@@ -79,7 +79,7 @@ export function StandbyCard() {
           </SettingRow>
           <SettingRow
             label={t.standby.status.connection}
-            description={d.connected ? <Status tone="success">{t.standby.connected}</Status> : <Status tone="warning">{t.standby.disconnected}</Status>}
+            description={d.connected ? t.standby.connected : t.standby.disconnected}
           />
           <SettingRow
             label={t.standby.lastSync}
@@ -123,7 +123,7 @@ export function StandbyCard() {
     </Button>
   );
   return (
-    <Section title={t.settings.tabs.standby.label} help={t.standby.list.help} actions={addButton}>
+    <Section title={t.settings.tabs.standby.label} help={t.standby.list.help} actions={d.standbys.length > 0 ? addButton : undefined}>
       {refetchError}
       {error && <Alert>{error}</Alert>}
       {d.standbys.length === 0 ? (
@@ -146,7 +146,7 @@ export function StandbyCard() {
                     <Status tone="success">{t.standby.connected}</Status>
                   ) : (
                     <span className="flex items-center gap-1">
-                      <Status tone="warning">{t.standby.disconnected}</Status>
+                      <Status>{t.standby.disconnected}</Status>
                       <HelpTip>{t.standby.disconnectedHint}</HelpTip>
                     </span>
                   ),

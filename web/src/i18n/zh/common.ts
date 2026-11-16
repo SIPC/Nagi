@@ -2,6 +2,8 @@
 export default {
   // 字段和标题旁问号按钮的读屏名称。
   help: "说明",
+  // 设置行里的开关（SettingSwitch）。
+  switch: { on: "已开启", off: "已关闭", turnOn: "开启", turnOff: "关闭" },
   status: {
     running: "运行中",
     stopped: "已停止",

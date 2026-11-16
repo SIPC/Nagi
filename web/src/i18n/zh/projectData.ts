@@ -222,7 +222,7 @@ export default {
     restoredElevate: "恢复高可用设置前，请验证身份。",
     restoredPrivileged: (items: string) => `这个容器的配置含有特权内容（${items}），确认后其他节点会以 root 运行它。`,
     restoredPrivilegedConfirm: (name: string) => `确认恢复容器 ${name} 的高可用设置？它的配置含有特权内容，确认后其他节点会以 root 运行它。`,
-    restoredTypeName: (name: string) => `输入容器名 ${name} 确认`,
+    restoredTypeName: (name: string) => `输入 ${name} 以确认`,
     confirmTakeoverPrompt: (node: string, container: string) =>
       `${node ? `由 ${node} ` : ""}顶替容器 ${container}？最后一次同步之后写入的数据将丢失。`,
     confirmTakeover: "确认顶替",

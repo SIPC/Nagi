@@ -83,6 +83,7 @@ export default {
     bindOff: "Off",
     bindAll: "Apply to all members",
     bindAllDescription: "Bind operators and viewers to their network the same way.",
+    bindAllUnavailable: "Unavailable while administrator network binding is off.",
     minutes: (n) => (n % 60 === 0 ? `${n / 60} ${n === 60 ? "hour" : "hours"}` : `${n} minutes`),
     hours: (n) => (n % 24 === 0 ? `${n / 24} ${n === 24 ? "day" : "days"}` : `${n} hours`),
     adminNetworks: "Administrator sign-in addresses",

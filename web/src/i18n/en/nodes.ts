@@ -11,7 +11,7 @@ export default {
     elevateUndo: "Verify your identity before ending isolation.",
     confirm: (name) => `Isolate node ${name}? Other nodes disconnect from it on the node network right away, and containers on it with failover are taken over by their failover nodes.`,
     confirmUndo: (name) => `End isolation of node ${name}? It rejoins the node network and regains project access.`,
-    typeName: "Enter the node name to confirm",
+    typeName: (name) => `Type ${name} to confirm`,
     done: "Isolated",
     undone: "Isolation ended",
   },

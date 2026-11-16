@@ -223,7 +223,7 @@ export default {
     restoredElevate: "Verify your identity to restore high availability settings.",
     restoredPrivileged: (items) => `This container's configuration has privileged settings (${items}). Once confirmed, other nodes run it as root.`,
     restoredPrivilegedConfirm: (name) => `Restore the high availability settings of container ${name}? Its configuration has privileged settings, and other nodes will run it as root.`,
-    restoredTypeName: (name) => `Enter the container name ${name} to confirm`,
+    restoredTypeName: (name) => `Type ${name} to confirm`,
     confirmTakeoverPrompt: (node, container) => `Fail over container ${container}${node ? ` to ${node}` : ""}? Data written after the last sync will be lost.`,
     confirmTakeover: "Confirm failover",
     pendingBody: (node) => `Node ${node} is offline. After failover, data written after the last sync will be lost.`,

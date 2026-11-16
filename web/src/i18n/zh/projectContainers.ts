@@ -77,7 +77,7 @@ export default {
       return `删除${kind} ${name}？${group ? "组内的容器" : "容器"}将被停止并删除，${kind}目录默认保留。`;
     },
     deleteDirCheck: (group: boolean) => `同时删除${group ? "容器组" : "容器"}目录（数据和快照将无法恢复）`,
-    deleteTypeName: (group: boolean, name: string) => `输入${group ? "容器组" : "容器"}名称 ${name} 以确认`,
+    deleteTypeName: (_group: boolean, name: string) => `输入 ${name} 以确认`,
     deleteKind: (group: boolean): string => (group ? "删除容器组" : "删除容器"),
     sharedEnvOutdated: "共享变量有更新，下次部署生效。",
     uploadDeploy: "上传并部署",

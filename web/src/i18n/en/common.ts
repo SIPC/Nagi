@@ -5,6 +5,7 @@ const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? o
 export default {
   // 字段和标题旁问号按钮的读屏名称。
   help: "More info",
+  switch: { on: "On", off: "Off", turnOn: "Turn on", turnOff: "Turn off" },
   status: {
     running: "Running",
     stopped: "Stopped",

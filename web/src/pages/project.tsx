@@ -146,7 +146,7 @@ export function ProjectSplit({
 
 // navState：项目导航里容器的状态点。节点离线时容器的状态是未知。
 function navState(m: Container, node: Node | undefined, services: NonNullable<ProjectData["status"]>["services"]) {
-  if (node?.online === false) return { tone: "warning" as const, label: t.common.status.nodesOffline([node.name]) };
+  if (node?.online === false) return { tone: "neutral" as const, label: t.common.status.nodesOffline([node.name]) };
   return stateOf(
     services.filter((s) => s.container === m.name),
     m.deployedVersion > 0n,
@@ -287,7 +287,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
                 <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
               </span>
               {node?.online === false ? (
-                <span className="pl-3.5 text-[13px] leading-5 text-warning-text">{t.common.status.nodesOffline([node.name])}</span>
+                <span className="pl-3.5 text-[13px] leading-5 text-muted-foreground">{t.common.status.nodesOffline([node.name])}</span>
               ) : (
                 <UsageRings usage={u} memFallback={memFallback} className="pl-3.5" />
               )}

@@ -82,6 +82,7 @@ export default {
     bindOff: "关闭",
     bindAll: "用于所有成员",
     bindAllDescription: "操作员和只读成员也按上面的方式绑定网络。",
+    bindAllUnavailable: "管理员网络绑定关闭时不可用。",
     minutes: (n: number) => (n % 60 === 0 ? `${n / 60} 小时` : `${n} 分钟`),
     hours: (n: number) => (n % 24 === 0 ? `${n / 24} 天` : `${n} 小时`),
     adminNetworks: "管理员登录地址",

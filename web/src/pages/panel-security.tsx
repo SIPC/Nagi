@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, Skeleton, Spinner, Status, Textarea } from "@/components/ui";
+import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, SettingSwitch, Skeleton, Spinner, Status, Textarea } from "@/components/ui";
 import { create } from "@bufbuild/protobuf";
 import { AuditSinkHeaderSchema, AuditSinkSchema, type AuditSettings, type AuditSink, type SessionPolicy } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
@@ -60,11 +60,7 @@ function AuditSections() {
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
       <Section title={r.title} description={r.description} help={r.help}>
         <SettingRows>
-          <SettingRow label={r.label}>
-            <Check checked={s.recording} disabled={save.isPending} onChange={(v) => save.mutate({ recording: v })}>
-              <span className="sr-only">{r.label}</span>
-            </Check>
-          </SettingRow>
+          <SettingSwitch label={r.label} on={s.recording} busy={save.isPending && save.variables?.recording !== undefined} onChange={(v) => save.mutate({ recording: v })} />
         </SettingRows>
       </Section>
       <Section title={ret.title} description={ret.description} help={ret.help}>
@@ -394,11 +390,7 @@ function SessionSection() {
             <option value="off">{m.bindOff}</option>
           </Select>
         </SettingRow>
-        <SettingRow label={m.bindAll} description={m.bindAllDescription}>
-          <Check checked={p.bindAll} disabled={p.bind === "off"} onChange={(v) => save.mutate({ bindAll: v })}>
-            <span className="sr-only">{m.bindAll}</span>
-          </Check>
-        </SettingRow>
+        <SettingSwitch label={m.bindAll} description={m.bindAllDescription} on={p.bindAll} unavailable={p.bind === "off" ? m.bindAllUnavailable : undefined} busy={save.isPending && save.variables?.bindAll !== undefined} onChange={(v) => save.mutate({ bindAll: v })} />
         <AdminNetworksRow />
       </SettingRows>
     </Section>

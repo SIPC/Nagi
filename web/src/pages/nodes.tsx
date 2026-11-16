@@ -205,11 +205,8 @@ function NodeStatus({ n }: { n: Node }) {
       </span>
     );
   if (n.online) return <Status tone="success">{t.common.status.online}</Status>;
-  return (
-    <span className="text-destructive">
-      <Status tone="danger">{t.common.status.offline}</Status>
-    </span>
-  );
+  // 离线和列表、组网图一样是灰色（ui.md：离线、未连接、状态未知都是灰色）。
+  return <Status>{t.common.status.offline}</Status>;
 }
 
 // NodeContainers：运行在这个节点上的容器。节点离线时状态未知，但列表来自面板，仍然可以看。
@@ -226,7 +223,7 @@ function NodeContainers({ nodeId, online }: { nodeId: string; online: boolean })
   return (
     <List>
       {rows.map(({ project, container, services }) => {
-        const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "warning" as const, label: t.common.status.unknown };
+        const st = online ? stateOf(services, container.deployedVersion > 0n) : { tone: "neutral" as const, label: t.common.status.unknown };
         return (
           <Row
             key={project.id + container.name}
@@ -1271,7 +1268,7 @@ async function toggleIsolation(n: Node, done: () => void) {
     action: on ? m.isolate : m.unisolate,
     danger: on,
     checkDefault: true,
-    typeToConfirm: { label: m.typeName, value: n.name },
+    typeToConfirm: { label: m.typeName(n.name), value: n.name },
   });
   if (!ok) return;
   try {

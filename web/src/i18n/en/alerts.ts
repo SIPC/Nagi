@@ -27,7 +27,7 @@ export default {
   botToken: "Bot token",
   chatId: "Chat ID",
   webhookUrl: "URL",
-  test: "Test",
+  test: "Send test message",
   defaultValue: (v) => `Default ${v}`,
   rules: "Alert rules",
   rulesWhere: "Alert rules are set in each node's and project's settings.",

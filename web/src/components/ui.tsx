@@ -660,6 +660,47 @@ export function SettingRow({ label, description, help, children }: { label: Reac
   );
 }
 
+// SettingSwitch：开关也写成设置行（见 docs/ui.md 设置页）：说明前写当前状态，右边是「开启」或「关闭」。
+// unavailable：做不了时写原因，替换说明，按钮置灰。
+export function SettingSwitch({
+  label,
+  description,
+  help,
+  on,
+  busy,
+  unavailable,
+  onChange,
+}: {
+  label: React.ReactNode;
+  description?: React.ReactNode;
+  help?: React.ReactNode;
+  on: boolean;
+  busy?: boolean;
+  unavailable?: string;
+  onChange: (on: boolean) => void;
+}) {
+  const s = t.common.switch;
+  return (
+    <SettingRow
+      label={label}
+      help={help}
+      description={
+        unavailable ?? (
+          <>
+            {on ? s.on : s.off}
+            {description && <> · {description}</>}
+          </>
+        )
+      }
+    >
+      <Button variant="outline" disabled={busy || !!unavailable} onClick={() => onChange(!on)}>
+        {busy && <Spinner />}
+        {on ? s.turnOff : s.turnOn}
+      </Button>
+    </SettingRow>
+  );
+}
+
 export function SettingRows({ children }: { children: React.ReactNode }) {
   return <List>{children}</List>;
 }

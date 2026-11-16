@@ -63,7 +63,8 @@ export function InviteCard() {
           {t.invite.addNode}
         </Link>,
       )}
-      actions={generateButton}
+      // 没有接入码时只留空状态里的按钮。
+      actions={invites.data && invites.data.invites.length === 0 ? undefined : generateButton}
     >
       {error && <Alert>{error}</Alert>}
       {code && (

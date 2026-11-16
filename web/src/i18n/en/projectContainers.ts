@@ -80,7 +80,7 @@ export default {
       return `Delete ${kind} ${name}? ${group ? "Its containers" : "The container"} will be stopped and removed. The ${kind} directory is kept by default.`;
     },
     deleteDirCheck: (group) => `Also delete the ${group ? "container group" : "container"} directory (data and snapshots can't be recovered)`,
-    deleteTypeName: (group, name) => `Enter the ${group ? "container group" : "container"} name ${name} to confirm`,
+    deleteTypeName: (_group, name) => `Type ${name} to confirm`,
     deleteKind: (group) => (group ? "Delete container group" : "Delete container"),
     sharedEnvOutdated: "Shared variables changed and take effect on the next deployment.",
     uploadDeploy: "Upload and deploy",

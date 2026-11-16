@@ -11,7 +11,7 @@ export default {
     elevateUndo: "解除隔离前需验证身份。",
     confirm: (name: string) => `隔离节点 ${name}？其他节点会立即断开和它的节点网络，它上面设置了顶替的容器由顶替节点接替。`,
     confirmUndo: (name: string) => `解除节点 ${name} 的隔离？它会重新加入节点网络，恢复项目放行。`,
-    typeName: "输入节点名称确认",
+    typeName: (name: string) => `输入 ${name} 以确认`,
     done: "已隔离",
     undone: "已解除隔离",
   },

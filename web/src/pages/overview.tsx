@@ -821,7 +821,7 @@ export function OverviewPage() {
     ) : abnormal > 0 ? (
       <Status tone="danger">{o.health.containersAbnormal(abnormal)}</Status>
     ) : offlineNames.length > 0 ? (
-      <Status tone="warning">{t.common.status.nodesOffline(offlineNames)}</Status>
+      <Status>{t.common.status.nodesOffline(offlineNames)}</Status>
     ) : (
       <Status tone="success">{o.health.ok}</Status>
     );
@@ -972,9 +972,7 @@ export function OverviewPage() {
                         ) : n.online ? (
                           <Status tone="success">{t.common.status.online}</Status>
                         ) : (
-                          <span className="text-destructive">
-                            <Status tone="danger">{t.common.status.offline}</Status>
-                          </span>
+                          <Status>{t.common.status.offline}</Status>
                         )}
                       </Td>
                       <Td className={cn(cell, hideCpu)}><Roll value={u ? fmtCpuShort(u.cpu) : dash} /></Td>

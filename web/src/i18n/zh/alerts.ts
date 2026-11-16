@@ -27,7 +27,7 @@ export default {
   botToken: "机器人令牌",
   chatId: "聊天 ID",
   webhookUrl: "地址",
-  test: "测试",
+  test: "发送测试消息",
   defaultValue: (v: number) => `默认 ${v}`,
   rules: "告警规则",
   rulesWhere: "告警规则在各节点和项目的设置中编辑。",

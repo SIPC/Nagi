@@ -212,15 +212,20 @@ export function AccessTokenSection() {
   const mcp = useMcpUrl();
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreateAccessTokenResponse | null>(null);
+  // 和下面的列表同一个查询：没有令牌时只留空状态里的「生成令牌」，标题栏不再重复一个。
+  const tokens = useQuery({ queryKey: ["access-tokens", "0"], queryFn: () => settingsClient.listAccessTokens({ userId: 0n }) });
+  const hasTokens = (tokens.data?.tokens.length ?? 0) > 0;
   return (
     <Section
       title={t.tokens.title}
       help={t.tokens.help}
       actions={
-        <Button variant="outline" onClick={() => setCreating(true)}>
-          <Plus />
-          {t.tokens.create}
-        </Button>
+        hasTokens && (
+          <Button variant="outline" onClick={() => setCreating(true)}>
+            <Plus />
+            {t.tokens.create}
+          </Button>
+        )
       }
     >
       <List>

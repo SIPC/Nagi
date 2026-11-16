@@ -87,7 +87,7 @@ export default {
     help: "容器目录包括数据和快照，保留在各自的节点上。容器所在的节点须在线。",
     confirm: (name: string) => `删除项目 ${name}？项目内的所有容器和容器组将被删除，容器目录默认保留。`,
     deleteDir: "同时删除容器目录（数据和快照将无法恢复）",
-    confirmName: (name: string) => `输入项目名称 ${name} 以确认`,
+    confirmName: (name: string) => `输入 ${name} 以确认`,
     submit: "删除项目",
   },
 };

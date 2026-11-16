@@ -284,7 +284,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
           const address = m.kind !== "group" ? m.name : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ");
           const notes: React.ReactNode[] = [
             !offline && (node?.name ?? m.nodeId),
-            offline ? <span className="text-warning-text">{t.common.status.nodesOffline([node.name])}</span> : stateOf(svc, m.deployedVersion > 0n).label,
+            offline ? <span>{t.common.status.nodesOffline([node.name])}</span> : stateOf(svc, m.deployedVersion > 0n).label,
             offline && t.common.status.unknown,
             !offline && version,
             m.kind === "group" && pc.kind.group,
@@ -607,7 +607,7 @@ function ContainerDetail({
             {containerLabel(container)}
             {container.displayName && <span className="font-mono text-[13px] font-normal text-muted-foreground">{container.name}</span>}
             {/* 节点离线时容器的状态是未知，不是已停止。 */}
-            {node && !nodeOnline ? <Status tone="warning">{t.common.status.nodesOffline([node.name])}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
+            {node && !nodeOnline ? <Status>{t.common.status.nodesOffline([node.name])}</Status> : <ProjectState services={services} deployed={container.deployedVersion > 0n} />}
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
             {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
             {hasImageUpdate &&
@@ -951,7 +951,7 @@ function Overview({ project, container, services }: { project: Project; containe
                   key={s.name + s.containerId}
                   title={s.name}
                   sub={<span title={s.image}>{[shortImage(s.image), serviceDetail(s.status)].filter(Boolean).join(" · ")}</span>}
-                  cols={[{ phone: true, content: offline ? <Status tone="warning">{t.common.status.unknown}</Status> : <ServiceState service={s} /> }]}
+                  cols={[{ phone: true, content: offline ? <Status>{t.common.status.unknown}</Status> : <ServiceState service={s} /> }]}
                 />
               ))}
             </List>

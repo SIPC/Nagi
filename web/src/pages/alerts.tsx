@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertConfig } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRow, SettingRows, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 
 // ---- 告警设置：通知渠道（规则在各节点和项目的设置里） ----
@@ -148,7 +148,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
   );
   return (
     <>
-      <Section title={t.settings.tabs.alerts.label} help={`${t.alerts.channelsHelp}${t.alerts.rulesWhere}`} actions={addButton}>
+      <Section title={t.settings.tabs.alerts.label} help={`${t.alerts.channelsHelp}${t.alerts.rulesWhere}`} actions={channels.length > 0 ? addButton : undefined}>
         {lost && (
           <Notice tone="warning" title={t.alerts.lostTitle}>
             {t.alerts.lostBody} <HelpTip>{t.alerts.lostHelp}</HelpTip>
@@ -164,16 +164,14 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
                 key={i}
                 title={<span className="truncate">{channelName(c)}</span>}
                 sub={<span className="wrap-anywhere">{c.type === "telegram" ? `Telegram · ${c.telegramChatId}` : `Webhook · ${c.url}`}</span>}
-                actionsWidth="w-auto"
+                // 测试和日志外送一样放在更多菜单里，行内只留 ⋯；测试中在右边转圈。
                 actions={
-                  <span className="flex items-center">
-                    <Button size="row" variant="ghost" disabled={testing !== null} onClick={() => test(i)}>
-                      {testing === i && <Spinner />}
-                      {t.alerts.test}
-                    </Button>
+                  <span className="flex items-center gap-2">
+                    {testing === i && <Spinner />}
                     <RowMenu
                       items={[
                         { label: t.common.actions.edit, onSelect: () => setEditing({ index: i, channel: c }) },
+                        { label: t.alerts.test, disabled: testing !== null, onSelect: () => test(i) },
                         { label: t.common.actions.delete, danger: true, onSelect: () => removeChannel(i) },
                       ]}
                     />
@@ -238,11 +236,7 @@ function SecurityAlertRules() {
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
       <SettingRows>
         {rows.map(([key, on, patch]) => (
-          <SettingRow key={key} label={m.rules[key].label} description={m.rules[key].description}>
-            <Check checked={on} disabled={save.isPending} onChange={() => save.mutate(patch)}>
-              <span className="sr-only">{m.rules[key].label}</span>
-            </Check>
-          </SettingRow>
+          <SettingSwitch key={key} label={m.rules[key].label} description={m.rules[key].description} on={on} busy={save.isPending && save.variables === patch} onChange={() => save.mutate(patch)} />
         ))}
       </SettingRows>
     </Section>
