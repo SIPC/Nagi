@@ -75,6 +75,16 @@ func (s *projectService) ListProjects(ctx context.Context, _ *connect.Request[na
 
 func (s *projectService) CreateProject(ctx context.Context, req *connect.Request[nagiv1.CreateProjectRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
+	// 出站限制：非管理员新建项目时只能用默认值（拦截、不放行），和 UpdateProjectSettings 的规则一样。
+	if e := m.GetSettings().GetEgress(); e != nil && auth.CurrentUser(ctx).Role != auth.RoleAdmin {
+		clean, err := spec.CleanEgress(e)
+		if err != nil {
+			return nil, toConnect(err)
+		}
+		if !spec.EgressEqual(clean, &nagiv1.Egress{Mode: spec.EgressBlock}) {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能修改出站限制"))
+		}
+	}
 	cr := projects.CreateRequest{Name: m.GetName(), NetworkName: m.GetNetworkName(), Settings: m.GetSettings()}
 	if m.GetContainer() != nil {
 		if err := s.checkOperatorConfig(ctx, "", m.GetContainerName(), m.GetContainer()); err != nil {
