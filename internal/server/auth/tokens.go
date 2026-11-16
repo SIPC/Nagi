@@ -60,9 +60,15 @@ func (s *Service) TokenUser(ctx context.Context, token, ip string) (User, store.
 	if t.Networks != "" {
 		prefixes, err := ParseNetworks(strings.Split(t.Networks, "\n"))
 		if err == nil && len(prefixes) > 0 && !prefixesContain(prefixes, ip) {
-			s.tokenNetworkDenied(ctx, t, row.Username, ip)
+			s.tokenNetworkDenied(ctx, t, row.Username, ip, "token")
 			return User{}, t, ErrInvalidToken
 		}
+	}
+	// 管理员登录地址（见 docs/panel.md#管理员登录地址）对管理员的令牌同样生效，包括 OAuth 授权的：
+	// 令牌泄露以后，别人不能从别的地方拿它调用 MCP、执行节点命令。
+	if row.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
+		s.tokenNetworkDenied(ctx, t, row.Username, ip, "admin")
+		return User{}, t, ErrInvalidToken
 	}
 	client := clipName(RequestMeta(ctx).Client)
 	if now.Unix()-t.LastUsedAt >= int64(tokenTouchInterval/time.Second) || t.LastIP != ip || t.LastClient != client {

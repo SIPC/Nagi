@@ -41,10 +41,12 @@ func tokenActor(t store.AccessToken, username string) audit.Event {
 		TargetType: "token", TargetID: strconv.FormatInt(t.ID, 10), TargetName: t.Name}
 }
 
-// tokenNetworkDenied 记下令牌从允许范围以外的地址使用，并告警。
-func (s *Service) tokenNetworkDenied(ctx context.Context, t store.AccessToken, username, ip string) {
+// tokenNetworkDenied 记下令牌从允许范围以外的地址使用，并告警。rule 是哪一项限制：token（令牌自己的地址）
+// 或 admin（管理员登录地址）。
+func (s *Service) tokenNetworkDenied(ctx context.Context, t store.AccessToken, username, ip, rule string) {
 	e := tokenActor(t, username)
 	e.Action, e.IP, e.Result, e.Client, e.Category = "token_network_denied", ip, audit.ResultDenied, clipClient(RequestMeta(ctx).Client), audit.Security
+	e.Params = `{"rule":"` + rule + `"}`
 	s.loginEvent(ctx, e)
 	if s.Alert != nil {
 		s.Alert(ctx, "token-denied:"+strconv.FormatInt(t.ID, 10),

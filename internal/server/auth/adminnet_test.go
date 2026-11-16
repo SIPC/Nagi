@@ -3,6 +3,9 @@ package auth
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/SIPC/nagi/internal/server/store"
 )
 
 func TestAdminNetworks(t *testing.T) {
@@ -53,5 +56,40 @@ func TestAdminNetworks(t *testing.T) {
 	}
 	if _, err := h.s.Login(octx, outside.IP, "admin", "correct horse", ""); err != nil {
 		t.Fatalf("清除以后应该能登录：%v", err)
+	}
+}
+
+// M4：设了管理员登录地址以后，管理员的访问令牌（个人令牌和 OAuth 授权的）从范围以外的地址使用时当作无效并告警；
+// 操作员的令牌不受影响。
+func TestAdminNetworksTokens(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := context.Background()
+	if _, err := h.s.SetAdminNetworks(ctx, []string{"203.0.113.0/24"}, "203.0.113.7"); err != nil {
+		t.Fatal(err)
+	}
+	add := func(user, source string) string {
+		u, _ := h.q.GetUserByUsername(ctx, user)
+		secret := NewSecret()
+		if _, err := h.q.InsertAccessToken(ctx, store.AccessToken{UserID: u.ID, Name: user + "-" + source, Source: source,
+			TokenHash: HashToken(secret), AllowWrite: true, AllowExec: true, AllowNodeExec: true, CreatedAt: time.Now().Unix()}); err != nil {
+			t.Fatal(err)
+		}
+		return secret
+	}
+	for _, source := range []string{TokenSourcePersonal, TokenSourceOAuth} {
+		tok := add("admin", source)
+		if _, _, err := h.s.TokenUser(ctx, tok, "203.0.113.20"); err != nil {
+			t.Fatalf("%s：允许的地址应该能用：%v", source, err)
+		}
+		if _, _, err := h.s.TokenUser(ctx, tok, "198.51.100.9"); err != ErrInvalidToken {
+			t.Fatalf("%s：允许范围以外的地址应该当作无效，实际 %v", source, err)
+		}
+	}
+	if !h.alerted("198.51.100.9") {
+		t.Fatalf("应该告警：%v", h.alerts)
+	}
+	op := add("op", TokenSourcePersonal)
+	if _, _, err := h.s.TokenUser(ctx, op, "198.51.100.9"); err != nil {
+		t.Fatalf("操作员的令牌不受管理员登录地址影响：%v", err)
 	}
 }
