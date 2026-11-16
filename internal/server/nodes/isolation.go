@@ -78,6 +78,10 @@ func (r *Registry) SetIsolated(ctx context.Context, nodeID string, on bool) erro
 	r.reloadIsolation(ctx)
 	r.updateMesh()
 	r.pushMesh(ctx)
+	// 隔离时让节点删掉外送目标（里面有凭据），解除时重新下发。
+	if c, err := r.Peek(nodeID); err == nil {
+		go r.pushAuditSinksTo(c)
+	}
 	if r.OnIsolate != nil {
 		r.OnIsolate(ctx)
 	}

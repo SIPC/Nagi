@@ -96,7 +96,7 @@ func (r *Registry) SetAlertConfig(ctx context.Context, cfg *nagiv1.AlertConfig) 
 // pushAlertConfig 把告警配置下发给一个节点。cfg 为 nil 时读取当前配置。
 // 带上节点在面板上的名称：节点自己发的告警用它，和界面上一致（节点改过名时不再是主机名）。
 func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.AlertConfig) {
-	if r.ReadOnly {
+	if r.ReadOnly || !c.trusted() {
 		return
 	}
 	if cfg == nil {
@@ -125,11 +125,16 @@ func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.Ale
 }
 
 // pushAuditSinks 把日志外送目标下发给一个节点（见 docs/audit.md#节点本地审计）。旧版本的节点没有这个接口，不报错。
+// 外送目标里有凭据：待批准、还没认本面板的节点不下发；被隔离的节点下发空列表，让它删掉已经保存的。
 func (r *Registry) pushAuditSinks(ctx context.Context, c *Conn) {
-	if r.ReadOnly || r.AuditSinks == nil {
+	if r.ReadOnly || r.AuditSinks == nil || c.Agent == nil || !c.trusted() {
 		return
 	}
-	_, err := c.Agent.SetAuditSink(ctx, &nagiv1.SetAuditSinkRequest{Sinks: r.AuditSinks(ctx)})
+	var sinks []*nagiv1.NodeAuditSink
+	if !r.Isolated(ctx, c.NodeID) {
+		sinks = r.AuditSinks(ctx)
+	}
+	_, err := c.Agent.SetAuditSink(ctx, &nagiv1.SetAuditSinkRequest{Sinks: sinks})
 	if err != nil && status.Code(err) != codes.Unimplemented {
 		r.log.Warn("下发日志外送配置失败", "node", c.NodeID, "err", err)
 	}
@@ -138,12 +143,14 @@ func (r *Registry) pushAuditSinks(ctx context.Context, c *Conn) {
 // PushAuditSinks 把日志外送目标下发给所有在线节点，外送设置修改后调用。
 func (r *Registry) PushAuditSinks() {
 	for _, c := range r.Conns() {
-		go func(c *Conn) {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			r.pushAuditSinks(ctx, c)
-		}(c)
+		go r.pushAuditSinksTo(c)
 	}
+}
+
+func (r *Registry) pushAuditSinksTo(c *Conn) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	r.pushAuditSinks(ctx, c)
 }
 
 // SendAlert 把告警发到面板配置的渠道。channelIDs 为空时发到所有渠道。

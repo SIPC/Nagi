@@ -134,6 +134,14 @@ func (c *Conn) Pending() bool {
 	return c.pending
 }
 
+// trusted 判断能不能给这个节点下发告警配置和外送目标：已经批准，并且认本面板是主面板。
+// 待批准的节点可能是拿泄露的接入码加入的，这些配置里有渠道地址和外送凭据（见 docs/control-plane.md）。
+func (c *Conn) trusted() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return !c.pending && c.accepted
+}
+
 // LastReport 返回节点最近一次上报的内容，可能为 nil。
 func (c *Conn) LastReport() *nagiv1.ReportRequest {
 	c.mu.RLock()
