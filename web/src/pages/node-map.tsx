@@ -7,7 +7,7 @@ import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { HelpTip, QueryError, RowsSkeleton, Section, Status, Waves } from "@/components/ui";
 import { Legend as ChartLegend, TimeChart, type Pt as ChartPt } from "@/components/chart";
-import { RangePicker, metricRanges, type MetricRange } from "@/components/metrics";
+import { RangePicker, fmtMs, metricRanges, type MetricRange } from "@/components/metrics";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { pathLabel } from "@/pages/mesh";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -599,7 +599,6 @@ const belowMap = "mt-2 max-md:mt-0";
 type Cell = { path: string; rtt: number };
 
 const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-const fmtMs = (v: number) => `${v.toFixed(v < 10 ? 1 : 0)} ms`;
 
 // heat：直连延迟的底色，越慢越深。只用灰度，有问题的连接（中转、不可达）才带颜色。
 function heat(rtt: number) {

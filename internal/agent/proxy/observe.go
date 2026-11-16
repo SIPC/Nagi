@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net/http"
 	"slices"
 	"sync"
 
@@ -31,8 +32,11 @@ const logRouteKey = "nagi_route"
 // RouteStats 是一条规则在一段时间内的请求统计。
 type RouteStats struct {
 	Requests int
-	Errors   int     // 5xx 响应数
-	Seconds  float64 // 耗时总和
+	Errors   int // 5xx 响应数
+	// Timed 是计入耗时的请求数，Seconds 是它们的耗时总和。WebSocket（101 切换协议）不计入：它的耗时是整条连接开着的
+	// 时间，动辄几分钟，算进去平均值和分位数就没有意义了。
+	Timed   int
+	Seconds float64
 	// Classes 是各类状态码的响应数，下标是状态码的百位（1xx～5xx）。
 	Classes  [6]int
 	BytesIn  int64 // 请求体字节数
@@ -107,13 +111,17 @@ func (o *observerT) record(line []byte) {
 	if c := entry.Status / 100; c >= 1 && c <= 5 {
 		s.Classes[c]++
 	}
-	s.Seconds += entry.Duration
 	s.BytesIn += entry.BytesRead
 	s.BytesOut += entry.Size
+	if entry.Status == http.StatusSwitchingProtocols {
+		return
+	}
+	s.Timed++
+	s.Seconds += entry.Duration
 	// 蓄水池抽样：每个请求被留下的概率相同，内存有上限。
 	if len(s.Durations) < maxSamples {
 		s.Durations = append(s.Durations, entry.Duration)
-	} else if i := rand.IntN(s.Requests); i < maxSamples {
+	} else if i := rand.IntN(s.Timed); i < maxSamples {
 		s.Durations[i] = entry.Duration
 	}
 }

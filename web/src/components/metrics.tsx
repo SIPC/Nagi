@@ -123,7 +123,15 @@ function MetricsSkeleton() {
 
 const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds * 1000));
 
-const fmtMs = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
+// fmtMs：耗时按大小换单位：1 秒以内用 ms，1 分钟以内用 s，再长用 min。按四舍五入以后的值换单位，不会出现「1000 ms」「60.0 s」。
+export const fmtMs = (v: number) => {
+  if (v < 9.95) return `${v.toFixed(1)} ms`;
+  if (v < 999.5) return `${Math.round(v)} ms`;
+  const s = v / 1000;
+  if (s < 59.95) return `${s < 9.995 ? s.toFixed(2) : s.toFixed(1)} s`;
+  const min = s / 60;
+  return `${min < 9.95 ? min.toFixed(1) : Math.round(min)} min`;
+};
 // 上万的次数用紧凑写法（1.9 万次、239.3K），统计格放得下。数字和单位分开交给文案拼，中文的单位和「次」连写。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
 export const fmtCount = (v: number) => {
@@ -490,7 +498,7 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
   const stats: { label: string; value: string; title?: string }[] = [
     { label: m.requests, value: fmtCount(requests), title: m.requestsAvgTitle((requests / r.seconds).toFixed(2)) },
     { label: m.errorRate, value: requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—", title: `5xx ${fmtCount(errors)}` },
-    { label: m.avgLatency, value: lat === undefined ? "—" : fmtMs(lat) },
+    { label: m.avgLatency, value: lat === undefined ? "—" : fmtMs(lat), title: m.avgLatencyTitle },
   ];
   if (data.has("p95")) stats.push({ label: m.p95Latency, value: p95 === undefined ? "—" : fmtMs(p95), title: m.p95Title });
   if (data.has("in")) stats.push({ label: m.inboundTraffic, value: fmtBytes(sum("in")) }, { label: m.outboundTraffic, value: fmtBytes(sum("out")) });

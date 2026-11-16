@@ -689,8 +689,9 @@ func routeMetrics() metrics.Source {
 			out[prefix+"5xx"] = float64(s.Errors) / elapsed
 			out[prefix+"in"] = float64(s.BytesIn) / elapsed
 			out[prefix+"out"] = float64(s.BytesOut) / elapsed
-			if s.Requests > 0 {
-				out[prefix+"lat"] = 1000 * s.Seconds / float64(s.Requests)
+			// 只有 WebSocket 的时段没有耗时，和没有请求一样不报。
+			if s.Timed > 0 {
+				out[prefix+"lat"] = 1000 * s.Seconds / float64(s.Timed)
 				out[prefix+"p50"] = 1000 * s.Percentile(0.50)
 				out[prefix+"p95"] = 1000 * s.Percentile(0.95)
 				out[prefix+"p99"] = 1000 * s.Percentile(0.99)
