@@ -91,7 +91,7 @@ func (a *API) auditSettings(ctx context.Context) *nagiv1.AuditSettings {
 	for _, sk := range a.Sinks(ctx) {
 		p := &nagiv1.AuditSink{
 			Id: sk.ID, Name: sk.Name, Type: sk.Type, Address: sk.Address, Ca: sk.CA, Url: sk.URL, Endpoint: sk.Endpoint, Region: sk.Region,
-			Bucket: sk.Bucket, Prefix: sk.Prefix, AccessKey: sk.AccessKey, Recordings: sk.Recordings, HasSecret: sk.SecretKey != "",
+			Bucket: sk.Bucket, Prefix: sk.Prefix, Recordings: sk.Recordings, HasSecret: sk.SecretKey != "",
 		}
 		for k := range sk.Headers {
 			p.Headers = append(p.Headers, &nagiv1.AuditSinkHeader{Name: k})
@@ -133,6 +133,9 @@ func sinkFrom(p *nagiv1.AuditSink, old map[string]audit.SinkConfig) (audit.SinkC
 	prev := old[sk.ID]
 	if sk.SecretKey == "" {
 		sk.SecretKey = prev.SecretKey
+	}
+	if sk.AccessKey == "" {
+		sk.AccessKey = prev.AccessKey
 	}
 	if len(p.GetHeaders()) > 0 {
 		sk.Headers = map[string]string{}

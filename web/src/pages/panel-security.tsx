@@ -284,8 +284,8 @@ function SinkDialog({ sink, onClose, onSave }: { sink?: AuditSink; onClose: () =
                 <Input id="sink-prefix" value={k.prefix} onChange={(e) => set({ prefix: e.target.value })} placeholder="nagi/audit" />
               </Field>
               <FormRow>
-                <Field label={m.accessKey} htmlFor="sink-ak">
-                  <Input id="sink-ak" value={k.accessKey} onChange={(e) => set({ accessKey: e.target.value })} required autoComplete="off" />
+                <Field label={m.accessKey} htmlFor="sink-ak" hint={sink?.hasSecret ? m.secretKeep : undefined}>
+                  <Input id="sink-ak" value={k.accessKey} onChange={(e) => set({ accessKey: e.target.value })} required={!sink?.hasSecret} autoComplete="off" />
                 </Field>
                 <Field label={m.secretKey} htmlFor="sink-sk" hint={sink?.hasSecret ? m.secretKeep : undefined}>
                   <Input id="sink-sk" type="password" value={k.secretKey} onChange={(e) => set({ secretKey: e.target.value })} required={!sink?.hasSecret} autoComplete="new-password" />

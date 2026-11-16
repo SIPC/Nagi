@@ -11517,14 +11517,15 @@ type AuditSink struct {
 	// syslog：host:port（TCP + TLS），可选的 CA 证书（PEM）。
 	Address string `protobuf:"bytes,4,opt,name=address,proto3" json:"address,omitempty"`
 	Ca      string `protobuf:"bytes,5,opt,name=ca,proto3" json:"ca,omitempty"`
-	// http：接收地址和固定的请求头。
+	// http：接收地址和固定的请求头。地址常在查询串里带令牌，不写进审计参数。
 	Url     string             `protobuf:"bytes,6,opt,name=url,proto3" json:"url,omitempty"`
 	Headers []*AuditSinkHeader `protobuf:"bytes,7,rep,name=headers,proto3" json:"headers,omitempty"`
 	// s3：兼容 S3 的存储。
-	Endpoint  string `protobuf:"bytes,8,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	Region    string `protobuf:"bytes,9,opt,name=region,proto3" json:"region,omitempty"`
-	Bucket    string `protobuf:"bytes,10,opt,name=bucket,proto3" json:"bucket,omitempty"`
-	Prefix    string `protobuf:"bytes,11,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	Endpoint string `protobuf:"bytes,8,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Region   string `protobuf:"bytes,9,opt,name=region,proto3" json:"region,omitempty"`
+	Bucket   string `protobuf:"bytes,10,opt,name=bucket,proto3" json:"bucket,omitempty"`
+	Prefix   string `protobuf:"bytes,11,opt,name=prefix,proto3" json:"prefix,omitempty"`
+	// 返回界面时 access_key 和 secret_key 都留空，保存时留空表示不变。
 	AccessKey string `protobuf:"bytes,12,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	SecretKey string `protobuf:"bytes,13,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
 	// s3：同时上传终端录制。
@@ -13394,14 +13395,14 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x05chain\x18\x05 \x01(\v2\x19.nagi.v1.AuditChainStatusR\x05chain\x12.\n" +
 	"\x13alert_totp_failures\x18\x06 \x01(\bR\x11alertTotpFailures\x122\n" +
 	"\x15alert_login_ratelimit\x18\a \x01(\bR\x13alertLoginRatelimit\x12.\n" +
-	"\x13alert_admin_network\x18\b \x01(\bR\x11alertAdminNetwork\"\x96\x04\n" +
+	"\x13alert_admin_network\x18\b \x01(\bR\x11alertAdminNetwork\"\x9b\x04\n" +
 	"\tAuditSink\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x03 \x01(\tR\x04type\x12\x18\n" +
 	"\aaddress\x18\x04 \x01(\tR\aaddress\x12\x0e\n" +
-	"\x02ca\x18\x05 \x01(\tR\x02ca\x12\x10\n" +
-	"\x03url\x18\x06 \x01(\tR\x03url\x122\n" +
+	"\x02ca\x18\x05 \x01(\tR\x02ca\x12\x15\n" +
+	"\x03url\x18\x06 \x01(\tB\x03\x80\x01\x01R\x03url\x122\n" +
 	"\aheaders\x18\a \x03(\v2\x18.nagi.v1.AuditSinkHeaderR\aheaders\x12\x1a\n" +
 	"\bendpoint\x18\b \x01(\tR\bendpoint\x12\x16\n" +
 	"\x06region\x18\t \x01(\tR\x06region\x12\x16\n" +

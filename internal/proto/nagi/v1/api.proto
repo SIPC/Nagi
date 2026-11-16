@@ -1555,14 +1555,15 @@ message AuditSink {
   // syslog：host:port（TCP + TLS），可选的 CA 证书（PEM）。
   string address = 4;
   string ca = 5;
-  // http：接收地址和固定的请求头。
-  string url = 6;
+  // http：接收地址和固定的请求头。地址常在查询串里带令牌，不写进审计参数。
+  string url = 6 [debug_redact = true];
   repeated AuditSinkHeader headers = 7;
   // s3：兼容 S3 的存储。
   string endpoint = 8;
   string region = 9;
   string bucket = 10;
   string prefix = 11;
+  // 返回界面时 access_key 和 secret_key 都留空，保存时留空表示不变。
   string access_key = 12 [debug_redact = true];
   string secret_key = 13 [debug_redact = true];
   // s3：同时上传终端录制。
