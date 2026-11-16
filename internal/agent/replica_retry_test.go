@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -63,4 +64,36 @@ func TestResumeSync(t *testing.T) {
 	if _, err, calls := run(many...); err == nil || calls != syncAttempts {
 		t.Errorf("最多 %d 次：calls=%d", syncAttempts, calls)
 	}
+}
+
+// 对方太久没收到数据（旧版本的对方一次只收一条流时会这样）也算传输断了，接着传。
+func TestConnectionLostStall(t *testing.T) {
+	if !connectionLost(fmt.Errorf("传输文件: %w", status.Error(codes.DeadlineExceeded, "同步副本时长时间没有收到数据"))) {
+		t.Fatal("DeadlineExceeded 应该接着传")
+	}
+}
+
+// 同一个容器到同一个目标的同步排队；不同目标互不影响；等的时候可以取消。
+func TestLockSync(t *testing.T) {
+	ctx := context.Background()
+	unlock, err := lockSync(ctx, "p/c/a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := lockSync(ctx, "p/c/b")
+	if err != nil {
+		t.Fatal("不同目标不应该等")
+	}
+	other()
+	waiting, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	if _, err := lockSync(waiting, "p/c/a"); err == nil {
+		t.Fatal("同一个目标应该等前一次结束")
+	}
+	unlock()
+	again, err := lockSync(ctx, "p/c/a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again()
 }

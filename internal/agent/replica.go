@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -246,7 +249,7 @@ func (s *meshService) ReplicaManifest(ctx context.Context, req *nagiv1.ReplicaMa
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil {
+		if err != nil || isReplicaTemp(d.Name()) {
 			return nil
 		}
 		rel, _ := filepath.Rel(files, full)
@@ -255,6 +258,12 @@ func (s *meshService) ReplicaManifest(ctx context.Context, req *nagiv1.ReplicaMa
 	})
 	return out, nil
 }
+
+// replicaTempMark 是接收中的临时文件名里的标记：<文件名>.nagi-tmp-<随机>。随机后缀让同时写同一个文件的两条流
+// 各写各的临时文件，不会互相覆盖；清单不列它们，提交时作为多余的文件删掉。
+const replicaTempMark = ".nagi-tmp"
+
+func isReplicaTemp(name string) bool { return strings.Contains(name, replicaTempMark) }
 
 // replicaIdle 是同步副本时多久收不到数据就放弃：源节点挂了、网络断了时不一直占着锁和临时文件。
 const replicaIdle = 2 * time.Minute
@@ -352,7 +361,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 				return err
 			}
-			tmp = dest + ".nagi-tmp"
+			tmp = dest + replicaTempMark + "-" + randomSuffix()
 			if f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
 				return err
 			}
@@ -463,6 +472,13 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container string) 
 // 对方每收完一个文件就落盘，下次核对清单时跳过，所以每次重试都从断开的地方往后。上一次传过去了数据就继续重试，
 // 最多 syncAttempts 次；一点都没传过去就不再试（线路是真的不通）。
 func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
+	// 同一个容器到同一个目标同时只有一次同步：定时快照后的同步、每 15 分钟一次的热备同步、迁移、切回可能重叠，
+	// 两次同步交错时，一次提交会删掉另一次刚传的文件。后来的等前一次结束。
+	unlock, err := lockSync(ctx, projectID+"/"+container+"/"+string(target.GetKey()))
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
 	return resumeSync(ctx, func() (int64, error) { return a.syncOnce(ctx, projectID, container, target) }, func(attempt int, n int64, err error) {
 		a.log.Info("同步时连接断开，接着传", "project", projectID, "container", container, "target", target.GetName(),
 			"attempt", attempt, "bytes", n, "err", err)
@@ -492,10 +508,37 @@ const syncAttempts = 10
 
 var syncRetryDelay = 2 * time.Second
 
-// connectionLost 判断同步失败是不是因为连接断了（gRPC 的 Unavailable），而不是对方拒绝。
+// connectionLost 判断同步失败是不是因为传输断了，而不是对方拒绝：连接断开（Unavailable），
+// 或者对方太久没收到数据（DeadlineExceeded，例如旧版本的对方一次只收一条流，其余的流等它时超时）。
 func connectionLost(err error) bool {
 	var se interface{ GRPCStatus() *status.Status }
-	return errors.As(err, &se) && se.GRPCStatus().Code() == codes.Unavailable
+	if !errors.As(err, &se) {
+		return false
+	}
+	c := se.GRPCStatus().Code()
+	return c == codes.Unavailable || c == codes.DeadlineExceeded
+}
+
+// syncLocks 是正在进行的同步，键是容器和目标，值是只能放一个的通道（能被 ctx 取消的锁）。
+var syncLocks sync.Map
+
+// lockSync 等到 key 没有别的同步在进行，返回释放的函数。
+func lockSync(ctx context.Context, key string) (func(), error) {
+	v, _ := syncLocks.LoadOrStore(key, make(chan struct{}, 1))
+	ch := v.(chan struct{})
+	select {
+	case ch <- struct{}{}:
+		return func() { <-ch }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// randomSuffix 是临时文件名的随机后缀。
+func randomSuffix() string {
+	var b [6]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 func (a *agent) syncOnce(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
