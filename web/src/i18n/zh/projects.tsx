@@ -34,7 +34,15 @@ export default {
     sort: "排序",
     byCreated: "最近创建",
     byName: "按名称",
+    byCustom: "自定义",
     empty: "没有匹配的项目",
+  },
+  reorder: {
+    instructions: "按空格键拿起，用方向键移动，再按空格键放下，按 Esc 取消。",
+    picked: (name: string) => `已拿起 ${name}`,
+    over: (name: string, target: string) => `${name} 移到 ${target} 的位置`,
+    dropped: (name: string) => `已放下 ${name}`,
+    cancelled: (name: string) => `已取消移动 ${name}`,
   },
   offline: {
     body: "节点上的容器状态未知，容器可能仍在运行。",

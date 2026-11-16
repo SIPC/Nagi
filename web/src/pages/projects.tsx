@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronRight, CircleArrowUp, Plus } from "lucide-react";
+import { rectSortingStrategy, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { authClient, errorMessage, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { formatDate, slugName } from "@/lib/utils";
@@ -15,6 +16,7 @@ import {
   ButtonLink,
   CardGrid,
   cardClass,
+  Collapse,
   Dialog,
   DialogActions,
   Empty,
@@ -37,6 +39,7 @@ import { checkName } from "@/lib/config";
 import { useStandbys } from "@/pages/standby";
 import { useRole } from "@/components/role";
 import { GroupSelect, groupsOf, ManageLabels } from "@/components/labels";
+import { Reorder, useProjectOrder, useReorderItem } from "@/pages/project-order";
 
 // Attention：需要处理的事聚合成一行：数量、名单和「查看」，点开后逐项显示（说明和操作）。
 // 顺序固定：节点离线、备用面板未连接、两步验证、主密钥。后两项可以「不再提醒」（只记在这个浏览器里）。
@@ -145,7 +148,7 @@ const cardContainers = 3;
 // 卡片共用 cardClass（和其他可点的卡片同一种边框、悬停和焦点），这里只加内边距和间距。
 const projectCard = cn(cardClass, "min-w-0 gap-3 p-4");
 
-function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[] | undefined }) {
+function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; nodes: Node[] | undefined; draggable?: boolean }) {
   const p = summary.project!;
   const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? id;
   const offline = (id: string) => nodes?.find((n) => n.id === id)?.online === false;
@@ -154,7 +157,7 @@ function ProjectCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[
   const updates = summary.status?.imageUpdates ?? [];
   const shown = p.containers.length > cardContainers ? p.containers.slice(0, cardContainers - 1) : p.containers;
   return (
-    <Link to="/projects/$projectId" params={{ projectId: p.id }} className={projectCard}>
+    <Link to="/projects/$projectId" params={{ projectId: p.id }} className={projectCard} draggable={draggable}>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 truncate font-medium">{p.name}</span>
         {/* 没有容器时不写状态，下面的内容区已经写了「暂无容器」。 */}
@@ -244,14 +247,64 @@ function useCollapsed() {
   return { collapsed, toggle };
 }
 
+// SortableCard：「自定义」排序时可以拖动的项目卡片，整张卡片都能按住拖。拖动中的卡片浮在上面、带阴影。
+function SortableCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[] | undefined }) {
+  const r = useReorderItem(summary.project!.id);
+  return (
+    <div
+      ref={r.ref}
+      style={r.style}
+      {...r.handle}
+      className={cn("grid min-w-0", r.enabled && "cursor-grab touch-manipulation", r.dragging && "relative z-10 cursor-grabbing *:shadow-lg")}
+    >
+      <ProjectCard summary={summary} nodes={nodes} draggable={r.enabled ? false : undefined} />
+    </div>
+  );
+}
+
+// GroupSection：一个分组：标题行和卡片。「自定义」排序时按住标题行上下拖动调整分组的顺序。
+function GroupSection({ id, name, count, open, onToggle, children }: { id: string; name: string; count: number; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  const r = useReorderItem(id);
+  return (
+    <section ref={r.ref} style={r.style} className={cn("min-w-0", r.dragging && "relative z-10 rounded-lg bg-background shadow-lg")}>
+      <GroupHeader name={name} count={count} open={open} onToggle={onToggle} handle={r.handle} handleRef={r.handleRef} sortable={r.enabled} />
+      {/* 展开、收起时高度和透明度一起过渡，下面的分组跟着移动（ui.md 的 Collapse）。间距放在里面，收起后不留空。 */}
+      <Collapse open={open}>
+        <div className="pt-2">{children}</div>
+      </Collapse>
+    </section>
+  );
+}
+
 // GroupHeader：分组的标题行，点击展开或收起。参考 Grafana 的文件夹行：箭头、名称、数量。
-function GroupHeader({ name, count, open, onToggle }: { name: string; count: number; open: boolean; onToggle: () => void }) {
+function GroupHeader({
+  name,
+  count,
+  open,
+  onToggle,
+  handle,
+  handleRef,
+  sortable,
+}: {
+  name: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  handle?: React.HTMLAttributes<HTMLElement>;
+  handleRef?: (el: HTMLElement | null) => void;
+  sortable?: boolean;
+}) {
   return (
     <button
       type="button"
+      ref={handleRef}
+      {...handle}
       aria-expanded={open}
       aria-label={open ? t.labels.collapse(name) : t.labels.expand(name)}
-      className="-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring"
+      className={cn(
+        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
+        sortable && "cursor-grab touch-manipulation active:cursor-grabbing",
+      )}
       onClick={onToggle}
     >
       <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
@@ -272,8 +325,9 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   const { isAdmin } = useRole();
   // 备用面板在设置里，只有管理员能处理。
   const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => isAdmin && !s.connected).map((s) => s.name);
-  const search = useSearch({ strict: false }) as { q?: string; sort?: "name"; group?: string; ungrouped?: true };
+  const search = useSearch({ strict: false }) as { q?: string; sort?: "name" | "custom"; group?: string; ungrouped?: true };
   const { collapsed, toggle } = useCollapsed();
+  const order = useProjectOrder();
   const [managing, setManaging] = useState(false);
   const navigateList = useNavigate();
   const sort = search.sort ?? "created";
@@ -284,7 +338,8 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
   const all = projects.data?.projects ?? [];
-  const groups = groupsOf(all);
+  const custom = search.sort === "custom";
+  const groups = custom ? order.sortGroups(groupsOf(all), (g) => g.name) : groupsOf(all);
   // 筛选的分组已经没有了（例如被删除）时，当作全部。
   const groupFilter = search.ungrouped ? "" : search.group && groups.some((g) => g.name === search.group) ? search.group : undefined;
   const q = query.trim().toLowerCase();
@@ -293,6 +348,11 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
     .filter(({ project: p }) => !q || [p?.name, p?.networkName, p?.group, ...(p?.containers ?? []).map((c) => c.name)].some((v) => v?.toLowerCase().includes(q)))
     .slice()
     .sort((a, b) => (sort === "name" ? (a.project?.name ?? "").localeCompare(b.project?.name ?? "") : Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)));
+  const idOf = (s: ProjectSummary) => s.project?.id ?? "";
+  const shown = custom ? order.sortProjects(shownProjects, idOf) : shownProjects;
+  // 拖动只改动所在列表里的顺序，其余项目（别的分组、被筛选掉的）保持原位。
+  const allIds = () => order.sortProjects(all.slice().sort((a, b) => Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)), idOf).map(idOf);
+  const projectName = (id: string) => all.find((s) => s.project?.id === id)?.project?.name ?? id;
 
   const newButton = (
     <ButtonLink to="/projects/new">
@@ -307,11 +367,21 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   const sections =
     groups.length > 0 && groupFilter === undefined
       ? [
-          ...groups.map((g) => ({ key: `g:${g.name}`, name: g.name, items: shownProjects.filter((s) => s.project?.group === g.name) })),
-          { key: "-", name: t.labels.ungrouped, items: shownProjects.filter((s) => !s.project?.group) },
+          ...groups.map((g) => ({ key: `g:${g.name}`, name: g.name, items: shown.filter((s) => s.project?.group === g.name) })),
+          { key: "-", name: t.labels.ungrouped, items: shown.filter((s) => !s.project?.group) },
         ].filter((s) => s.items.length > 0)
       : undefined;
-  const cards = (list: ProjectSummary[]) => <CardGrid>{list.map((summary) => summary.project && <ProjectCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}</CardGrid>;
+  const cards = (list: ProjectSummary[]) => {
+    const ids = list.map(idOf);
+    return (
+      <Reorder ids={ids} name={projectName} enabled={custom} strategy={rectSortingStrategy} onMove={(a, o) => order.moveProject(allIds(), ids, a, o)}>
+        <CardGrid>{list.map((summary) => summary.project && <SortableCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}</CardGrid>
+      </Reorder>
+    );
+  };
+  // 未分组的固定在最后，不参与分组的拖动。
+  const sortableSections = sections?.filter((s) => s.key !== "-") ?? [];
+  const sectionName = (key: string) => sections?.find((s) => s.key === key)?.name ?? key;
 
   return (
     <>
@@ -365,9 +435,15 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
                   <option value="-">{t.labels.ungrouped}</option>
                 </Select>
               )}
-              <Select value={sort} onChange={(e) => navigateList({ to: "/projects", search: (s) => ({ ...s, sort: e.target.value === "name" ? "name" : undefined }), replace: true })} aria-label={t.projects.filter.sort} className="w-auto shrink-0">
+              <Select
+                value={sort}
+                onChange={(e) => navigateList({ to: "/projects", search: (s) => ({ ...s, sort: e.target.value === "name" || e.target.value === "custom" ? e.target.value : undefined }), replace: true })}
+                aria-label={t.projects.filter.sort}
+                className="w-auto shrink-0"
+              >
                 <option value="created">{t.projects.filter.byCreated}</option>
                 <option value="name">{t.projects.filter.byName}</option>
+                <option value="custom">{t.projects.filter.byCustom}</option>
               </Select>
               </div>
             </div>
@@ -376,18 +452,22 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
             ) : sections ? (
               // 分组之间比组内（标题到卡片 8）宽，看得出哪些卡片属于同一组。
               <div className="grid gap-6">
-                {sections.map((s) => {
-                  const open = !collapsed.includes(s.key);
-                  return (
-                    <section key={s.key} className="grid gap-2">
-                      <GroupHeader name={s.name} count={s.items.length} open={open} onToggle={() => toggle(s.key)} />
-                      {open && cards(s.items)}
-                    </section>
-                  );
-                })}
+                <Reorder
+                  ids={sortableSections.map((s) => s.key)}
+                  name={sectionName}
+                  enabled={custom}
+                  strategy={verticalListSortingStrategy}
+                  onMove={(a, o) => order.moveGroup(groups.map((g) => g.name), a.slice(2), o.slice(2))}
+                >
+                  {sections.map((s) => (
+                    <GroupSection key={s.key} id={s.key} name={s.name} count={s.items.length} open={!collapsed.includes(s.key)} onToggle={() => toggle(s.key)}>
+                      {cards(s.items)}
+                    </GroupSection>
+                  ))}
+                </Reorder>
               </div>
             ) : (
-              cards(shownProjects)
+              cards(shown)
             )}
           </div>
         )}

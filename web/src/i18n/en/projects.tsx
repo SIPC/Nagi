@@ -36,7 +36,15 @@ export default {
     sort: "Sort",
     byCreated: "Newest",
     byName: "Name",
+    byCustom: "Custom",
     empty: "No matching projects",
+  },
+  reorder: {
+    instructions: "Press Space to pick up, use the arrow keys to move, and press Space again to drop. Press Escape to cancel.",
+    picked: (name: string) => `Picked up ${name}`,
+    over: (name: string, target: string) => `${name} moved to the position of ${target}`,
+    dropped: (name: string) => `Dropped ${name}`,
+    cancelled: (name: string) => `Canceled moving ${name}`,
   },
   offline: {
     body: "The state of containers on the node is unknown. They may still be running.",
