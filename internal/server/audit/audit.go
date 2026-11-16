@@ -250,21 +250,8 @@ func (l *Log) insert(ctx context.Context, e *Event) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	var next int64
 	// 先占一个 ID：哈希里要包含 ID，删掉中间一条以后后面的哈希对不上。
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'events'), 0) + 1`).Scan(&next); err != nil {
-		return 0, err
-	}
-	e.ID = next
-	e.PrevHash = l.lastHash
-	e.Hash = ChainHash(e.PrevHash, *e)
-	_, err = tx.ExecContext(ctx, `INSERT INTO events (id, time, category, action, actor_type, actor_id, actor_name, via, token_id, client,
-		session, ip, user_agent, project_id, target_type, target_id, target_name, params, result, error, duration_ms, parent_id,
-		recording_id, prev_hash, hash) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		e.ID, e.Time.UnixMilli(), e.Category, e.Action, e.ActorType, e.ActorID, e.ActorName, e.Via, e.TokenID, e.Client,
-		e.Session, e.IP, e.UserAgent, e.ProjectID, e.TargetType, e.TargetID, e.TargetName, e.Params, e.Result, e.Error,
-		e.DurationMS, e.ParentID, e.RecordingID, e.PrevHash, e.Hash)
-	if err != nil {
+	if err := l.insertTx(ctx, tx, l.lastHash, e); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -574,6 +561,20 @@ func (l *Log) deleteWhere(ctx context.Context, cond string, args ...any) error {
 		return err
 	}
 	defer tx.Rollback()
+	ids, err := queryIDs(ctx, tx, `SELECT id FROM events WHERE `+cond+` ORDER BY id`, args...)
+	if err != nil || len(ids) == 0 {
+		return err
+	}
+	// 要删掉的清理记录列出的 ID，墓碑还在的由这次的清理记录接着列出（见 pruned.go）。
+	var carried coverage
+	if rows, err := tx.QueryContext(ctx, `SELECT `+columns+` FROM events WHERE action = 'audit_pruned' AND (`+cond+`)`, args...); err == nil {
+		for rows.Next() {
+			if e, err := scan(rows); err == nil {
+				carried.add(e)
+			}
+		}
+		rows.Close()
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO tombstones (id, hash) SELECT id, hash FROM events WHERE `+cond, args...); err != nil {
 		return err
 	}
@@ -583,7 +584,29 @@ func (l *Log) deleteWhere(ctx context.Context, cond string, args ...any) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM tombstones WHERE id < (SELECT MIN(id) FROM events)`); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if len(carried.ranges) > 0 {
+		left, err := queryIDs(ctx, tx, `SELECT id FROM tombstones ORDER BY id`)
+		if err != nil {
+			return err
+		}
+		for _, id := range left {
+			if carried.covers(id) {
+				ids = append(ids, id)
+			}
+		}
+		slices.Sort(ids)
+		ids = slices.Compact(ids)
+	}
+	// 清理记录和删除在同一个事务里：中途崩溃不会留下没有清理记录的墓碑。
+	last, err := l.writePruneRecordsTx(ctx, tx, ids, false)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	l.lastHash = last
+	return nil
 }
 
 // size 是数据库实际占用的字节数（不含空闲页）。

@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 )
 
 // 哈希链校验（见 docs/audit.md#防篡改）：每条记录的 hash = SHA-256(prev_hash ‖ 规范化 JSON)，prev_hash 是上一条
-// 记录（或它的墓碑）的 hash。中间的记录被修改或删除都能发现；从某处起重写后面所有的记录发现不了，要靠外送的锚点对比。
+// 记录（或它的墓碑）的 hash，每个墓碑都要被清理记录列出（见 pruned.go）。从某处起重写后面所有的记录、在末尾追加伪造的记录发现不了，要靠外送的副本对比。
 
 // VerifyResult 是一次校验的结果。
 type VerifyResult struct {
@@ -24,6 +25,8 @@ type VerifyResult struct {
 	// LastID、LastHash 是链上最新的一条。
 	LastID   int64  `json:"last_id"`
 	LastHash string `json:"last_hash"`
+	// Tombstones 是墓碑的个数。
+	Tombstones int64 `json:"tombstones,omitempty"`
 }
 
 // OK 判断整条链完好。
@@ -79,6 +82,7 @@ func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
 	defer rows.Close()
 	var prevID int64 = -1
 	var prevHash string
+	var cov coverage
 	bad := func(id int64, reason string) {
 		if res.BadID == 0 {
 			res.BadID, res.Reason = id, reason
@@ -90,6 +94,9 @@ func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
 			return res, err
 		}
 		res.Records++
+		if e.Action == actionPruned {
+			cov.add(e)
+		}
 		if ChainHash(e.PrevHash, e) != e.Hash {
 			bad(e.ID, fmt.Sprintf("记录 %d 的内容和哈希对不上，可能被修改过", e.ID))
 		}
@@ -113,6 +120,24 @@ func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
 	}
 	if err := rows.Err(); err != nil {
 		return res, err
+	}
+	res.Tombstones = int64(len(tomb))
+	// 每个墓碑都要被清理记录列出：否则是有人删了记录、补了一个墓碑（见 pruned.go）。
+	if res.BadID == 0 && res.Records > 0 {
+		ids := make([]int64, 0, len(tomb))
+		for id := range tomb {
+			ids = append(ids, id)
+		}
+		slices.Sort(ids)
+		for _, id := range ids {
+			if !cov.covers(id) {
+				bad(id, fmt.Sprintf("记录 %d 被删除了，但没有对应的清理记录，墓碑可能是伪造的", id))
+				break
+			}
+		}
+	}
+	if res.BadID == 0 && cov.legacy > 1 {
+		bad(res.LastID, "有多条升级时写的清理记录，审计库可能被改过")
 	}
 	if res.Records == 0 && res.BadID == 0 {
 		var n int64

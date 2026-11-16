@@ -37,11 +37,11 @@ func TestVerifyDetectsDeletion(t *testing.T) {
 	if r, err := l.Verify(ctx); err != nil || !r.OK() || r.Records != 10 {
 		t.Fatalf("完好的链：%+v %v", r, err)
 	}
-	// 按保留时间清理：删掉第 1、3 条（普通记录），第 2 条（登录）留着，链靠墓碑接上。
+	// 按保留时间清理：删掉第 1、3 条（普通记录），第 2 条（登录）留着，链靠墓碑接上；链上多一条清理记录。
 	if err := l.Prune(ctx, DefaultRetention, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if r, err := l.Verify(ctx); err != nil || !r.OK() || r.Records != 8 {
+	if r, err := l.Verify(ctx); err != nil || !r.OK() || r.Records != 9 {
 		t.Fatalf("清理之后：%+v %v", r, err)
 	}
 	// 删掉中间的一条。

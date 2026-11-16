@@ -142,6 +142,7 @@ export default {
     UnisolateNode: "End node isolation",
     Enroll: "Node enrolled",
     audit_sinks_changed: "Edit log forwarding",
+    audit_pruned: "Expired records removed",
     violation: "Node violation reported",
     totp_failures: "Repeated wrong 2FA codes",
     admin_new_network: "Administrator sign-in from a new network",

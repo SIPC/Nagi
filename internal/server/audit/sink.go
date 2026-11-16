@@ -34,6 +34,8 @@ type Anchor struct {
 	Time time.Time `json:"time"`
 	ID   int64     `json:"id"`
 	Hash string    `json:"hash"`
+	// Tombstones 是当时的墓碑个数：和外送目标上的清理记录对照，墓碑突然变多说明有人删了记录。
+	Tombstones int64 `json:"tombstones"`
 }
 
 const (
@@ -246,9 +248,10 @@ func (s *Shipper) sendBatch(ctx context.Context, sk SinkConfig, lastAnchor *time
 	if anchorDue {
 		a := Anchor{Time: time.Now()}
 		_ = s.Log.db.QueryRowContext(ctx, `SELECT id, hash FROM events ORDER BY id DESC LIMIT 1`).Scan(&a.ID, &a.Hash)
+		_ = s.Log.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tombstones`).Scan(&a.Tombstones)
 		if a.ID > 0 {
 			anchor = &a
-			b, _ := json.Marshal(map[string]any{"type": "anchor", "time": a.Time.UTC().Format(time.RFC3339Nano), "id": a.ID, "hash": a.Hash})
+			b, _ := json.Marshal(map[string]any{"type": "anchor", "time": a.Time.UTC().Format(time.RFC3339Nano), "id": a.ID, "hash": a.Hash, "tombstones": a.Tombstones})
 			lines = append(lines, b)
 		}
 	}

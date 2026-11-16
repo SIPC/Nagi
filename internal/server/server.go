@@ -106,6 +106,10 @@ func (s *Server) openAudit(ctx context.Context, isStandby bool) error {
 	}
 	if !isStandby {
 		_ = l.SetMeta(ctx, "role", "primary")
+		// 升级前留下的墓碑没有清理记录，写 legacy 的（见 docs/audit.md#防篡改），只做一次。
+		if err := l.CoverLegacyTombstones(ctx); err != nil {
+			s.log.Warn("为已有的墓碑写清理记录失败", "err", err)
+		}
 		if n, err := l.MigrateActivity(ctx, s.db); err != nil {
 			s.log.Warn("迁移活动记录失败", "err", err)
 		} else if n > 0 {
