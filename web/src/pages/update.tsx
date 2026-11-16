@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, AutoHeight, Button, dotColor, HelpTip, Skeleton, Spinner, Waves } from "@/components/ui";
+import { Alert, AutoHeight, Button, dotColor, HelpTip, Skeleton, Spinner, textLink, Waves } from "@/components/ui";
 import { confirmAction } from "@/components/confirm";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
@@ -212,7 +212,7 @@ function inline(text: string) {
       );
     } else {
       out.push(
-        <a key={m.index} className="text-foreground underline underline-offset-4" href={m[3]} target="_blank" rel="noreferrer">
+        <a key={m.index} className={textLink} href={m[3]} target="_blank" rel="noreferrer">
           {m[2]}
         </a>,
       );

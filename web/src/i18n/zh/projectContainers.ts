@@ -5,7 +5,7 @@ export default {
   imageTip: {
     label: "镜像可更新",
     title: "镜像有新版本",
-    body: "有更新。更新时会拉取新镜像并重建容器，服务短暂中断。",
+    body: "更新时会拉取新镜像并重建容器，服务短暂中断。",
     later: "稍后",
     update: "更新容器",
   },
@@ -147,7 +147,7 @@ export default {
     empty: "暂无日志",
   },
   config: {
-    notice: "改动保存为草稿，部署后生效。",
+    notice: "改动保存为草稿，部署后生效",
     portsLink: "在「网络」标签页配置端口映射",
     composeHelp: "ports 仅在首次出现时导入为端口映射；已有的端口映射和域名在「网络」标签页编辑，此处编辑 ports 不生效。",
     git: "Git 仓库",

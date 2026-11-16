@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { ChevronRight } from "lucide-react";
-import { Collapse, Field, FormRow, Input, Segmented, Textarea } from "@/components/ui";
+import { Collapse, Field, FormRow, Input, oneLineTextarea, Segmented, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { checkEnv, checkPorts, envToText, lines, portsToText, textToEnv, textToPorts } from "@/lib/config";
 import { t } from "@/i18n";
@@ -85,7 +85,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
   const [healthInterval, setHealthInterval] = useState(initial?.healthIntervalSeconds ? String(initial.healthIntervalSeconds) : "");
   const volumesField = (
     <Field label={t.containerForm.volumes} htmlFor={prefix + "volumes"} help={`${t.containerForm.volumesHint}${t.common.sentenceEnd}${t.containerForm.volumesHelp}`}>
-      <Textarea id={prefix + "volumes"} rows={Math.max(1, volumes.split("\n").length)} value={volumes} onChange={(e) => setVolumes(e.target.value)} className={cn("min-h-8 resize-none py-[5px] max-md:py-[9px]", monoInput)} placeholder="/data" spellCheck={false} />
+      <Textarea id={prefix + "volumes"} rows={Math.max(1, volumes.split("\n").length)} value={volumes} onChange={(e) => setVolumes(e.target.value)} className={cn(oneLineTextarea, monoInput)} placeholder="/data" spellCheck={false} />
     </Field>
   );
   const imageField = (

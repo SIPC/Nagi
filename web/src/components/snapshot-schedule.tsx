@@ -1,7 +1,7 @@
 // 定时快照的计划（见 docs/snapshot.md#定时快照）：开关，按间隔或每天定时。项目设置和容器的「存储」标签共用。
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { ProjectSettings, SnapshotSchedule, SnapshotScheduleSchema } from "@/gen/nagi/v1/common_pb";
-import { Check, Collapse, Field, FormRow, Input, Select } from "@/components/ui";
+import { Check, Collapse, Field, FormRow, Input, Segmented } from "@/components/ui";
 import { defaultSnapshotIntervalMinutes } from "@/lib/config";
 import { t } from "@/i18n";
 
@@ -109,11 +109,18 @@ export function ScheduleFields({
       </Check>
       <Collapse open={value.enabled}>
         <FormRow className="pt-4">
-          <Field label={m.mode} htmlFor={`${id}-mode`}>
-            <Select id={`${id}-mode`} value={value.mode} disabled={disabled} onChange={(e) => onChange({ ...value, mode: e.target.value as ScheduleForm["mode"] })}>
-              <option value="interval">{m.interval}</option>
-              <option value="daily">{m.daily}</option>
-            </Select>
+          {/* 两种方式之间切换用切换控件（ui.md：2 到 3 项）。 */}
+          <Field label={m.mode}>
+            <Segmented
+              label={m.mode}
+              value={value.mode}
+              disabled={disabled}
+              onChange={(mode) => onChange({ ...value, mode })}
+              items={[
+                { value: "interval", label: m.interval },
+                { value: "daily", label: m.daily },
+              ]}
+            />
           </Field>
           {value.mode === "interval" ? (
             <Field label={m.intervalMinutes} htmlFor={`${id}-interval`} error={errors.interval}>

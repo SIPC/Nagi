@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner } from "@/components/ui";
+import { Alert, Button, CodeBlock, EmptyRow, List, QueryError, Row, RowsSkeleton, Section, Spinner, textLink } from "@/components/ui";
 import { formatDateTime, timeUntil } from "@/lib/utils";
 import { t } from "@/i18n";
 
@@ -59,7 +59,7 @@ export function InviteCard() {
       title={t.settings.tabs.invite.label}
       help={t.invite.help}
       description={t.invite.description(
-        <Link to="/nodes" className="text-foreground underline-offset-4 hover:underline">
+        <Link to="/nodes" className={textLink}>
           {t.invite.addNode}
         </Link>,
       )}

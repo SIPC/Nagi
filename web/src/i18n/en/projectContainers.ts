@@ -6,7 +6,7 @@ export default {
   imageTip: {
     label: "Image update available",
     title: "New image version",
-    body: "has an update. Updating pulls the new image and recreates the container. The service is briefly interrupted.",
+    body: "Updating pulls the new image and recreates the container. The service is briefly interrupted.",
     later: "Later",
     update: "Update container",
   },
@@ -152,7 +152,7 @@ export default {
     empty: "No logs",
   },
   config: {
-    notice: "Changes are saved as a draft and take effect after deployment.",
+    notice: "Changes are saved as a draft and take effect after deployment",
     portsLink: "Configure port mappings on the Network tab",
     composeHelp:
       "ports are imported as port mappings only when they first appear. Edit existing port mappings and domains on the Network tab; editing ports here has no effect.",

@@ -31,6 +31,7 @@ import {
   Skeleton,
   Spinner,
   dotColor,
+  textLink,
 } from "@/components/ui";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
@@ -102,7 +103,7 @@ function Attention({ offlineNodes, offlineStandbys }: { offlineNodes: string[]; 
       short: m.totp,
       title: t.projects.reminders.totpTitle,
       text: t.projects.reminders.totpText(
-        <Link to="/settings" search={{ tab: "security" }} className="mx-1 text-foreground underline underline-offset-2">
+        <Link to="/settings" search={{ tab: "security" }} className={cn("mx-1", textLink)}>
           {t.projects.reminders.totpLink}
         </Link>,
       ),
@@ -556,7 +557,7 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
           nodes.data && onlineNodes.length === 0 && (
             <>
               {t.projects.nodeChoice.noOnlineNodesHint}{" "}
-              <Link to="/nodes" className="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
+              <Link to="/nodes" className={textLink}>
                 {t.projects.nodeChoice.viewNodes}
               </Link>
             </>
@@ -642,7 +643,7 @@ function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialG
             <span className="text-muted-foreground">{t.projects.create.networkName}</span>
             <span className="min-w-0 truncate">{generated || "—"}</span>
             <HelpTip className="-ml-1">{`${t.projects.create.slugHint}${t.common.sentenceEnd}${t.projects.create.networkHelp}`}</HelpTip>
-            <button type="button" className="cursor-pointer underline underline-offset-4 decoration-border hover:decoration-foreground" onClick={() => setEditNetwork(true)}>
+            <button type="button" className={textLink} onClick={() => setEditNetwork(true)}>
               {t.projects.create.editNetwork}
             </button>
           </div>

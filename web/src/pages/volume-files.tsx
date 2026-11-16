@@ -408,7 +408,8 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
                 )
               }
               cols={[{ content: e.isDir || e.isSymlink ? "" : fmtBytes(Number(e.size)), num: true }, { content: <span title={formatDateTime(toDate(e.modified))}>{capitalize(timeAgo(toDate(e.modified)))}</span> }]}
-              actionsWidth="w-28"
+              // 快照里一行两个按钮（下载、恢复），英文要 140 左右，操作列放宽；同一列表的各行同宽。
+              actionsWidth={snapshot ? "w-40" : "w-28"}
               actions={
                 snapshot ? (
                   e.isSymlink ? null : (

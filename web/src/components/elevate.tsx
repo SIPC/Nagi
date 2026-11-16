@@ -4,7 +4,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Alert, Button, Dialog, DialogActions, Field, Input, Spinner } from "@/components/ui";
+import { Alert, Button, Dialog, DialogActions, Field, Input, Spinner, textLink } from "@/components/ui";
 import { t } from "@/i18n";
 import { authClient, errorMessage, toDate } from "@/lib/api";
 
@@ -81,7 +81,7 @@ export function ElevateHost() {
             <>
               {" "}
               {m.enableTotp}{" "}
-              <Link to="/settings" search={{ tab: "security" }} className="text-foreground underline underline-offset-4" onClick={() => finish(false)}>
+              <Link to="/settings" search={{ tab: "security" }} className={textLink} onClick={() => finish(false)}>
                 {m.securityLink}
               </Link>
             </>

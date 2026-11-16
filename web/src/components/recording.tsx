@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as AsciinemaPlayer from "asciinema-player";
 import "asciinema-player/dist/bundle/asciinema-player.css";
-import { Dialog, Input, List, QueryError, RowsSkeleton } from "@/components/ui";
+import { Dialog, EmptyRow, Input, List, QueryError, RowsSkeleton } from "@/components/ui";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { requireElevation } from "@/components/elevate";
 import { t } from "@/i18n";
@@ -106,14 +106,15 @@ export function RecordingDialog({ id, open, onClose }: { id: string; open: boole
             {query.trim() !== "" && (
               <div className="max-h-40 overflow-y-auto">
                 {hits.length === 0 ? (
-                  <p className="text-muted-foreground">{m.noMatch}</p>
+                  <EmptyRow>{m.noMatch}</EmptyRow>
                 ) : (
                   <List>
                     {hits.map((h, i) => (
                       <button
                         key={i}
                         type="button"
-                        className="flex min-h-8 items-center gap-3 rounded-md px-2 text-left hover:bg-accent"
+                        // 和列表行同样的尺寸：高 36、左右 8、列之间 16；整行是按钮，点了跳到那一刻。
+                        className="flex min-h-9 cursor-pointer items-center gap-4 rounded-md border border-transparent px-2 text-left outline-none transition-colors hover:bg-accent focus-ring"
                         onClick={() => player.current?.seek(Math.max(0, h.time - 0.5)).then(() => player.current?.play())}
                       >
                         <span className="w-12 shrink-0 font-mono text-[13px] text-muted-foreground tabular-nums">{clock(h.time)}</span>

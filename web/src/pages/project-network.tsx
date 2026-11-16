@@ -7,7 +7,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
-import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, Notice, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor } from "@/components/ui";
+import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, Notice, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor, textLink } from "@/components/ui";
 import type { DomainCheck } from "@/gen/nagi/v1/api_pb";
 import type { Container, Exposure, ExposureSchema, Project, ServiceStatus } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
@@ -230,7 +230,7 @@ function RouteSub({ route: r, checks, entries, hasAddress, overview, onReason }:
               {part.cert && onReason && (
                 <>
                   {" · "}
-                  <button type="button" className="cursor-pointer rounded-sm text-foreground underline decoration-border underline-offset-4 outline-none focus-ring" onClick={onReason}>
+                  <button type="button" className={textLink} onClick={onReason}>
                     {m.check.certErrorDetail}
                   </button>
                 </>

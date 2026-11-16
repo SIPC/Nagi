@@ -18,7 +18,7 @@ import { TerminalView } from "@/components/terminal";
 import { composeInputClass, formToCompose, useImageForm, useContainerForm } from "@/components/container-form";
 import { useNodeChoice } from "@/pages/projects";
 import { Breadcrumb, MobileBar, PageHeader } from "@/pages/layout";
-import { ContainerHA, ContainerStorage } from "@/pages/project-data";
+import { ContainerHA, ContainerStorage, NotDeployed } from "@/pages/project-data";
 import { ContainerNetwork } from "@/pages/project-network";
 import {
   Alert,
@@ -57,6 +57,8 @@ import {
   Status,
   Tabs,
   Textarea,
+  oneLineTextarea,
+  textLink,
 } from "@/components/ui";
 import { create } from "@bufbuild/protobuf";
 import { AlertRulesSchema, type AlertRules, type Container, type Project, type ServiceStatus } from "@/gen/nagi/v1/common_pb";
@@ -268,7 +270,8 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
       actions={
         project.containers.length > 1 &&
         targets.length > 0 && (
-          <Button disabled={busy} onClick={() => deploy(targets)}>
+          // 窄屏上页头已有主按钮，这里用次要按钮，同一区域不出现两个主按钮。
+          <Button variant="outline" disabled={busy} onClick={() => deploy(targets)}>
             {busy && <Spinner />}
             {pc.table.deploySelected(targets.length)}
           </Button>
@@ -441,8 +444,10 @@ function ImageTip({ images, disabled, onClose, onUpdate }: { images: string; dis
           <X />
         </Button>
       </div>
+      {/* 标题已经说了有新版本：下面一行写是哪个镜像，再一行写后果，不再重复「有更新」。 */}
       <p className="text-muted-foreground">
-        <span className="font-mono text-[13px]">{images}</span> {tip.body}
+        <span className="block font-mono text-[13px] text-foreground">{images}</span>
+        {tip.body}
       </p>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={close}>
@@ -943,7 +948,8 @@ function Overview({ project, container, services }: { project: Project; containe
       {showServices && (
         <Section title={o.servicesTitle}>
           {services.length === 0 ? (
-            <EmptyRow>{t.common.status.notDeployed}</EmptyRow>
+            // 和存储页一样：还没部署时给「部署」按钮。
+            container.deployedVersion === 0n ? <NotDeployed project={project} container={container} /> : <EmptyRow>{t.common.status.notDeployed}</EmptyRow>
           ) : (
             <List>
               {services.map((s) => (
@@ -1175,7 +1181,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
         </div>
         <div className="flex items-center gap-2">
           {/* 复选框，开关状态一眼看得出。 */}
-          <Check checked={showTime} onChange={setShowTime} className="mr-2">
+          <Check checked={showTime} onChange={setShowTime}>
             {l_.showTime}
           </Check>
           <Button variant="outline" readOnlyOk onClick={() => setFrozen(frozen ? null : lines)}>
@@ -1316,7 +1322,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const textField = "font-mono text-[13px] max-md:text-base";
   const portsLink = (
     <p className="text-muted-foreground">
-      <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className="underline decoration-border underline-offset-4 hover:decoration-foreground">
+      <Link to="/projects/$projectId/c/$container" params={{ projectId: project.id, container: container.name }} search={{ view: "network" }} className={textLink}>
         {c.portsLink}
       </Link>
     </p>
@@ -1386,9 +1392,16 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
         title={isForm ? t.containerForm.env : c.groupEnv}
         help={isForm ? undefined : c.groupEnvHelp}
         actions={
-          <Button variant="ghost" className="-mr-3" onClick={() => setEnvMode(envMode === "rows" ? "text" : "rows")}>
-            {envMode === "rows" ? t.containerForm.envText : t.containerForm.envRows}
-          </Button>
+          // 两种编辑方式之间切换，和同页「表单 / Compose」一样用切换控件，不用会变文字的按钮。
+          <Segmented
+            label={t.containerForm.env}
+            value={envMode}
+            onChange={setEnvMode}
+            items={[
+              { value: "rows", label: t.containerForm.envRows },
+              { value: "text", label: t.containerForm.envText },
+            ]}
+          />
         }
       >
         {isForm ? <EnvEditor id="edit-env" mode={envMode} value={imageForm.env} onChange={imageForm.setEnv} /> : <EnvEditor id="edit-env" mode={envMode} value={env} onChange={setEnv} />}
@@ -1427,7 +1440,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
               <Input id="edit-ref" value={gitRef} onChange={(e) => setGitRef(e.target.value)} placeholder="main" className={textField} autoComplete="off" spellCheck={false} />
             </Field>
             <Field label={c.preserve} htmlFor="edit-preserve" help={`${c.preserveHint}${t.common.sentenceEnd}${c.preserveHelp}`}>
-              <Textarea id="edit-preserve" rows={Math.max(1, preserve.split("\n").length)} value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} placeholder="uploads/" className={cn(textField, "min-h-8 resize-none py-[5px] max-md:py-[9px]")} />
+              <Textarea id="edit-preserve" rows={Math.max(1, preserve.split("\n").length)} value={preserve} onChange={(e) => setPreserve(e.target.value)} spellCheck={false} placeholder="uploads/" className={cn(textField, oneLineTextarea)} />
             </Field>
             <Field label={c.dependsOn} htmlFor="edit-deps" help={`${c.dependsOnHint}${t.common.sentenceEnd}${c.dependsOnHelp}`}>
               <Input id="edit-deps" value={dependsOn} onChange={(e) => setDependsOn(e.target.value)} placeholder="db, cache" className={textField} autoComplete="off" spellCheck={false} />
@@ -1547,12 +1560,12 @@ function Versions({
                 title={
                   <>
                     <span>{`v${x.version}`}</span>
-                    {!x.deployedAt && <span className="text-destructive">{v_.deployFailed}</span>}
+                    {!x.deployedAt && <span className="text-muted-foreground">{v_.deployFailed}</span>}
                     {notes.length > 0 && <span className="truncate text-muted-foreground">{notes.join(" · ")}</span>}
                   </>
                 }
                 cols={[
-                  { num: true, width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={t.common.list(Object.values(x.images))}>{imageDigest(x.images)}</span> },
+                  { width: "w-64", content: <span className="font-mono text-[13px] leading-none" title={t.common.list(Object.values(x.images))}>{imageDigest(x.images)}</span> },
                   { content: x.deployedAt ? capitalize(timeAgo(toDate(x.deployedAt))) : "" },
                 ]}
                 actions={

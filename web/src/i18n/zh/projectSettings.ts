@@ -71,7 +71,7 @@ export default {
     showAll: (n: number) => `显示全部 ${n} 条`,
     sources: {
       manual: "手动部署",
-      git: "git 拉取",
+      git: "Git 拉取",
       image: "镜像更新",
       rollback: "容器回滚",
       sharedEnv: "共享变量",

@@ -124,6 +124,9 @@ export function Input({ className, ...props }: React.ComponentProps<"input">) {
   return <input className={cn(control, "h-8 max-md:h-10", className)} {...props} />;
 }
 
+// oneLineTextarea：默认一行、按内容加行的文本框（卷、保留路径）：一行时和 Input 一样高。
+export const oneLineTextarea = "min-h-8 resize-none py-[5px] max-md:py-[9px]";
+
 export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return <textarea className={cn(control, "min-h-8 py-1.5 leading-5", className)} {...props} />;
 }
@@ -948,6 +951,9 @@ export function CodeBlock({ children, copy, nowrap, className }: { children: str
   );
 }
 
+// textLink：句子里的文字链接（含当按钮用的文字）。主文字色、浅色下划线，悬停下划线变深，有焦点样式。
+export const textLink = "cursor-pointer rounded-sm text-foreground underline decoration-border underline-offset-4 outline-none transition-colors hover:decoration-foreground focus-ring";
+
 // LogBox：日志和命令输出的深色区域。里面要放块级元素（每行一个 div）时用 logBoxClass 写在 div 上。
 export const logBoxClass = "overflow-auto rounded-lg bg-log px-4 py-3 font-mono text-[13px] leading-5 text-log-foreground";
 export function LogBox({ className, ...props }: React.ComponentProps<"pre">) {
@@ -1181,7 +1187,7 @@ export function Tabs<T extends string>({
 }
 
 // SegmentedControl：两三个选项之间切换（例如"容器 / 容器组"）。
-export function Segmented<T extends string>({ value, onChange, items, label }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode }[]; label?: string }) {
+export function Segmented<T extends string>({ value, onChange, items, label, disabled }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode }[]; label?: string; disabled?: boolean }) {
   const listRef = useRef<HTMLDivElement>(null);
   const box = useTabIndicator(value, listRef);
   return (
@@ -1192,7 +1198,8 @@ export function Segmented<T extends string>({ value, onChange, items, label }: {
           <TabsTrigger
             key={it.value}
             value={it.value}
-            className="relative h-full cursor-pointer rounded-md border border-transparent px-2 text-sm text-foreground/60 max-md:flex-1 max-md:whitespace-nowrap outline-none transition-colors focus-ring data-[state=active]:text-foreground"
+            disabled={disabled}
+            className="relative h-full cursor-pointer rounded-md border border-transparent px-2 text-sm text-foreground/60 max-md:flex-1 max-md:whitespace-nowrap outline-none transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=active]:text-foreground"
           >
             {it.label}
           </TabsTrigger>

@@ -3,6 +3,7 @@ import type { ContainerConfig } from "@/gen/nagi/v1/common_pb";
 import { portsToText } from "@/lib/config";
 import { t } from "@/i18n";
 
+// 行首写字段的英文键名（和 compose 的写法一样），是代码式的对比，不翻译。
 function configLines(c: ContainerConfig | undefined): string[] {
   if (!c) return [];
   const out: string[] = [];
@@ -84,8 +85,9 @@ export function LineDiff({ before, after, none }: { before: string; after: strin
 export function ConfigDiff({ deployed, draft }: { deployed: ContainerConfig | undefined; draft: ContainerConfig | undefined }) {
   const ops = diffLines(configLines(deployed), configLines(draft)).filter((o) => o.kind !== "same");
   if (ops.length === 0) return <p className="text-muted-foreground">{t.projectContainers.config.diffNone}</p>;
+  // 和 LineDiff 一样最高 256，改动很多时在框里滚动。
   return (
-    <div className="overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5 whitespace-pre">
+    <div className="max-h-64 overflow-auto rounded-lg bg-muted p-3 font-mono text-[13px] leading-5 whitespace-pre">
       {ops.map((o, i) => (
         <div key={i} className={o.kind === "add" ? "text-success" : "text-destructive"}>
           {`${o.kind === "add" ? "+" : "-"} ${maskLine(o.text)}`}

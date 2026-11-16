@@ -140,6 +140,7 @@ export function TerminalSession({ url, deps = [], beforeConnect, intro, canConne
       {conn.kind === "ended" || conn.kind === "failed" ? (
         <Notice
           tone={conn.kind === "failed" ? "danger" : "neutral"}
+          title={conn.message}
           actions={
             <>
               {picker}
@@ -148,9 +149,7 @@ export function TerminalSession({ url, deps = [], beforeConnect, intro, canConne
               </Button>
             </>
           }
-        >
-          <span className="font-medium">{conn.message}</span>
-        </Notice>
+        />
       ) : (
         <header className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 items-center gap-3">
