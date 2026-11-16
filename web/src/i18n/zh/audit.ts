@@ -115,7 +115,7 @@ export default {
     ExportAuditEvents: "导出审计记录",
     CloseTerminal: "关闭容器终端",
     GetRecording: "回放终端录制",
-    SetAuditSettings: "修改审计设置",
+    SetAuditSettings: "编辑审计设置",
     reverify: "重新验证身份",
     reverify_failed: "重新验证失败",
     reverify_locked: "重新验证失败次数过多",

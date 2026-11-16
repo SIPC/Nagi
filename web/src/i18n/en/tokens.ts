@@ -13,7 +13,7 @@ export default {
   expires: "Expiration",
   expiryOptions: { 30: "30 days", 90: "90 days", 365: "1 year", 0: "Never" },
   allowWrite: "Allow changes",
-  allowWriteHelp: "Deploy, restart, roll back, change configuration and more.",
+  allowWriteHelp: "Deploy, restart, roll back, edit configuration and more.",
   allowExec: "Run commands",
   allowExecHelp: "Run commands in containers, with the same permission as the terminal.",
   allowNodeExec: "Node terminal",

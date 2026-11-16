@@ -115,7 +115,7 @@ export default {
     ExportAuditEvents: "Export audit records",
     CloseTerminal: "Close container terminal",
     GetRecording: "Replay terminal recording",
-    SetAuditSettings: "Change audit settings",
+    SetAuditSettings: "Edit audit settings",
     reverify: "Verify identity again",
     reverify_failed: "Identity verification failed",
     reverify_locked: "Too many failed verifications",

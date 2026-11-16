@@ -12,7 +12,7 @@ export default {
   expires: "有效期",
   expiryOptions: { 30: "30 天", 90: "90 天", 365: "1 年", 0: "不过期" } as Record<number, string>,
   allowWrite: "可修改",
-  allowWriteHelp: "部署、重启、回滚、修改配置等。",
+  allowWriteHelp: "部署、重启、回滚、编辑配置等。",
   allowExec: "执行命令",
   allowExecHelp: "在容器里执行命令，和终端权限相同。",
   allowNodeExec: "节点终端",
