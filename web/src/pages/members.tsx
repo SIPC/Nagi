@@ -93,7 +93,7 @@ function ScopePick({
   const allLabels = [...labels, ...pickedLabels.filter((p) => !labels.some((l) => l.name === p)).map((name) => ({ name, count: 0 }))];
   const heading = "pt-1 text-[13px] leading-5 text-muted-foreground first:pt-0";
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} help={hint}>
       <div className="grid">
         <div>
           <Segmented
@@ -226,7 +226,7 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
         save.mutate();
       }}
     >
-      <Field label={t.members.role} htmlFor="member-edit-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
+      <Field label={t.members.role} htmlFor="member-edit-role" help={t.members.roleHelp}>
         <Select id="member-edit-role" value={role} onChange={(e) => setRole(e.target.value)}>
           {roleOptions}
         </Select>
@@ -272,7 +272,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
       <Field label={t.members.password} htmlFor="member-password" hint={t.members.passwordHint}>
         <Input id="member-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
-      <Field label={t.members.role} htmlFor="member-role" hint={t.members.roleHints[role as (typeof roles)[number]]}>
+      <Field label={t.members.role} htmlFor="member-role" help={t.members.roleHelp}>
         <Select id="member-role" value={role} onChange={(e) => setRole(e.target.value)}>
           {roleOptions}
         </Select>

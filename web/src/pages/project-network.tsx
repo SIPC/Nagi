@@ -580,14 +580,15 @@ function RoutesSection({ project, services, container }: { project: Project; ser
             </Field>
           </FormRow>
           <Collapse open={isHTTP} gap={4}>
-            <Field
-              label={m.domains}
-              htmlFor="route-domains"
-              help={m.domainsHelp}
-              hint={hasDomains ? <DraftDns checks={draftDomains.checks} error={draftDomains.error} /> : undefined}
-            >
+            <Field label={m.domains} htmlFor="route-domains" help={m.domainsHelp}>
               <Input id="route-domains" autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="app.example.com" value={form.domains} onChange={(e) => setForm({ ...form, domains: e.target.value })} />
             </Field>
+            {/* 各入口节点的解析结果：字段下面单独一行，不占格式说明的位置。 */}
+            {hasDomains && (
+              <div className="pt-2 leading-5 text-muted-foreground">
+                <DraftDns checks={draftDomains.checks} error={draftDomains.error} />
+              </div>
+            )}
           </Collapse>
           <Collapse open={!hasDomains} gap={4}>
             <Field label={m.nodePort} htmlFor="route-published" help={m.nodePortHelp} error={publishedError}>

@@ -842,7 +842,7 @@ function RenameContainer({ project, container, onDone }: { project: Project; con
         save();
       }}
     >
-      <Field label={r.label} htmlFor="container-display-name" hint={r.hint(container.name)}>
+      <Field label={r.label} htmlFor="container-display-name">
         <Input id="container-display-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} placeholder={container.name} autoFocus />
       </Field>
       {error && <Alert>{error}</Alert>}

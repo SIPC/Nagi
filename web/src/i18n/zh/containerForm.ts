@@ -8,7 +8,7 @@ export default {
   envShow: "显示值",
   envHide: "隐藏值",
   image: "镜像",
-  imagePlaceholder: "例如 nginx:alpine",
+  imagePlaceholder: "nginx:alpine",
   command: "启动命令",
   commandHint: "留空使用镜像默认命令",
   compose: "Compose",

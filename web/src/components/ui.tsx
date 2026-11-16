@@ -222,8 +222,8 @@ export function Field({
   help?: React.ReactNode;
   htmlFor?: string;
   className?: string;
-  // error：填写有误时的说明，显示在格式说明的位置。
-  error?: string;
+  // error：填写有误或做不了时的说明，显示在格式说明的位置，可以带链接。
+  error?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const errorId = error && htmlFor ? `${htmlFor}-error` : undefined;

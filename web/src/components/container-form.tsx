@@ -114,7 +114,7 @@ export function useImageForm(initial?: ImageForm, prefix = "", top?: ReactNode, 
       {top}
       <FormRow>
         {!editing && (
-          <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} hint={t.containerForm.portsHint} help={t.containerForm.portsHelp}>
+          <Field label={t.containerForm.ports} htmlFor={prefix + "ports"} error={checkPorts(ports)} help={`${t.containerForm.portsHint}${t.common.sentenceEnd}${t.containerForm.portsHelp}`}>
             <Input
               id={prefix + "ports"}
               value={ports}

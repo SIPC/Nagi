@@ -524,7 +524,8 @@ export function useNodeChoice(args: { projectId?: string; projectName: string; c
         label={t.projects.nodeChoice.node}
         htmlFor="container-node"
         help={t.projects.nodeChoice.nodeHelp}
-        hint={
+        // 没有在线节点时提交不了：红字写原因并给去处，不写在格式说明的位置。
+        error={
           nodes.data && onlineNodes.length === 0 && (
             <>
               {t.projects.nodeChoice.noOnlineNodesHint}{" "}

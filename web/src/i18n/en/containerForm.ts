@@ -9,7 +9,7 @@ export default {
   envShow: "Show value",
   envHide: "Hide value",
   image: "Image",
-  imagePlaceholder: "For example, nginx:alpine",
+  imagePlaceholder: "nginx:alpine",
   command: "Command",
   commandHint: "Leave blank for the image default",
   compose: "Compose",

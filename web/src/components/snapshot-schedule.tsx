@@ -116,7 +116,7 @@ export function ScheduleFields({
             </Select>
           </Field>
           {value.mode === "interval" ? (
-            <Field label={m.intervalMinutes} htmlFor={`${id}-interval`} hint={m.intervalHint} error={errors.interval}>
+            <Field label={m.intervalMinutes} htmlFor={`${id}-interval`} error={errors.interval}>
               <Input
                 id={`${id}-interval`}
                 value={value.interval}
@@ -128,7 +128,7 @@ export function ScheduleFields({
               />
             </Field>
           ) : (
-            <Field label={m.times} htmlFor={`${id}-times`} hint={m.timesHint(timeZone ?? browserTimeZone())} error={errors.times}>
+            <Field label={m.times} htmlFor={`${id}-times`} hint={m.timesHint} help={m.timesZone(timeZone ?? browserTimeZone())} error={errors.times}>
               <Input
                 id={`${id}-times`}
                 value={value.times}
