@@ -41,7 +41,10 @@ func looksLikeTool(fp string) bool {
 	return a[8:] != "h2" || exts < 14
 }
 
-// fingerprints 记着每个连接的指纹：握手时算好（GetConfigForClient 里只有底层连接），HTTP 服务拿到连接时取走。
+// fingerprints 记着每个连接的指纹：握手时按底层连接记下（GetConfigForClient 里只有底层连接），握手结束后
+// 不管成败马上取走（TakeFingerprint），要交给 HTTP 服务的再按 TLS 连接放回去（HoldFingerprint），HTTP 服务拿到
+// 连接时取走。表里只有正在握手和排队等 HTTP 服务接收的连接：握手失败、中途断开、节点和备用面板的连接都不会留下，
+// 没登录的人不能借反复中止握手让它一直变大。
 var fingerprints sync.Map // net.Conn → string
 
 // RecordFingerprint 记下底层连接的 ClientHello 指纹，在 GetConfigForClient 里调用。
@@ -51,7 +54,21 @@ func RecordFingerprint(h *tls.ClientHelloInfo) {
 	}
 }
 
-// TakeFingerprint 取走底层连接的指纹。
+// HoldFingerprint 把握手后取出的指纹按 TLS 连接放回去，等 HTTP 服务的 ConnContext 取走。
+func HoldFingerprint(c net.Conn, fp string) {
+	if fp != "" {
+		fingerprints.Store(c, fp)
+	}
+}
+
+// FingerprintCount 是指纹表里的项数，测试用。
+func FingerprintCount() int {
+	n := 0
+	fingerprints.Range(func(_, _ any) bool { n++; return true })
+	return n
+}
+
+// TakeFingerprint 取走连接的指纹。
 func TakeFingerprint(raw net.Conn) string {
 	v, ok := fingerprints.LoadAndDelete(raw)
 	if !ok {

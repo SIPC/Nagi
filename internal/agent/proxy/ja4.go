@@ -36,19 +36,35 @@ type ja4Entry struct {
 }
 
 // ja4Keep 是指纹保留多久：超过它的连接（长连接）的请求不再带指纹，面板这时不做这项检查。
-const ja4Keep = time.Hour
+// ja4Max 是最多记多少个连接：没登录的人能不断发起握手，表不能无限变大。满了先删一分钟以前的，还是满的就清空，
+// 这些连接之后的请求不带指纹，面板不做这项检查。
+const (
+	ja4Keep = time.Hour
+	ja4Max  = 50000
+)
 
 func rememberJA4(addr, fp string) {
 	ja4Conns.Lock()
 	defer ja4Conns.Unlock()
 	now := time.Now()
+	if len(ja4Conns.m) >= ja4Max {
+		pruneJA4(now, time.Minute)
+		if len(ja4Conns.m) >= ja4Max {
+			ja4Conns.m = map[string]ja4Entry{}
+		}
+	}
 	ja4Conns.m[addr] = ja4Entry{fp, now}
 	if now.Sub(ja4Conns.last) > time.Minute {
 		ja4Conns.last = now
-		for k, e := range ja4Conns.m {
-			if now.Sub(e.at) > ja4Keep {
-				delete(ja4Conns.m, k)
-			}
+		pruneJA4(now, ja4Keep)
+	}
+}
+
+// pruneJA4 删掉 keep 以前记的。调用方持有锁。
+func pruneJA4(now time.Time, keep time.Duration) {
+	for k, e := range ja4Conns.m {
+		if now.Sub(e.at) > keep {
+			delete(ja4Conns.m, k)
 		}
 	}
 }

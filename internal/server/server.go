@@ -471,7 +471,7 @@ func (s *Server) Run(ctx context.Context) error {
 		// TLS 指纹（见 docs/panel.md#会话）：握手时按底层连接记下，这里放进请求的 ctx。
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			if tc, ok := c.(*tls.Conn); ok {
-				return auth.WithFingerprint(ctx, auth.TakeFingerprint(tc.NetConn()))
+				return auth.WithFingerprint(ctx, auth.TakeFingerprint(tc))
 			}
 			return ctx
 		},
@@ -616,13 +616,9 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 			continue
 		}
 		go func() {
-			conn := tls.Server(raw, cfg)
-			hctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			err := conn.HandshakeContext(hctx)
-			cancel()
+			conn, fp, err := handshakeTLS(ctx, raw, cfg)
 			<-handshakes
 			if err != nil {
-				conn.Close()
 				return
 			}
 			switch conn.ConnectionState().NegotiatedProtocol {
@@ -645,11 +641,28 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 				}
 				return
 			}
+			auth.HoldFingerprint(conn, fp)
 			if !httpLn.put(conn) {
+				auth.TakeFingerprint(conn)
 				conn.Close()
 			}
 		}()
 	}
+}
+
+// handshakeTLS 做 TLS 握手（最多 10 秒），返回连接和 ClientHello 的指纹。不管成败都从 auth 的指纹表里取走这个连接：
+// 握手失败、中途断开的连接不能留在表里（见 auth.fingerprints）。失败时连接已经关掉。
+func handshakeTLS(ctx context.Context, raw net.Conn, cfg *tls.Config) (*tls.Conn, string, error) {
+	conn := tls.Server(raw, cfg)
+	hctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err := conn.HandshakeContext(hctx)
+	cancel()
+	fp := auth.TakeFingerprint(raw)
+	if err != nil {
+		conn.Close()
+		return nil, "", err
+	}
+	return conn, fp, nil
 }
 
 // chanListener 是一个由 acceptLoop 喂连接的 net.Listener，供 http.Server 使用。
