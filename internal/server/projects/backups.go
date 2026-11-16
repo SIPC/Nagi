@@ -324,8 +324,10 @@ func (s *Service) pickBackupNode(ctx context.Context, c store.Container, nodeID 
 	return best, nil
 }
 
-// rememberBackups 记下节点上报的各容器同步到备份节点的状态（见 Service.backupReports）。
-func (s *Service) rememberBackups(nodeID string, list []*nagiv1.ContainerStatus) {
+// rememberBackups 记下节点上报的各容器同步到备份节点的状态（见 Service.backupReports）。只记 own 里的容器
+// （面板上记着在这个节点上的）：节点不一定可信，不能借上报别的节点的容器，覆盖离线的源节点留下的同步记录，
+// 让从备份恢复时选错副本。
+func (s *Service) rememberBackups(nodeID string, list []*nagiv1.ContainerStatus, own map[string]bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.backupReports == nil {
@@ -337,6 +339,9 @@ func (s *Service) rememberBackups(nodeID string, list []*nagiv1.ContainerStatus)
 			st = []*nagiv1.BackupStatus{cs.GetBackup()} // 旧版本的节点只报一个
 		}
 		key := cs.GetProjectId() + "/" + cs.GetName()
+		if !own[key] {
+			continue
+		}
 		if len(st) == 0 {
 			if s.backupReports[key].node == nodeID {
 				delete(s.backupReports, key)

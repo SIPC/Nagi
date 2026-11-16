@@ -143,7 +143,13 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 	for _, cs := range req.GetContainers() {
 		have[cs.GetProjectId()+"/"+cs.GetName()] = cs
 	}
-	s.rememberBackups(c.NodeID, req.GetContainers())
+	own := map[string]bool{}
+	if list, err := s.Q.ListNodeContainers(ctx, c.NodeID); err == nil {
+		for _, x := range list {
+			own[x.ProjectID+"/"+x.Name] = true
+		}
+	}
+	s.rememberBackups(c.NodeID, req.GetContainers(), own)
 	// 节点上有面板不知道的容器（换了面板、换了主密钥）：从它的缓存把项目拼回来。
 	stale := map[string]bool{}
 	if !c.Pending() {
