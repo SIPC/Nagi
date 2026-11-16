@@ -62,6 +62,10 @@ type API struct {
 	Audit *audit.Log
 	// Recordings 是终端和命令的录制（见 docs/audit.md#终端与命令录制）。
 	Recordings *audit.Recordings
+	// AuditView 是界面上查看的审计库：备用面板上是从主面板同步来的那份，主面板上为 nil（就是 Audit）。
+	AuditView *audit.Log
+	// Shipper 把审计记录外送（见 docs/audit.md#外送），备用面板上为 nil。
+	Shipper *audit.Shipper
 
 	updates panelUpdates
 	reads   readDedup

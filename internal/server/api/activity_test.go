@@ -57,6 +57,7 @@ var notSensitiveOutputs = map[string]string{
 	"GetSettings":       "master_key_path 是文件路径",
 	"ListAuditEvents":   "token_name 是令牌的名称",
 	"GetAuditEvent":     "token_name 是令牌的名称",
+	"GetAuditSettings":  "外送目标的 Secret Key 和请求头的值返回时留空",
 }
 
 // 返回密钥、变量值或文件内容的查询都要登记在 store.SensitiveReads（见 docs/audit.md#记录范围）。

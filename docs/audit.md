@@ -69,9 +69,40 @@
 ## 存储与保留
 
 - 审计记录存在面板数据目录下的 `audit.db`（SQLite，WAL），不放进主库，只追加。备用面板每次同步都传整份主库（见 [standby.md](standby.md#同步)），审计数据变多以后会拖慢同步。
-- 保留：普通记录 90 天；`security`、`session`、`login`、`mcp` 类 365 天。数据库超过 2 GB 时先删最旧的普通记录。每小时清理一次。
+- 保留：普通记录 90 天；`security`、`session`、`login`、`mcp` 类 365 天，都可以在「设置 → 安全 → 审计记录保留」里改（7–3650 天，安全记录不短于普通记录）。数据库超过 2 GB 时先删最旧的普通记录。每小时清理一次。删掉的记录留下 ID 和哈希（`tombstones` 表），哈希链还能接上；比所有剩下的记录都旧的墓碑一起删掉。
 - 升级后面板启动时把主库 `activity` 表的记录复制进 `audit.db`，缺少的字段留空，中断了下次从断点继续。原来的接口 `ListActivity`、`ListProjectEvents`、`ListContainerEvents` 改为查询审计库，返回格式不变。`activity` 表不再写入，下一个版本删除。
 - 界面和接口都没有删除审计记录的功能。
+
+## 备用面板
+
+备用面板每次同步都传整份主库（见 [standby.md](standby.md#同步)），不带审计库。审计记录另走一条连接（ALPN `nagi-standby-audit/1`，同样的 mTLS 客户端证书）：备用面板报上自己已有的最大 ID，主面板按 ID 把之后的记录（原来的 `id`、`prev_hash`、`hash`）、这一段里的墓碑、引用到的录制块（加密的原样内容）一批批发过来，追上以后每秒看一次，空闲时发心跳。断线后从备用面板已有的最大 ID 续传。
+
+- 备用面板的 `audit.db` 只存同步来的记录，界面上看的是它；备用面板自己的记录（登录、查看）写进 `audit-standby.db`。活动记录的迁移只在主面板上做。
+- 提升以后接着原来的哈希链写（自增序号跟上同步来的最大 ID），`audit-standby.db` 里的记录作为新记录并进来，原文件改名为 `audit-standby-<时间>.imported.db` 保留。
+- 原来的主面板降为备用面板时，`audit.db` 里有新主面板没有的记录，改名归档为 `audit-term<任期>-<时间>.db` 保留，不并入新主面板，再从新主面板重新同步。
+- 只有主面板外送。
+
+## 防篡改
+
+- **哈希链**：每条记录的 `hash = SHA-256(prev_hash ‖ 记录的规范化 JSON)`，规范化 JSON 包含 `id`。在面板机器上执行 `nagi audit verify` 校验整条链（只读，面板运行中也能用），校验失败时打印第一条对不上的记录并返回非零；界面的「设置 → 安全 → 哈希链」可以立即校验，显示最近一次校验的结果。
+- **锚点**：每个外送目标启动时、之后每小时和每 1000 条，把链上最新的 `id` 和 `hash` 发到外送目标（`{"type":"anchor", …}`），界面显示最近一次锚点。
+- **能发现的**：中间的记录被修改或删除（按保留时间删掉的有墓碑）。**发现不了的**：面板被攻破后从某处起重写后面所有的记录。这种情况只能靠外送目标上的锚点和副本对比。
+
+## 外送
+
+外送才是面板被攻破、机器被格式化以后真正的保障。目标在「设置 → 安全 → 日志外送」中配置，可以配多个：
+
+| 目标 | 方式 | 适合 |
+| --- | --- | --- |
+| syslog | RFC 5424，TCP + TLS（RFC 5425 的长度前缀分帧），facility 13，可以填自签服务器的 CA | 已有日志服务器 |
+| HTTP | 每 2 秒批量 POST 一次 JSON Lines（`application/x-ndjson`），可以带固定请求头 | Vector、Loki、Elasticsearch、自建接收端 |
+| S3 兼容存储 | 每小时一个对象（`<前缀>/<年>/<月>/<日>/<时>-<第一条 ID>.jsonl`），路径风格、SigV4 签名；可选同时上传录制（加密的原样内容） | 长期保存，建议开启对象锁（Object Lock） |
+
+- 每行和导出的格式一样：全部字段，带 `prev_hash` 和 `hash`。新添加的目标从当时最新的记录开始发，以前的记录用导出拿。
+- 每个目标一个游标（审计库的 `meta` 表）。发送失败时游标不动，恢复后从游标处补发，不另存一份数据。连续失败超过 10 分钟告警，恢复时再发一条。
+- 外送配置用主密钥加密后存在设置里（`audit_sinks`），返回界面时 Secret Key、Access Key 和请求头的值留空，保存时留空表示不变。
+- 修改外送配置是 `security` 事件（`audit_sinks_changed`）：先记下这条，等原来的目标都发到这一条（最多 15 秒），再换成新的配置，并发一条告警。攻击者拿到管理员后改外送，改之前的记录已经送出去了。
+- 「发送测试消息」发一条 `{"type":"test"}`，S3 写一个 `nagi-test.json`。
 
 ## 界面
 
@@ -98,3 +129,6 @@
 | SettingsService | `ListAuditEvents` | 按条件查询，或按 `parent_id` 查下级记录 |
 | SettingsService | `GetAuditEvent` | 详情，带上级和下级记录 |
 | SettingsService | `ExportAuditEvents` | 导出 JSON Lines（服务端流），只有管理员能用 |
+| SettingsService | `GetRecording` | 按块读取录制（服务端流），只有管理员能用，要先做高权限确认 |
+| SettingsService | `GetAuditSettings`、`SetAuditSettings` | 终端录制、保留时间、外送目标，以及哈希链状态 |
+| SettingsService | `TestAuditSink`、`VerifyAudit` | 测试外送目标、校验哈希链 |

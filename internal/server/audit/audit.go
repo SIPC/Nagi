@@ -505,10 +505,10 @@ var LongCategories = []string{Security, Session, Login, MCP}
 func (l *Log) Prune(ctx context.Context, r Retention, now time.Time) error {
 	long := "category IN (" + placeholders(len(LongCategories)) + ")"
 	args := anySlice(LongCategories)
-	if _, err := l.db.ExecContext(ctx, `DELETE FROM events WHERE NOT `+long+` AND time < ?`, append(args, now.Add(-r.Normal).UnixMilli())...); err != nil {
+	if err := l.deleteWhere(ctx, `NOT `+long+` AND time < ?`, append(args, now.Add(-r.Normal).UnixMilli())...); err != nil {
 		return err
 	}
-	if _, err := l.db.ExecContext(ctx, `DELETE FROM events WHERE `+long+` AND time < ?`, append(anySlice(LongCategories), now.Add(-r.Long).UnixMilli())...); err != nil {
+	if err := l.deleteWhere(ctx, long+` AND time < ?`, append(anySlice(LongCategories), now.Add(-r.Long).UnixMilli())...); err != nil {
 		return err
 	}
 	if r.MaxBytes <= 0 {
@@ -523,20 +523,41 @@ func (l *Log) Prune(ctx context.Context, r Retention, now time.Time) error {
 		var n int64
 		_ = l.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&n)
 		batch := max(n/100, 1000)
-		res, err := l.db.ExecContext(ctx, `DELETE FROM events WHERE id IN (SELECT id FROM events WHERE NOT `+long+` ORDER BY id LIMIT ?)`, append(anySlice(LongCategories), batch)...)
-		if err != nil {
-			return err
-		}
-		if c, _ := res.RowsAffected(); c == 0 {
-			if _, err := l.db.ExecContext(ctx, `DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id LIMIT ?)`, batch); err != nil {
+		var c int64
+		_ = l.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE NOT `+long, anySlice(LongCategories)...).Scan(&c)
+		if c > 0 {
+			if err := l.deleteWhere(ctx, `id IN (SELECT id FROM events WHERE NOT `+long+` ORDER BY id LIMIT ?)`, append(anySlice(LongCategories), batch)...); err != nil {
 				return err
 			}
+		} else if err := l.deleteWhere(ctx, `id IN (SELECT id FROM events ORDER BY id LIMIT ?)`, batch); err != nil {
+			return err
 		}
 		if _, err := l.db.ExecContext(ctx, `PRAGMA incremental_vacuum`); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// deleteWhere 删除符合条件的记录，留下墓碑（ID 和哈希），哈希链还能接上；比剩下的记录都旧的墓碑一起删掉。
+func (l *Log) deleteWhere(ctx context.Context, cond string, args ...any) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	tx, err := l.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO tombstones (id, hash) SELECT id, hash FROM events WHERE `+cond, args...); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM events WHERE `+cond, args...); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM tombstones WHERE id < (SELECT MIN(id) FROM events)`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // size 是数据库实际占用的字节数（不含空闲页）。

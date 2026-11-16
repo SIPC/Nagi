@@ -426,6 +426,10 @@ service SettingsService {
   // 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
   rpc GetAuditSettings(GetAuditSettingsRequest) returns (AuditSettings);
   rpc SetAuditSettings(AuditSettings) returns (AuditSettings);
+  // 向外送目标发一条测试消息。
+  rpc TestAuditSink(AuditSink) returns (TestAuditSinkResponse);
+  // 校验审计日志的哈希链（和 nagi audit verify 一样）。
+  rpc VerifyAudit(VerifyAuditRequest) returns (AuditChainStatus);
 }
 
 message AccessToken {
@@ -1451,4 +1455,60 @@ message GetAuditSettingsRequest {}
 message AuditSettings {
   // 录制节点终端、容器终端、exec 和 node_exec 的输出。默认开启。
   bool recording = 1;
+  // 普通记录保留的天数（默认 90）；security、session、login、mcp 类保留的天数（默认 365）。
+  int32 retention_days = 2;
+  int32 long_retention_days = 3;
+  // 日志外送的目标（见 docs/audit.md#外送）。返回时密钥和请求头的值留空，保存时留空表示不变。
+  repeated AuditSink sinks = 4;
+  // 只读：哈希链的状态。
+  AuditChainStatus chain = 5;
+}
+
+message AuditSink {
+  string id = 1;
+  string name = 2;
+  // syslog、http、s3。
+  string type = 3;
+  // syslog：host:port（TCP + TLS），可选的 CA 证书（PEM）。
+  string address = 4;
+  string ca = 5;
+  // http：接收地址和固定的请求头。
+  string url = 6;
+  repeated AuditSinkHeader headers = 7;
+  // s3：兼容 S3 的存储。
+  string endpoint = 8;
+  string region = 9;
+  string bucket = 10;
+  string prefix = 11;
+  string access_key = 12 [debug_redact = true];
+  string secret_key = 13 [debug_redact = true];
+  // s3：同时上传终端录制。
+  bool recordings = 14;
+  // 只读：已经保存过密钥。
+  bool has_secret = 15;
+  // 只读：发送状态。
+  google.protobuf.Timestamp last_success = 16;
+  string last_error = 17;
+  bool failing = 18;
+}
+
+message AuditSinkHeader {
+  string name = 1;
+  string value = 2 [debug_redact = true];
+}
+
+message TestAuditSinkResponse {}
+
+message VerifyAuditRequest {}
+
+message AuditChainStatus {
+  // 最近一次校验。
+  google.protobuf.Timestamp verified_at = 1;
+  bool ok = 2;
+  int64 records = 3;
+  string reason = 4;
+  // 最近一次发往外送目标的锚点。
+  google.protobuf.Timestamp anchor_at = 5;
+  int64 anchor_id = 6;
+  string anchor_hash = 7;
 }

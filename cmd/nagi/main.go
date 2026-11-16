@@ -15,6 +15,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent"
 	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/server"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +30,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), nodeCmd(), resetCmd(), versionCmd(), linkProxyCmd())
+	root.AddCommand(serverCmd(), agentCmd(), enrollCmd(), panelCmd(), nodeCmd(), resetCmd(), auditCmd(), versionCmd(), linkProxyCmd())
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "错误：", err)
 		os.Exit(1)
@@ -368,6 +369,34 @@ func resetCmd() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(password, totp, entrance)
+	return cmd
+}
+
+// auditCmd 是面板本地命令：校验审计日志的哈希链（见 docs/audit.md#防篡改）。
+func auditCmd() *cobra.Command {
+	var dataDir string
+	cmd := &cobra.Command{Use: "audit", Short: "审计日志"}
+	cmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "数据目录（和 nagi server 的相同）")
+	verify := &cobra.Command{
+		Use:   "verify",
+		Short: "校验审计日志的哈希链：中间的记录被修改或删除时报错",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path := filepath.Join(dataDir, "panel", "audit.db")
+			if _, err := os.Stat(path); err != nil {
+				return fmt.Errorf("找不到审计库 %s", path)
+			}
+			r, err := audit.VerifyFile(cmd.Context(), path)
+			if err != nil {
+				return err
+			}
+			if !r.OK() {
+				return fmt.Errorf("哈希链校验失败：%s（共 %d 条记录）", r.Reason, r.Records)
+			}
+			fmt.Printf("哈希链完好：共 %d 条记录，最新一条 %d，哈希 %s\n", r.Records, r.LastID, r.LastHash)
+			return nil
+		},
+	}
+	cmd.AddCommand(verify)
 	return cmd
 }
 

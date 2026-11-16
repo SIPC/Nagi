@@ -12,7 +12,6 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
-	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -151,7 +150,7 @@ func (s *settingsService) ListAuditEvents(ctx context.Context, req *connect.Requ
 		f.TopLevel = true
 	}
 	f.Before, f.Limit = req.Msg.GetBefore(), limit
-	rows, err := s.Audit.List(ctx, f)
+	rows, err := s.view().List(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +158,7 @@ func (s *settingsService) ListAuditEvents(ctx context.Context, req *connect.Requ
 	for i, r := range rows {
 		ids[i] = r.ID
 	}
-	counts, _ := s.Audit.ChildCounts(ctx, ids)
+	counts, _ := s.view().ChildCounts(ctx, ids)
 	names := s.auditNames(ctx)
 	out := &nagiv1.ListAuditEventsResponse{}
 	for _, r := range rows {
@@ -175,20 +174,20 @@ func (s *settingsService) GetAuditEvent(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
-	row, err := s.Audit.Get(ctx, req.Msg.GetId())
+	row, err := s.view().Get(ctx, req.Msg.GetId())
 	if err != nil || !v.canSee(row) {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("记录不存在"))
 	}
 	names := s.auditNames(ctx)
 	out := &nagiv1.GetAuditEventResponse{Event: v.entry(row, names)}
 	if row.ParentID != 0 {
-		if p, err := s.Audit.Get(ctx, row.ParentID); err == nil && v.canSee(p) {
+		if p, err := s.view().Get(ctx, row.ParentID); err == nil && v.canSee(p) {
 			out.Parent = v.entry(p, names)
 		}
 	}
 	f := audit.Filter{ParentID: row.ID, Limit: 200}
 	v.restrict(&f)
-	children, err := s.Audit.List(ctx, f)
+	children, err := s.view().List(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -215,8 +214,8 @@ func (s *settingsService) ExportAuditEvents(ctx context.Context, req *connect.Re
 	f := v.filter(req.Msg.GetFilter())
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
-	err = s.Audit.Each(ctx, f, func(e audit.Event) error {
-		if err := enc.Encode(exportLine(e)); err != nil {
+	err = s.view().Each(ctx, f, func(e audit.Event) error {
+		if err := enc.Encode(audit.ExportLine(e)); err != nil {
 			return err
 		}
 		if buf.Len() >= exportChunk {
@@ -234,16 +233,6 @@ func (s *settingsService) ExportAuditEvents(ctx context.Context, req *connect.Re
 		return stream.Send(&nagiv1.ExportAuditEventsChunk{Data: buf.Bytes()})
 	}
 	return nil
-}
-
-// exportLine 是导出的一行：全部字段，时间用 RFC 3339 毫秒，带上哈希链。
-func exportLine(e audit.Event) map[string]any {
-	var m map[string]any
-	b, _ := json.Marshal(e)
-	_ = json.Unmarshal(b, &m)
-	m["time"] = e.Time.UTC().Format("2006-01-02T15:04:05.000Z07:00")
-	m["prev_hash"], m["hash"] = e.PrevHash, e.Hash
-	return m
 }
 
 // ---- 原来的活动记录接口：改为查询审计库，返回格式不变 ----
@@ -313,7 +302,7 @@ func (s *projectService) projectEvents(ctx context.Context, f audit.Filter) (*co
 	}
 	f.Categories = []string{audit.Operation, audit.Session, audit.Alert, audit.MCP, audit.Security}
 	f.TopLevel = false
-	rows, err := s.Audit.List(ctx, f)
+	rows, err := s.view().List(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +332,7 @@ func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request
 	case "operation":
 		f.Categories = []string{audit.Operation, audit.Read, audit.MCP, audit.Session, audit.Login, audit.Security}
 	}
-	rows, err := s.Audit.List(ctx, f)
+	rows, err := s.view().List(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -380,36 +369,6 @@ func (s *settingsService) GetRecording(ctx context.Context, req *connect.Request
 	return nil
 }
 
-func (s *settingsService) GetAuditSettings(ctx context.Context, _ *connect.Request[nagiv1.GetAuditSettingsRequest]) (*connect.Response[nagiv1.AuditSettings], error) {
-	return connect.NewResponse(&nagiv1.AuditSettings{Recording: s.RecordingEnabled(ctx)}), nil
-}
-
-// SetAuditSettings 保存审计设置。关闭录制要先做高权限确认，并发一条告警（见 docs/security.md#账号与凭据）。
-func (s *settingsService) SetAuditSettings(ctx context.Context, req *connect.Request[nagiv1.AuditSettings]) (*connect.Response[nagiv1.AuditSettings], error) {
-	was := s.RecordingEnabled(ctx)
-	on := req.Msg.GetRecording()
-	if was && !on {
-		if !auth.CurrentUser(ctx).Elevated() {
-			return nil, elevationError()
-		}
-	}
-	v := "1"
-	if !on {
-		v = "0"
-	}
-	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingRecording, Value: v}); err != nil {
-		return nil, err
-	}
-	if was != on {
-		title := "终端录制已开启"
-		if !on {
-			title = "终端录制已关闭"
-		}
-		s.securityAlert(ctx, "recording", title)
-	}
-	return connect.NewResponse(&nagiv1.AuditSettings{Recording: on}), nil
-}
-
 // securityAlert 发一条面板的安全通知（操作人和来源写在消息里），发送在后台进行。
 func (a *API) securityAlert(ctx context.Context, key, title string) {
 	u := auth.CurrentUser(ctx)
@@ -417,4 +376,12 @@ func (a *API) securityAlert(ctx context.Context, key, title string) {
 	msg := i18n.Errorf("成员：%s；来源：%s", u.Name, m.IP).Error()
 	ctx = context.WithoutCancel(ctx)
 	go a.Nodes.PanelAlert(ctx, &nagiv1.Alert{Key: "security:" + key, Title: i18n.New(title).Error(), Message: msg})
+}
+
+// view 返回界面上查看的审计库（备用面板上是同步来的那份）。
+func (a *API) view() *audit.Log {
+	if a.AuditView != nil {
+		return a.AuditView
+	}
+	return a.Audit
 }

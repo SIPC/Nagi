@@ -297,6 +297,12 @@ const (
 	// SettingsServiceSetAuditSettingsProcedure is the fully-qualified name of the SettingsService's
 	// SetAuditSettings RPC.
 	SettingsServiceSetAuditSettingsProcedure = "/nagi.v1.SettingsService/SetAuditSettings"
+	// SettingsServiceTestAuditSinkProcedure is the fully-qualified name of the SettingsService's
+	// TestAuditSink RPC.
+	SettingsServiceTestAuditSinkProcedure = "/nagi.v1.SettingsService/TestAuditSink"
+	// SettingsServiceVerifyAuditProcedure is the fully-qualified name of the SettingsService's
+	// VerifyAudit RPC.
+	SettingsServiceVerifyAuditProcedure = "/nagi.v1.SettingsService/VerifyAudit"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -2036,6 +2042,10 @@ type SettingsServiceClient interface {
 	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
 	GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error)
 	SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(context.Context, *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(context.Context, *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -2289,6 +2299,18 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("SetAuditSettings")),
 			connect.WithClientOptions(opts...),
 		),
+		testAuditSink: connect.NewClient[v1.AuditSink, v1.TestAuditSinkResponse](
+			httpClient,
+			baseURL+SettingsServiceTestAuditSinkProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("TestAuditSink")),
+			connect.WithClientOptions(opts...),
+		),
+		verifyAudit: connect.NewClient[v1.VerifyAuditRequest, v1.AuditChainStatus](
+			httpClient,
+			baseURL+SettingsServiceVerifyAuditProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("VerifyAudit")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -2334,6 +2356,8 @@ type settingsServiceClient struct {
 	getRecording         *connect.Client[v1.GetRecordingRequest, v1.RecordingChunk]
 	getAuditSettings     *connect.Client[v1.GetAuditSettingsRequest, v1.AuditSettings]
 	setAuditSettings     *connect.Client[v1.AuditSettings, v1.AuditSettings]
+	testAuditSink        *connect.Client[v1.AuditSink, v1.TestAuditSinkResponse]
+	verifyAudit          *connect.Client[v1.VerifyAuditRequest, v1.AuditChainStatus]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -2536,6 +2560,16 @@ func (c *settingsServiceClient) SetAuditSettings(ctx context.Context, req *conne
 	return c.setAuditSettings.CallUnary(ctx, req)
 }
 
+// TestAuditSink calls nagi.v1.SettingsService.TestAuditSink.
+func (c *settingsServiceClient) TestAuditSink(ctx context.Context, req *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error) {
+	return c.testAuditSink.CallUnary(ctx, req)
+}
+
+// VerifyAudit calls nagi.v1.SettingsService.VerifyAudit.
+func (c *settingsServiceClient) VerifyAudit(ctx context.Context, req *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error) {
+	return c.verifyAudit.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -2605,6 +2639,10 @@ type SettingsServiceHandler interface {
 	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
 	GetAuditSettings(context.Context, *connect.Request[v1.GetAuditSettingsRequest]) (*connect.Response[v1.AuditSettings], error)
 	SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(context.Context, *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(context.Context, *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2854,6 +2892,18 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("SetAuditSettings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceTestAuditSinkHandler := connect.NewUnaryHandler(
+		SettingsServiceTestAuditSinkProcedure,
+		svc.TestAuditSink,
+		connect.WithSchema(settingsServiceMethods.ByName("TestAuditSink")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceVerifyAuditHandler := connect.NewUnaryHandler(
+		SettingsServiceVerifyAuditProcedure,
+		svc.VerifyAudit,
+		connect.WithSchema(settingsServiceMethods.ByName("VerifyAudit")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -2936,6 +2986,10 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceGetAuditSettingsHandler.ServeHTTP(w, r)
 		case SettingsServiceSetAuditSettingsProcedure:
 			settingsServiceSetAuditSettingsHandler.ServeHTTP(w, r)
+		case SettingsServiceTestAuditSinkProcedure:
+			settingsServiceTestAuditSinkHandler.ServeHTTP(w, r)
+		case SettingsServiceVerifyAuditProcedure:
+			settingsServiceVerifyAuditHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3103,6 +3157,14 @@ func (UnimplementedSettingsServiceHandler) GetAuditSettings(context.Context, *co
 
 func (UnimplementedSettingsServiceHandler) SetAuditSettings(context.Context, *connect.Request[v1.AuditSettings]) (*connect.Response[v1.AuditSettings], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetAuditSettings is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) TestAuditSink(context.Context, *connect.Request[v1.AuditSink]) (*connect.Response[v1.TestAuditSinkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.TestAuditSink is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) VerifyAudit(context.Context, *connect.Request[v1.VerifyAuditRequest]) (*connect.Response[v1.AuditChainStatus], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.VerifyAudit is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

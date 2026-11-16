@@ -2231,6 +2231,8 @@ const (
 	SettingsService_GetRecording_FullMethodName         = "/nagi.v1.SettingsService/GetRecording"
 	SettingsService_GetAuditSettings_FullMethodName     = "/nagi.v1.SettingsService/GetAuditSettings"
 	SettingsService_SetAuditSettings_FullMethodName     = "/nagi.v1.SettingsService/SetAuditSettings"
+	SettingsService_TestAuditSink_FullMethodName        = "/nagi.v1.SettingsService/TestAuditSink"
+	SettingsService_VerifyAudit_FullMethodName          = "/nagi.v1.SettingsService/VerifyAudit"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -2304,6 +2306,10 @@ type SettingsServiceClient interface {
 	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
 	GetAuditSettings(ctx context.Context, in *GetAuditSettingsRequest, opts ...grpc.CallOption) (*AuditSettings, error)
 	SetAuditSettings(ctx context.Context, in *AuditSettings, opts ...grpc.CallOption) (*AuditSettings, error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(ctx context.Context, in *AuditSink, opts ...grpc.CallOption) (*TestAuditSinkResponse, error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(ctx context.Context, in *VerifyAuditRequest, opts ...grpc.CallOption) (*AuditChainStatus, error)
 }
 
 type settingsServiceClient struct {
@@ -2732,6 +2738,26 @@ func (c *settingsServiceClient) SetAuditSettings(ctx context.Context, in *AuditS
 	return out, nil
 }
 
+func (c *settingsServiceClient) TestAuditSink(ctx context.Context, in *AuditSink, opts ...grpc.CallOption) (*TestAuditSinkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestAuditSinkResponse)
+	err := c.cc.Invoke(ctx, SettingsService_TestAuditSink_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) VerifyAudit(ctx context.Context, in *VerifyAuditRequest, opts ...grpc.CallOption) (*AuditChainStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuditChainStatus)
+	err := c.cc.Invoke(ctx, SettingsService_VerifyAudit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -2803,6 +2829,10 @@ type SettingsServiceServer interface {
 	// 审计设置（「设置 → 安全」）：终端录制等。关闭录制要先做高权限确认。
 	GetAuditSettings(context.Context, *GetAuditSettingsRequest) (*AuditSettings, error)
 	SetAuditSettings(context.Context, *AuditSettings) (*AuditSettings, error)
+	// 向外送目标发一条测试消息。
+	TestAuditSink(context.Context, *AuditSink) (*TestAuditSinkResponse, error)
+	// 校验审计日志的哈希链（和 nagi audit verify 一样）。
+	VerifyAudit(context.Context, *VerifyAuditRequest) (*AuditChainStatus, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -2932,6 +2962,12 @@ func (UnimplementedSettingsServiceServer) GetAuditSettings(context.Context, *Get
 }
 func (UnimplementedSettingsServiceServer) SetAuditSettings(context.Context, *AuditSettings) (*AuditSettings, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAuditSettings not implemented")
+}
+func (UnimplementedSettingsServiceServer) TestAuditSink(context.Context, *AuditSink) (*TestAuditSinkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestAuditSink not implemented")
+}
+func (UnimplementedSettingsServiceServer) VerifyAudit(context.Context, *VerifyAuditRequest) (*AuditChainStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyAudit not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -3660,6 +3696,42 @@ func _SettingsService_SetAuditSettings_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_TestAuditSink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuditSink)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).TestAuditSink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_TestAuditSink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).TestAuditSink(ctx, req.(*AuditSink))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_VerifyAudit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyAuditRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).VerifyAudit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_VerifyAudit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).VerifyAudit(ctx, req.(*VerifyAuditRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3818,6 +3890,14 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetAuditSettings",
 			Handler:    _SettingsService_SetAuditSettings_Handler,
+		},
+		{
+			MethodName: "TestAuditSink",
+			Handler:    _SettingsService_TestAuditSink_Handler,
+		},
+		{
+			MethodName: "VerifyAudit",
+			Handler:    _SettingsService_VerifyAudit_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
