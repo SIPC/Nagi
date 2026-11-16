@@ -166,13 +166,19 @@ func checkTopLevel(doc map[string]any, add func(bool, string, ...any)) {
 			}
 		}
 	}
+	// 网络的驱动和参数也算：macvlan、ipvlan 让容器直接接入节点所在的局域网，流量不经过宿主机的
+	// forward 链，出站限制管不到；driver_opts 能指定宿主机的网桥（com.docker.network.bridge.name）；
+	// ipam 能指定和局域网重叠的网段。只有默认的 bridge 驱动、不带参数的网络不算。
 	networks, _ := doc["networks"].(map[string]any)
 	for name, raw := range networks {
 		e, _ := raw.(map[string]any)
-		for _, field := range []string{"external", "name"} {
+		for _, field := range []string{"external", "name", "driver_opts", "ipam"} {
 			if v, has := e[field]; has && v != nil && v != false {
 				add(hasVar(v), "networks: %s", name)
 			}
+		}
+		if v, has := e["driver"]; has && v != nil && v != "bridge" {
+			add(hasVar(v), "networks: %s", name)
 		}
 	}
 }

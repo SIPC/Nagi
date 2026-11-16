@@ -37,6 +37,7 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 - 一个挂载的源路径包含另一个挂载的源路径或 `secrets`、`configs` 的文件（例如同时挂载 `.` 和 `./uploads`）：能写上级目录的容器可以把下级换成符号链接，Docker 下次启动容器时会跟着它挂载宿主机的目录
 - 挂载绝对路径、`~`、带 `..` 的路径（包括 `docker.sock`）；`env_file`、`secrets`、`configs` 读取容器目录以外的文件
 - `include`、`extends` 引用文件，`build`，指定了 driver 的 volume，`external` 的 volume 和网络，指定了 `name` 的 volume 和网络（不加 compose 项目的前缀，节点上有同名的就直接用它）
+- 顶层 `networks` 里 `bridge` 以外的 `driver`、`driver_opts`、`ipam`：macvlan、ipvlan 让容器直接接入节点所在的局域网，流量不经过宿主机的 forward 链，[出站限制](agent.md#出站限制)管不到；`driver_opts` 能指定宿主机的网桥（`com.docker.network.bridge.name`），`ipam` 能指定和局域网重叠的网段
 - 上面这些字段的值里有变量：变量的值操作员能改
 
 容器目录里的路径可能是容器写的、或者从 git 仓库同步来的符号链接，所以部署时和代管重启前节点还会检查：挂载的源路径和 `env_file`、`secrets`、`configs` 的文件在容器目录以下不能经过符号链接，否则拒绝部署。
