@@ -8,6 +8,40 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.29.0
+
+### New features
+
+- Adds an audit log that records panel operations, sign-ins, sensitive reads, MCP tool calls and alerts, with filtering and export.
+- Records node terminals, container terminals and command output. Administrators can play them back after verifying their identity.
+- Sends the audit log to syslog, HTTP or S3, and can verify that records haven't been altered.
+- Adds security alerts for a possibly leaked password, many failed sign-ins, an administrator signing in from a new network, a new administrator, and changes such as editing the secure entry or alert settings.
+- Restricts containers from reaching the node itself, the local network and cloud metadata addresses. Set it in the project's Settings > Egress restriction.
+- Sends an alert when a node receives an unauthorized request from another node. Administrators can isolate a node with one click.
+- Adds alert rules for sustained high node or container CPU, request surges and a high 4xx rate.
+- Supports signing in with a passkey (requires a bound domain).
+- Restricts the addresses administrators can sign in from, and the addresses an access token can be used from.
+- A container can have several backup nodes, and backup nodes can be used together with failover.
+- Projects can be put in groups and nodes can have tags. Member access can be set by group and tag.
+
+### Improvements
+
+- Strengthens sign-in sessions: session tokens change regularly, and a session used from another browser, system or script tool is signed out.
+- Latency is shown in ms, s or min, and WebSocket connections no longer count toward latency.
+
+### Behavior changes
+
+- "Activity" is renamed "Audit".
+- Terminal recording is on by default, and turning it off requires identity verification.
+- Egress restriction defaults to "Block" for new projects and "Log only" for projects created before the upgrade.
+- Sessions end after 24 hours of inactivity, and last at most 7 days from sign-in.
+- Only administrators can save compose files that use a network driver other than bridge, or set network driver options or IP address management.
+
+### Upgrade notes
+
+- Nodes must be upgraded to v0.29.0 for egress restriction, unauthorized-request alerts, multiple backup nodes and the new alert rules to take effect.
+- Egress restriction requires nftables on the node.
+
 ## v0.28.1
 
 ### Fixes
