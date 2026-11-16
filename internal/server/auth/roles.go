@@ -18,6 +18,8 @@ func ValidRole(role string) bool {
 var selfMethods = map[string]bool{
 	"GetSecurity": true, "BeginTOTP": true, "EnableTOTP": true, "DisableTOTP": true,
 	"ListSessions": true, "RevokeSession": true,
+	// 通行密钥：只能管自己的（见 docs/panel.md#通行密钥）。
+	"BeginPasskeyRegistration": true, "AddPasskey": true, "DeletePasskey": true,
 	// 访问令牌：只能管自己的，管理员才能看、吊销别人的（处理函数里检查）。
 	"ListAccessTokens": true, "CreateAccessToken": true, "RevokeAccessToken": true,
 }
