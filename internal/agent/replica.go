@@ -34,7 +34,8 @@ import (
 
 // 备份节点和迁移（见 docs/snapshot.md#备份节点的实现、docs/failover.md#手动迁移），按容器进行。
 //   - 源节点：每次定时快照成功后，把容器的快照仓库经 mesh 增量依次同步到各个备份节点（在面板下发的 ContainerSpec.backups 里）；
-//   - 目标节点：副本放在 <节点目录>/replicas/<项目 ID>-<容器名>/files/repo，只接受登记过的源节点同步；
+//   - 目标节点：副本放在 <存放位置>/<项目 ID>-<容器名>/files/repo（存放位置默认是 <节点目录>/replicas，见 replica_dirs.go），
+//     只接受登记过的源节点同步；
 //     恢复用的配置是面板登记副本时给的（spec.pb），不从源节点拿。
 
 var projectIDRe = regexp.MustCompile(`^[a-f0-9]{16}$`)
@@ -51,8 +52,23 @@ type replicaMeta struct {
 }
 
 type replicas struct {
-	dir string // <节点目录>/replicas
+	dir  string // <节点目录>/replicas：没有设置默认目录时的存放位置
+	file string // <节点目录>/replica-dirs.json：默认目录和不在默认目录里的副本（见 replica_dirs.go）
+	// mu 保护 idx、locks、syncing。
 	mu  sync.Mutex
+	idx replicaIndex
+	// moving：同时只有一次移动（修改默认目录、移动一个副本）。
+	moving sync.Mutex
+	// layout：save 新建副本时拿读锁，修改默认目录、记下旧目录里有哪些副本时拿写锁，两者不会交错。
+	layout sync.RWMutex
+	// 校验存放位置用（见 checkBase）：系统目录、Nagi 自己的目录、容器目录、项目根目录、节点文件禁止访问的目录。
+	forbidden    []string
+	reserved     []string
+	managed      func() []string
+	projectsRoot func() string
+	denied       func(real string) bool
+	// stateDir 是副本快照仓库的连接配置和缓存，副本删除、换了位置时一起删掉。
+	stateDir func(projectID, container string) string
 	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。
 	locks map[string]*sync.RWMutex
 	// syncing 记着每个副本正在同步的源节点和它最近一次请求的时间（见 claim）。
@@ -114,12 +130,17 @@ func replicaID(projectID, container string) (string, error) {
 	return projectID + "-" + container, nil
 }
 
+// root 是副本的目录：<存放位置>/<项目 ID>-<容器名>。副本可能被移动（见 replica_dirs.go），
+// 要用这个目录读写时先拿到副本的锁再调用，免得拿到的是移走以前的位置。
 func (r *replicas) root(projectID, container string) (string, error) {
 	id, err := replicaID(projectID, container)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(r.dir, id), nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	base, _ := r.baseLocked(id)
+	return filepath.Join(base, id), nil
 }
 
 func (r *replicas) lock(projectID, container string) func() {
@@ -179,7 +200,10 @@ func (r *replicas) load(projectID, container string) (*replicaMeta, *nagiv1.Cont
 	return m, s, root, nil
 }
 
+// save 写入登记信息（副本还没有时新建）。调用时持有这个副本的锁。
 func (r *replicas) save(m *replicaMeta, s *nagiv1.ContainerSpec) error {
+	r.layout.RLock()
+	defer r.layout.RUnlock()
 	root, err := r.root(m.ProjectID, m.Container)
 	if err != nil {
 		return err
@@ -321,6 +345,7 @@ func (b *backupStates) failures(id string, targets []*nagiv1.BackupTarget) []str
 
 // authorizeReplica 校验调用方就是这个副本登记的源节点，返回副本的文件目录。write 表示要写入（Put、Commit），
 // 写入要占用这次同步（见 replicas.claim）；只读的请求（Manifest）不占用，也不续上占用。
+// 调用方先拿着副本的锁（rlock 或 lock）：副本可能被移到别的存放位置，拿锁以后返回的目录才不会变。
 func (s *meshService) authorizeReplica(ctx context.Context, projectID, container string, write bool) (string, error) {
 	caller, ok := mesh.Caller(ctx, s.M)
 	if !ok {
@@ -347,6 +372,10 @@ func (s *meshService) authorizeReplica(ctx context.Context, projectID, container
 }
 
 func (s *meshService) ReplicaManifest(ctx context.Context, req *nagiv1.ReplicaManifestRequest) (*nagiv1.ReplicaManifestResponse, error) {
+	if _, err := replicaID(req.GetProjectId(), req.GetContainer()); err != nil {
+		return nil, err
+	}
+	defer s.a.replicas.rlock(req.GetProjectId(), req.GetContainer())()
 	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer(), false)
 	if err != nil {
 		return nil, err
@@ -452,10 +481,13 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			return err
 		}
 		if files == "" {
-			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer(), true); err != nil {
+			if _, err := replicaID(c.GetProjectId(), c.GetContainer()); err != nil {
 				return err
 			}
 			unlock = s.a.replicas.rlock(c.GetProjectId(), c.GetContainer())
+			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer(), true); err != nil {
+				return err
+			}
 			guard = &metrics.DiskGuard{Dir: files}
 		}
 		if c.GetPath() != path {
@@ -484,11 +516,14 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 }
 
 func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaCommitRequest) (*nagiv1.ReplicaCommitResponse, error) {
+	if _, err := replicaID(req.GetProjectId(), req.GetContainer()); err != nil {
+		return nil, err
+	}
+	defer s.a.replicas.lock(req.GetProjectId(), req.GetContainer())()
 	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer(), true)
 	if err != nil {
 		return nil, err
 	}
-	defer s.a.replicas.lock(req.GetProjectId(), req.GetContainer())()
 	m, _, _, err := s.a.replicas.load(req.GetProjectId(), req.GetContainer())
 	if err != nil {
 		return nil, err
@@ -876,28 +911,56 @@ func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.SyncBackupReq
 	return s.node.backups.statuses(c.Spec)[i], nil
 }
 
+// AcceptReplica 登记（或更新）副本。replica_dir 只在新登记时使用：为空放在默认目录；
+// 已有的副本留在原处，和指定的位置不一样时拒绝（要移动用 MoveReplica）。
 func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplicaRequest) (*nagiv1.AcceptReplicaResponse, error) {
 	if _, err := mesh.ParseKey(req.GetSourceKey()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	sp := req.GetSpec()
-	r := s.node.replicas
-	m, _, _, err := r.load(sp.GetProjectId(), sp.GetName())
-	if err != nil {
-		if status.Code(err) != codes.NotFound {
-			return nil, err
-		}
-		m = &replicaMeta{ProjectID: sp.GetProjectId(), Container: sp.GetName()}
 	}
 	for _, k := range req.GetExtraSourceKeys() {
 		if _, err := mesh.ParseKey(k); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 	}
+	sp := req.GetSpec()
+	r := s.node.replicas
+	id, err := replicaID(sp.GetProjectId(), sp.GetName())
+	if err != nil {
+		return nil, err
+	}
+	var base string
+	if strings.TrimSpace(req.GetReplicaDir()) != "" {
+		// 校验和移动互斥（checkBase 会建目录），拿副本的锁之前做，顺序和 moveTo 一致。
+		r.moving.Lock()
+		defer r.moving.Unlock()
+		if base, err = r.checkBase(req.GetReplicaDir()); err != nil {
+			return nil, err
+		}
+	}
+	defer r.lock(sp.GetProjectId(), sp.GetName())()
+	m, _, root, err := r.load(sp.GetProjectId(), sp.GetName())
+	created := false
+	switch {
+	case status.Code(err) == codes.NotFound:
+		m = &replicaMeta{ProjectID: sp.GetProjectId(), Container: sp.GetName()}
+		if base != "" {
+			def, _ := r.defaultDir()
+			if err := r.setLocation(id, base, base != def); err != nil {
+				return nil, err
+			}
+			created = true
+		}
+	case err != nil:
+		return nil, err
+	case base != "" && filepath.Dir(root) != base:
+		return nil, status.Errorf(codes.FailedPrecondition, "此节点上已有该容器的副本（%s），请先不指定位置添加，再编辑存放位置", root)
+	}
 	m.SourceKey, m.SourceNodeID, m.SourceName = req.GetSourceKey(), req.GetSourceNodeId(), req.GetSourceName()
 	m.ExtraSourceKeys = req.GetExtraSourceKeys()
-	defer r.lock(sp.GetProjectId(), sp.GetName())()
 	if err := r.save(m, sp); err != nil {
+		if created {
+			r.forget(id)
+		}
 		return nil, err
 	}
 	return &nagiv1.AcceptReplicaResponse{}, nil
@@ -905,22 +968,14 @@ func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplic
 
 func (s *agentService) ListReplicas(context.Context, *nagiv1.ListReplicasRequest) (*nagiv1.ListReplicasResponse, error) {
 	r := s.node.replicas
-	entries, _ := os.ReadDir(r.dir)
 	out := &nagiv1.ListReplicasResponse{}
-	for _, e := range entries {
-		raw, err := os.ReadFile(filepath.Join(r.dir, e.Name(), "meta.json"))
+	for _, ref := range r.list() {
+		m, sp, root, err := r.load(ref.projectID, ref.container)
 		if err != nil {
 			continue
 		}
-		m := &replicaMeta{}
-		if json.Unmarshal(raw, m) != nil {
-			continue
-		}
-		_, sp, root, err := r.load(m.ProjectID, m.Container)
-		if err != nil {
-			continue
-		}
-		rp := &nagiv1.Replica{ProjectId: m.ProjectID, Container: m.Container, ProjectName: sp.GetProjectName(), SourceNodeId: m.SourceNodeID, SourceName: m.SourceName}
+		rp := &nagiv1.Replica{ProjectId: m.ProjectID, Container: m.Container, ProjectName: sp.GetProjectName(), SourceNodeId: m.SourceNodeID, SourceName: m.SourceName,
+			Dir: root, CustomDir: ref.custom}
 		if m.LastSync > 0 {
 			rp.LastSync = timestamppb.New(time.Unix(m.LastSync, 0))
 		}
@@ -938,11 +993,14 @@ func (s *agentService) ListReplicas(context.Context, *nagiv1.ListReplicasRequest
 }
 
 func (s *agentService) ListReplicaSnapshots(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.ListSnapshotsResponse, error) {
+	if _, err := replicaID(req.GetProjectId(), req.GetContainer()); err != nil {
+		return nil, err
+	}
+	defer s.node.replicas.lock(req.GetProjectId(), req.GetContainer())()
 	_, sp, root, err := s.node.replicas.load(req.GetProjectId(), req.GetContainer())
 	if err != nil {
 		return nil, err
 	}
-	defer s.node.replicas.lock(req.GetProjectId(), req.GetContainer())()
 	list, err := project.ReplicaSnapshots(ctx, sp, filepath.Join(root, "files", "repo"), s.node.replicaStateDir(req.GetProjectId(), req.GetContainer()))
 	if err != nil {
 		return nil, toStatus(err)
@@ -959,27 +1017,29 @@ func (s *agentService) CheckContainer(ctx context.Context, req *nagiv1.PutContai
 
 func (s *agentService) RestoreReplica(req *nagiv1.RestoreReplicaRequest, stream nagiv1.AgentService_RestoreReplicaServer) error {
 	sp := req.GetSpec()
-	if _, _, _, err := s.node.replicas.load(sp.GetProjectId(), sp.GetName()); err != nil {
+	if _, err := replicaID(sp.GetProjectId(), sp.GetName()); err != nil {
+		return err
+	}
+	unlock := s.node.replicas.lock(sp.GetProjectId(), sp.GetName())
+	_, _, root, err := s.node.replicas.load(sp.GetProjectId(), sp.GetName())
+	if err != nil {
+		unlock()
 		return err
 	}
 	defer s.changed()
 	ctx := stream.Context()
-	root, _ := s.node.replicas.root(sp.GetProjectId(), sp.GetName())
-	unlock := s.node.replicas.lock(sp.GetProjectId(), sp.GetName())
-	err := s.projects.RestoreReplica(ctx, sp, filepath.Join(root, "files", "repo"), req.GetSnapshotId(), func(line string) {
+	err = s.projects.RestoreReplica(ctx, sp, filepath.Join(root, "files", "repo"), req.GetSnapshotId(), func(line string) {
 		_ = stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
 	})
-	unlock()
-	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrInvalidArgument) {
-		return toStatus(err)
-	}
 	_, gerr := s.projects.Get(ctx, sp.GetProjectId(), sp.GetName())
 	placed := gerr == nil
 	if placed {
 		// 容器已经用自己的快照仓库了，副本没用了。
-		defer s.node.replicas.lock(sp.GetProjectId(), sp.GetName())()
-		os.RemoveAll(root)
-		os.RemoveAll(s.node.replicaStateDir(sp.GetProjectId(), sp.GetName()))
+		_ = s.node.replicas.remove(sp.GetProjectId(), sp.GetName())
+	}
+	unlock()
+	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrInvalidArgument) {
+		return toStatus(err)
 	}
 	result := &nagiv1.DeployResult{Success: err == nil, Version: sp.GetVersion(), Placed: placed}
 	if err != nil {
@@ -989,15 +1049,13 @@ func (s *agentService) RestoreReplica(req *nagiv1.RestoreReplicaRequest, stream 
 }
 
 func (s *agentService) DeleteReplica(_ context.Context, req *nagiv1.ContainerRef) (*nagiv1.DeleteReplicaResponse, error) {
-	root, err := s.node.replicas.root(req.GetProjectId(), req.GetContainer())
-	if err != nil {
+	if _, err := replicaID(req.GetProjectId(), req.GetContainer()); err != nil {
 		return nil, err
 	}
 	defer s.node.replicas.lock(req.GetProjectId(), req.GetContainer())()
-	if err := os.RemoveAll(root); err != nil {
+	if err := s.node.replicas.remove(req.GetProjectId(), req.GetContainer()); err != nil {
 		return nil, err
 	}
-	os.RemoveAll(s.node.replicaStateDir(req.GetProjectId(), req.GetContainer()))
 	return &nagiv1.DeleteReplicaResponse{}, nil
 }
 

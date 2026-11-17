@@ -162,6 +162,12 @@ const (
 	// AgentServiceMigrateResumeProcedure is the fully-qualified name of the AgentService's
 	// MigrateResume RPC.
 	AgentServiceMigrateResumeProcedure = "/nagi.v1.AgentService/MigrateResume"
+	// AgentServiceSetReplicaDirProcedure is the fully-qualified name of the AgentService's
+	// SetReplicaDir RPC.
+	AgentServiceSetReplicaDirProcedure = "/nagi.v1.AgentService/SetReplicaDir"
+	// AgentServiceMoveReplicaProcedure is the fully-qualified name of the AgentService's MoveReplica
+	// RPC.
+	AgentServiceMoveReplicaProcedure = "/nagi.v1.AgentService/MoveReplica"
 	// AgentServiceSetFailoverProcedure is the fully-qualified name of the AgentService's SetFailover
 	// RPC.
 	AgentServiceSetFailoverProcedure = "/nagi.v1.AgentService/SetFailover"
@@ -304,6 +310,11 @@ type AgentServiceClient interface {
 	MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 源节点：迁移失败时撤销，重新启动容器。
 	MigrateResume(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 副本的存放位置（见 docs/snapshot.md#副本的存放位置）。节点自己校验路径，移动完、核对无误才切换。
+	// 修改节点保存副本的默认目录，把在默认目录里的副本移过去。dir 为空表示 <节点目录>/replicas。
+	SetReplicaDir(context.Context, *connect.Request[v1.SetReplicaDirRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 把一个副本移到 dir 下面；dir 为空表示移回节点的默认目录。
+	MoveReplica(context.Context, *connect.Request[v1.MoveReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// ---- 顶替（见 docs/failover.md） ----
 	// 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
 	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
@@ -640,6 +651,18 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("MigrateResume")),
 			connect.WithClientOptions(opts...),
 		),
+		setReplicaDir: connect.NewClient[v1.SetReplicaDirRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceSetReplicaDirProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetReplicaDir")),
+			connect.WithClientOptions(opts...),
+		),
+		moveReplica: connect.NewClient[v1.MoveReplicaRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceMoveReplicaProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("MoveReplica")),
+			connect.WithClientOptions(opts...),
+		),
 		setFailover: connect.NewClient[v1.SetFailoverRequest, v1.FailoverStatus](
 			httpClient,
 			baseURL+AgentServiceSetFailoverProcedure,
@@ -840,6 +863,8 @@ type agentServiceClient struct {
 	deleteReplica         *connect.Client[v1.ContainerRef, v1.DeleteReplicaResponse]
 	migrateOut            *connect.Client[v1.MigrateOutRequest, v1.DeployEvent]
 	migrateResume         *connect.Client[v1.ContainerRef, v1.DeployEvent]
+	setReplicaDir         *connect.Client[v1.SetReplicaDirRequest, v1.DeployEvent]
+	moveReplica           *connect.Client[v1.MoveReplicaRequest, v1.DeployEvent]
 	setFailover           *connect.Client[v1.SetFailoverRequest, v1.FailoverStatus]
 	confirmTakeover       *connect.Client[v1.ContainerRef, v1.FailoverStatus]
 	getCache              *connect.Client[v1.GetCacheRequest, v1.NodeCache]
@@ -1092,6 +1117,16 @@ func (c *agentServiceClient) MigrateResume(ctx context.Context, req *connect.Req
 	return c.migrateResume.CallServerStream(ctx, req)
 }
 
+// SetReplicaDir calls nagi.v1.AgentService.SetReplicaDir.
+func (c *agentServiceClient) SetReplicaDir(ctx context.Context, req *connect.Request[v1.SetReplicaDirRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.setReplicaDir.CallServerStream(ctx, req)
+}
+
+// MoveReplica calls nagi.v1.AgentService.MoveReplica.
+func (c *agentServiceClient) MoveReplica(ctx context.Context, req *connect.Request[v1.MoveReplicaRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.moveReplica.CallServerStream(ctx, req)
+}
+
 // SetFailover calls nagi.v1.AgentService.SetFailover.
 func (c *agentServiceClient) SetFailover(ctx context.Context, req *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {
 	return c.setFailover.CallUnary(ctx, req)
@@ -1294,6 +1329,11 @@ type AgentServiceHandler interface {
 	MigrateOut(context.Context, *connect.Request[v1.MigrateOutRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 源节点：迁移失败时撤销，重新启动容器。
 	MigrateResume(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
+	// 副本的存放位置（见 docs/snapshot.md#副本的存放位置）。节点自己校验路径，移动完、核对无误才切换。
+	// 修改节点保存副本的默认目录，把在默认目录里的副本移过去。dir 为空表示 <节点目录>/replicas。
+	SetReplicaDir(context.Context, *connect.Request[v1.SetReplicaDirRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 把一个副本移到 dir 下面；dir 为空表示移回节点的默认目录。
+	MoveReplica(context.Context, *connect.Request[v1.MoveReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// ---- 顶替（见 docs/failover.md） ----
 	// 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
 	SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error)
@@ -1626,6 +1666,18 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("MigrateResume")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetReplicaDirHandler := connect.NewServerStreamHandler(
+		AgentServiceSetReplicaDirProcedure,
+		svc.SetReplicaDir,
+		connect.WithSchema(agentServiceMethods.ByName("SetReplicaDir")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceMoveReplicaHandler := connect.NewServerStreamHandler(
+		AgentServiceMoveReplicaProcedure,
+		svc.MoveReplica,
+		connect.WithSchema(agentServiceMethods.ByName("MoveReplica")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetFailoverHandler := connect.NewUnaryHandler(
 		AgentServiceSetFailoverProcedure,
 		svc.SetFailover,
@@ -1868,6 +1920,10 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceMigrateOutHandler.ServeHTTP(w, r)
 		case AgentServiceMigrateResumeProcedure:
 			agentServiceMigrateResumeHandler.ServeHTTP(w, r)
+		case AgentServiceSetReplicaDirProcedure:
+			agentServiceSetReplicaDirHandler.ServeHTTP(w, r)
+		case AgentServiceMoveReplicaProcedure:
+			agentServiceMoveReplicaHandler.ServeHTTP(w, r)
 		case AgentServiceSetFailoverProcedure:
 			agentServiceSetFailoverHandler.ServeHTTP(w, r)
 		case AgentServiceConfirmTakeoverProcedure:
@@ -2105,6 +2161,14 @@ func (UnimplementedAgentServiceHandler) MigrateOut(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) MigrateResume(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MigrateResume is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetReplicaDir(context.Context, *connect.Request[v1.SetReplicaDirRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetReplicaDir is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) MoveReplica(context.Context, *connect.Request[v1.MoveReplicaRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.MoveReplica is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetFailover(context.Context, *connect.Request[v1.SetFailoverRequest]) (*connect.Response[v1.FailoverStatus], error) {

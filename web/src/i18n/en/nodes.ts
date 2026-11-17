@@ -151,6 +151,17 @@ export default {
     rootHint: "Absolute path",
     rootHelp: "New containers on this node default to <projects root>/<network name>/<container name>. Existing container directories don't change.",
   },
+  replicaDir: {
+    title: "Replica directory",
+    help: "Replicas this node receives as a backup node or failover node are stored here, one subdirectory each. After a change, existing replicas move to the new directory and the original copies are deleted once verified. Syncing of those replicas pauses while they move. Replicas with their own location don't move.",
+    default: "Default (<node directory>/replicas)",
+    label: "Directory",
+    hint: "Absolute path. Leave empty to use the default directory",
+    placeholder: "<node directory>/replicas",
+    elevate: "Changing the replica directory creates directories and writes data on the node. Verify your identity first.",
+    outdated: "The node is out of date. Upgrade it to change this",
+    adminOnly: "Only admins can change this",
+  },
   reclaim: {
     title: "Snapshot repositories",
     description: "Reclaim the data in this node's snapshot repositories that no snapshot uses, such as deleted, expired or failed snapshots.",
@@ -181,6 +192,7 @@ export default {
     source: (name) => `Source node ${name}`,
     synced: (ago) => `Synced ${ago}`,
     neverSynced: "Not synced yet",
+    customDir: "Custom location",
   },
   stale: {
     adoptConfirm: (project) =>

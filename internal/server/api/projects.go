@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
+	"slices"
+	"strings"
 	"sync/atomic"
 
 	"connectrpc.com/connect"
@@ -294,7 +297,26 @@ func (s *projectService) DeleteRoute(ctx context.Context, req *connect.Request[n
 
 func (s *projectService) SetBackupNodes(ctx context.Context, req *connect.Request[nagiv1.SetBackupNodesRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
-	return reply(s.Projects.SetBackupNodes(ctx, m.GetProjectId(), m.GetContainer(), m.GetBackupNodeIds(), m.GetDeleteReplica()))
+	// 指定副本的存放位置会在节点上建目录、写数据，只有管理员能做，而且要先做高权限确认（见 docs/snapshot.md#副本的存放位置）。
+	if slices.ContainsFunc(slices.Collect(maps.Values(m.GetReplicaDirs())), func(d string) bool { return strings.TrimSpace(d) != "" }) {
+		u := auth.CurrentUser(ctx)
+		if u.Role != auth.RoleAdmin {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能指定副本的存放位置"))
+		}
+		if !u.Elevated() {
+			return nil, elevationError()
+		}
+	}
+	return reply(s.Projects.SetBackupNodes(ctx, m.GetProjectId(), m.GetContainer(), m.GetBackupNodeIds(), m.GetDeleteReplica(), m.GetReplicaDirs()))
+}
+
+// SetBackupReplicaDir 修改容器在一个备份节点上的副本存放位置，把副本移过去。只有管理员能用（auth.adminWrites），
+// 要先做高权限确认（elevationRequired）。开始了就做完，浏览器断开也不中断。
+func (s *projectService) SetBackupReplicaDir(ctx context.Context, req *connect.Request[nagiv1.SetBackupReplicaDirRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	m := req.Msg
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
+		return 0, s.Projects.SetBackupReplicaDir(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId(), m.GetDir(), o)
+	})
 }
 
 func (s *projectService) SetContainerAlertRules(ctx context.Context, req *connect.Request[nagiv1.SetContainerAlertRulesRequest]) (*connect.Response[nagiv1.Project], error) {

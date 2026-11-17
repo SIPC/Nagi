@@ -77,6 +77,8 @@ type Manager struct {
 	ReservedDirs []string
 	// ProjectsRoot 返回节点的项目根目录。
 	ProjectsRoot func() string
+	// ReplicaRoots 返回本节点保存的副本的目录，容器目录不能和它们重叠。
+	ReplicaRoots func() []string
 
 	restarts managedRestarts
 	images   imageUpdates
@@ -389,6 +391,13 @@ func (m *Manager) CheckDir(ctx context.Context, dir string) (string, error) {
 	}
 	if m.ProjectsRoot != nil && linkBelow(m.ProjectsRoot(), dir) {
 		return "", invalid("目录 %s 经过符号链接，请更换目录", dir)
+	}
+	if m.ReplicaRoots != nil {
+		for _, r := range m.ReplicaRoots() {
+			if within(dir, r) || within(r, dir) {
+				return "", invalid("目录与此节点上保存的副本 %s 重叠，请更换目录", r)
+			}
+		}
 	}
 	return dir, nil
 }

@@ -143,6 +143,14 @@ export default {
     set: "设置备份节点",
     add: "添加备份节点",
     unset: "定时将快照同步到其他节点，用于手动恢复。",
+    dir: "存放位置",
+    dirHint: "留空使用节点的副本目录",
+    dirHelp: "副本存放在 <存放位置>/<项目 ID>-<容器名>。仅管理员可指定，由备份节点校验路径。",
+    dirPlaceholder: "节点的副本目录",
+    editDir: "编辑存放位置",
+    editDirDescription: (node: string) => `更改后副本移到新位置，核对无误后删除原位置；移动期间同步暂停。备份节点：${node}。`,
+    storedAt: (dir: string) => `存放于 ${dir}`,
+    elevate: "指定副本的存放位置会在节点上创建目录并写入数据，请先验证身份。",
   },
   restore: {
     confirm: (node: string, container: string) =>

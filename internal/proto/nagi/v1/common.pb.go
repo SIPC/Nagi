@@ -635,9 +635,11 @@ type Container struct {
 	// 备份节点（见 docs/snapshot.md#异地副本），按添加的顺序。可以有多个，可以和顶替同时设置。
 	BackupNodeIds []string `protobuf:"bytes,29,rep,name=backup_node_ids,json=backupNodeIds,proto3" json:"backup_node_ids,omitempty"`
 	// 同步到各个备份节点的状态（容器所在节点上报的），按 backup_node_ids 的顺序。
-	Backups       []*BackupStatus `protobuf:"bytes,30,rep,name=backups,proto3" json:"backups,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Backups []*BackupStatus `protobuf:"bytes,30,rep,name=backups,proto3" json:"backups,omitempty"`
+	// 单独指定了副本存放位置的备份节点：节点 ID → 存放位置（见 docs/snapshot.md#副本的存放位置）。没有的用节点的默认目录。
+	BackupReplicaDirs map[string]string `protobuf:"bytes,31,rep,name=backup_replica_dirs,json=backupReplicaDirs,proto3" json:"backup_replica_dirs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Container) Reset() {
@@ -876,6 +878,13 @@ func (x *Container) GetBackupNodeIds() []string {
 func (x *Container) GetBackups() []*BackupStatus {
 	if x != nil {
 		return x.Backups
+	}
+	return nil
+}
+
+func (x *Container) GetBackupReplicaDirs() map[string]string {
+	if x != nil {
+		return x.BackupReplicaDirs
 	}
 	return nil
 }
@@ -2824,7 +2833,11 @@ type NodeInfo struct {
 	// 用旧版本回来是新版本没能运行、节点自动换回去了（见 docs/control-plane.md#接口设计）。旧版本的节点不报。
 	StartedAt int64 `protobuf:"varint,21,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	// 节点支持文件的改名、移动、复制、压缩、解压、目录大小和分块上传（旧版本的节点不报）。
-	FileOps       bool `protobuf:"varint,22,opt,name=file_ops,json=fileOps,proto3" json:"file_ops,omitempty"`
+	FileOps bool `protobuf:"varint,22,opt,name=file_ops,json=fileOps,proto3" json:"file_ops,omitempty"`
+	// 节点支持选择副本的存放位置（SetReplicaDir、MoveReplica、AcceptReplicaRequest.replica_dir，见 docs/snapshot.md#副本的存放位置）。旧版本的节点不报。
+	ReplicaDirs bool `protobuf:"varint,23,opt,name=replica_dirs,json=replicaDirs,proto3" json:"replica_dirs,omitempty"`
+	// 节点保存副本的默认目录，为空表示 <节点目录>/replicas。
+	ReplicaDir    string `protobuf:"bytes,24,opt,name=replica_dir,json=replicaDir,proto3" json:"replica_dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3011,6 +3024,20 @@ func (x *NodeInfo) GetFileOps() bool {
 		return x.FileOps
 	}
 	return false
+}
+
+func (x *NodeInfo) GetReplicaDirs() bool {
+	if x != nil {
+		return x.ReplicaDirs
+	}
+	return false
+}
+
+func (x *NodeInfo) GetReplicaDir() string {
+	if x != nil {
+		return x.ReplicaDir
+	}
+	return ""
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -4609,14 +4636,18 @@ func (x *BackupStatus) GetSyncing() bool {
 
 // Replica 是备份节点上保存的一个容器副本。
 type Replica struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Container     string                 `protobuf:"bytes,7,opt,name=container,proto3" json:"container,omitempty"`
-	ProjectName   string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
-	SourceNodeId  string                 `protobuf:"bytes,3,opt,name=source_node_id,json=sourceNodeId,proto3" json:"source_node_id,omitempty"`
-	SourceName    string                 `protobuf:"bytes,4,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
-	LastSync      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
-	Bytes         int64                  `protobuf:"varint,6,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId    string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container    string                 `protobuf:"bytes,7,opt,name=container,proto3" json:"container,omitempty"`
+	ProjectName  string                 `protobuf:"bytes,2,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
+	SourceNodeId string                 `protobuf:"bytes,3,opt,name=source_node_id,json=sourceNodeId,proto3" json:"source_node_id,omitempty"`
+	SourceName   string                 `protobuf:"bytes,4,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
+	LastSync     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_sync,json=lastSync,proto3" json:"last_sync,omitempty"`
+	Bytes        int64                  `protobuf:"varint,6,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	// 副本在节点上的目录（<存放位置>/<项目 ID>-<容器名>）。旧版本的节点不报。
+	Dir string `protobuf:"bytes,8,opt,name=dir,proto3" json:"dir,omitempty"`
+	// 这个副本单独指定了存放位置，不随节点的默认目录移动。
+	CustomDir     bool `protobuf:"varint,9,opt,name=custom_dir,json=customDir,proto3" json:"custom_dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4698,6 +4729,20 @@ func (x *Replica) GetBytes() int64 {
 		return x.Bytes
 	}
 	return 0
+}
+
+func (x *Replica) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+func (x *Replica) GetCustomDir() bool {
+	if x != nil {
+		return x.CustomDir
+	}
+	return false
 }
 
 // FailoverParticipant 是顶替设置里的一个参与者。
@@ -5622,8 +5667,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bdisabled\x18\x01 \x01(\bR\bdisabled\x12)\n" +
 	"\x10interval_minutes\x18\x02 \x01(\rR\x0fintervalMinutes\x12\x14\n" +
 	"\x05times\x18\x03 \x03(\tR\x05times\x12\x1b\n" +
-	"\ttime_zone\x18\x04 \x01(\tR\btimeZone\"\x89\n" +
-	"\n" +
+	"\ttime_zone\x18\x04 \x01(\tR\btimeZone\"\xaa\v\n" +
 	"\tContainer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x03R\brevision\x12%\n" +
@@ -5660,7 +5704,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"pending_ha\x18\x1c \x01(\v2\x12.nagi.v1.PendingHAR\tpendingHa\x12&\n" +
 	"\x0fbackup_node_ids\x18\x1d \x03(\tR\rbackupNodeIds\x12/\n" +
-	"\abackups\x18\x1e \x03(\v2\x15.nagi.v1.BackupStatusR\abackups\"\xd5\x01\n" +
+	"\abackups\x18\x1e \x03(\v2\x15.nagi.v1.BackupStatusR\abackups\x12Y\n" +
+	"\x13backup_replica_dirs\x18\x1f \x03(\v2).nagi.v1.Container.BackupReplicaDirsEntryR\x11backupReplicaDirs\x1aD\n" +
+	"\x16BackupReplicaDirsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd5\x01\n" +
 	"\tPendingHA\x123\n" +
 	"\bfailover\x18\x01 \x01(\v2\x17.nagi.v1.FailoverConfigR\bfailover\x12%\n" +
 	"\x0efailover_epoch\x18\x02 \x01(\x04R\rfailoverEpoch\x12$\n" +
@@ -5853,7 +5901,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xde\x05\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xa2\x06\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -5880,7 +5928,10 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\fegress_error\x18\x14 \x01(\tR\vegressError\x12\x1d\n" +
 	"\n" +
 	"started_at\x18\x15 \x01(\x03R\tstartedAt\x12\x19\n" +
-	"\bfile_ops\x18\x16 \x01(\bR\afileOps\"\x89\x01\n" +
+	"\bfile_ops\x18\x16 \x01(\bR\afileOps\x12!\n" +
+	"\freplica_dirs\x18\x17 \x01(\bR\vreplicaDirs\x12\x1f\n" +
+	"\vreplica_dir\x18\x18 \x01(\tR\n" +
+	"replicaDir\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +
@@ -6026,7 +6077,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tlast_sync\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x1d\n" +
 	"\n" +
 	"last_error\x18\x04 \x01(\tR\tlastError\x12\x18\n" +
-	"\asyncing\x18\x05 \x01(\bR\asyncing\"\xff\x01\n" +
+	"\asyncing\x18\x05 \x01(\bR\asyncing\"\xb0\x02\n" +
 	"\aReplica\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
@@ -6036,7 +6087,10 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vsource_name\x18\x04 \x01(\tR\n" +
 	"sourceName\x127\n" +
 	"\tlast_sync\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x14\n" +
-	"\x05bytes\x18\x06 \x01(\x03R\x05bytes\"f\n" +
+	"\x05bytes\x18\x06 \x01(\x03R\x05bytes\x12\x10\n" +
+	"\x03dir\x18\b \x01(\tR\x03dir\x12\x1d\n" +
+	"\n" +
+	"custom_dir\x18\t \x01(\bR\tcustomDir\"f\n" +
 	"\x13FailoverParticipant\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\fR\x03key\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x12\n" +
@@ -6143,7 +6197,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -6202,28 +6256,29 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*LinkProxy)(nil),             // 54: nagi.v1.LinkProxy
 	(*LinkNode)(nil),              // 55: nagi.v1.LinkNode
 	(*LinkAllow)(nil),             // 56: nagi.v1.LinkAllow
-	nil,                           // 57: nagi.v1.ContainerConfig.ServiceEnvEntry
-	nil,                           // 58: nagi.v1.Version.ImagesEntry
-	nil,                           // 59: nagi.v1.Deployment.VersionsEntry
-	nil,                           // 60: nagi.v1.ContainerSpec.ImagesEntry
-	nil,                           // 61: nagi.v1.DeployResult.ImagesEntry
-	nil,                           // 62: nagi.v1.AlertRules.EnabledEntry
-	(*timestamppb.Timestamp)(nil), // 63: google.protobuf.Timestamp
+	nil,                           // 57: nagi.v1.Container.BackupReplicaDirsEntry
+	nil,                           // 58: nagi.v1.ContainerConfig.ServiceEnvEntry
+	nil,                           // 59: nagi.v1.Version.ImagesEntry
+	nil,                           // 60: nagi.v1.Deployment.VersionsEntry
+	nil,                           // 61: nagi.v1.ContainerSpec.ImagesEntry
+	nil,                           // 62: nagi.v1.DeployResult.ImagesEntry
+	nil,                           // 63: nagi.v1.AlertRules.EnabledEntry
+	(*timestamppb.Timestamp)(nil), // 64: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	63, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	64, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	14, // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
 	3,  // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
 	15, // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
 	2,  // 5: nagi.v1.Project.links:type_name -> nagi.v1.LinkedProject
-	63, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
+	64, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
 	15, // 7: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
 	35, // 8: nagi.v1.ProjectSettings.alert_rules:type_name -> nagi.v1.AlertRules
 	6,  // 9: nagi.v1.ProjectSettings.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
 	4,  // 10: nagi.v1.ProjectSettings.egress:type_name -> nagi.v1.Egress
 	4,  // 11: nagi.v1.ProjectEgress.egress:type_name -> nagi.v1.Egress
-	63, // 12: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
+	64, // 12: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 13: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
 	9,  // 14: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
 	46, // 15: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
@@ -6234,72 +6289,73 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	6,  // 20: nagi.v1.Container.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
 	8,  // 21: nagi.v1.Container.pending_ha:type_name -> nagi.v1.PendingHA
 	46, // 22: nagi.v1.Container.backups:type_name -> nagi.v1.BackupStatus
-	49, // 23: nagi.v1.PendingHA.failover:type_name -> nagi.v1.FailoverConfig
-	15, // 24: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
-	57, // 25: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
-	17, // 26: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
-	13, // 27: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
-	0,  // 28: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
-	63, // 29: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	63, // 30: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	58, // 31: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	63, // 32: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
-	59, // 33: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
-	63, // 34: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
-	15, // 35: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
-	18, // 36: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
-	15, // 37: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
-	19, // 38: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
-	21, // 39: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	63, // 40: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	1,  // 41: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
-	20, // 42: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	9,  // 43: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
-	15, // 44: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
-	60, // 45: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
-	14, // 46: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
-	24, // 47: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
-	35, // 48: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
-	6,  // 49: nagi.v1.ContainerSpec.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
-	6,  // 50: nagi.v1.ContainerSpec.project_snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
-	24, // 51: nagi.v1.ContainerSpec.backups:type_name -> nagi.v1.BackupTarget
-	19, // 52: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
-	21, // 53: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	63, // 54: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	46, // 55: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
-	46, // 56: nagi.v1.ContainerStatus.backups:type_name -> nagi.v1.BackupStatus
-	27, // 57: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
-	63, // 58: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
-	63, // 59: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
-	32, // 60: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	61, // 61: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
-	62, // 62: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
-	34, // 63: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
-	35, // 64: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	63, // 65: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	63, // 66: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
-	40, // 67: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	63, // 68: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	63, // 69: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	48, // 70: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	48, // 71: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	48, // 72: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	49, // 73: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	63, // 74: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	54, // 75: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	56, // 76: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	52, // 77: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
-	53, // 78: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
-	5,  // 79: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
-	55, // 80: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
-	35, // 81: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
-	55, // 82: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	16, // 83: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	84, // [84:84] is the sub-list for method output_type
-	84, // [84:84] is the sub-list for method input_type
-	84, // [84:84] is the sub-list for extension type_name
-	84, // [84:84] is the sub-list for extension extendee
-	0,  // [0:84] is the sub-list for field type_name
+	57, // 23: nagi.v1.Container.backup_replica_dirs:type_name -> nagi.v1.Container.BackupReplicaDirsEntry
+	49, // 24: nagi.v1.PendingHA.failover:type_name -> nagi.v1.FailoverConfig
+	15, // 25: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
+	58, // 26: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	17, // 27: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
+	13, // 28: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
+	0,  // 29: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
+	64, // 30: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	64, // 31: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	59, // 32: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	64, // 33: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
+	60, // 34: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
+	64, // 35: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	15, // 36: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
+	18, // 37: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
+	15, // 38: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
+	19, // 39: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
+	21, // 40: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	64, // 41: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	1,  // 42: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
+	20, // 43: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
+	9,  // 44: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
+	15, // 45: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
+	61, // 46: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
+	14, // 47: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
+	24, // 48: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
+	35, // 49: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
+	6,  // 50: nagi.v1.ContainerSpec.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
+	6,  // 51: nagi.v1.ContainerSpec.project_snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
+	24, // 52: nagi.v1.ContainerSpec.backups:type_name -> nagi.v1.BackupTarget
+	19, // 53: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
+	21, // 54: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	64, // 55: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	46, // 56: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
+	46, // 57: nagi.v1.ContainerStatus.backups:type_name -> nagi.v1.BackupStatus
+	27, // 58: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
+	64, // 59: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
+	64, // 60: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	32, // 61: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
+	62, // 62: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
+	63, // 63: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
+	34, // 64: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
+	35, // 65: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
+	64, // 66: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	64, // 67: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	40, // 68: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	64, // 69: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	64, // 70: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	48, // 71: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	48, // 72: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	48, // 73: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	49, // 74: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	64, // 75: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	54, // 76: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	56, // 77: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	52, // 78: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	53, // 79: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	5,  // 80: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
+	55, // 81: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	35, // 82: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
+	55, // 83: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	16, // 84: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	85, // [85:85] is the sub-list for method output_type
+	85, // [85:85] is the sub-list for method input_type
+	85, // [85:85] is the sub-list for extension type_name
+	85, // [85:85] is the sub-list for extension extendee
+	0,  // [0:85] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -6317,7 +6373,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   62,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -41,7 +41,7 @@ func (s *Service) srcOf(p string) (string, fs.FileInfo, string, error) {
 	}
 	a := s.Access(real)
 	if a == AccessDenied {
-		return "", nil, "", denied(deniedReason(real))
+		return "", nil, "", denied(s.deniedReason(real))
 	}
 	return real, info, a, nil
 }
@@ -66,7 +66,7 @@ func (s *Service) destDirOf(p string, confirmed bool) (string, error) {
 func (s *Service) checkDest(real string, confirmed bool) error {
 	a := s.Access(real)
 	if a == AccessDenied {
-		return denied(deniedReason(real))
+		return denied(s.deniedReason(real))
 	}
 	return checkWrite(a, confirmed)
 }

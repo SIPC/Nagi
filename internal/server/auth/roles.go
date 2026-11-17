@@ -40,6 +40,8 @@ var adminReads = map[string]bool{
 // adminWrites 是项目接口里只有管理员能用的修改：项目分组决定成员的访问范围（见 docs/panel.md#分组和标签）。
 var adminWrites = map[string]bool{
 	"SetProjectGroup": true, "RenameProjectGroup": true,
+	// 副本的存放位置：在节点上任意位置建目录、写数据（见 docs/snapshot.md#副本的存放位置）。
+	"SetBackupReplicaDir": true,
 }
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。

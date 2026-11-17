@@ -17,7 +17,7 @@
 - `identity/`：证书、WireGuard 私钥、信任的面板列表（`panels.json`）、面板告诉的 mesh 成员（`mesh-peers.json`）、mesh 端口、告警配置和待补发的告警
 - `node.db`：分配给本节点的容器（所属项目、容器目录）和它们的配置缓存（见下文）；容器网段的分配；监控数据
 - `snapshots/<项目 ID>-<容器名>/`：快照仓库的连接配置和缓存
-- `replicas/`：作为备份节点或热备时收到的副本
+- `replicas/`：作为备份节点或热备时收到的副本（默认的存放位置，可以换到别处，见 [snapshot.md](snapshot.md#副本的存放位置)）；`replica-dirs.json` 记着换过的默认目录和不在默认目录里的副本
 - `failover/`：本节点参与的顶替设置（也包括作为见证人的）
 - `caddy/`：Caddy 的证书和状态
 - `run/`：代理容器连进来用的 unix socket

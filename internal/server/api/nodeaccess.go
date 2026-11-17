@@ -73,6 +73,10 @@ var elevationRequired = map[string]bool{
 	// 隔离和解除隔离节点（见 docs/mesh.md#隔离）。
 	nagiv1connect.NodeServiceIsolateNodeProcedure:   true,
 	nagiv1connect.NodeServiceUnisolateNodeProcedure: true,
+	// 副本的存放位置：在节点上任意位置建目录、写数据（见 docs/snapshot.md#副本的存放位置）。
+	// 设置备份节点时指定存放位置也要确认，在 SetBackupNodes 里检查。
+	nagiv1connect.NodeServiceSetNodeReplicaDirProcedure:      true,
+	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure: true,
 }
 
 func elevationError() error {

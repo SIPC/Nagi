@@ -152,6 +152,17 @@ export default {
     rootHint: "绝对路径",
     rootHelp: "新加入本节点的容器，默认目录为 <项目根目录>/<网络名>/<容器名>；已有容器的目录不变。",
   },
+  replicaDir: {
+    title: "副本目录",
+    help: "本节点作为备份节点或顶替节点收到的副本存放在此目录，每个副本一个子目录。更改后已有副本移到新目录，核对无误后删除原位置；移动期间这些副本的同步暂停。单独指定了位置的副本不移动。",
+    default: "默认（<节点目录>/replicas）",
+    label: "目录",
+    hint: "绝对路径，留空使用默认目录",
+    placeholder: "<节点目录>/replicas",
+    elevate: "更改副本目录会在节点上创建目录并写入数据，请先验证身份。",
+    outdated: "节点版本过低，升级后才能更改",
+    adminOnly: "仅管理员可更改",
+  },
   reclaim: {
     title: "快照仓库",
     description: "立即回收本节点快照仓库中没有快照使用的数据，例如已删除、已过期的快照和失败的快照留下的数据。",
@@ -182,6 +193,7 @@ export default {
     source: (name: string) => `来源节点 ${name}`,
     synced: (ago: string) => `${ago}同步`,
     neverSynced: "尚未同步",
+    customDir: "单独指定",
   },
   stale: {
     adoptConfirm: (project: string) =>
