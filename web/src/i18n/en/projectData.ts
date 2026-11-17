@@ -147,7 +147,7 @@ export default {
     dir: "Location",
     dirHint: "Leave empty to use the node's replica directory",
     dirHelp: "The replica is stored at <location>/<project ID>-<container name>. Only admins can choose it, and the backup node validates the path.",
-    dirPlaceholder: "Node's replica directory",
+    dirPlaceholder: "/mnt/data/replicas",
     editDir: "Edit location",
     editDirDescription: (node) => `The replica moves to the new location, and the original copy is deleted once verified. Syncing pauses during the move. Backup node: ${node}.`,
     storedAt: (dir) => `Stored at ${dir}`,

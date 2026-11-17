@@ -1048,8 +1048,13 @@ function NodeSettings({ n }: { n: Node }) {
             if (!(await requireElevation(t.nodes.replicaDir.elevate))) return;
             setEditing(null);
             await moving.run(() => nodeClient.setNodeReplicaDir({ nodeId: n.id, dir }));
-            await queryClient.invalidateQueries({ queryKey: ["nodes"] });
-            queryClient.invalidateQueries({ queryKey: ["node-replicas", n.id] });
+            // 新的目录随节点下一次上报到面板，过一会再取一次。
+            const refresh = () => {
+              queryClient.invalidateQueries({ queryKey: ["nodes"] });
+              queryClient.invalidateQueries({ queryKey: ["node-replicas", n.id] });
+            };
+            refresh();
+            setTimeout(refresh, 2000);
           }}
         />
       </Dialog>
@@ -1276,7 +1281,7 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
                       {t.nodes.replicas.unused}
                     </span>
                   ) : (
-                    <span className="truncate" title={tip}>
+                    <span className="wrap-anywhere" title={tip}>
                       {detail}
                       {r?.dir && <span className="font-mono"> · {r.dir}</span>}
                     </span>

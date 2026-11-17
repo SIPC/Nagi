@@ -146,7 +146,7 @@ export default {
     dir: "存放位置",
     dirHint: "留空使用节点的副本目录",
     dirHelp: "副本存放在 <存放位置>/<项目 ID>-<容器名>。仅管理员可指定，由备份节点校验路径。",
-    dirPlaceholder: "节点的副本目录",
+    dirPlaceholder: "/mnt/data/replicas",
     editDir: "编辑存放位置",
     editDirDescription: (node: string) => `更改后副本移到新位置，核对无误后删除原位置；移动期间同步暂停。备份节点：${node}。`,
     storedAt: (dir: string) => `存放于 ${dir}`,

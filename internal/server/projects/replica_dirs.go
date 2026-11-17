@@ -2,6 +2,7 @@ package projects
 
 import (
 	"context"
+	"errors"
 	"path"
 	"slices"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -31,6 +33,15 @@ func (s *Service) SupportsReplicaDirs(ctx context.Context, nodeID string) bool {
 // errOldNodeReplicaDir 是节点不支持选择副本存放位置时的错误。
 func (s *Service) errOldNodeReplicaDir(ctx context.Context, nodeID string) error {
 	return invalid("节点 %s 版本过低，升级后才能选择副本的存放位置", s.NodeName(ctx, nodeID))
+}
+
+// nodeMessage 把节点返回的 gRPC 错误换成只有文字的错误（去掉 "rpc error: code = ..."），包进面板的说明里时按语言翻译。
+func nodeMessage(err error) error {
+	var se interface{ GRPCStatus() *status.Status }
+	if errors.As(err, &se) {
+		return errors.New(se.GRPCStatus().Message())
+	}
+	return err
 }
 
 // cleanReplicaDir 整理界面填的存放位置，只做最基本的检查，规则以节点的校验为准。

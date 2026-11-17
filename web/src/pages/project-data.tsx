@@ -903,7 +903,7 @@ function BackupDetail({ project, container, nodes, run }: { project: Project; co
                     {st.lastError}
                   </span>
                 ) : (
-                  <span className="truncate" title={[formatDateTime(toDate(st?.lastSync)), dirs[id] ? b.storedAt(dirs[id]) : ""].filter(Boolean).join("\n")}>
+                  <span className="wrap-anywhere" title={[formatDateTime(toDate(st?.lastSync)), dirs[id] ? b.storedAt(dirs[id]) : ""].filter(Boolean).join("\n")}>
                     {last}
                     {dirs[id] && <span className="font-mono"> · {dirs[id]}</span>}
                   </span>

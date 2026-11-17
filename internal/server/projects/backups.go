@@ -201,7 +201,7 @@ func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, li
 			return nil, err
 		}
 		if err := s.registerBackup(ctx, target, p, c, dirOf[id]); err != nil {
-			return nil, i18n.Errorf("备份节点 %s 未能登记副本：%w", s.NodeName(ctx, id), s.nodeErr(ctx, id, err))
+			return nil, i18n.Errorf("备份节点 %s 未能登记副本：%w", s.NodeName(ctx, id), s.nodeErr(ctx, id, nodeMessage(err)))
 		}
 	}
 	// 记下新加的备份节点单独指定的存放位置；去掉的备份节点的记录删掉。
