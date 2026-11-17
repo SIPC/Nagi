@@ -420,11 +420,11 @@ func (s *projectService) ListVolumeFiles(ctx context.Context, req *connect.Reque
 	return connect.NewResponse(out), nil
 }
 
-// volumeFileOp 把卷的写操作转给容器所在的节点。
+// volumeFileOp 把卷的写操作转给容器所在的节点，先做和其他写接口一样的检查（见 checkVolumeWrite）。
 func (s *projectService) volumeFileOp(ctx context.Context, ref *nagiv1.VolumeFileRef, op func(nagiv1.AgentServiceClient) (*nagiv1.VolumeFileOpResponse, error)) (*connect.Response[nagiv1.VolumeFileOpResponse], error) {
-	agent, err := s.Projects.ContainerAgent(ctx, ref.GetProjectId(), ref.GetContainer())
+	agent, err := s.volumeWriteAgent(ctx, ref.GetProjectId(), ref.GetContainer())
 	if err != nil {
-		return nil, toConnect(err)
+		return nil, err
 	}
 	out, err := op(agent)
 	if err != nil {

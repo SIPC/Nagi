@@ -786,4 +786,5 @@ var en = map[string]string{
 	"请选择文件":                            "Select files first",
 	"这一块传输中出错，请重试":                     "This chunk was corrupted in transit. Try again",
 	"这个文件正在别处上传":                       "This file is being uploaded elsewhere",
+	"访问令牌没有「执行命令」权限，不能修改容器里的文件":        "The access token doesn't have the Run commands permission and can't change files in containers",
 }

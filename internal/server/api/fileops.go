@@ -8,7 +8,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
-	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -71,9 +70,9 @@ func drainFileOp(stream fileOpStream, err error) (*nagiv1.FileOpResult, error) {
 	}
 }
 
-// volumeWriteAgent 检查能不能改这个容器的文件，返回容器所在节点。
+// volumeWriteAgent 检查能不能改这个容器的文件（见 checkVolumeWrite），返回容器所在节点。卷的所有写接口都经过它。
 func (s *projectService) volumeWriteAgent(ctx context.Context, projectID, container string) (nagiv1.AgentServiceClient, error) {
-	if err := s.checkPrivilegedWrite(ctx, auth.CurrentUser(ctx).Role, projectID, container); err != nil {
+	if err := s.checkVolumeWrite(ctx, projectID, container); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 	agent, err := s.Projects.ContainerAgent(ctx, projectID, container)

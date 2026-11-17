@@ -54,8 +54,10 @@ func (a *API) VolumeFileHandler() http.Handler {
 			return
 		}
 		q := r.URL.Query()
+		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
 		if r.Method != http.MethodGet {
-			if err := a.checkPrivilegedWrite(r.Context(), u.Role, q.Get("project"), q.Get("container")); err != nil {
+			// 上传（整个文件和分块）：和其他写接口同样的检查，访问令牌要有「执行命令」权限。
+			if err := a.checkVolumeWrite(ctx, q.Get("project"), q.Get("container")); err != nil {
 				fail(http.StatusForbidden, err)
 				return
 			}
@@ -63,7 +65,6 @@ func (a *API) VolumeFileHandler() http.Handler {
 		ref := &nagiv1.VolumeFileRef{
 			ProjectId: q.Get("project"), Container: q.Get("container"), Volume: q.Get("volume"), Path: q.Get("path"), SnapshotId: q.Get("snapshot"),
 		}
-		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
 		m := a.Nodes.Mesh()
 		if m == nil {
 			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法传输文件"))

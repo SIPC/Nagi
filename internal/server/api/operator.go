@@ -151,6 +151,20 @@ func (a *API) checkPrivilegedWrite(ctx context.Context, role, projectID, contain
 
 var errPrivilegedWrite = i18n.New("特权容器的文件仅限管理员修改")
 
+// errTokenNoExec：访问令牌没有勾「执行命令」时不能改容器里的文件（能执行命令本来就能读写容器里的文件，
+// 反过来，没有这个权限的令牌也不能借文件接口往容器里放它会运行的东西，见 docs/mcp.md#权限）。
+var errTokenNoExec = i18n.New("访问令牌没有「执行命令」权限，不能修改容器里的文件")
+
+// checkVolumeWrite 是写容器卷里的文件的统一检查（删除、新建目录、上传、恢复、改名、移动、复制、压缩、解压）：
+// 访问令牌要有「执行命令」权限；特权容器只有管理员能写。网页的会话不受第一条影响。
+func (a *API) checkVolumeWrite(ctx context.Context, projectID, container string) error {
+	u := auth.CurrentUser(ctx)
+	if u.TokenID != 0 && !u.AllowExec {
+		return errTokenNoExec
+	}
+	return a.checkPrivilegedWrite(ctx, u.Role, projectID, container)
+}
+
 // checkOperatorSharedEnv：有特权的容器引用的共享变量，操作员不能改（和容器自己的变量一样，见 checkOperatorConfig）。
 // 和已部署的共享变量或者现有的草稿比，这些变量的值都没变才放行；容器自己的同名变量覆盖了的不算。
 func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID string, vars []*nagiv1.EnvVar) error {

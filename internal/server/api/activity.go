@@ -320,7 +320,7 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			return res, err
 		}
 		msg, _ := req.Any().(proto.Message)
-		if l.skip(ctx, procedure, msg, err) {
+		if l.skip(ctx, procedure, msg, err) || err == nil && conflictProbe(res.Any()) {
 			return res, err
 		}
 		result, failure := audit.ResultOK, ""
@@ -344,6 +344,9 @@ func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) con
 		start := time.Now()
 		w := &activityConn{StreamingHandlerConn: conn}
 		err := next(ctx, w)
+		if err == nil && w.probe {
+			return nil
+		}
 		result, failure := audit.ResultOK, w.failure
 		if failure != "" {
 			result = audit.ResultFailed
@@ -361,6 +364,20 @@ type activityConn struct {
 	connect.StreamingHandlerConn
 	req     proto.Message
 	failure string
+	// probe：文件操作只返回了同名的名字，什么都没改（见 conflictProbe）。
+	probe bool
+}
+
+// conflictProbe 判断回复是不是文件操作的同名探测：没有指定同名的处理方式时，节点发现同名就只返回名字，
+// 不做任何改动；界面问过以后带着处理方式再调用一次，那一次才记审计。
+func conflictProbe(m any) bool {
+	switch v := m.(type) {
+	case *nagiv1.FileOpResult:
+		return len(v.GetConflicts()) > 0
+	case *nagiv1.FileOpEvent:
+		return len(v.GetResult().GetConflicts()) > 0
+	}
+	return false
 }
 
 func (c *activityConn) Receive(m any) error {
@@ -372,6 +389,9 @@ func (c *activityConn) Receive(m any) error {
 }
 
 func (c *activityConn) Send(m any) error {
+	if conflictProbe(m) {
+		c.probe = true
+	}
 	if ev, ok := m.(*nagiv1.DeployEvent); ok {
 		if r := ev.GetResult(); r != nil && !r.GetSuccess() {
 			c.failure = r.GetError()

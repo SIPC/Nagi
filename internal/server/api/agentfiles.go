@@ -116,7 +116,7 @@ func (a *API) WriteVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, da
 	if err := a.checkAgentFiles(ctx, ref.GetProjectId(), true); err != nil {
 		return err
 	}
-	if err := a.checkPrivilegedWrite(ctx, auth.CurrentUser(ctx).Role, ref.GetProjectId(), ref.GetContainer()); err != nil {
+	if err := a.checkVolumeWrite(ctx, ref.GetProjectId(), ref.GetContainer()); err != nil {
 		return err
 	}
 	err := a.writeVolumeFile(ctx, &nagiv1.VolumeUploadChunk{Ref: ref, ExpectedSha256: expectedSHA256, CreateOnly: createOnly}, data)
