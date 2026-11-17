@@ -183,7 +183,7 @@ func toolInspectNodeStorage(c *call, in NodeArg) (any, error) {
 		Note          string  `json:"note"`
 	}{Node: n.GetName(), Disks: []disk{}, Images: tot(st.GetImages()), Containers: tot(st.GetContainers()), Volumes: tot(st.GetVolumes()),
 		BuildCache: tot(st.GetBuildCache()), LargestImages: []image{}, ContainerDirs: []dir{}, ReplicasGB: gb(st.GetReplicasBytes()), DockerError: st.GetDockerError(),
-		Note: "read-only. Reclaimable image space and build cache are usually safe to clean on the node; volumes, container data and snapshots can hold business data. Nothing is cleaned through MCP."}
+		Note: "read-only. Reclaimable image space and build cache are usually safe to clean on the node; volumes, container data and snapshots can hold business data. This tool cleans nothing; see list_node_images and prune_node_images."}
 	for _, d := range st.GetDisks() {
 		pct := 0.0
 		if d.GetTotalBytes() > 0 {

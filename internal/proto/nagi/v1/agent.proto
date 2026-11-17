@@ -145,6 +145,125 @@ service AgentService {
   rpc SetAuditSink(SetAuditSinkRequest) returns (SetAuditSinkResponse);
   // 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
   rpc ReadAuditLog(ReadAuditLogRequest) returns (ReadAuditLogResponse);
+  // ---- 节点镜像（见 docs/agent.md#节点镜像），v0.31.0 起支持（NodeInfo.image_ops），更早的节点返回 Unimplemented ----
+  // 列出镜像、使用它们的容器和 Nagi 要用的原因，以及一键清理会删除哪些。
+  rpc ListImages(ListImagesRequest) returns (NodeImages);
+  // 删除镜像或标签。节点自己判断：有容器使用的、Nagi 要用的都拒绝，不强制删除。
+  rpc DeleteImages(DeleteImagesRequest) returns (DeleteImagesResponse);
+  // 一键清理：只删除请求里列出、而且节点重新判断后仍然可以清理的镜像，可选清理构建缓存。
+  rpc PruneImages(PruneImagesRequest) returns (PruneImagesResponse);
+  // 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
+  rpc PullImage(PullImageRequest) returns (stream ImagePullEvent);
+}
+
+// ---- 节点镜像（见 docs/agent.md#节点镜像） ----
+
+message ListImagesRequest {}
+
+message NodeImages {
+  repeated NodeImage images = 1;
+  // 一键清理会删除的镜像（没有容器使用、Nagi 也不用的）。
+  repeated string prune_ids = 2;
+  // 清理这些镜像至少能释放的空间：按各镜像独占的层计算，它们之间共用的层不计入。
+  int64 prune_bytes = 3;
+  // 构建缓存中可以回收的大小。
+  int64 build_cache_bytes = 4;
+}
+
+message NodeImage {
+  // 完整的镜像 ID（sha256:...）。
+  string id = 1;
+  // 仓库:标签，悬空镜像没有。
+  repeated string tags = 2;
+  // 仓库@摘要。
+  repeated string digests = 3;
+  int64 size = 4;
+  // 只属于这个镜像的大小（不含和别的镜像共用的层），删除它至少能释放这么多。
+  int64 unique_size = 5;
+  google.protobuf.Timestamp created = 6;
+  // 使用这个镜像的容器（包括已停止的）。
+  repeated ImageUser users = 7;
+  // Nagi 要用它的原因：有任何一条时不能删除，也不会被清理。
+  repeated ImageHold holds = 8;
+}
+
+message ImageUser {
+  // Docker 里的容器名。
+  string name = 1;
+  bool running = 2;
+  // Nagi 管理的容器：所属项目、容器名和容器组里的服务名。
+  string project_id = 3;
+  string project_name = 4;
+  string container = 5;
+  string service = 6;
+  // Nagi 自己的容器（项目内网的代理）。
+  bool system = 7;
+}
+
+message ImageHold {
+  // deployed：本节点上的容器部署的版本；standby：热备提前拉取的；backup：在本节点从备份恢复时要用的；system：Nagi 自己用的。
+  string kind = 1;
+  string project_id = 2;
+  string project_name = 3;
+  string container = 4;
+}
+
+// ImageRef 是要删除的一个镜像或标签。
+message ImageRef {
+  // 完整的镜像 ID（sha256:...），节点核对标签确实属于它。
+  string id = 1;
+  // 只删除这个标签（镜像还有别的标签时只去掉它）；为空时删除整个镜像。
+  string tag = 2;
+}
+
+message DeleteImagesRequest {
+  repeated ImageRef images = 1;
+}
+
+message ImageDeleteResult {
+  string id = 1;
+  string tag = 2;
+  // 删除失败的原因，成功时为空。
+  string error = 3;
+}
+
+message DeleteImagesResponse {
+  repeated ImageDeleteResult results = 1;
+}
+
+message PruneImagesRequest {
+  // 预览时列出的镜像 ID（NodeImages.prune_ids）。
+  repeated string ids = 1;
+  bool build_cache = 2;
+}
+
+message PruneImagesResponse {
+  int32 deleted = 1;
+  // 删除失败的镜像。
+  repeated ImageDeleteResult failed = 2;
+  // 预览以后不能再清理的（例如已经被容器或 Nagi 用上）、已经不在的，没有删除。
+  int32 skipped = 3;
+  int64 build_cache_freed = 4;
+}
+
+message PullImageRequest {
+  // 镜像引用，例如 nginx:1.27、ghcr.io/owner/app@sha256:...。
+  string image = 1;
+}
+
+// ImagePullEvent 是拉取进度，节点最多每 0.25 秒发一条。
+message ImagePullEvent {
+  // Docker 的状态说明，例如 "Pulling from library/nginx"。
+  string status = 1;
+  // 已知大小的层合计的已下载、总字节数。
+  int64 current = 2;
+  int64 total = 3;
+  // 已完成（下载并解压，或本地已有）的层数和总层数。
+  int32 layers_done = 4;
+  int32 layers = 5;
+  // 最后一条：拉取完成，镜像 ID。
+  bool done = 6;
+  string id = 7;
 }
 
 message SetLinksResponse {}

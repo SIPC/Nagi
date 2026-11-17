@@ -62,14 +62,16 @@ import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
 import { NodeFiles, NodeTerminal, nodeAccessBlock } from "@/pages/node-access";
+import { NodeImages } from "@/pages/node-images";
 
-export type NodeTab = "metrics" | "containers" | "terminal" | "files" | "panels" | "mesh" | "settings" | "replicas";
+export type NodeTab = "metrics" | "containers" | "terminal" | "files" | "images" | "panels" | "mesh" | "settings" | "replicas";
 
 export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: t.nodes.tabs.metrics },
   { value: "containers", label: t.nodes.tabs.containers },
   { value: "terminal", label: t.nodes.tabs.terminal },
   { value: "files", label: t.nodes.tabs.files },
+  { value: "images", label: t.nodes.tabs.images },
   { value: "replicas", label: t.nodes.tabs.replicas },
   { value: "panels", label: t.nodes.tabs.panels },
   { value: "mesh", label: t.nodes.tabs.mesh },
@@ -581,7 +583,9 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
   }
   // 节点访问只给管理员，备用面板上也不能用（见 docs/node-access.md）。
   const showAccess = canSeeUpgrades && !readOnlyPanel;
-  const tabs = nodeTabs.filter((x) => showAccess || (x.value !== "terminal" && x.value !== "files"));
+  // 镜像只给管理员（备用面板上只能查看），旧版本的节点没有这个功能，不显示标签（见 docs/agent.md#节点镜像）。
+  const showImages = canSeeUpgrades && !!n.info?.imageOps;
+  const tabs = nodeTabs.filter((x) => (showAccess || (x.value !== "terminal" && x.value !== "files")) && (showImages || x.value !== "images" || tab === "images"));
   const accessBlock = nodeAccessBlock(n);
   // 手机上进入文件页后，标题栏换成返回、目录名、更多（docs/ui.md）。
   const browsing = tab === "files" && showAccess && n.online && !accessBlock;
@@ -696,6 +700,8 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
                 <NodeContainers nodeId={n.id} online={n.online} />
               ) : (tab === "terminal" || tab === "files") && !showAccess ? (
                 <Notice title={t.nodeAccess.gate.adminOnly} />
+              ) : tab === "images" && !canSeeUpgrades ? (
+                <Notice title={t.nodeImages.adminOnly} />
               ) : !n.online ? (
                 <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
               ) : tab === "terminal" || tab === "files" ? (
@@ -704,6 +710,8 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
                 <NodeResources n={n} />
               ) : tab === "mesh" ? (
                 <NodeMesh nodeId={n.id} />
+              ) : tab === "images" ? (
+                <NodeImages node={n} />
               ) : tab === "replicas" ? (
                 <NodeReplicas nodeId={n.id} nodes={nodes.data.nodes} />
               ) : tab === "settings" ? (

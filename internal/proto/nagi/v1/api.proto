@@ -254,6 +254,28 @@ service NodeService {
   // 只有管理员能用，要先做高权限确认并输入节点名。
   rpc IsolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
   rpc UnisolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
+  // 节点镜像（见 docs/agent.md#节点镜像）：只有管理员能用，访问令牌不能用。
+  rpc ListNodeImages(NodeRef) returns (NodeImages);
+  rpc DeleteNodeImages(DeleteNodeImagesRequest) returns (DeleteImagesResponse);
+  rpc PruneNodeImages(PruneNodeImagesRequest) returns (PruneImagesResponse);
+  // 浏览器断开（取消）时停止拉取。
+  rpc PullNodeImage(PullNodeImageRequest) returns (stream ImagePullEvent);
+}
+
+message DeleteNodeImagesRequest {
+  string node_id = 1;
+  repeated ImageRef images = 2;
+}
+
+message PruneNodeImagesRequest {
+  string node_id = 1;
+  repeated string ids = 2;
+  bool build_cache = 3;
+}
+
+message PullNodeImageRequest {
+  string node_id = 1;
+  string image = 2;
 }
 
 message SetNodeTagsRequest {

@@ -16,7 +16,7 @@ import (
 )
 
 // 假的节点和项目接口：只记下调用了哪些修改接口和参数，用来检查工具先预览、确认码对上才执行。
-type fakeNodes struct {
+type fakeNodeAdmin struct {
 	nagiv1connect.UnimplementedNodeServiceHandler
 	mu    sync.Mutex
 	calls []string
@@ -25,26 +25,26 @@ type fakeNodes struct {
 	move  *nagiv1.NodeTransferRequest
 }
 
-func (f *fakeNodes) record(name string) {
+func (f *fakeNodeAdmin) record(name string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, name)
 }
 
-func (f *fakeNodes) called() []string {
+func (f *fakeNodeAdmin) called() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.calls...)
 }
 
-func (f *fakeNodes) ListNodes(context.Context, *connect.Request[nagiv1.ListNodesRequest]) (*connect.Response[nagiv1.ListNodesResponse], error) {
+func (f *fakeNodeAdmin) ListNodes(context.Context, *connect.Request[nagiv1.ListNodesRequest]) (*connect.Response[nagiv1.ListNodesResponse], error) {
 	return connect.NewResponse(&nagiv1.ListNodesResponse{Nodes: []*nagiv1.Node{
 		{Id: "n1", Name: "alpha", Online: true, Containers: 0, Info: &nagiv1.NodeInfo{Version: "v1"}},
 		{Id: "n2", Name: "beta", Online: true, Pending: true, Info: &nagiv1.NodeInfo{Version: "v1", Hostname: "beta-host"}},
 	}}), nil
 }
 
-func (f *fakeNodes) ListNodeDir(_ context.Context, req *connect.Request[nagiv1.NodeFileRef]) (*connect.Response[nagiv1.ListNodeDirResponse], error) {
+func (f *fakeNodeAdmin) ListNodeDir(_ context.Context, req *connect.Request[nagiv1.NodeFileRef]) (*connect.Response[nagiv1.ListNodeDirResponse], error) {
 	return connect.NewResponse(&nagiv1.ListNodeDirResponse{Path: req.Msg.GetPath(), Access: "normal", Entries: []*nagiv1.NodeFileEntry{
 		{Name: "app.conf", Size: 3, Access: "normal"},
 		{Name: "shadow", Size: 3, Access: "confirm"},
@@ -52,7 +52,7 @@ func (f *fakeNodes) ListNodeDir(_ context.Context, req *connect.Request[nagiv1.N
 	}}), nil
 }
 
-func (f *fakeNodes) WriteNodeFile(_ context.Context, req *connect.Request[nagiv1.WriteNodeFileRequest]) (*connect.Response[nagiv1.WriteNodeFileResponse], error) {
+func (f *fakeNodeAdmin) WriteNodeFile(_ context.Context, req *connect.Request[nagiv1.WriteNodeFileRequest]) (*connect.Response[nagiv1.WriteNodeFileResponse], error) {
 	f.record("WriteNodeFile")
 	f.mu.Lock()
 	f.write = req.Msg
@@ -60,7 +60,7 @@ func (f *fakeNodes) WriteNodeFile(_ context.Context, req *connect.Request[nagiv1
 	return connect.NewResponse(&nagiv1.WriteNodeFileResponse{Sha256: digest(req.Msg.GetContent())}), nil
 }
 
-func (f *fakeNodes) DeleteNodeFile(_ context.Context, req *connect.Request[nagiv1.DeleteNodeFileRequest]) (*connect.Response[nagiv1.NodeFileOpResponse], error) {
+func (f *fakeNodeAdmin) DeleteNodeFile(_ context.Context, req *connect.Request[nagiv1.DeleteNodeFileRequest]) (*connect.Response[nagiv1.NodeFileOpResponse], error) {
 	f.record("DeleteNodeFile")
 	f.mu.Lock()
 	f.del = req.Msg
@@ -68,7 +68,7 @@ func (f *fakeNodes) DeleteNodeFile(_ context.Context, req *connect.Request[nagiv
 	return connect.NewResponse(&nagiv1.NodeFileOpResponse{}), nil
 }
 
-func (f *fakeNodes) MoveNodeFiles(_ context.Context, req *connect.Request[nagiv1.NodeTransferRequest], out *connect.ServerStream[nagiv1.FileOpEvent]) error {
+func (f *fakeNodeAdmin) MoveNodeFiles(_ context.Context, req *connect.Request[nagiv1.NodeTransferRequest], out *connect.ServerStream[nagiv1.FileOpEvent]) error {
 	f.record("MoveNodeFiles")
 	f.mu.Lock()
 	f.move = req.Msg
@@ -79,28 +79,28 @@ func (f *fakeNodes) MoveNodeFiles(_ context.Context, req *connect.Request[nagiv1
 	return out.Send(&nagiv1.FileOpEvent{Result: &nagiv1.FileOpResult{Paths: []string{"/srv/x"}}})
 }
 
-func (f *fakeNodes) RemoveNode(context.Context, *connect.Request[nagiv1.RemoveNodeRequest]) (*connect.Response[nagiv1.RemoveNodeResponse], error) {
+func (f *fakeNodeAdmin) RemoveNode(context.Context, *connect.Request[nagiv1.RemoveNodeRequest]) (*connect.Response[nagiv1.RemoveNodeResponse], error) {
 	f.record("RemoveNode")
 	return connect.NewResponse(&nagiv1.RemoveNodeResponse{}), nil
 }
 
-func (f *fakeNodes) ApproveNode(context.Context, *connect.Request[nagiv1.ApproveNodeRequest]) (*connect.Response[nagiv1.ApproveNodeResponse], error) {
+func (f *fakeNodeAdmin) ApproveNode(context.Context, *connect.Request[nagiv1.ApproveNodeRequest]) (*connect.Response[nagiv1.ApproveNodeResponse], error) {
 	f.record("ApproveNode")
 	return connect.NewResponse(&nagiv1.ApproveNodeResponse{}), nil
 }
 
-func (f *fakeNodes) IsolateNode(_ context.Context, req *connect.Request[nagiv1.IsolateNodeRequest]) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
+func (f *fakeNodeAdmin) IsolateNode(_ context.Context, req *connect.Request[nagiv1.IsolateNodeRequest]) (*connect.Response[nagiv1.IsolateNodeResponse], error) {
 	f.record("IsolateNode:" + req.Msg.GetConfirmName())
 	return connect.NewResponse(&nagiv1.IsolateNodeResponse{}), nil
 }
 
-type fakeProjects struct {
+type fakeProjectAdmin struct {
 	nagiv1connect.UnimplementedProjectServiceHandler
 	mu    sync.Mutex
 	calls []string
 }
 
-func (f *fakeProjects) record(name string) {
+func (f *fakeProjectAdmin) record(name string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, name)
@@ -111,15 +111,15 @@ func testProject() *nagiv1.ProjectSummary {
 		Containers: []*nagiv1.Container{{Name: "web", NodeId: "n1"}}}}
 }
 
-func (f *fakeProjects) ListProjects(context.Context, *connect.Request[nagiv1.ListProjectsRequest]) (*connect.Response[nagiv1.ListProjectsResponse], error) {
+func (f *fakeProjectAdmin) ListProjects(context.Context, *connect.Request[nagiv1.ListProjectsRequest]) (*connect.Response[nagiv1.ListProjectsResponse], error) {
 	return connect.NewResponse(&nagiv1.ListProjectsResponse{Projects: []*nagiv1.ProjectSummary{testProject()}}), nil
 }
 
-func (f *fakeProjects) GetProject(context.Context, *connect.Request[nagiv1.ProjectRef]) (*connect.Response[nagiv1.ProjectSummary], error) {
+func (f *fakeProjectAdmin) GetProject(context.Context, *connect.Request[nagiv1.ProjectRef]) (*connect.Response[nagiv1.ProjectSummary], error) {
 	return connect.NewResponse(testProject()), nil
 }
 
-func (f *fakeProjects) MoveVolumeFiles(_ context.Context, req *connect.Request[nagiv1.VolumeTransferRequest], out *connect.ServerStream[nagiv1.FileOpEvent]) error {
+func (f *fakeProjectAdmin) MoveVolumeFiles(_ context.Context, req *connect.Request[nagiv1.VolumeTransferRequest], out *connect.ServerStream[nagiv1.FileOpEvent]) error {
 	f.record("MoveVolumeFiles:" + req.Msg.GetConflict())
 	if req.Msg.GetConflict() == "" {
 		return out.Send(&nagiv1.FileOpEvent{Result: &nagiv1.FileOpResult{Conflicts: []string{"a.txt"}}})
@@ -127,9 +127,9 @@ func (f *fakeProjects) MoveVolumeFiles(_ context.Context, req *connect.Request[n
 	return out.Send(&nagiv1.FileOpEvent{Result: &nagiv1.FileOpResult{Paths: []string{"dst/a.txt"}}})
 }
 
-func testCall(t *testing.T) (*call, *fakeNodes, *fakeProjects) {
+func nodeAdminCall(t *testing.T) (*call, *fakeNodeAdmin, *fakeProjectAdmin) {
 	t.Helper()
-	fn, fp := &fakeNodes{}, &fakeProjects{}
+	fn, fp := &fakeNodeAdmin{}, &fakeProjectAdmin{}
 	mux := http.NewServeMux()
 	mux.Handle(nagiv1connect.NewNodeServiceHandler(fn))
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(fp))
@@ -159,7 +159,7 @@ func previewCode(t *testing.T, v any) string {
 
 // 改节点文件每次都要先预览：不带确认码、确认码对不上（参数变了）都只返回预览，对上了才写，并且带上 confirmed。
 func TestWriteNodeFileConfirm(t *testing.T) {
-	c, fn, _ := testCall(t)
+	c, fn, _ := nodeAdminCall(t)
 	in := WriteNodeFileArgs{Node: "alpha", Path: "/etc/app.conf", Content: "new", ExpectedSHA256: digest([]byte("old"))}
 	v, err := toolWriteNodeFile(c, in)
 	if err != nil {
@@ -200,7 +200,7 @@ func TestWriteNodeFileConfirm(t *testing.T) {
 }
 
 func TestDeleteNodeFileConfirm(t *testing.T) {
-	c, fn, _ := testCall(t)
+	c, fn, _ := nodeAdminCall(t)
 	in := NodeConfirmPathArgs{NodePathArgs: NodePathArgs{Node: "alpha", Path: "/srv/data"}}
 	v, err := toolDeleteNodeFile(c, in)
 	if err != nil {
@@ -223,7 +223,7 @@ func TestDeleteNodeFileConfirm(t *testing.T) {
 }
 
 func TestMoveNodeFilesConfirm(t *testing.T) {
-	c, fn, _ := testCall(t)
+	c, fn, _ := nodeAdminCall(t)
 	in := MoveNodeFilesArgs{Node: "alpha", Paths: []string{"/srv/a"}, Action: "move", DestDir: "/srv/b"}
 	v, err := toolMoveNodeFiles(c, in)
 	if err != nil {
@@ -257,7 +257,7 @@ func TestMoveNodeFilesConfirm(t *testing.T) {
 
 // 卷文件的移动：默认同名时什么都不改，返回冲突；选覆盖要先预览。
 func TestMoveFilesConflict(t *testing.T) {
-	c, _, fp := testCall(t)
+	c, _, fp := nodeAdminCall(t)
 	in := MoveFilesArgs{ContainerArg: ContainerArg{Project: "shop", Container: "web"}, Volume: ".data", Paths: []string{"a.txt"}, Action: "move", DestDir: "dst"}
 	v, err := toolMoveFiles(c, in)
 	if err != nil {
@@ -283,7 +283,7 @@ func TestMoveFilesConflict(t *testing.T) {
 }
 
 func TestRemoveAndApproveNodeConfirm(t *testing.T) {
-	c, fn, _ := testCall(t)
+	c, fn, _ := nodeAdminCall(t)
 	if v, err := toolRemoveNode(c, NodeConfirmArgs{Node: "alpha"}); err != nil || v.(map[string]any)["preview"] == nil {
 		t.Fatalf("移除节点要先预览：%v %v", v, err)
 	}
@@ -313,7 +313,7 @@ func TestRemoveAndApproveNodeConfirm(t *testing.T) {
 }
 
 func TestIsolateNodeConfirm(t *testing.T) {
-	c, fn, _ := testCall(t)
+	c, fn, _ := nodeAdminCall(t)
 	if v, err := toolIsolateNode(c, IsolateArgs{Node: "alpha"}); err != nil || v.(map[string]any)["preview"] == nil {
 		t.Fatalf("隔离要先预览：%v %v", v, err)
 	}

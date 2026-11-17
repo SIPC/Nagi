@@ -901,6 +901,10 @@ const (
 	NodeService_RenameNodeTag_FullMethodName         = "/nagi.v1.NodeService/RenameNodeTag"
 	NodeService_IsolateNode_FullMethodName           = "/nagi.v1.NodeService/IsolateNode"
 	NodeService_UnisolateNode_FullMethodName         = "/nagi.v1.NodeService/UnisolateNode"
+	NodeService_ListNodeImages_FullMethodName        = "/nagi.v1.NodeService/ListNodeImages"
+	NodeService_DeleteNodeImages_FullMethodName      = "/nagi.v1.NodeService/DeleteNodeImages"
+	NodeService_PruneNodeImages_FullMethodName       = "/nagi.v1.NodeService/PruneNodeImages"
+	NodeService_PullNodeImage_FullMethodName         = "/nagi.v1.NodeService/PullNodeImage"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -986,6 +990,12 @@ type NodeServiceClient interface {
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
 	UnisolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
+	// 节点镜像（见 docs/agent.md#节点镜像）：只有管理员能用，访问令牌不能用。
+	ListNodeImages(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeImages, error)
+	DeleteNodeImages(ctx context.Context, in *DeleteNodeImagesRequest, opts ...grpc.CallOption) (*DeleteImagesResponse, error)
+	PruneNodeImages(ctx context.Context, in *PruneNodeImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error)
+	// 浏览器断开（取消）时停止拉取。
+	PullNodeImage(ctx context.Context, in *PullNodeImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error)
 }
 
 type nodeServiceClient struct {
@@ -1501,6 +1511,55 @@ func (c *nodeServiceClient) UnisolateNode(ctx context.Context, in *IsolateNodeRe
 	return out, nil
 }
 
+func (c *nodeServiceClient) ListNodeImages(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeImages, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeImages)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) DeleteNodeImages(ctx context.Context, in *DeleteNodeImagesRequest, opts ...grpc.CallOption) (*DeleteImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteImagesResponse)
+	err := c.cc.Invoke(ctx, NodeService_DeleteNodeImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) PruneNodeImages(ctx context.Context, in *PruneNodeImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PruneImagesResponse)
+	err := c.cc.Invoke(ctx, NodeService_PruneNodeImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) PullNodeImage(ctx context.Context, in *PullNodeImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[5], NodeService_PullNodeImage_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PullNodeImageRequest, ImagePullEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_PullNodeImageClient = grpc.ServerStreamingClient[ImagePullEvent]
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -1584,6 +1643,12 @@ type NodeServiceServer interface {
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
 	UnisolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
+	// 节点镜像（见 docs/agent.md#节点镜像）：只有管理员能用，访问令牌不能用。
+	ListNodeImages(context.Context, *NodeRef) (*NodeImages, error)
+	DeleteNodeImages(context.Context, *DeleteNodeImagesRequest) (*DeleteImagesResponse, error)
+	PruneNodeImages(context.Context, *PruneNodeImagesRequest) (*PruneImagesResponse, error)
+	// 浏览器断开（取消）时停止拉取。
+	PullNodeImage(*PullNodeImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -1731,6 +1796,18 @@ func (UnimplementedNodeServiceServer) IsolateNode(context.Context, *IsolateNodeR
 }
 func (UnimplementedNodeServiceServer) UnisolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnisolateNode not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeImages(context.Context, *NodeRef) (*NodeImages, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeImages not implemented")
+}
+func (UnimplementedNodeServiceServer) DeleteNodeImages(context.Context, *DeleteNodeImagesRequest) (*DeleteImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeImages not implemented")
+}
+func (UnimplementedNodeServiceServer) PruneNodeImages(context.Context, *PruneNodeImagesRequest) (*PruneImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PruneNodeImages not implemented")
+}
+func (UnimplementedNodeServiceServer) PullNodeImage(*PullNodeImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error {
+	return status.Error(codes.Unimplemented, "method PullNodeImage not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -2546,6 +2623,71 @@ func _NodeService_UnisolateNode_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_ListNodeImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeImages(ctx, req.(*NodeRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_DeleteNodeImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeImagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).DeleteNodeImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_DeleteNodeImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).DeleteNodeImages(ctx, req.(*DeleteNodeImagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_PruneNodeImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PruneNodeImagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).PruneNodeImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_PruneNodeImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).PruneNodeImages(ctx, req.(*PruneNodeImagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_PullNodeImage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(PullNodeImageRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).PullNodeImage(m, &grpc.GenericServerStream[PullNodeImageRequest, ImagePullEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_PullNodeImageServer = grpc.ServerStreamingServer[ImagePullEvent]
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2717,6 +2859,18 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "UnisolateNode",
 			Handler:    _NodeService_UnisolateNode_Handler,
 		},
+		{
+			MethodName: "ListNodeImages",
+			Handler:    _NodeService_ListNodeImages_Handler,
+		},
+		{
+			MethodName: "DeleteNodeImages",
+			Handler:    _NodeService_DeleteNodeImages_Handler,
+		},
+		{
+			MethodName: "PruneNodeImages",
+			Handler:    _NodeService_PruneNodeImages_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -2742,6 +2896,11 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ReclaimNodeSnapshots",
 			Handler:       _NodeService_ReclaimNodeSnapshots_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "PullNodeImage",
+			Handler:       _NodeService_PullNodeImage_Handler,
 			ServerStreams: true,
 		},
 	},

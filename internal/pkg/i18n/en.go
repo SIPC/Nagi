@@ -531,6 +531,24 @@ var en = map[string]string{
 	"客户端元数据中的 client_id 与网址不一致": "The client_id in the client metadata doesn't match its URL",
 	"客户端元数据中有不可用的回调地址":          "The client metadata contains a redirect URI that can't be used",
 
+	// ---- 节点镜像 ----
+	"无法连接 Docker：%s":                                "Can't connect to Docker: %s",
+	"镜像正在被容器 %s 使用":                                 "The image is used by container %s",
+	"Nagi 需要这个镜像，不能删除":                              "Nagi needs this image, so it can't be deleted",
+	"镜像不存在或已删除":                                     "The image doesn't exist or was already deleted",
+	"镜像没有标签 %s":                                     "The image doesn't have the tag %s",
+	"删除失败：%s":                                       "Couldn't delete: %s",
+	"一次可删除 1 至 %d 个镜像":                              "Delete between 1 and %d images at a time",
+	"一次最多清理 %d 个镜像":                                 "Clean up at most %d images at a time",
+	"没有可清理的内容":                                      "There's nothing to clean up",
+	"清理构建缓存失败：%s":                                   "Couldn't clean up the build cache: %s",
+	"请填写镜像":                                         "Enter an image",
+	"镜像不能超过 %d 个字符":                                 "The image can't be longer than %d characters",
+	"镜像格式不正确，例如 nginx:1.27 或 ghcr.io/owner/app:tag": "Enter an image like nginx:1.27 or ghcr.io/owner/app:tag",
+	"拉取超过 30 分钟，已停止":                                "The pull took longer than 30 minutes and was stopped",
+	"已取消拉取":                                         "Pull canceled",
+	"拉取镜像失败：%s":                                     "Couldn't pull the image: %s",
+
 	// ---- 旧版本节点的消息 ----
 	// 节点和面板的版本可能不同：旧节点还会发来改写之前的文字，按新的译文显示。
 	"%s 是 Nagi 管理的容器目录（或包含它），不能导入":              "%s is (or contains) a container directory managed by Nagi and can't be imported",

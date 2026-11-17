@@ -25,6 +25,7 @@ export default {
     mesh: "节点网络",
     terminal: "终端",
     files: "文件",
+    images: "镜像",
   },
   approveConfirm: (name: string, address: string) => `批准节点 ${name}（${address}）？节点将加入节点网络并接受面板管理，请确认是自有机器。`,
   title: "节点",

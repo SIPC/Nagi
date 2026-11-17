@@ -40,6 +40,11 @@ func (m *Manager) clearImageUpdates(projectID, container string) {
 	delete(m.images.updates, uid(projectID, container))
 }
 
+// RegistryAuth 从一份 docker 配置（config.json）里取出某个仓库的登录信息（auths 里的），编码成 Docker 接口要的格式。
+func RegistryAuth(dockerConfig []byte, domain string) string {
+	return registryAuth(dockerConfig, domain)
+}
+
 // registryAuth 从项目的 docker 配置里取出某个仓库的登录信息，编码成 Docker 接口要的格式。
 func registryAuth(dockerConfig []byte, domain string) string {
 	if len(dockerConfig) == 0 {

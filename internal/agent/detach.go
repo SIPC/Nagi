@@ -23,7 +23,7 @@ func detachUnary(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler 
 }
 
 func detachStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	// 日志、终端这类一直跟着看的流，对方走了就该停。
+	// 日志、终端这类一直跟着看的流，对方走了就该停；拉取镜像停在中途也不留下半截状态，用户取消时就停。
 	if info.IsClientStream || isFollowStream(info.FullMethod) {
 		return handler(srv, ss)
 	}
@@ -40,5 +40,5 @@ type detachedStream struct {
 func (s *detachedStream) Context() context.Context { return s.ctx }
 
 func isFollowStream(method string) bool {
-	return strings.HasSuffix(method, "/StreamLogs")
+	return strings.HasSuffix(method, "/StreamLogs") || strings.HasSuffix(method, "/PullImage")
 }

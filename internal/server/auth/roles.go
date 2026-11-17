@@ -31,6 +31,9 @@ var adminReads = map[string]bool{
 	"ListNodeDir": true, "ListNodeFileBackups": true, "ListNodeDirSizes": true,
 	// 节点的磁盘明细：涉及节点上所有项目（镜像、容器目录）。
 	"GetNodeStorage": true,
+	// 节点上的镜像（见 docs/agent.md#节点镜像）：涉及节点上所有项目。删除、清理、拉取是 NodeService 的修改，默认只给管理员。
+	// 访问令牌按 TokenAllowed 的规则：查看不用额外权限，删除、清理、拉取要勾「可修改」。
+	"ListNodeImages": true,
 	// 终端录制和审计设置（见 docs/audit.md）。
 	"GetRecording": true, "GetAuditSettings": true,
 	// 管理员登录地址。

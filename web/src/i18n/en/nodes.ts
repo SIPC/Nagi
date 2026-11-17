@@ -19,6 +19,7 @@ export default {
   tabs: {
     terminal: "Terminal",
     files: "Files",
+    images: "Images",
     containers: "Containers",
     metrics: "Monitoring",
     settings: "Settings",
