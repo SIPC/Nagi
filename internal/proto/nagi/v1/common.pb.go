@@ -4617,6 +4617,9 @@ type MeshOptions struct {
 	RelayOff bool `protobuf:"varint,2,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
 	// 关闭直连下载：浏览器下载文件都经面板（见 docs/agent.md#直连下载）。
 	DirectDownloadOff bool `protobuf:"varint,3,opt,name=direct_download_off,json=directDownloadOff,proto3" json:"direct_download_off,omitempty"`
+	// 请求里带了 direct_download_off：节点只在为 true 时按它修改直连下载的开关。
+	// v0.32.0 以前的面板不知道直连下载，请求里没有这一项，节点不能把它当作「打开」。面板转发修改时总是填上。
+	SetDirectDownload bool `protobuf:"varint,4,opt,name=set_direct_download,json=setDirectDownload,proto3" json:"set_direct_download,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -4668,6 +4671,13 @@ func (x *MeshOptions) GetRelayOff() bool {
 func (x *MeshOptions) GetDirectDownloadOff() bool {
 	if x != nil {
 		return x.DirectDownloadOff
+	}
+	return false
+}
+
+func (x *MeshOptions) GetSetDirectDownload() bool {
+	if x != nil {
+		return x.SetDirectDownload
 	}
 	return false
 }
@@ -6193,11 +6203,12 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x10wireguard_upload\x18\x05 \x01(\x01R\x0fwireguardUpload\x12-\n" +
 	"\x12wireguard_download\x18\x06 \x01(\x01R\x11wireguardDownload\x12\"\n" +
 	"\rquic_off_here\x18\a \x01(\bR\vquicOffHere\x12\"\n" +
-	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"u\n" +
+	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"\xa5\x01\n" +
 	"\vMeshOptions\x12\x19\n" +
 	"\bquic_off\x18\x01 \x01(\bR\aquicOff\x12\x1b\n" +
 	"\trelay_off\x18\x02 \x01(\bR\brelayOff\x12.\n" +
-	"\x13direct_download_off\x18\x03 \x01(\bR\x11directDownloadOff\"\xc7\x01\n" +
+	"\x13direct_download_off\x18\x03 \x01(\bR\x11directDownloadOff\x12.\n" +
+	"\x13set_direct_download\x18\x04 \x01(\bR\x11setDirectDownload\"\xc7\x01\n" +
 	"\fBackupStatus\x12$\n" +
 	"\x0etarget_node_id\x18\x01 \x01(\tR\ftargetNodeId\x12\x1f\n" +
 	"\vtarget_name\x18\x02 \x01(\tR\n" +

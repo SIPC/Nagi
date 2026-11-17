@@ -81,7 +81,7 @@
 - **签名链接**：节点连上、认本面板是主面板以后，面板为这条连接随机生成一个 32 字节的密钥，连同节点的公网地址经 `AgentService.SetDirectDownload` 告诉节点。密钥只在两边的内存里，面板重启或节点重连后换一个，之前签的链接随之失效。浏览器下载前调用 `GET /api/volume-file/direct` 或 `/api/node-file/direct`（参数和经面板下载的相同）：面板做和经面板下载一样的权限检查，节点能直连时签一个链接，返回 `{"url": …}`，否则返回 204。链接是 `https://<IP>/.nagi/download/<内容>.<签名>`，内容写明节点、种类、项目、容器、卷、快照、路径和到期时间，签名是 HMAC-SHA256。链接 15 分钟内有效，期间可以续传、用多线程下载工具；已经开始的下载过期后照常传完。
 - **节点核对**：签名对得上节点信任的某个面板给的密钥、没有过期，而且这个面板现在是主面板、能调用对应的 mesh 下载接口（`VolumeDownload`、`NodeFileDownload`，规则和经 mesh 下载相同）；节点文件还要求节点访问没有在本地关闭。下载和经面板一样支持单段 Range、ETag 和 If-Range，公共部分在 `internal/pkg/filehttp`。响应允许跨域（`Access-Control-Allow-Origin: *`），不用 Cookie：链接本身就是凭据，所以有效期短，并且带 `Referrer-Policy: no-referrer`。
 - **浏览器**：照常先检查能不能下载（`check=1`），再向面板要直连链接，用 `HEAD` 探测（节点核对链接后回 204，不读文件）。2.5 秒内探测成功就从节点下载，否则经面板下载；探测失败的节点 10 分钟内不再尝试（`web/src/lib/direct-download.ts`）。
-- **开关**：默认开启。节点设置里的「直连下载」可以关闭，保存在节点的 `identity/direct-download-off`（`SetNodeMeshOptions` 的 `direct_download_off`）。关闭后 Caddy 不再为这个 IP 开规则，面板也不再签链接。状态由节点上报（`NodeInfo.direct_download`），界面显示可直连、正在申请证书、没有公网地址，或者不可直连的原因。本面板自带的节点和面板在同一台机器上，不开。旧版本节点不上报，照常经面板下载。
+- **开关**：默认开启。节点设置里的「直连下载」可以关闭，保存在节点的 `identity/direct-download-off`（`SetNodeMeshOptions` 的 `direct_download_off`）。节点只在请求带了 `set_direct_download` 时按 `direct_download_off` 修改：v0.32.0 以前的面板不知道这一项，它修改 QUIC、中转时请求里没有直连下载的开关，不能把关掉的直连下载重新打开。面板转发 `SetNodeMeshOptions` 时总是带上（界面和 MCP 总是给出全部开关）。关闭后 Caddy 不再为这个 IP 开规则，面板也不再签链接。状态由节点上报（`NodeInfo.direct_download`），界面显示可直连、正在申请证书、没有公网地址，或者不可直连的原因。本面板自带的节点和面板在同一台机器上，不开。旧版本节点不上报，照常经面板下载。
 - **活动记录**：签发链接时记一次，操作名和经面板下载相同；节点上不另记。
 
 ## 容器目录

@@ -742,6 +742,9 @@ message MeshOptions {
   bool relay_off = 2;
   // 关闭直连下载：浏览器下载文件都经面板（见 docs/agent.md#直连下载）。
   bool direct_download_off = 3;
+  // 请求里带了 direct_download_off：节点只在为 true 时按它修改直连下载的开关。
+  // v0.32.0 以前的面板不知道直连下载，请求里没有这一项，节点不能把它当作「打开」。面板转发修改时总是填上。
+  bool set_direct_download = 4;
 }
 
 // BackupStatus 是容器同步到备份节点的状态（在源节点上）。

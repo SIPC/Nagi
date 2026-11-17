@@ -268,7 +268,10 @@ func (s *nodeService) SetNodeMeshOptions(ctx context.Context, req *connect.Reque
 	if err != nil {
 		return nil, err
 	}
-	resp, err := agent.SetMeshOptions(ctx, req.Msg.GetOptions())
+	// 界面和 MCP 总是带着全部开关（MCP 先读当前的再合并），所以直连下载的开关总是写入（见 MeshOptions.set_direct_download）。
+	in := req.Msg.GetOptions()
+	opts := &nagiv1.MeshOptions{QuicOff: in.GetQuicOff(), RelayOff: in.GetRelayOff(), DirectDownloadOff: in.GetDirectDownloadOff(), SetDirectDownload: true}
+	resp, err := agent.SetMeshOptions(ctx, opts)
 	if err != nil {
 		return nil, fromGRPC(err)
 	}
