@@ -317,7 +317,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `query_audit` | 按时间、成员、来源、类别、项目、节点、只看失败、关键字查审计记录，翻页；或者取一条记录和它的上下级 | `ListAuditEvents`、`GetAuditEvent` |
 | `export_audit` | 按筛选条件导出 JSON Lines，最多 256 KB（超出时截断，只留完整的行） | `ExportAuditEvents` |
 | `verify_audit` | 校验审计日志的哈希链，返回结果和最近一次外送的锚点 | `VerifyAudit` |
-| `check_panel_update` | 有没有新版本、更新日志、面板和节点的更新进度 | `CheckPanelUpdate`、`GetPanelReleaseNotes`、`GetUpdateStatus` |
+| `check_panel_update` | 有没有新版本、更新日志、面板和节点的更新进度；最新版本是经加速代理查到的时带 `latest_checked_via`（见 [panel.md](panel.md#更新面板)） | `CheckPanelUpdate`、`GetPanelReleaseNotes`、`GetUpdateStatus` |
 | `update_panel` | 更新面板到最新版本（要确认），面板重启期间 MCP 暂时不能用 | `CheckPanelUpdate`、`UpdatePanel` |
 | `list_members` | 成员、角色、访问范围、是否开了两步验证、通行密钥的名称。只读 | `ListUsers` |
 
