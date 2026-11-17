@@ -12,9 +12,10 @@ import (
 //   - compose 和文件内容只记 SHA-256 和长度。
 
 var (
-	jsonHidden  = []string{"password", "secret_value", "token", "confirm", "code"}
+	// webhook_url：告警渠道的地址里常带着密钥（MCP 的 update_alert_channels）。
+	jsonHidden  = []string{"password", "secret_value", "token", "confirm", "code", "webhook_url"}
 	jsonEnv     = map[string]bool{"env": true, "set": true, "variables": true, "service_env": true, "shared_variables": true}
-	jsonContent = map[string]bool{"content": true, "compose": true, "files": true, "data": true}
+	jsonContent = map[string]bool{"content": true, "content_base64": true, "compose": true, "files": true, "data": true}
 )
 
 // JSONParams 把工具参数（JSON）脱敏后返回。

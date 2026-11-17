@@ -32,6 +32,7 @@ function tokenSummary(tk: AccessToken) {
     tk.allowWrite ? k.write : k.readOnly,
     ...(tk.allowExec ? [k.exec] : []),
     ...(tk.allowNodeExec ? [k.nodeExec] : []),
+    ...(tk.allowPanel ? [k.panel] : []),
     ...(tk.networks.length ? [k.networksLimited(t.common.list(tk.networks))] : []),
     !expires ? k.neverExpires : expires.getTime() < Date.now() ? k.expired : k.expiresOn(formatDate(expires) ?? ""),
   ];
@@ -97,6 +98,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
   const [write, setWrite] = useState(false);
   const [exec, setExec] = useState(false);
   const [nodeExec, setNodeExec] = useState(false);
+  const [panel, setPanel] = useState(false);
   const [networks, setNetworks] = useState("");
   const create = useMutation({
     mutationFn: async () => {
@@ -106,6 +108,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
         allowWrite: write,
         allowExec: exec,
         allowNodeExec: isAdmin && nodeExec,
+        allowPanel: isAdmin && panel,
         networks: networks.split(/[\s,，、]+/).filter(Boolean), // i18n-ignore：输入时中英文的分隔符都认
       };
       try {
@@ -165,6 +168,11 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
               help={t.tokens.allowNodeExecHelp}
             >
               {t.tokens.allowNodeExec}
+            </Check>
+          )}
+          {isAdmin && (
+            <Check checked={panel} onChange={setPanel} help={t.tokens.allowPanelHelp}>
+              {t.tokens.allowPanel}
             </Check>
           )}
           </div>
@@ -294,10 +302,11 @@ export function OAuthAuthorizePage() {
   const [write, setWrite] = useState(false);
   const [exec, setExec] = useState(false);
   const [nodeExec, setNodeExec] = useState(false);
+  const [panel, setPanel] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const approve = useMutation({
     mutationFn: async (allow: boolean) => {
-      const req = { request, allow, days, allowWrite: write, allowExec: exec, allowNodeExec: nodeExec };
+      const req = { request, allow, days, allowWrite: write, allowExec: exec, allowNodeExec: nodeExec, allowPanel: panel };
       try {
         return await authClient.approveOAuth(req);
       } catch (err) {
@@ -385,6 +394,11 @@ export function OAuthAuthorizePage() {
                 help={t.tokens.allowNodeExecHelp}
               >
                 {t.tokens.allowNodeExec}
+              </Check>
+            )}
+            {c.role === "admin" && (
+              <Check checked={panel} onChange={setPanel} help={t.tokens.allowPanelHelp}>
+                {t.tokens.allowPanel}
               </Check>
             )}
             </div>

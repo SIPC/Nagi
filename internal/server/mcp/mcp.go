@@ -40,6 +40,8 @@ type Options struct {
 	Record func(ctx context.Context, u auth.User, tool, reason string)
 	// Audit 记一次工具调用和它触发的接口调用（api.API.RecordMCPCall）。project 是参数里的项目（名称或 ID）。
 	Audit func(ctx context.Context, u auth.User, e audit.Event, project string, children *audit.Collector)
+	// PanelAlert 在调用管理面板的工具时发告警（api.API.AlertPanelTool）。
+	PanelAlert func(ctx context.Context, u auth.User, tool string)
 	// Standby 表示这是备用面板：只给查看类的工具。
 	Standby bool
 	Log     *slog.Logger
@@ -70,6 +72,9 @@ type callStamp struct {
 type clients struct {
 	projects nagiv1connect.ProjectServiceClient
 	nodes    nagiv1connect.NodeServiceClient
+	// settings、account 只用于管理面板和自己的项目页排序（令牌能调用的见 auth.TokenAllowed）。
+	settings nagiv1connect.SettingsServiceClient
+	account  nagiv1connect.AuthServiceClient
 }
 
 // Mount 挂上 /mcp 和 OAuth 的地址。
@@ -80,6 +85,8 @@ func Mount(mux *http.ServeMux, o Options) {
 	h.clients = clients{
 		projects: nagiv1connect.NewProjectServiceClient(hc, base),
 		nodes:    nagiv1connect.NewNodeServiceClient(hc, base),
+		settings: nagiv1connect.NewSettingsServiceClient(hc, base),
+		account:  nagiv1connect.NewAuthServiceClient(hc, base),
 	}
 	h.http = mcp.NewStreamableHTTPHandler(h.server, &mcp.StreamableHTTPOptions{
 		Logger: o.Log,

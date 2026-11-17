@@ -36,16 +36,17 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ### 权限
 
-- 令牌属于授权它的成员，权限是成员的角色和访问范围，再按下面两个选项收窄。成员的角色、范围改了，令牌立即跟着变。
+- 令牌属于授权它的成员，权限是成员的角色和访问范围，再按下面几个选项收窄。成员的角色、范围改了，令牌立即跟着变。
   - **可修改**：默认不勾，只能用查看类的工具。
   - **执行命令**：默认不勾，勾了才能用 `exec`。只读成员没有这一项。
-  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）和节点文件、导入现有目录、隔离节点、副本的存放位置这些网页上要先做高权限确认的操作（见[节点文件和节点级操作](#节点文件和节点级操作)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
+  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）和节点文件、导入现有目录、隔离节点、副本的存放位置这些网页上要先做高权限确认的操作（见[高权限确认](#高权限确认)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
+  - **管理面板**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以）。勾了才有[管理面板](#管理面板)的工具：面板设置、告警渠道、活动和审计、面板更新、备用面板状态、成员（只读）；修改的还要勾「可修改」。每次使用都发告警。OAuth 范围是 `nagi:admin`。成员降为操作员后随之失效。
 - 节点镜像（见下面的[节点镜像](#节点镜像)）只给管理员的令牌：查看不用额外权限，删除、清理、拉取要勾「可修改」。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
 ### 个人访问令牌
 
-在「设置 → 账号安全 → 访问令牌」生成：填名称（例如「Claude Code · 笔记本」），选有效期（30 天、90 天、1 年、不过期，默认 90 天）和上面两个选项，可以填写允许使用的地址（见[网段](#网段)）。令牌是长期有效的凭据，生成前要做高权限确认（15 分钟内不再询问）。令牌只显示一次，形如 `nagi_<43 位 base64url>`，面板只存哈希。
+在「设置 → 账号安全 → 访问令牌」生成：填名称（例如「Claude Code · 笔记本」），选有效期（30 天、90 天、1 年、不过期，默认 90 天）和上面的选项，可以填写允许使用的地址（见[网段](#网段)）。令牌是长期有效的凭据，生成前要做高权限确认（15 分钟内不再询问）。令牌只显示一次，形如 `nagi_<43 位 base64url>`，面板只存哈希。
 
 ### OAuth
 
@@ -63,7 +64,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 回调地址必须是 https 或本机地址，和注册时的严格一致。授权码 5 分钟内有效，只能用一次。
 - 回调地址里带 `iss`（RFC 9207），成功和拒绝都带，和元数据里的 `issuer` 完全一样（`auth.IssuerOf`）。ChatGPT 只有服务器声明支持 iss 时才用它客户端元数据里登记的固定回调地址。
 - 动态注册是公开接口：注册过的客户端在有人授权之前什么也做不了；最多 100 个，注册后 24 小时没有被授权的自动删除；按来源地址限速（每小时 10 个，IPv6 按 /64 合并，最多记 1 万个来源，满了以后新来源暂时不能注册）。
-- 授权页的权限选项默认是最小的（只读、不能执行命令、没有节点终端），成员要主动勾选。「节点终端」只有管理员看得到。
+- 授权页的权限选项默认是最小的（只读、不能执行命令、没有节点终端、不能管理面板），成员要主动勾选。「节点终端」「管理面板」只有管理员看得到。
 
 ### 管理
 
@@ -71,7 +72,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 管理员在「设置 → 成员」从成员行的 ⋯ 打开「访问令牌」，看到这个成员的令牌并吊销，发现泄露时不用等本人处理。看不到令牌本身，也不能替别人生成。
 - 删除成员、管理员重置成员密码时，这个成员的令牌全部吊销（和登录会话一样）。
 - 数据库：
-  - `api_tokens (id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash, allow_write, allow_exec, allow_node_exec, created_at, expires_at, refresh_expires_at, last_used_at, last_ip, networks, seen_networks, last_client)`，删除成员时级联删除。最后使用时间 1 分钟内不重复写（地址或客户端变了照写）。
+  - `api_tokens (id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash, allow_write, allow_exec, allow_node_exec, allow_panel, created_at, expires_at, refresh_expires_at, last_used_at, last_ip, networks, seen_networks, last_client)`，删除成员时级联删除。最后使用时间 1 分钟内不重复写（地址或客户端变了照写）。
   - `oauth_clients (id, name, redirect_uris, created_at, authorized_at)`：动态注册的客户端。用网址作标识的不存，元数据在内存里缓存 10 分钟。
   - 授权码只放在内存里。
   - 备用面板复制数据库时一起带过去。
@@ -81,21 +82,35 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 令牌存在 MCP 客户端的配置文件里，被偷走后别人能在任何地方用它（`auth/tokennet.go`）。
 
 - **允许的地址**：生成个人访问令牌时可选填写 IP 或网段（`CreateAccessTokenRequest.networks`，最多 50 项，存在 `api_tokens.networks`）。从其他地址使用时当作令牌无效（客户端看到 401），记入审计（`token_network_denied`，类别 security，参数 `rule` 是 `token`）并告警「访问令牌 `<名称>` 从允许范围以外的地址使用，已拒绝」。OAuth 授权的令牌不能填。设了[管理员登录地址](panel.md#管理员登录地址)时，管理员的所有令牌（包括 OAuth 授权的）还要在那个范围内，否则按同样的方式拒绝（`rule` 是 `admin`）。
-- **新网段告警**：每个令牌记下用过的网段（IPv4 /24、IPv6 /48，最多 20 个，`seen_networks`；最早用过的 10 个一直留着，满了替换之后最早的那个，偷到令牌的人轮流换网段挤不掉本人一开始常用的）。勾了「执行命令」或「节点终端」的令牌第一次从新网段使用时告警「访问令牌 `<名称>` 第一次从网段 `<网段>` 使用」，带来源和客户端，记入审计（`token_new_network`）；令牌第一次使用不算。每个令牌每小时最多告警一次，这一小时里其余的新网段只记审计，下一条告警里带上个数，轮流换网段刷不爆告警。只读和只能修改的令牌只记录不告警。
+- **新网段告警**：每个令牌记下用过的网段（IPv4 /24、IPv6 /48，最多 20 个，`seen_networks`；最早用过的 10 个一直留着，满了替换之后最早的那个，偷到令牌的人轮流换网段挤不掉本人一开始常用的）。勾了「执行命令」「节点终端」或「管理面板」的令牌第一次从新网段使用时告警「访问令牌 `<名称>` 第一次从网段 `<网段>` 使用」，带来源和客户端，记入审计（`token_new_network`）；令牌第一次使用不算。每个令牌每小时最多告警一次，这一小时里其余的新网段只记审计，下一条告警里带上个数，轮流换网段刷不爆告警。只读和只能修改的令牌只记录不告警。
 - **客户端**：记下最近一次使用的客户端（User-Agent，`last_client`），列表里悬停最后使用时间可以看到。
 
 ## 调用方式
 
 工具不直接调用业务代码，而是在进程内调用面板自己的 Connect 接口：MCP 层验证令牌后，把令牌对应的成员放进请求的 ctx，通过内存里的传输调用同一个 mux（不经过网络，所以不能伪造）。这样现有的拦截器全部照常生效，不用为 MCP 再写一遍：
 
-- 角色检查、访问范围、高权限确认、备用面板只读。令牌做不了高权限确认：要确认的接口里，项目和节点的（节点文件、导入现有目录、隔离节点、恢复拼回的顶替设置，`auth.tokenNodeProcedures`）只有勾了「节点终端」的管理员令牌能调用，这时算确认过（`auth.User.ElevatedFor`：生成令牌或在授权页点允许前已经确认过身份，每次修改还要用户在 agent 里再确认一次）；设置里的（生成令牌、回放录制、管理员登录地址、测试外送）令牌本来就调不了。
+- 角色检查、访问范围、高权限确认（令牌的规则见[高权限确认](#高权限确认)）、备用面板只读。
 - 审计记录：每次工具调用都记一条（包括查询），它触发的接口调用挂在下面（见 [audit.md](audit.md#mcp-调用)）。来源 `via` 是 `mcp`，带上令牌 ID 和客户端，审计页显示「MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条（类别 `session`），参数里是命令本身，退出码不为 0 时接在后面。
-- 令牌只能调用项目和节点的接口（`auth.TokenAllowed`），成员、设置、令牌自己的接口都不行；`auth.tokenNodeProcedures` 里的还要勾「节点终端」。
-- 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec` 和文件工具；没勾「节点终端」的拦下节点命令和节点文件。
+- 令牌能调用的接口由 `auth.TokenAllowed` 决定：项目和节点的接口（没勾「可修改」时只能查询，高权限确认的那些按下表）；设置和账号的接口只有[管理面板](#管理面板)列出的几个（要勾「管理面板」）和自己的项目页排序，成员的修改、令牌、密码、两步验证、通行密钥、会话这些一律不行（`auth.tokenAccount`，`tools_test.go` 的 `TestTokenNeverReaches` 逐个检查设置、账号、初始化的全部接口）。
+- 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec` 和文件工具；没勾「节点终端」的拦下节点命令和节点文件；没勾「管理面板」的拦下管理面板的工具。
+
+### 高权限确认
+
+网页上有些操作要先再验证一次身份（高权限确认，见 [node-access.md](node-access.md#权限)）。令牌做不了交互式的确认，所以一张表（`auth.tokenElevated`）、一个函数（`auth.User.ElevatedFor`）说清楚：表里的接口，管理员的令牌勾了要求的选项就算确认过，MCP 工具每次修改前再让用户确认预览；不在表里的，令牌一律不算确认过。网页会话的判断不变（`Elevated`：15 分钟内做过确认）。`api` 的拦截器只调用这一个函数（`needsElevation`），`api/token_elevation_test.go` 逐个检查 `elevationRequired` 里的接口。
+
+| 接口 | 令牌要勾 | 原因 |
+| --- | --- | --- |
+| 节点文件的查看：`ListNodeDir`、`ReadNodeFile`、`ListNodeFileBackups`、`ListNodeDirSizes`，以及 `InspectComposeDir` | 节点终端 | 读的是整台机器的文件，等于节点的 root |
+| 节点文件的修改：`WriteNodeFile`、`DeleteNodeFile`、`CreateNodeDir`、`RestoreNodeFileBackup`、`RenameNodeFile`、`MoveNodeFiles`、`CopyNodeFiles`、`CompressNodeFiles`、`ExtractNodeFile`；`ImportComposeDir`、`IsolateNode`、`UnisolateNode`、`ConfirmPendingHA` | 节点终端、可修改 | 以 root 改节点上的东西，或者让别的节点运行拼回的配置 |
+| `SetNodeReplicaDir`、`SetBackupReplicaDir`（`SetBackupNodes` 指定存放位置时同样） | 节点终端、可修改 | 让节点以 root 在任意位置建目录、写数据 |
+| `DeleteNodeImages`、`PruneNodeImages` | 可修改 | 节点拒绝删有容器在用、Nagi 需要的镜像，影响和部署同一级 |
+| 设置和账号的：`CreateAccessToken`、`BeginTOTP`、`BeginPasskeyRegistration`、`SetAdminNetworks`、`GetRecording`、`TestAuditSink` | 令牌一律不行 | 会给自己留登录凭据、把账号主人锁在外面，或者泄露录制和外送的凭据 |
+
+「节点终端」只能在做过高权限确认之后勾选（生成令牌前、在授权页点允许前），所以这些令牌已经确认过身份；令牌只在 `/mcp` 有效，到接口的令牌请求都来自 MCP 工具。
 
 ## 工具
 
-按任务设计，几个相近的接口合成一个工具（例如移动、复制、改名是一个 `move_files`），网页上能做的项目和节点操作都有对应的工具（面板和账号的设置除外，见[还没有的](#还没有的)）。工具按令牌的权限给，只读令牌只看到 20 个左右，勾满权限的管理员令牌看到全部。项目、容器、节点都可以用名称或 ID 指定（项目名可以重名，重名时要求用网络名或 ID）。工具说明是英文的（给模型看），返回 JSON。令牌没有相应权限（或者是备用面板）时，客户端拿到的工具列表里就没有修改类工具、`exec` 和 `node_exec`。
+按任务设计，几个相近的接口合成一个工具（例如移动、复制、改名是一个 `move_files`），网页上能做的项目、节点和面板管理操作都有对应的工具（不提供的见[还没有的](#还没有的)）。工具按令牌的权限给，只读令牌只看到 20 个左右，勾满权限的管理员令牌看到全部。项目、容器、节点都可以用名称或 ID 指定（项目名可以重名，重名时要求用网络名或 ID）。工具说明是英文的（给模型看），返回 JSON。令牌没有相应权限（或者是备用面板）时，客户端拿到的工具列表里就没有修改类工具、`exec` 和 `node_exec`。
 
 ### 查看
 
@@ -222,7 +237,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 节点上的文件和网页上要先做高权限确认的几个操作，等于节点的 root，和 `node_exec` 一样只给管理员、令牌要勾「节点终端」，备用面板上没有。规则和网页的节点文件一样（见 [node-access.md](node-access.md#文件)）：路径先解析成真实路径，`/proc`、`/sys`、`/dev`、Nagi 的数据目录禁止访问，容器目录只读，敏感文件可以改，节点在本地关闭了节点访问时拒绝。
 
-- **高权限确认**：令牌做不了。这些接口在 `auth.tokenNodeProcedures` 里，只有勾了「节点终端」的管理员令牌能调用，调用时算确认过（`auth.User.ElevatedFor`）：勾这一项时已经做过高权限确认（生成令牌前，或者在 OAuth 授权页点允许前），每次修改还要用户在 agent 里确认。其他令牌调用时角色检查直接拒绝。
+- **高权限确认**：令牌做不了，规则见[高权限确认](#高权限确认)：只有勾了「节点终端」的管理员令牌能调用（修改还要「可修改」），这时算确认过。其他令牌调用时角色检查直接拒绝。
 - **每次修改都要确认**（新建目录除外）：不带 `confirm` 只返回预览（节点、路径、大小，敏感路径另有提醒），`confirm` 填预览给的确认码才执行。确认码由工具、节点和参数算出，和 `node_exec` 一样只保证执行的就是预览过的操作。确认后调用接口时带上 `confirmed`（敏感路径要用户确认过才能改）。
 - 读写都和网页一样记进活动记录（带路径，不记内容）；`HandoverNodes` 不提供（见[还没有的](#还没有的)）。
 
@@ -245,7 +260,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 和节点页的「镜像」标签同一组接口（见 [agent.md](agent.md#节点镜像)），能不能删由节点判断，有容器使用的、Nagi 需要的一律拒绝。
 
 - 只给管理员的令牌。`list_node_images` 不用额外权限；`delete_node_images`、`prune_node_images`、`pull_node_image` 要勾「可修改」，备用面板上没有。
-- 网页上删除和清理要先做高权限确认，令牌做不了交互式的确认，改由预览和确认码代替：不带 `confirm` 只返回预览，用户同意后带预览给的确认码再调用一次。确认码由节点和要删的镜像（清理时是可清理的镜像 ID 和是否清理构建缓存）算出，预览之后节点上的镜像变了就对不上，只会再返回一次预览。所以管理员的、勾了「可修改」的令牌调用这两个接口时算确认过（见[高权限确认](#高权限确认)），令牌只在 `/mcp` 有效，到这里的令牌请求都来自这两个工具。和 `node_exec` 一样，确认码只保证执行的就是预览过的内容。
+- 网页上删除和清理要先做高权限确认，令牌做不了交互式的确认（规则见[高权限确认](#高权限确认)），改由预览和确认码代替：不带 `confirm` 只返回预览，用户同意后带预览给的确认码再调用一次。确认码由节点和要删的镜像（清理时是可清理的镜像 ID 和是否清理构建缓存）算出，预览之后节点上的镜像变了就对不上，只会再返回一次预览。所以管理员的、勾了「可修改」的令牌调用这两个接口时算确认过（见[高权限确认](#高权限确认)），令牌只在 `/mcp` 有效，到这里的令牌请求都来自这两个工具。和 `node_exec` 一样，确认码只保证执行的就是预览过的内容。
 - `pull_node_image` 用节点全局的 Docker 登录信息和镜像加速拉取，等拉完才返回，最长 30 分钟。不用确认。
 - 删除、清理、拉取都记进审计，挂在这次工具调用下面。
 
@@ -276,12 +291,32 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - **接口上的高权限确认**：见[高权限确认](#高权限确认)，这两个接口要管理员的、勾了「可修改」和「节点终端」的令牌。
 - 移动的过程作为进度通知发给客户端，结果里有成功与否和最后几行输出。和网页一样记进活动记录（`SetNodeReplicaDir`、`SetBackupReplicaDir`）。添加备份节点（`set_backup_node`）时不能指定存放位置，加好以后用 `set_replica_location`。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec`、节点文件、节点级操作和副本的存放位置是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file`、`move_files`、`extract_file`、`delete_node_images`、`prune_node_images`、`set_node_replica_dir`、`set_replica_location`、节点文件的修改、节点管理里要确认的操作和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+### 管理面板
+
+面板的设置页里能交给 agent 的部分。只给管理员，令牌要勾「管理面板」（修改的还要勾「可修改」），备用面板上只有查看类的。**每次调用都发一条告警**「访问令牌使用了管理面板的工具 `<工具名>`」（带令牌名、成员和来源，和节点命令一样），令牌泄露时用户马上知道。改变面板地址、通知去向或者更新面板的，分两步：不带 `confirm` 只返回预览，`confirm` 填预览给的确认码（`update_panel` 填目标版本）才执行。
+
+| 工具 | 内容 | 用到的接口 |
+| --- | --- | --- |
+| `get_panel_settings` | 面板的对外地址、端口、指纹、版本、绑定的域名、主密钥文件的路径，备用面板（备用面板上是主面板和同步状态） | `GetSettings`、`GetStandbys` |
+| `update_panel_settings` | 修改对外地址、绑定或取消域名（要确认）。安全入口不能改 | `UpdateSettings`、`SetPanelDomain` |
+| `get_alert_channels` | 告警渠道：名称、类型、指向哪里（webhook 只给主机，地址和机器人令牌一律不返回） | `GetAlertConfig` |
+| `update_alert_channels` | 添加、修改、改名、删除渠道。除了改名都会改变通知去向，要确认；生效前先用原来的渠道发通知（接口本来就这样）。webhook 地址和机器人令牌只写，审计里也隐去 | `GetAlertConfig`、`UpdateAlertConfig` |
+| `test_alert_channel` | 用保存了的渠道发一条测试消息。不按 agent 给的地址发请求 | `GetAlertConfig`、`TestAlertChannel` |
+| `list_activity` | 整个面板的活动：操作和告警，翻页 | `ListActivity` |
+| `query_audit` | 按时间、成员、来源、类别、项目、节点、只看失败、关键字查审计记录，翻页；或者取一条记录和它的上下级 | `ListAuditEvents`、`GetAuditEvent` |
+| `export_audit` | 按筛选条件导出 JSON Lines，最多 256 KB（超出时截断，只留完整的行） | `ExportAuditEvents` |
+| `verify_audit` | 校验审计日志的哈希链，返回结果和最近一次外送的锚点 | `VerifyAudit` |
+| `check_panel_update` | 有没有新版本、更新日志、面板和节点的更新进度 | `CheckPanelUpdate`、`GetPanelReleaseNotes`、`GetUpdateStatus` |
+| `update_panel` | 更新面板到最新版本（要确认），面板重启期间 MCP 暂时不能用 | `CheckPanelUpdate`、`UpdatePanel` |
+| `list_members` | 成员、角色、访问范围、是否开了两步验证、通行密钥的名称。只读 | `ListUsers` |
+
+所有令牌都能用的（只影响自己的账号）：`get_project_order`、`set_project_order` 查看和修改自己的项目页排序（`GetProjectOrder`、`SetProjectOrder`），修改仍要「可修改」。
+
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec`、节点文件、节点级操作和副本的存放位置是 `nagi:node`，管理面板的是 `nagi:admin`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file`、`move_files`、`extract_file`、`delete_node_images`、`prune_node_images`、`set_node_replica_dir`、`set_replica_location`、`update_panel_settings`、`update_alert_channels`、`update_panel`、节点文件的修改、节点管理里要确认的操作和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 还没有的
 
-- **面板和账号的设置**：令牌只能调用项目和节点的接口（`auth.TokenAllowed`），设置页的功能都没有工具：面板设置（域名、保留天数等）、告警渠道、成员和邀请、访问范围、会话策略、审计设置和外送、管理员登录地址、面板更新、备用面板。是否开放、怎么开放待定（计划是单独一项默认不勾、只给管理员的令牌权限）。
-- **一直不提供**：初始化、登录、提升权限、改密码、两步验证、通行密钥、会话、OAuth 授权、访问令牌（生成令牌等于给自己留一个长期凭据），以及会把凭据放进对话的操作（邀请链接、节点加入命令 `CreateEnrollCommand`、备用面板配对码、备份密钥 `GetBackupKey`、容器的 webhook 令牌）、安全入口。节点移交（`HandoverNodes`）也不提供：要把另一个面板的接入码交给 agent，执行后本面板忘记这些节点和上面的项目，等于把节点的 root 交给另一个面板，只在网页上做。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
+- **一直不提供**：初始化、登录、高权限确认、改密码、两步验证、通行密钥、会话、OAuth 授权、访问令牌的生成和吊销（生成令牌等于给自己留一个长期凭据），成员的增删、角色和访问范围的修改（等于给自己或别人留后门），邀请、会话策略、审计设置和外送、管理员登录地址、终端录制的回放，以及会把凭据放进对话的操作（邀请链接、节点加入命令 `CreateEnrollCommand`、备用面板配对码和提升、备份密钥 `GetBackupKey`、容器的 webhook 令牌）、安全入口。节点移交（`HandoverNodes`）也不提供：要把另一个面板的接入码交给 agent，执行后本面板忘记这些节点和上面的项目，等于把节点的 root 交给另一个面板，只在网页上做。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
 - **大文件的上传下载**：见[文件](#文件)。日志只取最近的，不跟随（`get_logs`）；终端是交互的，用 `exec`、`node_exec` 执行单条命令代替。
 
 ## 给 agent 的说明
@@ -299,7 +334,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 实现
 
-- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 检查网页上要高权限确认的项目和节点接口，勾了「节点终端」的管理员令牌都能用，设置里的一律不能。
+- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作、`images.go` 节点镜像、`replicadirs.go` 副本的存放位置、`panel.go` 管理面板和项目页排序）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 按[高权限确认](#高权限确认)的表逐个检查 `elevationRequired` 里的接口；`TestTokenNeverReaches` 逐个检查设置、账号、初始化的接口，令牌只能碰管理面板列出的那些。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
 - `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
 - `internal/server/store`：`api_tokens`、`oauth_clients` 表。查询手写在 `tokens.go`，不放进 `queries.sql`。

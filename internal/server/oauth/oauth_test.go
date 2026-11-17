@@ -83,7 +83,7 @@ func authorize(t *testing.T, s *Server, client, redirect string, write bool) str
 	t.Helper()
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, State: "xyz",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, write, false, false)
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, Grant{Write: write, Exec: false, Node: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestOAuthDeny(t *testing.T) {
 	// 本机回调可以换端口。
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: "http://127.0.0.1:50000/callback", State: "s",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", false, 0, true, true, false)
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", false, 0, Grant{Write: true, Exec: true, Node: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,14 +215,14 @@ func TestOAuthNodeExec(t *testing.T) {
 	redirect := "https://claude.ai/api/mcp/auth_callback"
 	client := register(t, hs, redirect)
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, true, true, true); err == nil {
+	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, Grant{Write: true, Exec: true, Node: true}); err == nil {
 		t.Error("操作员不能授权节点终端")
 	}
 	admin := auth.User{ID: 3, Role: auth.RoleAdmin}
-	if _, err := s.Approve(ctx, admin, req, "https://panel.example.com", true, 30, true, false, true); err == nil {
+	if _, err := s.Approve(ctx, admin, req, "https://panel.example.com", true, 30, Grant{Write: true, Exec: false, Node: true}); err == nil {
 		t.Error("没有允许执行命令时不能授权节点终端")
 	}
-	to, err := s.Approve(ctx, admin, req, "https://panel.example.com", true, 30, false, true, true)
+	to, err := s.Approve(ctx, admin, req, "https://panel.example.com", true, 30, Grant{Write: false, Exec: true, Node: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,6 +239,36 @@ func TestOAuthNodeExec(t *testing.T) {
 	// 刷新以后照样保留。
 	st, tok = post(t, hs, "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client}})
 	if st != http.StatusOK || tok["scope"] != ScopeRead+" "+ScopeExec+" "+ScopeNode {
+		t.Fatalf("刷新后权限不对：%d %v", st, tok)
+	}
+}
+
+// 管理面板：只有管理员能授权，发出的令牌带 nagi:admin，刷新后照样保留。
+func TestOAuthPanel(t *testing.T) {
+	s, a, hs := testServer(t)
+	ctx := context.Background()
+	redirect := "https://claude.ai/api/mcp/auth_callback"
+	client := register(t, hs, redirect)
+	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
+	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, Grant{Panel: true}); err == nil {
+		t.Error("操作员不能授权管理面板")
+	}
+	to, err := s.Approve(ctx, auth.User{ID: 3, Role: auth.RoleAdmin}, req, "https://panel.example.com", true, 30, Grant{Panel: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(to)
+	st, tok := post(t, hs, "/oauth/token", url.Values{"grant_type": {"authorization_code"}, "code": {u.Query().Get("code")}, "client_id": {client},
+		"redirect_uri": {redirect}, "code_verifier": {verifier}})
+	if st != http.StatusOK || tok["scope"] != ScopeRead+" "+ScopeAdmin {
+		t.Fatalf("换令牌失败：%d %v", st, tok)
+	}
+	tu, _, err := a.TokenUser(ctx, tok["access_token"].(string), "1.2.3.4")
+	if err != nil || !tu.AllowPanel || tu.AllowWrite {
+		t.Fatalf("令牌应该只能管理面板（只读）：%+v %v", tu, err)
+	}
+	st, tok = post(t, hs, "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {tok["refresh_token"].(string)}, "client_id": {client}})
+	if st != http.StatusOK || tok["scope"] != ScopeRead+" "+ScopeAdmin {
 		t.Fatalf("刷新后权限不对：%d %v", st, tok)
 	}
 }

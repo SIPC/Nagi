@@ -320,6 +320,8 @@ type User struct {
 	Via                   string
 	AllowWrite, AllowExec bool
 	AllowNodeExec         bool
+	// AllowPanel：令牌可以管理面板（只给管理员，见 docs/mcp.md#管理面板）。
+	AllowPanel bool
 	// SessionID 是网页会话的固定 ID（审计记录用它的哈希把一次登录里的操作串起来），令牌调用为空。
 	SessionID string
 }

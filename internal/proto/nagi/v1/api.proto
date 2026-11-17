@@ -92,6 +92,8 @@ message ApproveOAuthRequest {
   bool allow_exec = 5;
   // 可以在节点上执行命令（MCP 的 node_exec）。只有管理员能勾，要同时勾 allow_exec。
   bool allow_node_exec = 6;
+  // 管理面板（见 docs/mcp.md#管理面板）：面板设置、告警渠道、审计、面板更新等。只有管理员能勾。
+  bool allow_panel = 7;
 }
 
 message ApproveOAuthResponse {
@@ -541,6 +543,8 @@ message AccessToken {
   repeated string networks = 11;
   // 最近一次使用的客户端（User-Agent）。
   string last_client = 12;
+  // 管理面板（见 docs/mcp.md#管理面板），只有管理员的令牌能有。
+  bool allow_panel = 13;
 }
 
 message ListAccessTokensRequest {
@@ -561,6 +565,8 @@ message CreateAccessTokenRequest {
   bool allow_node_exec = 5;
   // 允许使用的 IP 或网段，为空表示不限制。
   repeated string networks = 6;
+  // 管理面板（见 docs/mcp.md#管理面板）。只有管理员能勾选。
+  bool allow_panel = 7;
 }
 
 message CreateAccessTokenResponse {

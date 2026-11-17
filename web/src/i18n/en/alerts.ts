@@ -4,7 +4,7 @@ export default {
   security: {
     title: "Security alerts",
     description: "Get notified about unusual sign-ins through the channels above.",
-    help: "Turning off 2FA, changing or resetting a password, adding an administrator, creating an access token, approving OAuth, and editing the secure entry, alert settings, terminal recording, or log forwarding, and shortening audit retention always send a notification, as do node joins and handovers, standby panels, and saving or deploying privileged configurations. These can't be turned off. When alert settings are edited, the notification goes to the previous channels first.",
+    help: "Turning off 2FA, changing or resetting a password, adding an administrator, creating an access token, approving OAuth, using an access token to administer the panel, and editing the secure entry, alert settings, terminal recording, or log forwarding, and shortening audit retention always send a notification, as do node joins and handovers, standby panels, and saving or deploying privileged configurations. These can't be turned off. When alert settings are edited, the notification goes to the previous channels first.",
     rules: {
       totp: { label: "Repeated wrong 2FA codes", description: "The password was correct but the 2FA code was wrong 5 times in a row, so the password may be leaked" },
       ratelimit: { label: "Sign-in rate limiting", description: "An IP was rate-limited after too many failed sign-ins. Sent as an hourly summary" },

@@ -107,7 +107,7 @@ func (s *Service) checkTokenNetwork(ctx context.Context, t store.AccessToken, us
 		seen = slices.Delete(seen, pinnedNetworks, pinnedNetworks+1)
 	}
 	_ = s.q.SetTokenSeenNetworks(ctx, t.ID, strings.Join(seen, "\n"))
-	if first || !(t.AllowExec || t.AllowNodeExec) {
+	if first || !(t.AllowExec || t.AllowNodeExec || t.AllowPanel) {
 		return
 	}
 	e := tokenActor(t, username)

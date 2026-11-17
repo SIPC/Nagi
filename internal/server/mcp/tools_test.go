@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestToolDeclarations(t *testing.T) {
 		return svc != nil && svc.Methods().ByName(protoreflect.Name(parts[1])) != nil
 	}
 	// 数修改接口用的令牌：除了「可修改」都勾上（节点文件这类接口还要「节点终端」）。
-	readOnly := auth.User{TokenID: 1, AllowExec: true, AllowNodeExec: true}
+	readOnly := auth.User{TokenID: 1, AllowExec: true, AllowNodeExec: true, AllowPanel: true}
 	seen := map[string]bool{}
 	for _, tl := range allTools {
 		if seen[tl.name] {
@@ -293,6 +294,103 @@ func TestNewToolsAllowedFor(t *testing.T) {
 			if !auth.TokenAllowed(auth.User{TokenID: 1, AllowWrite: true, AllowExec: true}, p) && auth.TokenAllowed(nodeAdmin, p) && !tl.nodeExec {
 				t.Errorf("工具 %s 用到要「节点终端」的接口 %s，要声明 nodeExec", tl.name, p)
 			}
+		}
+	}
+}
+
+// 设置和账号的接口：令牌只能碰管理面板列出的这些（还要勾「管理面板」）和自己的项目页排序，其余一律不能，
+// 勾满所有选项的管理员令牌也不能。新加的设置、账号接口默认令牌不能用；要开放时在这里和 auth.tokenAccount 里写明。
+func TestTokenNeverReaches(t *testing.T) {
+	panelRead := []string{"GetSettings", "GetAlertConfig", "ListActivity", "ListAuditEvents", "GetAuditEvent", "ExportAuditEvents", "VerifyAudit",
+		"CheckPanelUpdate", "GetPanelReleaseNotes", "GetUpdateStatus", "GetStandbys", "ListUsers"}
+	panelWrite := []string{"UpdateSettings", "SetPanelDomain", "UpdateAlertConfig", "TestAlertChannel", "UpdatePanel"}
+	never := []string{"CreateAccessToken", "RevokeAccessToken", "ListAccessTokens", "BeginTOTP", "EnableTOTP", "DisableTOTP", "GetSecurity",
+		"BeginPasskeyRegistration", "AddPasskey", "DeletePasskey", "ListSessions", "RevokeSession", "SetEntrance", "CreateStandbyCode",
+		"RemoveStandby", "PromoteStandby", "CreateInvite", "ListInvites", "RevokeInvite", "CreateUser", "UpdateUser", "DeleteUser",
+		"GetSessionPolicy", "SetSessionPolicy", "GetAuditSettings", "SetAuditSettings", "TestAuditSink", "GetAdminNetworks", "SetAdminNetworks",
+		"GetRecording", "Login", "Logout", "Me", "Elevate", "ChangePassword", "SetLanguage", "UpdateProfile", "GetOAuthRequest", "ApproveOAuth",
+		"RegisterSessionKey", "RotateSession", "Reverify", "BeginPasskeyLogin", "PasskeyLogin", "GetSetupState", "Setup"}
+	full := auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true, AllowPanel: true}
+	noPanel := full
+	noPanel.AllowPanel = false
+	readPanel := full
+	readPanel.AllowWrite = false
+	file := nagiv1.File_nagi_v1_api_proto
+	for _, svc := range []string{"SettingsService", "AuthService", "SetupService"} {
+		methods := file.Services().ByName(protoreflect.Name(svc)).Methods()
+		for i := range methods.Len() {
+			m := string(methods.Get(i).Name())
+			p := "/nagi.v1." + svc + "/" + m
+			want := slices.Contains(panelRead, m) || slices.Contains(panelWrite, m) || m == "GetProjectOrder" || m == "SetProjectOrder"
+			if got := auth.TokenAllowed(full, p); got != want {
+				t.Errorf("勾满选项的管理员令牌调用 %s = %v，想要 %v", p, got, want)
+			}
+			if slices.Contains(never, m) && auth.TokenAllowed(full, p) {
+				t.Errorf("令牌永远不能调用 %s", p)
+			}
+			if wantNo := m == "GetProjectOrder" || m == "SetProjectOrder"; auth.TokenAllowed(noPanel, p) != wantNo {
+				t.Errorf("没勾管理面板的令牌调用 %s = %v，想要 %v", p, !wantNo, wantNo)
+			}
+			if wantRead := slices.Contains(panelRead, m) || m == "GetProjectOrder"; auth.TokenAllowed(readPanel, p) != wantRead {
+				t.Errorf("只读的管理面板令牌调用 %s = %v，想要 %v", p, !wantRead, wantRead)
+			}
+		}
+	}
+	// 只读令牌（什么都没勾）只能看自己的项目页排序。
+	if !auth.TokenAllowed(auth.User{TokenID: 1}, "/nagi.v1.AuthService/GetProjectOrder") || auth.TokenAllowed(auth.User{TokenID: 1}, "/nagi.v1.AuthService/SetProjectOrder") {
+		t.Error("只读令牌：能看项目页排序，不能改")
+	}
+}
+
+// 管理面板的工具只给勾了「管理面板」的管理员令牌；修改的还要「可修改」，备用面板上没有。成员被降为操作员后，
+// 令牌上的这一项随之失效（auth.TokenUser 只给管理员 AllowPanel，这里看角色）。
+func TestPanelToolsAllowedFor(t *testing.T) {
+	byName := map[string]tool{}
+	for _, tl := range allTools {
+		byName[tl.name] = tl
+	}
+	full := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowPanel: true}
+	read := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowPanel: true}
+	noPanel := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
+	op := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true, AllowPanel: true}
+	cases := []struct {
+		tool    string
+		u       auth.User
+		standby bool
+		want    bool
+	}{
+		{"get_panel_settings", read, false, true},
+		{"get_panel_settings", noPanel, false, false},
+		{"get_panel_settings", op, false, false},
+		{"query_audit", read, true, true},
+		{"update_panel_settings", read, false, false},
+		{"update_panel_settings", full, false, true},
+		{"update_panel_settings", full, true, false},
+		{"update_alert_channels", full, false, true},
+		{"update_alert_channels", noPanel, false, false},
+		{"update_panel", full, false, true},
+		{"list_members", read, false, true},
+		{"get_project_order", auth.User{Role: auth.RoleViewer, TokenID: 1}, false, true},
+		{"set_project_order", auth.User{Role: auth.RoleViewer, TokenID: 1}, false, false},
+		{"set_project_order", auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true}, false, true},
+	}
+	for _, c := range cases {
+		tl, ok := byName[c.tool]
+		if !ok {
+			t.Fatalf("没有工具 %s", c.tool)
+		}
+		if got := tl.allowedFor(c.u, c.standby); got != c.want {
+			t.Errorf("%s 对 %+v（备用面板 %v）= %v，想要 %v", c.tool, c.u, c.standby, got, c.want)
+		}
+	}
+	// 用到设置接口的工具都要声明 panel（每次调用发告警），声明了 panel 的 OAuth 范围是 nagi:admin。
+	for _, tl := range allTools {
+		uses := slices.ContainsFunc(tl.procedures, func(p string) bool { return strings.HasPrefix(p, "/nagi.v1.SettingsService/") })
+		if uses != tl.panel {
+			t.Errorf("工具 %s：用到设置接口 %v，声明 panel %v", tl.name, uses, tl.panel)
+		}
+		if tl.panel && (tl.scope() != "nagi:admin" || !tl.adminOnly) {
+			t.Errorf("工具 %s 要只给管理员，OAuth 范围是 nagi:admin", tl.name)
 		}
 	}
 }

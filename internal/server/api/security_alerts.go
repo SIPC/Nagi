@@ -52,6 +52,8 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 		title := i18n.Errorf("账号 %s 生成了访问令牌 %s", u.Name, m.GetName()).Error()
 		if m.GetAllowNodeExec() {
 			title = i18n.Errorf("账号 %s 生成了可以使用节点终端的访问令牌 %s", u.Name, m.GetName()).Error()
+		} else if m.GetAllowPanel() {
+			title = i18n.Errorf("账号 %s 生成了可以管理面板的访问令牌 %s", u.Name, m.GetName()).Error()
 		}
 		a.notify(ctx, "token", title, "")
 	case *nagiv1.ApproveOAuthRequest:
@@ -59,6 +61,8 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 			title := i18n.Errorf("账号 %s 授权了 OAuth 客户端", u.Name).Error()
 			if m.GetAllowNodeExec() {
 				title = i18n.Errorf("账号 %s 授权了 OAuth 客户端，可以使用节点终端", u.Name).Error()
+			} else if m.GetAllowPanel() {
+				title = i18n.Errorf("账号 %s 授权了 OAuth 客户端，可以管理面板", u.Name).Error()
 			}
 			a.notify(ctx, "oauth", title, "")
 		}
@@ -124,6 +128,15 @@ func (a *API) userName(ctx context.Context, id int64) string {
 }
 
 // notify 发一条一次性的安全通知：标题，后面附上操作人和来源。发送在后台进行，不挡接口返回。
+// AlertPanelTool 在访问令牌用 MCP 的管理面板工具时发一条告警（见 docs/mcp.md#管理面板），和节点命令一样：
+// 令牌泄露时能马上知道。查看类的工具也发。
+func (a *API) AlertPanelTool(ctx context.Context, u auth.User, tool string) {
+	if a.Nodes == nil || a.Panel == nil || a.Panel.Standby != nil {
+		return
+	}
+	a.notify(auth.WithUser(ctx, u), "panel-admin", i18n.Errorf("访问令牌使用了管理面板的工具 %s", tool).Error(), i18n.Errorf("令牌：%s", strings.TrimPrefix(u.Via, "mcp:")).Error())
+}
+
 func (a *API) notify(ctx context.Context, key, title, detail string) {
 	u := auth.CurrentUser(ctx)
 	m := auth.RequestMeta(ctx)

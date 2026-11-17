@@ -49,6 +49,8 @@ const (
 	ScopeExec  = "nagi:exec"
 	// ScopeNode：在节点上执行命令（node_exec）。
 	ScopeNode = "nagi:node"
+	// ScopeAdmin：管理面板（见 docs/mcp.md#管理面板）。
+	ScopeAdmin = "nagi:admin"
 )
 
 // Server 是授权服务器。授权码只放在内存里：面板重启时进行到一半的授权要重新来。
@@ -70,16 +72,14 @@ func New(q *store.Queries, log *slog.Logger) *Server {
 }
 
 type grant struct {
-	client     Client
-	redirect   string
-	challenge  string
-	resource   string
-	userID     int64
-	allowWrite bool
-	allowExec  bool
-	allowNode  bool
-	days       uint32
-	expires    time.Time
+	client    Client
+	redirect  string
+	challenge string
+	resource  string
+	userID    int64
+	perm      Grant
+	days      uint32
+	expires   time.Time
 }
 
 // Client 是核对过的客户端：动态注册的，或者用网址作标识的（客户端元数据文档）。
@@ -102,16 +102,24 @@ func sameResource(got, want string) bool {
 	return strings.TrimSuffix(got, "/") == want
 }
 
-func scopesOf(write, exec, node bool) string {
+// Grant 是成员在授权页勾的权限（和个人访问令牌的选项一样，见 docs/mcp.md#权限）。
+type Grant struct {
+	Write, Exec, Node, Panel bool
+}
+
+func scopesOf(g Grant) string {
 	s := []string{ScopeRead}
-	if write {
+	if g.Write {
 		s = append(s, ScopeWrite)
 	}
-	if exec {
+	if g.Exec {
 		s = append(s, ScopeExec)
 	}
-	if node {
+	if g.Node {
 		s = append(s, ScopeNode)
+	}
+	if g.Panel {
+		s = append(s, ScopeAdmin)
 	}
 	return strings.Join(s, " ")
 }
@@ -213,7 +221,7 @@ func RedirectHost(raw string) string {
 
 // Approve 处理成员在授权页上的选择，返回浏览器要转去的回调地址。issuer 写进回调地址的 iss（RFC 9207），
 // 客户端据此确认授权码来自它找的授权服务器；ChatGPT 只有服务器支持 iss 时才用它登记过的固定回调地址。
-func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequest, issuer string, allow bool, days uint32, write, exec, node bool) (string, error) {
+func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequest, issuer string, allow bool, days uint32, g Grant) (string, error) {
 	c, err := s.Check(ctx, req)
 	if err != nil {
 		return "", err
@@ -232,20 +240,24 @@ func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequ
 		return "", i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不再使用的令牌", MaxTokens)
 	}
 	if u.Role == auth.RoleViewer {
-		write, exec = false, false
+		g.Write, g.Exec = false, false
 	}
 	// 节点终端等于节点的 root：只有管理员能授权，而且要同时允许执行命令（和个人访问令牌一样）。
-	if node && u.Role != auth.RoleAdmin {
+	if g.Node && u.Role != auth.RoleAdmin {
 		return "", i18n.New("只有管理员能创建可在节点上执行命令的令牌")
 	}
-	if node && !exec {
+	if g.Node && !g.Exec {
 		return "", i18n.New("允许节点终端时须同时允许执行命令")
+	}
+	// 管理面板同样只有管理员能授权。
+	if g.Panel && u.Role != auth.RoleAdmin {
+		return "", i18n.New("只有管理员能创建可以管理面板的令牌")
 	}
 	code := randomHex(32)
 	s.mu.Lock()
 	s.prune()
 	s.codes[code] = grant{client: c, redirect: req.GetRedirectUri(), challenge: req.GetCodeChallenge(), resource: req.GetResource(),
-		userID: u.ID, allowWrite: write, allowExec: exec, allowNode: node, days: days, expires: time.Now().Add(codeTTL)}
+		userID: u.ID, perm: g, days: days, expires: time.Now().Add(codeTTL)}
 	s.mu.Unlock()
 	if !strings.HasPrefix(c.ID, "https://") {
 		_ = s.Q.MarkOAuthClientAuthorized(ctx, c.ID, time.Now().Unix())
@@ -330,7 +342,7 @@ func (s *Server) handleResourceMetadata(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resource":                 ResourceURL(r),
 		"authorization_servers":    []string{BaseURL(r)},
-		"scopes_supported":         []string{ScopeRead, ScopeWrite, ScopeExec, ScopeNode},
+		"scopes_supported":         []string{ScopeRead, ScopeWrite, ScopeExec, ScopeNode, ScopeAdmin},
 		"bearer_methods_supported": []string{"header"},
 		"resource_name":            "Nagi",
 	})
@@ -351,7 +363,7 @@ func (s *Server) handleServerMetadata(w http.ResponseWriter, r *http.Request) {
 		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"none"},
-		"scopes_supported":                               []string{ScopeRead, ScopeWrite, ScopeExec, ScopeNode},
+		"scopes_supported":                               []string{ScopeRead, ScopeWrite, ScopeExec, ScopeNode, ScopeAdmin},
 		"client_id_metadata_document_supported":          true,
 		"authorization_response_iss_parameter_supported": true,
 	})
@@ -530,7 +542,7 @@ func (s *Server) exchangeCode(w http.ResponseWriter, r *http.Request) {
 	t := store.AccessToken{
 		UserID: g.userID, Name: g.client.Name, Source: auth.TokenSourceOAuth, ClientID: g.client.ID,
 		TokenHash: auth.HashToken(access), RefreshHash: auth.HashToken(refresh),
-		AllowWrite: g.allowWrite, AllowExec: g.allowExec, AllowNodeExec: g.allowNode, CreatedAt: now.Unix(), ExpiresAt: now.Add(AccessTTL).Unix(),
+		AllowWrite: g.perm.Write, AllowExec: g.perm.Exec, AllowNodeExec: g.perm.Node, AllowPanel: g.perm.Panel, CreatedAt: now.Unix(), ExpiresAt: now.Add(AccessTTL).Unix(),
 	}
 	if g.days > 0 {
 		t.RefreshExpiresAt = now.Add(time.Duration(g.days) * 24 * time.Hour).Unix()
@@ -540,16 +552,16 @@ func (s *Server) exchangeCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Log.Info("OAuth 授权已发出令牌", "client", g.client.Name, "user", g.userID)
-	writeTokens(w, access, refresh, g.allowWrite, g.allowExec, g.allowNode)
+	writeTokens(w, access, refresh, g.perm)
 }
 
-func writeTokens(w http.ResponseWriter, access, refresh string, write, exec, node bool) {
+func writeTokens(w http.ResponseWriter, access, refresh string, g Grant) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token":  access,
 		"token_type":    "Bearer",
 		"expires_in":    int(AccessTTL / time.Second),
 		"refresh_token": refresh,
-		"scope":         scopesOf(write, exec, node),
+		"scope":         scopesOf(g),
 	})
 }
 
@@ -588,7 +600,7 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusInternalServerError, "server_error", err.Error())
 		return
 	}
-	writeTokens(w, access, refresh, t.AllowWrite, t.AllowExec, t.AllowNodeExec)
+	writeTokens(w, access, refresh, Grant{Write: t.AllowWrite, Exec: t.AllowExec, Node: t.AllowNodeExec, Panel: t.AllowPanel})
 }
 
 // handleRevoke 吊销访问令牌或刷新令牌（RFC 7009）：不论令牌是否存在都返回成功。

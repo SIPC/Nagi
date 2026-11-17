@@ -85,6 +85,8 @@ func (s *Service) TokenUser(ctx context.Context, token, ip string) (User, store.
 		AllowExec:  t.AllowExec && row.Role != RoleViewer,
 		// 节点命令等于节点的 root，只给管理员；成员被降级后令牌上的这一项随之失效。
 		AllowNodeExec: t.AllowNodeExec && row.Role == RoleAdmin,
+		// 管理面板同样只给管理员。
+		AllowPanel: t.AllowPanel && row.Role == RoleAdmin,
 	}
 	return u, t, nil
 }

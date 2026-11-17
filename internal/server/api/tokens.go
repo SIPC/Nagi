@@ -19,7 +19,7 @@ import (
 
 func accessTokenInfo(t store.AccessToken) *nagiv1.AccessToken {
 	out := &nagiv1.AccessToken{
-		Id: t.ID, Name: t.Name, Source: t.Source, AllowWrite: t.AllowWrite, AllowExec: t.AllowExec, AllowNodeExec: t.AllowNodeExec,
+		Id: t.ID, Name: t.Name, Source: t.Source, AllowWrite: t.AllowWrite, AllowExec: t.AllowExec, AllowNodeExec: t.AllowNodeExec, AllowPanel: t.AllowPanel,
 		CreatedAt: timestamppb.New(time.Unix(t.CreatedAt, 0)), LastIp: t.LastIP, LastClient: t.LastClient,
 	}
 	if t.Networks != "" {
@@ -99,6 +99,13 @@ func (s *settingsService) CreateAccessToken(ctx context.Context, req *connect.Re
 		}
 		t.AllowNodeExec = true
 	}
+	// 管理面板：只有管理员能给令牌勾上（生成令牌本身已经要求确认过身份）。
+	if m.GetAllowPanel() {
+		if u.Role != auth.RoleAdmin {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能创建可以管理面板的令牌"))
+		}
+		t.AllowPanel = true
+	}
 	if m.GetDays() > 0 {
 		t.ExpiresAt = now.Add(time.Duration(m.GetDays()) * 24 * time.Hour).Unix()
 	}
@@ -159,7 +166,8 @@ func (s *authService) ApproveOAuth(ctx context.Context, req *connect.Request[nag
 	if m.GetAllow() && !auth.CurrentUser(ctx).Elevated() {
 		return nil, elevationError()
 	}
-	redirect, err := s.OAuth.Approve(ctx, auth.CurrentUser(ctx), m.GetRequest(), s.Auth.IssuerOf(ctx), m.GetAllow(), m.GetDays(), m.GetAllowWrite(), m.GetAllowExec(), m.GetAllowNodeExec())
+	redirect, err := s.OAuth.Approve(ctx, auth.CurrentUser(ctx), m.GetRequest(), s.Auth.IssuerOf(ctx), m.GetAllow(), m.GetDays(),
+		oauth.Grant{Write: m.GetAllowWrite(), Exec: m.GetAllowExec(), Node: m.GetAllowNodeExec(), Panel: m.GetAllowPanel()})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}

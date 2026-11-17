@@ -64,7 +64,7 @@ func isRead(method string) bool {
 }
 
 // tokenNeed 是访问令牌调用一个接口要勾的选项。
-type tokenNeed struct{ write, nodeExec bool }
+type tokenNeed struct{ write, nodeExec, panel bool }
 
 var (
 	needRead  = tokenNeed{nodeExec: true}
@@ -105,15 +105,45 @@ func TokenElevatedProcedures() []string {
 }
 
 func (n tokenNeed) metBy(u User) bool {
-	return (!n.write || u.AllowWrite) && (!n.nodeExec || u.AllowNodeExec)
+	return (!n.write || u.AllowWrite) && (!n.nodeExec || u.AllowNodeExec) && (!n.panel || u.AllowPanel)
 }
 
-// TokenAllowed 判断访问令牌（MCP）能不能调用接口：只能用项目和节点的接口，没勾「可修改」时只能查询
-// （见 docs/mcp.md#权限）；tokenElevated 里的按那里要求的选项。角色的限制另由 Allowed 检查。
+var (
+	panelRead  = tokenNeed{panel: true}
+	panelWrite = tokenNeed{panel: true, write: true}
+)
+
+// tokenAccount 是项目和节点以外、访问令牌能调用的接口（见 docs/mcp.md#管理面板），其余的设置、账号接口令牌一律不能调用。
+// 管理面板（「管理面板」选项，只给管理员）：面板设置（不含安全入口）、告警渠道、活动和审计记录、面板更新、备用面板的状态（只读）、
+// 成员（只读）。一直不开放：生成和吊销令牌、密码、两步验证、通行密钥、会话、OAuth 授权、初始化、高权限确认、安全入口、
+// 备用面板的配对码和提升、邀请、成员的角色和访问范围、会话策略、审计设置和外送、管理员登录地址、终端录制。
+// 测试 docs/mcp.md#管理面板 列出的每个接口（tools_test.go 的 TestTokenNeverReaches）。
+var tokenAccount = map[string]tokenNeed{
+	// 自己的项目页排序：只影响自己的账号。修改仍要「可修改」。
+	"/nagi.v1.AuthService/GetProjectOrder": {}, "/nagi.v1.AuthService/SetProjectOrder": {write: true},
+	"/nagi.v1.SettingsService/GetSettings": panelRead, "/nagi.v1.SettingsService/UpdateSettings": panelWrite,
+	"/nagi.v1.SettingsService/SetPanelDomain": panelWrite,
+	"/nagi.v1.SettingsService/GetAlertConfig": panelRead, "/nagi.v1.SettingsService/UpdateAlertConfig": panelWrite,
+	"/nagi.v1.SettingsService/TestAlertChannel": panelWrite,
+	"/nagi.v1.SettingsService/ListActivity":     panelRead, "/nagi.v1.SettingsService/ListAuditEvents": panelRead,
+	"/nagi.v1.SettingsService/GetAuditEvent": panelRead, "/nagi.v1.SettingsService/ExportAuditEvents": panelRead,
+	"/nagi.v1.SettingsService/VerifyAudit":      panelRead,
+	"/nagi.v1.SettingsService/CheckPanelUpdate": panelRead, "/nagi.v1.SettingsService/GetPanelReleaseNotes": panelRead,
+	"/nagi.v1.SettingsService/GetUpdateStatus": panelRead, "/nagi.v1.SettingsService/UpdatePanel": panelWrite,
+	"/nagi.v1.SettingsService/GetStandbys": panelRead,
+	"/nagi.v1.SettingsService/ListUsers":   panelRead,
+}
+
+// TokenAllowed 判断访问令牌（MCP）能不能调用接口：项目和节点的接口，没勾「可修改」时只能查询（见 docs/mcp.md#权限），
+// tokenElevated 里的按那里要求的选项；别的服务只有 tokenAccount 里的。角色的限制另由 Allowed 检查。
 func TokenAllowed(u User, procedure string) bool {
 	parts := strings.Split(strings.TrimPrefix(procedure, "/"), "/")
-	if len(parts) != 2 || parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" {
+	if len(parts) != 2 {
 		return false
+	}
+	if parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" {
+		need, ok := tokenAccount[procedure]
+		return ok && need.metBy(u)
 	}
 	if need, ok := tokenElevated[procedure]; ok {
 		return need.metBy(u)
