@@ -192,7 +192,7 @@ func Run(ctx context.Context, cfg Config) error {
 		case netSync <- struct{}{}:
 		default:
 		}
-	})
+	}, a.intranet.endpointEvents)
 	go func() {
 		projects.SyncAllNetworks(ctx)
 		for {
@@ -245,7 +245,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go dc.WatchNetworkConnects(ctx, func() {
 		a.intranet.forgetEndpoints() // 容器接入网络（分到了地址）
 		a.egress.trigger()
-	})
+	}, a.intranet.endpointEvents)
 	go a.violations.run(ctx)
 	for _, id := range a.failovers.ids() {
 		a.startFailover(ctx, id)

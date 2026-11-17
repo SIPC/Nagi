@@ -24,7 +24,7 @@ import (
 // ---- 目标节点：容器地址的缓存 ----
 
 // endpointTTL 是缓存的容器地址最多用多久。平时靠 Docker 事件清空（Nagi 管理的容器有变化、任何容器接入网络），
-// 这只是兜底：事件流断开重连期间漏掉的变化。
+// 这只是兜底。事件流断开（Docker 重启）期间不用缓存，每个连接都查 Docker（见 endpointEvents）。
 const endpointTTL = 10 * time.Second
 
 type cachedEndpoint struct {
@@ -37,6 +37,22 @@ type endpointCache struct {
 	mu  sync.Mutex
 	gen uint64 // 清空一次加一：清空之前开始的查询，结果不再记进缓存
 	m   map[string]cachedEndpoint
+	// down 是断开着的 Docker 事件流数（容器事件、网络事件各一个）。大于 0 时收不到变化，不用缓存。
+	down int
+}
+
+// endpointEvents 是 Docker 事件流断开（up 为假）、重新订阅（up 为真）时的回调：断开时清空缓存并停用，
+// 两个事件流都恢复以后再用。
+func (n *intranet) endpointEvents(up bool) {
+	n.eps.mu.Lock()
+	defer n.eps.mu.Unlock()
+	if up {
+		n.eps.down = max(0, n.eps.down-1)
+	} else {
+		n.eps.down++
+	}
+	n.eps.gen++
+	clear(n.eps.m)
 }
 
 // forgetEndpoints 清空缓存的容器地址。容器启动、停止、重建、接入网络时调用。
@@ -52,7 +68,7 @@ func (n *intranet) forgetEndpoints() {
 func (n *intranet) lookupEndpoint(ctx context.Context, projectID, name string) (e project.Endpoint, found, cached bool) {
 	key := projectID + "/" + name
 	n.eps.mu.Lock()
-	if c, ok := n.eps.m[key]; ok && c.gen == n.eps.gen && time.Since(c.at) < endpointTTL {
+	if c, ok := n.eps.m[key]; ok && n.eps.down == 0 && c.gen == n.eps.gen && time.Since(c.at) < endpointTTL {
 		n.eps.mu.Unlock()
 		return c.e, true, true
 	}
@@ -61,7 +77,7 @@ func (n *intranet) lookupEndpoint(ctx context.Context, projectID, name string) (
 	e, found = n.endpoint(ctx, projectID, name)
 	if found {
 		n.eps.mu.Lock()
-		if gen == n.eps.gen {
+		if gen == n.eps.gen && n.eps.down == 0 {
 			if n.eps.m == nil {
 				n.eps.m = map[string]cachedEndpoint{}
 			}

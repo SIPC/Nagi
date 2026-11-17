@@ -277,15 +277,20 @@ func splitTimestamp(line string) (time.Time, string) {
 }
 
 // WatchProjects 监听所有 Nagi 管理的容器的事件，有变化时调用 onChange。
-// 出错（例如 Docker 重启）后会自动重连，直到 ctx 取消。
-func (d *Client) WatchProjects(ctx context.Context, labelKey string, onChange func()) {
-	for ctx.Err() == nil {
+// 出错（例如 Docker 重启）后会自动重连，直到 ctx 取消。onStream（可以为空）在事件流断开时收到 false，
+// 重新订阅后收到 true；断开期间的变化收不到，所以重新订阅后再调用一次 onChange。
+func (d *Client) WatchProjects(ctx context.Context, labelKey string, onChange func(), onStream func(up bool)) {
+	for first := true; ctx.Err() == nil; first = false {
 		res := d.c.Events(ctx, client.EventsListOptions{
 			Filters: make(client.Filters).
 				Add("type", string(events.ContainerEventType)).
 				Add("label", labelKey),
 		})
 		msgs, errs := res.Messages, res.Err
+		if !first {
+			streamState(onStream, true)
+			onChange()
+		}
 	loop:
 		for {
 			select {
@@ -294,6 +299,7 @@ func (d *Client) WatchProjects(ctx context.Context, labelKey string, onChange fu
 			case <-msgs:
 				onChange()
 			case <-errs:
+				streamState(onStream, false)
 				break loop
 			}
 		}
@@ -307,14 +313,19 @@ func (d *Client) WatchProjects(ctx context.Context, labelKey string, onChange fu
 
 // WatchNetworkConnects 在任何容器接入网络时（包括启动、重启换了地址）调用 onConnect，直到 ctx 结束。
 // 不只是 Nagi 管理的容器：出站限制要知道网桥上所有容器的地址（见 agent/egress.go）。
-func (d *Client) WatchNetworkConnects(ctx context.Context, onConnect func()) {
-	for ctx.Err() == nil {
+// onStream 和重新订阅后的那次 onConnect 同 WatchProjects。
+func (d *Client) WatchNetworkConnects(ctx context.Context, onConnect func(), onStream func(up bool)) {
+	for first := true; ctx.Err() == nil; first = false {
 		res := d.c.Events(ctx, client.EventsListOptions{
 			Filters: make(client.Filters).
 				Add("type", string(events.NetworkEventType)).
 				Add("event", string(events.ActionConnect)),
 		})
 		msgs, errs := res.Messages, res.Err
+		if !first {
+			streamState(onStream, true)
+			onConnect()
+		}
 	loop:
 		for {
 			select {
@@ -323,6 +334,7 @@ func (d *Client) WatchNetworkConnects(ctx context.Context, onConnect func()) {
 			case <-msgs:
 				onConnect()
 			case <-errs:
+				streamState(onStream, false)
 				break loop
 			}
 		}
@@ -331,6 +343,12 @@ func (d *Client) WatchNetworkConnects(ctx context.Context, onConnect func()) {
 			return
 		case <-time.After(5 * time.Second):
 		}
+	}
+}
+
+func streamState(f func(bool), up bool) {
+	if f != nil {
+		f(up)
 	}
 }
 
