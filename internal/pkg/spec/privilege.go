@@ -1,7 +1,10 @@
 package spec
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"path"
 	"slices"
 	"sort"
@@ -39,6 +42,9 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 	text, err := ComposeText(cfg, container)
 	if err != nil {
 		return []string{"compose"}, false
+	}
+	if r := yamlShapeReason(text); r != "" {
+		return []string{r}, false
 	}
 	var doc map[string]any
 	if err := yaml.Unmarshal([]byte(text), &doc); err != nil {
@@ -301,6 +307,59 @@ func hasVar(v any) bool {
 			if hasVar(e) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// yamlShapeReason：下面按第一个 YAML 文档的普通 map 检查，所以 compose 实际会读到、而这里看不到的写法一律算有特权：
+//   - 多个文档（`---` 分隔）：compose 会把后面的文档合并进来，后面的文档里写什么这里都看不到；
+//   - 自定义标签（`!reset`、`!override` 这类不以 `!!` 开头的）：compose 按它们重置、覆盖前面的值，普通解析看不出来。
+//
+// 不是合法 YAML 的交给后面的解析报错。
+func yamlShapeReason(text string) string {
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(text)))
+	// 下面的检查只读第一个文档，所以除了第一个，后面的文档都得是空的（例如末尾多一个 ---）。
+	for i := 0; ; i++ {
+		var n yaml.Node
+		err := dec.Decode(&n)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "compose"
+		}
+		if emptyDoc(&n) {
+			continue
+		}
+		if i > 0 {
+			return "compose: multiple YAML documents"
+		}
+		if customTag(&n) {
+			return "compose: YAML tag"
+		}
+	}
+	return ""
+}
+
+func emptyDoc(n *yaml.Node) bool {
+	if n.Kind == 0 || n.Kind == yaml.DocumentNode && len(n.Content) == 0 {
+		return true
+	}
+	if n.Kind == yaml.DocumentNode && len(n.Content) == 1 {
+		c := n.Content[0]
+		return c.Kind == yaml.ScalarNode && c.Tag == "!!null" && len(c.Content) == 0
+	}
+	return false
+}
+
+func customTag(n *yaml.Node) bool {
+	if n.Tag != "" && !strings.HasPrefix(n.Tag, "!!") && n.Tag != "!" {
+		return true
+	}
+	for _, c := range n.Content {
+		if customTag(c) {
+			return true
 		}
 	}
 	return false
