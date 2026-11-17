@@ -261,8 +261,48 @@ func buildRuleset(st egressState) string {
 	}
 	chain("forward", "forward", false)
 	chain("input", "input", true)
+	natInput(&b, st, ids, pub4, pub6)
 	b.WriteString("}\n")
 	return b.String()
+}
+
+// natInput 写 nat 表 input hook 上的链：拦截模式的容器连本机公网地址上对外开放的端口（访问自己或别的项目的域名）时，
+// 源地址改成这个公网地址。否则 Caddy 看到的来源、转给后端的 X-Forwarded-For 是容器的网桥私有地址，按私有网段信任
+// 来源的后端（应用的「受信任网络」、管理员登录地址）会把它当成内网访问（见 docs/agent.md#出站限制）。
+// 本机投递不经过 POSTROUTING，所以在 input hook 上做 SNAT。
+func natInput(b *strings.Builder, st egressState, ids, pub4, pub6 []string) {
+	var rules []string
+	for _, proto := range []string{spec.ProtoTCP, spec.ProtoUDP} {
+		var ports []string
+		for _, p := range st.public {
+			if p.Proto == proto {
+				ports = append(ports, strconv.FormatUint(uint64(p.Port), 10))
+			}
+		}
+		if len(ports) == 0 {
+			continue
+		}
+		for _, id := range ids {
+			if spec.EgressMode(st.projects[id]) != spec.EgressBlock {
+				continue
+			}
+			k := projectKey(id)
+			for _, a := range pub4 {
+				rules = append(rules, fmt.Sprintf("\t\tip saddr @p%s_4 ip daddr %s meta l4proto %s th dport { %s } snat ip to %s\n", k, a, proto, strings.Join(ports, ", "), a))
+			}
+			for _, a := range pub6 {
+				rules = append(rules, fmt.Sprintf("\t\tip6 saddr @p%s_6 ip6 daddr %s meta l4proto %s th dport { %s } snat ip6 to %s\n", k, a, proto, strings.Join(ports, ", "), a))
+			}
+		}
+	}
+	if len(rules) == 0 {
+		return
+	}
+	b.WriteString("\tchain nat_input {\n\t\ttype nat hook input priority srcnat; policy accept;\n")
+	for _, r := range rules {
+		b.WriteString(r)
+	}
+	b.WriteString("\t}\n")
 }
 
 // egressStateOf 列出节点上 Nagi 管理的容器，和代理计划里各项目的出站限制合起来。
