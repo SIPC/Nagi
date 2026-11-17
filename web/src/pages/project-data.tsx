@@ -809,6 +809,8 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
             <Input id="backup-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={nodes.replicaDir(choice) || b.dirPlaceholder} className="font-mono" autoComplete="off" autoCapitalize="none" spellCheck={false} />
           </Field>
         )}
+        {/* 节点上已有这个容器的旧副本时，节点先把它移到指定的位置，可能要一会儿。 */}
+        {busy && canDir && dir.trim() && <Notice tone="info">{b.dirMoving}</Notice>}
         {error && <Alert>{error}</Alert>}
         <DialogActions>
           <Button variant="outline" readOnlyOk onClick={onClose}>

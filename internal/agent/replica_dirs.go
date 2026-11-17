@@ -757,6 +757,32 @@ func (r *replicas) setDefault(ctx context.Context, dir string, onLine func(strin
 	return nil
 }
 
+// moveExisting 在登记副本时指定了存放位置、本节点却已有这个容器的副本在别处时，把它移到 base 下面。
+// 没有副本或者已经在那里时什么都不做。调用时持有 moving。移动不随面板断开取消（面板等不及时节点照样做完），
+// 过程写进节点日志。
+func (a *agent) moveExisting(ctx context.Context, projectID, container, base string) error {
+	r := a.replicas
+	root, err := r.root(projectID, container)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(root, "meta.json")); err != nil || filepath.Dir(root) == base {
+		return nil
+	}
+	ctx, cancel := a.stopWithNode(ctx)
+	defer cancel()
+	def, _ := r.defaultDir()
+	log := func(line string) {
+		if a.log != nil {
+			a.log.Info("移动已有的副本", "project", projectID, "container", container, "msg", line)
+		}
+	}
+	if err := r.moveTo(ctx, projectID, container, base, base != def, log); err != nil {
+		return status.Errorf(status.Code(err), "此节点上已有该容器的副本，移到 %s 失败，仍在原处：%s", base, status.Convert(err).Message())
+	}
+	return nil
+}
+
 // ---- AgentService ----
 
 // SetReplicaDir 修改节点保存副本的默认目录，并把副本移过去。开始了就做完，面板断开也不中断。

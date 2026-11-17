@@ -457,10 +457,6 @@ func TestAcceptReplicaDir(t *testing.T) {
 	if root, _ := r.root(testPID, "web"); !strings.HasPrefix(root, dir) {
 		t.Fatalf("不带位置的再次登记不应该移动副本，实际 %s", root)
 	}
-	// 已有副本、指定了另一个位置：拒绝，要移动用 MoveReplica。
-	if err := accept("web", filepath.Join(tmp, "other")); status.Code(err) != codes.FailedPrecondition {
-		t.Fatalf("应该拒绝：%v", err)
-	}
 	// 不能放在另一个副本的目录里。
 	webRoot, _ := r.root(testPID, "web")
 	if err := accept("api", filepath.Join(webRoot, "files")); status.Code(err) != codes.InvalidArgument {
@@ -485,4 +481,80 @@ func TestAcceptReplicaDir(t *testing.T) {
 	if !slices.ContainsFunc(r.usageDirs(), func(d string) bool { return strings.HasPrefix(d, dir) }) {
 		t.Fatalf("统计占用时要算上 %s：%v", dir, r.usageDirs())
 	}
+}
+
+// 添加备份节点时指定了存放位置，节点上却已有这个容器的旧副本：先把它移过去（同样的移动和核对），再更新登记；
+// 移动失败时副本和登记都不变。移动等正在进行的同步结束。
+func TestAcceptReplicaMovesExisting(t *testing.T) {
+	for _, crossFS := range []bool{false, true} {
+		t.Run(map[bool]string{false: "同一文件系统", true: "跨文件系统"}[crossFS], func(t *testing.T) {
+			if crossFS {
+				defer forceCopy(t)()
+			}
+			r, tmp := testReplicas(t)
+			s := &agentService{node: &agent{replicas: r}}
+			old := addReplica(t, r, "web")
+			unlock := r.rlock(testPID, "web") // 正在同步
+			dir := filepath.Join(tmp, "big")
+			done := make(chan error, 1)
+			go func() {
+				_, err := s.AcceptReplica(context.Background(), &nagiv1.AcceptReplicaRequest{
+					Spec: &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"}, SourceKey: make([]byte, 32), SourceName: "new-source", ReplicaDir: dir,
+				})
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				t.Fatalf("同步进行中不应该开始移动：%v", err)
+			case <-time.After(300 * time.Millisecond):
+			}
+			unlock()
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			root, _ := r.root(testPID, "web")
+			if root != filepath.Join(dir, testPID+"-web") {
+				t.Fatalf("旧副本应该移到 %s，实际 %s", dir, root)
+			}
+			checkReplicaFiles(t, root, "web")
+			if _, err := os.Stat(old); !os.IsNotExist(err) {
+				t.Fatal("原位置应该删掉")
+			}
+			m, _, _, err := r.load(testPID, "web")
+			if err != nil || m.SourceName != "new-source" {
+				t.Fatalf("登记应该更新：%v %+v", err, m)
+			}
+			if l := r.idx.Locations[testPID+"-web"]; !l.Custom || l.Base != dir {
+				t.Fatalf("应该记成单独指定的位置：%+v", l)
+			}
+			entries, _ := os.ReadDir(dir)
+			if len(entries) != 1 {
+				t.Fatalf("不能留下临时目录：%v", entries)
+			}
+		})
+	}
+	t.Run("移动失败", func(t *testing.T) {
+		defer forceCopy(t)()
+		r, tmp := testReplicas(t)
+		s := &agentService{node: &agent{replicas: r}}
+		old := addReplica(t, r, "web")
+		os.Symlink("/etc/passwd", filepath.Join(old, "files", "link"))
+		dir := filepath.Join(tmp, "big")
+		_, err := s.AcceptReplica(context.Background(), &nagiv1.AcceptReplicaRequest{
+			Spec: &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"}, SourceKey: make([]byte, 32), SourceName: "new-source", ReplicaDir: dir,
+		})
+		if err == nil || !strings.Contains(err.Error(), "仍在原处") {
+			t.Fatalf("应该报告移动失败：%v", err)
+		}
+		if root, _ := r.root(testPID, "web"); root != old {
+			t.Fatalf("失败时副本留在原处，实际 %s", root)
+		}
+		checkReplicaFiles(t, old, "web")
+		if m, _, _, _ := r.load(testPID, "web"); m.SourceName == "new-source" {
+			t.Fatal("移动失败时不应该更新登记")
+		}
+		if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+			t.Fatalf("不能留下复制了一半的目录：%v", entries)
+		}
+	})
 }

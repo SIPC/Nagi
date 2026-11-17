@@ -2835,9 +2835,9 @@ type NodeInfo struct {
 	// 节点支持文件的改名、移动、复制、压缩、解压、目录大小和分块上传（旧版本的节点不报）。
 	FileOps bool `protobuf:"varint,22,opt,name=file_ops,json=fileOps,proto3" json:"file_ops,omitempty"`
 	// 节点支持选择副本的存放位置（SetReplicaDir、MoveReplica、AcceptReplicaRequest.replica_dir，见 docs/snapshot.md#副本的存放位置）。旧版本的节点不报。
-	ReplicaDirs bool `protobuf:"varint,23,opt,name=replica_dirs,json=replicaDirs,proto3" json:"replica_dirs,omitempty"`
+	ReplicaDirs bool `protobuf:"varint,25,opt,name=replica_dirs,json=replicaDirs,proto3" json:"replica_dirs,omitempty"`
 	// 节点保存副本的默认目录，为空表示 <节点目录>/replicas。
-	ReplicaDir    string `protobuf:"bytes,24,opt,name=replica_dir,json=replicaDir,proto3" json:"replica_dir,omitempty"`
+	ReplicaDir    string `protobuf:"bytes,26,opt,name=replica_dir,json=replicaDir,proto3" json:"replica_dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5929,8 +5929,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\x15 \x01(\x03R\tstartedAt\x12\x19\n" +
 	"\bfile_ops\x18\x16 \x01(\bR\afileOps\x12!\n" +
-	"\freplica_dirs\x18\x17 \x01(\bR\vreplicaDirs\x12\x1f\n" +
-	"\vreplica_dir\x18\x18 \x01(\tR\n" +
+	"\freplica_dirs\x18\x19 \x01(\bR\vreplicaDirs\x12\x1f\n" +
+	"\vreplica_dir\x18\x1a \x01(\tR\n" +
 	"replicaDir\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +

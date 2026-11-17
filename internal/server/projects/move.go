@@ -81,10 +81,18 @@ func (s *Service) checkPlacement(ctx context.Context, conn *nodes.Conn, p store.
 	return sp, nil
 }
 
+// acceptMoveTimeout 是登记副本时顺带移动已有副本最多等多久；面板不等了节点也会做完。
+const acceptMoveTimeout = 6 * time.Hour
+
 // acceptReplica 让目标节点登记接收容器的副本，只接受源节点（和 extra 里的节点）的同步。
 // dir 是新登记时副本的存放位置，为空用节点的默认目录（旧版本的节点只支持为空，调用方先检查）。
 func (s *Service) acceptReplica(ctx context.Context, target *nodes.Conn, sp *nagiv1.ContainerSpec, source store.Node, extra [][]byte, dir string) error {
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// 指定了存放位置时，节点上已有的旧副本要先移过去（见 docs/snapshot.md#副本的存放位置），可能要很久。
+	timeout := 30 * time.Second
+	if dir != "" {
+		timeout = acceptMoveTimeout
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	_, err := target.Agent.AcceptReplica(cctx, &nagiv1.AcceptReplicaRequest{
 		Spec: sp, SourceKey: source.MeshKey, SourceNodeId: source.ID, SourceName: source.Name, ExtraSourceKeys: extra, ReplicaDir: dir,

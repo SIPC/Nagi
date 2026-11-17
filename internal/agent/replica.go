@@ -911,9 +911,10 @@ func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.SyncBackupReq
 	return s.node.backups.statuses(c.Spec)[i], nil
 }
 
-// AcceptReplica 登记（或更新）副本。replica_dir 只在新登记时使用：为空放在默认目录；
-// 已有的副本留在原处，和指定的位置不一样时拒绝（要移动用 MoveReplica）。
-func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplicaRequest) (*nagiv1.AcceptReplicaResponse, error) {
+// AcceptReplica 登记（或更新）副本。replica_dir 为空时：新登记的放在默认目录，已有的留在原处。
+// 指定了 replica_dir 而本节点已有这个容器的副本（例如之前作为备份节点留下的）、又不在那里时，先把它移过去
+// （和 MoveReplica 同样的移动：拿着副本的锁，移完核对无误才切换），再更新登记；移动失败时不改登记。
+func (s *agentService) AcceptReplica(ctx context.Context, req *nagiv1.AcceptReplicaRequest) (*nagiv1.AcceptReplicaResponse, error) {
 	if _, err := mesh.ParseKey(req.GetSourceKey()); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -936,6 +937,9 @@ func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplic
 		if base, err = r.checkBase(req.GetReplicaDir()); err != nil {
 			return nil, err
 		}
+		if err := s.node.moveExisting(ctx, sp.GetProjectId(), sp.GetName(), base); err != nil {
+			return nil, err
+		}
 	}
 	defer r.lock(sp.GetProjectId(), sp.GetName())()
 	m, _, root, err := r.load(sp.GetProjectId(), sp.GetName())
@@ -953,7 +957,8 @@ func (s *agentService) AcceptReplica(_ context.Context, req *nagiv1.AcceptReplic
 	case err != nil:
 		return nil, err
 	case base != "" && filepath.Dir(root) != base:
-		return nil, status.Errorf(codes.FailedPrecondition, "此节点上已有该容器的副本（%s），请先不指定位置添加，再编辑存放位置", root)
+		// 上面刚移过去，不应该出现（另一次移动不会插进来：拿着 moving）。
+		return nil, status.Errorf(codes.FailedPrecondition, "此节点上已有该容器的副本（%s），未能移到指定的位置", root)
 	}
 	m.SourceKey, m.SourceNodeID, m.SourceName = req.GetSourceKey(), req.GetSourceNodeId(), req.GetSourceName()
 	m.ExtraSourceKeys = req.GetExtraSourceKeys()
