@@ -811,7 +811,7 @@ function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; st
   if (state?.phase === "restarting") {
     return (
       <Notice tone="success" title={t.nodes.upgrade.restartingTitle(state.target)}>
-        {t.nodes.upgrade.restartingText}
+        {t.nodes.upgrade.restartingText(state.source)}
       </Notice>
     );
   }

@@ -396,7 +396,7 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
   // 版本下面：进行中的进度、失败原因。
   let below: React.ReactNode = null;
   if (panel && active) {
-    below = <p className="text-pretty text-muted-foreground">{panel.phase === "restarting" ? t.update.restartingText : t.update.installingText}</p>;
+    below = <p className="text-pretty text-muted-foreground">{panel.phase === "restarting" ? t.update.restartingText(panel.source) : t.update.installingText}</p>;
   } else if (panel && failed && panel.error) {
     below = <p className="text-pretty text-muted-foreground">{panel.error}</p>;
   }

@@ -96,6 +96,7 @@ func TestLatest(t *testing.T) {
 		{"还没有发布过", "", http.StatusNotFound, ""},
 		{"重定向到别的地方", "https://github.com/login", http.StatusFound, ""},
 	}
+	noKnownProxies(t)
 	old := latestURL
 	t.Cleanup(func() { latestURL = old })
 	for _, c := range cases {
@@ -162,6 +163,7 @@ func TestBaseForProxy(t *testing.T) {
 
 // 直接连不上 GitHub 时经代理查最新版本。
 func TestLatestViaProxy(t *testing.T) {
+	noKnownProxies(t)
 	old := latestURL
 	t.Cleanup(func() { latestURL = old })
 	latestURL = "http://127.0.0.1:1/releases/latest" // 连不上

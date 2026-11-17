@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/SIPC/nagi/internal/pkg/release"
 )
 
 const panelScript = "../../../scripts/install.sh"
@@ -26,6 +28,15 @@ func TestSharedScript(t *testing.T) {
 	got := text[begin : end+len("# <<< 共用代码结束")]
 	if got != sharedScript {
 		t.Fatal("scripts/install.sh 里的共用代码和 install.go 的 sharedScript 不一致，请同步修改")
+	}
+}
+
+// 安装脚本里的加速代理要和 Go 里的一致：一键升级按 release.GitHubProxies 换代理。
+// scripts/install.sh 由 TestSharedScript 保证和 sharedScript 一样。
+func TestInstallConstants(t *testing.T) {
+	proxies := `GH_PROXIES="` + release.GitHubProxies + `"` + "\n"
+	if !strings.Contains(sharedScript, proxies) {
+		t.Errorf("sharedScript 里的 GH_PROXIES 和 release.GitHubProxies 不一致，应为 %s", proxies)
 	}
 }
 

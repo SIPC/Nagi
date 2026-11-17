@@ -693,6 +693,8 @@ message UpgradeRequest {
 message UpgradeResponse {
   // 新二进制的版本号，节点替换完成后重启。
   string version = 1;
+  // 下载用上的地址（主机名，例如 github.com、ghfast.top）。v0.32.0 起有。
+  string source = 2;
 }
 
 message CancelUpgradeRequest {}

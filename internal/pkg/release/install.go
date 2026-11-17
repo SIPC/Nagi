@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -15,6 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
@@ -24,19 +28,18 @@ import (
 // 一键升级也从这里下载；没有时从 GitHub Release 下载。
 const downloadURLFile = "download-url"
 
-// githubProxyFile 记着安装脚本在中国大陆网络下载时用上的 GitHub 加速代理（地址前缀，例如 https://ghfast.top/），
-// 和 download-url 在同一个目录。一键升级时 GitHub 上的文件也经它下载。
+// githubProxyFile 记着上一次下载 nagi 时用上的 GitHub 加速代理（地址前缀，例如 https://ghfast.top/），
+// 和 download-url 在同一个目录。安装脚本在中国大陆网络经代理下载时写入；一键升级时先经它下载，
+// 换了地址才下载成功时改成那一个，直接从 GitHub 下载成功时删掉（见 Sources、remember）。
 const githubProxyFile = "github-proxy"
 
-// BaseFor 返回 dir 对应的安装下载某个版本时用的地址：安装时指定了镜像就用镜像，用了加速代理就经代理下载 GitHub Release。
+// BaseFor 返回 dir 对应的安装下载某个版本时首先用的地址（见 Sources）：安装时指定了镜像就用镜像，
+// 记着加速代理就经代理下载 GitHub Release，否则直接从 GitHub 下载。
 func BaseFor(dir, version string) string {
-	if b, err := os.ReadFile(filepath.Join(dir, downloadURLFile)); err == nil && strings.TrimSpace(string(b)) != "" {
-		return strings.TrimRight(strings.TrimSpace(string(b)), "/")
-	}
-	return ProxyFor(dir) + DownloadBase(version)
+	return Sources(dir, version)[0].Base
 }
 
-// ProxyFor 返回 dir 对应的安装用上的 GitHub 加速代理，没有时为空。
+// ProxyFor 返回 dir 对应的安装记着的 GitHub 加速代理，没有时为空。
 func ProxyFor(dir string) string {
 	b, err := os.ReadFile(filepath.Join(dir, githubProxyFile))
 	if err != nil {
@@ -63,23 +66,30 @@ func IsUnusable(err error) bool {
 	return errors.As(err, &u)
 }
 
-// Install 从 base 下载 want 版本的 nagi，按 SHA256SUMS 核对，试运行确认能用、版本对得上，替换当前的可执行文件，
-// 返回它的路径。之后用 Reexec 原地重启。
-func Install(ctx context.Context, base, want string) (string, error) {
-	p, err := Prepare(ctx, base, want)
+// Install 下载 want 版本的 nagi（依次尝试 Sources(dir, want) 里的地址），按 SHA256SUMS 核对，试运行确认能用、
+// 版本对得上，替换当前的可执行文件，返回它的路径和用上的地址。之后用 Reexec 原地重启。
+func Install(ctx context.Context, dir, want string, log *slog.Logger) (string, Source, error) {
+	p, err := Prepare(ctx, dir, want, log)
 	if err != nil {
-		return "", err
+		return "", Source{}, err
 	}
-	return p.Commit()
+	exe, err := p.Commit()
+	return exe, p.Source, err
 }
 
 // Prepared 是下载好、核对过的新版本，还没有替换。
 type Prepared struct {
 	exe, tmp string
+	// Source 是下载用上的地址。
+	Source Source
 }
 
-// Prepare 做 Install 替换之前的部分：下载、核对、试运行。之后用 Commit 替换，或者 Discard 放弃。
-func Prepare(ctx context.Context, base, want string) (*Prepared, error) {
+// Prepare 做 Install 替换之前的部分：依次尝试 Sources(dir, want) 里的地址下载、核对、试运行，
+// 成功后记下用上的地址（见 remember）。之后用 Commit 替换，或者 Discard 放弃。
+func Prepare(ctx context.Context, dir, want string, log *slog.Logger) (*Prepared, error) {
+	if log == nil {
+		log = slog.Default()
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -88,27 +98,35 @@ func Prepare(ctx context.Context, base, want string) (*Prepared, error) {
 		return nil, err
 	}
 	p := &Prepared{exe: exe, tmp: exe + ".new"}
-	if err := Download(ctx, base, p.tmp); err != nil {
+	src, err := fetchFirst(ctx, Sources(dir, want), p.tmp, func(s Source) error { return p.check(ctx, s.Base, want) }, log)
+	if err != nil {
 		p.Discard()
 		return nil, err
 	}
+	p.Source = src
+	if err := remember(dir, src); err != nil {
+		log.Warn("无法记下下载用的地址", "source", src.Name(), "err", err)
+	}
+	return p, nil
+}
+
+// check 试运行下载的新版本，确认能在本机运行、版本是 want。
+func (p *Prepared) check(ctx context.Context, base, want string) error {
 	vctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	out, err := exec.CommandContext(vctx, p.tmp, "version").Output()
 	cancel()
 	if err != nil {
-		p.Discard()
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return ctx.Err()
 		}
-		return nil, unusable{i18n.Detail(i18n.New("新版本无法在此机器上运行"), err)}
+		return unusable{i18n.Detail(i18n.New("新版本无法在此机器上运行"), err)}
 	}
 	version := strings.TrimSpace(string(out))
 	if version != want {
 		// 镜像地址不分版本，里面放的可能不是要求的版本。
-		p.Discard()
-		return nil, unusable{i18n.Errorf("下载到的版本是 %s，不是 %s，请检查镜像地址 %s", version, want, base)}
+		return unusable{i18n.Errorf("下载到的版本是 %s，不是 %s，请检查镜像地址 %s", version, want, base)}
 	}
-	return p, nil
+	return nil
 }
 
 // Commit 用新版本替换当前的可执行文件，返回它的路径。替换前把当前版本留成 <可执行文件>.old：
@@ -172,22 +190,32 @@ func (p *Prepared) Discard() { os.Remove(p.tmp) }
 
 // Download 从 base 下载 nagi-linux-<架构> 到 dst，并按同一地址下的 SHA256SUMS 核对。
 func Download(ctx context.Context, base, dst string) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
+	_, err := download(ctx, base, dst, "")
+	return err
+}
+
+// download 从 base 下载 nagi-linux-<架构> 到 dst，并按同一地址下的 SHA256SUMS 核对；pinned 不为空时
+// SHA256SUMS 里的值还必须等于它（直接从 GitHub 拿到的值，见 fetchFirst）。返回 SHA256SUMS 里的值，下载文件失败时也返回。
+func download(ctx context.Context, base, dst, pinned string) (string, error) {
 	name := "nagi-linux-" + runtime.GOARCH
 
 	sums, err := fetch(ctx, base+"/SHA256SUMS", 64<<10, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	want := Checksum(string(sums), name)
 	if want == "" {
-		return i18n.Errorf("SHA256SUMS 中没有 %s，请检查镜像地址", name)
+		return "", i18n.Errorf("SHA256SUMS 中没有 %s，请检查镜像地址", name)
+	}
+	if pinned != "" && want != pinned {
+		return want, i18n.Errorf("%s 提供的 SHA256SUMS 和 GitHub 上的不一致，已跳过", hostOf(base))
 	}
 
 	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
-		return err
+		return want, err
 	}
 	h := sha256.New()
 	_, err = fetch(ctx, base+"/"+name, 0, io.MultiWriter(f, h))
@@ -195,28 +223,71 @@ func Download(ctx context.Context, base, dst string) error {
 		err = cerr
 	}
 	if err != nil {
-		return err
+		return want, err
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
-		return i18n.Errorf("下载的文件校验不一致（%s，应为 %s），请重试或检查镜像地址", got[:12], want[:min(12, len(want))])
+		return want, i18n.Errorf("下载的文件校验不一致（%s，应为 %s），请重试或检查镜像地址", got[:12], want[:min(12, len(want))])
 	}
-	return nil
+	return want, nil
 }
 
-// fetch 下载 url：w 不为空时写进 w，否则读进内存返回（最多 limit 字节）。
+func hostOf(raw string) string {
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return raw
+}
+
+const (
+	// connectTimeout 是连接（含 TLS 握手）的时间上限，连不上就换下一个地址。和安装脚本的 curl --connect-timeout 10 一样。
+	connectTimeout = 10 * time.Second
+	// headerTimeout 是发出请求后等响应头的时间上限。
+	headerTimeout = 30 * time.Second
+)
+
+// 和安装脚本的 curl --speed-limit 1024 --speed-time 30 一样：连续 lowSpeedTime 内平均每秒不到 lowSpeedLimit 字节就放弃。
+var (
+	lowSpeedLimit = 1024
+	lowSpeedTime  = 30 * time.Second
+)
+
+var errTooSlow = errors.New("download too slow")
+
+// transport 是下载用的连接：在 http.DefaultTransport 的基础上（照常用 HTTPS_PROXY 等环境变量）缩短连接和等响应头的时间。
+var transport http.RoundTripper = func() http.RoundTripper {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = (&net.Dialer{Timeout: connectTimeout, KeepAlive: 30 * time.Second}).DialContext
+	t.TLSHandshakeTimeout = connectTimeout
+	t.ResponseHeaderTimeout = headerTimeout
+	return t
+}()
+
+// fetch 下载 url：w 不为空时写进 w，否则读进内存返回（最多 limit 字节）。速度太慢时放弃（见 watchSpeed）。
 func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	name := path.Base(url)
+	wctx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+	var got, total atomic.Int64
+	total.Store(-1)
+	done := make(chan struct{})
+	defer close(done)
+	deadline, _ := ctx.Deadline()
+	go watchSpeed(&got, &total, deadline, done, func() { stop(errTooSlow) })
+
+	req, err := http.NewRequestWithContext(wctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	name := path.Base(url)
 	unreachable := func(err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if errors.Is(context.Cause(wctx), errTooSlow) {
+			return i18n.Errorf("下载 %s 的速度过慢，已停止", name)
+		}
 		return i18n.Detail(i18n.Errorf("无法下载 %s，请检查网络或镜像地址", name), err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := (&http.Client{Transport: transport}).Do(req)
 	if err != nil {
 		return nil, unreachable(err)
 	}
@@ -224,41 +295,97 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 	if resp.StatusCode != http.StatusOK {
 		return nil, i18n.Errorf("无法下载 %s（HTTP %d），请检查镜像地址", name, resp.StatusCode)
 	}
+	total.Store(resp.ContentLength)
+	body := &countingReader{r: resp.Body, n: &got}
 	if w != nil {
-		if _, err := io.Copy(w, resp.Body); err != nil {
+		if _, err := io.Copy(w, body); err != nil {
 			return nil, unreachable(err)
 		}
 		return nil, nil
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
+	b, err := io.ReadAll(io.LimitReader(body, limit))
 	if err != nil {
 		return nil, unreachable(err)
 	}
 	return b, nil
 }
 
+// watchSpeed 每 lowSpeedTime 看一次下载了多少（got），两种情况调用 abort：
+//   - 这段时间平均每秒不到 lowSpeedLimit 字节（卡住了）；
+//   - 知道文件大小（total）和时间上限（deadline）时，按开始以来的平均速度在上限之前下载不完：
+//     与其耗到超时，不如早点换下一个地址（例如中国大陆直连 GitHub，一直有数据但很慢）。
+//
+// done 关闭后退出。
+func watchSpeed(got, total *atomic.Int64, deadline time.Time, done <-chan struct{}, abort func()) {
+	t := time.NewTicker(lowSpeedTime)
+	defer t.Stop()
+	start := time.Now()
+	least := int64(float64(lowSpeedLimit) * lowSpeedTime.Seconds())
+	var last int64
+	for {
+		select {
+		case <-done:
+			return
+		case now := <-t.C:
+			n := got.Load()
+			if n-last < least {
+				abort()
+				return
+			}
+			last = n
+			if size := total.Load(); n > 0 && size > n && !deadline.IsZero() {
+				left := time.Duration(float64(now.Sub(start)) * float64(size-n) / float64(n))
+				if now.Add(left).After(deadline) {
+					abort()
+					return
+				}
+			}
+		}
+	}
+}
+
+type countingReader struct {
+	r io.Reader
+	n *atomic.Int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n.Add(int64(n))
+	return n, err
+}
+
 // latestURL 是最新发布版本的页面，GitHub 把它重定向到 .../releases/tag/<版本>（不含预发布版）。
 // 用重定向而不是 GitHub API：不占 API 的限额（每个 IP 每小时 60 次）。
 var latestURL = "https://github.com/" + Repo + "/releases/latest"
 
-// Latest 返回最新发布的版本号。直接连不上 GitHub 时，proxy 不为空就经这个加速代理再查一次（代理也转发重定向）。
+// Latest 返回最新发布的版本号。直接连不上 GitHub 时经加速代理再查（代理也转发重定向）：先用 proxy（记着的代理，可以为空），
+// 再依次用 GitHubProxies 里的其他代理。都查不到时返回直接查询的错误。
 func Latest(ctx context.Context, proxy string) (string, error) {
-	v, err := latest(ctx, latestURL)
-	if err != nil && proxy != "" && ctx.Err() == nil {
-		if pv, perr := latest(ctx, proxy+latestURL); perr == nil {
+	v, err := latest(ctx, latestURL, 15*time.Second)
+	if err == nil {
+		return v, nil
+	}
+	tried := map[string]bool{}
+	for _, p := range append([]string{proxy}, knownProxies...) {
+		if p == "" || tried[p] || ctx.Err() != nil {
+			continue
+		}
+		tried[p] = true
+		if pv, perr := latest(ctx, p+latestURL, 10*time.Second); perr == nil {
 			return pv, nil
 		}
 	}
-	return v, err
+	return "", err
 }
 
-func latest(ctx context.Context, url string) (string, error) {
+func latest(ctx context.Context, url string, timeout time.Duration) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
 	}
 	client := &http.Client{
-		Timeout:       15 * time.Second,
+		Timeout:       timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	resp, err := client.Do(req)

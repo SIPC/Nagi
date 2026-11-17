@@ -8225,8 +8225,10 @@ type UpdateState struct {
 	// queued（排队）、installing（下载和替换）、restarting（等它用新版本回来）、failed。
 	Phase string `protobuf:"bytes,3,opt,name=phase,proto3" json:"phase,omitempty"`
 	// 失败的原因。
-	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	Error     string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	StartedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	// 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+	Source        string `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8294,6 +8296,13 @@ func (x *UpdateState) GetStartedAt() *timestamppb.Timestamp {
 		return x.StartedAt
 	}
 	return nil
+}
+
+func (x *UpdateState) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
 }
 
 type GetUpdateStatusResponse struct {
@@ -13591,14 +13600,15 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x12UpdatePanelRequest\"/\n" +
 	"\x13UpdatePanelResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\"\x18\n" +
-	"\x16GetUpdateStatusRequest\"\xa0\x01\n" +
+	"\x16GetUpdateStatusRequest\"\xb8\x01\n" +
 	"\vUpdateState\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\tR\x04from\x12\x14\n" +
 	"\x05phase\x18\x03 \x01(\tR\x05phase\x12\x14\n" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x129\n" +
 	"\n" +
-	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\"\xf2\x01\n" +
+	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x16\n" +
+	"\x06source\x18\x06 \x01(\tR\x06source\"\xf2\x01\n" +
 	"\x17GetUpdateStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12*\n" +
 	"\x05panel\x18\x02 \x01(\v2\x14.nagi.v1.UpdateStateR\x05panel\x12A\n" +

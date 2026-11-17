@@ -12,7 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Upgrade 下载面板指定版本的 nagi（GitHub Release 或安装时指定的镜像），按 SHA256SUMS 核对，
+// Upgrade 下载面板指定版本的 nagi（安装时指定的镜像；否则依次试记着的加速代理、GitHub Release、其他加速代理，
+// 见 release.Sources），按 SHA256SUMS 核对，
 // 试运行确认能用、版本对得上，替换自己的可执行文件，返回后原地重启（同一个进程号，systemd 和容器里都适用）。
 // 项目容器由 Docker 运行，不受影响；内嵌的 Caddy 会中断一两秒。
 func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) (*nagiv1.UpgradeResponse, error) {
@@ -30,7 +31,7 @@ func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) 
 		return nil, err
 	}
 	defer cancel()
-	p, err := release.Prepare(ctx, release.BaseFor(a.id.dir, want), want)
+	p, err := release.Prepare(ctx, a.id.dir, want, a.log)
 	if err == nil && !u.commit() {
 		p.Discard()
 		err = context.Canceled
@@ -55,7 +56,7 @@ func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) 
 		// 没有记录时新版本不做自检：起不来就要到节点上处理。
 		a.log.Warn("无法记下升级，新版本起不来时不会自动换回", "err", err)
 	}
-	a.log.Info("已替换为新版本，重启", "from", a.cfg.Version, "to", want)
+	a.log.Info("已替换为新版本，重启", "from", a.cfg.Version, "to", want, "source", p.Source.Name())
 	go func() {
 		time.Sleep(time.Second) // 先把响应发回去
 		if err := release.Reexec(exe); err != nil {
@@ -63,7 +64,7 @@ func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) 
 			u.end()
 		}
 	}()
-	return &nagiv1.UpgradeResponse{Version: want}, nil
+	return &nagiv1.UpgradeResponse{Version: want, Source: p.Source.Name()}, nil
 }
 
 // CancelUpgrade 取消正在下载、校验的升级。已经开始替换的不能取消。

@@ -17,7 +17,7 @@ export default {
   confirm: (version: string) =>
     `Update the panel to ${version}? The panel downloads and verifies the new version, then restarts in place. Operations in progress, such as deployments, are interrupted. You can't go back to an older version from the panel afterwards.`,
   restartingTitle: (version: string) => `Replaced with ${version}. The panel is restarting`,
-  restartingText: "The page refreshes automatically once the panel is back.",
+  restartingText: (source: string) => `${source ? `Downloaded from ${source}. ` : ""}The page refreshes automatically once the panel is back.`,
   retry: "Retry",
   installingTitle: (version) => `Updating to ${version}`,
   installingText: "The panel is downloading and verifying the new version, then restarts in place and this page refreshes. You can leave this page; progress is kept on the panel.",

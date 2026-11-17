@@ -4525,7 +4525,9 @@ func (x *UpgradeRequest) GetVersion() string {
 type UpgradeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 新二进制的版本号，节点替换完成后重启。
-	Version       string `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Version string `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	// 下载用上的地址（主机名，例如 github.com、ghfast.top）。v0.32.0 起有。
+	Source        string `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4563,6 +4565,13 @@ func (*UpgradeResponse) Descriptor() ([]byte, []int) {
 func (x *UpgradeResponse) GetVersion() string {
 	if x != nil {
 		return x.Version
+	}
+	return ""
+}
+
+func (x *UpgradeResponse) GetSource() string {
+	if x != nil {
+		return x.Source
 	}
 	return ""
 }
@@ -8273,9 +8282,10 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x16SetPanelDomainResponse\"B\n" +
 	"\x0eUpgradeRequest\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"+\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"C\n" +
 	"\x0fUpgradeResponse\x12\x18\n" +
-	"\aversion\x18\x01 \x01(\tR\aversion\"\x16\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\"\x16\n" +
 	"\x14CancelUpgradeRequest\"\x17\n" +
 	"\x15CancelUpgradeResponse\"\x13\n" +
 	"\x11GetMirrorsRequest\";\n" +

@@ -42,6 +42,7 @@ type updateState struct {
 	Error   string `json:"error,omitempty"` // 中文；显示时按请求的语言翻译（见 updateStateProto）
 	Started int64  `json:"started"`
 	Changed int64  `json:"changed"`
+	Source  string `json:"source,omitempty"` // 下载用上的地址（主机名），替换后才有
 }
 
 func (s *updateState) active() bool { return s != nil && s.Phase != updateFailed }
@@ -174,7 +175,7 @@ func (a *API) reconcileUpdates(ctx context.Context) {
 }
 
 func updateStateProto(lang i18n.Lang, s *updateState) *nagiv1.UpdateState {
-	return &nagiv1.UpdateState{Target: s.Target, From: s.From, Phase: s.Phase, Error: i18n.Text(lang, s.Error), StartedAt: timestamppb.New(time.Unix(s.Started, 0))}
+	return &nagiv1.UpdateState{Target: s.Target, From: s.From, Phase: s.Phase, Error: i18n.Text(lang, s.Error), StartedAt: timestamppb.New(time.Unix(s.Started, 0)), Source: s.Source}
 }
 
 func (s *settingsService) GetUpdateStatus(ctx context.Context, _ *connect.Request[nagiv1.GetUpdateStatusRequest]) (*connect.Response[nagiv1.GetUpdateStatusResponse], error) {
@@ -206,7 +207,7 @@ func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 	}
 	installCtx, cancel := context.WithTimeout(ctx, updateInstallTimeout)
 	defer cancel()
-	exe, err := release.Install(installCtx, release.BaseFor(a.Panel.DataDir, latest), latest)
+	exe, src, err := release.Install(installCtx, a.Panel.DataDir, latest, a.Log)
 	if errors.Is(err, context.DeadlineExceeded) {
 		err = i18n.New("10 分钟内没有完成下载和校验，已停止更新")
 	}
@@ -216,10 +217,10 @@ func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 	}
 	a.withUpdates(ctx, func(r *updateRecords) {
 		if r.Panel != nil {
-			r.Panel.Phase, r.Panel.Changed = updateRestarting, time.Now().Unix()
+			r.Panel.Phase, r.Panel.Changed, r.Panel.Source = updateRestarting, time.Now().Unix(), src.Name()
 		}
 	})
-	a.Log.Info("面板已替换为新版本，重启", "from", a.Panel.Version, "to", latest)
+	a.Log.Info("面板已替换为新版本，重启", "from", a.Panel.Version, "to", latest, "source", src.Name())
 	time.Sleep(time.Second) // 让界面看到状态
 	if err := release.Reexec(exe); err != nil {
 		a.Log.Error("重启失败，请手动重启面板", "err", err)
@@ -263,6 +264,7 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 	if mine == nil {
 		return errUpgradeCanceled
 	}
+	var source string
 	err := func() error {
 		if err := a.upgradableNode(id); err != nil {
 			return err
@@ -271,7 +273,8 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		if err != nil {
 			return err
 		}
-		_, err = conn.Agent.Upgrade(installCtx, &nagiv1.UpgradeRequest{Version: target})
+		resp, err := conn.Agent.Upgrade(installCtx, &nagiv1.UpgradeRequest{Version: target})
+		source = resp.GetSource()
 		switch {
 		case err == nil:
 			return nil
@@ -293,7 +296,7 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		}
 		switch {
 		case err == nil:
-			mine.Phase, mine.Changed = updateRestarting, now.Unix()
+			mine.Phase, mine.Changed, mine.Source = updateRestarting, now.Unix(), source
 		case errors.Is(err, errUpgradeCanceled):
 			delete(r.Nodes, id)
 		default:
@@ -301,7 +304,7 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		}
 	})
 	if err == nil {
-		a.Log.Info("节点正在升级", "node", id, "to", target)
+		a.Log.Info("节点正在升级", "node", id, "to", target, "source", source)
 	}
 	return err
 }

@@ -146,6 +146,9 @@ var en = map[string]string{
 	"无法下载 %s（HTTP %d），请检查镜像地址":        "Can't download %s (HTTP %d). Check the mirror address",
 	"无法连接 GitHub，请检查面板的网络后重试":         "Can't reach GitHub. Check the panel's network and try again",
 	"GitHub 没有返回最新版本（HTTP %d），请稍后重试":  "GitHub didn't return the latest version (HTTP %d). Try again later",
+	"已尝试 %d 个下载地址，均未成功（%s：%w）":        "All %d download sources failed (%s: %v)",
+	"%s 提供的 SHA256SUMS 和 GitHub 上的不一致，已跳过": "The SHA256SUMS from %s doesn't match the one on GitHub, so it was skipped",
+	"下载 %s 的速度过慢，已停止":                  "Downloading %s was too slow and was stopped",
 
 	// ---- 面板设置 ----
 	"对外地址须为 IP 地址或域名，不含端口":        "The public address must be an IP address or domain name without a port",

@@ -15,7 +15,7 @@ export default {
   updatePanel: "更新面板",
   confirm: (version: string) => `将面板更新到 ${version}？面板下载并校验新版本后原地重启，进行中的部署等操作会中断。更新后不能在面板上退回旧版本。`,
   restartingTitle: (version: string) => `已替换为 ${version}，面板正在重启`,
-  restartingText: "重启完成后页面将自动刷新。",
+  restartingText: (source: string) => `${source ? `下载自 ${source}。` : ""}重启完成后页面将自动刷新。`,
   retry: "重试",
   installingTitle: (version: string) => `正在更新到 ${version}`,
   installingText: "面板正在下载并校验新版本，完成后原地重启，页面将自动刷新。可离开此页，进度保存在面板上。",

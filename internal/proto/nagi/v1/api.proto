@@ -1193,6 +1193,8 @@ message UpdateState {
   // 失败的原因。
   string error = 4;
   google.protobuf.Timestamp started_at = 5;
+  // 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+  string source = 6;
 }
 
 message GetUpdateStatusResponse {
