@@ -82,6 +82,9 @@ type Manager struct {
 	// ReplicaBases 返回副本的存放位置（默认目录、<节点目录>/replicas、各个副本所在的位置、正在移入的位置）。
 	// 容器目录和现有目录不能等于、包含它们，也不能在它们下面：里面还没有副本时，之后收到的副本也会放进去。
 	ReplicaBases func() []string
+	// ReplicaIndexBroken 返回 true 时节点的副本位置记录读不出来，不知道副本都放在哪里：新的容器目录只能在项目根目录下面
+	// （存放位置不能在项目根目录里，也不能包含它，见 docs/snapshot.md#副本的存放位置）。
+	ReplicaIndexBroken func() bool
 
 	restarts managedRestarts
 	images   imageUpdates
@@ -422,6 +425,16 @@ func (m *Manager) CheckDir(ctx context.Context, dir string) (string, error) {
 	}
 	if b := m.replicaBaseOverlap(dir); b != "" {
 		return "", invalid("目录与此节点上副本的存放位置 %s 重叠，请更换目录", b)
+	}
+	// 副本位置记录读不出来时，ReplicaBases 可能不全，保守一些：只接受项目根目录下面的目录。
+	if m.ReplicaIndexBroken != nil && m.ReplicaIndexBroken() {
+		root := ""
+		if m.ProjectsRoot != nil {
+			root = m.ProjectsRoot()
+		}
+		if root == "" || !within(dir, root) {
+			return "", invalid("此节点的副本位置记录无法读取，修复之前容器目录只能在项目根目录 %s 下面", root)
+		}
 	}
 	return dir, nil
 }

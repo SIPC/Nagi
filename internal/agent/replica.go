@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
@@ -58,9 +60,11 @@ type replicas struct {
 	// mu 保护 idx、locks、syncing。
 	mu  sync.Mutex
 	idx replicaIndex
-	// broken：启动时 file 读不出来（损坏），见 markBroken；brokenCause 是原因，写进日志和告警。
+	// broken：启动时 file 读不出来（损坏或读取出错），见 markCorrupt、markUnreadable；brokenCause 是原因，写进日志和告警。
+	// salvaged 是从损坏的 file 里认出来的路径，算进存放位置（见 bases）。
 	broken      error
 	brokenCause string
+	salvaged    []string
 	// moving：同时只有一次移动（修改默认目录、移动一个副本）。
 	moving sync.Mutex
 	// layout：save 新建副本时拿读锁，修改默认目录、记下旧目录里有哪些副本时拿写锁，两者不会交错。
@@ -205,18 +209,33 @@ func (r *replicas) load(projectID, container string) (*replicaMeta, *nagiv1.Cont
 }
 
 // save 写入登记信息（副本还没有时新建）。调用时持有这个副本的锁。
+// 副本目录里的写入经过 os.Root：副本目录或者里面的东西被换成符号链接时，不会写到别处。
 func (r *replicas) save(m *replicaMeta, s *nagiv1.ContainerSpec) error {
 	r.layout.RLock()
 	defer r.layout.RUnlock()
-	root, err := r.root(m.ProjectID, m.Container)
+	dir, err := r.root(m.ProjectID, m.Container)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(root, "files", "repo"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
+		return err
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	if err := checkPlainDirs(dir); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	if err := root.MkdirAll(filepath.Join("files", "repo"), 0o700); err != nil {
 		return err
 	}
 	b, _ := json.MarshalIndent(m, "", "  ")
-	if err := writeAtomic(filepath.Join(root, "meta.json"), b); err != nil {
+	if err := writeAtomicIn(root, "meta.json", b); err != nil {
 		return err
 	}
 	if s == nil {
@@ -226,13 +245,25 @@ func (r *replicas) save(m *replicaMeta, s *nagiv1.ContainerSpec) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(root, "spec.pb"), raw)
+	return writeAtomicIn(root, "spec.pb", raw)
 }
 
 // writeAtomic 写到临时文件、落盘后改名，再让所在目录落盘：断电时要么是旧内容，要么是新内容，不会是截断的文件。
 func writeAtomic(path string, data []byte) error {
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return writeAtomicIn(root, filepath.Base(path), data)
+}
+
+// writeAtomicIn 和 writeAtomic 一样，name 是 root 里的路径。
+// 改名成功就算写入成功：之后目录落盘失败只记日志（见 syncRenamed），调用方不能当成失败去回滚内存，
+// 否则内存和磁盘上的内容不一致（审查 N3）。
+func writeAtomicIn(root *os.Root, name string, data []byte) error {
+	tmp := name + ".tmp"
+	f, err := root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -244,18 +275,19 @@ func writeAtomic(path string, data []byte) error {
 		err = cerr
 	}
 	if err != nil {
-		os.Remove(tmp)
+		root.Remove(tmp)
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+	if err := root.Rename(tmp, name); err != nil {
+		root.Remove(tmp)
 		return err
 	}
-	return syncDir(filepath.Dir(path))
+	syncRenamed(filepath.Join(root.Name(), filepath.Dir(name)))
+	return nil
 }
 
-// syncDir 让目录项（改名的结果）落盘。Windows 上不能这样打开目录，跳过。
-func syncDir(dir string) error {
+// syncDir 让目录项（改名的结果）落盘。Windows 上不能这样打开目录，跳过。测试里替换。
+var syncDir = func(dir string) error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
@@ -265,6 +297,16 @@ func syncDir(dir string) error {
 	}
 	defer d.Close()
 	return d.Sync()
+}
+
+// syncRenamed 在改名以后让目录落盘。失败时内容已经换成新的了，只记日志；文件系统不支持对目录 fsync
+// （EINVAL、ENOTSUP）时不记，免得每次写入都报一条。
+func syncRenamed(dir string) {
+	err := syncDir(dir)
+	if err == nil || errors.Is(err, syscall.EINVAL) || errors.Is(err, errors.ErrUnsupported) {
+		return
+	}
+	slog.Warn("写入后目录落盘失败，内容已经写入", "dir", dir, "err", err)
 }
 
 // replicaStateDir 是副本快照仓库的连接配置和缓存，和容器自己的分开。
@@ -570,16 +612,24 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 // openReplicaFiles 打开副本的 files 目录作为 os.Root，之后的写入都在它里面解析路径：里面的符号链接指向外面时拒绝。
 // 副本目录和 files 本身是符号链接时也拒绝（存放位置被容器碰到时，可能被换成链接）。
 func openReplicaFiles(files string) (*os.Root, error) {
-	for _, p := range []string{filepath.Dir(files), files} {
-		info, err := os.Lstat(p)
-		if err != nil {
-			return nil, err
-		}
-		if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-			return nil, status.Errorf(codes.FailedPrecondition, "副本目录 %s 不是普通目录", p)
-		}
+	if err := checkPlainDirs(filepath.Dir(files), files); err != nil {
+		return nil, err
 	}
 	return os.OpenRoot(files)
+}
+
+// checkPlainDirs 确认这些路径都是目录，不是符号链接。
+func checkPlainDirs(paths ...string) error {
+	for _, p := range paths {
+		info, err := os.Lstat(p)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
+			return status.Errorf(codes.FailedPrecondition, "副本目录 %s 不是普通目录", p)
+		}
+	}
+	return nil
 }
 
 func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaCommitRequest) (*nagiv1.ReplicaCommitResponse, error) {
@@ -599,27 +649,21 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 	for _, p := range req.GetPaths() {
 		keep[p] = true
 	}
-	// 源节点上已经删掉的文件（例如快照仓库维护回收的数据包），这里也删掉。
-	var existing int
-	var remove []string
-	_ = filepath.WalkDir(files, func(full string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		existing++
-		rel, _ := filepath.Rel(files, full)
-		if !keep[filepath.ToSlash(rel)] {
-			remove = append(remove, full)
-		}
-		return nil
-	})
+	// 源节点上已经删掉的文件（例如快照仓库维护回收的数据包），这里也删掉。经过 os.Root：
+	// 副本里被换成指向外面的符号链接时，只删链接本身，不会删到别处。
+	root, err := openReplicaFiles(files)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	existing, remove := replicaExtras(root, keep)
 	// 要删掉大部分文件（例如提交一个空列表）时只接受登记的源节点：顶替的另一个参与者平时不运行容器，
 	// 被攻破以后不能借此清空异地备份（见 docs/snapshot.md#备份节点的实现）。
 	if caller, ok := mesh.Caller(ctx, s.M); ok && !slices.Equal(m.SourceKey, caller[:]) && massDelete(existing, len(remove)) {
 		return nil, status.Errorf(codes.FailedPrecondition, "这次同步要删掉副本里 %d 个文件中的 %d 个，只接受容器所在节点的这种同步", existing, len(remove))
 	}
-	for _, full := range remove {
-		os.Remove(full)
+	for _, rel := range remove {
+		root.Remove(rel)
 	}
 	if caller, ok := mesh.Caller(ctx, s.M); ok {
 		s.a.replicas.release(req.GetProjectId(), req.GetContainer(), caller[:])
@@ -634,6 +678,22 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 		s.a.changed()
 	}
 	return &nagiv1.ReplicaCommitResponse{}, nil
+}
+
+// replicaExtras 返回副本 files 目录（root）里文件的个数和不在 keep 里的文件（root 里的路径）。
+// 不进入符号链接：指向外面的链接本身算一个文件，删除时只删链接。
+func replicaExtras(root *os.Root, keep map[string]bool) (existing int, remove []string) {
+	_ = fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		existing++
+		if !keep[rel] {
+			remove = append(remove, filepath.FromSlash(rel))
+		}
+		return nil
+	})
+	return existing, remove
 }
 
 // ---- 源节点：同步 ----

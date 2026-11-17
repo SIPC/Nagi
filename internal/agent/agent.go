@@ -183,6 +183,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.replicas.stateDir = a.replicaStateDir
 	projects.ReplicaRoots = a.replicas.roots
 	projects.ReplicaBases = a.replicas.bases
+	projects.ReplicaIndexBroken = func() bool { return a.replicas.usable() != nil }
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.statuses
 	a.failovers = newFailovers(cfg.DataDir)

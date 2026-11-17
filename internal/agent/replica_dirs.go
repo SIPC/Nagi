@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -84,10 +86,10 @@ func newReplicas(dataDir string) *replicas {
 	case err == nil:
 		if err := json.Unmarshal(raw, &r.idx); err != nil {
 			r.idx = replicaIndex{}
-			r.markBroken(err)
+			r.markCorrupt(raw, err)
 		}
 	case !errors.Is(err, fs.ErrNotExist):
-		r.markBroken(err)
+		r.markUnreadable(err)
 	}
 	if r.broken == nil {
 		r.recoverMoves()
@@ -101,17 +103,23 @@ func newReplicas(dataDir string) *replicas {
 //   - 记录已经指向目标位置：移动完成了，只是原位置还没删（复制的情况），删掉原位置；
 //   - 原位置的副本还在、记录指向原位置：移动没有完成，删掉目标位置复制好的副本（移动开始前确认过那里没有东西）。
 //
-// 副本完整以 meta.json 在为准：改名是原子的，复制是核对完才改名成正式的名字。
+// 副本完整以副本目录是普通目录（不是符号链接）、里面有 meta.json 为准：改名是原子的，复制是核对完才改名成正式的名字。
+// 原位置和目标位置都要是已知的存放位置（见 knownBasesLocked；markMove 把两者都记进了 Moving），对不上的记录不处理。
 func (r *replicas) recoverMoves() {
 	if len(r.idx.Moves) == 0 {
 		return
 	}
 	has := func(root string) bool {
-		info, err := os.Lstat(filepath.Join(root, "meta.json"))
+		info, err := os.Lstat(root)
+		if err != nil || !info.IsDir() {
+			return false
+		}
+		info, err = os.Lstat(filepath.Join(root, "meta.json"))
 		return err == nil && info.Mode().IsRegular()
 	}
+	known := r.knownBasesLocked()
 	for _, m := range r.idx.Moves {
-		if _, _, ok := splitReplicaID(m.ID); !ok || m.From == "" || m.To == "" {
+		if _, _, ok := splitReplicaID(m.ID); !ok || m.From == m.To || !slices.Contains(known, m.From) || !slices.Contains(known, m.To) {
 			continue
 		}
 		src, dst := filepath.Join(m.From, m.ID), filepath.Join(m.To, m.ID)
@@ -122,14 +130,7 @@ func (r *replicas) recoverMoves() {
 				os.RemoveAll(src)
 			}
 		case cur == m.From && !has(src) && has(dst):
-			if !m.Custom && m.To == r.defaultLocked() {
-				delete(r.idx.Locations, m.ID)
-			} else {
-				if r.idx.Locations == nil {
-					r.idx.Locations = map[string]replicaLocation{}
-				}
-				r.idx.Locations[m.ID] = replicaLocation{Base: m.To, Custom: m.Custom}
-			}
+			r.placeLocked(m.ID, m.To, m.Custom)
 		case cur == m.From && has(src) && has(dst):
 			os.RemoveAll(dst)
 		}
@@ -138,23 +139,104 @@ func (r *replicas) recoverMoves() {
 	_ = r.persistLocked()
 }
 
-// markBroken 在 replica-dirs.json 读不出来时调用：原文件改名成 .corrupt-<时间> 留着（之后的写入不会覆盖它），
-// 记下错误。在修好之前拒绝修改存放位置、登记新的副本：不知道副本原来在哪里，当成空的会在默认目录从头同步一份，
-// 原来的副本成了孤儿（见 docs/snapshot.md#副本的存放位置）。
-func (r *replicas) markBroken(cause error) {
-	kept := r.file
-	if _, err := os.Stat(r.file); err == nil {
-		name := r.file + ".corrupt-" + time.Now().Format("20060102-150405")
-		if err := os.Rename(r.file, name); err == nil {
-			kept = name
+// knownBasesLocked 是记录里的所有存放位置：<节点目录>/replicas、默认目录、各个副本所在的位置、Moving。调用时持有 mu。
+func (r *replicas) knownBasesLocked() []string {
+	out := []string{r.dir}
+	add := func(b string) {
+		if b != "" && !slices.Contains(out, b) {
+			out = append(out, b)
 		}
 	}
-	r.brokenCause = cause.Error()
-	r.broken = status.Errorf(codes.FailedPrecondition,
-		"副本位置记录 replica-dirs.json 无法读取，原文件保存为 %s。修复后改回原名并重启节点，在此之前不能修改存放位置或登记新的副本", kept)
+	add(r.idx.Dir)
+	for _, l := range r.idx.Locations {
+		add(l.Base)
+	}
+	for _, m := range r.idx.Moving {
+		add(m)
+	}
+	return out
 }
 
-// usable 返回副本位置记录不可用时的错误（见 markBroken）。
+// placeLocked 在内存里记下副本 id 在 base 下面，不写盘。不是单独指定、又正好在默认目录里的不用记。调用时持有 mu。
+func (r *replicas) placeLocked(id, base string, custom bool) {
+	if !custom && base == r.defaultLocked() {
+		delete(r.idx.Locations, id)
+		return
+	}
+	if r.idx.Locations == nil {
+		r.idx.Locations = map[string]replicaLocation{}
+	}
+	r.idx.Locations[id] = replicaLocation{Base: base, Custom: custom}
+}
+
+// markCorrupt 在 replica-dirs.json 解析不了（断电截断、磁盘故障）时调用。原文件留在原处，另存一份
+// .corrupt-<时间>（内容相同的已经有了就不再存）；之后的写入都拒绝（见 persistLocked），所以每次重启都会再读到
+// 这个坏文件、保持不可用，直到管理员修好它（审查 N1）。在此之前拒绝修改存放位置、登记新的副本：不知道副本原来在哪里，
+// 当成空的会在默认目录从头同步一份，原来的副本成了孤儿（见 docs/snapshot.md#副本的存放位置）。
+//
+// 从坏文件里尽量找出还认得出的路径（见 salvagePaths），算进存放位置（bases），容器目录照样不能和它们重叠。
+// 找不全也没关系：不可用期间新的容器目录只能放在项目根目录下面（见 project.Manager.ReplicaIndexBroken）。
+func (r *replicas) markCorrupt(raw []byte, cause error) {
+	r.salvaged = salvagePaths(raw)
+	r.brokenCause = cause.Error()
+	if kept := keepCorruptCopy(r.file, raw); kept != "" {
+		r.broken = status.Errorf(codes.FailedPrecondition,
+			"副本位置记录 replica-dirs.json 无法解析，已另存一份为 %s，原文件留在原处。修复原文件后重启节点，在此之前不能修改存放位置或登记新的副本", kept)
+		return
+	}
+	r.broken = status.Error(codes.FailedPrecondition,
+		"副本位置记录 replica-dirs.json 无法解析，原文件留在原处。修复原文件后重启节点，在此之前不能修改存放位置或登记新的副本")
+}
+
+// markUnreadable 在读 replica-dirs.json 出错（EIO、EACCES 等，不是不存在）时调用：不另存、不改名，也不当成空的，
+// 这次运行期间和记录损坏一样拒绝修改。排除故障后重启节点就会重新读取。
+func (r *replicas) markUnreadable(cause error) {
+	r.brokenCause = cause.Error()
+	r.broken = status.Error(codes.FailedPrecondition,
+		"副本位置记录 replica-dirs.json 读取出错。排除故障后重启节点，在此之前不能修改存放位置或登记新的副本")
+}
+
+// keepCorruptCopy 把坏掉的记录另存为 <file>.corrupt-<时间>，返回另存的文件名；已经有内容相同的就返回它，
+// 不在每次重启时多存一份。另存失败时返回空。
+func keepCorruptCopy(file string, raw []byte) string {
+	matches, _ := filepath.Glob(file + ".corrupt-*")
+	sort.Strings(matches)
+	for _, p := range matches {
+		if b, err := os.ReadFile(p); err == nil && bytes.Equal(b, raw) {
+			return p
+		}
+	}
+	name := file + ".corrupt-" + time.Now().Format("20060102-150405")
+	for i := 1; slices.Contains(matches, name); i++ {
+		name = fmt.Sprintf("%s.corrupt-%s-%d", file, time.Now().Format("20060102-150405"), i)
+	}
+	if err := writeAtomic(name, raw); err != nil {
+		return ""
+	}
+	return name
+}
+
+// jsonString 匹配 JSON 里的字符串（含引号）。
+var jsonString = regexp.MustCompile(`"(?:[^"\\\x00-\x1f]|\\.)*"`)
+
+// salvagePaths 从解析不了的记录里找出完整的、是绝对路径的字符串（存放位置都是绝对路径，键是副本 ID，不是路径）。
+// 文件被截断时，断点以前的路径都还在。只用来多拒绝一些目录，认错了也不会放过什么。
+func salvagePaths(raw []byte) []string {
+	var out []string
+	for _, q := range jsonString.FindAll(raw, -1) {
+		var s string
+		if json.Unmarshal(q, &s) != nil || len(s) > 4096 || strings.ContainsRune(s, 0) || !filepath.IsAbs(s) {
+			continue
+		}
+		s = filepath.Clean(s)
+		if filepath.Dir(s) != s && !slices.Contains(out, s) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// usable 返回副本位置记录不可用时的错误（见 markCorrupt、markUnreadable）。
 func (r *replicas) usable() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -197,14 +279,7 @@ func (r *replicas) setLocation(id, base string, custom bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	prev, had := r.idx.Locations[id]
-	if !custom && base == r.defaultLocked() {
-		delete(r.idx.Locations, id)
-	} else {
-		if r.idx.Locations == nil {
-			r.idx.Locations = map[string]replicaLocation{}
-		}
-		r.idx.Locations[id] = replicaLocation{Base: base, Custom: custom}
-	}
+	r.placeLocked(id, base, custom)
 	if err := r.persistLocked(); err != nil {
 		if had {
 			r.idx.Locations[id] = prev
@@ -304,21 +379,15 @@ func (r *replicas) roots() []string {
 
 // bases 返回所有存放位置：<节点目录>/replicas、默认目录、各个副本所在的位置、正在往里移动副本的位置。
 // 容器目录、现有目录不能和它们重叠（见 project.Manager.ReplicaBases）：即使里面还没有副本，之后收到的副本也会放进去。
+// 记录损坏时加上从坏文件里认出来的路径（见 markCorrupt）。
 func (r *replicas) bases() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := []string{r.dir}
-	add := func(b string) {
-		if b != "" && !slices.Contains(out, b) {
+	out := r.knownBasesLocked()
+	for _, b := range r.salvaged {
+		if !slices.Contains(out, b) {
 			out = append(out, b)
 		}
-	}
-	add(r.idx.Dir)
-	for _, l := range r.idx.Locations {
-		add(l.Base)
-	}
-	for _, m := range r.idx.Moving {
-		add(m)
 	}
 	return out
 }
@@ -386,22 +455,32 @@ func (r *replicas) markMoving(base string, on bool) error {
 	return r.markMove(replicaMove{To: base}, on)
 }
 
-// markMove 记下（on 为 false 时去掉）一次移动：目标位置记进 Moving（清理临时目录用），
-// m.ID 不为空时整条记进 Moves（启动时收尾用，见 recoverMoves）。改名、复制之前写盘。
+// markMove 记下（on 为 false 时去掉）一次移动：目标位置和原位置记进 Moving（清理临时目录用；
+// 启动时 recoverMoves 只处理两头都是已知存放位置的记录，原位置是单独指定的、切换以后就不在 Locations 里了），
+// m.ID 不为空时整条记进 Moves（启动时收尾用，见 recoverMoves）。改名、复制之前写盘；写不进去时内存也不变。
 func (r *replicas) markMove(m replicaMove, on bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.idx.Moving = slices.DeleteFunc(r.idx.Moving, func(b string) bool { return b == m.To })
+	prevMoving, prevMoves := slices.Clone(r.idx.Moving), slices.Clone(r.idx.Moves)
+	ends := []string{m.To}
+	if m.From != "" && m.From != m.To {
+		ends = append(ends, m.From)
+	}
+	r.idx.Moving = slices.DeleteFunc(r.idx.Moving, func(b string) bool { return slices.Contains(ends, b) })
 	if m.ID != "" {
 		r.idx.Moves = slices.DeleteFunc(r.idx.Moves, func(x replicaMove) bool { return x.ID == m.ID })
 	}
 	if on {
-		r.idx.Moving = append(r.idx.Moving, m.To)
+		r.idx.Moving = append(r.idx.Moving, ends...)
 		if m.ID != "" {
 			r.idx.Moves = append(r.idx.Moves, m)
 		}
 	}
-	return r.persistLocked()
+	if err := r.persistLocked(); err != nil {
+		r.idx.Moving, r.idx.Moves = prevMoving, prevMoves
+		return err
+	}
+	return nil
 }
 
 // ---- 校验 ----
@@ -799,7 +878,12 @@ func (r *replicas) moveTo(ctx context.Context, projectID, container, base string
 	if err := r.markMove(mv, true); err != nil {
 		return err
 	}
-	defer func() { _ = r.markMove(mv, false) }()
+	keepMove := false
+	defer func() {
+		if !keepMove {
+			_ = r.markMove(mv, false)
+		}
+	}()
 	onLine("移动 " + src + " → " + dst)
 	renamed, err := relocate(ctx, src, dst, onLine)
 	if err != nil {
@@ -808,9 +892,18 @@ func (r *replicas) moveTo(ctx context.Context, projectID, container, base string
 	if err := r.setLocation(id, base, custom); err != nil {
 		if renamed {
 			if rerr := renameDir(dst, src); rerr != nil {
-				// 移回去也失败了：数据在 dst，记录还指着 src。记录写不进去多半是节点目录所在的盘出了问题，
-				// 交给人处理，不删任何东西。
-				return status.Errorf(codes.Internal, "保存副本位置失败（%s），副本在 %s，请手动移回 %s", err.Error(), dst, src)
+				// 移回去也失败了：数据在 dst，磁盘上的记录还指着 src。记录写不进去多半是节点目录所在的盘出了问题。
+				// 内存里改用 dst（之后的同步、恢复找得到它，不会在 src 新建一份），磁盘上留着这次移动的记录：
+				// 下次启动时 recoverMoves 看到原位置没有、目标位置有，自动采用 dst。不删任何东西。
+				keepMove = true
+				r.mu.Lock()
+				r.placeLocked(id, base, custom)
+				_ = r.persistLocked()
+				r.mu.Unlock()
+				if r.stateDir != nil {
+					os.RemoveAll(r.stateDir(projectID, container))
+				}
+				return status.Errorf(codes.Internal, "保存副本位置失败（%s）。副本已在 %s，照常使用，节点重启时自动采用这个位置", err.Error(), dst)
 			}
 		} else {
 			os.RemoveAll(dst)

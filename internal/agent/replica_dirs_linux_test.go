@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -719,7 +720,8 @@ func TestReplicaBaseStickySystemDirs(t *testing.T) {
 	}
 }
 
-// replica-dirs.json 损坏时（审查 L2）：原文件改名留着，不当成空的覆盖；修改存放位置、登记新的副本都拒绝。
+// replica-dirs.json 损坏时（审查 L2、N1）：原文件留在原处、另存一份，不当成空的覆盖；修改存放位置、登记新的副本都拒绝。
+// 重启几次都一样，直到修好原文件。
 func TestCorruptReplicaIndex(t *testing.T) {
 	r, tmp := testReplicas(t)
 	addReplica(t, r, "web")
@@ -731,21 +733,37 @@ func TestCorruptReplicaIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 断电截断了文件。
-	if err := os.WriteFile(r.file, good[:len(good)/2], 0o600); err != nil {
+	// 断电截断了文件，断在单独指定的位置后面。
+	i := bytes.Index(good, []byte(`"`+custom+`"`))
+	if i < 0 {
+		t.Fatalf("记录里没有 %s：%s", custom, good)
+	}
+	cut := good[:i+len(custom)+3]
+	if err := os.WriteFile(r.file, cut, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	broken := newReplicas(filepath.Dir(r.dir))
-	broken.forbidden, broken.reserved, broken.stateDir = r.forbidden, r.reserved, r.stateDir
+	data := filepath.Dir(r.dir)
+	open := func() *replicas {
+		b := newReplicas(data)
+		b.forbidden, b.reserved, b.stateDir = r.forbidden, r.reserved, r.stateDir
+		return b
+	}
+	broken := open()
 	if broken.usable() == nil {
 		t.Fatal("损坏的记录应该被发现")
 	}
+	if b, _ := os.ReadFile(r.file); !bytes.Equal(b, cut) {
+		t.Fatal("原文件应该留在原处，内容不变")
+	}
 	matches, _ := filepath.Glob(r.file + ".corrupt-*")
 	if len(matches) != 1 {
-		t.Fatalf("原文件应该改名留着：%v", matches)
+		t.Fatalf("应该另存一份：%v", matches)
 	}
-	if b, _ := os.ReadFile(matches[0]); string(b) != string(good[:len(good)/2]) {
-		t.Fatal("留下的应该是原来的内容")
+	if b, _ := os.ReadFile(matches[0]); !bytes.Equal(b, cut) {
+		t.Fatal("另存的应该是原来的内容")
+	}
+	if !slices.Contains(broken.bases(), custom) {
+		t.Fatalf("坏文件里还认得出的存放位置要算进去：%v", broken.bases())
 	}
 	if err := broken.move(context.Background(), testPID, "web", "", discard); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("记录损坏时不能移动副本：%v", err)
@@ -753,29 +771,262 @@ func TestCorruptReplicaIndex(t *testing.T) {
 	if err := broken.setDefault(context.Background(), filepath.Join(tmp, "big"), discard); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("记录损坏时不能修改默认目录：%v", err)
 	}
-	s := &agentService{node: &agent{replicas: broken}}
-	if _, err := s.AcceptReplica(context.Background(), &nagiv1.AcceptReplicaRequest{
-		Spec: &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"}, SourceKey: make([]byte, 32),
-	}); status.Code(err) != codes.FailedPrecondition {
+	accept := func(b *replicas) error {
+		s := &agentService{node: &agent{replicas: b}}
+		_, err := s.AcceptReplica(context.Background(), &nagiv1.AcceptReplicaRequest{
+			Spec: &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"}, SourceKey: make([]byte, 32),
+		})
+		return err
+	}
+	if err := accept(broken); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("记录损坏时不能在默认目录新建副本：%v", err)
 	}
 	broken.forget(testPID + "-web")
-	if _, err := os.Stat(r.file); !os.IsNotExist(err) {
+	if b, _ := os.ReadFile(r.file); !bytes.Equal(b, cut) {
 		t.Fatal("记录损坏时不能写入新的记录")
 	}
-	// 修好放回去，重启后照常。
-	if err := os.Rename(matches[0], r.file); err != nil {
-		t.Fatal(err)
+
+	// 容器目录：不能和认出来的存放位置重叠；认不全，所以只接受项目根目录下面的。
+	projectsRoot := filepath.Join(tmp, "srv", "nagi")
+	m := testManager(t)
+	m.ProjectsRoot = func() string { return projectsRoot }
+	m.ReplicaRoots = broken.roots
+	m.ReplicaBases = broken.bases
+	m.ReplicaIndexBroken = func() bool { return broken.usable() != nil }
+	if _, err := m.CheckDir(context.Background(), filepath.Join(custom, "app")); err == nil {
+		t.Error("和坏文件里的存放位置重叠的目录应该拒绝")
 	}
+	if _, err := m.CheckDir(context.Background(), filepath.Join(tmp, "elsewhere", "app")); err == nil {
+		t.Error("记录损坏时项目根目录以外的目录应该拒绝")
+	}
+	if _, err := m.CheckDir(context.Background(), filepath.Join(projectsRoot, "p", "app")); err != nil {
+		t.Errorf("项目根目录下面的目录应该接受：%v", err)
+	}
+
+	// 再重启两次（升级、重启）：照样不可用，不当成全新安装，也不多存备份。
+	for n := 0; n < 2; n++ {
+		again := open()
+		if again.usable() == nil {
+			t.Fatalf("第 %d 次重启后应该仍然不可用", n+1)
+		}
+		if err := accept(again); status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("第 %d 次重启后不能在默认目录新建副本：%v", n+1, err)
+		}
+		if _, err := os.Stat(filepath.Join(r.dir, testPID+"-web")); !os.IsNotExist(err) {
+			t.Fatal("默认目录里不能新建副本")
+		}
+		if b, _ := os.ReadFile(r.file); !bytes.Equal(b, cut) {
+			t.Fatal("原文件应该留在原处")
+		}
+	}
+	if matches, _ := filepath.Glob(r.file + ".corrupt-*"); len(matches) != 1 {
+		t.Fatalf("内容相同时不再另存：%v", matches)
+	}
+
+	// 修好原文件，重启后照常。
 	if err := os.WriteFile(r.file, good, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	fixed := newReplicas(filepath.Dir(r.dir))
+	fixed := open()
 	if fixed.usable() != nil {
 		t.Fatal("修好以后应该可以用")
 	}
 	if root, _ := fixed.root(testPID, "web"); root != filepath.Join(custom, testPID+"-web") {
 		t.Fatalf("应该找到原来的位置，实际 %s", root)
+	}
+}
+
+// 读 replica-dirs.json 出错（EIO、EACCES 这类，不是内容坏了）时不改名、不另存、不当成空的；排除故障后重启照常（审查 N1）。
+// 测试以 root 运行，权限挡不住，用目录代替读不出来的文件。
+func TestReplicaIndexReadError(t *testing.T) {
+	r, _ := testReplicas(t)
+	addReplica(t, r, "web")
+	if err := os.Mkdir(r.file, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data := filepath.Dir(r.dir)
+	broken := newReplicas(data)
+	if broken.usable() == nil {
+		t.Fatal("读不出来时应该不可用")
+	}
+	if matches, _ := filepath.Glob(r.file + ".corrupt-*"); len(matches) != 0 {
+		t.Fatalf("读取出错时不应另存：%v", matches)
+	}
+	if info, err := os.Stat(r.file); err != nil || !info.IsDir() {
+		t.Fatal("读取出错时不能改名或删掉原来的东西")
+	}
+	if err := broken.setLocation(testPID+"-web", r.dir, false); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("读不出来时不能写记录：%v", err)
+	}
+	if err := os.Remove(r.file); err != nil {
+		t.Fatal(err)
+	}
+	if newReplicas(data).usable() != nil {
+		t.Fatal("排除故障后应该可以用")
+	}
+}
+
+// moveTo 改名以后记不下新位置、又移不回去时（审查建议）：内存里改用新位置，磁盘上留着移动记录，重启后自动采用新位置。
+func TestMoveBackFailsAdoptsTarget(t *testing.T) {
+	r, tmp := testReplicas(t)
+	old := addReplica(t, r, "web")
+	big := filepath.Join(tmp, "big")
+	block := r.file + ".tmp" // 占住临时文件名，记录写不进去
+	orig := renameDir
+	t.Cleanup(func() { renameDir = orig })
+	calls := 0
+	renameDir = func(from, to string) error {
+		calls++
+		if calls > 1 {
+			return syscall.EIO
+		}
+		if err := os.Rename(from, to); err != nil {
+			return err
+		}
+		return os.Mkdir(block, 0o700)
+	}
+	err := r.move(context.Background(), testPID, "web", big, discard)
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("应该报告保存失败：%v", err)
+	}
+	dst := filepath.Join(big, testPID+"-web")
+	if root, _ := r.root(testPID, "web"); root != dst {
+		t.Fatalf("内存里应改用新位置，实际 %s", root)
+	}
+	checkReplicaFiles(t, dst, "web")
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatal("原位置不应再有副本")
+	}
+	if err := os.Remove(block); err != nil {
+		t.Fatal(err)
+	}
+	data := filepath.Dir(r.dir)
+	again := newReplicas(data)
+	if root, _ := again.root(testPID, "web"); root != dst {
+		t.Fatalf("重启后应采用新位置，实际 %s", root)
+	}
+	if l := again.idx.Locations[testPID+"-web"]; !l.Custom || l.Base != big || len(again.idx.Moves) != 0 {
+		t.Fatalf("应记成单独指定的位置、移动记录收尾：%+v %+v", l, again.idx.Moves)
+	}
+	if root, _ := newReplicas(data).root(testPID, "web"); root != dst {
+		t.Fatalf("记录应已保存，实际 %s", root)
+	}
+}
+
+// recoverMoves 只处理原位置、目标位置都在记录里的移动；目标位置的副本目录是符号链接时不采用（审查建议）。
+func TestRecoverMovesChecksRecord(t *testing.T) {
+	t.Run("原位置不在记录里", func(t *testing.T) {
+		r, tmp := testReplicas(t)
+		addReplica(t, r, "web")
+		victim := filepath.Join(tmp, "victim", testPID+"-web")
+		if err := os.MkdirAll(victim, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(victim, "meta.json"), []byte("{}"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		r.mu.Lock()
+		r.idx.Moves = []replicaMove{{ID: testPID + "-web", From: filepath.Dir(victim), To: r.dir}}
+		err := r.persistLocked()
+		r.mu.Unlock()
+		if err != nil {
+			t.Fatal(err)
+		}
+		again := newReplicas(filepath.Dir(r.dir))
+		if _, err := os.Stat(filepath.Join(victim, "meta.json")); err != nil {
+			t.Fatal("记录里没有的位置不能删")
+		}
+		if len(again.idx.Moves) != 0 {
+			t.Fatal("对不上的记录也要清掉")
+		}
+	})
+	t.Run("目标是符号链接", func(t *testing.T) {
+		r, tmp := testReplicas(t)
+		old := addReplica(t, r, "web")
+		big := filepath.Join(tmp, "big")
+		elsewhere := filepath.Join(tmp, "elsewhere")
+		for _, d := range []string{big, elsewhere} {
+			if err := os.MkdirAll(d, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := r.markMove(replicaMove{ID: testPID + "-web", From: r.dir, To: big, Custom: true}, true); err != nil {
+			t.Fatal(err)
+		}
+		real := filepath.Join(elsewhere, testPID+"-web")
+		if err := os.Rename(old, real); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(real, filepath.Join(big, testPID+"-web")); err != nil {
+			t.Fatal(err)
+		}
+		again := newReplicas(filepath.Dir(r.dir))
+		if root, _ := again.root(testPID, "web"); root != old {
+			t.Fatalf("符号链接不能当成完整的副本采用，实际 %s", root)
+		}
+		checkReplicaFiles(t, real, "web")
+	})
+}
+
+// 提交时删多余的文件、写登记信息都经过 os.Root：副本里的符号链接只删链接本身；副本目录被换成符号链接时不写（审查建议）。
+func TestReplicaWritesStayInside(t *testing.T) {
+	r, tmp := testReplicas(t)
+	root := addReplica(t, r, "web")
+	outside := filepath.Join(tmp, "outside")
+	if err := os.MkdirAll(filepath.Join(outside, "dir"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "dir", "keep"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "file"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files := filepath.Join(root, "files")
+	for name, target := range map[string]string{"ln-dir": filepath.Join(outside, "dir"), "ln-file": filepath.Join(outside, "file")} {
+		if err := os.Symlink(target, filepath.Join(files, "repo", name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fr, err := openReplicaFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fr.Close()
+	existing, remove := replicaExtras(fr, map[string]bool{"repo/p0001": true, "repo/kopia.repository": true})
+	slices.Sort(remove)
+	if want := []string{"repo/ln-dir", "repo/ln-file", "repo/sub/q0002"}; existing != 5 || !slices.Equal(remove, want) {
+		t.Fatalf("existing=%d remove=%v", existing, remove)
+	}
+	for _, rel := range remove {
+		if err := fr.Remove(rel); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{filepath.Join(outside, "dir", "keep"), filepath.Join(outside, "file")} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("链接指向的 %s 不能删", p)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(files, "repo", "ln-dir")); !os.IsNotExist(err) {
+		t.Fatal("链接本身应该删掉")
+	}
+
+	// 副本目录被换成指向外面的符号链接：登记信息不写过去。
+	if err := os.RemoveAll(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, root); err != nil {
+		t.Fatal(err)
+	}
+	unlock := r.lock(testPID, "web")
+	err = r.save(&replicaMeta{ProjectID: testPID, Container: "web"}, &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"})
+	unlock()
+	if err == nil {
+		t.Fatal("副本目录是符号链接时应该拒绝")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "meta.json")); !os.IsNotExist(err) {
+		t.Fatal("登记信息不能写到链接指向的地方")
 	}
 }
 
