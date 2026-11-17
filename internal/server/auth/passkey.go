@@ -2,13 +2,16 @@ package auth
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,21 +29,92 @@ const settingDomain = "panel_domain"
 
 const (
 	passkeyChallengeTTL = 5 * time.Minute
-	// maxPasskeyChallenges：登录和添加各自同时有效的挑战个数。分开算：没登录的人占满登录的名额，已登录的成员照样能添加。
+	// maxPasskeyChallenges：添加通行密钥的挑战同时有效的个数（只有登录了的成员能要）。
 	maxPasskeyChallenges = 1000
-	// maxLoginChallengesPerNet：同一个网段（IPv4 /24、IPv6 /48）同时有效的登录挑战个数，一个人占不满整个池子。
-	maxLoginChallengesPerNet = 20
 	// maxAddChallengesPerUser：一个成员同时有效的添加挑战个数。
 	maxAddChallengesPerUser = 5
-	maxPasskeys             = 20
+	// maxUsedLogin：记着的已用过的登录挑战个数上限（只在提交登录时记，提交按 IP 限速）。
+	maxUsedLogin = 100000
+	maxPasskeys  = 20
 )
 
 type passkeyChallenge struct {
 	challenge []byte
-	userID    int64 // 添加时是成员，登录时为 0
-	network   string
+	userID    int64
 	rpID      string
 	expires   time.Time
+}
+
+// 登录的挑战不在面板上占名额（见 docs/panel.md#通行密钥）：没登录的人谁都能要，按名额限制的话，攻击者和别人共用一个
+// 出口（CDN 节点、公司或运营商的 NAT）时就能把名额占满，让后面的人都开始不了通行密钥登录。所以登录挑战是无状态的：
+// 编号里带随机数和过期时间，用面板进程里的密钥做 HMAC；挑战本身也由它们算出。提交登录时核对、记下用过的编号。
+
+// loginKeyLocked 返回签登录挑战用的密钥，调用方持有 s.mu（只在内存里，面板重启后还没提交的登录要重来）。
+func (s *Service) loginKeyLocked() []byte {
+	if s.loginKey == nil {
+		s.loginKey = make([]byte, 32)
+		_, _ = rand.Read(s.loginKey)
+	}
+	return s.loginKey
+}
+
+func loginMAC(key []byte, label string, nonce []byte, expires int64, rpID string) []byte {
+	m := hmac.New(sha256.New, key)
+	m.Write([]byte(label))
+	m.Write(nonce)
+	m.Write(binary.BigEndian.AppendUint64(nil, uint64(expires)))
+	m.Write([]byte(rpID))
+	return m.Sum(nil)
+}
+
+// newLoginChallenge 生成一个登录挑战：编号是 随机数(16) ‖ 过期时间(8) ‖ HMAC 的前 16 字节，十六进制。
+func (s *Service) newLoginChallenge(rpID string, now time.Time) (string, []byte, error) {
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", nil, err
+	}
+	expires := now.Add(passkeyChallengeTTL).Unix()
+	s.mu.Lock()
+	key := s.loginKeyLocked()
+	s.mu.Unlock()
+	id := append(append(slices.Clone(nonce), binary.BigEndian.AppendUint64(nil, uint64(expires))...), loginMAC(key, "id", nonce, expires, rpID)[:16]...)
+	return hex.EncodeToString(id), loginMAC(key, "challenge", nonce, expires, rpID), nil
+}
+
+// takeLoginChallenge 核对登录挑战的编号，只能用一次。
+func (s *Service) takeLoginChallenge(id, rpID string, now time.Time) (passkeyChallenge, bool) {
+	b, err := hex.DecodeString(id)
+	if err != nil || len(b) != 40 {
+		return passkeyChallenge{}, false
+	}
+	nonce, expires := b[:16], int64(binary.BigEndian.Uint64(b[16:24]))
+	if now.Unix() > expires {
+		return passkeyChallenge{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := s.loginKeyLocked()
+	if !hmac.Equal(b[24:], loginMAC(key, "id", nonce, expires, rpID)[:16]) {
+		return passkeyChallenge{}, false
+	}
+	if s.usedLogin == nil {
+		s.usedLogin = map[string]int64{}
+	}
+	if _, used := s.usedLogin[id]; used {
+		return passkeyChallenge{}, false
+	}
+	if len(s.usedLogin) >= maxUsedLogin {
+		for k, exp := range s.usedLogin {
+			if now.Unix() > exp {
+				delete(s.usedLogin, k)
+			}
+		}
+		if len(s.usedLogin) >= maxUsedLogin {
+			return passkeyChallenge{}, false
+		}
+	}
+	s.usedLogin[id] = expires
+	return passkeyChallenge{challenge: loginMAC(key, "challenge", nonce, expires, rpID), rpID: rpID, expires: time.Unix(expires, 0)}, true
 }
 
 // PasskeyDomain 返回能用通行密钥的域名（面板绑定的域名），没绑定时为空。
@@ -49,8 +123,8 @@ func (s *Service) PasskeyDomain(ctx context.Context) string {
 	return strings.ToLower(strings.TrimSpace(v))
 }
 
-// newPasskeyChallenge 生成一次性的挑战，返回编号和内容。network 是请求方的网段（登录时按它限制个数）。
-func (s *Service) newPasskeyChallenge(userID int64, rpID, network string) (string, []byte, error) {
+// newPasskeyChallenge 生成添加通行密钥用的一次性挑战，返回编号和内容。
+func (s *Service) newPasskeyChallenge(userID int64, rpID string) (string, []byte, error) {
 	b := make([]byte, 48)
 	if _, err := rand.Read(b); err != nil {
 		return "", nil, err
@@ -67,24 +141,16 @@ func (s *Service) newPasskeyChallenge(userID int64, rpID, network string) (strin
 			delete(s.challenges, k)
 		}
 	}
-	pool, same := 0, 0
+	same := 0
 	for _, c := range s.challenges {
-		if (c.userID == 0) != (userID == 0) {
-			continue
-		}
-		pool++
-		if userID == 0 && c.network == network || userID != 0 && c.userID == userID {
+		if c.userID == userID {
 			same++
 		}
 	}
-	limit := maxAddChallengesPerUser
-	if userID == 0 {
-		limit = maxLoginChallengesPerNet
-	}
-	if pool >= maxPasskeyChallenges || same >= limit {
+	if len(s.challenges) >= maxPasskeyChallenges || same >= maxAddChallengesPerUser {
 		return "", nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("请求过多，请稍后重试"))
 	}
-	s.challenges[id] = passkeyChallenge{challenge: challenge, userID: userID, network: network, rpID: rpID, expires: now.Add(passkeyChallengeTTL)}
+	s.challenges[id] = passkeyChallenge{challenge: challenge, userID: userID, rpID: rpID, expires: now.Add(passkeyChallengeTTL)}
 	return id, challenge, nil
 }
 
@@ -129,7 +195,7 @@ func (s *Service) BeginPasskeyRegistration(ctx context.Context, userID int64) (P
 	if len(existing) >= maxPasskeys {
 		return PasskeyRegistration{}, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("最多添加 %d 个通行密钥", maxPasskeys))
 	}
-	id, challenge, err := s.newPasskeyChallenge(userID, rpID, "")
+	id, challenge, err := s.newPasskeyChallenge(userID, rpID)
 	if err != nil {
 		return PasskeyRegistration{}, err
 	}
@@ -191,8 +257,7 @@ func (s *Service) BeginPasskeyLogin(ctx context.Context) (id string, challenge [
 	if rpID == "" {
 		return "", nil, "", errNoDomain()
 	}
-	_, network := Network(RequestMeta(ctx).IP)
-	id, challenge, err = s.newPasskeyChallenge(0, rpID, network)
+	id, challenge, err = s.newLoginChallenge(rpID, time.Now())
 	return id, challenge, rpID, err
 }
 
@@ -224,7 +289,7 @@ func (s *Service) PasskeyLogin(ctx context.Context, ip string, a PasskeyAssertio
 	}
 	result := outcomeFailure
 	defer func() { done(result) }()
-	c, ok := s.takePasskeyChallenge(a.ChallengeID, 0)
+	c, ok := s.takeLoginChallenge(a.ChallengeID, s.PasskeyDomain(ctx), time.Now())
 	if !ok {
 		result = outcomeNeutral
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("请求已过期，请重试"))

@@ -9,8 +9,8 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"testing"
+	"time"
 
 	"github.com/SIPC/nagi/internal/server/store"
 	"github.com/fxamacker/cbor/v2"
@@ -188,35 +188,46 @@ func TestOriginAllowed(t *testing.T) {
 	}
 }
 
-// L8：没开安全入口时，未登录的人每 5 分钟发 1000 次 BeginPasskeyLogin，之前所有人的通行密钥登录和添加都失败。
-// 现在登录和添加分开计数，同一个网段的登录挑战最多 20 个。
+// L8、R6：没登录的人反复要登录挑战，之前能占满挑战池；按网段限数量以后，和攻击者共用出口（CDN 节点、NAT）的人
+// 照样开始不了通行密钥登录。现在登录挑战不占名额（无状态，编号带 HMAC），添加的挑战另外计数。
 func TestPasskeyChallengePool(t *testing.T) {
 	h := newSessionHarness(t)
 	ctx := context.Background()
 	admin, _ := h.q.GetUserByUsername(ctx, "admin")
 	_ = h.q.SetSetting(ctx, store.SetSettingParams{Key: settingDomain, Value: "nagi.example.com"})
-	from := func(ip string) context.Context { return WithMeta(ctx, Meta{IP: ip}) }
-	// 攻击者在一个网段里刷。
-	n := 0
-	for range 2000 {
-		if _, _, _, err := h.s.BeginPasskeyLogin(from("198.51.100.7")); err == nil {
-			n++
+	from := WithMeta(ctx, Meta{IP: "198.51.100.7"})
+	for i := range 5000 {
+		if _, _, _, err := h.s.BeginPasskeyLogin(from); err != nil {
+			t.Fatalf("第 %d 次：登录挑战不应有名额限制：%v", i, err)
 		}
 	}
-	if n != maxLoginChallengesPerNet {
-		t.Fatalf("同一个网段同时有效的登录挑战应该最多 %d 个，实际 %d 个", maxLoginChallengesPerNet, n)
-	}
-	// 本人从别的网段登录、已登录的成员添加，都不受影响。
-	if _, _, _, err := h.s.BeginPasskeyLogin(from("203.0.113.10")); err != nil {
-		t.Fatalf("别的网段的登录不应受影响：%v", err)
-	}
-	// 攻击者用很多网段占满登录的池子，添加照样可用。
-	for i := range 200 {
-		for range maxLoginChallengesPerNet {
-			_, _, _, _ = h.s.BeginPasskeyLogin(from(fmt.Sprintf("10.%d.%d.1", i/250, i%250)))
-		}
+	// 同一个出口后面的本人照样能开始登录，已登录的成员照样能添加。
+	id, ch, rp, err := h.s.BeginPasskeyLogin(from)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if _, err := h.s.BeginPasskeyRegistration(ctx, admin.ID); err != nil {
-		t.Fatalf("登录的挑战占满以后，添加不应受影响：%v", err)
+		t.Fatalf("添加不应受影响：%v", err)
+	}
+	// 编号只能用一次，改过的编号、别的域名、过期的都不认。
+	now := time.Now()
+	c, ok := h.s.takeLoginChallenge(id, rp, now)
+	if !ok || string(c.challenge) != string(ch) {
+		t.Fatal("挑战应能取出，内容和发出去的一致")
+	}
+	if _, ok := h.s.takeLoginChallenge(id, rp, now); ok {
+		t.Fatal("挑战只能用一次")
+	}
+	id2, _, _, _ := h.s.BeginPasskeyLogin(from)
+	bad := []byte(id2)
+	bad[0] ^= 1
+	if _, ok := h.s.takeLoginChallenge(string(bad), rp, now); ok {
+		t.Fatal("改过的编号不应认")
+	}
+	if _, ok := h.s.takeLoginChallenge(id2, "evil.example.net", now); ok {
+		t.Fatal("别的域名不应认")
+	}
+	if _, ok := h.s.takeLoginChallenge(id2, rp, now.Add(passkeyChallengeTTL+time.Second)); ok {
+		t.Fatal("过期的不应认")
 	}
 }
