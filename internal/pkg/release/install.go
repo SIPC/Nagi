@@ -283,7 +283,8 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 	done := make(chan struct{})
 	defer close(done)
 	deadline, _ := ctx.Deadline()
-	go watchSpeed(&got, &total, deadline, done, func() { stop(errTooSlow) })
+	// 限速的参数在这里读好再交给 watchSpeed：它可能在 fetch 返回之后才开始运行（测试里会改这两个变量）。
+	go watchSpeed(&got, &total, deadline, lowSpeedTime, lowSpeedLimit, done, func() { stop(errTooSlow) })
 
 	req, err := http.NewRequestWithContext(wctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -327,7 +328,7 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 //     与其耗到超时，不如早点换下一个地址（例如中国大陆直连 GitHub，一直有数据但很慢）。
 //
 // done 关闭后退出。
-func watchSpeed(got, total *atomic.Int64, deadline time.Time, done <-chan struct{}, abort func()) {
+func watchSpeed(got, total *atomic.Int64, deadline time.Time, lowSpeedTime time.Duration, lowSpeedLimit int, done <-chan struct{}, abort func()) {
 	t := time.NewTicker(lowSpeedTime)
 	defer t.Stop()
 	start := time.Now()
