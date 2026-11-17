@@ -109,6 +109,9 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /api/upload", a.standbyBlock(a.UploadHandler()))
 	mux.Handle("GET /api/volume-file", a.VolumeFileHandler())
 	mux.Handle("POST /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))
+	// 分块上传的一块和放弃（见 chunkupload.go）。
+	mux.Handle("PUT /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))
+	mux.Handle("DELETE /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))
 	mux.Handle("GET /install.sh", a.InstallHandler())
 }
 

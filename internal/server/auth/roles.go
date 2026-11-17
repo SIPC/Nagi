@@ -28,7 +28,7 @@ var selfMethods = map[string]bool{
 var adminReads = map[string]bool{
 	"GetAlertConfig": true, "ListInvites": true, "ListActivity": true, "ListUsers": true, "GetNodeMirrors": true, "GetUpdateStatus": true,
 	// 节点上的文件（见 docs/node-access.md）：看到的是整个节点。
-	"ListNodeDir": true, "ListNodeFileBackups": true,
+	"ListNodeDir": true, "ListNodeFileBackups": true, "ListNodeDirSizes": true,
 	// 节点的磁盘明细：涉及节点上所有项目（镜像、容器目录）。
 	"GetNodeStorage": true,
 	// 终端录制和审计设置（见 docs/audit.md）。
@@ -44,7 +44,7 @@ var adminWrites = map[string]bool{
 
 // operatorReads 是只读角色不能用的查询：含有项目的密钥。
 var operatorReads = map[string]bool{
-	"GetBackupKey": true, "ListRegistries": true, "ListVolumeFiles": true,
+	"GetBackupKey": true, "ListRegistries": true, "ListVolumeFiles": true, "ListVolumeDirSizes": true,
 }
 
 var readPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping"}

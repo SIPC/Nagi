@@ -104,6 +104,24 @@ const (
 	// NodeServiceRestoreNodeFileBackupProcedure is the fully-qualified name of the NodeService's
 	// RestoreNodeFileBackup RPC.
 	NodeServiceRestoreNodeFileBackupProcedure = "/nagi.v1.NodeService/RestoreNodeFileBackup"
+	// NodeServiceRenameNodeFileProcedure is the fully-qualified name of the NodeService's
+	// RenameNodeFile RPC.
+	NodeServiceRenameNodeFileProcedure = "/nagi.v1.NodeService/RenameNodeFile"
+	// NodeServiceMoveNodeFilesProcedure is the fully-qualified name of the NodeService's MoveNodeFiles
+	// RPC.
+	NodeServiceMoveNodeFilesProcedure = "/nagi.v1.NodeService/MoveNodeFiles"
+	// NodeServiceCopyNodeFilesProcedure is the fully-qualified name of the NodeService's CopyNodeFiles
+	// RPC.
+	NodeServiceCopyNodeFilesProcedure = "/nagi.v1.NodeService/CopyNodeFiles"
+	// NodeServiceCompressNodeFilesProcedure is the fully-qualified name of the NodeService's
+	// CompressNodeFiles RPC.
+	NodeServiceCompressNodeFilesProcedure = "/nagi.v1.NodeService/CompressNodeFiles"
+	// NodeServiceExtractNodeFileProcedure is the fully-qualified name of the NodeService's
+	// ExtractNodeFile RPC.
+	NodeServiceExtractNodeFileProcedure = "/nagi.v1.NodeService/ExtractNodeFile"
+	// NodeServiceListNodeDirSizesProcedure is the fully-qualified name of the NodeService's
+	// ListNodeDirSizes RPC.
+	NodeServiceListNodeDirSizesProcedure = "/nagi.v1.NodeService/ListNodeDirSizes"
 	// NodeServiceListNodePanelsProcedure is the fully-qualified name of the NodeService's
 	// ListNodePanels RPC.
 	NodeServiceListNodePanelsProcedure = "/nagi.v1.NodeService/ListNodePanels"
@@ -473,6 +491,24 @@ const (
 	// ProjectServiceRestoreVolumeFileProcedure is the fully-qualified name of the ProjectService's
 	// RestoreVolumeFile RPC.
 	ProjectServiceRestoreVolumeFileProcedure = "/nagi.v1.ProjectService/RestoreVolumeFile"
+	// ProjectServiceRenameVolumeFileProcedure is the fully-qualified name of the ProjectService's
+	// RenameVolumeFile RPC.
+	ProjectServiceRenameVolumeFileProcedure = "/nagi.v1.ProjectService/RenameVolumeFile"
+	// ProjectServiceMoveVolumeFilesProcedure is the fully-qualified name of the ProjectService's
+	// MoveVolumeFiles RPC.
+	ProjectServiceMoveVolumeFilesProcedure = "/nagi.v1.ProjectService/MoveVolumeFiles"
+	// ProjectServiceCopyVolumeFilesProcedure is the fully-qualified name of the ProjectService's
+	// CopyVolumeFiles RPC.
+	ProjectServiceCopyVolumeFilesProcedure = "/nagi.v1.ProjectService/CopyVolumeFiles"
+	// ProjectServiceCompressVolumeFilesProcedure is the fully-qualified name of the ProjectService's
+	// CompressVolumeFiles RPC.
+	ProjectServiceCompressVolumeFilesProcedure = "/nagi.v1.ProjectService/CompressVolumeFiles"
+	// ProjectServiceExtractVolumeFileProcedure is the fully-qualified name of the ProjectService's
+	// ExtractVolumeFile RPC.
+	ProjectServiceExtractVolumeFileProcedure = "/nagi.v1.ProjectService/ExtractVolumeFile"
+	// ProjectServiceListVolumeDirSizesProcedure is the fully-qualified name of the ProjectService's
+	// ListVolumeDirSizes RPC.
+	ProjectServiceListVolumeDirSizesProcedure = "/nagi.v1.ProjectService/ListVolumeDirSizes"
 	// ProjectServiceListSnapshotsProcedure is the fully-qualified name of the ProjectService's
 	// ListSnapshots RPC.
 	ProjectServiceListSnapshotsProcedure = "/nagi.v1.ProjectService/ListSnapshots"
@@ -1037,6 +1073,12 @@ type NodeServiceClient interface {
 	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
 	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
 	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	RenameNodeFile(context.Context, *connect.Request[v1.NodeTransferRequest]) (*connect.Response[v1.FileOpResult], error)
+	MoveNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	CopyNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	CompressNodeFiles(context.Context, *connect.Request[v1.NodeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ExtractNodeFile(context.Context, *connect.Request[v1.NodeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ListNodeDirSizes(context.Context, *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -1160,6 +1202,42 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+NodeServiceRestoreNodeFileBackupProcedure,
 			connect.WithSchema(nodeServiceMethods.ByName("RestoreNodeFileBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		renameNodeFile: connect.NewClient[v1.NodeTransferRequest, v1.FileOpResult](
+			httpClient,
+			baseURL+NodeServiceRenameNodeFileProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		moveNodeFiles: connect.NewClient[v1.NodeTransferRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+NodeServiceMoveNodeFilesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("MoveNodeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		copyNodeFiles: connect.NewClient[v1.NodeTransferRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+NodeServiceCopyNodeFilesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CopyNodeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		compressNodeFiles: connect.NewClient[v1.NodeCompressRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+NodeServiceCompressNodeFilesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("CompressNodeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		extractNodeFile: connect.NewClient[v1.NodeExtractRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+NodeServiceExtractNodeFileProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ExtractNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeDirSizes: connect.NewClient[v1.NodeDirSizesRequest, v1.DirSizesResponse](
+			httpClient,
+			baseURL+NodeServiceListNodeDirSizesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeDirSizes")),
 			connect.WithClientOptions(opts...),
 		),
 		listNodePanels: connect.NewClient[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse](
@@ -1367,6 +1445,12 @@ type nodeServiceClient struct {
 	createNodeDir         *connect.Client[v1.NodeFileRef, v1.NodeFileOpResponse]
 	listNodeFileBackups   *connect.Client[v1.NodeFileRef, v1.ListNodeFileBackupsResponse]
 	restoreNodeFileBackup *connect.Client[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse]
+	renameNodeFile        *connect.Client[v1.NodeTransferRequest, v1.FileOpResult]
+	moveNodeFiles         *connect.Client[v1.NodeTransferRequest, v1.FileOpEvent]
+	copyNodeFiles         *connect.Client[v1.NodeTransferRequest, v1.FileOpEvent]
+	compressNodeFiles     *connect.Client[v1.NodeCompressRequest, v1.FileOpEvent]
+	extractNodeFile       *connect.Client[v1.NodeExtractRequest, v1.FileOpEvent]
+	listNodeDirSizes      *connect.Client[v1.NodeDirSizesRequest, v1.DirSizesResponse]
 	listNodePanels        *connect.Client[v1.ListNodePanelsRequest, v1.ListNodePanelsResponse]
 	handoverNodes         *connect.Client[v1.HandoverNodesRequest, v1.HandoverNodesResponse]
 	removeNodePanel       *connect.Client[v1.RemoveNodePanelRequest, v1.RemoveNodePanelResponse]
@@ -1439,6 +1523,36 @@ func (c *nodeServiceClient) ListNodeFileBackups(ctx context.Context, req *connec
 // RestoreNodeFileBackup calls nagi.v1.NodeService.RestoreNodeFileBackup.
 func (c *nodeServiceClient) RestoreNodeFileBackup(ctx context.Context, req *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
 	return c.restoreNodeFileBackup.CallUnary(ctx, req)
+}
+
+// RenameNodeFile calls nagi.v1.NodeService.RenameNodeFile.
+func (c *nodeServiceClient) RenameNodeFile(ctx context.Context, req *connect.Request[v1.NodeTransferRequest]) (*connect.Response[v1.FileOpResult], error) {
+	return c.renameNodeFile.CallUnary(ctx, req)
+}
+
+// MoveNodeFiles calls nagi.v1.NodeService.MoveNodeFiles.
+func (c *nodeServiceClient) MoveNodeFiles(ctx context.Context, req *connect.Request[v1.NodeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.moveNodeFiles.CallServerStream(ctx, req)
+}
+
+// CopyNodeFiles calls nagi.v1.NodeService.CopyNodeFiles.
+func (c *nodeServiceClient) CopyNodeFiles(ctx context.Context, req *connect.Request[v1.NodeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.copyNodeFiles.CallServerStream(ctx, req)
+}
+
+// CompressNodeFiles calls nagi.v1.NodeService.CompressNodeFiles.
+func (c *nodeServiceClient) CompressNodeFiles(ctx context.Context, req *connect.Request[v1.NodeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.compressNodeFiles.CallServerStream(ctx, req)
+}
+
+// ExtractNodeFile calls nagi.v1.NodeService.ExtractNodeFile.
+func (c *nodeServiceClient) ExtractNodeFile(ctx context.Context, req *connect.Request[v1.NodeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.extractNodeFile.CallServerStream(ctx, req)
+}
+
+// ListNodeDirSizes calls nagi.v1.NodeService.ListNodeDirSizes.
+func (c *nodeServiceClient) ListNodeDirSizes(ctx context.Context, req *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return c.listNodeDirSizes.CallUnary(ctx, req)
 }
 
 // ListNodePanels calls nagi.v1.NodeService.ListNodePanels.
@@ -1612,6 +1726,12 @@ type NodeServiceHandler interface {
 	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
 	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
 	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	RenameNodeFile(context.Context, *connect.Request[v1.NodeTransferRequest]) (*connect.Response[v1.FileOpResult], error)
+	MoveNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	CopyNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	CompressNodeFiles(context.Context, *connect.Request[v1.NodeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ExtractNodeFile(context.Context, *connect.Request[v1.NodeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ListNodeDirSizes(context.Context, *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -1731,6 +1851,42 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		NodeServiceRestoreNodeFileBackupProcedure,
 		svc.RestoreNodeFileBackup,
 		connect.WithSchema(nodeServiceMethods.ByName("RestoreNodeFileBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceRenameNodeFileHandler := connect.NewUnaryHandler(
+		NodeServiceRenameNodeFileProcedure,
+		svc.RenameNodeFile,
+		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceMoveNodeFilesHandler := connect.NewServerStreamHandler(
+		NodeServiceMoveNodeFilesProcedure,
+		svc.MoveNodeFiles,
+		connect.WithSchema(nodeServiceMethods.ByName("MoveNodeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceCopyNodeFilesHandler := connect.NewServerStreamHandler(
+		NodeServiceCopyNodeFilesProcedure,
+		svc.CopyNodeFiles,
+		connect.WithSchema(nodeServiceMethods.ByName("CopyNodeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceCompressNodeFilesHandler := connect.NewServerStreamHandler(
+		NodeServiceCompressNodeFilesProcedure,
+		svc.CompressNodeFiles,
+		connect.WithSchema(nodeServiceMethods.ByName("CompressNodeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceExtractNodeFileHandler := connect.NewServerStreamHandler(
+		NodeServiceExtractNodeFileProcedure,
+		svc.ExtractNodeFile,
+		connect.WithSchema(nodeServiceMethods.ByName("ExtractNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceListNodeDirSizesHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeDirSizesProcedure,
+		svc.ListNodeDirSizes,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeDirSizes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	nodeServiceListNodePanelsHandler := connect.NewUnaryHandler(
@@ -1943,6 +2099,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceListNodeFileBackupsHandler.ServeHTTP(w, r)
 		case NodeServiceRestoreNodeFileBackupProcedure:
 			nodeServiceRestoreNodeFileBackupHandler.ServeHTTP(w, r)
+		case NodeServiceRenameNodeFileProcedure:
+			nodeServiceRenameNodeFileHandler.ServeHTTP(w, r)
+		case NodeServiceMoveNodeFilesProcedure:
+			nodeServiceMoveNodeFilesHandler.ServeHTTP(w, r)
+		case NodeServiceCopyNodeFilesProcedure:
+			nodeServiceCopyNodeFilesHandler.ServeHTTP(w, r)
+		case NodeServiceCompressNodeFilesProcedure:
+			nodeServiceCompressNodeFilesHandler.ServeHTTP(w, r)
+		case NodeServiceExtractNodeFileProcedure:
+			nodeServiceExtractNodeFileHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeDirSizesProcedure:
+			nodeServiceListNodeDirSizesHandler.ServeHTTP(w, r)
 		case NodeServiceListNodePanelsProcedure:
 			nodeServiceListNodePanelsHandler.ServeHTTP(w, r)
 		case NodeServiceHandoverNodesProcedure:
@@ -2046,6 +2214,30 @@ func (UnimplementedNodeServiceHandler) ListNodeFileBackups(context.Context, *con
 
 func (UnimplementedNodeServiceHandler) RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RestoreNodeFileBackup is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RenameNodeFile(context.Context, *connect.Request[v1.NodeTransferRequest]) (*connect.Response[v1.FileOpResult], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeFile is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) MoveNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.MoveNodeFiles is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CopyNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CopyNodeFiles is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) CompressNodeFiles(context.Context, *connect.Request[v1.NodeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CompressNodeFiles is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ExtractNodeFile(context.Context, *connect.Request[v1.NodeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ExtractNodeFile is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeDirSizes(context.Context, *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeDirSizes is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) ListNodePanels(context.Context, *connect.Request[v1.ListNodePanelsRequest]) (*connect.Response[v1.ListNodePanelsResponse], error) {
@@ -3591,6 +3783,13 @@ type ProjectServiceClient interface {
 	DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	// 同一个卷里的改名、移动、复制，压缩和解压。长操作流式返回进度。
+	RenameVolumeFile(context.Context, *connect.Request[v1.VolumeTransferRequest]) (*connect.Response[v1.FileOpResult], error)
+	MoveVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	CopyVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	CompressVolumeFiles(context.Context, *connect.Request[v1.VolumeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ExtractVolumeFile(context.Context, *connect.Request[v1.VolumeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ListVolumeDirSizes(context.Context, *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -3901,6 +4100,42 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("RestoreVolumeFile")),
 			connect.WithClientOptions(opts...),
 		),
+		renameVolumeFile: connect.NewClient[v1.VolumeTransferRequest, v1.FileOpResult](
+			httpClient,
+			baseURL+ProjectServiceRenameVolumeFileProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RenameVolumeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		moveVolumeFiles: connect.NewClient[v1.VolumeTransferRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+ProjectServiceMoveVolumeFilesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("MoveVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		copyVolumeFiles: connect.NewClient[v1.VolumeTransferRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+ProjectServiceCopyVolumeFilesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CopyVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		compressVolumeFiles: connect.NewClient[v1.VolumeCompressRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+ProjectServiceCompressVolumeFilesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("CompressVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		extractVolumeFile: connect.NewClient[v1.VolumeExtractRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+ProjectServiceExtractVolumeFileProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ExtractVolumeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		listVolumeDirSizes: connect.NewClient[v1.VolumeDirSizesRequest, v1.DirSizesResponse](
+			httpClient,
+			baseURL+ProjectServiceListVolumeDirSizesProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("ListVolumeDirSizes")),
+			connect.WithClientOptions(opts...),
+		),
 		listSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
 			httpClient,
 			baseURL+ProjectServiceListSnapshotsProcedure,
@@ -4007,6 +4242,12 @@ type projectServiceClient struct {
 	deleteVolumeFile             *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
 	createVolumeDir              *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
 	restoreVolumeFile            *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	renameVolumeFile             *connect.Client[v1.VolumeTransferRequest, v1.FileOpResult]
+	moveVolumeFiles              *connect.Client[v1.VolumeTransferRequest, v1.FileOpEvent]
+	copyVolumeFiles              *connect.Client[v1.VolumeTransferRequest, v1.FileOpEvent]
+	compressVolumeFiles          *connect.Client[v1.VolumeCompressRequest, v1.FileOpEvent]
+	extractVolumeFile            *connect.Client[v1.VolumeExtractRequest, v1.FileOpEvent]
+	listVolumeDirSizes           *connect.Client[v1.VolumeDirSizesRequest, v1.DirSizesResponse]
 	listSnapshots                *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot               *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot              *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
@@ -4253,6 +4494,36 @@ func (c *projectServiceClient) RestoreVolumeFile(ctx context.Context, req *conne
 	return c.restoreVolumeFile.CallUnary(ctx, req)
 }
 
+// RenameVolumeFile calls nagi.v1.ProjectService.RenameVolumeFile.
+func (c *projectServiceClient) RenameVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeTransferRequest]) (*connect.Response[v1.FileOpResult], error) {
+	return c.renameVolumeFile.CallUnary(ctx, req)
+}
+
+// MoveVolumeFiles calls nagi.v1.ProjectService.MoveVolumeFiles.
+func (c *projectServiceClient) MoveVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.moveVolumeFiles.CallServerStream(ctx, req)
+}
+
+// CopyVolumeFiles calls nagi.v1.ProjectService.CopyVolumeFiles.
+func (c *projectServiceClient) CopyVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.copyVolumeFiles.CallServerStream(ctx, req)
+}
+
+// CompressVolumeFiles calls nagi.v1.ProjectService.CompressVolumeFiles.
+func (c *projectServiceClient) CompressVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.compressVolumeFiles.CallServerStream(ctx, req)
+}
+
+// ExtractVolumeFile calls nagi.v1.ProjectService.ExtractVolumeFile.
+func (c *projectServiceClient) ExtractVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.extractVolumeFile.CallServerStream(ctx, req)
+}
+
+// ListVolumeDirSizes calls nagi.v1.ProjectService.ListVolumeDirSizes.
+func (c *projectServiceClient) ListVolumeDirSizes(ctx context.Context, req *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return c.listVolumeDirSizes.CallUnary(ctx, req)
+}
+
 // ListSnapshots calls nagi.v1.ProjectService.ListSnapshots.
 func (c *projectServiceClient) ListSnapshots(ctx context.Context, req *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return c.listSnapshots.CallUnary(ctx, req)
@@ -4383,6 +4654,13 @@ type ProjectServiceHandler interface {
 	DeleteVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	// 同一个卷里的改名、移动、复制，压缩和解压。长操作流式返回进度。
+	RenameVolumeFile(context.Context, *connect.Request[v1.VolumeTransferRequest]) (*connect.Response[v1.FileOpResult], error)
+	MoveVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	CopyVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	CompressVolumeFiles(context.Context, *connect.Request[v1.VolumeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ExtractVolumeFile(context.Context, *connect.Request[v1.VolumeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ListVolumeDirSizes(context.Context, *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -4689,6 +4967,42 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("RestoreVolumeFile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceRenameVolumeFileHandler := connect.NewUnaryHandler(
+		ProjectServiceRenameVolumeFileProcedure,
+		svc.RenameVolumeFile,
+		connect.WithSchema(projectServiceMethods.ByName("RenameVolumeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceMoveVolumeFilesHandler := connect.NewServerStreamHandler(
+		ProjectServiceMoveVolumeFilesProcedure,
+		svc.MoveVolumeFiles,
+		connect.WithSchema(projectServiceMethods.ByName("MoveVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCopyVolumeFilesHandler := connect.NewServerStreamHandler(
+		ProjectServiceCopyVolumeFilesProcedure,
+		svc.CopyVolumeFiles,
+		connect.WithSchema(projectServiceMethods.ByName("CopyVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceCompressVolumeFilesHandler := connect.NewServerStreamHandler(
+		ProjectServiceCompressVolumeFilesProcedure,
+		svc.CompressVolumeFiles,
+		connect.WithSchema(projectServiceMethods.ByName("CompressVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceExtractVolumeFileHandler := connect.NewServerStreamHandler(
+		ProjectServiceExtractVolumeFileProcedure,
+		svc.ExtractVolumeFile,
+		connect.WithSchema(projectServiceMethods.ByName("ExtractVolumeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceListVolumeDirSizesHandler := connect.NewUnaryHandler(
+		ProjectServiceListVolumeDirSizesProcedure,
+		svc.ListVolumeDirSizes,
+		connect.WithSchema(projectServiceMethods.ByName("ListVolumeDirSizes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceListSnapshotsHandler := connect.NewUnaryHandler(
 		ProjectServiceListSnapshotsProcedure,
 		svc.ListSnapshots,
@@ -4839,6 +5153,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceCreateVolumeDirHandler.ServeHTTP(w, r)
 		case ProjectServiceRestoreVolumeFileProcedure:
 			projectServiceRestoreVolumeFileHandler.ServeHTTP(w, r)
+		case ProjectServiceRenameVolumeFileProcedure:
+			projectServiceRenameVolumeFileHandler.ServeHTTP(w, r)
+		case ProjectServiceMoveVolumeFilesProcedure:
+			projectServiceMoveVolumeFilesHandler.ServeHTTP(w, r)
+		case ProjectServiceCopyVolumeFilesProcedure:
+			projectServiceCopyVolumeFilesHandler.ServeHTTP(w, r)
+		case ProjectServiceCompressVolumeFilesProcedure:
+			projectServiceCompressVolumeFilesHandler.ServeHTTP(w, r)
+		case ProjectServiceExtractVolumeFileProcedure:
+			projectServiceExtractVolumeFileHandler.ServeHTTP(w, r)
+		case ProjectServiceListVolumeDirSizesProcedure:
+			projectServiceListVolumeDirSizesHandler.ServeHTTP(w, r)
 		case ProjectServiceListSnapshotsProcedure:
 			projectServiceListSnapshotsHandler.ServeHTTP(w, r)
 		case ProjectServiceCreateSnapshotProcedure:
@@ -5052,6 +5378,30 @@ func (UnimplementedProjectServiceHandler) CreateVolumeDir(context.Context, *conn
 
 func (UnimplementedProjectServiceHandler) RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RestoreVolumeFile is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RenameVolumeFile(context.Context, *connect.Request[v1.VolumeTransferRequest]) (*connect.Response[v1.FileOpResult], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RenameVolumeFile is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) MoveVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.MoveVolumeFiles is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CopyVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CopyVolumeFiles is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) CompressVolumeFiles(context.Context, *connect.Request[v1.VolumeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CompressVolumeFiles is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ExtractVolumeFile(context.Context, *connect.Request[v1.VolumeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ExtractVolumeFile is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) ListVolumeDirSizes(context.Context, *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListVolumeDirSizes is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {

@@ -168,6 +168,12 @@ service NodeService {
   rpc CreateNodeDir(NodeFileRef) returns (NodeFileOpResponse);
   rpc ListNodeFileBackups(NodeFileRef) returns (ListNodeFileBackupsResponse);
   rpc RestoreNodeFileBackup(RestoreNodeFileBackupRequest) returns (WriteNodeFileResponse);
+  rpc RenameNodeFile(NodeTransferRequest) returns (FileOpResult);
+  rpc MoveNodeFiles(NodeTransferRequest) returns (stream FileOpEvent);
+  rpc CopyNodeFiles(NodeTransferRequest) returns (stream FileOpEvent);
+  rpc CompressNodeFiles(NodeCompressRequest) returns (stream FileOpEvent);
+  rpc ExtractNodeFile(NodeExtractRequest) returns (stream FileOpEvent);
+  rpc ListNodeDirSizes(NodeDirSizesRequest) returns (DirSizesResponse);
   // 节点信任的面板列表。
   rpc ListNodePanels(ListNodePanelsRequest) returns (ListNodePanelsResponse);
   // 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -812,6 +818,13 @@ service ProjectService {
   rpc DeleteVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
   rpc CreateVolumeDir(VolumeFileRef) returns (VolumeFileOpResponse);
   rpc RestoreVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
+  // 同一个卷里的改名、移动、复制，压缩和解压。长操作流式返回进度。
+  rpc RenameVolumeFile(VolumeTransferRequest) returns (FileOpResult);
+  rpc MoveVolumeFiles(VolumeTransferRequest) returns (stream FileOpEvent);
+  rpc CopyVolumeFiles(VolumeTransferRequest) returns (stream FileOpEvent);
+  rpc CompressVolumeFiles(VolumeCompressRequest) returns (stream FileOpEvent);
+  rpc ExtractVolumeFile(VolumeExtractRequest) returns (stream FileOpEvent);
+  rpc ListVolumeDirSizes(VolumeDirSizesRequest) returns (DirSizesResponse);
 
   // 快照（按容器）。
   rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);

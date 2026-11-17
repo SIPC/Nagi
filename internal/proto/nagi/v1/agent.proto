@@ -29,6 +29,12 @@ service AgentService {
   rpc CreateVolumeDir(VolumeFileRef) returns (VolumeFileOpResponse);
   // 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
   rpc RestoreVolumeFile(VolumeFileRef) returns (VolumeFileOpResponse);
+  // 卷里的改名、移动、复制（同一个卷内）、压缩、解压，都在节点本地进行。每隔一会儿发一条进度，最后一条带结果。
+  rpc TransferVolumeFiles(VolumeTransferRequest) returns (stream FileOpEvent);
+  rpc CompressVolumeFiles(VolumeCompressRequest) returns (stream FileOpEvent);
+  rpc ExtractVolumeFile(VolumeExtractRequest) returns (stream FileOpEvent);
+  // 目录的大小：在时间和文件数的限额内统计，超出时标记为不完整。
+  rpc ListVolumeDirSizes(VolumeDirSizesRequest) returns (DirSizesResponse);
   rpc ListSnapshots(ContainerRef) returns (ListSnapshotsResponse);
   rpc CreateSnapshot(ContainerRef) returns (stream DeployEvent);
   // 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -55,6 +61,10 @@ service AgentService {
   rpc CreateNodeDir(NodeFileRef) returns (NodeFileOpResponse);
   rpc ListNodeFileBackups(NodeFileRef) returns (ListNodeFileBackupsResponse);
   rpc RestoreNodeFileBackup(RestoreNodeFileBackupRequest) returns (WriteNodeFileResponse);
+  rpc TransferNodeFiles(NodeTransferRequest) returns (stream FileOpEvent);
+  rpc CompressNodeFiles(NodeCompressRequest) returns (stream FileOpEvent);
+  rpc ExtractNodeFile(NodeExtractRequest) returns (stream FileOpEvent);
+  rpc ListNodeDirSizes(NodeDirSizesRequest) returns (DirSizesResponse);
   // 立即检查容器的镜像有没有新版本。
   rpc CheckImages(ContainerRef) returns (CheckImagesResponse);
   // 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -349,6 +359,133 @@ message VolumeUploadResponse {
 
 message VolumeFileOpResponse {}
 
+// 文件的改名、移动、复制、压缩、解压（见 docs/agent.md#存储）。
+// conflict：目标已经存在时怎么办。空：不做任何改动，在结果的 conflicts 里列出已存在的名字；
+// overwrite：替换；rename：保留两者，新的加「 (2)」这样的后缀；skip：跳过。
+message VolumeTransferRequest {
+  string project_id = 1;
+  string container = 2;
+  string volume = 3;
+  // 要移动或复制的文件和目录，相对卷根目录。
+  repeated string paths = 4;
+  // 目标目录，相对卷根目录，空表示根目录。必须已经存在。
+  string dest_dir = 5;
+  // true 复制，false 移动。面板按调用的接口填写。
+  bool copy = 6;
+  // 只有一项时可以指定新的名字（改名）。
+  string new_name = 7;
+  string conflict = 8;
+}
+
+message VolumeCompressRequest {
+  string project_id = 1;
+  string container = 2;
+  string volume = 3;
+  repeated string paths = 4;
+  // 压缩包的路径，相对卷根目录。
+  string dest = 5;
+  // zip 或 tar.gz。
+  string format = 6;
+  string conflict = 7;
+}
+
+message VolumeExtractRequest {
+  string project_id = 1;
+  string container = 2;
+  string volume = 3;
+  // 压缩包：zip、tar.gz（.tgz）、tar。
+  string path = 4;
+  string dest_dir = 5;
+  // true：dest_dir 是新建的目录（以压缩包命名），已经存在时按 conflict 处理这个目录；
+  // false：解压到已有的 dest_dir 里，压缩包顶层的每一项按 conflict 处理。
+  bool into_new_dir = 6;
+  string conflict = 7;
+}
+
+message VolumeDirSizesRequest {
+  string project_id = 1;
+  string container = 2;
+  string volume = 3;
+  // 所在目录，相对卷根目录。
+  string path = 4;
+  // 要统计的子目录名。
+  repeated string names = 5;
+}
+
+message FileOpResult {
+  // 已经存在的目标（名字），这时没有做任何改动。
+  repeated string conflicts = 1;
+  // 完成后各项的路径。
+  repeated string paths = 2;
+  // 按 skip 跳过的同名项。
+  int32 skipped = 3;
+  // 没有处理的符号链接、硬链接和特殊文件。
+  int32 skipped_links = 4;
+}
+
+// FileOpEvent：长操作的进度。result 只在最后一条里。
+message FileOpEvent {
+  int64 bytes = 1;
+  int64 files = 2;
+  FileOpResult result = 3;
+}
+
+message DirSize {
+  string name = 1;
+  int64 size = 2;
+  int64 files = 3;
+  // false：超出了时间或文件数的限额，size 只是已经统计到的部分。
+  bool complete = 4;
+}
+
+message DirSizesResponse {
+  repeated DirSize sizes = 1;
+}
+
+// 分块上传（断点续传）：先 Begin 拿到上传 ID 和已经收到的长度，再从这个位置按块发，最后 Commit 核对大小和 SHA-256。
+// volume 和 node 二选一，分别是卷里和节点上的目标。
+message UploadBeginRequest {
+  VolumeFileRef volume = 1;
+  NodeFileRef node = 2;
+  int64 size = 3;
+  // 客户端对文件的标识（名字、大小、修改时间、首尾内容的哈希）。同一个目标、同样大小和标识的上传接着传。
+  string key = 4;
+  bool confirmed = 5;
+}
+
+message UploadSession {
+  string id = 1;
+  // 已经收到并核对过的长度，下一块从这里开始。
+  int64 offset = 2;
+  int64 size = 3;
+}
+
+// UploadPart 的第一条带 id、offset、sha256 和目标，之后是内容。
+message UploadPartChunk {
+  VolumeFileRef volume = 1;
+  NodeFileRef node = 2;
+  string id = 3;
+  int64 offset = 4;
+  bytes data = 5;
+  // 这一块的 SHA-256，对不上就丢掉这一块。
+  string sha256 = 6;
+}
+
+message UploadCommitRequest {
+  VolumeFileRef volume = 1;
+  NodeFileRef node = 2;
+  string id = 3;
+  // 整个文件的 SHA-256。
+  string sha256 = 4;
+  bool confirmed = 5;
+}
+
+message UploadAbortRequest {
+  VolumeFileRef volume = 1;
+  NodeFileRef node = 2;
+  string id = 3;
+}
+
 message RestoreSnapshotRequest {
   string project_id = 1;
   string container = 2;
@@ -624,6 +761,42 @@ message RestoreNodeFileBackupRequest {
   string path = 2;
   string id = 3;
   bool confirmed = 4;
+}
+
+// 节点上的改名、移动、复制、压缩、解压，路径都是绝对路径，conflict 同 VolumeTransferRequest。
+// confirmed：用户确认过要动敏感路径。
+message NodeTransferRequest {
+  string node_id = 1;
+  repeated string paths = 2;
+  string dest_dir = 3;
+  bool copy = 4;
+  string new_name = 5;
+  string conflict = 6;
+  bool confirmed = 7;
+}
+
+message NodeCompressRequest {
+  string node_id = 1;
+  repeated string paths = 2;
+  string dest = 3;
+  string format = 4;
+  string conflict = 5;
+  bool confirmed = 6;
+}
+
+message NodeExtractRequest {
+  string node_id = 1;
+  string path = 2;
+  string dest_dir = 3;
+  bool into_new_dir = 4;
+  string conflict = 5;
+  bool confirmed = 6;
+}
+
+message NodeDirSizesRequest {
+  string node_id = 1;
+  string path = 2;
+  repeated string names = 3;
 }
 
 // NodeFileUploadChunk 第一条带 ref 和 confirmed，之后是内容。

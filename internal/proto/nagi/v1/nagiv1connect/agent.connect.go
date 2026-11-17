@@ -60,6 +60,18 @@ const (
 	// AgentServiceRestoreVolumeFileProcedure is the fully-qualified name of the AgentService's
 	// RestoreVolumeFile RPC.
 	AgentServiceRestoreVolumeFileProcedure = "/nagi.v1.AgentService/RestoreVolumeFile"
+	// AgentServiceTransferVolumeFilesProcedure is the fully-qualified name of the AgentService's
+	// TransferVolumeFiles RPC.
+	AgentServiceTransferVolumeFilesProcedure = "/nagi.v1.AgentService/TransferVolumeFiles"
+	// AgentServiceCompressVolumeFilesProcedure is the fully-qualified name of the AgentService's
+	// CompressVolumeFiles RPC.
+	AgentServiceCompressVolumeFilesProcedure = "/nagi.v1.AgentService/CompressVolumeFiles"
+	// AgentServiceExtractVolumeFileProcedure is the fully-qualified name of the AgentService's
+	// ExtractVolumeFile RPC.
+	AgentServiceExtractVolumeFileProcedure = "/nagi.v1.AgentService/ExtractVolumeFile"
+	// AgentServiceListVolumeDirSizesProcedure is the fully-qualified name of the AgentService's
+	// ListVolumeDirSizes RPC.
+	AgentServiceListVolumeDirSizesProcedure = "/nagi.v1.AgentService/ListVolumeDirSizes"
 	// AgentServiceListSnapshotsProcedure is the fully-qualified name of the AgentService's
 	// ListSnapshots RPC.
 	AgentServiceListSnapshotsProcedure = "/nagi.v1.AgentService/ListSnapshots"
@@ -107,6 +119,18 @@ const (
 	// AgentServiceRestoreNodeFileBackupProcedure is the fully-qualified name of the AgentService's
 	// RestoreNodeFileBackup RPC.
 	AgentServiceRestoreNodeFileBackupProcedure = "/nagi.v1.AgentService/RestoreNodeFileBackup"
+	// AgentServiceTransferNodeFilesProcedure is the fully-qualified name of the AgentService's
+	// TransferNodeFiles RPC.
+	AgentServiceTransferNodeFilesProcedure = "/nagi.v1.AgentService/TransferNodeFiles"
+	// AgentServiceCompressNodeFilesProcedure is the fully-qualified name of the AgentService's
+	// CompressNodeFiles RPC.
+	AgentServiceCompressNodeFilesProcedure = "/nagi.v1.AgentService/CompressNodeFiles"
+	// AgentServiceExtractNodeFileProcedure is the fully-qualified name of the AgentService's
+	// ExtractNodeFile RPC.
+	AgentServiceExtractNodeFileProcedure = "/nagi.v1.AgentService/ExtractNodeFile"
+	// AgentServiceListNodeDirSizesProcedure is the fully-qualified name of the AgentService's
+	// ListNodeDirSizes RPC.
+	AgentServiceListNodeDirSizesProcedure = "/nagi.v1.AgentService/ListNodeDirSizes"
 	// AgentServiceCheckImagesProcedure is the fully-qualified name of the AgentService's CheckImages
 	// RPC.
 	AgentServiceCheckImagesProcedure = "/nagi.v1.AgentService/CheckImages"
@@ -223,6 +247,12 @@ type AgentServiceClient interface {
 	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
 	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	// 卷里的改名、移动、复制（同一个卷内）、压缩、解压，都在节点本地进行。每隔一会儿发一条进度，最后一条带结果。
+	TransferVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	CompressVolumeFiles(context.Context, *connect.Request[v1.VolumeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ExtractVolumeFile(context.Context, *connect.Request[v1.VolumeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	// 目录的大小：在时间和文件数的限额内统计，超出时标记为不完整。
+	ListVolumeDirSizes(context.Context, *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -248,6 +278,10 @@ type AgentServiceClient interface {
 	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
 	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
 	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	TransferNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	CompressNodeFiles(context.Context, *connect.Request[v1.NodeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ExtractNodeFile(context.Context, *connect.Request[v1.NodeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error)
+	ListNodeDirSizes(context.Context, *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -390,6 +424,30 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("RestoreVolumeFile")),
 			connect.WithClientOptions(opts...),
 		),
+		transferVolumeFiles: connect.NewClient[v1.VolumeTransferRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+AgentServiceTransferVolumeFilesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("TransferVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		compressVolumeFiles: connect.NewClient[v1.VolumeCompressRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+AgentServiceCompressVolumeFilesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CompressVolumeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		extractVolumeFile: connect.NewClient[v1.VolumeExtractRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+AgentServiceExtractVolumeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ExtractVolumeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		listVolumeDirSizes: connect.NewClient[v1.VolumeDirSizesRequest, v1.DirSizesResponse](
+			httpClient,
+			baseURL+AgentServiceListVolumeDirSizesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListVolumeDirSizes")),
+			connect.WithClientOptions(opts...),
+		),
 		listSnapshots: connect.NewClient[v1.ContainerRef, v1.ListSnapshotsResponse](
 			httpClient,
 			baseURL+AgentServiceListSnapshotsProcedure,
@@ -490,6 +548,30 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceRestoreNodeFileBackupProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("RestoreNodeFileBackup")),
+			connect.WithClientOptions(opts...),
+		),
+		transferNodeFiles: connect.NewClient[v1.NodeTransferRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+AgentServiceTransferNodeFilesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("TransferNodeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		compressNodeFiles: connect.NewClient[v1.NodeCompressRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+AgentServiceCompressNodeFilesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CompressNodeFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		extractNodeFile: connect.NewClient[v1.NodeExtractRequest, v1.FileOpEvent](
+			httpClient,
+			baseURL+AgentServiceExtractNodeFileProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ExtractNodeFile")),
+			connect.WithClientOptions(opts...),
+		),
+		listNodeDirSizes: connect.NewClient[v1.NodeDirSizesRequest, v1.DirSizesResponse](
+			httpClient,
+			baseURL+AgentServiceListNodeDirSizesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListNodeDirSizes")),
 			connect.WithClientOptions(opts...),
 		),
 		checkImages: connect.NewClient[v1.ContainerRef, v1.CheckImagesResponse](
@@ -722,6 +804,10 @@ type agentServiceClient struct {
 	deleteVolumeFile      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
 	createVolumeDir       *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
 	restoreVolumeFile     *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
+	transferVolumeFiles   *connect.Client[v1.VolumeTransferRequest, v1.FileOpEvent]
+	compressVolumeFiles   *connect.Client[v1.VolumeCompressRequest, v1.FileOpEvent]
+	extractVolumeFile     *connect.Client[v1.VolumeExtractRequest, v1.FileOpEvent]
+	listVolumeDirSizes    *connect.Client[v1.VolumeDirSizesRequest, v1.DirSizesResponse]
 	listSnapshots         *connect.Client[v1.ContainerRef, v1.ListSnapshotsResponse]
 	createSnapshot        *connect.Client[v1.ContainerRef, v1.DeployEvent]
 	restoreSnapshot       *connect.Client[v1.RestoreSnapshotRequest, v1.DeployEvent]
@@ -739,6 +825,10 @@ type agentServiceClient struct {
 	createNodeDir         *connect.Client[v1.NodeFileRef, v1.NodeFileOpResponse]
 	listNodeFileBackups   *connect.Client[v1.NodeFileRef, v1.ListNodeFileBackupsResponse]
 	restoreNodeFileBackup *connect.Client[v1.RestoreNodeFileBackupRequest, v1.WriteNodeFileResponse]
+	transferNodeFiles     *connect.Client[v1.NodeTransferRequest, v1.FileOpEvent]
+	compressNodeFiles     *connect.Client[v1.NodeCompressRequest, v1.FileOpEvent]
+	extractNodeFile       *connect.Client[v1.NodeExtractRequest, v1.FileOpEvent]
+	listNodeDirSizes      *connect.Client[v1.NodeDirSizesRequest, v1.DirSizesResponse]
 	checkImages           *connect.Client[v1.ContainerRef, v1.CheckImagesResponse]
 	loginRegistry         *connect.Client[v1.LoginRegistryRequest, v1.LoginRegistryResponse]
 	syncBackup            *connect.Client[v1.SyncBackupRequest, v1.BackupStatus]
@@ -820,6 +910,26 @@ func (c *agentServiceClient) CreateVolumeDir(ctx context.Context, req *connect.R
 // RestoreVolumeFile calls nagi.v1.AgentService.RestoreVolumeFile.
 func (c *agentServiceClient) RestoreVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error) {
 	return c.restoreVolumeFile.CallUnary(ctx, req)
+}
+
+// TransferVolumeFiles calls nagi.v1.AgentService.TransferVolumeFiles.
+func (c *agentServiceClient) TransferVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.transferVolumeFiles.CallServerStream(ctx, req)
+}
+
+// CompressVolumeFiles calls nagi.v1.AgentService.CompressVolumeFiles.
+func (c *agentServiceClient) CompressVolumeFiles(ctx context.Context, req *connect.Request[v1.VolumeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.compressVolumeFiles.CallServerStream(ctx, req)
+}
+
+// ExtractVolumeFile calls nagi.v1.AgentService.ExtractVolumeFile.
+func (c *agentServiceClient) ExtractVolumeFile(ctx context.Context, req *connect.Request[v1.VolumeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.extractVolumeFile.CallServerStream(ctx, req)
+}
+
+// ListVolumeDirSizes calls nagi.v1.AgentService.ListVolumeDirSizes.
+func (c *agentServiceClient) ListVolumeDirSizes(ctx context.Context, req *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return c.listVolumeDirSizes.CallUnary(ctx, req)
 }
 
 // ListSnapshots calls nagi.v1.AgentService.ListSnapshots.
@@ -905,6 +1015,26 @@ func (c *agentServiceClient) ListNodeFileBackups(ctx context.Context, req *conne
 // RestoreNodeFileBackup calls nagi.v1.AgentService.RestoreNodeFileBackup.
 func (c *agentServiceClient) RestoreNodeFileBackup(ctx context.Context, req *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
 	return c.restoreNodeFileBackup.CallUnary(ctx, req)
+}
+
+// TransferNodeFiles calls nagi.v1.AgentService.TransferNodeFiles.
+func (c *agentServiceClient) TransferNodeFiles(ctx context.Context, req *connect.Request[v1.NodeTransferRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.transferNodeFiles.CallServerStream(ctx, req)
+}
+
+// CompressNodeFiles calls nagi.v1.AgentService.CompressNodeFiles.
+func (c *agentServiceClient) CompressNodeFiles(ctx context.Context, req *connect.Request[v1.NodeCompressRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.compressNodeFiles.CallServerStream(ctx, req)
+}
+
+// ExtractNodeFile calls nagi.v1.AgentService.ExtractNodeFile.
+func (c *agentServiceClient) ExtractNodeFile(ctx context.Context, req *connect.Request[v1.NodeExtractRequest]) (*connect.ServerStreamForClient[v1.FileOpEvent], error) {
+	return c.extractNodeFile.CallServerStream(ctx, req)
+}
+
+// ListNodeDirSizes calls nagi.v1.AgentService.ListNodeDirSizes.
+func (c *agentServiceClient) ListNodeDirSizes(ctx context.Context, req *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return c.listNodeDirSizes.CallUnary(ctx, req)
 }
 
 // CheckImages calls nagi.v1.AgentService.CheckImages.
@@ -1107,6 +1237,12 @@ type AgentServiceHandler interface {
 	CreateVolumeDir(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
 	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
 	RestoreVolumeFile(context.Context, *connect.Request[v1.VolumeFileRef]) (*connect.Response[v1.VolumeFileOpResponse], error)
+	// 卷里的改名、移动、复制（同一个卷内）、压缩、解压，都在节点本地进行。每隔一会儿发一条进度，最后一条带结果。
+	TransferVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	CompressVolumeFiles(context.Context, *connect.Request[v1.VolumeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ExtractVolumeFile(context.Context, *connect.Request[v1.VolumeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	// 目录的大小：在时间和文件数的限额内统计，超出时标记为不完整。
+	ListVolumeDirSizes(context.Context, *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	CreateSnapshot(context.Context, *connect.Request[v1.ContainerRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -1132,6 +1268,10 @@ type AgentServiceHandler interface {
 	CreateNodeDir(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.NodeFileOpResponse], error)
 	ListNodeFileBackups(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.Response[v1.ListNodeFileBackupsResponse], error)
 	RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error)
+	TransferNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	CompressNodeFiles(context.Context, *connect.Request[v1.NodeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ExtractNodeFile(context.Context, *connect.Request[v1.NodeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error
+	ListNodeDirSizes(context.Context, *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -1270,6 +1410,30 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("RestoreVolumeFile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceTransferVolumeFilesHandler := connect.NewServerStreamHandler(
+		AgentServiceTransferVolumeFilesProcedure,
+		svc.TransferVolumeFiles,
+		connect.WithSchema(agentServiceMethods.ByName("TransferVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCompressVolumeFilesHandler := connect.NewServerStreamHandler(
+		AgentServiceCompressVolumeFilesProcedure,
+		svc.CompressVolumeFiles,
+		connect.WithSchema(agentServiceMethods.ByName("CompressVolumeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceExtractVolumeFileHandler := connect.NewServerStreamHandler(
+		AgentServiceExtractVolumeFileProcedure,
+		svc.ExtractVolumeFile,
+		connect.WithSchema(agentServiceMethods.ByName("ExtractVolumeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListVolumeDirSizesHandler := connect.NewUnaryHandler(
+		AgentServiceListVolumeDirSizesProcedure,
+		svc.ListVolumeDirSizes,
+		connect.WithSchema(agentServiceMethods.ByName("ListVolumeDirSizes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceListSnapshotsHandler := connect.NewUnaryHandler(
 		AgentServiceListSnapshotsProcedure,
 		svc.ListSnapshots,
@@ -1370,6 +1534,30 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceRestoreNodeFileBackupProcedure,
 		svc.RestoreNodeFileBackup,
 		connect.WithSchema(agentServiceMethods.ByName("RestoreNodeFileBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceTransferNodeFilesHandler := connect.NewServerStreamHandler(
+		AgentServiceTransferNodeFilesProcedure,
+		svc.TransferNodeFiles,
+		connect.WithSchema(agentServiceMethods.ByName("TransferNodeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceCompressNodeFilesHandler := connect.NewServerStreamHandler(
+		AgentServiceCompressNodeFilesProcedure,
+		svc.CompressNodeFiles,
+		connect.WithSchema(agentServiceMethods.ByName("CompressNodeFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceExtractNodeFileHandler := connect.NewServerStreamHandler(
+		AgentServiceExtractNodeFileProcedure,
+		svc.ExtractNodeFile,
+		connect.WithSchema(agentServiceMethods.ByName("ExtractNodeFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceListNodeDirSizesHandler := connect.NewUnaryHandler(
+		AgentServiceListNodeDirSizesProcedure,
+		svc.ListNodeDirSizes,
+		connect.WithSchema(agentServiceMethods.ByName("ListNodeDirSizes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceCheckImagesHandler := connect.NewUnaryHandler(
@@ -1608,6 +1796,14 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceCreateVolumeDirHandler.ServeHTTP(w, r)
 		case AgentServiceRestoreVolumeFileProcedure:
 			agentServiceRestoreVolumeFileHandler.ServeHTTP(w, r)
+		case AgentServiceTransferVolumeFilesProcedure:
+			agentServiceTransferVolumeFilesHandler.ServeHTTP(w, r)
+		case AgentServiceCompressVolumeFilesProcedure:
+			agentServiceCompressVolumeFilesHandler.ServeHTTP(w, r)
+		case AgentServiceExtractVolumeFileProcedure:
+			agentServiceExtractVolumeFileHandler.ServeHTTP(w, r)
+		case AgentServiceListVolumeDirSizesProcedure:
+			agentServiceListVolumeDirSizesHandler.ServeHTTP(w, r)
 		case AgentServiceListSnapshotsProcedure:
 			agentServiceListSnapshotsHandler.ServeHTTP(w, r)
 		case AgentServiceCreateSnapshotProcedure:
@@ -1642,6 +1838,14 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceListNodeFileBackupsHandler.ServeHTTP(w, r)
 		case AgentServiceRestoreNodeFileBackupProcedure:
 			agentServiceRestoreNodeFileBackupHandler.ServeHTTP(w, r)
+		case AgentServiceTransferNodeFilesProcedure:
+			agentServiceTransferNodeFilesHandler.ServeHTTP(w, r)
+		case AgentServiceCompressNodeFilesProcedure:
+			agentServiceCompressNodeFilesHandler.ServeHTTP(w, r)
+		case AgentServiceExtractNodeFileProcedure:
+			agentServiceExtractNodeFileHandler.ServeHTTP(w, r)
+		case AgentServiceListNodeDirSizesProcedure:
+			agentServiceListNodeDirSizesHandler.ServeHTTP(w, r)
 		case AgentServiceCheckImagesProcedure:
 			agentServiceCheckImagesHandler.ServeHTTP(w, r)
 		case AgentServiceLoginRegistryProcedure:
@@ -1759,6 +1963,22 @@ func (UnimplementedAgentServiceHandler) RestoreVolumeFile(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreVolumeFile is not implemented"))
 }
 
+func (UnimplementedAgentServiceHandler) TransferVolumeFiles(context.Context, *connect.Request[v1.VolumeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.TransferVolumeFiles is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CompressVolumeFiles(context.Context, *connect.Request[v1.VolumeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CompressVolumeFiles is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ExtractVolumeFile(context.Context, *connect.Request[v1.VolumeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ExtractVolumeFile is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListVolumeDirSizes(context.Context, *connect.Request[v1.VolumeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListVolumeDirSizes is not implemented"))
+}
+
 func (UnimplementedAgentServiceHandler) ListSnapshots(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListSnapshots is not implemented"))
 }
@@ -1825,6 +2045,22 @@ func (UnimplementedAgentServiceHandler) ListNodeFileBackups(context.Context, *co
 
 func (UnimplementedAgentServiceHandler) RestoreNodeFileBackup(context.Context, *connect.Request[v1.RestoreNodeFileBackupRequest]) (*connect.Response[v1.WriteNodeFileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.RestoreNodeFileBackup is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) TransferNodeFiles(context.Context, *connect.Request[v1.NodeTransferRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.TransferNodeFiles is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CompressNodeFiles(context.Context, *connect.Request[v1.NodeCompressRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CompressNodeFiles is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ExtractNodeFile(context.Context, *connect.Request[v1.NodeExtractRequest], *connect.ServerStream[v1.FileOpEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ExtractNodeFile is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListNodeDirSizes(context.Context, *connect.Request[v1.NodeDirSizesRequest]) (*connect.Response[v1.DirSizesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListNodeDirSizes is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) CheckImages(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.CheckImagesResponse], error) {

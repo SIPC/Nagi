@@ -20,6 +20,15 @@ service MeshService {
   rpc NodeFileDownload(NodeFileRef) returns (stream VolumeFileChunk);
   // 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
   rpc NodeFileUpload(stream NodeFileUploadChunk) returns (VolumeUploadResponse);
+  // 分块上传（断点续传，见 docs/agent.md#存储）：卷里和节点上各一组，规则和上面两个一样。
+  rpc VolumeUploadBegin(UploadBeginRequest) returns (UploadSession);
+  rpc VolumeUploadPart(stream UploadPartChunk) returns (UploadSession);
+  rpc VolumeUploadCommit(UploadCommitRequest) returns (VolumeUploadResponse);
+  rpc VolumeUploadAbort(UploadAbortRequest) returns (UploadSession);
+  rpc NodeFileUploadBegin(UploadBeginRequest) returns (UploadSession);
+  rpc NodeFileUploadPart(stream UploadPartChunk) returns (UploadSession);
+  rpc NodeFileUploadCommit(UploadCommitRequest) returns (VolumeUploadResponse);
+  rpc NodeFileUploadAbort(UploadAbortRequest) returns (UploadSession);
   // 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
   // 只接受备份节点登记过的源节点。
   rpc ReplicaManifest(ReplicaManifestRequest) returns (ReplicaManifestResponse);

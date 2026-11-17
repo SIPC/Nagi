@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { NodeFileRefSchema, NodeFileUploadChunkSchema, VolumeFileChunkSchema, VolumeFileRefSchema, VolumeUploadChunkSchema, VolumeUploadResponseSchema } from "./agent_pb";
+import type { NodeFileRefSchema, NodeFileUploadChunkSchema, UploadAbortRequestSchema, UploadBeginRequestSchema, UploadCommitRequestSchema, UploadPartChunkSchema, UploadSessionSchema, VolumeFileChunkSchema, VolumeFileRefSchema, VolumeUploadChunkSchema, VolumeUploadResponseSchema } from "./agent_pb";
 import { file_nagi_v1_agent } from "./agent_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/mesh.proto.
  */
 export const file_nagi_v1_mesh: GenFile = /*@__PURE__*/
-  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiXQoQTGVhc2VWb3RlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgEIAEoCRINCgVlcG9jaBgCIAEoBBITCgtoYW5kb3Zlcl90bxgDIAEoDCI9ChFMZWFzZVZvdGVzUmVxdWVzdBIoCgV2b3RlcxgBIAMoCzIZLm5hZ2kudjEuTGVhc2VWb3RlUmVxdWVzdCI/ChJMZWFzZVZvdGVzUmVzcG9uc2USKQoFdm90ZXMYASADKAsyGi5uYWdpLnYxLkxlYXNlVm90ZVJlc3BvbnNlIkMKEUxlYXNlVm90ZVJlc3BvbnNlEg8KB2dyYW50ZWQYASABKAgSDgoGaG9sZGVyGAIgASgMEg0KBWVwb2NoGAMgASgEIj8KFlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgljb250YWluZXIYAiABKAkiKQoLUmVwbGljYUZpbGUSDAoEcGF0aBgBIAEoCRIMCgRzaXplGAIgASgDIj4KF1JlcGxpY2FNYW5pZmVzdFJlc3BvbnNlEiMKBWZpbGVzGAEgAygLMhQubmFnaS52MS5SZXBsaWNhRmlsZSJRCgxSZXBsaWNhQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRwYXRoGAIgASgJEgwKBGRhdGEYAyABKAwSEQoJY29udGFpbmVyGAQgASgJIiMKElJlcGxpY2FQdXRSZXNwb25zZRINCgVmaWxlcxgBIAEoDSJMChRSZXBsaWNhQ29tbWl0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgDIAEoCRINCgVwYXRocxgCIAMoCSIXChVSZXBsaWNhQ29tbWl0UmVzcG9uc2UiQgoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMEhEKCWNvbnRhaW5lchgDIAEoCSJACg5VcGxvYWRSZXNwb25zZRINCgVieXRlcxgBIAEoBBINCgVmaWxlcxgCIAEoDRIQCghzdHJpcHBlZBgDIAEoCSINCgtQaW5nUmVxdWVzdCIeCgxQaW5nUmVzcG9uc2USDgoGY2FsbGVyGAEgASgMMtgFCgtNZXNoU2VydmljZRIzCgRQaW5nEhQubmFnaS52MS5QaW5nUmVxdWVzdBoVLm5hZ2kudjEuUGluZ1Jlc3BvbnNlEjkKBlVwbG9hZBIULm5hZ2kudjEuVXBsb2FkQ2h1bmsaFy5uYWdpLnYxLlVwbG9hZFJlc3BvbnNlKAESRAoOVm9sdW1lRG93bmxvYWQSFi5uYWdpLnYxLlZvbHVtZUZpbGVSZWYaGC5uYWdpLnYxLlZvbHVtZUZpbGVDaHVuazABEksKDFZvbHVtZVVwbG9hZBIaLm5hZ2kudjEuVm9sdW1lVXBsb2FkQ2h1bmsaHS5uYWdpLnYxLlZvbHVtZVVwbG9hZFJlc3BvbnNlKAESRAoQTm9kZUZpbGVEb3dubG9hZBIULm5hZ2kudjEuTm9kZUZpbGVSZWYaGC5uYWdpLnYxLlZvbHVtZUZpbGVDaHVuazABEk8KDk5vZGVGaWxlVXBsb2FkEhwubmFnaS52MS5Ob2RlRmlsZVVwbG9hZENodW5rGh0ubmFnaS52MS5Wb2x1bWVVcGxvYWRSZXNwb25zZSgBElQKD1JlcGxpY2FNYW5pZmVzdBIfLm5hZ2kudjEuUmVwbGljYU1hbmlmZXN0UmVxdWVzdBogLm5hZ2kudjEuUmVwbGljYU1hbmlmZXN0UmVzcG9uc2USQgoKUmVwbGljYVB1dBIVLm5hZ2kudjEuUmVwbGljYUNodW5rGhsubmFnaS52MS5SZXBsaWNhUHV0UmVzcG9uc2UoARJOCg1SZXBsaWNhQ29tbWl0Eh0ubmFnaS52MS5SZXBsaWNhQ29tbWl0UmVxdWVzdBoeLm5hZ2kudjEuUmVwbGljYUNvbW1pdFJlc3BvbnNlEkUKCkxlYXNlVm90ZXMSGi5uYWdpLnYxLkxlYXNlVm90ZXNSZXF1ZXN0GhsubmFnaS52MS5MZWFzZVZvdGVzUmVzcG9uc2VCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_nagi_v1_agent]);
+  fileDesc("ChJuYWdpL3YxL21lc2gucHJvdG8SB25hZ2kudjEiXQoQTGVhc2VWb3RlUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgEIAEoCRINCgVlcG9jaBgCIAEoBBITCgtoYW5kb3Zlcl90bxgDIAEoDCI9ChFMZWFzZVZvdGVzUmVxdWVzdBIoCgV2b3RlcxgBIAMoCzIZLm5hZ2kudjEuTGVhc2VWb3RlUmVxdWVzdCI/ChJMZWFzZVZvdGVzUmVzcG9uc2USKQoFdm90ZXMYASADKAsyGi5uYWdpLnYxLkxlYXNlVm90ZVJlc3BvbnNlIkMKEUxlYXNlVm90ZVJlc3BvbnNlEg8KB2dyYW50ZWQYASABKAgSDgoGaG9sZGVyGAIgASgMEg0KBWVwb2NoGAMgASgEIj8KFlJlcGxpY2FNYW5pZmVzdFJlcXVlc3QSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgljb250YWluZXIYAiABKAkiKQoLUmVwbGljYUZpbGUSDAoEcGF0aBgBIAEoCRIMCgRzaXplGAIgASgDIj4KF1JlcGxpY2FNYW5pZmVzdFJlc3BvbnNlEiMKBWZpbGVzGAEgAygLMhQubmFnaS52MS5SZXBsaWNhRmlsZSJRCgxSZXBsaWNhQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRwYXRoGAIgASgJEgwKBGRhdGEYAyABKAwSEQoJY29udGFpbmVyGAQgASgJIiMKElJlcGxpY2FQdXRSZXNwb25zZRINCgVmaWxlcxgBIAEoDSJMChRSZXBsaWNhQ29tbWl0UmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJEhEKCWNvbnRhaW5lchgDIAEoCRINCgVwYXRocxgCIAMoCSIXChVSZXBsaWNhQ29tbWl0UmVzcG9uc2UiQgoLVXBsb2FkQ2h1bmsSEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRkYXRhGAIgASgMEhEKCWNvbnRhaW5lchgDIAEoCSJACg5VcGxvYWRSZXNwb25zZRINCgVieXRlcxgBIAEoBBINCgVmaWxlcxgCIAEoDRIQCghzdHJpcHBlZBgDIAEoCSINCgtQaW5nUmVxdWVzdCIeCgxQaW5nUmVzcG9uc2USDgoGY2FsbGVyGAEgASgMMr4KCgtNZXNoU2VydmljZRIzCgRQaW5nEhQubmFnaS52MS5QaW5nUmVxdWVzdBoVLm5hZ2kudjEuUGluZ1Jlc3BvbnNlEjkKBlVwbG9hZBIULm5hZ2kudjEuVXBsb2FkQ2h1bmsaFy5uYWdpLnYxLlVwbG9hZFJlc3BvbnNlKAESRAoOVm9sdW1lRG93bmxvYWQSFi5uYWdpLnYxLlZvbHVtZUZpbGVSZWYaGC5uYWdpLnYxLlZvbHVtZUZpbGVDaHVuazABEksKDFZvbHVtZVVwbG9hZBIaLm5hZ2kudjEuVm9sdW1lVXBsb2FkQ2h1bmsaHS5uYWdpLnYxLlZvbHVtZVVwbG9hZFJlc3BvbnNlKAESRAoQTm9kZUZpbGVEb3dubG9hZBIULm5hZ2kudjEuTm9kZUZpbGVSZWYaGC5uYWdpLnYxLlZvbHVtZUZpbGVDaHVuazABEk8KDk5vZGVGaWxlVXBsb2FkEhwubmFnaS52MS5Ob2RlRmlsZVVwbG9hZENodW5rGh0ubmFnaS52MS5Wb2x1bWVVcGxvYWRSZXNwb25zZSgBEkgKEVZvbHVtZVVwbG9hZEJlZ2luEhsubmFnaS52MS5VcGxvYWRCZWdpblJlcXVlc3QaFi5uYWdpLnYxLlVwbG9hZFNlc3Npb24SRgoQVm9sdW1lVXBsb2FkUGFydBIYLm5hZ2kudjEuVXBsb2FkUGFydENodW5rGhYubmFnaS52MS5VcGxvYWRTZXNzaW9uKAESUQoSVm9sdW1lVXBsb2FkQ29tbWl0EhwubmFnaS52MS5VcGxvYWRDb21taXRSZXF1ZXN0Gh0ubmFnaS52MS5Wb2x1bWVVcGxvYWRSZXNwb25zZRJIChFWb2x1bWVVcGxvYWRBYm9ydBIbLm5hZ2kudjEuVXBsb2FkQWJvcnRSZXF1ZXN0GhYubmFnaS52MS5VcGxvYWRTZXNzaW9uEkoKE05vZGVGaWxlVXBsb2FkQmVnaW4SGy5uYWdpLnYxLlVwbG9hZEJlZ2luUmVxdWVzdBoWLm5hZ2kudjEuVXBsb2FkU2Vzc2lvbhJIChJOb2RlRmlsZVVwbG9hZFBhcnQSGC5uYWdpLnYxLlVwbG9hZFBhcnRDaHVuaxoWLm5hZ2kudjEuVXBsb2FkU2Vzc2lvbigBElMKFE5vZGVGaWxlVXBsb2FkQ29tbWl0EhwubmFnaS52MS5VcGxvYWRDb21taXRSZXF1ZXN0Gh0ubmFnaS52MS5Wb2x1bWVVcGxvYWRSZXNwb25zZRJKChNOb2RlRmlsZVVwbG9hZEFib3J0EhsubmFnaS52MS5VcGxvYWRBYm9ydFJlcXVlc3QaFi5uYWdpLnYxLlVwbG9hZFNlc3Npb24SVAoPUmVwbGljYU1hbmlmZXN0Eh8ubmFnaS52MS5SZXBsaWNhTWFuaWZlc3RSZXF1ZXN0GiAubmFnaS52MS5SZXBsaWNhTWFuaWZlc3RSZXNwb25zZRJCCgpSZXBsaWNhUHV0EhUubmFnaS52MS5SZXBsaWNhQ2h1bmsaGy5uYWdpLnYxLlJlcGxpY2FQdXRSZXNwb25zZSgBEk4KDVJlcGxpY2FDb21taXQSHS5uYWdpLnYxLlJlcGxpY2FDb21taXRSZXF1ZXN0Gh4ubmFnaS52MS5SZXBsaWNhQ29tbWl0UmVzcG9uc2USRQoKTGVhc2VWb3RlcxIaLm5hZ2kudjEuTGVhc2VWb3Rlc1JlcXVlc3QaGy5uYWdpLnYxLkxlYXNlVm90ZXNSZXNwb25zZUI0WjJnaXRodWIuY29tL1NJUEMvbmFnaS9pbnRlcm5hbC9wcm90by9uYWdpL3YxO25hZ2l2MWIGcHJvdG8z", [file_nagi_v1_agent]);
 
 /**
  * @generated from message nagi.v1.LeaseVoteRequest
@@ -422,6 +422,72 @@ export const MeshService: GenService<{
     methodKind: "client_streaming";
     input: typeof NodeFileUploadChunkSchema;
     output: typeof VolumeUploadResponseSchema;
+  },
+  /**
+   * 分块上传（断点续传，见 docs/agent.md#存储）：卷里和节点上各一组，规则和上面两个一样。
+   *
+   * @generated from rpc nagi.v1.MeshService.VolumeUploadBegin
+   */
+  volumeUploadBegin: {
+    methodKind: "unary";
+    input: typeof UploadBeginRequestSchema;
+    output: typeof UploadSessionSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.VolumeUploadPart
+   */
+  volumeUploadPart: {
+    methodKind: "client_streaming";
+    input: typeof UploadPartChunkSchema;
+    output: typeof UploadSessionSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.VolumeUploadCommit
+   */
+  volumeUploadCommit: {
+    methodKind: "unary";
+    input: typeof UploadCommitRequestSchema;
+    output: typeof VolumeUploadResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.VolumeUploadAbort
+   */
+  volumeUploadAbort: {
+    methodKind: "unary";
+    input: typeof UploadAbortRequestSchema;
+    output: typeof UploadSessionSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.NodeFileUploadBegin
+   */
+  nodeFileUploadBegin: {
+    methodKind: "unary";
+    input: typeof UploadBeginRequestSchema;
+    output: typeof UploadSessionSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.NodeFileUploadPart
+   */
+  nodeFileUploadPart: {
+    methodKind: "client_streaming";
+    input: typeof UploadPartChunkSchema;
+    output: typeof UploadSessionSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.NodeFileUploadCommit
+   */
+  nodeFileUploadCommit: {
+    methodKind: "unary";
+    input: typeof UploadCommitRequestSchema;
+    output: typeof VolumeUploadResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.MeshService.NodeFileUploadAbort
+   */
+  nodeFileUploadAbort: {
+    methodKind: "unary";
+    input: typeof UploadAbortRequestSchema;
+    output: typeof UploadSessionSchema;
   },
   /**
    * 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。

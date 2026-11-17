@@ -49,6 +49,30 @@ const (
 	// MeshServiceNodeFileUploadProcedure is the fully-qualified name of the MeshService's
 	// NodeFileUpload RPC.
 	MeshServiceNodeFileUploadProcedure = "/nagi.v1.MeshService/NodeFileUpload"
+	// MeshServiceVolumeUploadBeginProcedure is the fully-qualified name of the MeshService's
+	// VolumeUploadBegin RPC.
+	MeshServiceVolumeUploadBeginProcedure = "/nagi.v1.MeshService/VolumeUploadBegin"
+	// MeshServiceVolumeUploadPartProcedure is the fully-qualified name of the MeshService's
+	// VolumeUploadPart RPC.
+	MeshServiceVolumeUploadPartProcedure = "/nagi.v1.MeshService/VolumeUploadPart"
+	// MeshServiceVolumeUploadCommitProcedure is the fully-qualified name of the MeshService's
+	// VolumeUploadCommit RPC.
+	MeshServiceVolumeUploadCommitProcedure = "/nagi.v1.MeshService/VolumeUploadCommit"
+	// MeshServiceVolumeUploadAbortProcedure is the fully-qualified name of the MeshService's
+	// VolumeUploadAbort RPC.
+	MeshServiceVolumeUploadAbortProcedure = "/nagi.v1.MeshService/VolumeUploadAbort"
+	// MeshServiceNodeFileUploadBeginProcedure is the fully-qualified name of the MeshService's
+	// NodeFileUploadBegin RPC.
+	MeshServiceNodeFileUploadBeginProcedure = "/nagi.v1.MeshService/NodeFileUploadBegin"
+	// MeshServiceNodeFileUploadPartProcedure is the fully-qualified name of the MeshService's
+	// NodeFileUploadPart RPC.
+	MeshServiceNodeFileUploadPartProcedure = "/nagi.v1.MeshService/NodeFileUploadPart"
+	// MeshServiceNodeFileUploadCommitProcedure is the fully-qualified name of the MeshService's
+	// NodeFileUploadCommit RPC.
+	MeshServiceNodeFileUploadCommitProcedure = "/nagi.v1.MeshService/NodeFileUploadCommit"
+	// MeshServiceNodeFileUploadAbortProcedure is the fully-qualified name of the MeshService's
+	// NodeFileUploadAbort RPC.
+	MeshServiceNodeFileUploadAbortProcedure = "/nagi.v1.MeshService/NodeFileUploadAbort"
 	// MeshServiceReplicaManifestProcedure is the fully-qualified name of the MeshService's
 	// ReplicaManifest RPC.
 	MeshServiceReplicaManifestProcedure = "/nagi.v1.MeshService/ReplicaManifest"
@@ -75,6 +99,15 @@ type MeshServiceClient interface {
 	NodeFileDownload(context.Context, *connect.Request[v1.NodeFileRef]) (*connect.ServerStreamForClient[v1.VolumeFileChunk], error)
 	// 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
 	NodeFileUpload(context.Context) *connect.ClientStreamForClient[v1.NodeFileUploadChunk, v1.VolumeUploadResponse]
+	// 分块上传（断点续传，见 docs/agent.md#存储）：卷里和节点上各一组，规则和上面两个一样。
+	VolumeUploadBegin(context.Context, *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error)
+	VolumeUploadPart(context.Context) *connect.ClientStreamForClient[v1.UploadPartChunk, v1.UploadSession]
+	VolumeUploadCommit(context.Context, *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error)
+	VolumeUploadAbort(context.Context, *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error)
+	NodeFileUploadBegin(context.Context, *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error)
+	NodeFileUploadPart(context.Context) *connect.ClientStreamForClient[v1.UploadPartChunk, v1.UploadSession]
+	NodeFileUploadCommit(context.Context, *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error)
+	NodeFileUploadAbort(context.Context, *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
@@ -132,6 +165,54 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(meshServiceMethods.ByName("NodeFileUpload")),
 			connect.WithClientOptions(opts...),
 		),
+		volumeUploadBegin: connect.NewClient[v1.UploadBeginRequest, v1.UploadSession](
+			httpClient,
+			baseURL+MeshServiceVolumeUploadBeginProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("VolumeUploadBegin")),
+			connect.WithClientOptions(opts...),
+		),
+		volumeUploadPart: connect.NewClient[v1.UploadPartChunk, v1.UploadSession](
+			httpClient,
+			baseURL+MeshServiceVolumeUploadPartProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("VolumeUploadPart")),
+			connect.WithClientOptions(opts...),
+		),
+		volumeUploadCommit: connect.NewClient[v1.UploadCommitRequest, v1.VolumeUploadResponse](
+			httpClient,
+			baseURL+MeshServiceVolumeUploadCommitProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("VolumeUploadCommit")),
+			connect.WithClientOptions(opts...),
+		),
+		volumeUploadAbort: connect.NewClient[v1.UploadAbortRequest, v1.UploadSession](
+			httpClient,
+			baseURL+MeshServiceVolumeUploadAbortProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("VolumeUploadAbort")),
+			connect.WithClientOptions(opts...),
+		),
+		nodeFileUploadBegin: connect.NewClient[v1.UploadBeginRequest, v1.UploadSession](
+			httpClient,
+			baseURL+MeshServiceNodeFileUploadBeginProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadBegin")),
+			connect.WithClientOptions(opts...),
+		),
+		nodeFileUploadPart: connect.NewClient[v1.UploadPartChunk, v1.UploadSession](
+			httpClient,
+			baseURL+MeshServiceNodeFileUploadPartProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadPart")),
+			connect.WithClientOptions(opts...),
+		),
+		nodeFileUploadCommit: connect.NewClient[v1.UploadCommitRequest, v1.VolumeUploadResponse](
+			httpClient,
+			baseURL+MeshServiceNodeFileUploadCommitProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadCommit")),
+			connect.WithClientOptions(opts...),
+		),
+		nodeFileUploadAbort: connect.NewClient[v1.UploadAbortRequest, v1.UploadSession](
+			httpClient,
+			baseURL+MeshServiceNodeFileUploadAbortProcedure,
+			connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadAbort")),
+			connect.WithClientOptions(opts...),
+		),
 		replicaManifest: connect.NewClient[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse](
 			httpClient,
 			baseURL+MeshServiceReplicaManifestProcedure,
@@ -161,16 +242,24 @@ func NewMeshServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // meshServiceClient implements MeshServiceClient.
 type meshServiceClient struct {
-	ping             *connect.Client[v1.PingRequest, v1.PingResponse]
-	upload           *connect.Client[v1.UploadChunk, v1.UploadResponse]
-	volumeDownload   *connect.Client[v1.VolumeFileRef, v1.VolumeFileChunk]
-	volumeUpload     *connect.Client[v1.VolumeUploadChunk, v1.VolumeUploadResponse]
-	nodeFileDownload *connect.Client[v1.NodeFileRef, v1.VolumeFileChunk]
-	nodeFileUpload   *connect.Client[v1.NodeFileUploadChunk, v1.VolumeUploadResponse]
-	replicaManifest  *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
-	replicaPut       *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
-	replicaCommit    *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
-	leaseVotes       *connect.Client[v1.LeaseVotesRequest, v1.LeaseVotesResponse]
+	ping                 *connect.Client[v1.PingRequest, v1.PingResponse]
+	upload               *connect.Client[v1.UploadChunk, v1.UploadResponse]
+	volumeDownload       *connect.Client[v1.VolumeFileRef, v1.VolumeFileChunk]
+	volumeUpload         *connect.Client[v1.VolumeUploadChunk, v1.VolumeUploadResponse]
+	nodeFileDownload     *connect.Client[v1.NodeFileRef, v1.VolumeFileChunk]
+	nodeFileUpload       *connect.Client[v1.NodeFileUploadChunk, v1.VolumeUploadResponse]
+	volumeUploadBegin    *connect.Client[v1.UploadBeginRequest, v1.UploadSession]
+	volumeUploadPart     *connect.Client[v1.UploadPartChunk, v1.UploadSession]
+	volumeUploadCommit   *connect.Client[v1.UploadCommitRequest, v1.VolumeUploadResponse]
+	volumeUploadAbort    *connect.Client[v1.UploadAbortRequest, v1.UploadSession]
+	nodeFileUploadBegin  *connect.Client[v1.UploadBeginRequest, v1.UploadSession]
+	nodeFileUploadPart   *connect.Client[v1.UploadPartChunk, v1.UploadSession]
+	nodeFileUploadCommit *connect.Client[v1.UploadCommitRequest, v1.VolumeUploadResponse]
+	nodeFileUploadAbort  *connect.Client[v1.UploadAbortRequest, v1.UploadSession]
+	replicaManifest      *connect.Client[v1.ReplicaManifestRequest, v1.ReplicaManifestResponse]
+	replicaPut           *connect.Client[v1.ReplicaChunk, v1.ReplicaPutResponse]
+	replicaCommit        *connect.Client[v1.ReplicaCommitRequest, v1.ReplicaCommitResponse]
+	leaseVotes           *connect.Client[v1.LeaseVotesRequest, v1.LeaseVotesResponse]
 }
 
 // Ping calls nagi.v1.MeshService.Ping.
@@ -201,6 +290,46 @@ func (c *meshServiceClient) NodeFileDownload(ctx context.Context, req *connect.R
 // NodeFileUpload calls nagi.v1.MeshService.NodeFileUpload.
 func (c *meshServiceClient) NodeFileUpload(ctx context.Context) *connect.ClientStreamForClient[v1.NodeFileUploadChunk, v1.VolumeUploadResponse] {
 	return c.nodeFileUpload.CallClientStream(ctx)
+}
+
+// VolumeUploadBegin calls nagi.v1.MeshService.VolumeUploadBegin.
+func (c *meshServiceClient) VolumeUploadBegin(ctx context.Context, req *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error) {
+	return c.volumeUploadBegin.CallUnary(ctx, req)
+}
+
+// VolumeUploadPart calls nagi.v1.MeshService.VolumeUploadPart.
+func (c *meshServiceClient) VolumeUploadPart(ctx context.Context) *connect.ClientStreamForClient[v1.UploadPartChunk, v1.UploadSession] {
+	return c.volumeUploadPart.CallClientStream(ctx)
+}
+
+// VolumeUploadCommit calls nagi.v1.MeshService.VolumeUploadCommit.
+func (c *meshServiceClient) VolumeUploadCommit(ctx context.Context, req *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error) {
+	return c.volumeUploadCommit.CallUnary(ctx, req)
+}
+
+// VolumeUploadAbort calls nagi.v1.MeshService.VolumeUploadAbort.
+func (c *meshServiceClient) VolumeUploadAbort(ctx context.Context, req *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error) {
+	return c.volumeUploadAbort.CallUnary(ctx, req)
+}
+
+// NodeFileUploadBegin calls nagi.v1.MeshService.NodeFileUploadBegin.
+func (c *meshServiceClient) NodeFileUploadBegin(ctx context.Context, req *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error) {
+	return c.nodeFileUploadBegin.CallUnary(ctx, req)
+}
+
+// NodeFileUploadPart calls nagi.v1.MeshService.NodeFileUploadPart.
+func (c *meshServiceClient) NodeFileUploadPart(ctx context.Context) *connect.ClientStreamForClient[v1.UploadPartChunk, v1.UploadSession] {
+	return c.nodeFileUploadPart.CallClientStream(ctx)
+}
+
+// NodeFileUploadCommit calls nagi.v1.MeshService.NodeFileUploadCommit.
+func (c *meshServiceClient) NodeFileUploadCommit(ctx context.Context, req *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error) {
+	return c.nodeFileUploadCommit.CallUnary(ctx, req)
+}
+
+// NodeFileUploadAbort calls nagi.v1.MeshService.NodeFileUploadAbort.
+func (c *meshServiceClient) NodeFileUploadAbort(ctx context.Context, req *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error) {
+	return c.nodeFileUploadAbort.CallUnary(ctx, req)
 }
 
 // ReplicaManifest calls nagi.v1.MeshService.ReplicaManifest.
@@ -237,6 +366,15 @@ type MeshServiceHandler interface {
 	NodeFileDownload(context.Context, *connect.Request[v1.NodeFileRef], *connect.ServerStream[v1.VolumeFileChunk]) error
 	// 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
 	NodeFileUpload(context.Context, *connect.ClientStream[v1.NodeFileUploadChunk]) (*connect.Response[v1.VolumeUploadResponse], error)
+	// 分块上传（断点续传，见 docs/agent.md#存储）：卷里和节点上各一组，规则和上面两个一样。
+	VolumeUploadBegin(context.Context, *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error)
+	VolumeUploadPart(context.Context, *connect.ClientStream[v1.UploadPartChunk]) (*connect.Response[v1.UploadSession], error)
+	VolumeUploadCommit(context.Context, *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error)
+	VolumeUploadAbort(context.Context, *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error)
+	NodeFileUploadBegin(context.Context, *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error)
+	NodeFileUploadPart(context.Context, *connect.ClientStream[v1.UploadPartChunk]) (*connect.Response[v1.UploadSession], error)
+	NodeFileUploadCommit(context.Context, *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error)
+	NodeFileUploadAbort(context.Context, *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error)
@@ -290,6 +428,54 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(meshServiceMethods.ByName("NodeFileUpload")),
 		connect.WithHandlerOptions(opts...),
 	)
+	meshServiceVolumeUploadBeginHandler := connect.NewUnaryHandler(
+		MeshServiceVolumeUploadBeginProcedure,
+		svc.VolumeUploadBegin,
+		connect.WithSchema(meshServiceMethods.ByName("VolumeUploadBegin")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceVolumeUploadPartHandler := connect.NewClientStreamHandler(
+		MeshServiceVolumeUploadPartProcedure,
+		svc.VolumeUploadPart,
+		connect.WithSchema(meshServiceMethods.ByName("VolumeUploadPart")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceVolumeUploadCommitHandler := connect.NewUnaryHandler(
+		MeshServiceVolumeUploadCommitProcedure,
+		svc.VolumeUploadCommit,
+		connect.WithSchema(meshServiceMethods.ByName("VolumeUploadCommit")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceVolumeUploadAbortHandler := connect.NewUnaryHandler(
+		MeshServiceVolumeUploadAbortProcedure,
+		svc.VolumeUploadAbort,
+		connect.WithSchema(meshServiceMethods.ByName("VolumeUploadAbort")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceNodeFileUploadBeginHandler := connect.NewUnaryHandler(
+		MeshServiceNodeFileUploadBeginProcedure,
+		svc.NodeFileUploadBegin,
+		connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadBegin")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceNodeFileUploadPartHandler := connect.NewClientStreamHandler(
+		MeshServiceNodeFileUploadPartProcedure,
+		svc.NodeFileUploadPart,
+		connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadPart")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceNodeFileUploadCommitHandler := connect.NewUnaryHandler(
+		MeshServiceNodeFileUploadCommitProcedure,
+		svc.NodeFileUploadCommit,
+		connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadCommit")),
+		connect.WithHandlerOptions(opts...),
+	)
+	meshServiceNodeFileUploadAbortHandler := connect.NewUnaryHandler(
+		MeshServiceNodeFileUploadAbortProcedure,
+		svc.NodeFileUploadAbort,
+		connect.WithSchema(meshServiceMethods.ByName("NodeFileUploadAbort")),
+		connect.WithHandlerOptions(opts...),
+	)
 	meshServiceReplicaManifestHandler := connect.NewUnaryHandler(
 		MeshServiceReplicaManifestProcedure,
 		svc.ReplicaManifest,
@@ -328,6 +514,22 @@ func NewMeshServiceHandler(svc MeshServiceHandler, opts ...connect.HandlerOption
 			meshServiceNodeFileDownloadHandler.ServeHTTP(w, r)
 		case MeshServiceNodeFileUploadProcedure:
 			meshServiceNodeFileUploadHandler.ServeHTTP(w, r)
+		case MeshServiceVolumeUploadBeginProcedure:
+			meshServiceVolumeUploadBeginHandler.ServeHTTP(w, r)
+		case MeshServiceVolumeUploadPartProcedure:
+			meshServiceVolumeUploadPartHandler.ServeHTTP(w, r)
+		case MeshServiceVolumeUploadCommitProcedure:
+			meshServiceVolumeUploadCommitHandler.ServeHTTP(w, r)
+		case MeshServiceVolumeUploadAbortProcedure:
+			meshServiceVolumeUploadAbortHandler.ServeHTTP(w, r)
+		case MeshServiceNodeFileUploadBeginProcedure:
+			meshServiceNodeFileUploadBeginHandler.ServeHTTP(w, r)
+		case MeshServiceNodeFileUploadPartProcedure:
+			meshServiceNodeFileUploadPartHandler.ServeHTTP(w, r)
+		case MeshServiceNodeFileUploadCommitProcedure:
+			meshServiceNodeFileUploadCommitHandler.ServeHTTP(w, r)
+		case MeshServiceNodeFileUploadAbortProcedure:
+			meshServiceNodeFileUploadAbortHandler.ServeHTTP(w, r)
 		case MeshServiceReplicaManifestProcedure:
 			meshServiceReplicaManifestHandler.ServeHTTP(w, r)
 		case MeshServiceReplicaPutProcedure:
@@ -367,6 +569,38 @@ func (UnimplementedMeshServiceHandler) NodeFileDownload(context.Context, *connec
 
 func (UnimplementedMeshServiceHandler) NodeFileUpload(context.Context, *connect.ClientStream[v1.NodeFileUploadChunk]) (*connect.Response[v1.VolumeUploadResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.NodeFileUpload is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) VolumeUploadBegin(context.Context, *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.VolumeUploadBegin is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) VolumeUploadPart(context.Context, *connect.ClientStream[v1.UploadPartChunk]) (*connect.Response[v1.UploadSession], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.VolumeUploadPart is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) VolumeUploadCommit(context.Context, *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.VolumeUploadCommit is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) VolumeUploadAbort(context.Context, *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.VolumeUploadAbort is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) NodeFileUploadBegin(context.Context, *connect.Request[v1.UploadBeginRequest]) (*connect.Response[v1.UploadSession], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.NodeFileUploadBegin is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) NodeFileUploadPart(context.Context, *connect.ClientStream[v1.UploadPartChunk]) (*connect.Response[v1.UploadSession], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.NodeFileUploadPart is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) NodeFileUploadCommit(context.Context, *connect.Request[v1.UploadCommitRequest]) (*connect.Response[v1.VolumeUploadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.NodeFileUploadCommit is not implemented"))
+}
+
+func (UnimplementedMeshServiceHandler) NodeFileUploadAbort(context.Context, *connect.Request[v1.UploadAbortRequest]) (*connect.Response[v1.UploadSession], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.MeshService.NodeFileUploadAbort is not implemented"))
 }
 
 func (UnimplementedMeshServiceHandler) ReplicaManifest(context.Context, *connect.Request[v1.ReplicaManifestRequest]) (*connect.Response[v1.ReplicaManifestResponse], error) {

@@ -495,6 +495,8 @@ message NodeInfo {
   // 节点进程启动的时间（Unix 秒）。面板据此判断升级后节点是不是又起来过：用新版本回来是升级完成，
   // 用旧版本回来是新版本没能运行、节点自动换回去了（见 docs/control-plane.md#接口设计）。旧版本的节点不报。
   int64 started_at = 21;
+  // 节点支持文件的改名、移动、复制、压缩、解压、目录大小和分块上传（旧版本的节点不报）。
+  bool file_ops = 22;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。

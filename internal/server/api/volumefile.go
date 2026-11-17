@@ -107,7 +107,15 @@ func (a *API) VolumeFileHandler() http.Handler {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
 			return
 		}
-		// 浏览器也会先拦下；这里先看长度，免得白传一遍才报错。
+		if op := q.Get("op"); op != "" {
+			volumeChunks(client, ref, func(failure string) { a.recordOperation(ctx, "/UploadVolumeFile", ref, failure) }).serve(w, r, op)
+			return
+		}
+		if r.Method != http.MethodPost {
+			fail(http.StatusMethodNotAllowed, i18n.New("上传参数无效"))
+			return
+		}
+		// 整个文件一次上传（旧版本的节点、编辑后保存）。浏览器也会先拦下；这里先看长度，免得白传一遍才报错。
 		if r.ContentLength > maxVolumeUpload {
 			a.recordOperation(ctx, "/UploadVolumeFile", ref, "file too large")
 			fail(http.StatusRequestEntityTooLarge, i18n.New("单个文件不能超过 8 GB"))

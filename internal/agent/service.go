@@ -358,6 +358,9 @@ func runStream(send func(*nagiv1.DeployEvent) error, op func(onLine func(string)
 }
 
 func toStatus(err error) error {
+	if _, ok := err.(interface{ GRPCStatus() *status.Status }); ok {
+		return err // 已经是 gRPC 状态（fileops、nodefiles 返回的）
+	}
 	switch {
 	case err == nil:
 		return nil

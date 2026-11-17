@@ -51,6 +51,7 @@ func TestAllowed(t *testing.T) {
 func TestNodeAccessAdminOnly(t *testing.T) {
 	for _, method := range []string{
 		"ListNodeDir", "ReadNodeFile", "WriteNodeFile", "DeleteNodeFile", "CreateNodeDir", "ListNodeFileBackups", "RestoreNodeFileBackup",
+		"RenameNodeFile", "MoveNodeFiles", "CopyNodeFiles", "CompressNodeFiles", "ExtractNodeFile", "ListNodeDirSizes",
 	} {
 		for _, role := range []string{RoleOperator, RoleViewer} {
 			if Allowed(role, "/nagi.v1.NodeService/"+method) {

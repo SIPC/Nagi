@@ -19,16 +19,24 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MeshService_Ping_FullMethodName             = "/nagi.v1.MeshService/Ping"
-	MeshService_Upload_FullMethodName           = "/nagi.v1.MeshService/Upload"
-	MeshService_VolumeDownload_FullMethodName   = "/nagi.v1.MeshService/VolumeDownload"
-	MeshService_VolumeUpload_FullMethodName     = "/nagi.v1.MeshService/VolumeUpload"
-	MeshService_NodeFileDownload_FullMethodName = "/nagi.v1.MeshService/NodeFileDownload"
-	MeshService_NodeFileUpload_FullMethodName   = "/nagi.v1.MeshService/NodeFileUpload"
-	MeshService_ReplicaManifest_FullMethodName  = "/nagi.v1.MeshService/ReplicaManifest"
-	MeshService_ReplicaPut_FullMethodName       = "/nagi.v1.MeshService/ReplicaPut"
-	MeshService_ReplicaCommit_FullMethodName    = "/nagi.v1.MeshService/ReplicaCommit"
-	MeshService_LeaseVotes_FullMethodName       = "/nagi.v1.MeshService/LeaseVotes"
+	MeshService_Ping_FullMethodName                 = "/nagi.v1.MeshService/Ping"
+	MeshService_Upload_FullMethodName               = "/nagi.v1.MeshService/Upload"
+	MeshService_VolumeDownload_FullMethodName       = "/nagi.v1.MeshService/VolumeDownload"
+	MeshService_VolumeUpload_FullMethodName         = "/nagi.v1.MeshService/VolumeUpload"
+	MeshService_NodeFileDownload_FullMethodName     = "/nagi.v1.MeshService/NodeFileDownload"
+	MeshService_NodeFileUpload_FullMethodName       = "/nagi.v1.MeshService/NodeFileUpload"
+	MeshService_VolumeUploadBegin_FullMethodName    = "/nagi.v1.MeshService/VolumeUploadBegin"
+	MeshService_VolumeUploadPart_FullMethodName     = "/nagi.v1.MeshService/VolumeUploadPart"
+	MeshService_VolumeUploadCommit_FullMethodName   = "/nagi.v1.MeshService/VolumeUploadCommit"
+	MeshService_VolumeUploadAbort_FullMethodName    = "/nagi.v1.MeshService/VolumeUploadAbort"
+	MeshService_NodeFileUploadBegin_FullMethodName  = "/nagi.v1.MeshService/NodeFileUploadBegin"
+	MeshService_NodeFileUploadPart_FullMethodName   = "/nagi.v1.MeshService/NodeFileUploadPart"
+	MeshService_NodeFileUploadCommit_FullMethodName = "/nagi.v1.MeshService/NodeFileUploadCommit"
+	MeshService_NodeFileUploadAbort_FullMethodName  = "/nagi.v1.MeshService/NodeFileUploadAbort"
+	MeshService_ReplicaManifest_FullMethodName      = "/nagi.v1.MeshService/ReplicaManifest"
+	MeshService_ReplicaPut_FullMethodName           = "/nagi.v1.MeshService/ReplicaPut"
+	MeshService_ReplicaCommit_FullMethodName        = "/nagi.v1.MeshService/ReplicaCommit"
+	MeshService_LeaseVotes_FullMethodName           = "/nagi.v1.MeshService/LeaseVotes"
 )
 
 // MeshServiceClient is the client API for MeshService service.
@@ -49,6 +57,15 @@ type MeshServiceClient interface {
 	NodeFileDownload(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VolumeFileChunk], error)
 	// 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
 	NodeFileUpload(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[NodeFileUploadChunk, VolumeUploadResponse], error)
+	// 分块上传（断点续传，见 docs/agent.md#存储）：卷里和节点上各一组，规则和上面两个一样。
+	VolumeUploadBegin(ctx context.Context, in *UploadBeginRequest, opts ...grpc.CallOption) (*UploadSession, error)
+	VolumeUploadPart(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadPartChunk, UploadSession], error)
+	VolumeUploadCommit(ctx context.Context, in *UploadCommitRequest, opts ...grpc.CallOption) (*VolumeUploadResponse, error)
+	VolumeUploadAbort(ctx context.Context, in *UploadAbortRequest, opts ...grpc.CallOption) (*UploadSession, error)
+	NodeFileUploadBegin(ctx context.Context, in *UploadBeginRequest, opts ...grpc.CallOption) (*UploadSession, error)
+	NodeFileUploadPart(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadPartChunk, UploadSession], error)
+	NodeFileUploadCommit(ctx context.Context, in *UploadCommitRequest, opts ...grpc.CallOption) (*VolumeUploadResponse, error)
+	NodeFileUploadAbort(ctx context.Context, in *UploadAbortRequest, opts ...grpc.CallOption) (*UploadSession, error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error)
@@ -154,6 +171,92 @@ func (c *meshServiceClient) NodeFileUpload(ctx context.Context, opts ...grpc.Cal
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MeshService_NodeFileUploadClient = grpc.ClientStreamingClient[NodeFileUploadChunk, VolumeUploadResponse]
 
+func (c *meshServiceClient) VolumeUploadBegin(ctx context.Context, in *UploadBeginRequest, opts ...grpc.CallOption) (*UploadSession, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadSession)
+	err := c.cc.Invoke(ctx, MeshService_VolumeUploadBegin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meshServiceClient) VolumeUploadPart(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadPartChunk, UploadSession], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[5], MeshService_VolumeUploadPart_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadPartChunk, UploadSession]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_VolumeUploadPartClient = grpc.ClientStreamingClient[UploadPartChunk, UploadSession]
+
+func (c *meshServiceClient) VolumeUploadCommit(ctx context.Context, in *UploadCommitRequest, opts ...grpc.CallOption) (*VolumeUploadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeUploadResponse)
+	err := c.cc.Invoke(ctx, MeshService_VolumeUploadCommit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meshServiceClient) VolumeUploadAbort(ctx context.Context, in *UploadAbortRequest, opts ...grpc.CallOption) (*UploadSession, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadSession)
+	err := c.cc.Invoke(ctx, MeshService_VolumeUploadAbort_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meshServiceClient) NodeFileUploadBegin(ctx context.Context, in *UploadBeginRequest, opts ...grpc.CallOption) (*UploadSession, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadSession)
+	err := c.cc.Invoke(ctx, MeshService_NodeFileUploadBegin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meshServiceClient) NodeFileUploadPart(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadPartChunk, UploadSession], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[6], MeshService_NodeFileUploadPart_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadPartChunk, UploadSession]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_NodeFileUploadPartClient = grpc.ClientStreamingClient[UploadPartChunk, UploadSession]
+
+func (c *meshServiceClient) NodeFileUploadCommit(ctx context.Context, in *UploadCommitRequest, opts ...grpc.CallOption) (*VolumeUploadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VolumeUploadResponse)
+	err := c.cc.Invoke(ctx, MeshService_NodeFileUploadCommit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *meshServiceClient) NodeFileUploadAbort(ctx context.Context, in *UploadAbortRequest, opts ...grpc.CallOption) (*UploadSession, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UploadSession)
+	err := c.cc.Invoke(ctx, MeshService_NodeFileUploadAbort_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *meshServiceClient) ReplicaManifest(ctx context.Context, in *ReplicaManifestRequest, opts ...grpc.CallOption) (*ReplicaManifestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReplicaManifestResponse)
@@ -166,7 +269,7 @@ func (c *meshServiceClient) ReplicaManifest(ctx context.Context, in *ReplicaMani
 
 func (c *meshServiceClient) ReplicaPut(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ReplicaChunk, ReplicaPutResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[5], MeshService_ReplicaPut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &MeshService_ServiceDesc.Streams[7], MeshService_ReplicaPut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -215,6 +318,15 @@ type MeshServiceServer interface {
 	NodeFileDownload(*NodeFileRef, grpc.ServerStreamingServer[VolumeFileChunk]) error
 	// 面板把文件写到节点上。第一条带 ref，之后是内容。只接受主面板。
 	NodeFileUpload(grpc.ClientStreamingServer[NodeFileUploadChunk, VolumeUploadResponse]) error
+	// 分块上传（断点续传，见 docs/agent.md#存储）：卷里和节点上各一组，规则和上面两个一样。
+	VolumeUploadBegin(context.Context, *UploadBeginRequest) (*UploadSession, error)
+	VolumeUploadPart(grpc.ClientStreamingServer[UploadPartChunk, UploadSession]) error
+	VolumeUploadCommit(context.Context, *UploadCommitRequest) (*VolumeUploadResponse, error)
+	VolumeUploadAbort(context.Context, *UploadAbortRequest) (*UploadSession, error)
+	NodeFileUploadBegin(context.Context, *UploadBeginRequest) (*UploadSession, error)
+	NodeFileUploadPart(grpc.ClientStreamingServer[UploadPartChunk, UploadSession]) error
+	NodeFileUploadCommit(context.Context, *UploadCommitRequest) (*VolumeUploadResponse, error)
+	NodeFileUploadAbort(context.Context, *UploadAbortRequest) (*UploadSession, error)
 	// 备份同步（源节点 → 备份节点）：先取对方已有的文件，再传缺少的，最后提交完整的文件列表。
 	// 只接受备份节点登记过的源节点。
 	ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error)
@@ -250,6 +362,30 @@ func (UnimplementedMeshServiceServer) NodeFileDownload(*NodeFileRef, grpc.Server
 }
 func (UnimplementedMeshServiceServer) NodeFileUpload(grpc.ClientStreamingServer[NodeFileUploadChunk, VolumeUploadResponse]) error {
 	return status.Error(codes.Unimplemented, "method NodeFileUpload not implemented")
+}
+func (UnimplementedMeshServiceServer) VolumeUploadBegin(context.Context, *UploadBeginRequest) (*UploadSession, error) {
+	return nil, status.Error(codes.Unimplemented, "method VolumeUploadBegin not implemented")
+}
+func (UnimplementedMeshServiceServer) VolumeUploadPart(grpc.ClientStreamingServer[UploadPartChunk, UploadSession]) error {
+	return status.Error(codes.Unimplemented, "method VolumeUploadPart not implemented")
+}
+func (UnimplementedMeshServiceServer) VolumeUploadCommit(context.Context, *UploadCommitRequest) (*VolumeUploadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VolumeUploadCommit not implemented")
+}
+func (UnimplementedMeshServiceServer) VolumeUploadAbort(context.Context, *UploadAbortRequest) (*UploadSession, error) {
+	return nil, status.Error(codes.Unimplemented, "method VolumeUploadAbort not implemented")
+}
+func (UnimplementedMeshServiceServer) NodeFileUploadBegin(context.Context, *UploadBeginRequest) (*UploadSession, error) {
+	return nil, status.Error(codes.Unimplemented, "method NodeFileUploadBegin not implemented")
+}
+func (UnimplementedMeshServiceServer) NodeFileUploadPart(grpc.ClientStreamingServer[UploadPartChunk, UploadSession]) error {
+	return status.Error(codes.Unimplemented, "method NodeFileUploadPart not implemented")
+}
+func (UnimplementedMeshServiceServer) NodeFileUploadCommit(context.Context, *UploadCommitRequest) (*VolumeUploadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method NodeFileUploadCommit not implemented")
+}
+func (UnimplementedMeshServiceServer) NodeFileUploadAbort(context.Context, *UploadAbortRequest) (*UploadSession, error) {
+	return nil, status.Error(codes.Unimplemented, "method NodeFileUploadAbort not implemented")
 }
 func (UnimplementedMeshServiceServer) ReplicaManifest(context.Context, *ReplicaManifestRequest) (*ReplicaManifestResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReplicaManifest not implemented")
@@ -345,6 +481,128 @@ func _MeshService_NodeFileUpload_Handler(srv interface{}, stream grpc.ServerStre
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type MeshService_NodeFileUploadServer = grpc.ClientStreamingServer[NodeFileUploadChunk, VolumeUploadResponse]
 
+func _MeshService_VolumeUploadBegin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadBeginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).VolumeUploadBegin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_VolumeUploadBegin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).VolumeUploadBegin(ctx, req.(*UploadBeginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeshService_VolumeUploadPart_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MeshServiceServer).VolumeUploadPart(&grpc.GenericServerStream[UploadPartChunk, UploadSession]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_VolumeUploadPartServer = grpc.ClientStreamingServer[UploadPartChunk, UploadSession]
+
+func _MeshService_VolumeUploadCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).VolumeUploadCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_VolumeUploadCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).VolumeUploadCommit(ctx, req.(*UploadCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeshService_VolumeUploadAbort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadAbortRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).VolumeUploadAbort(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_VolumeUploadAbort_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).VolumeUploadAbort(ctx, req.(*UploadAbortRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeshService_NodeFileUploadBegin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadBeginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).NodeFileUploadBegin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_NodeFileUploadBegin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).NodeFileUploadBegin(ctx, req.(*UploadBeginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeshService_NodeFileUploadPart_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(MeshServiceServer).NodeFileUploadPart(&grpc.GenericServerStream[UploadPartChunk, UploadSession]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type MeshService_NodeFileUploadPartServer = grpc.ClientStreamingServer[UploadPartChunk, UploadSession]
+
+func _MeshService_NodeFileUploadCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).NodeFileUploadCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_NodeFileUploadCommit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).NodeFileUploadCommit(ctx, req.(*UploadCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MeshService_NodeFileUploadAbort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadAbortRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MeshServiceServer).NodeFileUploadAbort(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MeshService_NodeFileUploadAbort_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MeshServiceServer).NodeFileUploadAbort(ctx, req.(*UploadAbortRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MeshService_ReplicaManifest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReplicaManifestRequest)
 	if err := dec(in); err != nil {
@@ -418,6 +676,30 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MeshService_Ping_Handler,
 		},
 		{
+			MethodName: "VolumeUploadBegin",
+			Handler:    _MeshService_VolumeUploadBegin_Handler,
+		},
+		{
+			MethodName: "VolumeUploadCommit",
+			Handler:    _MeshService_VolumeUploadCommit_Handler,
+		},
+		{
+			MethodName: "VolumeUploadAbort",
+			Handler:    _MeshService_VolumeUploadAbort_Handler,
+		},
+		{
+			MethodName: "NodeFileUploadBegin",
+			Handler:    _MeshService_NodeFileUploadBegin_Handler,
+		},
+		{
+			MethodName: "NodeFileUploadCommit",
+			Handler:    _MeshService_NodeFileUploadCommit_Handler,
+		},
+		{
+			MethodName: "NodeFileUploadAbort",
+			Handler:    _MeshService_NodeFileUploadAbort_Handler,
+		},
+		{
 			MethodName: "ReplicaManifest",
 			Handler:    _MeshService_ReplicaManifest_Handler,
 		},
@@ -454,6 +736,16 @@ var MeshService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "NodeFileUpload",
 			Handler:       _MeshService_NodeFileUpload_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "VolumeUploadPart",
+			Handler:       _MeshService_VolumeUploadPart_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "NodeFileUploadPart",
+			Handler:       _MeshService_NodeFileUploadPart_Handler,
 			ClientStreams: true,
 		},
 		{

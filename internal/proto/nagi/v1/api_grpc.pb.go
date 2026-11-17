@@ -783,6 +783,12 @@ const (
 	NodeService_CreateNodeDir_FullMethodName         = "/nagi.v1.NodeService/CreateNodeDir"
 	NodeService_ListNodeFileBackups_FullMethodName   = "/nagi.v1.NodeService/ListNodeFileBackups"
 	NodeService_RestoreNodeFileBackup_FullMethodName = "/nagi.v1.NodeService/RestoreNodeFileBackup"
+	NodeService_RenameNodeFile_FullMethodName        = "/nagi.v1.NodeService/RenameNodeFile"
+	NodeService_MoveNodeFiles_FullMethodName         = "/nagi.v1.NodeService/MoveNodeFiles"
+	NodeService_CopyNodeFiles_FullMethodName         = "/nagi.v1.NodeService/CopyNodeFiles"
+	NodeService_CompressNodeFiles_FullMethodName     = "/nagi.v1.NodeService/CompressNodeFiles"
+	NodeService_ExtractNodeFile_FullMethodName       = "/nagi.v1.NodeService/ExtractNodeFile"
+	NodeService_ListNodeDirSizes_FullMethodName      = "/nagi.v1.NodeService/ListNodeDirSizes"
 	NodeService_ListNodePanels_FullMethodName        = "/nagi.v1.NodeService/ListNodePanels"
 	NodeService_HandoverNodes_FullMethodName         = "/nagi.v1.NodeService/HandoverNodes"
 	NodeService_RemoveNodePanel_FullMethodName       = "/nagi.v1.NodeService/RemoveNodePanel"
@@ -830,6 +836,12 @@ type NodeServiceClient interface {
 	CreateNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*NodeFileOpResponse, error)
 	ListNodeFileBackups(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeFileBackupsResponse, error)
 	RestoreNodeFileBackup(ctx context.Context, in *RestoreNodeFileBackupRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
+	RenameNodeFile(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (*FileOpResult, error)
+	MoveNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	CopyNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	CompressNodeFiles(ctx context.Context, in *NodeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ExtractNodeFile(ctx context.Context, in *NodeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ListNodeDirSizes(ctx context.Context, in *NodeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(ctx context.Context, in *ListNodePanelsRequest, opts ...grpc.CallOption) (*ListNodePanelsResponse, error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -978,6 +990,102 @@ func (c *nodeServiceClient) RestoreNodeFileBackup(ctx context.Context, in *Resto
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WriteNodeFileResponse)
 	err := c.cc.Invoke(ctx, NodeService_RestoreNodeFileBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) RenameNodeFile(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (*FileOpResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FileOpResult)
+	err := c.cc.Invoke(ctx, NodeService_RenameNodeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) MoveNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_MoveNodeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeTransferRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_MoveNodeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *nodeServiceClient) CopyNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[1], NodeService_CopyNodeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeTransferRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_CopyNodeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *nodeServiceClient) CompressNodeFiles(ctx context.Context, in *NodeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[2], NodeService_CompressNodeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeCompressRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_CompressNodeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *nodeServiceClient) ExtractNodeFile(ctx context.Context, in *NodeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[3], NodeService_ExtractNodeFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeExtractRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_ExtractNodeFileClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *nodeServiceClient) ListNodeDirSizes(ctx context.Context, in *NodeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DirSizesResponse)
+	err := c.cc.Invoke(ctx, NodeService_ListNodeDirSizes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1136,7 +1244,7 @@ func (c *nodeServiceClient) SetNodeMirrors(ctx context.Context, in *SetNodeMirro
 
 func (c *nodeServiceClient) ReclaimNodeSnapshots(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[0], NodeService_ReclaimNodeSnapshots_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[4], NodeService_ReclaimNodeSnapshots_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1326,6 +1434,12 @@ type NodeServiceServer interface {
 	CreateNodeDir(context.Context, *NodeFileRef) (*NodeFileOpResponse, error)
 	ListNodeFileBackups(context.Context, *NodeFileRef) (*ListNodeFileBackupsResponse, error)
 	RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error)
+	RenameNodeFile(context.Context, *NodeTransferRequest) (*FileOpResult, error)
+	MoveNodeFiles(*NodeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	CopyNodeFiles(*NodeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	CompressNodeFiles(*NodeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ExtractNodeFile(*NodeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ListNodeDirSizes(context.Context, *NodeDirSizesRequest) (*DirSizesResponse, error)
 	// 节点信任的面板列表。
 	ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error)
 	// 移交（见 docs/control-plane.md）：用另一个面板的接入码，让这些节点加入那个面板，随后把本面板从节点上移除，
@@ -1423,6 +1537,24 @@ func (UnimplementedNodeServiceServer) ListNodeFileBackups(context.Context, *Node
 }
 func (UnimplementedNodeServiceServer) RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestoreNodeFileBackup not implemented")
+}
+func (UnimplementedNodeServiceServer) RenameNodeFile(context.Context, *NodeTransferRequest) (*FileOpResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameNodeFile not implemented")
+}
+func (UnimplementedNodeServiceServer) MoveNodeFiles(*NodeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method MoveNodeFiles not implemented")
+}
+func (UnimplementedNodeServiceServer) CopyNodeFiles(*NodeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method CopyNodeFiles not implemented")
+}
+func (UnimplementedNodeServiceServer) CompressNodeFiles(*NodeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method CompressNodeFiles not implemented")
+}
+func (UnimplementedNodeServiceServer) ExtractNodeFile(*NodeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method ExtractNodeFile not implemented")
+}
+func (UnimplementedNodeServiceServer) ListNodeDirSizes(context.Context, *NodeDirSizesRequest) (*DirSizesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeDirSizes not implemented")
 }
 func (UnimplementedNodeServiceServer) ListNodePanels(context.Context, *ListNodePanelsRequest) (*ListNodePanelsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodePanels not implemented")
@@ -1681,6 +1813,86 @@ func _NodeService_RestoreNodeFileBackup_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServiceServer).RestoreNodeFileBackup(ctx, req.(*RestoreNodeFileBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_RenameNodeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RenameNodeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RenameNodeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RenameNodeFile(ctx, req.(*NodeTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_MoveNodeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeTransferRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).MoveNodeFiles(m, &grpc.GenericServerStream[NodeTransferRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_MoveNodeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _NodeService_CopyNodeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeTransferRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).CopyNodeFiles(m, &grpc.GenericServerStream[NodeTransferRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_CopyNodeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _NodeService_CompressNodeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeCompressRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).CompressNodeFiles(m, &grpc.GenericServerStream[NodeCompressRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_CompressNodeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _NodeService_ExtractNodeFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeExtractRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).ExtractNodeFile(m, &grpc.GenericServerStream[NodeExtractRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_ExtractNodeFileServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _NodeService_ListNodeDirSizes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeDirSizesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).ListNodeDirSizes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_ListNodeDirSizes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).ListNodeDirSizes(ctx, req.(*NodeDirSizesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2294,6 +2506,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_RestoreNodeFileBackup_Handler,
 		},
 		{
+			MethodName: "RenameNodeFile",
+			Handler:    _NodeService_RenameNodeFile_Handler,
+		},
+		{
+			MethodName: "ListNodeDirSizes",
+			Handler:    _NodeService_ListNodeDirSizes_Handler,
+		},
+		{
 			MethodName: "ListNodePanels",
 			Handler:    _NodeService_ListNodePanels_Handler,
 		},
@@ -2419,6 +2639,26 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "MoveNodeFiles",
+			Handler:       _NodeService_MoveNodeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CopyNodeFiles",
+			Handler:       _NodeService_CopyNodeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CompressNodeFiles",
+			Handler:       _NodeService_CompressNodeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ExtractNodeFile",
+			Handler:       _NodeService_ExtractNodeFile_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "ReclaimNodeSnapshots",
 			Handler:       _NodeService_ReclaimNodeSnapshots_Handler,
@@ -4397,6 +4637,12 @@ const (
 	ProjectService_DeleteVolumeFile_FullMethodName             = "/nagi.v1.ProjectService/DeleteVolumeFile"
 	ProjectService_CreateVolumeDir_FullMethodName              = "/nagi.v1.ProjectService/CreateVolumeDir"
 	ProjectService_RestoreVolumeFile_FullMethodName            = "/nagi.v1.ProjectService/RestoreVolumeFile"
+	ProjectService_RenameVolumeFile_FullMethodName             = "/nagi.v1.ProjectService/RenameVolumeFile"
+	ProjectService_MoveVolumeFiles_FullMethodName              = "/nagi.v1.ProjectService/MoveVolumeFiles"
+	ProjectService_CopyVolumeFiles_FullMethodName              = "/nagi.v1.ProjectService/CopyVolumeFiles"
+	ProjectService_CompressVolumeFiles_FullMethodName          = "/nagi.v1.ProjectService/CompressVolumeFiles"
+	ProjectService_ExtractVolumeFile_FullMethodName            = "/nagi.v1.ProjectService/ExtractVolumeFile"
+	ProjectService_ListVolumeDirSizes_FullMethodName           = "/nagi.v1.ProjectService/ListVolumeDirSizes"
 	ProjectService_ListSnapshots_FullMethodName                = "/nagi.v1.ProjectService/ListSnapshots"
 	ProjectService_CreateSnapshot_FullMethodName               = "/nagi.v1.ProjectService/CreateSnapshot"
 	ProjectService_RestoreSnapshot_FullMethodName              = "/nagi.v1.ProjectService/RestoreSnapshot"
@@ -4495,6 +4741,13 @@ type ProjectServiceClient interface {
 	DeleteVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
 	CreateVolumeDir(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
 	RestoreVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
+	// 同一个卷里的改名、移动、复制，压缩和解压。长操作流式返回进度。
+	RenameVolumeFile(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (*FileOpResult, error)
+	MoveVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	CopyVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ListVolumeDirSizes(ctx context.Context, in *VolumeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error)
 	// 快照（按容器）。
 	ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -5062,6 +5315,102 @@ func (c *projectServiceClient) RestoreVolumeFile(ctx context.Context, in *Volume
 	return out, nil
 }
 
+func (c *projectServiceClient) RenameVolumeFile(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (*FileOpResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FileOpResult)
+	err := c.cc.Invoke(ctx, ProjectService_RenameVolumeFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) MoveVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeTransferRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_MoveVolumeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *projectServiceClient) CopyVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeTransferRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_CopyVolumeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *projectServiceClient) CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeCompressRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_CompressVolumeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *projectServiceClient) ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeExtractRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_ExtractVolumeFileClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *projectServiceClient) ListVolumeDirSizes(ctx context.Context, in *VolumeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DirSizesResponse)
+	err := c.cc.Invoke(ctx, ProjectService_ListVolumeDirSizes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
@@ -5074,7 +5423,7 @@ func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerR
 
 func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5093,7 +5442,7 @@ type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEven
 
 func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5257,6 +5606,13 @@ type ProjectServiceServer interface {
 	DeleteVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
 	CreateVolumeDir(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
 	RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
+	// 同一个卷里的改名、移动、复制，压缩和解压。长操作流式返回进度。
+	RenameVolumeFile(context.Context, *VolumeTransferRequest) (*FileOpResult, error)
+	MoveVolumeFiles(*VolumeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	CopyVolumeFiles(*VolumeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	CompressVolumeFiles(*VolumeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ExtractVolumeFile(*VolumeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ListVolumeDirSizes(context.Context, *VolumeDirSizesRequest) (*DirSizesResponse, error)
 	// 快照（按容器）。
 	ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
 	// 给容器做一份手动快照；container 为空时给项目里所有部署过的容器各做一份。
@@ -5422,6 +5778,24 @@ func (UnimplementedProjectServiceServer) CreateVolumeDir(context.Context, *Volum
 }
 func (UnimplementedProjectServiceServer) RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestoreVolumeFile not implemented")
+}
+func (UnimplementedProjectServiceServer) RenameVolumeFile(context.Context, *VolumeTransferRequest) (*FileOpResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameVolumeFile not implemented")
+}
+func (UnimplementedProjectServiceServer) MoveVolumeFiles(*VolumeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method MoveVolumeFiles not implemented")
+}
+func (UnimplementedProjectServiceServer) CopyVolumeFiles(*VolumeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method CopyVolumeFiles not implemented")
+}
+func (UnimplementedProjectServiceServer) CompressVolumeFiles(*VolumeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method CompressVolumeFiles not implemented")
+}
+func (UnimplementedProjectServiceServer) ExtractVolumeFile(*VolumeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method ExtractVolumeFile not implemented")
+}
+func (UnimplementedProjectServiceServer) ListVolumeDirSizes(context.Context, *VolumeDirSizesRequest) (*DirSizesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVolumeDirSizes not implemented")
 }
 func (UnimplementedProjectServiceServer) ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
@@ -6261,6 +6635,86 @@ func _ProjectService_RestoreVolumeFile_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_RenameVolumeFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeTransferRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).RenameVolumeFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_RenameVolumeFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).RenameVolumeFile(ctx, req.(*VolumeTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_MoveVolumeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeTransferRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).MoveVolumeFiles(m, &grpc.GenericServerStream[VolumeTransferRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_MoveVolumeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _ProjectService_CopyVolumeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeTransferRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).CopyVolumeFiles(m, &grpc.GenericServerStream[VolumeTransferRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_CopyVolumeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _ProjectService_CompressVolumeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeCompressRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).CompressVolumeFiles(m, &grpc.GenericServerStream[VolumeCompressRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_CompressVolumeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _ProjectService_ExtractVolumeFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeExtractRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).ExtractVolumeFile(m, &grpc.GenericServerStream[VolumeExtractRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_ExtractVolumeFileServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _ProjectService_ListVolumeDirSizes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeDirSizesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).ListVolumeDirSizes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_ListVolumeDirSizes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).ListVolumeDirSizes(ctx, req.(*VolumeDirSizesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -6573,6 +7027,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_RestoreVolumeFile_Handler,
 		},
 		{
+			MethodName: "RenameVolumeFile",
+			Handler:    _ProjectService_RenameVolumeFile_Handler,
+		},
+		{
+			MethodName: "ListVolumeDirSizes",
+			Handler:    _ProjectService_ListVolumeDirSizes_Handler,
+		},
+		{
 			MethodName: "ListSnapshots",
 			Handler:    _ProjectService_ListSnapshots_Handler,
 		},
@@ -6640,6 +7102,26 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "RedeployElsewhere",
 			Handler:       _ProjectService_RedeployElsewhere_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MoveVolumeFiles",
+			Handler:       _ProjectService_MoveVolumeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CopyVolumeFiles",
+			Handler:       _ProjectService_CopyVolumeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CompressVolumeFiles",
+			Handler:       _ProjectService_CompressVolumeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ExtractVolumeFile",
+			Handler:       _ProjectService_ExtractVolumeFile_Handler,
 			ServerStreams: true,
 		},
 		{

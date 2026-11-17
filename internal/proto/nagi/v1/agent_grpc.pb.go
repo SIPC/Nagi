@@ -28,6 +28,10 @@ const (
 	AgentService_DeleteVolumeFile_FullMethodName      = "/nagi.v1.AgentService/DeleteVolumeFile"
 	AgentService_CreateVolumeDir_FullMethodName       = "/nagi.v1.AgentService/CreateVolumeDir"
 	AgentService_RestoreVolumeFile_FullMethodName     = "/nagi.v1.AgentService/RestoreVolumeFile"
+	AgentService_TransferVolumeFiles_FullMethodName   = "/nagi.v1.AgentService/TransferVolumeFiles"
+	AgentService_CompressVolumeFiles_FullMethodName   = "/nagi.v1.AgentService/CompressVolumeFiles"
+	AgentService_ExtractVolumeFile_FullMethodName     = "/nagi.v1.AgentService/ExtractVolumeFile"
+	AgentService_ListVolumeDirSizes_FullMethodName    = "/nagi.v1.AgentService/ListVolumeDirSizes"
 	AgentService_ListSnapshots_FullMethodName         = "/nagi.v1.AgentService/ListSnapshots"
 	AgentService_CreateSnapshot_FullMethodName        = "/nagi.v1.AgentService/CreateSnapshot"
 	AgentService_RestoreSnapshot_FullMethodName       = "/nagi.v1.AgentService/RestoreSnapshot"
@@ -45,6 +49,10 @@ const (
 	AgentService_CreateNodeDir_FullMethodName         = "/nagi.v1.AgentService/CreateNodeDir"
 	AgentService_ListNodeFileBackups_FullMethodName   = "/nagi.v1.AgentService/ListNodeFileBackups"
 	AgentService_RestoreNodeFileBackup_FullMethodName = "/nagi.v1.AgentService/RestoreNodeFileBackup"
+	AgentService_TransferNodeFiles_FullMethodName     = "/nagi.v1.AgentService/TransferNodeFiles"
+	AgentService_CompressNodeFiles_FullMethodName     = "/nagi.v1.AgentService/CompressNodeFiles"
+	AgentService_ExtractNodeFile_FullMethodName       = "/nagi.v1.AgentService/ExtractNodeFile"
+	AgentService_ListNodeDirSizes_FullMethodName      = "/nagi.v1.AgentService/ListNodeDirSizes"
 	AgentService_CheckImages_FullMethodName           = "/nagi.v1.AgentService/CheckImages"
 	AgentService_LoginRegistry_FullMethodName         = "/nagi.v1.AgentService/LoginRegistry"
 	AgentService_SyncBackup_FullMethodName            = "/nagi.v1.AgentService/SyncBackup"
@@ -108,6 +116,12 @@ type AgentServiceClient interface {
 	CreateVolumeDir(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
 	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
 	RestoreVolumeFile(ctx context.Context, in *VolumeFileRef, opts ...grpc.CallOption) (*VolumeFileOpResponse, error)
+	// 卷里的改名、移动、复制（同一个卷内）、压缩、解压，都在节点本地进行。每隔一会儿发一条进度，最后一条带结果。
+	TransferVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	// 目录的大小：在时间和文件数的限额内统计，超出时标记为不完整。
+	ListVolumeDirSizes(ctx context.Context, in *VolumeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error)
 	ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -133,6 +147,10 @@ type AgentServiceClient interface {
 	CreateNodeDir(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*NodeFileOpResponse, error)
 	ListNodeFileBackups(ctx context.Context, in *NodeFileRef, opts ...grpc.CallOption) (*ListNodeFileBackupsResponse, error)
 	RestoreNodeFileBackup(ctx context.Context, in *RestoreNodeFileBackupRequest, opts ...grpc.CallOption) (*WriteNodeFileResponse, error)
+	TransferNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	CompressNodeFiles(ctx context.Context, in *NodeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ExtractNodeFile(ctx context.Context, in *NodeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error)
+	ListNodeDirSizes(ctx context.Context, in *NodeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -326,6 +344,73 @@ func (c *agentServiceClient) RestoreVolumeFile(ctx context.Context, in *VolumeFi
 	return out, nil
 }
 
+func (c *agentServiceClient) TransferVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_TransferVolumeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeTransferRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_TransferVolumeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *agentServiceClient) CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_CompressVolumeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeCompressRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_CompressVolumeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *agentServiceClient) ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_ExtractVolumeFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[VolumeExtractRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ExtractVolumeFileClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *agentServiceClient) ListVolumeDirSizes(ctx context.Context, in *VolumeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DirSizesResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListVolumeDirSizes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSnapshotsResponse)
@@ -338,7 +423,7 @@ func (c *agentServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef
 
 func (c *agentServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +442,7 @@ type AgentService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +471,7 @@ func (c *agentServiceClient) DeleteSnapshot(ctx context.Context, in *RestoreSnap
 
 func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +490,7 @@ type AgentService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
 
 func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_Exec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_Exec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +503,7 @@ type AgentService_ExecClient = grpc.BidiStreamingClient[ExecInput, ExecOutput]
 
 func (c *agentServiceClient) NodeShell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[NodeShellInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_NodeShell_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_NodeShell_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +516,7 @@ type AgentService_NodeShellClient = grpc.BidiStreamingClient[NodeShellInput, Exe
 
 func (c *agentServiceClient) NodeExec(ctx context.Context, in *NodeExecRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_NodeExec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_NodeExec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +535,7 @@ type AgentService_NodeExecClient = grpc.ServerStreamingClient[ExecOutput]
 
 func (c *agentServiceClient) ReclaimSnapshots(ctx context.Context, in *ReclaimSnapshotsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_ReclaimSnapshots_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[11], AgentService_ReclaimSnapshots_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -547,6 +632,73 @@ func (c *agentServiceClient) RestoreNodeFileBackup(ctx context.Context, in *Rest
 	return out, nil
 }
 
+func (c *agentServiceClient) TransferNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[12], AgentService_TransferNodeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeTransferRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_TransferNodeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *agentServiceClient) CompressNodeFiles(ctx context.Context, in *NodeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[13], AgentService_CompressNodeFiles_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeCompressRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_CompressNodeFilesClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *agentServiceClient) ExtractNodeFile(ctx context.Context, in *NodeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[14], AgentService_ExtractNodeFile_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[NodeExtractRequest, FileOpEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ExtractNodeFileClient = grpc.ServerStreamingClient[FileOpEvent]
+
+func (c *agentServiceClient) ListNodeDirSizes(ctx context.Context, in *NodeDirSizesRequest, opts ...grpc.CallOption) (*DirSizesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DirSizesResponse)
+	err := c.cc.Invoke(ctx, AgentService_ListNodeDirSizes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) CheckImages(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*CheckImagesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CheckImagesResponse)
@@ -619,7 +771,7 @@ func (c *agentServiceClient) CheckContainer(ctx context.Context, in *PutContaine
 
 func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[15], AgentService_RestoreReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -648,7 +800,7 @@ func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ContainerRef
 
 func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_MigrateOut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[16], AgentService_MigrateOut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -667,7 +819,7 @@ type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[11], AgentService_MigrateResume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[17], AgentService_MigrateResume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -959,6 +1111,12 @@ type AgentServiceServer interface {
 	CreateVolumeDir(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
 	// 把快照里的文件或目录恢复到卷里原来的位置，只覆盖快照里有的文件。
 	RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error)
+	// 卷里的改名、移动、复制（同一个卷内）、压缩、解压，都在节点本地进行。每隔一会儿发一条进度，最后一条带结果。
+	TransferVolumeFiles(*VolumeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	CompressVolumeFiles(*VolumeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ExtractVolumeFile(*VolumeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	// 目录的大小：在时间和文件数的限额内统计，超出时标记为不完整。
+	ListVolumeDirSizes(context.Context, *VolumeDirSizesRequest) (*DirSizesResponse, error)
 	ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error)
 	CreateSnapshot(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 从定时或手动快照恢复容器的 data/ 和 volumes/：停止、恢复、重新启动。配置不变。
@@ -984,6 +1142,10 @@ type AgentServiceServer interface {
 	CreateNodeDir(context.Context, *NodeFileRef) (*NodeFileOpResponse, error)
 	ListNodeFileBackups(context.Context, *NodeFileRef) (*ListNodeFileBackupsResponse, error)
 	RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error)
+	TransferNodeFiles(*NodeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	CompressNodeFiles(*NodeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ExtractNodeFile(*NodeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error
+	ListNodeDirSizes(context.Context, *NodeDirSizesRequest) (*DirSizesResponse, error)
 	// 立即检查容器的镜像有没有新版本。
 	CheckImages(context.Context, *ContainerRef) (*CheckImagesResponse, error)
 	// 向仓库验证账号，返回登录后的 docker 配置（config.json），由面板保存。
@@ -1096,6 +1258,18 @@ func (UnimplementedAgentServiceServer) CreateVolumeDir(context.Context, *VolumeF
 func (UnimplementedAgentServiceServer) RestoreVolumeFile(context.Context, *VolumeFileRef) (*VolumeFileOpResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestoreVolumeFile not implemented")
 }
+func (UnimplementedAgentServiceServer) TransferVolumeFiles(*VolumeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method TransferVolumeFiles not implemented")
+}
+func (UnimplementedAgentServiceServer) CompressVolumeFiles(*VolumeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method CompressVolumeFiles not implemented")
+}
+func (UnimplementedAgentServiceServer) ExtractVolumeFile(*VolumeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method ExtractVolumeFile not implemented")
+}
+func (UnimplementedAgentServiceServer) ListVolumeDirSizes(context.Context, *VolumeDirSizesRequest) (*DirSizesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListVolumeDirSizes not implemented")
+}
 func (UnimplementedAgentServiceServer) ListSnapshots(context.Context, *ContainerRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSnapshots not implemented")
 }
@@ -1146,6 +1320,18 @@ func (UnimplementedAgentServiceServer) ListNodeFileBackups(context.Context, *Nod
 }
 func (UnimplementedAgentServiceServer) RestoreNodeFileBackup(context.Context, *RestoreNodeFileBackupRequest) (*WriteNodeFileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RestoreNodeFileBackup not implemented")
+}
+func (UnimplementedAgentServiceServer) TransferNodeFiles(*NodeTransferRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method TransferNodeFiles not implemented")
+}
+func (UnimplementedAgentServiceServer) CompressNodeFiles(*NodeCompressRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method CompressNodeFiles not implemented")
+}
+func (UnimplementedAgentServiceServer) ExtractNodeFile(*NodeExtractRequest, grpc.ServerStreamingServer[FileOpEvent]) error {
+	return status.Error(codes.Unimplemented, "method ExtractNodeFile not implemented")
+}
+func (UnimplementedAgentServiceServer) ListNodeDirSizes(context.Context, *NodeDirSizesRequest) (*DirSizesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodeDirSizes not implemented")
 }
 func (UnimplementedAgentServiceServer) CheckImages(context.Context, *ContainerRef) (*CheckImagesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckImages not implemented")
@@ -1424,6 +1610,57 @@ func _AgentService_RestoreVolumeFile_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_TransferVolumeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeTransferRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).TransferVolumeFiles(m, &grpc.GenericServerStream[VolumeTransferRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_TransferVolumeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _AgentService_CompressVolumeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeCompressRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).CompressVolumeFiles(m, &grpc.GenericServerStream[VolumeCompressRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_CompressVolumeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _AgentService_ExtractVolumeFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(VolumeExtractRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).ExtractVolumeFile(m, &grpc.GenericServerStream[VolumeExtractRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ExtractVolumeFileServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _AgentService_ListVolumeDirSizes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VolumeDirSizesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListVolumeDirSizes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListVolumeDirSizes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListVolumeDirSizes(ctx, req.(*VolumeDirSizesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
 	if err := dec(in); err != nil {
@@ -1669,6 +1906,57 @@ func _AgentService_RestoreNodeFileBackup_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServiceServer).RestoreNodeFileBackup(ctx, req.(*RestoreNodeFileBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_TransferNodeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeTransferRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).TransferNodeFiles(m, &grpc.GenericServerStream[NodeTransferRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_TransferNodeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _AgentService_CompressNodeFiles_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeCompressRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).CompressNodeFiles(m, &grpc.GenericServerStream[NodeCompressRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_CompressNodeFilesServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _AgentService_ExtractNodeFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(NodeExtractRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).ExtractNodeFile(m, &grpc.GenericServerStream[NodeExtractRequest, FileOpEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ExtractNodeFileServer = grpc.ServerStreamingServer[FileOpEvent]
+
+func _AgentService_ListNodeDirSizes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeDirSizesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListNodeDirSizes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListNodeDirSizes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListNodeDirSizes(ctx, req.(*NodeDirSizesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2336,6 +2624,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AgentService_RestoreVolumeFile_Handler,
 		},
 		{
+			MethodName: "ListVolumeDirSizes",
+			Handler:    _AgentService_ListVolumeDirSizes_Handler,
+		},
+		{
 			MethodName: "ListSnapshots",
 			Handler:    _AgentService_ListSnapshots_Handler,
 		},
@@ -2374,6 +2666,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RestoreNodeFileBackup",
 			Handler:    _AgentService_RestoreNodeFileBackup_Handler,
+		},
+		{
+			MethodName: "ListNodeDirSizes",
+			Handler:    _AgentService_ListNodeDirSizes_Handler,
 		},
 		{
 			MethodName: "CheckImages",
@@ -2520,6 +2816,21 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
+			StreamName:    "TransferVolumeFiles",
+			Handler:       _AgentService_TransferVolumeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CompressVolumeFiles",
+			Handler:       _AgentService_CompressVolumeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ExtractVolumeFile",
+			Handler:       _AgentService_ExtractVolumeFile_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "CreateSnapshot",
 			Handler:       _AgentService_CreateSnapshot_Handler,
 			ServerStreams: true,
@@ -2554,6 +2865,21 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ReclaimSnapshots",
 			Handler:       _AgentService_ReclaimSnapshots_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "TransferNodeFiles",
+			Handler:       _AgentService_TransferNodeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "CompressNodeFiles",
+			Handler:       _AgentService_CompressNodeFiles_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ExtractNodeFile",
+			Handler:       _AgentService_ExtractNodeFile_Handler,
 			ServerStreams: true,
 		},
 		{

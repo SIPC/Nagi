@@ -48,6 +48,12 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.NodeServiceCreateNodeDirProcedure:         true,
 	nagiv1connect.NodeServiceListNodeFileBackupsProcedure:   true,
 	nagiv1connect.NodeServiceRestoreNodeFileBackupProcedure: true,
+	nagiv1connect.NodeServiceRenameNodeFileProcedure:        true,
+	nagiv1connect.NodeServiceMoveNodeFilesProcedure:         true,
+	nagiv1connect.NodeServiceCopyNodeFilesProcedure:         true,
+	nagiv1connect.NodeServiceCompressNodeFilesProcedure:     true,
+	nagiv1connect.NodeServiceExtractNodeFileProcedure:       true,
+	nagiv1connect.NodeServiceListNodeDirSizesProcedure:      true,
 	// 导入现有目录：读主机上的文件（见 docs/agent.md#现有目录）。
 	nagiv1connect.NodeServiceInspectComposeDirProcedure:   true,
 	nagiv1connect.ProjectServiceImportComposeDirProcedure: true,
@@ -432,6 +438,14 @@ func (a *API) NodeFileHandler() http.Handler {
 
 		if r.Header.Get("X-Nagi-Upload") != "1" {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))
+			return
+		}
+		if op := q.Get("op"); op != "" {
+			nodeChunks(client, ref, q.Get("confirmed") == "1", record).serve(w, r, op)
+			return
+		}
+		if r.Method != http.MethodPost {
+			fail(http.StatusMethodNotAllowed, i18n.New("上传参数无效"))
 			return
 		}
 		if r.ContentLength > maxNodeUpload {

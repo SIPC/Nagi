@@ -496,6 +496,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		CrossNodeEntry: true,
 		ProxyProtocol:  true,
 		MultiBackup:    true,
+		FileOps:        true,
 		ProxyDisabled:  a.cfg.DisableProxy,
 		EgressError:    a.egress.Error(),
 		ReportsCerts:   true,
