@@ -22,7 +22,15 @@ func TestPrivilegeReasonsAllowList(t *testing.T) {
 		{"syslog 日志", svc("    logging:\n      driver: syslog\n      options:\n        syslog-address: tcp://10.0.0.5:6379\n"), true},
 		{"gelf 日志", svc("    logging:\n      driver: gelf\n"), true},
 		{"json-file 日志带参数", svc("    logging:\n      driver: json-file\n      options:\n        max-size: 10m\n"), false},
-		{"只写参数", svc("    logging:\n      options:\n        max-size: 10m\n"), false},
+		{"只写参数", svc("    logging:\n      options:\n        max-size: 10m\n"), true},
+		{"json-file 不认识的参数", svc("    logging:\n      driver: json-file\n      options:\n        syslog-address: tcp://x\n"), true},
+		{"oom_score_adj 负数", svc("    oom_score_adj: -1000\n"), true},
+		{"oom_score_adj 正数", svc("    oom_score_adj: 500\n"), false},
+		{"oom_kill_disable", svc("    oom_kill_disable: true\n"), true},
+		{"ulimits rtprio", svc("    ulimits:\n      rtprio: 99\n"), true},
+		{"ulimits memlock", svc("    ulimits:\n      memlock: -1\n"), true},
+		{"annotations", svc("    annotations:\n      a: b\n"), true},
+		{"container_name", svc("    container_name: web1\n"), true},
 		{"label_file 绝对路径", svc("    label_file: /etc/nagi/secret\n"), true},
 		{"label_file 相对路径", svc("    label_file: ./labels\n"), false},
 		{"deploy 资源", svc("    deploy:\n      resources:\n        limits:\n          cpus: '0.5'\n"), false},
@@ -31,7 +39,7 @@ func TestPrivilegeReasonsAllowList(t *testing.T) {
 		{"blkio_config", svc("    blkio_config:\n      weight: 300\n"), true},
 		{"顶层 models", svc("") + "models:\n  m:\n    model: x\n", true},
 		{"顶层扩展", "x-common: &c\n  restart: always\n" + svc("    <<: *c\n"), false},
-		{"常见写法", svc("    container_name: web1\n    restart: unless-stopped\n    environment:\n      A: b\n    ports:\n      - \"8080:80\"\n    depends_on:\n      - db\n    healthcheck:\n      test: [\"CMD\", \"true\"]\n    labels:\n      a: b\n    extra_hosts:\n      - \"host.docker.internal:host-gateway\"\n    ulimits:\n      nofile: 65535\n    sysctls:\n      net.core.somaxconn: 1024\n    shm_size: 256m\n    stop_grace_period: 30s\n    tmpfs:\n      - /run\n") + "  db:\n    image: postgres\n", false},
+		{"常见写法", svc("    restart: unless-stopped\n    environment:\n      A: b\n    ports:\n      - \"8080:80\"\n    depends_on:\n      - db\n    healthcheck:\n      test: [\"CMD\", \"true\"]\n    labels:\n      a: b\n    extra_hosts:\n      - \"host.docker.internal:host-gateway\"\n    ulimits:\n      nofile: 65535\n    sysctls:\n      net.core.somaxconn: 1024\n    shm_size: 256m\n    stop_grace_period: 30s\n    tmpfs:\n      - /run\n") + "  db:\n    image: postgres\n", false},
 	}
 	for _, c := range cases {
 		reasons, _ := PrivilegeReasons(&nagiv1.ContainerConfig{Compose: c.compose}, "web")

@@ -35,13 +35,13 @@ var privilegedFields = []string{
 // 节点上的版本也不由 Nagi 决定，按「已知危险的字段」逐个列出总会漏掉新字段。
 var safeServiceFields = []string{
 	"image", "command", "entrypoint", "environment", "ports", "expose", "healthcheck", "restart", "depends_on",
-	"labels", "annotations", "working_dir", "user", "group_add", "hostname", "domainname", "container_name",
+	"labels", "working_dir", "user", "group_add", "hostname", "domainname",
 	"networks", "dns", "dns_opt", "dns_search", "extra_hosts", "links", "mac_address",
 	"configs", "secrets", "tmpfs", "read_only", "init", "tty", "stdin_open", "attach",
 	"stop_signal", "stop_grace_period", "platform", "pull_policy", "pull_refresh_after", "profiles", "scale",
 	"cpus", "cpu_count", "cpu_percent", "cpu_shares", "cpu_period", "cpu_quota", "cpuset",
-	"mem_limit", "mem_reservation", "mem_swappiness", "memswap_limit", "shm_size", "pids_limit", "ulimits",
-	"oom_kill_disable", "oom_score_adj", "sysctls", "isolation",
+	"mem_limit", "mem_reservation", "mem_swappiness", "memswap_limit", "shm_size", "pids_limit",
+	"sysctls", "isolation",
 }
 
 // safeTopLevel 是顶层不碰节点的段（volumes、networks、secrets、configs 另外检查值）。其他顶层段一律算有特权，
@@ -50,7 +50,14 @@ var safeTopLevel = []string{"services", "volumes", "networks", "secrets", "confi
 
 // safeLogDrivers 是在容器自己那里写日志的驱动：syslog、gelf、fluentd 这类由 dockerd 在节点的网络里发出去，
 // 能绕过出站限制访问节点所在的内网。
-var safeLogDrivers = []string{"", "json-file", "local", "none"}
+// 不写 driver 时用 dockerd 的默认驱动，由节点的 daemon.json 决定，所以不写 driver 时不能带 options。
+var safeLogDrivers = []string{"json-file", "local", "none"}
+
+// safeLogOptions 是 json-file、local 驱动的日志选项里不碰节点的。
+var safeLogOptions = []string{"max-size", "max-file", "compress", "labels", "env", "tag", "labels-regex", "env-regex"}
+
+// unsafeUlimits 是能让容器里的进程抢占整个节点的 ulimit：实时调度、调高优先级、锁住大量内存。
+var unsafeUlimits = []string{"rtprio", "rttime", "nice", "memlock"}
 
 // hookFields 是容器的生命周期钩子：在容器里执行命令，可以单独设 privileged，以特权执行。
 var hookFields = []string{"post_start", "pre_stop"}
@@ -146,7 +153,7 @@ func composeModel(text string) (map[string]any, error) {
 }
 
 func checkService(name string, svc map[string]any, services map[string]any, add func(bool, string, ...any)) {
-	checked := []string{"env_file", "label_file", "volumes", "logging", "deploy"}
+	checked := []string{"env_file", "label_file", "volumes", "logging", "deploy", "ulimits", "oom_score_adj", "oom_kill_disable"}
 	for field, v := range svc {
 		switch {
 		case strings.HasPrefix(field, "x-"), slices.Contains(safeServiceFields, field), slices.Contains(checked, field),
@@ -162,10 +169,28 @@ func checkService(name string, svc map[string]any, services map[string]any, add 
 		}
 	}
 	if v, ok := svc["logging"]; ok && v != nil {
-		m, isMap := v.(map[string]any)
-		driver, _ := m["driver"].(string)
-		if !isMap || !slices.Contains(safeLogDrivers, driver) {
+		if !safeLogging(v) {
 			add(hasVar(v), "%s: logging", name)
+		}
+	}
+	// 内存不够时内核先杀别的进程（节点进程、dockerd、别的项目的容器）。
+	if v, ok := svc["oom_score_adj"]; ok && v != nil {
+		if n, isInt := v.(int); !isInt || n < 0 {
+			add(hasVar(v), "%s: oom_score_adj", name)
+		}
+	}
+	if v, ok := svc["oom_kill_disable"]; ok && v != nil && v != false {
+		add(hasVar(v), "%s: oom_kill_disable", name)
+	}
+	if v, ok := svc["ulimits"]; ok && v != nil {
+		m, isMap := v.(map[string]any)
+		if !isMap {
+			add(hasVar(v), "%s: ulimits", name)
+		}
+		for k, e := range m {
+			if slices.Contains(unsafeUlimits, k) {
+				add(hasVar(e), "%s: ulimits.%s", name, k)
+			}
 		}
 	}
 	// deploy 里只有设备（GPU 这类）碰节点：resources.reservations.devices。
@@ -237,6 +262,35 @@ func checkService(name string, svc map[string]any, services map[string]any, add 
 			}
 		}
 	}
+}
+
+// safeLogging：驱动是 safeLogDrivers 之一，选项只有 safeLogOptions。
+func safeLogging(v any) bool {
+	m, isMap := v.(map[string]any)
+	if !isMap {
+		return false
+	}
+	for k := range m {
+		if k != "driver" && k != "options" {
+			return false
+		}
+	}
+	driver, _ := m["driver"].(string)
+	if !slices.Contains(safeLogDrivers, driver) {
+		return false
+	}
+	if o, has := m["options"]; has && o != nil {
+		opts, isMap := o.(map[string]any)
+		if !isMap {
+			return false
+		}
+		for k := range opts {
+			if !slices.Contains(safeLogOptions, k) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // containsKey 判断 v 里（任意层）有没有名为 key 的字段。
