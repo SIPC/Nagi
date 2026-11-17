@@ -56,6 +56,10 @@ export default {
     done: (n: number, size: string) => `已删除 ${n} 个镜像，构建缓存释放 ${size}`,
     doneImages: (n: number) => `已删除 ${n} 个镜像`,
     skipped: (n: number) => `${n} 个镜像在预览后已被使用或已删除，未清理`,
+    previousMark: "可能用于回滚",
+    localMark: "本地构建",
+    warning: (previous: number, local: number) =>
+      [previous > 0 && `${previous} 个可能是回滚要用的旧版本`, local > 0 && `${local} 个是本地构建的，删除后无法重新拉取`].filter(Boolean).join("，") + "。",
   },
   pullDialog: {
     title: "拉取镜像",

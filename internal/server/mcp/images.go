@@ -81,6 +81,39 @@ func imageRefusal(im *nagiv1.NodeImage) string {
 	return ""
 }
 
+// imageOf 按完整 ID 找镜像，找不到时返回 nil。
+func imageOf(list *nagiv1.NodeImages, id string) *nagiv1.NodeImage {
+	for _, im := range list.GetImages() {
+		if im.GetId() == id {
+			return im
+		}
+	}
+	return nil
+}
+
+// imageWarnings 是删除前要提醒的镜像：可能是回滚要用的旧版本、本地构建的（删除后拉不回来）。只提醒，不阻止。
+func imageWarnings(images []*nagiv1.NodeImage) map[string]any {
+	var previous, local []string
+	for _, im := range images {
+		if im.GetPreviousVersion() {
+			previous = append(previous, imageLabel(im))
+		}
+		if im.GetLocalBuild() {
+			local = append(local, imageLabel(im))
+		}
+	}
+	out := map[string]any{}
+	if len(previous) > 0 {
+		out["possible_rollback_versions"] = previous
+		out["possible_rollback_note"] = "same repository as an image a Nagi container on this node uses: possibly an older version needed to roll back"
+	}
+	if len(local) > 0 {
+		out["local_builds"] = local
+		out["local_builds_note"] = "built or loaded locally with no registry digest: cannot be pulled again after deletion"
+	}
+	return out
+}
+
 // nodeImages 按名称或 ID 找到节点并列出它的镜像。
 func (c *call) nodeImages(ref string) (*nagiv1.Node, *nagiv1.NodeImages, error) {
 	nodes, err := c.nodes()
@@ -200,7 +233,12 @@ func toolDeleteNodeImages(c *call, in DeleteNodeImagesArgs) (any, error) {
 		}
 		if k := im.GetId() + "|" + tag; !seen[k] {
 			seen[k] = true
-			plan = append(plan, planned{&nagiv1.ImageRef{Id: im.GetId(), Tag: tag}, label})
+			ref := &nagiv1.ImageRef{Id: im.GetId(), Tag: tag}
+			if tag == "" {
+				// 删整个镜像：带上预览时的标签，之后新加的标签节点不跟着删（见 docs/agent.md#节点镜像）。
+				ref.Tags, ref.CheckTags = append([]string{}, im.GetTags()...), true
+			}
+			plan = append(plan, planned{ref, label})
 		}
 	}
 	for _, ref := range in.Images {
@@ -231,22 +269,34 @@ func toolDeleteNodeImages(c *call, in DeleteNodeImagesArgs) (any, error) {
 	keys := make([]string, 0, len(plan))
 	labels := make([]string, 0, len(plan))
 	for _, p := range plan {
-		keys = append(keys, p.ref.GetId()+"|"+p.ref.GetTag())
+		// 删整个镜像时确认码也算上当时的标签：预览之后多了标签，确认码就对不上。
+		tags := slices.Clone(p.ref.GetTags())
+		sort.Strings(tags)
+		keys = append(keys, p.ref.GetId()+"|"+p.ref.GetTag()+"|"+strings.Join(tags, ","))
 		labels = append(labels, p.label)
 	}
 	sort.Strings(keys)
-	code := confirmCode(append([]string{"delete", n.GetId()}, keys...)...)
-	if in.Confirm != code {
+	code, ok := c.confirm(in.Confirm, append([]string{"delete", n.GetId()}, keys...)...)
+	if !ok || len(plan) == 0 {
 		if len(plan) == 0 {
 			return map[string]any{"node": n.GetName(), "refused": refused, "note": "nothing can be deleted: the node refuses images used by a container or needed by Nagi"}, nil
 		}
-		out := preview("delete_node_images", code, fmt.Sprintf("these will be deleted from node %s now; deleted images can be pulled again.", n.GetName()),
+		out := preview("delete_node_images", code, fmt.Sprintf("these will be deleted from node %s now; deleted images can be pulled again unless warned below.", n.GetName()),
 			map[string]any{"node": n.GetName(), "delete": labels})
+		var whole []*nagiv1.NodeImage
+		for _, p := range plan {
+			if p.ref.GetTag() == "" {
+				whole = append(whole, imageOf(list, p.ref.GetId()))
+			}
+		}
+		if w := imageWarnings(whole); len(w) > 0 {
+			out["warnings"] = w
+		}
 		if len(refused) > 0 {
 			out["refused"] = refused
 		}
 		if in.Confirm != "" {
-			out["note"] = "the confirm code does not match these images on the node now; show this preview to the user again"
+			out["note"] = "the confirm code does not match these images on the node now, or has expired; show this preview to the user again"
 		}
 		return out, nil
 	}
@@ -305,8 +355,18 @@ func toolPruneNodeImages(c *call, in PruneNodeImagesArgs) (any, error) {
 	if len(ids) == 0 && !cache {
 		return map[string]any{"node": n.GetName(), "note": "nothing to clean up: every image is used by a container or needed by Nagi", "build_cache_reclaimable_mb": mb(list.GetBuildCacheBytes())}, nil
 	}
-	code := confirmCode(append([]string{"prune", n.GetId(), fmt.Sprint(cache)}, ids...)...)
-	if in.Confirm != code {
+	// 确认码算上每个镜像当时的标签：预览之后镜像多了标签，确认码就对不上。
+	parts := []string{"prune", n.GetId(), fmt.Sprint(cache)}
+	var pruned []*nagiv1.NodeImage
+	for _, id := range ids {
+		im := imageOf(list, id)
+		tags := slices.Clone(im.GetTags())
+		sort.Strings(tags)
+		parts = append(parts, id+"|"+strings.Join(tags, ","))
+		pruned = append(pruned, im)
+	}
+	code, ok := c.confirm(in.Confirm, parts...)
+	if !ok {
 		type item struct {
 			Image  string  `json:"image"`
 			SizeMB float64 `json:"size_mb"`
@@ -317,13 +377,16 @@ func toolPruneNodeImages(c *call, in PruneNodeImagesArgs) (any, error) {
 				items = append(items, item{cmpOr(strings.Join(im.GetTags(), ", "), shortImageID(im.GetId())), mb(im.GetSize())})
 			}
 		}
-		text := fmt.Sprintf("%d images that no container uses and Nagi does not need will be deleted from node %s, freeing at least %.1f MB (layers shared among them are not counted). They can be pulled again.", len(ids), n.GetName(), mb(list.GetPruneBytes()))
+		text := fmt.Sprintf("%d images that no container uses and Nagi does not need will be deleted from node %s, freeing at least %.1f MB (layers shared among them are not counted). They can be pulled again unless warned below.", len(ids), n.GetName(), mb(list.GetPruneBytes()))
 		if cache {
 			text += fmt.Sprintf(" Unused build cache (%.1f MB) is cleaned up too.", mb(list.GetBuildCacheBytes()))
 		}
 		out := preview("prune_node_images", code, text, map[string]any{"node": n.GetName(), "images": items, "build_cache": cache})
+		if w := imageWarnings(pruned); len(w) > 0 {
+			out["warnings"] = w
+		}
 		if in.Confirm != "" {
-			out["note"] = "the images on the node changed since the preview; show this preview to the user again"
+			out["note"] = "the images on the node changed since the preview, or the confirm code has expired; show this preview to the user again"
 		}
 		return out, nil
 	}

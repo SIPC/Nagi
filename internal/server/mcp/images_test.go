@@ -114,7 +114,7 @@ func TestDeleteNodeImagesConfirm(t *testing.T) {
 		t.Fatal(err)
 	}
 	pv := v.(map[string]any)
-	code := confirmCode("delete", "n1", imgFree+"|", imgTwo+"|app:b")
+	code := c.confirmCode("delete", "n1", imgFree+"||busybox:1.36", imgTwo+"|app:b|")
 	if next, _ := pv["next"].(string); !strings.Contains(next, code) {
 		t.Fatalf("预览里应给出确认码 %s：%v", code, pv)
 	}
@@ -140,6 +140,46 @@ func TestDeleteNodeImagesConfirm(t *testing.T) {
 	if want := []string{imgFree + "|", imgTwo + "|app:b"}; !slices.Equal(got, want) {
 		t.Errorf("删除 = %v，应为 %v", got, want)
 	}
+	// 删整个镜像时带上预览时的标签，节点据此跳过之后新加了标签的镜像（审查 L5）。
+	for _, r := range f.deleted {
+		if r.GetTag() == "" && (!r.GetCheckTags() || !slices.Equal(r.GetTags(), []string{"busybox:1.36"})) {
+			t.Errorf("删整个镜像应带上预览时的标签：%v", r)
+		}
+	}
+}
+
+// 预览之后镜像多了标签：确认码对不上，不删除（审查 L5）。
+func TestDeleteNodeImagesNewTag(t *testing.T) {
+	f := &fakeNodes{images: testNodeImages()}
+	c := testCall(f)
+	args := DeleteNodeImagesArgs{Node: "hk", Images: []string{"busybox:1.36"}}
+	v, err := toolDeleteNodeImages(c, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args.Confirm = previewCode(t, v)
+	f.images.Images[0].Tags = append(f.images.Images[0].Tags, "busybox:latest")
+	if _, err := toolDeleteNodeImages(c, args); err != nil || len(f.deleted) != 0 {
+		t.Fatalf("多了标签以后原来的确认码不能用：%v %v", err, f.deleted)
+	}
+}
+
+// 清理前提示可能是回滚要用的旧版本、本地构建的镜像，只提示不阻止。
+func TestPruneNodeImagesWarnings(t *testing.T) {
+	f := &fakeNodes{images: testNodeImages()}
+	f.images.Images[0].PreviousVersion = true
+	f.images.Images[1].LocalBuild = true
+	v, err := toolPruneNodeImages(testCall(f), PruneNodeImagesArgs{Node: "hk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, _ := v.(map[string]any)["warnings"].(map[string]any)
+	if prev, _ := w["possible_rollback_versions"].([]string); !slices.Equal(prev, []string{"busybox:1.36"}) {
+		t.Errorf("应提示可能是回滚要用的旧版本：%v", w)
+	}
+	if local, _ := w["local_builds"].([]string); !slices.Equal(local, []string{"app:a"}) {
+		t.Errorf("应提示本地构建的镜像：%v", w)
+	}
 }
 
 // 一键清理：预览之后节点上的镜像变了，原来的确认码作废；构建缓存默认不清理。
@@ -149,7 +189,7 @@ func TestPruneNodeImagesConfirm(t *testing.T) {
 	if _, err := toolPruneNodeImages(c, PruneNodeImagesArgs{Node: "hk"}); err != nil || f.pruned != nil {
 		t.Fatalf("预览不应清理：%v", err)
 	}
-	code := confirmCode("prune", "n1", "false", imgFree, imgTwo)
+	code := c.confirmCode("prune", "n1", "false", imgFree+"|busybox:1.36", imgTwo+"|app:a,app:b")
 	// 预览以后多了一个可清理的镜像：确认码对不上，只返回新的预览。
 	f.images.PruneIds = append(f.images.PruneIds, imgInUse)
 	if _, err := toolPruneNodeImages(c, PruneNodeImagesArgs{Node: "hk", Confirm: code}); err != nil || f.pruned != nil {
@@ -167,7 +207,7 @@ func TestPruneNodeImagesConfirm(t *testing.T) {
 	if _, err := toolPruneNodeImages(c, PruneNodeImagesArgs{Node: "hk", BuildCache: true, Confirm: code}); err != nil || f.pruned != nil {
 		t.Fatalf("构建缓存要单独确认：%v", err)
 	}
-	if _, err := toolPruneNodeImages(c, PruneNodeImagesArgs{Node: "hk", BuildCache: true, Confirm: confirmCode("prune", "n1", "true", imgFree, imgTwo)}); err != nil || !f.pruned.GetBuildCache() {
+	if _, err := toolPruneNodeImages(c, PruneNodeImagesArgs{Node: "hk", BuildCache: true, Confirm: c.confirmCode("prune", "n1", "true", imgFree+"|busybox:1.36", imgTwo+"|app:a,app:b")}); err != nil || !f.pruned.GetBuildCache() {
 		t.Fatalf("清理构建缓存：%v %v", err, f.pruned)
 	}
 }

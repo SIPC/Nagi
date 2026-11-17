@@ -131,12 +131,28 @@ func computeImages(st imageState) *nagiv1.NodeImages {
 		}
 		users[c.ImageID] = append(users[c.ImageID], u)
 	}
+	// Nagi 容器正在用的镜像的仓库：同一个仓库里没人用的镜像，可能是回滚要用的旧版本（只用于清理前提示）。
+	repos := map[string]bool{}
+	for _, h := range st.held {
+		if h.hold.GetKind() == holdSystem {
+			continue
+		}
+		if n, err := reference.ParseNormalizedNamed(strings.TrimSpace(h.ref)); err == nil {
+			repos[n.Name()] = true
+		}
+	}
 	out := &nagiv1.NodeImages{}
 	for _, im := range st.images {
 		ni := &nagiv1.NodeImage{
 			Id: im.ID, Tags: im.Tags, Digests: im.Digests, Size: im.Size, UniqueSize: im.Size,
 			Created: timestamppb.New(im.Created), Users: users[im.ID],
+			// 没有仓库摘要：本地构建或导入的，删除后拉不回来。
+			LocalBuild: len(im.Digests) == 0,
 		}
+		sameRepo := slices.ContainsFunc(append(slices.Clone(im.Tags), im.Digests...), func(r string) bool {
+			n, err := reference.ParseNormalizedNamed(r)
+			return err == nil && repos[n.Name()]
+		})
 		if im.SharedSize > 0 {
 			ni.UniqueSize = max(0, im.Size-im.SharedSize)
 		}
@@ -154,6 +170,7 @@ func computeImages(st imageState) *nagiv1.NodeImages {
 		if len(ni.Users) == 0 && len(ni.Holds) == 0 {
 			out.PruneIds = append(out.PruneIds, im.ID)
 			out.PruneBytes += ni.UniqueSize
+			ni.PreviousVersion = sameRepo
 		}
 		out.Images = append(out.Images, ni)
 	}
@@ -285,10 +302,24 @@ func deleteImages(ctx context.Context, rm imageRemover, list *nagiv1.NodeImages,
 			if _, err := rm.RemoveImage(ctx, r.GetTag()); err != nil {
 				res.Error = fmt.Sprintf("删除失败：%s", err)
 			}
+		case r.GetCheckTags() && len(newTags(ni.GetTags(), r.GetTags())) > 0:
+			// 删除整个镜像会去掉它所有的标签：预览之后新加的标签没有给用户看过，不跟着删。
+			res.Error = fmt.Sprintf("预览之后镜像多了标签 %s，已跳过，请重新确认", strings.Join(newTags(ni.GetTags(), r.GetTags()), "、"))
 		default:
 			if err := removeWholeImage(ctx, rm, ni); err != nil {
 				res.Error = fmt.Sprintf("删除失败：%s", err)
 			}
+		}
+	}
+	return out
+}
+
+// newTags 返回 now 里有、seen 里没有的标签。
+func newTags(now, seen []string) []string {
+	var out []string
+	for _, t := range now {
+		if !slices.Contains(seen, t) {
+			out = append(out, t)
 		}
 	}
 	return out
@@ -407,25 +438,65 @@ func normalizeImageRef(s string) (string, string, error) {
 	return named.String(), reference.Domain(named), nil
 }
 
+// maxPulls 是一个节点同时进行的拉取数，pullSlots 是占用的名额。
+const maxPulls = 2
+
+var pullSlots = make(chan struct{}, maxPulls)
+
+// pullDiskInterval 是拉取过程中检查磁盘剩余空间的间隔。
+var pullDiskInterval = 5 * time.Second
+
+// watchPullDisk 在拉取过程中定期检查磁盘（check 是 metrics.CheckDisk），剩余空间不足时以它的错误为原因取消拉取。
+func watchPullDisk(ctx context.Context, check func() error, stop context.CancelCauseFunc) {
+	t := time.NewTicker(pullDiskInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := check(); err != nil {
+				stop(err)
+				return
+			}
+		}
+	}
+}
+
 func (s *agentService) PullImage(req *nagiv1.PullImageRequest, stream nagiv1.AgentService_PullImageServer) error {
 	ref, domain, err := normalizeImageRef(req.GetImage())
 	if err != nil {
 		return err
 	}
+	// 每个节点同时最多 maxPulls 个拉取：被攻破的面板或令牌不能一下子发起很多拉取占满带宽和磁盘。
+	select {
+	case pullSlots <- struct{}{}:
+		defer func() { <-pullSlots }()
+	default:
+		return status.Errorf(codes.ResourceExhausted, "节点上已有 %d 个镜像在拉取，请稍后再试", maxPulls)
+	}
 	// 调用方取消时停止（PullImage 不在 detach 的范围内，见 isFollowStream）。
 	ctx, cancel := context.WithTimeout(stream.Context(), pullTimeout)
 	defer cancel()
+	ctx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
 	a := s.node
 	if root, err := a.docker.DockerRoot(ctx); err == nil && root != "" {
 		if err := metrics.CheckDisk(root, 0); err != nil {
 			return status.Error(codes.ResourceExhausted, err.Error())
 		}
+		// 拉取过程中也定期检查：镜像很大时，开始时够用不代表拉完还够。空间不足就停下。
+		go watchPullDisk(ctx, func() error { return metrics.CheckDisk(root, 0) }, stop)
 	}
 	a.log.Info("拉取镜像", "image", ref)
 	err = a.docker.Pull(ctx, ref, globalRegistryAuth(ctx, domain), func(p docker.PullProgress) {
 		_ = stream.Send(&nagiv1.ImagePullEvent{Status: p.Status, Current: p.Current, Total: p.Total, LayersDone: int32(p.LayersDone), Layers: int32(p.Layers)})
 	})
+	var low *metrics.LowDiskError
 	switch {
+	case errors.As(context.Cause(ctx), &low):
+		a.log.Warn("拉取镜像时磁盘空间不足，已停止", "image", ref, "err", low)
+		return status.Error(codes.ResourceExhausted, low.Error())
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return status.Error(codes.DeadlineExceeded, "拉取超过 30 分钟，已停止")
 	case errors.Is(ctx.Err(), context.Canceled):

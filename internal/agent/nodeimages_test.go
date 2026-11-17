@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -100,6 +101,13 @@ func TestComputeImagesProtects(t *testing.T) {
 	// 按大小从大到小。
 	if list.GetImages()[0].GetId() != idPg {
 		t.Errorf("第一项应是最大的镜像")
+	}
+	// 清理前的提示：旧版 nginx 和正在用的 nginx 是同一个仓库，可能是回滚要用的；没有仓库摘要的是本地构建的。
+	if !imageByID(list, idOld).GetPreviousVersion() || imageByID(list, idUnused).GetPreviousVersion() || imageByID(list, idNginx).GetPreviousVersion() {
+		t.Error("只有可清理、和 Nagi 容器的镜像同一个仓库的才标为可能的回滚版本")
+	}
+	if !imageByID(list, idBuilt).GetLocalBuild() || imageByID(list, idOld).GetLocalBuild() || imageByID(list, idPg).GetLocalBuild() {
+		t.Error("没有仓库摘要的才标为本地构建")
 	}
 }
 
@@ -238,6 +246,30 @@ func TestDeleteImagesTagAndWhole(t *testing.T) {
 	}
 }
 
+// 按 ID 删整个镜像时带上预览时的标签（审查 L5）：之后新加的标签不跟着删，跳过并报告。
+func TestDeleteWholeImageNewTag(t *testing.T) {
+	list := computeImages(testImageState())
+	rm := newFakeRemover()
+	// 预览时 busybox 只有 1.36，确认前多了 latest。
+	res := deleteImages(context.Background(), rm, list, []*nagiv1.ImageRef{{Id: idUnused, Tags: []string{"busybox:1.36"}, CheckTags: true}})
+	if !strings.Contains(res[0].GetError(), "busybox:latest") || len(rm.removed) != 0 {
+		t.Fatalf("多了标签应跳过：%q %v", res[0].GetError(), rm.removed)
+	}
+	// 预览时没有标签的镜像，现在有了也一样。
+	res = deleteImages(context.Background(), rm, list, []*nagiv1.ImageRef{{Id: idUnused, CheckTags: true}})
+	if res[0].GetError() == "" || len(rm.removed) != 0 {
+		t.Fatalf("预览时没有标签、现在有了应跳过：%q %v", res[0].GetError(), rm.removed)
+	}
+	// 标签没变：照常删除。
+	res = deleteImages(context.Background(), rm, list, []*nagiv1.ImageRef{{Id: idUnused, Tags: []string{"busybox:latest", "busybox:1.36"}, CheckTags: true}})
+	if res[0].GetError() != "" {
+		t.Fatalf("标签没变应删除：%s", res[0].GetError())
+	}
+	if _, err := rm.ImageID(context.Background(), idUnused); err == nil {
+		t.Error("busybox 应已删除")
+	}
+}
+
 func TestPruneOnlyCandidates(t *testing.T) {
 	list := computeImages(testImageState())
 	rm := newFakeRemover()
@@ -286,6 +318,49 @@ func TestNormalizeImageRef(t *testing.T) {
 	}
 	if _, domain, _ := normalizeImageRef("ghcr.io/owner/app"); domain != "ghcr.io" {
 		t.Errorf("域名 = %q", domain)
+	}
+}
+
+// 每个节点同时最多 maxPulls 个拉取，多出来的直接拒绝。
+func TestPullImageConcurrencyLimit(t *testing.T) {
+	for range maxPulls {
+		pullSlots <- struct{}{}
+	}
+	defer func() {
+		for range maxPulls {
+			<-pullSlots
+		}
+	}()
+	s := &agentService{node: &agent{}}
+	err := s.PullImage(&nagiv1.PullImageRequest{Image: "nginx:1.27"}, nil)
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("名额用完时应拒绝：%v", err)
+	}
+}
+
+// 拉取过程中磁盘剩余空间不足时停下，原因是磁盘不足。
+func TestWatchPullDisk(t *testing.T) {
+	prev := pullDiskInterval
+	pullDiskInterval = 10 * time.Millisecond
+	defer func() { pullDiskInterval = prev }()
+	ctx, stop := context.WithCancelCause(context.Background())
+	defer stop(nil)
+	low := &metrics.LowDiskError{Total: 100 << 30, Free: 1 << 30}
+	calls := 0
+	go watchPullDisk(ctx, func() error {
+		if calls++; calls >= 3 {
+			return low
+		}
+		return nil
+	}, stop)
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("磁盘不足时应停止拉取")
+	}
+	var got *metrics.LowDiskError
+	if !errors.As(context.Cause(ctx), &got) {
+		t.Fatalf("原因应是磁盘不足：%v", context.Cause(ctx))
 	}
 }
 

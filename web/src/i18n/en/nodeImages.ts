@@ -57,6 +57,15 @@ export default {
     done: (n, size) => `${n === 1 ? "1 image" : `${n} images`} deleted. Build cache freed ${size}`,
     doneImages: (n) => (n === 1 ? "1 image deleted" : `${n} images deleted`),
     skipped: (n) => (n === 1 ? "1 image was used or deleted after the preview and wasn't cleaned up" : `${n} images were used or deleted after the preview and weren't cleaned up`),
+    previousMark: "Possible rollback",
+    localMark: "Built locally",
+    warning: (previous, local) =>
+      [
+        previous > 0 && (previous === 1 ? "1 may be an older version needed to roll back" : `${previous} may be older versions needed to roll back`),
+        local > 0 && (local === 1 ? "1 was built locally and can't be pulled again" : `${local} were built locally and can't be pulled again`),
+      ]
+        .filter(Boolean)
+        .join(". ") + ".",
   },
   pullDialog: {
     title: "Pull image",

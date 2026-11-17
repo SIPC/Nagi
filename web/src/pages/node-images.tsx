@@ -16,8 +16,9 @@ import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field,
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { ImageHold, ImagePullEvent, NodeImage, NodeImages as NodeImageList } from "@/gen/nagi/v1/agent_pb";
 
-// Ref：要删除的镜像（tag 为空）或标签。
-type Ref = { id: string; tag: string };
+// Ref：要删除的镜像（tag 为空）或标签。删整个镜像时带上这时看到的标签：之后新加的标签节点不跟着删。
+type Ref = { id: string; tag: string; tags?: string[]; checkTags?: boolean };
+const wholeImage = (im: NodeImage): Ref => ({ id: im.id, tag: "", tags: [...im.tags], checkTags: true });
 
 const m = t.nodeImages;
 
@@ -118,7 +119,7 @@ export function NodeImages({ node }: { node: Node }) {
       q.refetch();
     }
   };
-  const removeImage = (im: NodeImage) => remove([{ id: im.id, tag: "" }], m.deleteConfirm(imageName(im) || shortId(im.id)), m.deleteImage);
+  const removeImage = (im: NodeImage) => remove([wholeImage(im)], m.deleteConfirm(imageName(im) || shortId(im.id)), m.deleteImage);
   const removeTag = (im: NodeImage, tag: string) => remove([{ id: im.id, tag }], m.deleteTagConfirm(tag), m.deleteTagAction);
   const removeSelected = () => {
     if (selected.length === 1) {
@@ -126,7 +127,10 @@ export function NodeImages({ node }: { node: Node }) {
       if (im) return removeImage(im);
     }
     return remove(
-      selected.map((id) => ({ id, tag: "" })),
+      selected.map((id) => {
+        const im = all.find((x) => x.id === id);
+        return im ? wholeImage(im) : { id, tag: "" };
+      }),
       m.deleteManyConfirm(selected.length),
       m.deleteImage,
     );
@@ -270,6 +274,9 @@ function PruneImages({ nodeId, list, busy, setBusy, onDone, onCancel }: { nodeId
   const [withCache, setWithCache] = useState(false);
   const [error, setError] = useState("");
   const nothing = candidates.length === 0 && cache === 0;
+  // 只提醒，不阻止：可能是回滚要用的旧版本、本地构建的（删除后拉不回来）。
+  const previous = candidates.filter((im) => im.previousVersion).length;
+  const local = candidates.filter((im) => im.localBuild).length;
   const run = async () => {
     setError("");
     setBusy(true);
@@ -310,11 +317,16 @@ function PruneImages({ nodeId, list, busy, setBusy, onDone, onCancel }: { nodeId
           <div className="grid max-h-56 gap-1 overflow-y-auto rounded-md border px-3 py-2 text-[13px]">
             {candidates.map((im) => (
               <div key={im.id} className="flex min-w-0 justify-between gap-4">
-                <span className={cn("truncate", !im.tags[0] && "text-muted-foreground")}>{im.tags[0] ? t.common.list(im.tags) : `${m.untagged} · ${shortId(im.id)}`}</span>
+                <span className="flex min-w-0 gap-2">
+                  <span className={cn("truncate", !im.tags[0] && "text-muted-foreground")}>{im.tags[0] ? t.common.list(im.tags) : `${m.untagged} · ${shortId(im.id)}`}</span>
+                  {im.previousVersion && <span className="shrink-0 text-muted-foreground">{d.previousMark}</span>}
+                  {im.localBuild && <span className="shrink-0 text-muted-foreground">{d.localMark}</span>}
+                </span>
                 <span className="shrink-0 text-muted-foreground tabular-nums">{fmtBytes(Number(im.size))}</span>
               </div>
             ))}
           </div>
+          {(previous > 0 || local > 0) && <Notice tone="warning">{d.warning(previous, local)}</Notice>}
         </div>
       )}
       {cache > 0 && (
