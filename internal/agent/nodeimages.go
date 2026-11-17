@@ -365,6 +365,7 @@ func pruneImages(ctx context.Context, rm imageRemover, list *nagiv1.NodeImages, 
 			continue
 		}
 		out.Deleted++
+		out.DeletedIds = append(out.DeletedIds, id)
 	}
 	out.Skipped = int32(len(ids) - len(targets))
 	return out

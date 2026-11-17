@@ -197,7 +197,11 @@ type NodeImage struct {
 	// 使用这个镜像的容器（包括已停止的）。
 	Users []*ImageUser `protobuf:"bytes,7,rep,name=users,proto3" json:"users,omitempty"`
 	// Nagi 要用它的原因：有任何一条时不能删除，也不会被清理。
-	Holds         []*ImageHold `protobuf:"bytes,8,rep,name=holds,proto3" json:"holds,omitempty"`
+	Holds []*ImageHold `protobuf:"bytes,8,rep,name=holds,proto3" json:"holds,omitempty"`
+	// 和本节点上 Nagi 容器正在用的镜像是同一个仓库，可能是回滚要用的旧版本。只用于清理前提示，不阻止删除。v0.31.0 起。
+	PreviousVersion bool `protobuf:"varint,9,opt,name=previous_version,json=previousVersion,proto3" json:"previous_version,omitempty"`
+	// 没有仓库摘要（本地构建或导入的），删除后不能重新拉取。只用于清理前提示。v0.31.0 起。
+	LocalBuild    bool `protobuf:"varint,10,opt,name=local_build,json=localBuild,proto3" json:"local_build,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -286,6 +290,20 @@ func (x *NodeImage) GetHolds() []*ImageHold {
 		return x.Holds
 	}
 	return nil
+}
+
+func (x *NodeImage) GetPreviousVersion() bool {
+	if x != nil {
+		return x.PreviousVersion
+	}
+	return false
+}
+
+func (x *NodeImage) GetLocalBuild() bool {
+	if x != nil {
+		return x.LocalBuild
+	}
+	return false
 }
 
 type ImageUser struct {
@@ -458,7 +476,11 @@ type ImageRef struct {
 	// 完整的镜像 ID（sha256:...），节点核对标签确实属于它。
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// 只删除这个标签（镜像还有别的标签时只去掉它）；为空时删除整个镜像。
-	Tag           string `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	Tag string `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`
+	// 删除整个镜像时，预览时看到的标签（check_tags 为 true 时有效，空表示当时没有标签）。
+	// 节点发现镜像现在多了别的标签时跳过并报告：预览之后新加的标签不跟着删掉。v0.31.0 起。
+	Tags          []string `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
+	CheckTags     bool     `protobuf:"varint,4,opt,name=check_tags,json=checkTags,proto3" json:"check_tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -505,6 +527,20 @@ func (x *ImageRef) GetTag() string {
 		return x.Tag
 	}
 	return ""
+}
+
+func (x *ImageRef) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *ImageRef) GetCheckTags() bool {
+	if x != nil {
+		return x.CheckTags
+	}
+	return false
 }
 
 type DeleteImagesRequest struct {
@@ -717,8 +753,10 @@ type PruneImagesResponse struct {
 	// 预览以后不能再清理的（例如已经被容器或 Nagi 用上）、已经不在的，没有删除。
 	Skipped         int32 `protobuf:"varint,3,opt,name=skipped,proto3" json:"skipped,omitempty"`
 	BuildCacheFreed int64 `protobuf:"varint,4,opt,name=build_cache_freed,json=buildCacheFreed,proto3" json:"build_cache_freed,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 实际删除的镜像 ID（审计记录用）。v0.31.0 起。
+	DeletedIds    []string `protobuf:"bytes,5,rep,name=deleted_ids,json=deletedIds,proto3" json:"deleted_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PruneImagesResponse) Reset() {
@@ -777,6 +815,13 @@ func (x *PruneImagesResponse) GetBuildCacheFreed() int64 {
 		return x.BuildCacheFreed
 	}
 	return 0
+}
+
+func (x *PruneImagesResponse) GetDeletedIds() []string {
+	if x != nil {
+		return x.DeletedIds
+	}
+	return nil
 }
 
 type PullImageRequest struct {
@@ -7904,7 +7949,7 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\tprune_ids\x18\x02 \x03(\tR\bpruneIds\x12\x1f\n" +
 	"\vprune_bytes\x18\x03 \x01(\x03R\n" +
 	"pruneBytes\x12*\n" +
-	"\x11build_cache_bytes\x18\x04 \x01(\x03R\x0fbuildCacheBytes\"\x88\x02\n" +
+	"\x11build_cache_bytes\x18\x04 \x01(\x03R\x0fbuildCacheBytes\"\xd4\x02\n" +
 	"\tNodeImage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04tags\x18\x02 \x03(\tR\x04tags\x12\x18\n" +
@@ -7914,7 +7959,11 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"uniqueSize\x124\n" +
 	"\acreated\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\acreated\x12(\n" +
 	"\x05users\x18\a \x03(\v2\x12.nagi.v1.ImageUserR\x05users\x12(\n" +
-	"\x05holds\x18\b \x03(\v2\x12.nagi.v1.ImageHoldR\x05holds\"\xcb\x01\n" +
+	"\x05holds\x18\b \x03(\v2\x12.nagi.v1.ImageHoldR\x05holds\x12)\n" +
+	"\x10previous_version\x18\t \x01(\bR\x0fpreviousVersion\x12\x1f\n" +
+	"\vlocal_build\x18\n" +
+	" \x01(\bR\n" +
+	"localBuild\"\xcb\x01\n" +
 	"\tImageUser\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\arunning\x18\x02 \x01(\bR\arunning\x12\x1d\n" +
@@ -7929,10 +7978,13 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"project_id\x18\x02 \x01(\tR\tprojectId\x12!\n" +
 	"\fproject_name\x18\x03 \x01(\tR\vprojectName\x12\x1c\n" +
-	"\tcontainer\x18\x04 \x01(\tR\tcontainer\",\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\"_\n" +
 	"\bImageRef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
-	"\x03tag\x18\x02 \x01(\tR\x03tag\"@\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\x12\x12\n" +
+	"\x04tags\x18\x03 \x03(\tR\x04tags\x12\x1d\n" +
+	"\n" +
+	"check_tags\x18\x04 \x01(\bR\tcheckTags\"@\n" +
 	"\x13DeleteImagesRequest\x12)\n" +
 	"\x06images\x18\x01 \x03(\v2\x11.nagi.v1.ImageRefR\x06images\"K\n" +
 	"\x11ImageDeleteResult\x12\x0e\n" +
@@ -7944,12 +7996,14 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x12PruneImagesRequest\x12\x10\n" +
 	"\x03ids\x18\x01 \x03(\tR\x03ids\x12\x1f\n" +
 	"\vbuild_cache\x18\x02 \x01(\bR\n" +
-	"buildCache\"\xa9\x01\n" +
+	"buildCache\"\xca\x01\n" +
 	"\x13PruneImagesResponse\x12\x18\n" +
 	"\adeleted\x18\x01 \x01(\x05R\adeleted\x122\n" +
 	"\x06failed\x18\x02 \x03(\v2\x1a.nagi.v1.ImageDeleteResultR\x06failed\x12\x18\n" +
 	"\askipped\x18\x03 \x01(\x05R\askipped\x12*\n" +
-	"\x11build_cache_freed\x18\x04 \x01(\x03R\x0fbuildCacheFreed\"(\n" +
+	"\x11build_cache_freed\x18\x04 \x01(\x03R\x0fbuildCacheFreed\x12\x1f\n" +
+	"\vdeleted_ids\x18\x05 \x03(\tR\n" +
+	"deletedIds\"(\n" +
 	"\x10PullImageRequest\x12\x14\n" +
 	"\x05image\x18\x01 \x01(\tR\x05image\"\xb5\x01\n" +
 	"\x0eImagePullEvent\x12\x16\n" +

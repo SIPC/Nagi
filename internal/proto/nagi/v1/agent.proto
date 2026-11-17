@@ -190,6 +190,10 @@ message NodeImage {
   repeated ImageUser users = 7;
   // Nagi 要用它的原因：有任何一条时不能删除，也不会被清理。
   repeated ImageHold holds = 8;
+  // 和本节点上 Nagi 容器正在用的镜像是同一个仓库，可能是回滚要用的旧版本。只用于清理前提示，不阻止删除。v0.31.0 起。
+  bool previous_version = 9;
+  // 没有仓库摘要（本地构建或导入的），删除后不能重新拉取。只用于清理前提示。v0.31.0 起。
+  bool local_build = 10;
 }
 
 message ImageUser {
@@ -219,6 +223,10 @@ message ImageRef {
   string id = 1;
   // 只删除这个标签（镜像还有别的标签时只去掉它）；为空时删除整个镜像。
   string tag = 2;
+  // 删除整个镜像时，预览时看到的标签（check_tags 为 true 时有效，空表示当时没有标签）。
+  // 节点发现镜像现在多了别的标签时跳过并报告：预览之后新加的标签不跟着删掉。v0.31.0 起。
+  repeated string tags = 3;
+  bool check_tags = 4;
 }
 
 message DeleteImagesRequest {
@@ -249,6 +257,8 @@ message PruneImagesResponse {
   // 预览以后不能再清理的（例如已经被容器或 Nagi 用上）、已经不在的，没有删除。
   int32 skipped = 3;
   int64 build_cache_freed = 4;
+  // 实际删除的镜像 ID（审计记录用）。v0.31.0 起。
+  repeated string deleted_ids = 5;
 }
 
 message PullImageRequest {

@@ -209,7 +209,7 @@ func (a *API) recordCallWith(ctx context.Context, procedure string, req proto.Me
 		Category:   categoryOf(method),
 		Action:     method,
 		ProjectID:  activityField(req, "project_id"),
-		Params:     withExtraParams(audit.Params(req), extra),
+		Params:     withExtraParams(req, extra),
 		Result:     result,
 		Error:      failure,
 		DurationMS: d.Milliseconds(),
@@ -337,11 +337,14 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		var extra map[string]any
 		if err != nil {
 			result, failure = errorResult(err), activityFailure(err)
-		} else if failed, all := batchFailures(msg, res.Any()); len(failed) > 0 {
-			// 批量操作（删除、清理镜像）：每一项都失败时记为失败；部分成功仍记为成功，参数里列出失败的几项。
-			extra = map[string]any{"failed": failed}
-			if all {
-				result, failure = audit.ResultFailed, failed[0]
+		} else if extra = batchSummary(msg, res.Any()); extra != nil {
+			// 批量操作（删除、清理镜像）：参数里记下成功、跳过、失败的数量和实际删除的前几项，再列出失败的几项。
+			// 每一项都失败时记为失败；部分成功仍记为成功。
+			if failed, all := batchFailures(msg, res.Any()); len(failed) > 0 {
+				extra["failed"] = failed
+				if all {
+					result, failure = audit.ResultFailed, failed[0]
+				}
 			}
 		}
 		l.a.recordCallWith(ctx, procedure, msg, result, failure, time.Since(start), extra)
@@ -459,21 +462,114 @@ func batchFailures(req proto.Message, res any) (failed []string, all bool) {
 	return failed, all
 }
 
-// withExtraParams 把 extra 合并进记录的参数（JSON 对象）。
-func withExtraParams(params string, extra map[string]any) string {
-	if len(extra) == 0 {
-		return params
+// maxBatchListed 是批量操作的记录里最多列出的实际删除项。
+const maxBatchListed = 20
+
+// shortImage 是镜像在记录里的简称：12 位短 ID，只删标签时是标签。
+func shortImage(id, tag string) string {
+	if tag != "" {
+		return tag
 	}
+	id = strings.TrimPrefix(id, "sha256:")
+	return id[:min(12, len(id))]
+}
+
+// listHead 取前 maxBatchListed 项。
+func listHead(items []string) []string {
+	if len(items) > maxBatchListed {
+		return items[:maxBatchListed]
+	}
+	return items
+}
+
+// batchSummary 是批量删除、清理镜像的结果摘要：请求了几项，删除、跳过、失败各几项，实际删除的前几项（审查 L4）。
+// 请求本身的列表很长时会被截断（见 withExtraParams），摘要另外记，追查时看得到实际删了哪些。不是批量操作时返回 nil。
+func batchSummary(req proto.Message, res any) map[string]any {
+	switch m := res.(type) {
+	case *nagiv1.DeleteImagesResponse:
+		var deleted []string
+		failed := 0
+		for _, r := range m.GetResults() {
+			if r.GetError() != "" {
+				failed++
+				continue
+			}
+			deleted = append(deleted, shortImage(r.GetId(), r.GetTag()))
+		}
+		out := map[string]any{"requested": len(m.GetResults()), "deleted": len(deleted), "failed_count": failed}
+		if p, ok := req.(*nagiv1.DeleteNodeImagesRequest); ok {
+			out["requested"] = len(p.GetImages())
+		}
+		if len(deleted) > 0 {
+			out["deleted_items"] = listHead(deleted)
+		}
+		return out
+	case *nagiv1.PruneImagesResponse:
+		deleted := make([]string, 0, len(m.GetDeletedIds()))
+		for _, id := range m.GetDeletedIds() {
+			deleted = append(deleted, shortImage(id, ""))
+		}
+		out := map[string]any{"deleted": m.GetDeleted(), "skipped": m.GetSkipped(), "failed_count": len(m.GetFailed())}
+		if p, ok := req.(*nagiv1.PruneNodeImagesRequest); ok {
+			out["requested"] = len(p.GetIds())
+		}
+		if len(deleted) > 0 {
+			out["deleted_items"] = listHead(deleted)
+		}
+		if m.GetBuildCacheFreed() > 0 {
+			out["build_cache_freed"] = m.GetBuildCacheFreed()
+		}
+		return out
+	}
+	return nil
+}
+
+// shrinkable 是参数超长时可以缩短的列表：请求里的镜像列表和摘要里的列表。缩短后加上 "<键>_truncated"，总数另有记录。
+var shrinkable = []string{"images", "ids", "deleted_items", "failed"}
+
+// shrinkLongest 把 obj 里最长的可缩短列表砍掉一半（至少留 5 项），没有可以缩短的时返回 false。
+func shrinkLongest(obj map[string]any) bool {
+	key, longest := "", 5
+	for _, k := range shrinkable {
+		if l, ok := obj[k].([]any); ok && len(l) > longest {
+			key, longest = k, len(l)
+		} else if l, ok := obj[k].([]string); ok && len(l) > longest {
+			key, longest = k, len(l)
+		}
+	}
+	if key == "" {
+		return false
+	}
+	switch l := obj[key].(type) {
+	case []any:
+		obj[key] = l[:max(5, len(l)/2)]
+	case []string:
+		obj[key] = l[:max(5, len(l)/2)]
+	}
+	obj[key+"_truncated"] = true
+	return true
+}
+
+// withExtraParams 把 extra 合并进记录的参数（JSON 对象）。超过 audit.MaxParams 时先缩短最长的列表，
+// 让 extra 里的数量和摘要留在记录里，实在放不下才整体截断。
+func withExtraParams(req proto.Message, extra map[string]any) string {
+	if len(extra) == 0 {
+		return audit.Params(req)
+	}
+	params := audit.ParamsRaw(req)
 	obj := map[string]any{}
 	if params != "" && json.Unmarshal([]byte(params), &obj) != nil {
-		return params
+		return audit.TruncateParams(params)
 	}
 	for k, v := range extra {
 		obj[k] = v
 	}
 	b, err := json.Marshal(obj)
+	for err == nil && len(b) > audit.MaxParams && shrinkLongest(obj) {
+		b, err = json.Marshal(obj)
+	}
 	if err != nil {
-		return params
+		return audit.TruncateParams(params)
 	}
 	return audit.TruncateParams(string(b))
 }

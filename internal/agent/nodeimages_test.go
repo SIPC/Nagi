@@ -246,6 +246,9 @@ func TestPruneOnlyCandidates(t *testing.T) {
 	if out.GetDeleted() != 2 || out.GetSkipped() != 4 || len(out.GetFailed()) != 0 {
 		t.Fatalf("清理结果 = %+v", out)
 	}
+	if !slices.Equal(out.GetDeletedIds(), []string{idOld, idUnused}) {
+		t.Errorf("实际删除的 ID 要列出来（审计用）：%v", out.GetDeletedIds())
+	}
 	for _, id := range []string{idPg, idNginx, idLink, idRedis, idBuilt, idOther} {
 		if _, err := rm.ImageID(context.Background(), id); err != nil {
 			t.Errorf("%s 不应被清理", id[:12])

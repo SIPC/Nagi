@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -106,8 +109,11 @@ func (fakeImages) PruneNodeImages(_ context.Context, req *connect.Request[nagiv1
 	for _, id := range req.Msg.GetIds() {
 		if strings.HasPrefix(id, "sha256:bad") {
 			out.Failed = append(out.Failed, &nagiv1.ImageDeleteResult{Id: id, Error: "删除失败：conflict"})
+		} else if strings.HasPrefix(id, "sha256:gone") {
+			out.Skipped++
 		} else {
 			out.Deleted++
+			out.DeletedIds = append(out.DeletedIds, id)
 		}
 	}
 	if req.Msg.GetBuildCache() {
@@ -143,7 +149,7 @@ func TestNodeImagesAuditBatch(t *testing.T) {
 	}
 
 	del("sha256:good1")
-	if r := last(); r.result != "ok" || strings.Contains(r.params, "failed") {
+	if r := last(); r.result != "ok" || strings.Contains(r.params, `"failed":`) || !strings.Contains(r.params, `"deleted":1`) {
 		t.Errorf("全部成功：%+v", r)
 	}
 	del("sha256:good1", "sha256:bad222222222")
@@ -173,4 +179,47 @@ func TestNodeImagesAuditBatch(t *testing.T) {
 	if r := last(); r.result != "ok" {
 		t.Errorf("清理部分成功应记为成功：%+v", r)
 	}
+
+	// 一次删除、清理几百个（审查 L4）：参数不超过上限，数量和实际删除的前几项都在记录里。
+	var ids []string
+	for i := range 300 {
+		ids = append(ids, fmt.Sprintf("sha256:%064x", i+1))
+	}
+	ids = append(ids, "sha256:bad"+strings.Repeat("0", 61), "sha256:gone"+strings.Repeat("0", 60))
+	type summary struct {
+		Requested    int      `json:"requested"`
+		Deleted      int      `json:"deleted"`
+		Skipped      int      `json:"skipped"`
+		FailedCount  int      `json:"failed_count"`
+		DeletedItems []string `json:"deleted_items"`
+		Failed       []string `json:"failed"`
+	}
+	check := func(what string, wantSkipped int) {
+		t.Helper()
+		r := last()
+		if len(r.params) > audit.MaxParams {
+			t.Fatalf("%s：参数超过上限 %d", what, len(r.params))
+		}
+		var s summary
+		if err := json.Unmarshal([]byte(r.params), &s); err != nil {
+			t.Fatalf("%s：参数应该是完整的 JSON：%v %s", what, err, r.params)
+		}
+		wantDeleted := 300
+		if wantSkipped == 0 {
+			wantDeleted = 301 // 删除时 gone 也算成功
+		}
+		if s.Requested != 302 || s.Deleted != wantDeleted || s.FailedCount != 1 || s.Skipped != wantSkipped {
+			t.Errorf("%s：数量不对：%+v", what, s)
+		}
+		if len(s.DeletedItems) != maxBatchListed || s.DeletedItems[0] != strings.TrimPrefix(ids[0], "sha256:")[:12] {
+			t.Errorf("%s：应该列出实际删除的前 %d 项：%v", what, maxBatchListed, s.DeletedItems)
+		}
+		if len(s.Failed) != 1 {
+			t.Errorf("%s：应该列出失败的一项：%v", what, s.Failed)
+		}
+	}
+	del(ids...)
+	check("删除", 0)
+	prune(false, ids...)
+	check("清理", 1)
 }

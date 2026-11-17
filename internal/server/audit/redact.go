@@ -39,6 +39,11 @@ const envVar protoreflect.FullName = "nagi.v1.EnvVar"
 
 // Params 把请求消息转成脱敏后的 JSON。
 func Params(m proto.Message) string {
+	return TruncateParams(ParamsRaw(m))
+}
+
+// ParamsRaw 和 Params 一样脱敏，但不截断：调用方合并别的内容、缩短过长的列表以后自己截断（见 api.withExtraParams）。
+func ParamsRaw(m proto.Message) string {
 	if m == nil {
 		return ""
 	}
@@ -50,7 +55,7 @@ func Params(m proto.Message) string {
 	if err != nil {
 		return ""
 	}
-	return TruncateParams(string(b))
+	return string(b)
 }
 
 // Redacted 判断字段带 debug_redact = true。
