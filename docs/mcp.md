@@ -39,8 +39,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 令牌属于授权它的成员，权限是成员的角色和访问范围，再按下面两个选项收窄。成员的角色、范围改了，令牌立即跟着变。
   - **可修改**：默认不勾，只能用查看类的工具。
   - **执行命令**：默认不勾，勾了才能用 `exec`。只读成员没有这一项。
-  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
-- 节点文件（见 [node-access.md](node-access.md#权限)）一律不能用令牌。
+  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）和节点文件、导入现有目录、隔离节点这些网页上要先做高权限确认的操作（见[节点文件和节点级操作](#节点文件和节点级操作)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
 ### 个人访问令牌
@@ -88,14 +87,14 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 工具不直接调用业务代码，而是在进程内调用面板自己的 Connect 接口：MCP 层验证令牌后，把令牌对应的成员放进请求的 ctx，通过内存里的传输调用同一个 mux（不经过网络，所以不能伪造）。这样现有的拦截器全部照常生效，不用为 MCP 再写一遍：
 
-- 角色检查、访问范围、高权限确认（令牌没有高权限，相关接口一律拒绝）、备用面板只读。
+- 角色检查、访问范围、高权限确认、备用面板只读。令牌做不了高权限确认：要确认的接口里，项目和节点的（节点文件、导入现有目录、隔离节点、恢复拼回的顶替设置，`auth.tokenNodeProcedures`）只有勾了「节点终端」的管理员令牌能调用，这时算确认过（`auth.User.ElevatedFor`：生成令牌或在授权页点允许前已经确认过身份，每次修改还要用户在 agent 里再确认一次）；设置里的（生成令牌、回放录制、管理员登录地址、测试外送）令牌本来就调不了。
 - 审计记录：每次工具调用都记一条（包括查询），它触发的接口调用挂在下面（见 [audit.md](audit.md#mcp-调用)）。来源 `via` 是 `mcp`，带上令牌 ID 和客户端，审计页显示「MCP（令牌名）」。`exec` 和 `node_exec` 不走接口，各自检查权限、单独记一条（类别 `session`），参数里是命令本身，退出码不为 0 时接在后面。
-- 令牌只能调用项目和节点的接口（`auth.TokenAllowed`），成员、设置、令牌自己的接口都不行。
-- 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec`。
+- 令牌只能调用项目和节点的接口（`auth.TokenAllowed`），成员、设置、令牌自己的接口都不行；`auth.tokenNodeProcedures` 里的还要勾「节点终端」。
+- 没勾「可修改」的令牌在 MCP 层先拦下所有修改类工具，再由接口层兜底；没勾「执行命令」的拦下 `exec` 和文件工具；没勾「节点终端」的拦下节点命令和节点文件。
 
 ## 工具
 
-按任务设计，不把 90 多个接口一一暴露：工具太多 agent 选不准。项目、容器、节点都可以用名称或 ID 指定（项目名可以重名，重名时要求用网络名或 ID）。工具说明是英文的（给模型看），返回 JSON。令牌没有相应权限（或者是备用面板）时，客户端拿到的工具列表里就没有修改类工具、`exec` 和 `node_exec`。
+按任务设计，几个相近的接口合成一个工具（例如移动、复制、改名是一个 `move_files`），网页上能做的项目和节点操作都有对应的工具（面板和账号的设置除外，见[还没有的](#还没有的)）。工具按令牌的权限给，只读令牌只看到 20 个左右，勾满权限的管理员令牌看到全部。项目、容器、节点都可以用名称或 ID 指定（项目名可以重名，重名时要求用网络名或 ID）。工具说明是英文的（给模型看），返回 JSON。令牌没有相应权限（或者是备用面板）时，客户端拿到的工具列表里就没有修改类工具、`exec` 和 `node_exec`。
 
 ### 查看
 
@@ -116,13 +115,18 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `check_routes` | 端口映射的域名检查：是否解析到入口节点、证书状态。用面板自己的检查，不按 agent 给的地址发请求，不能被拿来探测内网 | `CheckDomains` |
 | `query_events` | 项目的活动记录，可以按容器、只看失败的筛选，翻页 | `ListProjectEvents` |
 | `inspect_node_storage` | 只给管理员（内容涉及节点上所有项目）：Docker 镜像、容器可写层、数据卷、构建缓存的占用和可回收空间，最大的镜像，每个容器的 data、volumes、快照占用。只读，不清理 | `GetNodeStorage`（节点的 `GetStorage`） |
+| `list_versions` | 容器的全部版本：创建和部署时间、镜像、git 提交、是否保存了文件、回滚自哪个版本（`get_container` 只给最近 5 个） | `ListVersions` |
+| `get_node` | 一个节点的详情：系统和版本、占用、标签、告警规则、项目根目录、节点访问是否可用、面板不认识的容器和以节点为准的项目（见下面的 `adopt_*`）、信任的面板、节点上保存的副本 | `ListNodes`、`ListNodePanels`、`ListNodeReplicas` |
+| `check_mesh` | 一个节点（或面板自己）看到的节点网络：每个成员的路径（直连、中转）、延迟、丢包、最近握手；带 `peer` 时让节点立即 ping 这个成员 | `GetNodeMesh`、`GetPanelMesh`、`PingNodeMesh` |
+| `get_node_mirrors` | 只给管理员：节点的镜像加速地址和 Docker 当前生效的 | `GetNodeMirrors` |
 
 ### 日常操作
 
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
 | `create_project` | 新建项目（不带容器） | `CreateProject` |
-| `update_project` | 修改项目名称、网络名、定时快照（开关、间隔或每天定时）、份数上限、内部端口，立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
+| `update_project` | 修改项目名称、网络名、定时快照（开关、间隔或每天定时）、份数上限、内部端口、出站限制（模式和放行地址，只有管理员能改，接口检查），立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
+| `set_alert_rules` | 修改项目里容器的告警规则（重启、5xx、4xx、健康检查、快照、备份同步、CPU、流量、出站拦截），或者给一个容器单独设置；`use_project` 让容器改回用项目的。只改传了的项 | `UpdateProjectSettings`、`SetContainerAlertRules` |
 | `update_shared_env` | 设置、删除共享变量，或标为密钥，存为草稿，返回引用了改动变量的容器。用 `deploy` 的 `apply_shared_env` 生效 | `SaveSharedEnv` |
 | `discard_shared_env` | 丢弃共享变量的草稿 | `DiscardSharedEnv` |
 | `connect_project`、`disconnect_project` | 连接、断开两个项目，立即生效 | `ConnectProject`、`DisconnectProject` |
@@ -144,6 +148,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 立即依次同步到所有备份节点（或只同步 `backup_node`），同步完才返回各自的结果 | `SyncBackup` |
+| `set_node_alert_rules` | 只给管理员：修改节点的告警规则（内存、磁盘、离线、证书、CPU） | `SetNodeAlertRules` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用，操作员不能进入特权容器；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
 ### 不可逆或会中断服务的操作
@@ -171,14 +176,63 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
-| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录，带 `snapshot_id` 时列出快照里的 | `ListVolumes`、`ListVolumeFiles` |
-| `read_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256。二进制文件和目录拒绝 | 节点的 `VolumeDownload` |
-| `write_file` | 新建或整个覆盖一个文本文件，最多 1 MB。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝，原来不在的文件期间被建了也拒绝（节点在写入前、持有容器锁时核对）；已有的文件是二进制或超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
+| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录，带 `snapshot_id` 时列出快照里的，带 `sizes` 时统计每个子目录的大小 | `ListVolumes`、`ListVolumeFiles`、`ListVolumeDirSizes` |
+| `read_file` | 读一个文件，最多 256 KB，返回内容和 SHA-256。默认只读文本；`encoding` 为 `base64` 时任何文件都按 base64 返回。目录拒绝 | 节点的 `VolumeDownload` |
+| `write_file` | 新建或整个覆盖一个文件，最多 1 MB：文本放 `content`，二进制（例如要用 `extract_file` 解开的压缩包）放 `content_base64`。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝，原来不在的文件期间被建了也拒绝（节点在写入前、持有容器锁时核对）；已有的文件超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
+| `move_files` | 在一个卷里移动、复制（`action` 为 `move`、`copy`）或原地改名（`rename`）。同名时默认什么都不改、返回冲突的名字，agent 再选 `conflict`：`rename`（保留两者）、`skip`、`overwrite`。覆盖会丢掉目标位置原来的内容，先预览，`confirm` 填预览给的确认码才执行 | `RenameVolumeFile`、`MoveVolumeFiles`、`CopyVolumeFiles` |
+| `compress_files` | 把同一个目录里的几项打包成 zip 或 tar.gz，放在同一个卷里。同名的处理同上 | `CompressVolumeFiles` |
+| `extract_file` | 解开 zip、tar.gz、tar：默认解到以压缩包命名的新目录（和网页一样），`merge` 时解到已有的目录里。同名的处理同上 | `ExtractVolumeFile` |
 | `create_dir` | 在卷里新建目录（连同上级目录） | `CreateVolumeDir` |
 | `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
 | `delete_file` | 删除卷里的一个文件或目录（连同里面的内容）。不带 `confirm` 只返回预览，`confirm` 原样填路径才删除 | `DeleteVolumeFile` |
 
-不提供改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file` 会修改卷，令牌还要勾「可修改」。文件内容和日志一样当作不可信数据。
+读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`、`RenameVolumeFile`、`MoveVolumeFiles`、`CopyVolumeFiles`、`CompressVolumeFiles`、`ExtractVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file`、`move_files`、`compress_files`、`extract_file` 会修改卷，令牌还要勾「可修改」。移动、复制、打包、解压在节点本地进行，过程中用进度通知推送已处理的文件数和字节数；和部署一样用不跟着客户端取消的 ctx，超过 10 分钟返回「仍在进行」。文件内容和日志一样当作不可信数据。
+
+网页的上传、下载走 HTTP（分块上传、断点续传、目录打包下载），MCP 不能传大文件：读写都以 1 MB 以内为限（读 256 KB），更大的文件用 `exec` 在容器里处理（例如从可信的地址下载），或者在网页上传。项目压缩包的上传部署（`/api/upload`）同样没有对应的工具，可以用 `write_file` 写入不超过 1 MB 的压缩包再 `extract_file`，或者改用 git 来源。
+
+### 节点管理
+
+和网页的节点页同一组接口。查看类（`get_node`、`check_mesh`）所有角色都能用，访问范围照常生效；修改类只有管理员能用（操作员看不到这些工具），令牌要勾「可修改」。会让面板忘记节点、丢掉数据或者牵涉安全判断的，分两步，不带 `confirm` 只返回预览。
+
+| 工具 | 内容 | `confirm` 填 | 用到的接口 |
+| --- | --- | --- | --- |
+| `rename_node` | 修改节点在面板上的名称 | — | `RenameNode` |
+| `rename_node_tag` | 给所有节点改标签名；`new_name` 为空时删除标签（要确认），访问范围随之改变 | 标签名（删除时） | `RenameNodeTag` |
+| `rename_project_group` | 改项目分组名；`new_name` 为空时删除分组（要确认），项目变为未分组 | 分组名（删除时） | `RenameProjectGroup` |
+| `approve_node` | 批准用接入码加入、在等批准的节点。预览给出节点报告的主机名、地址、系统、版本（标明是节点报告的，不可信），提醒接入码可能泄露 | 节点名 | `ApproveNode` |
+| `remove_node` | 让面板忘记节点；节点上还有容器时接口拒绝 | 节点名 | `RemoveNode` |
+| `set_node_mirrors` | 替换节点的镜像加速地址（写 `/etc/docker/daemon.json`，Docker 重启后才用） | — | `SetNodeMirrors` |
+| `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器 | — | `SetNodeProjectsRoot` |
+| `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转，只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
+| `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
+| `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
+| `reclaim_node_snapshots` | 立即清理节点上每个容器的快照仓库，回收没用到的数据，快照本身不删 | — | `ReclaimNodeSnapshots` |
+| `remove_node_panel` | 从节点的信任列表移除一个面板；移除的是本面板时本面板忘记这个节点 | 面板指纹 | `ListNodePanels`、`RemoveNodePanel` |
+| `delete_node_replica` | 删除节点上已经没有容器使用的副本（`get_node` 里 `in_use` 为 false） | 容器名 | `ListNodeReplicas`、`DeleteNodeReplica` |
+| `adopt_node_container` | 把节点上有、面板不认识的容器按节点缓存加入项目 | — | `AdoptNodeContainer` |
+| `adopt_stale_project` | 节点报告项目被别的面板改过时，以节点为准重建面板上的记录。节点可能被攻破，预览里写明 | 项目名 | `AdoptStaleProject` |
+
+### 节点文件和节点级操作
+
+节点上的文件和网页上要先做高权限确认的几个操作，等于节点的 root，和 `node_exec` 一样只给管理员、令牌要勾「节点终端」，备用面板上没有。规则和网页的节点文件一样（见 [node-access.md](node-access.md#文件)）：路径先解析成真实路径，`/proc`、`/sys`、`/dev`、Nagi 的数据目录禁止访问，容器目录只读，敏感文件可以改，节点在本地关闭了节点访问时拒绝。
+
+- **高权限确认**：令牌做不了。这些接口在 `auth.tokenNodeProcedures` 里，只有勾了「节点终端」的管理员令牌能调用，调用时算确认过（`auth.User.ElevatedFor`）：勾这一项时已经做过高权限确认（生成令牌前，或者在 OAuth 授权页点允许前），每次修改还要用户在 agent 里确认。其他令牌调用时角色检查直接拒绝。
+- **每次修改都要确认**（新建目录除外）：不带 `confirm` 只返回预览（节点、路径、大小，敏感路径另有提醒），`confirm` 填预览给的确认码才执行。确认码由工具、节点和参数算出，和 `node_exec` 一样只保证执行的就是预览过的操作。确认后调用接口时带上 `confirmed`（敏感路径要用户确认过才能改）。
+- 读写都和网页一样记进活动记录（带路径，不记内容）；`HandoverNodes` 不提供（见[还没有的](#还没有的)）。
+
+| 工具 | 内容 | 用到的接口 |
+| --- | --- | --- |
+| `list_node_files` | 列出节点上的一个目录：类型、大小、权限、属主、访问规则（`normal`、`confirm`、`readonly`、`denied`），`sizes` 时统计子目录大小 | `ListNodeDir`、`ListNodeDirSizes` |
+| `read_node_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256；二进制文件只返回属性 | `ReadNodeFile` |
+| `write_node_file` | 新建或覆盖一个文本文件，最多 1 MB。覆盖时要带 `read_node_file` 返回的 `expected_sha256`，旧内容按网页的规则保留备份 | `ListNodeDir`、`WriteNodeFile` |
+| `create_node_dir` | 新建目录（连同上级目录），不用确认 | `CreateNodeDir` |
+| `delete_node_file` | 删除文件或目录（连同里面的内容），符号链接只删链接，不备份 | `ListNodeDir`、`DeleteNodeFile` |
+| `move_node_files` | 移动、复制、改名，同名的处理和 `move_files` 一样 | `RenameNodeFile`、`MoveNodeFiles`、`CopyNodeFiles` |
+| `compress_node_files`、`extract_node_file` | 打包、解压 | `CompressNodeFiles`、`ExtractNodeFile` |
+| `restore_node_file` | 不带 `backup_id` 时列出文件保留的旧版本；带上时恢复这一版（要确认） | `ListNodeFileBackups`、`RestoreNodeFileBackup` |
+| `import_compose_dir` | 把节点上现有的 compose 目录导入为项目里的容器组，数据留在原处。不带 `confirm` 时读目录，返回导入后的 compose、变量名（不给值）、原来运行着的 compose 项目和注意事项；确认后才导入，不部署 | `InspectComposeDir`、`ImportComposeDir` |
+| `isolate_node` | 隔离可能被攻破的节点（`undo` 解除），`confirm` 填节点名 | `IsolateNode`、`UnisolateNode` |
+| `confirm_pending_ha` | 让从节点缓存拼回的顶替和备份节点设置生效（`discard` 放弃），预览列出涉及的节点，配置有特权时醒目提示，`confirm` 填容器名 | `ConfirmPendingHA` |
 
 ### 节点命令
 
@@ -193,12 +247,13 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - shell 和环境变量和节点终端一样（见 [node-access.md](node-access.md#终端)）：root 的登录 shell，`sh -lc` 执行，不分配终端，没有输入。节点跑在容器里时，命令进的是这个容器，返回里会注明。
 - 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。命令的输出和日志一样当作不可信数据。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec` 是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file` 和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec`、节点文件和节点级操作是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file`、`move_files`、`extract_file`、节点文件的修改、节点管理里要确认的操作和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 还没有的
 
-- 整个集群和面板的管理，计划之后只给管理员：节点管理和磁盘清理、节点上的文件、面板设置（包括告警）、成员。
-- 一直不提供：初始化、登录、提升权限、改密码、两步验证、会话、OAuth 授权、访问令牌，以及会把凭据放进对话的操作（邀请链接、节点加入命令、备用面板配对码、备份密钥）、安全入口。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
+- **面板和账号的设置**：令牌只能调用项目和节点的接口（`auth.TokenAllowed`），设置页的功能都没有工具：面板设置（域名、保留天数等）、告警渠道、成员和邀请、访问范围、会话策略、审计设置和外送、管理员登录地址、面板更新、备用面板。是否开放、怎么开放待定（计划是单独一项默认不勾、只给管理员的令牌权限）。
+- **一直不提供**：初始化、登录、提升权限、改密码、两步验证、通行密钥、会话、OAuth 授权、访问令牌（生成令牌等于给自己留一个长期凭据），以及会把凭据放进对话的操作（邀请链接、节点加入命令 `CreateEnrollCommand`、备用面板配对码、备份密钥 `GetBackupKey`、容器的 webhook 令牌）、安全入口。节点移交（`HandoverNodes`）也不提供：要把另一个面板的接入码交给 agent，执行后本面板忘记这些节点和上面的项目，等于把节点的 root 交给另一个面板，只在网页上做。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
+- **大文件的上传下载**：见[文件](#文件)。日志只取最近的，不跟随（`get_logs`）；终端是交互的，用 `exec`、`node_exec` 执行单条命令代替。
 
 ## 给 agent 的说明
 
@@ -215,7 +270,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 实现
 
-- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用。
+- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 检查网页上要高权限确认的项目和节点接口，勾了「节点终端」的管理员令牌都能用，设置里的一律不能。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
 - `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
 - `internal/server/store`：`api_tokens`、`oauth_clients` 表。查询手写在 `tokens.go`，不放进 `queries.sql`。

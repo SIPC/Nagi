@@ -16,7 +16,7 @@ export default {
   allowExec: "执行命令",
   allowExecHelp: "在容器里执行命令，和终端权限相同。",
   allowNodeExec: "节点终端",
-  allowNodeExecHelp: "以 root 身份在节点上执行命令，相当于获得节点的完全控制权。每次执行都会记入审计并发送告警。",
+  allowNodeExecHelp: "以 root 身份在节点上执行命令、读写文件，相当于获得节点的完全控制权。所有操作记入审计，执行命令时发送告警。",
   elevate: "生成访问令牌前需验证身份。验证后 15 分钟内无需再次验证。",
   created: "已生成令牌",
   createdHint: "令牌只显示这一次，立即复制保存。",

@@ -986,10 +986,10 @@ func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
 	}{n.GetName(), res.ExitCode, res.TimedOut, res.Truncated, res.Output, inContainerNote(n)}, nil
 }
 
-// inContainerNote：节点跑在容器里时，命令进的是这个容器，不是主机。
+// inContainerNote：节点跑在容器里时，命令和文件都是这个容器里的，不是主机的。
 func inContainerNote(n *nagiv1.Node) string {
 	if n.GetInfo().GetInContainer() {
-		return "this node runs inside a container: commands run in that container, not on the host"
+		return "this node runs inside a container: commands and files are in that container, not on the host"
 	}
 	return ""
 }

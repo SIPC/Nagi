@@ -17,7 +17,7 @@ export default {
   allowExec: "Run commands",
   allowExecHelp: "Run commands in containers, with the same permission as the terminal.",
   allowNodeExec: "Node terminal",
-  allowNodeExecHelp: "Run commands on nodes as root, which is equivalent to full control of the node. Every command is recorded in Audit and sends an alert.",
+  allowNodeExecHelp: "Run commands and read or write files on nodes as root, which is equivalent to full control of the node. Every action is recorded in Audit, and commands send an alert.",
   elevate: "Verify your identity to generate an access token. You won't be asked again for 15 minutes.",
   created: "Token generated",
   createdHint: "The token is shown only once. Copy it now.",

@@ -58,14 +58,46 @@ func isRead(method string) bool {
 	return false
 }
 
+// tokenNodeProcedures 是访问令牌要有「节点终端」权限才能调用的接口（见 docs/mcp.md#节点文件和节点级操作），值表示是不是修改。
+// 都是网页上要先做高权限确认、或者等于把节点交出去的操作：令牌做不了高权限确认，只有生成（或 OAuth 授权）时做过确认、
+// 单独勾了「节点终端」的管理员令牌能用，这时按确认过处理（ElevatedFor）。
+var tokenNodeProcedures = map[string]bool{
+	// 节点上的文件（见 docs/node-access.md#文件）。
+	"/nagi.v1.NodeService/ListNodeDir": false, "/nagi.v1.NodeService/ReadNodeFile": false,
+	"/nagi.v1.NodeService/ListNodeFileBackups": false, "/nagi.v1.NodeService/ListNodeDirSizes": false,
+	"/nagi.v1.NodeService/WriteNodeFile": true, "/nagi.v1.NodeService/DeleteNodeFile": true, "/nagi.v1.NodeService/CreateNodeDir": true,
+	"/nagi.v1.NodeService/RestoreNodeFileBackup": true, "/nagi.v1.NodeService/RenameNodeFile": true,
+	"/nagi.v1.NodeService/MoveNodeFiles": true, "/nagi.v1.NodeService/CopyNodeFiles": true,
+	"/nagi.v1.NodeService/CompressNodeFiles": true, "/nagi.v1.NodeService/ExtractNodeFile": true,
+	// 导入现有目录：读主机上的文件（见 docs/agent.md#现有目录）。
+	"/nagi.v1.NodeService/InspectComposeDir": false, "/nagi.v1.ProjectService/ImportComposeDir": true,
+	// 隔离节点、恢复从节点缓存拼回的顶替和备份设置。
+	"/nagi.v1.NodeService/IsolateNode": true, "/nagi.v1.NodeService/UnisolateNode": true,
+	"/nagi.v1.NodeService/ConfirmPendingHA": true,
+}
+
 // TokenAllowed 判断访问令牌（MCP）能不能调用接口：只能用项目和节点的接口，没勾「可修改」时只能查询
-// （见 docs/mcp.md#权限）。角色的限制另由 Allowed 检查。
+// （见 docs/mcp.md#权限）；tokenNodeProcedures 里的还要勾「节点终端」。角色的限制另由 Allowed 检查。
 func TokenAllowed(u User, procedure string) bool {
 	parts := strings.Split(strings.TrimPrefix(procedure, "/"), "/")
 	if len(parts) != 2 || parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" {
 		return false
 	}
+	if write, ok := tokenNodeProcedures[procedure]; ok {
+		return u.AllowNodeExec && (u.AllowWrite || !write)
+	}
 	return u.AllowWrite || isRead(parts[1])
+}
+
+// ElevatedFor 判断调用这个接口时算不算做过高权限确认：网页的会话看 Elevated；访问令牌没有高权限确认，
+// 只有勾了「节点终端」的管理员令牌调用 tokenNodeProcedures 里的接口时算确认过（生成令牌、OAuth 授权时已经确认过身份，
+// 每次调用 MCP 工具还要用户再确认一次，见 docs/mcp.md#节点文件和节点级操作）。
+func (u User) ElevatedFor(procedure string) bool {
+	if u.TokenID == 0 {
+		return u.Elevated()
+	}
+	_, ok := tokenNodeProcedures[procedure]
+	return ok && u.AllowNodeExec && u.Role == RoleAdmin
 }
 
 // Allowed 判断角色能不能调用接口（procedure 形如 /nagi.v1.ProjectService/Deploy）。

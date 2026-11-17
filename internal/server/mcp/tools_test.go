@@ -19,7 +19,8 @@ func TestToolDeclarations(t *testing.T) {
 		svc := file.Services().ByName(protoreflect.Name(parts[0]))
 		return svc != nil && svc.Methods().ByName(protoreflect.Name(parts[1])) != nil
 	}
-	readOnly := auth.User{TokenID: 1}
+	// 数修改接口用的令牌：除了「可修改」都勾上（节点文件这类接口还要「节点终端」）。
+	readOnly := auth.User{TokenID: 1, AllowExec: true, AllowNodeExec: true}
 	seen := map[string]bool{}
 	for _, tl := range allTools {
 		if seen[tl.name] {
@@ -73,6 +74,14 @@ func TestTokenAllowed(t *testing.T) {
 		{write, "/nagi.v1.SettingsService/ListUsers", false},
 		{write, "/nagi.v1.SettingsService/CreateAccessToken", false},
 		{write, "/nagi.v1.AuthService/ChangePassword", false},
+		// 节点文件这类接口要「节点终端」：只勾了可修改、执行命令不够；读不用「可修改」，写要。
+		{auth.User{TokenID: 1, AllowWrite: true, AllowExec: true}, "/nagi.v1.NodeService/ReadNodeFile", false},
+		{auth.User{TokenID: 1, AllowExec: true, AllowNodeExec: true}, "/nagi.v1.NodeService/ReadNodeFile", true},
+		{auth.User{TokenID: 1, AllowExec: true, AllowNodeExec: true}, "/nagi.v1.NodeService/WriteNodeFile", false},
+		{auth.User{TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}, "/nagi.v1.NodeService/WriteNodeFile", true},
+		{write, "/nagi.v1.ProjectService/ImportComposeDir", false},
+		{write, "/nagi.v1.NodeService/IsolateNode", false},
+		{write, "/nagi.v1.NodeService/RemoveNode", true},
 	}
 	for _, c := range cases {
 		if got := auth.TokenAllowed(c.u, c.procedure); got != c.want {
@@ -181,6 +190,109 @@ func TestNodeExecCode(t *testing.T) {
 	} {
 		if other == base {
 			t.Errorf("case %d: 参数变了，确认码却一样", i)
+		}
+	}
+}
+
+// 令牌做不了高权限确认：只有勾了「节点终端」的管理员令牌调用节点文件这类接口时算确认过；别的要确认的接口一律不算。
+func TestElevatedFor(t *testing.T) {
+	node := auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
+	noNode := node
+	noNode.AllowNodeExec = false
+	operator := node
+	operator.Role = auth.RoleOperator
+	session := auth.User{ID: 1, Role: auth.RoleAdmin}
+	elevated := session
+	elevated.ElevatedUntil = time.Now().Add(time.Minute).Unix()
+	cases := []struct {
+		u         auth.User
+		procedure string
+		want      bool
+	}{
+		{node, "/nagi.v1.NodeService/ListNodeDir", true},
+		{node, "/nagi.v1.ProjectService/ImportComposeDir", true},
+		{node, "/nagi.v1.NodeService/IsolateNode", true},
+		{noNode, "/nagi.v1.NodeService/ListNodeDir", false},
+		{operator, "/nagi.v1.NodeService/ListNodeDir", false},
+		{node, "/nagi.v1.SettingsService/CreateAccessToken", false},
+		{node, "/nagi.v1.SettingsService/GetRecording", false},
+		{node, "/nagi.v1.SettingsService/SetAdminNetworks", false},
+		{session, "/nagi.v1.NodeService/ListNodeDir", false},
+		{elevated, "/nagi.v1.NodeService/ListNodeDir", true},
+	}
+	for i, c := range cases {
+		if got := c.u.ElevatedFor(c.procedure); got != c.want {
+			t.Errorf("case %d: ElevatedFor(%s) = %v，想要 %v", i, c.procedure, got, c.want)
+		}
+	}
+}
+
+// 新加的工具按权限分给令牌：节点文件和节点级操作只给勾了「节点终端」的管理员令牌；节点管理只给管理员；
+// 卷文件的移动这类要执行命令和可修改；备用面板上都没有。
+func TestNewToolsAllowedFor(t *testing.T) {
+	byName := map[string]tool{}
+	for _, tl := range allTools {
+		byName[tl.name] = tl
+	}
+	nodeAdmin := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
+	nodeAdminRead := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowExec: true, AllowNodeExec: true}
+	admin := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true}
+	adminRead := auth.User{Role: auth.RoleAdmin, TokenID: 1}
+	op := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true, AllowExec: true}
+	opNoExec := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true}
+	viewer := auth.User{Role: auth.RoleViewer, TokenID: 1}
+	cases := []struct {
+		tool    string
+		u       auth.User
+		standby bool
+		want    bool
+	}{
+		{"list_node_files", nodeAdminRead, false, true},
+		{"list_node_files", admin, false, false},
+		{"list_node_files", nodeAdmin, true, false},
+		{"read_node_file", nodeAdminRead, false, true},
+		{"write_node_file", nodeAdminRead, false, false},
+		{"write_node_file", nodeAdmin, false, true},
+		{"delete_node_file", admin, false, false},
+		{"import_compose_dir", admin, false, false},
+		{"import_compose_dir", nodeAdmin, false, true},
+		{"isolate_node", admin, false, false},
+		{"isolate_node", nodeAdmin, false, true},
+		{"confirm_pending_ha", admin, false, false},
+		{"remove_node", admin, false, true},
+		{"remove_node", op, false, false},
+		{"remove_node", adminRead, false, false},
+		{"upgrade_nodes", admin, true, false},
+		{"get_node_mirrors", adminRead, false, true},
+		{"get_node_mirrors", op, false, false},
+		{"get_node", viewer, false, true},
+		{"check_mesh", viewer, false, true},
+		{"list_versions", viewer, false, true},
+		{"set_alert_rules", op, false, true},
+		{"set_alert_rules", viewer, false, false},
+		{"set_node_alert_rules", op, false, false},
+		{"move_files", op, false, true},
+		{"move_files", opNoExec, false, false},
+		{"move_files", viewer, false, false},
+		{"compress_files", op, true, false},
+		{"rename_project_group", op, false, false},
+		{"rename_project_group", admin, false, true},
+	}
+	for _, c := range cases {
+		tl, ok := byName[c.tool]
+		if !ok {
+			t.Fatalf("没有工具 %s", c.tool)
+		}
+		if got := tl.allowedFor(c.u, c.standby); got != c.want {
+			t.Errorf("%s 对 %+v（备用面板 %v）= %v，想要 %v", c.tool, c.u, c.standby, got, c.want)
+		}
+	}
+	// 节点级的工具都要声明 nodeExec，修改节点文件的还要声明 destructive（客户端会先问用户）。
+	for _, tl := range allTools {
+		for _, p := range tl.procedures {
+			if !auth.TokenAllowed(auth.User{TokenID: 1, AllowWrite: true, AllowExec: true}, p) && auth.TokenAllowed(nodeAdmin, p) && !tl.nodeExec {
+				t.Errorf("工具 %s 用到要「节点终端」的接口 %s，要声明 nodeExec", tl.name, p)
+			}
 		}
 	}
 }

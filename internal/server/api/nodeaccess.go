@@ -81,12 +81,13 @@ func elevationError() error {
 	return err
 }
 
-// elevationCheck 拦下没有做高权限确认的请求。放在角色检查之后。
+// elevationCheck 拦下没有做高权限确认的请求。放在角色检查之后。访问令牌按 auth.User.ElevatedFor 判断
+// （只有勾了「节点终端」的管理员令牌调用节点文件这类接口时算确认过，见 docs/mcp.md#节点文件和节点级操作）。
 type elevationCheck struct{}
 
 func (elevationCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		if elevationRequired[req.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+		if elevationRequired[req.Spec().Procedure] && !auth.CurrentUser(ctx).ElevatedFor(req.Spec().Procedure) {
 			return nil, elevationError()
 		}
 		return next(ctx, req)
@@ -99,7 +100,7 @@ func (elevationCheck) WrapStreamingClient(next connect.StreamingClientFunc) conn
 
 func (elevationCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		if elevationRequired[conn.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+		if elevationRequired[conn.Spec().Procedure] && !auth.CurrentUser(ctx).ElevatedFor(conn.Spec().Procedure) {
 			return elevationError()
 		}
 		return next(ctx, conn)
