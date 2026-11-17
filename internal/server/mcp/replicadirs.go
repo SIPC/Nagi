@@ -2,8 +2,6 @@ package mcp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"path"
@@ -36,10 +34,9 @@ var replicaDirTools = []tool{
 		toolSetReplicaLocation),
 }
 
-// replicaDirCode 是确认码：由工具、节点、容器和整理过的目录算出，预览之后改了其中任何一项都对不上。
-func replicaDirCode(tool, nodeID, projectID, container, dir string) string {
-	sum := sha256.Sum256([]byte(tool + "\x00" + nodeID + "\x00" + projectID + "\x00" + container + "\x00" + dir))
-	return hex.EncodeToString(sum[:6])
+// replicaDirParts 是确认码的内容（确认码见 confirm.go）：工具、节点、容器和整理过的目录，预览之后改了其中任何一项都对不上。
+func replicaDirParts(tool, nodeID, projectID, container, dir string) []string {
+	return []string{tool, nodeID, projectID, container, dir}
 }
 
 // cleanDir 整理参数里的目录：空的表示默认目录；其余要是绝对路径、不含 ..（节点还会按自己的规则校验）。
@@ -78,7 +75,7 @@ func toolSetNodeReplicaDir(c *call, in SetNodeReplicaDirArgs) (any, error) {
 	if !n.GetInfo().GetReplicaDirs() {
 		return nil, fmt.Errorf("node %s is out of date; upgrade it to choose where replicas are stored", n.GetName())
 	}
-	if code := replicaDirCode("set_node_replica_dir", n.GetId(), "", "", dir); in.Confirm != code {
+	if code, ok := c.confirm(in.Confirm, replicaDirParts("set_node_replica_dir", n.GetId(), "", "", dir)...); !ok {
 		var moving []string
 		if res, err := c.h.clients.nodes.ListNodeReplicas(c.ctx, connect.NewRequest(&nagiv1.NodeRef{NodeId: n.GetId()})); err == nil {
 			for _, r := range res.Msg.GetReplicas() {
@@ -137,7 +134,7 @@ func toolSetReplicaLocation(c *call, in SetReplicaLocationArgs) (any, error) {
 		return nil, fmt.Errorf("node %s is out of date; upgrade it to choose where replicas are stored", n.GetName())
 	}
 	p := s.GetProject()
-	if code := replicaDirCode("set_replica_location", n.GetId(), p.GetId(), m.GetName(), dir); in.Confirm != code {
+	if code, ok := c.confirm(in.Confirm, replicaDirParts("set_replica_location", n.GetId(), p.GetId(), m.GetName(), dir)...); !ok {
 		current := m.GetBackupReplicaDirs()[n.GetId()]
 		if current == "" {
 			current = "the node's replica directory"

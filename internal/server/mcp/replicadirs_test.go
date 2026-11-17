@@ -53,14 +53,18 @@ func slicesContains(list []tool, name string) bool {
 
 // 确认码绑定工具、节点、容器和目录：预览之后改了哪一项都不能用原来的确认码执行。
 func TestReplicaDirCode(t *testing.T) {
-	base := replicaDirCode("set_replica_location", "n1", "p1", "web", "/mnt/big")
+	c, _ := replicaTestCall(t)
+	code := func(parts ...string) string {
+		return c.confirmCode(replicaDirParts(parts[0], parts[1], parts[2], parts[3], parts[4])...)
+	}
+	base := code("set_replica_location", "n1", "p1", "web", "/mnt/big")
 	for i, other := range []string{
-		replicaDirCode("set_node_replica_dir", "n1", "p1", "web", "/mnt/big"),
-		replicaDirCode("set_replica_location", "n2", "p1", "web", "/mnt/big"),
-		replicaDirCode("set_replica_location", "n1", "p2", "web", "/mnt/big"),
-		replicaDirCode("set_replica_location", "n1", "p1", "db", "/mnt/big"),
-		replicaDirCode("set_replica_location", "n1", "p1", "web", "/mnt/other"),
-		replicaDirCode("set_replica_location", "n1", "p1", "web", ""),
+		code("set_node_replica_dir", "n1", "p1", "web", "/mnt/big"),
+		code("set_replica_location", "n2", "p1", "web", "/mnt/big"),
+		code("set_replica_location", "n1", "p2", "web", "/mnt/big"),
+		code("set_replica_location", "n1", "p1", "db", "/mnt/big"),
+		code("set_replica_location", "n1", "p1", "web", "/mnt/other"),
+		code("set_replica_location", "n1", "p1", "web", ""),
 	} {
 		if other == base {
 			t.Errorf("case %d：参数变了，确认码却一样", i)
@@ -142,7 +146,7 @@ func TestSetNodeReplicaDirConfirm(t *testing.T) {
 	if moving := p["replicas_to_move"].([]string); len(moving) != 1 || moving[0] != "shop / web" {
 		t.Fatalf("预览里要列出会移动的副本（单独指定了位置的不动）：%v", moving)
 	}
-	code := replicaDirCode("set_node_replica_dir", "n2", "", "", "/mnt/data")
+	code := c.confirmCode(replicaDirParts("set_node_replica_dir", "n2", "", "", "/mnt/data")...)
 	if out, _ := toolSetNodeReplicaDir(c, SetNodeReplicaDirArgs{Node: "big", Dir: "/mnt/data", Confirm: "000000000000"}); out.(map[string]any)["note"] == nil || len(f.setNode) != 0 {
 		t.Fatal("确认码不对时不能执行")
 	}
@@ -175,7 +179,7 @@ func TestSetReplicaLocationConfirm(t *testing.T) {
 	if p := out.(map[string]any); p["preview"] == nil || p["current"] != "/mnt/old" || len(f.setDir) != 0 {
 		t.Fatalf("第一次调用只应该返回预览：%v", p)
 	}
-	arg.Confirm = replicaDirCode("set_replica_location", "n2", "p1", "web", "/mnt/big")
+	arg.Confirm = c.confirmCode(replicaDirParts("set_replica_location", "n2", "p1", "web", "/mnt/big")...)
 	res, err := toolSetReplicaLocation(c, arg)
 	if err != nil || !res.(opResult).Success || len(f.setDir) != 1 || f.setDir[0].GetDir() != "/mnt/big" || f.setDir[0].GetNodeId() != "n2" {
 		t.Fatalf("带上确认码应该执行：%v %v %v", res, err, f.setDir)
