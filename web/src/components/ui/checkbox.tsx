@@ -1,5 +1,5 @@
 // shadcn/ui Checkbox。
-import { Check } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import { Checkbox as CheckboxPrimitive } from "radix-ui";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,8 @@ export function Checkbox({ className, ...props }: React.ComponentProps<typeof Ch
       {...props}
     >
       <CheckboxPrimitive.Indicator>
-        <Check className="size-3" strokeWidth={3} />
+        {/* 部分选中（例如文件列表的全选）显示横线。 */}
+        {props.checked === "indeterminate" ? <Minus className="size-3" strokeWidth={3} /> : <Check className="size-3" strokeWidth={3} />}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

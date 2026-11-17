@@ -58,6 +58,8 @@ export default {
     readonlyDir: "容器目录，只读",
     readonlyText: "如需编辑，使用容器页的文件管理。",
     sensitiveFile: "敏感文件，保存前需确认",
+    sensitiveOp: (path: string) => `继续操作 ${path}？更改敏感文件可能导致无法登录节点。`,
+    overwriteHint: "覆盖 1 MB 以内的文件前保留历史版本，更大的文件无法找回。",
     sensitiveConfirm: (path: string) => `保存 ${path}？更改敏感文件可能导致无法登录节点。`,
     savedInPlace: "已保存（挂载的文件，已原地写入）",
     content: "文件内容",

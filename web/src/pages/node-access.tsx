@@ -1,12 +1,15 @@
 // 节点访问：节点的终端和文件（见 docs/node-access.md）。规则在节点和面板上执行，这里只是把用不了的入口藏起来、把原因说清楚。
+// 文件页和卷的文件管理共用 components/file-manager 的多选、剪贴板、改名、压缩解压、分块上传和目录大小。
 import { Code, ConnectError } from "@connectrpc/connect";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { File, Folder, Link as LinkIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LineDiff } from "@/components/config-diff";
 import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
+import { ClipboardBar, DirSizeText, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
+import type { UploadTarget } from "@/lib/chunked-upload";
 import { fmtBytes } from "@/components/metrics";
 import { TerminalSession } from "@/components/terminal";
 import { Alert, Button, Collapse, Dialog, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Spinner, Textarea, CodeBlock } from "@/components/ui";
@@ -123,6 +126,7 @@ function accessLabel(access: string) {
 
 function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: Node; path: string; onPath: (p: string) => void; onTerminal: (p: string) => void; onExit: () => void; onExpired: () => void }) {
   const m = t.nodeAccess.files;
+  const fm = t.fileManager;
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<{ file: ReadNodeFileResponse; text: string } | null>(null);
   const [creating, setCreating] = useState<"dir" | "file" | null>(null);
@@ -134,6 +138,9 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   const inputRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const gotoRef = useRef<HTMLInputElement>(null);
+  // 节点支持改名、复制、压缩解压、目录大小和断点续传（旧版本的节点不支持）。
+  const ops = !!node.info?.fileOps;
+  const scope = `n:${node.id}`;
   const q = useQuery({
     queryKey: ["node-dir", node.id, path],
     queryFn: () => nodeClient.listNodeDir({ nodeId: node.id, path }),
@@ -163,7 +170,21 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   // 符号链接解开后的真实路径。
   const real = q.data?.path ?? path;
   const readonly = q.data?.access === "readonly";
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["node-dir", node.id] });
+  const entries = q.data?.entries ?? [];
+  const names = useMemo(() => entries.map((e) => e.name), [entries]);
+  const dirNames = entries.filter((e) => e.isDir && !e.isSymlink && e.access !== "denied").map((e) => e.name);
+  // 目录大小在列表出来以后再统计，不拖慢列表。
+  const sizes = useQuery({
+    queryKey: ["node-dir-sizes", node.id, real, dirNames.join("/")],
+    queryFn: () => nodeClient.listNodeDirSizes({ nodeId: node.id, path: real, names: dirNames }),
+    enabled: ops && !!q.data && dirNames.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["node-dir", node.id] });
+    queryClient.invalidateQueries({ queryKey: ["node-dir-sizes", node.id] });
+  };
 
   // 上传、删除、新建的结果在列表里看得到，不再弹成功提示（ui.md：页面上已能看到变化的不加）。
   const run = async (key: string, fn: () => Promise<unknown>) => {
@@ -194,6 +215,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     }
     return new Error((await res.json().catch(() => null))?.message || t.common.errors.http(String(res.status)));
   };
+  // 确认后交给浏览器下载，大文件可以断点续传。
   const download = (p: string) =>
     run(`download:${p}`, async () => {
       const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
@@ -205,29 +227,97 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       a.click();
     });
 
+  // withSensitive：动到敏感路径时先确认。看得出来的（当前目录或选中的项是敏感的）先问；看不出来的由节点拒绝，问过再重试。
+  const confirmedRef = useRef(false);
+  const withSensitive = async <T,>(known: boolean, label: string, first: boolean, fn: (confirmed: boolean) => Promise<T>): Promise<T> => {
+    if (first) confirmedRef.current = false;
+    if (known && !confirmedRef.current) {
+      if (!(await confirmAction(m.sensitiveOp(label), { action: fm.continue, danger: true }))) throw new DOMException("aborted", "AbortError");
+      confirmedRef.current = true;
+    }
+    try {
+      return await fn(confirmedRef.current);
+    } catch (err) {
+      if (confirmedRef.current || !(err instanceof ConnectError) || err.code !== Code.FailedPrecondition) throw err;
+      if (!(await confirmAction(m.sensitiveOp(label), { action: fm.continue, danger: true }))) throw new DOMException("aborted", "AbortError");
+      confirmedRef.current = true;
+      return fn(true);
+    }
+  };
+  const sensitiveIn = (paths: string[]) => q.data?.access === "confirm" || paths.some((p) => entries.find((e) => join(real, e.name) === p)?.access === "confirm");
+  const adapter: FileOpsAdapter = {
+    scope,
+    join,
+    rename: (p, newName) => withSensitive(sensitiveIn([p]), p, true, (confirmed) => nodeClient.renameNodeFile({ nodeId: node.id, paths: [p], destDir: parentOf(p), newName, confirmed })),
+    transfer: (paths, destDir, copy, o) =>
+      withSensitive(sensitiveIn(copy ? [] : paths), destDir, o.conflict === "", (confirmed) =>
+        streamOp((copy ? nodeClient.copyNodeFiles : nodeClient.moveNodeFiles)({ nodeId: node.id, paths, destDir, conflict: o.conflict, confirmed }, { signal: o.signal }), o),
+      ),
+    compress: (paths, dest, format, o) => withSensitive(sensitiveIn([]), dest, o.conflict === "", (confirmed) => streamOp(nodeClient.compressNodeFiles({ nodeId: node.id, paths, dest, format, conflict: o.conflict, confirmed }, { signal: o.signal }), o)),
+    extract: (p, destDir, intoNewDir, o) =>
+      withSensitive(sensitiveIn([]), destDir, o.conflict === "", (confirmed) => streamOp(nodeClient.extractNodeFile({ nodeId: node.id, path: p, destDir, intoNewDir, conflict: o.conflict, confirmed }, { signal: o.signal }), o)),
+    onError: (err) => {
+      if (err instanceof DOMException && err.name === "AbortError") return true;
+      if (!isElevationRequired(err)) return false;
+      onExpired();
+      return true;
+    },
+    overwriteHint: m.overwriteHint,
+  };
+  const fops = useFileOps(adapter, { dir: real, entries, refresh, setError });
+  const sel = useSelection(names, real);
+  const uploads = useUploads(scope);
+  const sensitiveDir = q.data?.access === "confirm";
+  const target: UploadTarget = { url: (p, params) => `${fileURL(p, sensitiveDir || entries.find((e) => join(real, e.name) === p)?.access === "confirm")}&${new URLSearchParams(params)}`, fail: async (res) => (res.headers.get("X-Nagi-Elevation") === "required" ? failure(res) : undefined) };
+
   const upload = async (list: File[]) => {
-    const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
-    if (tooLarge.length > 0) {
-      setError(m.tooLarge(t.common.list(tooLarge)));
+    if (!ops) {
+      const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
+      if (tooLarge.length > 0) {
+        setError(m.tooLarge(t.common.list(tooLarge)));
+        return;
+      }
+    }
+    const existing = new Map(entries.map((e) => [e.name, e]));
+    const clash = list.filter((f) => existing.has(f.name));
+    const sensitive = sensitiveDir || clash.some((f) => existing.get(f.name)?.access === "confirm");
+    let picked = list.map((file) => ({ file, name: file.name }));
+    if (ops) {
+      if (clash.length > 0) {
+        const answer = await fops.askConflict(clash.map((f) => f.name));
+        if (!answer) return;
+        const taken = new Set(names);
+        if (answer.choice === "skip") picked = picked.filter((x) => !taken.has(x.name));
+        if (answer.choice === "rename") {
+          picked = picked.map((x) => {
+            if (!taken.has(x.name)) return x;
+            const n = freeName(x.name, taken);
+            taken.add(n);
+            return { ...x, name: n };
+          });
+        }
+      }
+      if (sensitive && !(await confirmAction(m.sensitiveOp(real), { action: fm.continue, danger: true }))) return;
+      if (picked.length === 0) return;
+      setError("");
+      await uploads.queue.add(
+        picked.map((x) => ({ file: x.file, path: join(real, x.name) })),
+        target,
+      );
+      refresh();
       return;
     }
-    const existing = new Map((q.data?.entries ?? []).map((e) => [e.name, e]));
-    const clash = list.filter((f) => existing.has(f.name));
-    const sensitive = q.data?.access === "confirm" || clash.some((f) => existing.get(f.name)?.access === "confirm");
     if (clash.length > 0 || sensitive) {
       const names = t.common.list((clash.length ? clash : list).map((f) => f.name));
       const large = clash.some((f) => Number(existing.get(f.name)?.size ?? 0) > maxEditBytes);
       if (!(await confirmAction(m.overwriteConfirm(names, large), { action: m.overwrite, danger: true }))) return;
     }
-    await run(
-      "upload",
-      async () => {
-        await eachLimit(list, uploadConcurrency, async (f) => {
-          const res = await fetch(fileURL(join(real, f.name), sensitive), { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: f });
-          if (!res.ok) throw await failure(res);
-        });
-      },
-    );
+    await run("upload", async () => {
+      await eachLimit(list, uploadConcurrency, async (f) => {
+        const res = await fetch(fileURL(join(real, f.name), sensitive), { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: f });
+        if (!res.ok) throw await failure(res);
+      });
+    });
   };
 
   const remove = async (e: NodeFileEntry) => {
@@ -239,6 +329,24 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     });
     if (!answer) return;
     await run(`del:${e.name}`, () => nodeClient.deleteNodeFile({ nodeId: node.id, path: join(real, e.name), confirmName: typed ? e.name : "" }));
+  };
+
+  // removeSelected：一次删除几项。有目录或敏感文件时输入项数确认（单项删除时是输入名称）。
+  const removeSelected = async (list: NodeFileEntry[]) => {
+    const typed = list.some((e) => (e.isDir && !e.isSymlink) || e.access === "confirm");
+    const answer = await ask(fm.deleteMany(list.length), {
+      action: t.common.actions.delete,
+      danger: true,
+      ...(typed ? { checkDefault: true, typeToConfirm: { label: fm.deleteType(list.length), value: String(list.length) } } : {}),
+    });
+    if (!answer) return;
+    await run("del", async () => {
+      for (const e of list) {
+        const confirm = (e.isDir && !e.isSymlink) || e.access === "confirm";
+        await nodeClient.deleteNodeFile({ nodeId: node.id, path: join(real, e.name), confirmName: confirm ? e.name : "" });
+      }
+    });
+    sel.clear();
   };
 
   const edit = async (e: NodeFileEntry) => {
@@ -267,7 +375,6 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     );
   }
 
-  const entries = q.data?.entries ?? [];
   const segments = crumbsOf(real);
   const current = segments.pop();
   const crumbs = [...(current ? [{ label: m.root, path: "/" }] : []), ...segments];
@@ -277,6 +384,11 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     { label: m.openTerminal, onSelect: () => onTerminal(real) },
     ...(real === "/" ? [] : [{ label: m.downloadDir, onSelect: () => download(real) }]),
   ];
+  const selectedEntries = entries.filter((e) => sel.selected.has(e.name));
+  const selected = selectedEntries.map((e) => e.name);
+  const lockedSelected = selectedEntries.some((e) => e.access === "readonly");
+  const bar = ops && selected.length > 0 ? "select" : ops && fops.clipboard ? "clip" : null;
+  const working = !!busy || fops.busy;
 
   return (
     <section className="grid gap-4">
@@ -318,66 +430,86 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
       {readonly && <Notice title={m.readonlyDir}>{m.readonlyText}</Notice>}
 
       <Collapse open={goto !== null} gap={4}>
-      {goto !== null && (
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const p = goto.trim();
-            if (p) onPath(p);
-            setGoto(null);
-          }}
-        >
-          <Input ref={gotoRef} aria-label={m.pathLabel} value={goto} onChange={(e) => setGoto(e.target.value)} className="min-w-0 flex-1 font-mono" spellCheck={false} />
-          <Button type="submit" readOnlyOk>
-            {m.gotoSubmit}
-          </Button>
-          <Button variant="ghost" readOnlyOk onClick={() => setGoto(null)}>
-            {t.common.actions.cancel}
-          </Button>
-        </form>
-      )}
+        {goto !== null && (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const p = goto.trim();
+              if (p) onPath(p);
+              setGoto(null);
+            }}
+          >
+            <Input ref={gotoRef} aria-label={m.pathLabel} value={goto} onChange={(e) => setGoto(e.target.value)} className="min-w-0 flex-1 font-mono" spellCheck={false} />
+            <Button type="submit" readOnlyOk>
+              {m.gotoSubmit}
+            </Button>
+            <Button variant="ghost" readOnlyOk onClick={() => setGoto(null)}>
+              {t.common.actions.cancel}
+            </Button>
+          </form>
+        )}
       </Collapse>
 
       <Collapse open={!!creating} gap={4}>
-      {creating && (
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const n = name.trim();
-            if (!n) return;
-            const op =
-              creating === "dir"
-                ? () => nodeClient.createNodeDir({ nodeId: node.id, path: join(real, n) })
-                : () => nodeClient.writeNodeFile({ nodeId: node.id, path: join(real, n), create: true, confirmed: q.data?.access === "confirm" });
-            run("create", op).then((ok) => {
-              if (!ok) return;
-              setName("");
-              setCreating(null);
-            });
-          }}
-        >
-          {/* 字段名给读屏，占位符写示例。 */}
-          <Input ref={nameRef} aria-label={creating === "dir" ? m.dirName : m.fileName} placeholder={creating === "dir" ? "data" : "config.yml"} autoComplete="off" autoCapitalize="none" spellCheck={false} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
-          <Button type="submit" disabled={busy === "create"}>
-            {busy === "create" && <Spinner />}
-            {t.common.actions.create}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setName("");
-              setCreating(null);
+        {creating && (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const n = name.trim();
+              if (!n) return;
+              const op =
+                creating === "dir"
+                  ? () => nodeClient.createNodeDir({ nodeId: node.id, path: join(real, n) })
+                  : () => nodeClient.writeNodeFile({ nodeId: node.id, path: join(real, n), create: true, confirmed: q.data?.access === "confirm" });
+              run("create", op).then((ok) => {
+                if (!ok) return;
+                setName("");
+                setCreating(null);
+              });
             }}
           >
-            {t.common.actions.cancel}
-          </Button>
-        </form>
-      )}
+            {/* 字段名给读屏，占位符写示例。 */}
+            <Input ref={nameRef} aria-label={creating === "dir" ? m.dirName : m.fileName} placeholder={creating === "dir" ? "data" : "config.yml"} autoComplete="off" autoCapitalize="none" spellCheck={false} value={name} onChange={(e) => setName(e.target.value)} className="min-w-0 flex-1" />
+            <Button type="submit" disabled={busy === "create"}>
+              {busy === "create" && <Spinner />}
+              {t.common.actions.create}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setName("");
+                setCreating(null);
+              }}
+            >
+              {t.common.actions.cancel}
+            </Button>
+          </form>
+        )}
       </Collapse>
 
       {error && <Alert>{error}</Alert>}
+      {ops && !readonly && <PendingUploads scope={scope} dir={real} inDir={(p) => parentOf(p) === real} items={uploads.items} target={target} />}
+      <UploadList queue={uploads.queue} items={uploads.items} />
+      {fops.elements}
+      <Collapse open={!!bar} gap={4}>
+        {bar === "select" && (
+          <SelectionBar
+            count={selected.length}
+            total={entries.filter((e) => e.access !== "denied").length}
+            onAll={(on) => sel.setAll(on, entries.filter((e) => e.access !== "denied").map((e) => e.name))}
+            onClear={sel.clear}
+            actions={[
+              { label: fm.copy, onSelect: () => (fops.copy(selected), sel.clear()) },
+              { label: fm.cut, disabled: lockedSelected || readonly, onSelect: () => (fops.cut(selected), sel.clear()) },
+              { label: fm.compress, disabled: working || readonly, onSelect: () => fops.compress(selected) },
+              { label: t.common.actions.delete, danger: true, disabled: working || lockedSelected || readonly, onSelect: () => removeSelected(selectedEntries) },
+            ]}
+          />
+        )}
+        {bar === "clip" && fops.clipboard && <ClipboardBar clip={fops.clipboard} busy={fops.busy} disabled={!!busy || readonly} onPaste={fops.paste} />}
+      </Collapse>
 
       {q.isPending || isElevationRequired(q.error) ? (
         <RowsSkeleton />
@@ -389,11 +521,22 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
         <List>
           {entries.slice(0, shown).map((e) => {
             const blocked = e.access === "denied";
+            const locked = e.access === "readonly";
             const label = accessLabel(e.access);
+            const kind = e.isSymlink ? <LinkIcon className="-mr-1" strokeWidth={2.25} /> : e.isDir ? <Folder className="-mr-1" strokeWidth={2.25} /> : <File className="-mr-1" strokeWidth={2.25} />;
             return (
               <Row
                 key={e.name}
-                icon={e.isSymlink ? <LinkIcon className="-mr-1" strokeWidth={2.25} /> : e.isDir ? <Folder className="-mr-1" strokeWidth={2.25} /> : <File className="-mr-1" strokeWidth={2.25} />}
+                icon={
+                  ops ? (
+                    <span className="flex items-start gap-3">
+                      <SelectBox name={e.name} checked={sel.selected.has(e.name)} disabled={blocked} onToggle={(range) => sel.toggle(e.name, range)} />
+                      {kind}
+                    </span>
+                  ) : (
+                    kind
+                  )
+                }
                 title={
                   <>
                     {e.isDir && !blocked ? (
@@ -409,7 +552,13 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
                     {label && <span className="shrink-0 text-muted-foreground">{label}</span>}
                   </>
                 }
-                cols={[{ content: e.isDir || e.isSymlink ? "" : fmtBytes(Number(e.size)), num: true }, { content: <span title={formatDateTime(toDate(e.modified))}>{timeAgo(toDate(e.modified))}</span> }]}
+                cols={[
+                  {
+                    content: e.isSymlink ? "" : e.isDir ? ops && !blocked && <DirSizeText size={sizes.data?.sizes.find((s) => s.name === e.name)} pending={sizes.isFetching && !sizes.data} /> : fmtBytes(Number(e.size)),
+                    num: true,
+                  },
+                  { content: <span title={formatDateTime(toDate(e.modified))}>{timeAgo(toDate(e.modified))}</span> },
+                ]}
                 actionsWidth="w-8"
                 actions={
                   blocked ? null : (
@@ -417,8 +566,17 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
                       title={e.name}
                       items={[
                         { label: m.download, onSelect: () => download(join(real, e.name)) },
-                        ...(!e.isDir && Number(e.size) <= maxEditBytes ? [{ label: e.access === "readonly" ? m.view : t.common.actions.edit, disabled: !!busy, onSelect: () => edit(e) }] : []),
-                        ...(e.access === "readonly" ? [] : [{ label: t.common.actions.delete, danger: true, disabled: !!busy, onSelect: () => remove(e) }]),
+                        ...(!e.isDir && Number(e.size) <= maxEditBytes ? [{ label: locked ? m.view : t.common.actions.edit, disabled: working, onSelect: () => edit(e) }] : []),
+                        ...(ops
+                          ? [
+                              ...(locked || readonly ? [] : [{ label: fm.rename, disabled: working, onSelect: () => fops.rename(e.name) }]),
+                              ...(e.isSymlink ? [] : [{ label: fm.copy, onSelect: () => fops.copy([e.name]) }]),
+                              ...(locked || readonly ? [] : [{ label: fm.cut, onSelect: () => fops.cut([e.name]) }]),
+                              ...(e.isSymlink || readonly ? [] : [{ label: fm.compress, disabled: working, onSelect: () => fops.compress([e.name]) }]),
+                              ...(!e.isDir && !e.isSymlink && !readonly && isArchive(e.name) ? [{ label: fm.extract, disabled: working, onSelect: () => fops.extract(e.name) }] : []),
+                            ]
+                          : []),
+                        ...(locked ? [] : [{ label: t.common.actions.delete, danger: true, disabled: working, onSelect: () => remove(e) }]),
                       ]}
                     />
                   )

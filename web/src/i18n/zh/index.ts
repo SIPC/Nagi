@@ -22,6 +22,7 @@ import update from "./update";
 import projects from "./projects";
 import nodes from "./nodes";
 import nodeAccess from "./nodeAccess";
+import fileManager from "./fileManager";
 import project from "./project";
 import projectContainers from "./projectContainers";
 import projectData from "./projectData";
@@ -56,6 +57,7 @@ export default {
   projects,
   nodes,
   nodeAccess,
+  fileManager,
   project,
   projectContainers,
   projectData,

@@ -59,6 +59,8 @@ export default {
     readonlyDir: "Container directory, read-only",
     readonlyText: "Use the file manager on the container page to make changes.",
     sensitiveFile: "Sensitive file. Confirm before saving",
+    sensitiveOp: (path) => `Continue with ${path}? Changing sensitive files may prevent you from signing in to the node.`,
+    overwriteHint: "Files up to 1 MB keep a previous version. Larger files can't be recovered.",
     sensitiveConfirm: (path) => `Save ${path}? Changes to sensitive files can block node login.`,
     savedInPlace: "Saved (mounted file, written in place)",
     content: "File content",

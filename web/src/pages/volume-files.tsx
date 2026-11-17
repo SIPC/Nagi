@@ -1,12 +1,14 @@
-// 卷里的文件管理：浏览、下载、上传、删除、编辑小文本，以及查看快照里的文件并恢复单个文件。
-// 在存储标签里就地换内容（地址的 volume 参数），不开对话框。
+// 卷里的文件管理：浏览、下载、上传（分块、断点续传）、删除、编辑小文本，多选后复制、剪切、粘贴、压缩，改名、解压，
+// 目录大小；以及查看快照里的文件并恢复单个文件。在存储标签里就地换内容（地址的 volume 参数），不开对话框。
 // 规则在节点上执行（只读角色看不到入口，接口也拒绝；有顶替的容器只在持有租约时能写）。
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { File, Folder, Link as LinkIcon } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
-import { Alert, Button, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Select, Spinner, Textarea } from "@/components/ui";
+import { ClipboardBar, DirSizeText, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
+import type { UploadTarget } from "@/lib/chunked-upload";
+import { Alert, Button, Collapse, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Select, Spinner, Textarea } from "@/components/ui";
 import { MobileBar, mobileBarText } from "@/pages/layout";
 import { fmtBytes } from "@/components/metrics";
 import { useUnsaved } from "@/components/unsaved";
@@ -62,10 +64,13 @@ type Props = {
   onClose: () => void;
   // unmount：这个卷能取消挂载时才有。
   unmount?: { onSelect: () => void; disabled?: boolean };
+  // fileOps：容器所在的节点支持改名、复制、压缩解压、目录大小和断点续传（旧版本的节点不支持）。
+  fileOps?: boolean;
 };
 
-export function VolumeFiles({ project, container, volume, label, onClose, unmount }: Props) {
+export function VolumeFiles({ project, container, volume, label, onClose, unmount, fileOps = false }: Props) {
   const m = t.projectData.files;
+  const fm = t.fileManager;
   const queryClient = useQueryClient();
   const [path, setPath] = useState("");
   const [snapshot, setSnapshot] = useState("");
@@ -80,6 +85,10 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const inputRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
   const ref = { projectId: project.id, container: container.name, volume, snapshotId: snapshot };
+  const base = { projectId: project.id, container: container.name, volume };
+  const scope = `v:${project.id}/${container.name}/${volume}`;
+  // 新功能只用于当前文件，快照里的只能浏览、下载、恢复。
+  const ops = fileOps && !snapshot;
 
   const files = useQuery({
     queryKey: ["volume-files", project.id, container.name, volume, snapshot, path],
@@ -91,8 +100,20 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     queryFn: () => projectClient.listSnapshots({ projectId: project.id, container: container.name }),
   });
   const choices = (snapshots.data?.snapshots ?? []).filter((s) => s.kind !== "version");
+  const entries = files.data?.entries ?? [];
+  const names = useMemo(() => entries.map((e) => e.name), [entries]);
+  // 目录大小在列表出来以后再统计，不拖慢列表。
+  const dirNames = entries.filter((e) => e.isDir && !e.isSymlink).map((e) => e.name);
+  const sizes = useQuery({
+    queryKey: ["volume-dir-sizes", project.id, container.name, volume, path, dirNames.join("/")],
+    queryFn: () => projectClient.listVolumeDirSizes({ ...base, path, names: dirNames }),
+    enabled: ops && !!files.data && dirNames.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["volume-files", project.id, container.name, volume] });
+    queryClient.invalidateQueries({ queryKey: ["volume-dir-sizes", project.id, container.name, volume] });
     queryClient.invalidateQueries({ queryKey: ["volumes", project.id, container.name] });
   };
   const [shown, setShown] = useState(pageSize);
@@ -114,7 +135,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     if (snapshot) q.set("snapshot", snapshot);
     return `/api/volume-file?${q}`;
   };
-  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。
+  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。确认后交给浏览器下载（大文件可以断点续传）。
   const download = (p: string) => {
     run(`download:${p}`, async () => {
       const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
@@ -152,45 +173,94 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     }
   };
 
+  const adapter: FileOpsAdapter = {
+    scope,
+    join: (dir, name) => (dir ? `${dir}/${name}` : name),
+    rename: (p, name) => projectClient.renameVolumeFile({ ...base, paths: [p], destDir: p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "", newName: name }),
+    transfer: (paths, destDir, copy, o) => streamOp((copy ? projectClient.copyVolumeFiles : projectClient.moveVolumeFiles)({ ...base, paths, destDir, conflict: o.conflict }, { signal: o.signal }), o),
+    compress: (paths, dest, format, o) => streamOp(projectClient.compressVolumeFiles({ ...base, paths, dest, format, conflict: o.conflict }, { signal: o.signal }), o),
+    extract: (p, destDir, intoNewDir, o) => streamOp(projectClient.extractVolumeFile({ ...base, path: p, destDir, intoNewDir, conflict: o.conflict }, { signal: o.signal }), o),
+    snapshotFirst: { label: m.snapshotFirst, run: snapshotFirst },
+  };
+  const fops = useFileOps(adapter, { dir: path, entries, refresh, setError });
+  const sel = useSelection(names, `${snapshot}|${path}`);
+  const uploads = useUploads(scope);
+  const target: UploadTarget = { url: (p, params) => `${fileURL(p)}&${new URLSearchParams(params)}` };
+
   const uploadFile = async (p: string, body: Blob) => {
     const res = await fetch(fileURL(p), { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body });
     if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
   };
 
+  // upload：节点支持时分块上传（断点续传，不限大小）；旧版本的节点整个文件一次传，最大 8 GB。
   const upload = async (list: File[]) => {
-    const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
-    if (tooLarge.length > 0) {
-      setError(m.tooLarge(t.common.list(tooLarge)));
-      return;
+    if (!ops) {
+      const tooLarge = list.filter((f) => f.size > maxUploadBytes).map((f) => f.name);
+      if (tooLarge.length > 0) {
+        setError(m.tooLarge(t.common.list(tooLarge)));
+        return;
+      }
     }
-    const existing = new Set((files.data?.entries ?? []).map((e) => e.name));
-    const clash = list.filter((f) => existing.has(f.name)).map((f) => f.name);
+    const taken = new Set(names);
+    const clash = list.filter((f) => taken.has(f.name)).map((f) => f.name);
+    let picked = list.map((file) => ({ file, name: file.name }));
     let first = false;
-    if (clash.length > 0) {
+    if (clash.length > 0 && ops) {
+      const answer = await fops.askConflict(clash);
+      if (!answer) return;
+      first = answer.checked;
+      if (answer.choice === "skip") picked = picked.filter((x) => !taken.has(x.name));
+      if (answer.choice === "rename") {
+        picked = picked.map((x) => {
+          if (!taken.has(x.name)) return x;
+          const name = freeName(x.name, taken);
+          taken.add(name);
+          return { ...x, name };
+        });
+      }
+    } else if (clash.length > 0) {
       const answer = await ask(m.overwriteConfirm(t.common.list(clash)), { action: m.overwrite, danger: true, check: m.snapshotFirst, checkDefault: true });
       if (!answer) return;
       first = answer.checked;
     }
-    await run(
-      "upload",
-      async () => {
-        if (first) await snapshotFirst();
-        await eachLimit(list, uploadConcurrency, (f) => uploadFile(join(f.name), f));
-      },
-      m.uploaded(list.length),
+    if (picked.length === 0) return;
+    if (!ops) {
+      await run(
+        "upload",
+        async () => {
+          if (first) await snapshotFirst();
+          await eachLimit(picked, uploadConcurrency, (x) => uploadFile(join(x.name), x.file));
+        },
+        m.uploaded(picked.length),
+      );
+      return;
+    }
+    if (first && !(await run("snapshot", snapshotFirst))) return;
+    setError("");
+    await uploads.queue.add(
+      picked.map((x) => ({ file: x.file, path: join(x.name) })),
+      target,
     );
+    refresh();
   };
 
   const remove = async (e: VolumeFileEntry) => {
     const answer = await ask(m.deleteConfirm(e.name, e.isDir), { action: t.common.actions.delete, danger: true, check: m.snapshotFirst, checkDefault: true });
     if (!answer) return;
-    await run(
-      `del:${e.name}`,
-      async () => {
-        if (answer.checked) await snapshotFirst();
-        await projectClient.deleteVolumeFile({ ...ref, snapshotId: "", path: join(e.name) });
-      },
-    );
+    await run(`del:${e.name}`, async () => {
+      if (answer.checked) await snapshotFirst();
+      await projectClient.deleteVolumeFile({ ...ref, snapshotId: "", path: join(e.name) });
+    });
+  };
+
+  const removeSelected = async (list: string[]) => {
+    const answer = await ask(fm.deleteMany(list.length), { action: t.common.actions.delete, danger: true, check: m.snapshotFirst, checkDefault: true });
+    if (!answer) return;
+    await run("del", async () => {
+      if (answer.checked) await snapshotFirst();
+      for (const n of list) await projectClient.deleteVolumeFile({ ...ref, snapshotId: "", path: join(n) });
+    });
+    sel.clear();
   };
 
   const restore = async (name: string) => {
@@ -249,7 +319,6 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     );
   }
 
-  const entries = files.data?.entries ?? [];
   const crumbs = trail();
   const current = crumbs.pop();
   // 说明放进问号；手机上面包屑换成了标题栏，问号放到右边的工具栏里。
@@ -264,6 +333,9 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     { label: m.downloadDir, onSelect: () => download(path) },
     ...(unmount ? [{ label: t.projectData.volumes.remove, danger: true, disabled: unmount.disabled, onSelect: unmount.onSelect }] : []),
   ];
+  const selected = names.filter((n) => sel.selected.has(n));
+  const bar = ops && selected.length > 0 ? "select" : ops && fops.clipboard ? "clip" : null;
+  const working = !!busy || fops.busy;
 
   return (
     <section className="grid gap-4">
@@ -328,51 +400,73 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
 
       {snapshots.error && <QueryError error={errorMessage(snapshots.error)} onRetry={() => snapshots.refetch()} />}
 
-      {creating && !snapshot && (
-        <form
-          className="grid gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setDirChecked(true);
-            const name = dirName.trim();
-            if (!name) return;
-            run("mkdir", () => projectClient.createVolumeDir({ ...ref, snapshotId: "", path: join(name) })).then((ok) => {
-              if (ok) closeCreate();
-            });
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Input
-              ref={dirRef}
-              aria-label={m.dirName}
-              aria-invalid={!!dirError}
-              aria-describedby={dirError ? "new-dir-error" : undefined}
-              // 占位符写示例，字段名留给读屏（和节点文件一致）。
-              placeholder="data"
-              value={dirName}
-              onChange={(e) => setDirName(e.target.value)}
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              className="min-w-0 flex-1"
-            />
-            <Button type="submit" disabled={busy === "mkdir"}>
-              {busy === "mkdir" && <Spinner />}
-              {t.common.actions.create}
-            </Button>
-            <Button variant="ghost" onClick={closeCreate}>
-              {t.common.actions.cancel}
-            </Button>
-          </div>
-          {dirError && (
-            <p id="new-dir-error" role="alert" className="leading-5 text-destructive">
-              {dirError}
-            </p>
-          )}
-        </form>
-      )}
+      <Collapse open={creating && !snapshot} gap={4}>
+        {creating && !snapshot && (
+          <form
+            className="grid gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setDirChecked(true);
+              const name = dirName.trim();
+              if (!name) return;
+              run("mkdir", () => projectClient.createVolumeDir({ ...ref, snapshotId: "", path: join(name) })).then((ok) => {
+                if (ok) closeCreate();
+              });
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                ref={dirRef}
+                aria-label={m.dirName}
+                aria-invalid={!!dirError}
+                aria-describedby={dirError ? "new-dir-error" : undefined}
+                // 占位符写示例，字段名留给读屏（和节点文件一致）。
+                placeholder="data"
+                value={dirName}
+                onChange={(e) => setDirName(e.target.value)}
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="min-w-0 flex-1"
+              />
+              <Button type="submit" disabled={busy === "mkdir"}>
+                {busy === "mkdir" && <Spinner />}
+                {t.common.actions.create}
+              </Button>
+              <Button variant="ghost" onClick={closeCreate}>
+                {t.common.actions.cancel}
+              </Button>
+            </div>
+            {dirError && (
+              <p id="new-dir-error" role="alert" className="leading-5 text-destructive">
+                {dirError}
+              </p>
+            )}
+          </form>
+        )}
+      </Collapse>
 
       {error && <Alert>{error}</Alert>}
+      {ops && <PendingUploads scope={scope} dir={path} inDir={(p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "") === path} items={uploads.items} target={target} />}
+      <UploadList queue={uploads.queue} items={uploads.items} />
+      {fops.elements}
+      <Collapse open={!!bar} gap={4}>
+        {bar === "select" && (
+          <SelectionBar
+            count={selected.length}
+            total={names.length}
+            onAll={sel.setAll}
+            onClear={sel.clear}
+            actions={[
+              { label: fm.copy, onSelect: () => (fops.copy(selected), sel.clear()) },
+              { label: fm.cut, onSelect: () => (fops.cut(selected), sel.clear()) },
+              { label: fm.compress, disabled: working, onSelect: () => fops.compress(selected) },
+              { label: t.common.actions.delete, danger: true, disabled: working, onSelect: () => removeSelected(selected) },
+            ]}
+          />
+        )}
+        {bar === "clip" && fops.clipboard && <ClipboardBar clip={fops.clipboard} busy={fops.busy} disabled={!!busy} onPaste={fops.paste} />}
+      </Collapse>
 
       {files.isPending ? (
         <RowsSkeleton />
@@ -392,49 +486,76 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
         </EmptyRow>
       ) : (
         <List>
-          {entries.slice(0, shown).map((e) => (
-            <Row
-              key={e.name}
-              icon={e.isDir ? <Folder className="-mr-1" strokeWidth={2.25} /> : e.isSymlink ? <LinkIcon className="-mr-1" strokeWidth={2.25} /> : <File className="-mr-1" strokeWidth={2.25} />}
-              title={
-                e.isDir ? (
-                  <button type="button" className="min-w-0 cursor-pointer truncate rounded-sm text-left outline-none hover:underline focus-ring" onClick={() => setPath(join(e.name))}>
-                    {e.name}
-                  </button>
-                ) : (
-                  <span className="truncate" title={e.isSymlink ? m.symlinkHint : undefined}>
-                    {e.name}
-                  </span>
-                )
-              }
-              cols={[{ content: e.isDir || e.isSymlink ? "" : fmtBytes(Number(e.size)), num: true }, { content: <span title={formatDateTime(toDate(e.modified))}>{capitalize(timeAgo(toDate(e.modified)))}</span> }]}
-              // 快照里一行两个按钮（下载、恢复），英文要 140 左右，操作列放宽；同一列表的各行同宽。
-              actionsWidth={snapshot ? "w-40" : "w-28"}
-              actions={
-                snapshot ? (
-                  e.isSymlink ? null : (
-                    <>
-                      <Button variant="ghost" size="row" onClick={() => download(join(e.name))}>
-                        {m.download}
-                      </Button>
-                      <Button variant="ghost" size="row" disabled={!!busy} onClick={() => restore(e.name)}>
-                        {m.restore}
-                      </Button>
-                    </>
+          {entries.slice(0, shown).map((e) => {
+            const kind = e.isDir ? <Folder className="-mr-1" strokeWidth={2.25} /> : e.isSymlink ? <LinkIcon className="-mr-1" strokeWidth={2.25} /> : <File className="-mr-1" strokeWidth={2.25} />;
+            return (
+              <Row
+                key={e.name}
+                icon={
+                  ops ? (
+                    <span className="flex items-start gap-3">
+                      <SelectBox name={e.name} checked={sel.selected.has(e.name)} onToggle={(range) => sel.toggle(e.name, range)} />
+                      {kind}
+                    </span>
+                  ) : (
+                    kind
                   )
-                ) : (
-                  <RowMenu
-                    title={e.name}
-                    items={[
-                      ...(e.isSymlink ? [] : [{ label: m.download, onSelect: () => download(join(e.name)) }]),
-                      ...(!e.isDir && !e.isSymlink && Number(e.size) <= maxEditBytes ? [{ label: t.common.actions.edit, disabled: !!busy, onSelect: () => edit(e) }] : []),
-                      { label: t.common.actions.delete, danger: true, disabled: !!busy, onSelect: () => remove(e) },
-                    ]}
-                  />
-                )
-              }
-            />
-          ))}
+                }
+                title={
+                  e.isDir ? (
+                    <button type="button" className="min-w-0 cursor-pointer truncate rounded-sm text-left outline-none hover:underline focus-ring" onClick={() => setPath(join(e.name))}>
+                      {e.name}
+                    </button>
+                  ) : (
+                    <span className="truncate" title={e.isSymlink ? m.symlinkHint : undefined}>
+                      {e.name}
+                    </span>
+                  )
+                }
+                cols={[
+                  {
+                    content: e.isSymlink ? "" : e.isDir ? ops && <DirSizeText size={sizes.data?.sizes.find((s) => s.name === e.name)} pending={sizes.isFetching && !sizes.data} /> : fmtBytes(Number(e.size)),
+                    num: true,
+                  },
+                  { content: <span title={formatDateTime(toDate(e.modified))}>{capitalize(timeAgo(toDate(e.modified)))}</span> },
+                ]}
+                // 快照里一行两个按钮（下载、恢复），英文要 140 左右，操作列放宽；同一列表的各行同宽。
+                actionsWidth={snapshot ? "w-40" : "w-28"}
+                actions={
+                  snapshot ? (
+                    e.isSymlink ? null : (
+                      <>
+                        <Button variant="ghost" size="row" onClick={() => download(join(e.name))}>
+                          {m.download}
+                        </Button>
+                        <Button variant="ghost" size="row" disabled={!!busy} onClick={() => restore(e.name)}>
+                          {m.restore}
+                        </Button>
+                      </>
+                    )
+                  ) : (
+                    <RowMenu
+                      title={e.name}
+                      items={[
+                        ...(e.isSymlink ? [] : [{ label: m.download, onSelect: () => download(join(e.name)) }]),
+                        ...(!e.isDir && !e.isSymlink && Number(e.size) <= maxEditBytes ? [{ label: t.common.actions.edit, disabled: working, onSelect: () => edit(e) }] : []),
+                        ...(ops
+                          ? [
+                              { label: fm.rename, disabled: working, onSelect: () => fops.rename(e.name) },
+                              ...(e.isSymlink ? [] : [{ label: fm.copy, onSelect: () => fops.copy([e.name]) }]),
+                              { label: fm.cut, onSelect: () => fops.cut([e.name]) },
+                              ...(e.isSymlink ? [] : [{ label: fm.compress, disabled: working, onSelect: () => fops.compress([e.name]) }]),
+                              ...(!e.isDir && !e.isSymlink && isArchive(e.name) ? [{ label: fm.extract, disabled: working, onSelect: () => fops.extract(e.name) }] : []),
+                            ]
+                          : []),
+                        { label: t.common.actions.delete, danger: true, disabled: working, onSelect: () => remove(e) },
+                      ]}
+                    />
+                  )
+                }
+              />
+            );
+          })}
         </List>
       )}
       {entries.length > shown && (
