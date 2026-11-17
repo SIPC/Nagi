@@ -49,8 +49,9 @@ const (
 
 // Service 是面板上的项目和容器。
 type Service struct {
-	// onHolderChanged 换掉 holderChanged 的默认做法，测试用。
-	onHolderChanged func(pid, name string, moved bool)
+	// onHolderChanged 换掉 holderChanged 的默认做法，witnessReport 换掉取见证人节点上报的做法，测试用。
+	onHolderChanged func(pid, name string, register bool)
+	witnessReport   func(nodeID string) *nagiv1.ReportRequest
 	Q               *store.Queries
 	Sealer          *sealer.Sealer
 	Nodes           *nodes.Registry

@@ -465,7 +465,13 @@ func (s *Service) syncFailover(ctx context.Context, conn *nodes.Conn, st *nagiv1
 			s.Log.Warn("容器已由另一个节点运行（顶替或切回）", "project", pid, "container", name, "from", c.NodeID, "to", conn.NodeID, "epoch", st.GetEpoch())
 		}
 		if err := s.Q.SetContainerHolder(ctx, store.SetContainerHolderParams{NodeID: conn.NodeID, Dir: dir, FailoverEpoch: int64(st.GetEpoch()), ProjectID: pid, Name: name}); err == nil {
-			s.holderChanged(pid, name, c.NodeID != conn.NodeID)
+			moved := c.NodeID != conn.NodeID
+			key := participantKey(cur, conn.NodeID)
+			confirmed := !moved || s.witnessConfirms(cur, pid, name, key, st.GetEpoch())
+			s.holderChanged(pid, name, moved && confirmed)
+			if moved && !confirmed {
+				go s.registerWhenConfirmed(pid, name, conn.NodeID, key, st.GetEpoch(), witnessRetry, witnessGiveUp)
+			}
 		}
 	case st.GetRole() == "standby" && c.NodeID != conn.NodeID && st.GetSpecRevision() > 0 &&
 		(st.GetSpecRevision() != c.Revision || st.GetSpecProjectRevision() != s.projectRevision(ctx, pid)):
@@ -474,21 +480,80 @@ func (s *Service) syncFailover(ctx context.Context, conn *nodes.Conn, st *nagiv1
 	return &witnessAdopt{c, cur}
 }
 
-// holderChanged 在顶替换了持有方（或者轮次变了）以后调用：更新各节点的代理名单；持有方换了节点时，
-// 更新备份节点上的副本登记，改为只认新的持有方（见 docs/snapshot.md#备份节点的实现）。否则备份节点还认原来的
-// 源节点：被换下的一方被攻破时仍能大批删除副本，真正运行容器的一方大批清理时反而被拒绝。
-func (s *Service) holderChanged(pid, name string, moved bool) {
+// holderChanged 在顶替换了持有方（或者轮次变了）以后调用：更新各节点的代理名单；register 为真时（持有方换了节点、
+// 并且见证人确认过）更新备份节点上的副本登记，改为只认新的持有方（见 docs/snapshot.md#备份节点的实现）。否则备份节点
+// 还认原来的源节点：被换下的一方被攻破时仍能大批删除副本，真正运行容器的一方大批清理时反而被拒绝。
+func (s *Service) holderChanged(pid, name string, register bool) {
 	if s.onHolderChanged != nil {
-		s.onHolderChanged(pid, name, moved)
+		s.onHolderChanged(pid, name, register)
 		return
 	}
 	s.refreshLinks()
-	if moved {
+	if register {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			s.registerBackups(ctx, pid, name)
 		}()
+	}
+}
+
+// participantKey 返回顶替里 nodeID 那一方的 mesh 公钥。
+func participantKey(cfg *nagiv1.FailoverConfig, nodeID string) []byte {
+	if cfg.GetB().GetNodeId() == nodeID {
+		return cfg.GetB().GetKey()
+	}
+	return cfg.GetA().GetKey()
+}
+
+// witnessConfirms 判断见证人认的持有方是 key、轮次不小于 epoch。见证人是本面板时 witnessDisagrees 已经核对过；
+// 见证人是节点时，看它最近一次上报里这个容器的票。参与者自己报的「持有方」不可信：被攻破的另一方报一个更大的轮次，
+// 不能就此成为副本登记的源节点（之后可以提交空列表清空异地副本）。
+func (s *Service) witnessConfirms(cfg *nagiv1.FailoverConfig, pid, name string, key []byte, epoch uint64) bool {
+	if cfg.GetWitnessIsPanel() {
+		return true
+	}
+	var report *nagiv1.ReportRequest
+	if s.witnessReport != nil {
+		report = s.witnessReport(cfg.GetWitness().GetNodeId())
+	} else if conn, err := s.Nodes.Peek(cfg.GetWitness().GetNodeId()); err == nil {
+		report = conn.LastReport()
+	}
+	for _, st := range report.GetFailovers() {
+		if st.GetRole() == "witness" && st.GetConfig().GetProjectId() == pid && st.GetConfig().GetContainer() == name {
+			return len(key) > 0 && bytes.Equal(st.GetHolderKey(), key) && st.GetEpoch() >= epoch
+		}
+	}
+	return false
+}
+
+// witnessRetry、witnessGiveUp：见证人还没确认新的持有方时，隔多久再看一次、最多等多久。
+var (
+	witnessRetry  = 15 * time.Second
+	witnessGiveUp = 10 * time.Minute
+)
+
+// registerWhenConfirmed 等见证人确认 nodeID 是持有方以后，更新备份节点上的副本登记。容器又换了节点、或者等到
+// witnessGiveUp 还没确认时放弃（备份节点仍认原来的源节点）。
+func (s *Service) registerWhenConfirmed(pid, name, nodeID string, key []byte, epoch uint64, retry, giveUp time.Duration) {
+	deadline := time.Now().Add(giveUp)
+	for time.Now().Before(deadline) {
+		time.Sleep(retry)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		c, err := s.container(ctx, pid, name)
+		if err != nil || c.NodeID != nodeID {
+			cancel()
+			return
+		}
+		if cfg := failoverOf(c); cfg != nil && s.witnessConfirms(cfg, pid, name, key, epoch) {
+			s.registerBackups(ctx, pid, name)
+			cancel()
+			return
+		}
+		cancel()
+	}
+	if s.Log != nil {
+		s.Log.Warn("见证人没有确认新的持有方，备份节点上的副本登记不改", "project", pid, "container", name, "node", nodeID)
 	}
 }
 
