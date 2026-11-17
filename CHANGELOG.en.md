@@ -8,6 +8,31 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.30.0
+
+### New features
+
+- Container volume files and node files can be renamed, moved and copied, and multiple items can be cut, copied and pasted.
+- Files can be compressed to zip or tar.gz, and zip, tar.gz and tar archives can be extracted.
+- Large files are uploaded in chunks and resume after a network interruption or page refresh, with no 8 GB limit. Uploads show progress, speed and time remaining, and can be paused and canceled.
+- Opening a directory calculates the size of its subdirectories automatically.
+- When pasting items with the same name, you can choose to replace, keep both or skip. Before replacing volume files, you can create a snapshot first.
+- The Projects page adds Reorder, for dragging groups and project cards.
+
+### Improvements
+
+- The sort order and custom order on the Projects page are saved to your account and stay the same across browsers and devices.
+- New cross-node connections on a project's internal network are established faster.
+
+### Fixes
+
+- Fixed an issue where deleting volume files, creating directories and restoring files didn't check permissions for privileged containers.
+- Fixed an issue where an access token without the "Run commands" permission could still change container files.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.30.0 to use the new file management features.
+
 ## v0.29.1
 
 ### New features
