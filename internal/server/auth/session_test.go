@@ -600,3 +600,29 @@ func TestLegacyCookieIgnored(t *testing.T) {
 		t.Fatalf("新名字的 cookie 照常使用：%q", got)
 	}
 }
+
+// R5：L5 修好以后，带 CDN 请求头、再改一下 UA 的版本号，指纹就被当成浏览器更新直接采用，脚本工具照样能用。
+// 现在带 CDN 请求头时 UA 和指纹一起变，要求重新验证并记 session_tls_changed；本人经 CDN、浏览器更新时指纹不变，不受影响。
+func TestSessionCDNHeaderUAChange(t *testing.T) {
+	h := newSessionHarness(t)
+	token := h.login("admin", home)
+	if _, err := h.check(token, home); err != nil {
+		t.Fatal(err)
+	}
+	newer := strings.Replace(chromeUA, "131.0.0.0", "132.0.0.0", 1)
+	var rv *ErrReverify
+	if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: newer, Fingerprint: curlFP, CDN: true}); !errors.As(err, &rv) || rv.Reason != ReasonTLSChanged {
+		t.Fatalf("带 CDN 请求头、改了 UA 的脚本工具应要求重新验证：%v", err)
+	}
+	// 本人经 CDN 访问：指纹是 CDN 回源的，浏览器更新后不变。
+	h2 := newSessionHarness(t)
+	cdn := RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: goFP, CDN: true}
+	token2 := h2.login("admin", cdn)
+	if _, err := h2.check(token2, cdn); err != nil {
+		t.Fatal(err)
+	}
+	cdn.UserAgent = newer
+	if _, err := h2.check(token2, cdn); err != nil {
+		t.Fatalf("经 CDN 访问的本人浏览器更新不应受影响：%v", err)
+	}
+}

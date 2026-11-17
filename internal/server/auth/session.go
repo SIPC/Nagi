@@ -249,6 +249,11 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 		case cur.IsBrowser() && looksLikeTool(fp) && !info.CDN:
 			s.endSession(ctx, st, info, "session_tls_tool", i18n.Errorf("账号 %s 的登录被脚本工具使用，已退出", st.Username).Error(), true)
 			return sessionResult{}, errLoggedOut
+		case info.CDN && st.TLSFP != "" && info.UserAgent != st.UserAgent && !sameClient(st.TLSFP, fp) && reverify == "":
+			// 带 CDN 请求头时，指纹是 CDN 回源的，浏览器更新不会让它变；UA 和指纹一起变了，多半是有人带着这些请求头、
+			// 改了 UA 的版本号用别的客户端来，不能当成浏览器更新直接采用（见 docs/panel.md#会话）。
+			reverify = ReasonTLSChanged
+			s.securityEvent(ctx, st, info, "session_tls_changed", "", nil)
 		case st.TLSFP == "" || info.UserAgent != st.UserAgent:
 			// 第一次看到指纹，或者浏览器更新了（版本号和指纹一起变）。
 			set["tls_fp"] = fp
