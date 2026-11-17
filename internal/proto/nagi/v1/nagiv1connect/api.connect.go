@@ -217,6 +217,18 @@ const (
 	// NodeServiceUnisolateNodeProcedure is the fully-qualified name of the NodeService's UnisolateNode
 	// RPC.
 	NodeServiceUnisolateNodeProcedure = "/nagi.v1.NodeService/UnisolateNode"
+	// NodeServiceListNodeImagesProcedure is the fully-qualified name of the NodeService's
+	// ListNodeImages RPC.
+	NodeServiceListNodeImagesProcedure = "/nagi.v1.NodeService/ListNodeImages"
+	// NodeServiceDeleteNodeImagesProcedure is the fully-qualified name of the NodeService's
+	// DeleteNodeImages RPC.
+	NodeServiceDeleteNodeImagesProcedure = "/nagi.v1.NodeService/DeleteNodeImages"
+	// NodeServicePruneNodeImagesProcedure is the fully-qualified name of the NodeService's
+	// PruneNodeImages RPC.
+	NodeServicePruneNodeImagesProcedure = "/nagi.v1.NodeService/PruneNodeImages"
+	// NodeServicePullNodeImageProcedure is the fully-qualified name of the NodeService's PullNodeImage
+	// RPC.
+	NodeServicePullNodeImageProcedure = "/nagi.v1.NodeService/PullNodeImage"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -1205,6 +1217,12 @@ type NodeServiceClient interface {
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
 	UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
+	// 节点镜像（见 docs/agent.md#节点镜像）：只有管理员能用，访问令牌不能用。
+	ListNodeImages(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeImages], error)
+	DeleteNodeImages(context.Context, *connect.Request[v1.DeleteNodeImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error)
+	PruneNodeImages(context.Context, *connect.Request[v1.PruneNodeImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
+	// 浏览器断开（取消）时停止拉取。
+	PullNodeImage(context.Context, *connect.Request[v1.PullNodeImageRequest]) (*connect.ServerStreamForClient[v1.ImagePullEvent], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -1494,6 +1512,30 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("UnisolateNode")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodeImages: connect.NewClient[v1.NodeRef, v1.NodeImages](
+			httpClient,
+			baseURL+NodeServiceListNodeImagesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("ListNodeImages")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteNodeImages: connect.NewClient[v1.DeleteNodeImagesRequest, v1.DeleteImagesResponse](
+			httpClient,
+			baseURL+NodeServiceDeleteNodeImagesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeImages")),
+			connect.WithClientOptions(opts...),
+		),
+		pruneNodeImages: connect.NewClient[v1.PruneNodeImagesRequest, v1.PruneImagesResponse](
+			httpClient,
+			baseURL+NodeServicePruneNodeImagesProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("PruneNodeImages")),
+			connect.WithClientOptions(opts...),
+		),
+		pullNodeImage: connect.NewClient[v1.PullNodeImageRequest, v1.ImagePullEvent](
+			httpClient,
+			baseURL+NodeServicePullNodeImageProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("PullNodeImage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1545,6 +1587,10 @@ type nodeServiceClient struct {
 	renameNodeTag         *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 	isolateNode           *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	unisolateNode         *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
+	listNodeImages        *connect.Client[v1.NodeRef, v1.NodeImages]
+	deleteNodeImages      *connect.Client[v1.DeleteNodeImagesRequest, v1.DeleteImagesResponse]
+	pruneNodeImages       *connect.Client[v1.PruneNodeImagesRequest, v1.PruneImagesResponse]
+	pullNodeImage         *connect.Client[v1.PullNodeImageRequest, v1.ImagePullEvent]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -1777,6 +1823,26 @@ func (c *nodeServiceClient) UnisolateNode(ctx context.Context, req *connect.Requ
 	return c.unisolateNode.CallUnary(ctx, req)
 }
 
+// ListNodeImages calls nagi.v1.NodeService.ListNodeImages.
+func (c *nodeServiceClient) ListNodeImages(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeImages], error) {
+	return c.listNodeImages.CallUnary(ctx, req)
+}
+
+// DeleteNodeImages calls nagi.v1.NodeService.DeleteNodeImages.
+func (c *nodeServiceClient) DeleteNodeImages(ctx context.Context, req *connect.Request[v1.DeleteNodeImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error) {
+	return c.deleteNodeImages.CallUnary(ctx, req)
+}
+
+// PruneNodeImages calls nagi.v1.NodeService.PruneNodeImages.
+func (c *nodeServiceClient) PruneNodeImages(ctx context.Context, req *connect.Request[v1.PruneNodeImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error) {
+	return c.pruneNodeImages.CallUnary(ctx, req)
+}
+
+// PullNodeImage calls nagi.v1.NodeService.PullNodeImage.
+func (c *nodeServiceClient) PullNodeImage(ctx context.Context, req *connect.Request[v1.PullNodeImageRequest]) (*connect.ServerStreamForClient[v1.ImagePullEvent], error) {
+	return c.pullNodeImage.CallServerStream(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -1858,6 +1924,12 @@ type NodeServiceHandler interface {
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
 	UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
+	// 节点镜像（见 docs/agent.md#节点镜像）：只有管理员能用，访问令牌不能用。
+	ListNodeImages(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeImages], error)
+	DeleteNodeImages(context.Context, *connect.Request[v1.DeleteNodeImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error)
+	PruneNodeImages(context.Context, *connect.Request[v1.PruneNodeImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
+	// 浏览器断开（取消）时停止拉取。
+	PullNodeImage(context.Context, *connect.Request[v1.PullNodeImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -2143,6 +2215,30 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("UnisolateNode")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceListNodeImagesHandler := connect.NewUnaryHandler(
+		NodeServiceListNodeImagesProcedure,
+		svc.ListNodeImages,
+		connect.WithSchema(nodeServiceMethods.ByName("ListNodeImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceDeleteNodeImagesHandler := connect.NewUnaryHandler(
+		NodeServiceDeleteNodeImagesProcedure,
+		svc.DeleteNodeImages,
+		connect.WithSchema(nodeServiceMethods.ByName("DeleteNodeImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServicePruneNodeImagesHandler := connect.NewUnaryHandler(
+		NodeServicePruneNodeImagesProcedure,
+		svc.PruneNodeImages,
+		connect.WithSchema(nodeServiceMethods.ByName("PruneNodeImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServicePullNodeImageHandler := connect.NewServerStreamHandler(
+		NodeServicePullNodeImageProcedure,
+		svc.PullNodeImage,
+		connect.WithSchema(nodeServiceMethods.ByName("PullNodeImage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -2237,6 +2333,14 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceIsolateNodeHandler.ServeHTTP(w, r)
 		case NodeServiceUnisolateNodeProcedure:
 			nodeServiceUnisolateNodeHandler.ServeHTTP(w, r)
+		case NodeServiceListNodeImagesProcedure:
+			nodeServiceListNodeImagesHandler.ServeHTTP(w, r)
+		case NodeServiceDeleteNodeImagesProcedure:
+			nodeServiceDeleteNodeImagesHandler.ServeHTTP(w, r)
+		case NodeServicePruneNodeImagesProcedure:
+			nodeServicePruneNodeImagesHandler.ServeHTTP(w, r)
+		case NodeServicePullNodeImageProcedure:
+			nodeServicePullNodeImageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2428,6 +2532,22 @@ func (UnimplementedNodeServiceHandler) IsolateNode(context.Context, *connect.Req
 
 func (UnimplementedNodeServiceHandler) UnisolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.UnisolateNode is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) ListNodeImages(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeImages], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.ListNodeImages is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) DeleteNodeImages(context.Context, *connect.Request[v1.DeleteNodeImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.DeleteNodeImages is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) PruneNodeImages(context.Context, *connect.Request[v1.PruneNodeImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.PruneNodeImages is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) PullNodeImage(context.Context, *connect.Request[v1.PullNodeImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.PullNodeImage is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.

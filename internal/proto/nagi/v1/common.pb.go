@@ -2824,7 +2824,9 @@ type NodeInfo struct {
 	// 用旧版本回来是新版本没能运行、节点自动换回去了（见 docs/control-plane.md#接口设计）。旧版本的节点不报。
 	StartedAt int64 `protobuf:"varint,21,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	// 节点支持文件的改名、移动、复制、压缩、解压、目录大小和分块上传（旧版本的节点不报）。
-	FileOps       bool `protobuf:"varint,22,opt,name=file_ops,json=fileOps,proto3" json:"file_ops,omitempty"`
+	FileOps bool `protobuf:"varint,22,opt,name=file_ops,json=fileOps,proto3" json:"file_ops,omitempty"`
+	// 节点支持镜像管理（AgentService.ListImages 等，旧版本的节点不报）。
+	ImageOps      bool `protobuf:"varint,23,opt,name=image_ops,json=imageOps,proto3" json:"image_ops,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3009,6 +3011,13 @@ func (x *NodeInfo) GetStartedAt() int64 {
 func (x *NodeInfo) GetFileOps() bool {
 	if x != nil {
 		return x.FileOps
+	}
+	return false
+}
+
+func (x *NodeInfo) GetImageOps() bool {
+	if x != nil {
+		return x.ImageOps
 	}
 	return false
 }
@@ -5853,7 +5862,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xde\x05\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xfb\x05\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -5880,7 +5889,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\fegress_error\x18\x14 \x01(\tR\vegressError\x12\x1d\n" +
 	"\n" +
 	"started_at\x18\x15 \x01(\x03R\tstartedAt\x12\x19\n" +
-	"\bfile_ops\x18\x16 \x01(\bR\afileOps\"\x89\x01\n" +
+	"\bfile_ops\x18\x16 \x01(\bR\afileOps\x12\x1b\n" +
+	"\timage_ops\x18\x17 \x01(\bR\bimageOps\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +

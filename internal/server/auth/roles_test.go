@@ -47,6 +47,29 @@ func TestAllowed(t *testing.T) {
 	}
 }
 
+// 节点镜像只给管理员，访问令牌（包括管理员的、可修改的）都不能用（见 docs/agent.md#节点镜像）。
+func TestNodeImagesAdminOnly(t *testing.T) {
+	admin := User{ID: 1, Role: RoleAdmin, TokenID: 1, AllowWrite: true}
+	for _, method := range []string{"ListNodeImages", "DeleteNodeImages", "PruneNodeImages", "PullNodeImage"} {
+		p := "/nagi.v1.NodeService/" + method
+		if !Allowed(RoleAdmin, p) {
+			t.Errorf("管理员应能调用 %s", method)
+		}
+		for _, role := range []string{RoleOperator, RoleViewer} {
+			if Allowed(role, p) {
+				t.Errorf("%s 不应该能调用 %s", role, method)
+			}
+		}
+		if TokenAllowed(admin, p) {
+			t.Errorf("访问令牌不应该能调用 %s", method)
+		}
+	}
+	// 磁盘明细仍然可以用令牌查看（MCP 的 inspect_node_storage）。
+	if !TokenAllowed(admin, "/nagi.v1.NodeService/GetNodeStorage") {
+		t.Error("令牌应能查看节点的磁盘明细")
+	}
+}
+
 // 新增节点访问接口时加到这里：操作员和只读账号都不能调用。
 func TestNodeAccessAdminOnly(t *testing.T) {
 	for _, method := range []string{

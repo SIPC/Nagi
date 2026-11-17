@@ -239,8 +239,11 @@ const nodesRoute = createRoute({
 const nodeRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/nodes/$nodeId",
-  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab; path?: string; range?: MetricRange } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: NodeTab; path?: string; range?: MetricRange; q?: string; sort?: string } => ({
     range: rangeSearch(search.range),
+    // 镜像标签的筛选和排序（pages/node-images.tsx）。
+    q: typeof search.q === "string" && search.q !== "" ? search.q : undefined,
+    sort: search.sort === "created" || search.sort === "name" ? search.sort : undefined,
     tab: nodeTabs.some((t) => t.value === search.tab) ? (search.tab as NodeTab) : undefined,
     path: typeof search.path === "string" && search.path.startsWith("/") ? search.path : undefined,
   }),

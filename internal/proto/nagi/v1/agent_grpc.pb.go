@@ -89,6 +89,10 @@ const (
 	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
 	AgentService_SetAuditSink_FullMethodName          = "/nagi.v1.AgentService/SetAuditSink"
 	AgentService_ReadAuditLog_FullMethodName          = "/nagi.v1.AgentService/ReadAuditLog"
+	AgentService_ListImages_FullMethodName            = "/nagi.v1.AgentService/ListImages"
+	AgentService_DeleteImages_FullMethodName          = "/nagi.v1.AgentService/DeleteImages"
+	AgentService_PruneImages_FullMethodName           = "/nagi.v1.AgentService/PruneImages"
+	AgentService_PullImage_FullMethodName             = "/nagi.v1.AgentService/PullImage"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -226,6 +230,15 @@ type AgentServiceClient interface {
 	SetAuditSink(ctx context.Context, in *SetAuditSinkRequest, opts ...grpc.CallOption) (*SetAuditSinkResponse, error)
 	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
 	ReadAuditLog(ctx context.Context, in *ReadAuditLogRequest, opts ...grpc.CallOption) (*ReadAuditLogResponse, error)
+	// ---- 节点镜像（见 docs/agent.md#节点镜像），v0.31.0 起支持（NodeInfo.image_ops），更早的节点返回 Unimplemented ----
+	// 列出镜像、使用它们的容器和 Nagi 要用的原因，以及一键清理会删除哪些。
+	ListImages(ctx context.Context, in *ListImagesRequest, opts ...grpc.CallOption) (*NodeImages, error)
+	// 删除镜像或标签。节点自己判断：有容器使用的、Nagi 要用的都拒绝，不强制删除。
+	DeleteImages(ctx context.Context, in *DeleteImagesRequest, opts ...grpc.CallOption) (*DeleteImagesResponse, error)
+	// 一键清理：只删除请求里列出、而且节点重新判断后仍然可以清理的镜像，可选清理构建缓存。
+	PruneImages(ctx context.Context, in *PruneImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error)
+	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
+	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error)
 }
 
 type agentServiceClient struct {
@@ -1086,6 +1099,55 @@ func (c *agentServiceClient) ReadAuditLog(ctx context.Context, in *ReadAuditLogR
 	return out, nil
 }
 
+func (c *agentServiceClient) ListImages(ctx context.Context, in *ListImagesRequest, opts ...grpc.CallOption) (*NodeImages, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeImages)
+	err := c.cc.Invoke(ctx, AgentService_ListImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) DeleteImages(ctx context.Context, in *DeleteImagesRequest, opts ...grpc.CallOption) (*DeleteImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteImagesResponse)
+	err := c.cc.Invoke(ctx, AgentService_DeleteImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) PruneImages(ctx context.Context, in *PruneImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PruneImagesResponse)
+	err := c.cc.Invoke(ctx, AgentService_PruneImages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[18], AgentService_PullImage_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PullImageRequest, ImagePullEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_PullImageClient = grpc.ServerStreamingClient[ImagePullEvent]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -1221,6 +1283,15 @@ type AgentServiceServer interface {
 	SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error)
 	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
 	ReadAuditLog(context.Context, *ReadAuditLogRequest) (*ReadAuditLogResponse, error)
+	// ---- 节点镜像（见 docs/agent.md#节点镜像），v0.31.0 起支持（NodeInfo.image_ops），更早的节点返回 Unimplemented ----
+	// 列出镜像、使用它们的容器和 Nagi 要用的原因，以及一键清理会删除哪些。
+	ListImages(context.Context, *ListImagesRequest) (*NodeImages, error)
+	// 删除镜像或标签。节点自己判断：有容器使用的、Nagi 要用的都拒绝，不强制删除。
+	DeleteImages(context.Context, *DeleteImagesRequest) (*DeleteImagesResponse, error)
+	// 一键清理：只删除请求里列出、而且节点重新判断后仍然可以清理的镜像，可选清理构建缓存。
+	PruneImages(context.Context, *PruneImagesRequest) (*PruneImagesResponse, error)
+	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
+	PullImage(*PullImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -1440,6 +1511,18 @@ func (UnimplementedAgentServiceServer) SetAuditSink(context.Context, *SetAuditSi
 }
 func (UnimplementedAgentServiceServer) ReadAuditLog(context.Context, *ReadAuditLogRequest) (*ReadAuditLogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReadAuditLog not implemented")
+}
+func (UnimplementedAgentServiceServer) ListImages(context.Context, *ListImagesRequest) (*NodeImages, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListImages not implemented")
+}
+func (UnimplementedAgentServiceServer) DeleteImages(context.Context, *DeleteImagesRequest) (*DeleteImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteImages not implemented")
+}
+func (UnimplementedAgentServiceServer) PruneImages(context.Context, *PruneImagesRequest) (*PruneImagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PruneImages not implemented")
+}
+func (UnimplementedAgentServiceServer) PullImage(*PullImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error {
+	return status.Error(codes.Unimplemented, "method PullImage not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -2588,6 +2671,71 @@ func _AgentService_ReadAuditLog_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_ListImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListImagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ListImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ListImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ListImages(ctx, req.(*ListImagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_DeleteImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteImagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).DeleteImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_DeleteImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).DeleteImages(ctx, req.(*DeleteImagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_PruneImages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PruneImagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).PruneImages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_PruneImages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).PruneImages(ctx, req.(*PruneImagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_PullImage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(PullImageRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).PullImage(m, &grpc.GenericServerStream[PullImageRequest, ImagePullEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_PullImageServer = grpc.ServerStreamingServer[ImagePullEvent]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2803,6 +2951,18 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ReadAuditLog",
 			Handler:    _AgentService_ReadAuditLog_Handler,
 		},
+		{
+			MethodName: "ListImages",
+			Handler:    _AgentService_ListImages_Handler,
+		},
+		{
+			MethodName: "DeleteImages",
+			Handler:    _AgentService_DeleteImages_Handler,
+		},
+		{
+			MethodName: "PruneImages",
+			Handler:    _AgentService_PruneImages_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -2895,6 +3055,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "MigrateResume",
 			Handler:       _AgentService_MigrateResume_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "PullImage",
+			Handler:       _AgentService_PullImage_Handler,
 			ServerStreams: true,
 		},
 	},

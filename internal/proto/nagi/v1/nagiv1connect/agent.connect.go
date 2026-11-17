@@ -225,6 +225,16 @@ const (
 	// AgentServiceReadAuditLogProcedure is the fully-qualified name of the AgentService's ReadAuditLog
 	// RPC.
 	AgentServiceReadAuditLogProcedure = "/nagi.v1.AgentService/ReadAuditLog"
+	// AgentServiceListImagesProcedure is the fully-qualified name of the AgentService's ListImages RPC.
+	AgentServiceListImagesProcedure = "/nagi.v1.AgentService/ListImages"
+	// AgentServiceDeleteImagesProcedure is the fully-qualified name of the AgentService's DeleteImages
+	// RPC.
+	AgentServiceDeleteImagesProcedure = "/nagi.v1.AgentService/DeleteImages"
+	// AgentServicePruneImagesProcedure is the fully-qualified name of the AgentService's PruneImages
+	// RPC.
+	AgentServicePruneImagesProcedure = "/nagi.v1.AgentService/PruneImages"
+	// AgentServicePullImageProcedure is the fully-qualified name of the AgentService's PullImage RPC.
+	AgentServicePullImageProcedure = "/nagi.v1.AgentService/PullImage"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -357,6 +367,15 @@ type AgentServiceClient interface {
 	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
 	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
 	ReadAuditLog(context.Context, *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error)
+	// ---- 节点镜像（见 docs/agent.md#节点镜像），v0.31.0 起支持（NodeInfo.image_ops），更早的节点返回 Unimplemented ----
+	// 列出镜像、使用它们的容器和 Nagi 要用的原因，以及一键清理会删除哪些。
+	ListImages(context.Context, *connect.Request[v1.ListImagesRequest]) (*connect.Response[v1.NodeImages], error)
+	// 删除镜像或标签。节点自己判断：有容器使用的、Nagi 要用的都拒绝，不强制删除。
+	DeleteImages(context.Context, *connect.Request[v1.DeleteImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error)
+	// 一键清理：只删除请求里列出、而且节点重新判断后仍然可以清理的镜像，可选清理构建缓存。
+	PruneImages(context.Context, *connect.Request[v1.PruneImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
+	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
+	PullImage(context.Context, *connect.Request[v1.PullImageRequest]) (*connect.ServerStreamForClient[v1.ImagePullEvent], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -790,6 +809,30 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("ReadAuditLog")),
 			connect.WithClientOptions(opts...),
 		),
+		listImages: connect.NewClient[v1.ListImagesRequest, v1.NodeImages](
+			httpClient,
+			baseURL+AgentServiceListImagesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ListImages")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteImages: connect.NewClient[v1.DeleteImagesRequest, v1.DeleteImagesResponse](
+			httpClient,
+			baseURL+AgentServiceDeleteImagesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("DeleteImages")),
+			connect.WithClientOptions(opts...),
+		),
+		pruneImages: connect.NewClient[v1.PruneImagesRequest, v1.PruneImagesResponse](
+			httpClient,
+			baseURL+AgentServicePruneImagesProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("PruneImages")),
+			connect.WithClientOptions(opts...),
+		),
+		pullImage: connect.NewClient[v1.PullImageRequest, v1.ImagePullEvent](
+			httpClient,
+			baseURL+AgentServicePullImageProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("PullImage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -865,6 +908,10 @@ type agentServiceClient struct {
 	cancelUpgrade         *connect.Client[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse]
 	setAuditSink          *connect.Client[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse]
 	readAuditLog          *connect.Client[v1.ReadAuditLogRequest, v1.ReadAuditLogResponse]
+	listImages            *connect.Client[v1.ListImagesRequest, v1.NodeImages]
+	deleteImages          *connect.Client[v1.DeleteImagesRequest, v1.DeleteImagesResponse]
+	pruneImages           *connect.Client[v1.PruneImagesRequest, v1.PruneImagesResponse]
+	pullImage             *connect.Client[v1.PullImageRequest, v1.ImagePullEvent]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -1217,6 +1264,26 @@ func (c *agentServiceClient) ReadAuditLog(ctx context.Context, req *connect.Requ
 	return c.readAuditLog.CallUnary(ctx, req)
 }
 
+// ListImages calls nagi.v1.AgentService.ListImages.
+func (c *agentServiceClient) ListImages(ctx context.Context, req *connect.Request[v1.ListImagesRequest]) (*connect.Response[v1.NodeImages], error) {
+	return c.listImages.CallUnary(ctx, req)
+}
+
+// DeleteImages calls nagi.v1.AgentService.DeleteImages.
+func (c *agentServiceClient) DeleteImages(ctx context.Context, req *connect.Request[v1.DeleteImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error) {
+	return c.deleteImages.CallUnary(ctx, req)
+}
+
+// PruneImages calls nagi.v1.AgentService.PruneImages.
+func (c *agentServiceClient) PruneImages(ctx context.Context, req *connect.Request[v1.PruneImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error) {
+	return c.pruneImages.CallUnary(ctx, req)
+}
+
+// PullImage calls nagi.v1.AgentService.PullImage.
+func (c *agentServiceClient) PullImage(ctx context.Context, req *connect.Request[v1.PullImageRequest]) (*connect.ServerStreamForClient[v1.ImagePullEvent], error) {
+	return c.pullImage.CallServerStream(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	// ---- 容器 ----
@@ -1347,6 +1414,15 @@ type AgentServiceHandler interface {
 	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
 	// 读取节点本地审计，由面板代为外送（见 docs/audit.md#节点本地审计）。v0.29.1 起支持，更早的节点返回 Unimplemented。
 	ReadAuditLog(context.Context, *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error)
+	// ---- 节点镜像（见 docs/agent.md#节点镜像），v0.31.0 起支持（NodeInfo.image_ops），更早的节点返回 Unimplemented ----
+	// 列出镜像、使用它们的容器和 Nagi 要用的原因，以及一键清理会删除哪些。
+	ListImages(context.Context, *connect.Request[v1.ListImagesRequest]) (*connect.Response[v1.NodeImages], error)
+	// 删除镜像或标签。节点自己判断：有容器使用的、Nagi 要用的都拒绝，不强制删除。
+	DeleteImages(context.Context, *connect.Request[v1.DeleteImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error)
+	// 一键清理：只删除请求里列出、而且节点重新判断后仍然可以清理的镜像，可选清理构建缓存。
+	PruneImages(context.Context, *connect.Request[v1.PruneImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
+	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
+	PullImage(context.Context, *connect.Request[v1.PullImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -1776,6 +1852,30 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("ReadAuditLog")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceListImagesHandler := connect.NewUnaryHandler(
+		AgentServiceListImagesProcedure,
+		svc.ListImages,
+		connect.WithSchema(agentServiceMethods.ByName("ListImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceDeleteImagesHandler := connect.NewUnaryHandler(
+		AgentServiceDeleteImagesProcedure,
+		svc.DeleteImages,
+		connect.WithSchema(agentServiceMethods.ByName("DeleteImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServicePruneImagesHandler := connect.NewUnaryHandler(
+		AgentServicePruneImagesProcedure,
+		svc.PruneImages,
+		connect.WithSchema(agentServiceMethods.ByName("PruneImages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServicePullImageHandler := connect.NewServerStreamHandler(
+		AgentServicePullImageProcedure,
+		svc.PullImage,
+		connect.WithSchema(agentServiceMethods.ByName("PullImage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServicePutContainerProcedure:
@@ -1918,6 +2018,14 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSetAuditSinkHandler.ServeHTTP(w, r)
 		case AgentServiceReadAuditLogProcedure:
 			agentServiceReadAuditLogHandler.ServeHTTP(w, r)
+		case AgentServiceListImagesProcedure:
+			agentServiceListImagesHandler.ServeHTTP(w, r)
+		case AgentServiceDeleteImagesProcedure:
+			agentServiceDeleteImagesHandler.ServeHTTP(w, r)
+		case AgentServicePruneImagesProcedure:
+			agentServicePruneImagesHandler.ServeHTTP(w, r)
+		case AgentServicePullImageProcedure:
+			agentServicePullImageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2205,4 +2313,20 @@ func (UnimplementedAgentServiceHandler) SetAuditSink(context.Context, *connect.R
 
 func (UnimplementedAgentServiceHandler) ReadAuditLog(context.Context, *connect.Request[v1.ReadAuditLogRequest]) (*connect.Response[v1.ReadAuditLogResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ReadAuditLog is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ListImages(context.Context, *connect.Request[v1.ListImagesRequest]) (*connect.Response[v1.NodeImages], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ListImages is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) DeleteImages(context.Context, *connect.Request[v1.DeleteImagesRequest]) (*connect.Response[v1.DeleteImagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.DeleteImages is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) PruneImages(context.Context, *connect.Request[v1.PruneImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.PruneImages is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) PullImage(context.Context, *connect.Request[v1.PullImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.PullImage is not implemented"))
 }

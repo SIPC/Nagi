@@ -497,6 +497,8 @@ message NodeInfo {
   int64 started_at = 21;
   // 节点支持文件的改名、移动、复制、压缩、解压、目录大小和分块上传（旧版本的节点不报）。
   bool file_ops = 22;
+  // 节点支持镜像管理（AgentService.ListImages 等，旧版本的节点不报）。
+  bool image_ops = 23;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。

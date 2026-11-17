@@ -67,7 +67,7 @@ func auditTarget(req any) string {
 	}
 	var parts []string
 	r := m.ProtoReflect()
-	for _, name := range []protoreflect.Name{"project_id", "container", "path", "name", "version"} {
+	for _, name := range []protoreflect.Name{"project_id", "container", "path", "name", "version", "image"} {
 		f := r.Descriptor().Fields().ByName(name)
 		if f == nil || f.Kind() != protoreflect.StringKind || f.Cardinality() == protoreflect.Repeated {
 			continue
