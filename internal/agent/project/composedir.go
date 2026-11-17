@@ -18,8 +18,8 @@ import (
 // replacedSuffix 加在被接管的容器名后面：原来的容器名（container_name）会和新容器冲突。
 const replacedSuffix = "-replaced-by-nagi"
 
-// checkProjectDir 在部署前检查现有目录：不能在 Nagi 的数据目录里，也不能和本节点其他容器的目录
-// 或现有目录重叠。面板只让管理员设置现有目录，这里是节点自己的一层，和导入时的检查一致。
+// checkProjectDir 在部署前检查现有目录：不能在 Nagi 的数据目录里，也不能和本节点其他容器的目录、
+// 现有目录或副本的存放位置重叠。面板只让管理员设置现有目录，这里是节点自己的一层，和导入时的检查一致。
 func (m *Manager) checkProjectDir(ctx context.Context, s *nagiv1.ContainerSpec) error {
 	dir := s.GetConfig().GetProjectDir()
 	if dir == "" {
@@ -33,6 +33,13 @@ func (m *Manager) checkProjectDir(ctx context.Context, s *nagiv1.ContainerSpec) 
 		if within(real, d) || within(d, real) {
 			return invalid("现有目录 %s 是（或包含）Nagi 的数据目录", dir)
 		}
+	}
+	// 副本的存放位置：容器以 root 运行、挂载了现有目录时，容器被攻破后可以改动里面的副本。
+	if b := m.replicaBaseOverlap(real); b != "" {
+		return invalid("现有目录 %s 与此节点上副本的存放位置 %s 重叠", dir, b)
+	}
+	if b := m.replicaBaseOverlap(dir); b != "" {
+		return invalid("现有目录 %s 与此节点上副本的存放位置 %s 重叠", dir, b)
 	}
 	for _, c := range m.List(ctx) {
 		if c.Spec.GetProjectId() == s.GetProjectId() && c.Spec.GetName() == s.GetName() {

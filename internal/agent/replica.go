@@ -409,11 +409,13 @@ const replicaIdle = 2 * time.Minute
 func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
 	var (
 		files, path string
-		f           *os.File
-		tmp, dest   string
-		count       uint32
-		unlock      func()
-		guard       *metrics.DiskGuard
+		// root 是副本的 files 目录：写入都经过它，副本里被换成指向外面的符号链接时拒绝，不会写到别处（见 openReplicaFiles）。
+		root      *os.Root
+		f         *os.File
+		tmp, dest string // 相对 root 的路径
+		count     uint32
+		unlock    func()
+		guard     *metrics.DiskGuard
 	)
 	finish := func() error {
 		if f == nil {
@@ -422,10 +424,10 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 		err := f.Close()
 		f = nil
 		if err == nil {
-			err = os.Rename(tmp, dest)
+			err = root.Rename(tmp, dest)
 		}
 		if err != nil {
-			os.Remove(tmp)
+			root.Remove(tmp)
 			return err
 		}
 		count++
@@ -434,7 +436,10 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 	defer func() {
 		if f != nil {
 			f.Close()
-			os.Remove(tmp)
+			root.Remove(tmp)
+		}
+		if root != nil {
+			root.Close()
 		}
 		if unlock != nil {
 			unlock()
@@ -488,6 +493,9 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer(), true); err != nil {
 				return err
 			}
+			if root, err = openReplicaFiles(files); err != nil {
+				return err
+			}
 			guard = &metrics.DiskGuard{Dir: files}
 		}
 		if c.GetPath() != path {
@@ -495,14 +503,15 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 				return err
 			}
 			path = c.GetPath()
-			if dest, err = project.ReplicaPath(files, path); err != nil {
+			if _, err := project.ReplicaPath(files, path); err != nil {
 				return status.Error(codes.InvalidArgument, err.Error())
 			}
-			if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+			dest = filepath.FromSlash(path)
+			if err := root.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 				return err
 			}
 			tmp = dest + replicaTempMark + "-" + randomSuffix()
-			if f, err = os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
+			if f, err = root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
 				return err
 			}
 		}
@@ -513,6 +522,21 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			return err
 		}
 	}
+}
+
+// openReplicaFiles 打开副本的 files 目录作为 os.Root，之后的写入都在它里面解析路径：里面的符号链接指向外面时拒绝。
+// 副本目录和 files 本身是符号链接时也拒绝（存放位置被容器碰到时，可能被换成链接）。
+func openReplicaFiles(files string) (*os.Root, error) {
+	for _, p := range []string{filepath.Dir(files), files} {
+		info, err := os.Lstat(p)
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
+			return nil, status.Errorf(codes.FailedPrecondition, "副本目录 %s 不是普通目录", p)
+		}
+	}
+	return os.OpenRoot(files)
 }
 
 func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaCommitRequest) (*nagiv1.ReplicaCommitResponse, error) {

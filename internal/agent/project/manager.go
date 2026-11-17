@@ -79,6 +79,9 @@ type Manager struct {
 	ProjectsRoot func() string
 	// ReplicaRoots 返回本节点保存的副本的目录，容器目录不能和它们重叠。
 	ReplicaRoots func() []string
+	// ReplicaBases 返回副本的存放位置（默认目录、<节点目录>/replicas、各个副本所在的位置、正在移入的位置）。
+	// 容器目录和现有目录不能等于、包含它们，也不能在它们下面：里面还没有副本时，之后收到的副本也会放进去。
+	ReplicaBases func() []string
 
 	restarts managedRestarts
 	images   imageUpdates
@@ -298,6 +301,18 @@ func (m *Manager) Dirs(ctx context.Context) []string {
 	return out
 }
 
+// ManagedDirs 返回所有容器目录和现有目录（compose 的 project_dir）：副本的存放位置不能和它们重叠。
+func (m *Manager) ManagedDirs(ctx context.Context) []string {
+	var out []string
+	for _, c := range m.List(ctx) {
+		out = append(out, c.Spec.GetDir())
+		if d := c.Spec.GetConfig().GetProjectDir(); d != "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 // ProjectName 返回项目名称，本节点上没有这个项目的容器时返回 ID。用于告警内容。
 func (m *Manager) ProjectName(ctx context.Context, projectID string) string {
 	for _, c := range m.projectContainers(ctx, projectID) {
@@ -399,7 +414,60 @@ func (m *Manager) CheckDir(ctx context.Context, dir string) (string, error) {
 			}
 		}
 	}
+	if b := m.replicaBaseOverlap(dir); b != "" {
+		return "", invalid("目录与此节点上副本的存放位置 %s 重叠，请更换目录", b)
+	}
 	return dir, nil
+}
+
+// replicaBaseOverlap 返回和 dir 重叠（相同、包含或在里面）的副本存放位置，没有时为空。按字面和解开符号链接后的路径各比一次。
+func (m *Manager) replicaBaseOverlap(dir string) string {
+	if m.ReplicaBases == nil {
+		return ""
+	}
+	paths := []string{dir}
+	if real := resolveExisting(dir); real != dir {
+		paths = append(paths, real)
+	}
+	for _, b := range m.ReplicaBases() {
+		if b == "" {
+			continue
+		}
+		bases := []string{b}
+		if real := resolveExisting(b); real != b {
+			bases = append(bases, real)
+		}
+		for _, p := range paths {
+			for _, bb := range bases {
+				if within(p, bb) || within(bb, p) {
+					return b
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// resolveExisting 解开路径里已经存在的部分的符号链接，再接上还不存在的部分；出错时原样返回。
+func resolveExisting(p string) string {
+	var rest []string
+	cur := filepath.Clean(p)
+	for {
+		if _, err := os.Lstat(cur); err == nil {
+			break
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		rest = append([]string{filepath.Base(cur)}, rest...)
+		cur = parent
+	}
+	real, err := filepath.EvalSymlinks(cur)
+	if err != nil {
+		return p
+	}
+	return filepath.Join(append([]string{real}, rest...)...)
 }
 
 // linkBelow 判断 dir 在 root 下面时，root 以下已经存在的各级里有没有符号链接。目录由节点以 root 身份创建，

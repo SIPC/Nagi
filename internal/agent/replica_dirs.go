@@ -211,6 +211,27 @@ func (r *replicas) roots() []string {
 	return out
 }
 
+// bases 返回所有存放位置：<节点目录>/replicas、默认目录、各个副本所在的位置、正在往里移动副本的位置。
+// 容器目录、现有目录不能和它们重叠（见 project.Manager.ReplicaBases）：即使里面还没有副本，之后收到的副本也会放进去。
+func (r *replicas) bases() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := []string{r.dir}
+	add := func(b string) {
+		if b != "" && !slices.Contains(out, b) {
+			out = append(out, b)
+		}
+	}
+	add(r.idx.Dir)
+	for _, l := range r.idx.Locations {
+		add(l.Base)
+	}
+	for _, m := range r.idx.Moving {
+		add(m)
+	}
+	return out
+}
+
 // usageDirs 是统计副本占用时要算的目录：默认目录、<节点目录>/replicas，加上不在它们下面的副本。
 func (r *replicas) usageDirs() []string {
 	def, _ := r.defaultDir()
@@ -309,7 +330,7 @@ func invalid(format string, args ...any) error {
 
 // checkBase 校验存放位置并建好目录，返回真实路径。dir 和默认的 <节点目录>/replicas 是同一个目录时返回 r.dir。
 // 规则：绝对路径、不含 ..；解开符号链接以后按真实路径检查：不能是 / 和系统目录，不能在 Nagi 的数据目录里或者包含它，
-// 不能和容器目录重叠、包含项目根目录，不能在节点文件禁止访问的目录里、别的副本的目录里；
+// 不能和容器目录、现有目录重叠，不能在项目根目录里或者包含它，不能在节点文件禁止访问的目录里、别的副本的目录里；
 // 已经存在的各级目录都要属于 root（或节点进程的用户），而且其他用户不可写（上级目录有粘滞位时除外）。
 func (r *replicas) checkBase(dir string) (string, error) {
 	dir = strings.TrimSpace(dir)
@@ -360,9 +381,10 @@ func (r *replicas) checkBase(dir string) (string, error) {
 			}
 		}
 	}
+	// 项目根目录下面是操作员可以选的容器目录，存放位置放在里面时，操作员能抢先占用它（见 docs/snapshot.md#副本的存放位置）。
 	if r.projectsRoot != nil {
-		if root := realOrSelf(r.projectsRoot()); root != "" && pathUnder(root, real) {
-			return "", invalid("存放位置不能包含项目根目录 %s", root)
+		if root := realOrSelf(r.projectsRoot()); root != "" && (pathUnder(root, real) || pathUnder(real, root)) {
+			return "", invalid("存放位置不能在项目根目录 %s 里，也不能包含它", root)
 		}
 	}
 	if r.denied != nil && r.denied(real) {

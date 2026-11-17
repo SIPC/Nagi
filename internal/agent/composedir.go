@@ -79,6 +79,13 @@ func (s *agentService) InspectComposeDir(ctx context.Context, req *nagiv1.Inspec
 			return nil, status.Errorf(codes.InvalidArgument, "%s 是（或包含）Nagi 管理的容器目录，无法导入", d)
 		}
 	}
+	if s.node.replicas != nil {
+		for _, b := range s.node.replicas.bases() {
+			if b = realOrSelf(b); within(real, b) || within(b, real) {
+				return nil, status.Errorf(codes.InvalidArgument, "%s 和此节点上副本的存放位置重叠，无法导入", dir)
+			}
+		}
+	}
 	out := &nagiv1.InspectComposeDirResponse{Path: dir, Volumes: map[string]string{}}
 	for _, n := range composeNames {
 		text, err := readLimited(filepath.Join(dir, n))

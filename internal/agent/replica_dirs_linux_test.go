@@ -12,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/db"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -79,6 +82,21 @@ func checkReplicaFiles(t *testing.T, root, name string) {
 
 func discard(string) {}
 
+// testManager 建一个只有空数据库的容器管理器（不连 Docker），用来测目录的检查。
+func testManager(t *testing.T) *project.Manager {
+	t.Helper()
+	d, err := db.OpenMigrated(context.Background(), filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { d.Close() })
+	m, err := project.NewManager(d, nil, project.DefaultSubnetPool, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
 func TestReplicaBaseRules(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("需要 root：要改目录属主")
@@ -125,6 +143,7 @@ func TestReplicaBaseRules(t *testing.T) {
 		"容器目录里":           filepath.Join(container, "replicas"),
 		"包含容器目录":          filepath.Join(tmp, "srv", "nagi", "web"),
 		"包含项目根目录":         filepath.Join(tmp, "srv"),
+		"项目根目录里":          filepath.Join(tmp, "srv", "nagi", "replicas"),
 		"禁止访问的目录":         filepath.Join(denied, "x"),
 		"别的副本的目录里":        filepath.Join(existing, "files"),
 		"不是目录":            file,
@@ -184,6 +203,108 @@ func TestReplicaBaseRules(t *testing.T) {
 			t.Fatalf("默认目录应该接受：%v %s", err, got)
 		}
 	})
+}
+
+// 审查 M1 的场景：管理员以前把默认目录设在项目根目录下面（现在 checkBase 拒绝，这里直接写进记录），目录还是空的。
+// 操作员新建的容器目录等于这个存放位置、或者是之后副本会落到的位置时，节点都要拒绝。
+func TestAuditContainerDirEqualsEmptyReplicaBase(t *testing.T) {
+	r, tmp := testReplicas(t)
+	projectsRoot := filepath.Join(tmp, "srv", "nagi")
+	base := filepath.Join(projectsRoot, "replicas")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r.projectsRoot = func() string { return projectsRoot }
+	// 现在不能再这样设置。
+	if _, err := r.checkBase(base); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("项目根目录下面的存放位置应该拒绝：%v", err)
+	}
+	if _, err := r.checkBase(filepath.Join(tmp, "srv")); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("包含项目根目录的存放位置应该拒绝：%v", err)
+	}
+	r.idx.Dir = base // 升级以前留下的设置
+	m := testManager(t)
+	m.ProjectsRoot = r.projectsRoot
+	m.ReplicaRoots = r.roots
+	m.ReplicaBases = r.bases
+	for _, dir := range []string{base, filepath.Join(base, testPID+"-db"), filepath.Join(base, "x", "y")} {
+		if _, err := m.CheckDir(context.Background(), dir); err == nil {
+			t.Errorf("容器目录 %s 和空的存放位置重叠，应该拒绝", dir)
+		}
+	}
+	// 正在往里移动副本的位置也算。
+	moving := filepath.Join(tmp, "mnt", "moving")
+	if err := r.markMoving(moving, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CheckDir(context.Background(), filepath.Join(moving, "x")); err == nil {
+		t.Error("正在移入的位置应该拒绝")
+	}
+	// 经过符号链接指到存放位置的目录也拒绝。
+	link := filepath.Join(tmp, "link")
+	if err := os.Symlink(base, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.CheckDir(context.Background(), filepath.Join(link, "x")); err == nil {
+		t.Error("经过符号链接指到存放位置的目录应该拒绝")
+	}
+	if _, err := m.CheckDir(context.Background(), filepath.Join(projectsRoot, "web", "app")); err != nil {
+		t.Errorf("别的目录应该接受：%v", err)
+	}
+}
+
+// 存放位置不能放在现有目录（compose 的 project_dir）里面（审查 L1）。
+func TestAuditBaseInsideProjectDir(t *testing.T) {
+	r, tmp := testReplicas(t)
+	immich := filepath.Join(tmp, "opt", "immich")
+	if err := os.MkdirAll(immich, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.managed = func() []string { return []string{filepath.Join(tmp, "srv", "nagi", "p", "app"), immich} }
+	if _, err := r.checkBase(filepath.Join(immich, "replicas")); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("现有目录里面的存放位置应该拒绝：%v", err)
+	}
+}
+
+// 接收同步时写入经过 os.Root：副本里被换成指向外面的符号链接时拒绝，不会写到别处（审查 L1）。
+func TestReplicaFilesRoot(t *testing.T) {
+	tmp := t.TempDir()
+	files := filepath.Join(tmp, "base", testPID+"-web", "files")
+	outside := filepath.Join(tmp, "outside")
+	for _, d := range []string{filepath.Join(files, "repo"), outside} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(outside, filepath.Join(files, "repo", "p")); err != nil {
+		t.Fatal(err)
+	}
+	root, err := openReplicaFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := root.MkdirAll(filepath.Join("repo", "p", "x"), 0o700); err == nil {
+		t.Error("经过指向外面的链接建目录应该失败")
+	}
+	if f, err := root.OpenFile(filepath.Join("repo", "p", "evil"), os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+		f.Close()
+		t.Error("经过指向外面的链接写文件应该失败")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("外面的目录不能被写入：%v", entries)
+	}
+	// 副本的 files 目录本身被换成链接时拒绝。
+	other := filepath.Join(tmp, "base", testPID+"-db")
+	if err := os.MkdirAll(other, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(other, "files")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openReplicaFiles(filepath.Join(other, "files")); err == nil {
+		t.Error("files 是符号链接时应该拒绝")
+	}
 }
 
 func TestMoveReplica(t *testing.T) {
