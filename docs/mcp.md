@@ -310,8 +310,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | --- | --- | --- |
 | `get_panel_settings` | 面板的对外地址、端口、指纹、版本、绑定的域名、主密钥文件的路径，备用面板（备用面板上是主面板和同步状态） | `GetSettings`、`GetStandbys` |
 | `update_panel_settings` | 修改对外地址、绑定或取消域名（要确认）。生效前先用现在的告警渠道发通知（接口本来就这样，网页上改也一样）。安全入口不能改 | `UpdateSettings`、`SetPanelDomain` |
-| `get_alert_channels` | 告警渠道：名称、类型、指向哪里（webhook 只给主机，地址和机器人令牌一律不返回） | `GetAlertConfig` |
-| `update_alert_channels` | 添加、修改、改名、删除渠道。除了改名都会改变通知去向，要确认；生效前先用原来的渠道发通知（接口本来就这样）。webhook 地址和机器人令牌只写，审计里也隐去 | `GetAlertConfig`、`UpdateAlertConfig` |
+| `get_alert_channels` | 告警渠道：名称、类型、指向哪里（webhook 只给主机，地址和机器人令牌一律不返回）、webhook 是否允许内网地址 | `GetAlertConfig` |
+| `update_alert_channels` | 添加、修改、改名、删除渠道，webhook 可以设置「允许内网地址」（`allow_private`，见 [monitoring.md](monitoring.md#告警)）。除了改名都会改变通知去向，要确认（改「允许内网地址」也是）；生效前先用原来的渠道发通知（接口本来就这样）。webhook 地址和机器人令牌只写，审计里也隐去 | `GetAlertConfig`、`UpdateAlertConfig` |
 | `test_alert_channel` | 用保存了的渠道发一条测试消息。不按 agent 给的地址发请求 | `GetAlertConfig`、`TestAlertChannel` |
 | `list_activity` | 整个面板的活动：操作和告警，翻页 | `ListActivity` |
 | `query_audit` | 按时间、成员、来源、类别、项目、节点、只看失败、关键字查审计记录，翻页；或者取一条记录和它的上下级 | `ListAuditEvents`、`GetAuditEvent` |

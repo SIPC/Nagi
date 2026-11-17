@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/safehttp"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -68,7 +69,7 @@ type Server struct {
 
 // New 创建授权服务器。
 func New(q *store.Queries, log *slog.Logger) *Server {
-	return &Server{Q: q, Log: log, codes: map[string]grant{}, register: map[string][]time.Time{}, docs: map[string]cachedDoc{}, fetch: safeClient()}
+	return &Server{Q: q, Log: log, codes: map[string]grant{}, register: map[string][]time.Time{}, docs: map[string]cachedDoc{}, fetch: safehttp.Client(5*time.Second, false)}
 }
 
 type grant struct {
@@ -636,7 +637,7 @@ type cachedDoc struct {
 	expires time.Time
 }
 
-// metadataClient 取客户端元数据文档。网址由客户端提供，面板去访问它，所以只能访问公网地址（见 safeClient）。
+// metadataClient 取客户端元数据文档。网址由客户端提供，面板去访问它，所以只能访问公网地址（见 safehttp）。
 func (s *Server) metadataClient(ctx context.Context, id string) (Client, error) {
 	s.mu.Lock()
 	if d, ok := s.docs[id]; ok && time.Now().Before(d.expires) {
@@ -695,41 +696,4 @@ func (s *Server) fetchMetadata(ctx context.Context, id string) (Client, error) {
 		name = u.Hostname()
 	}
 	return Client{ID: id, Name: name, RedirectURIs: doc.RedirectURIs}, nil
-}
-
-// safeClient 只访问公网地址：解析后的 IP 是本机、内网、链路本地这些的一律拒绝，免得被用来探测面板所在的内网。
-func safeClient() *http.Client {
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	return &http.Client{
-		Timeout: 5 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Transport: &http.Transport{
-			Proxy: nil,
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				host, port, err := net.SplitHostPort(addr)
-				if err != nil {
-					return nil, err
-				}
-				ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-				if err != nil {
-					return nil, err
-				}
-				for _, ip := range ips {
-					if publicIP(ip.IP) {
-						return dialer.DialContext(ctx, network, net.JoinHostPort(ip.IP.String(), port))
-					}
-				}
-				return nil, errors.New("only public addresses are allowed")
-			},
-		},
-	}
-}
-
-func publicIP(ip net.IP) bool {
-	return !(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() ||
-		// 100.64.0.0/10（运营商 NAT）
-		ip.To4() != nil && ip.To4()[0] == 100 && ip.To4()[1]&0xc0 == 64)
 }

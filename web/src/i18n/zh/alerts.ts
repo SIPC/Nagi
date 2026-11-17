@@ -27,6 +27,8 @@ export default {
   botToken: "机器人令牌",
   chatId: "聊天 ID",
   webhookUrl: "地址",
+  allowPrivate: "允许内网地址",
+  allowPrivateHelp: "允许发到局域网内的地址，例如自建的通知服务。本机地址和云服务器的元数据地址始终不允许。",
   test: "发送测试消息",
   defaultValue: (v: number) => `默认 ${v}`,
   rules: "告警规则",

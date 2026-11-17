@@ -3539,8 +3539,11 @@ type AlertChannel struct {
 	// telegram：机器人令牌和聊天 ID。
 	TelegramToken  string `protobuf:"bytes,5,opt,name=telegram_token,json=telegramToken,proto3" json:"telegram_token,omitempty"`
 	TelegramChatId string `protobuf:"bytes,6,opt,name=telegram_chat_id,json=telegramChatId,proto3" json:"telegram_chat_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// webhook：允许内网地址（10.0.0.0/8、172.16.0.0/12、192.168.0.0/16、100.64.0.0/10、fc00::/7）。
+	// 默认只发到公网地址；本机、链路本地和云服务器的元数据地址始终不允许（见 docs/monitoring.md#告警）。
+	AllowPrivate  bool `protobuf:"varint,7,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AlertChannel) Reset() {
@@ -3613,6 +3616,13 @@ func (x *AlertChannel) GetTelegramChatId() string {
 		return x.TelegramChatId
 	}
 	return ""
+}
+
+func (x *AlertChannel) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
+	}
+	return false
 }
 
 // AlertRules 是告警规则的阈值，0 表示用默认值。
@@ -6088,14 +6098,15 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\fMetricSeries\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05times\x18\x02 \x03(\x03R\x05times\x12\x16\n" +
-	"\x06values\x18\x03 \x03(\x01R\x06values\"\xb3\x01\n" +
+	"\x06values\x18\x03 \x03(\x01R\x06values\"\xd8\x01\n" +
 	"\fAlertChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x03 \x01(\tR\x04type\x12\x15\n" +
 	"\x03url\x18\x04 \x01(\tB\x03\x80\x01\x01R\x03url\x12*\n" +
 	"\x0etelegram_token\x18\x05 \x01(\tB\x03\x80\x01\x01R\rtelegramToken\x12(\n" +
-	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\"\xa2\x03\n" +
+	"\x10telegram_chat_id\x18\x06 \x01(\tR\x0etelegramChatId\x12#\n" +
+	"\rallow_private\x18\a \x01(\bR\fallowPrivate\"\xa2\x03\n" +
 	"\n" +
 	"AlertRules\x12!\n" +
 	"\fdisk_percent\x18\x01 \x01(\rR\vdiskPercent\x12\x1f\n" +

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -40,6 +41,7 @@ func (r *receiver) count() int {
 }
 
 func newEngine(t *testing.T, relay Relay) *Engine {
+	alert.AllowLoopbackForTest(t) // 收告警的 httptest 服务在本机
 	return New(slog.New(slog.NewTextHandler(io.Discard, nil)), "node1", t.TempDir(), t.TempDir(), nil, nil,
 		func(id string) string { return "name-" + id }, relay)
 }

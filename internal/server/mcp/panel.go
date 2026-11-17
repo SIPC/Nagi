@@ -183,10 +183,14 @@ func channelTarget(ch *nagiv1.AlertChannel) string {
 	return "(invalid url)"
 }
 
-func channelsView(cfg *nagiv1.AlertConfig) []map[string]string {
-	out := []map[string]string{}
+func channelsView(cfg *nagiv1.AlertConfig) []map[string]any {
+	out := []map[string]any{}
 	for _, ch := range cfg.GetChannels() {
-		out = append(out, map[string]string{"id": ch.GetId(), "name": ch.GetName(), "type": ch.GetType(), "target": channelTarget(ch)})
+		v := map[string]any{"id": ch.GetId(), "name": ch.GetName(), "type": ch.GetType(), "target": channelTarget(ch)}
+		if ch.GetType() == "webhook" {
+			v["allow_private"] = ch.GetAllowPrivate()
+		}
+		out = append(out, v)
 	}
 	return out
 }
@@ -214,7 +218,9 @@ type AlertChannelArgs struct {
 	WebhookURL     string `json:"webhook_url,omitempty" jsonschema:"webhook: the URL alerts are POSTed to as JSON (write only)"`
 	TelegramToken  string `json:"telegram_token,omitempty" jsonschema:"telegram: the bot token (write only)"`
 	TelegramChatID string `json:"telegram_chat_id,omitempty" jsonschema:"telegram: the chat ID"`
-	Confirm        string `json:"confirm,omitempty" jsonschema:"omit to get a preview; then the code from the preview after the user agreed (not needed for rename)"`
+	// 允许内网地址：改了会改变能发到哪里，和改地址一样要确认。
+	AllowPrivate *bool  `json:"allow_private,omitempty" jsonschema:"webhook: true also allows private network addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, fc00::/7), e.g. a self-hosted notification service on the LAN. Default false: public addresses only. Loopback, link-local and cloud metadata addresses are never allowed"`
+	Confirm      string `json:"confirm,omitempty" jsonschema:"omit to get a preview; then the code from the preview after the user agreed (not needed for rename)"`
 }
 
 func findChannel(cfg *nagiv1.AlertConfig, ref string) (int, error) {
@@ -240,6 +246,25 @@ func destination(typ, webhook, chat string) string {
 	return u.Scheme + "://" + u.Host + u.Path
 }
 
+// privateNote 在预览里写明 webhook 是否允许内网地址。
+func privateNote(ch *nagiv1.AlertChannel) string {
+	if ch.GetType() != "webhook" {
+		return ""
+	}
+	if ch.GetAllowPrivate() {
+		return "; private network addresses allowed"
+	}
+	return "; public addresses only"
+}
+
+// boolArg 把可选的布尔参数放进确认码：没给、true、false 各不相同。
+func boolArg(b *bool) string {
+	if b == nil {
+		return ""
+	}
+	return fmt.Sprint(*b)
+}
+
 func toolUpdateAlertChannels(c *call, in AlertChannelArgs) (any, error) {
 	res, err := c.h.clients.settings.GetAlertConfig(c.ctx, connect.NewRequest(&nagiv1.GetAlertConfigRequest{}))
 	if err != nil {
@@ -256,9 +281,10 @@ func toolUpdateAlertChannels(c *call, in AlertChannelArgs) (any, error) {
 		if typ != "webhook" && typ != "telegram" {
 			return nil, errors.New("type must be webhook or telegram")
 		}
-		ch := &nagiv1.AlertChannel{Name: in.Name, Type: typ, Url: in.WebhookURL, TelegramToken: in.TelegramToken, TelegramChatId: in.TelegramChatID}
+		ch := &nagiv1.AlertChannel{Name: in.Name, Type: typ, Url: in.WebhookURL, TelegramToken: in.TelegramToken, TelegramChatId: in.TelegramChatID,
+			AllowPrivate: typ == "webhook" && in.AllowPrivate != nil && *in.AllowPrivate}
 		cfg.Channels = append(cfg.Channels, ch)
-		text = fmt.Sprintf("alerts will also be sent to %s (new %s channel %q).", destination(typ, in.WebhookURL, in.TelegramChatID), typ, in.Name)
+		text = fmt.Sprintf("alerts will also be sent to %s (new %s channel %q%s).", destination(typ, in.WebhookURL, in.TelegramChatID), typ, in.Name, privateNote(ch))
 	case "update", "rename", "remove":
 		i, err := findChannel(cfg, in.Channel)
 		if err != nil {
@@ -289,13 +315,16 @@ func toolUpdateAlertChannels(c *call, in AlertChannelArgs) (any, error) {
 			if in.Name != "" {
 				ch.Name = in.Name
 			}
-			text = fmt.Sprintf("channel %q now sends alerts to %s instead of %s.", ch.GetName(), destination(ch.GetType(), ch.GetUrl(), ch.GetTelegramChatId()), old)
+			if in.AllowPrivate != nil && ch.GetType() == "webhook" {
+				ch.AllowPrivate = *in.AllowPrivate
+			}
+			text = fmt.Sprintf("channel %q now sends alerts to %s instead of %s%s.", ch.GetName(), destination(ch.GetType(), ch.GetUrl(), ch.GetTelegramChatId()), old, privateNote(ch))
 		}
 	default:
 		return nil, errors.New("action must be add, update, rename or remove")
 	}
 	if text != "" {
-		if code, ok := c.confirm(in.Confirm, "update_alert_channels", in.Action, in.Channel, in.Name, in.Type, in.WebhookURL, in.TelegramToken, in.TelegramChatID); !ok {
+		if code, ok := c.confirm(in.Confirm, "update_alert_channels", in.Action, in.Channel, in.Name, in.Type, in.WebhookURL, in.TelegramToken, in.TelegramChatID, boolArg(in.AllowPrivate)); !ok {
 			out := preview("update_alert_channels", code, text+" The current channels get a notice about this change first.", nil)
 			if in.Confirm != "" {
 				out["note"] = mismatchNote
