@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { LineDiff } from "@/components/config-diff";
 import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { ClipboardBar, DirSizeText, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
+import { ClipboardBar, DirSizeText, formatModified, useDirSizes, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
 import type { UploadTarget } from "@/lib/chunked-upload";
 import { fmtBytes } from "@/components/metrics";
 import { TerminalSession } from "@/components/terminal";
@@ -21,7 +21,7 @@ import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { NodeFileEntry, ReadNodeFileResponse } from "@/gen/nagi/v1/agent_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
-import { cn, eachLimit, formatDateTime, timeAgo, uploadConcurrency } from "@/lib/utils";
+import { cn, eachLimit, formatDateTime, uploadConcurrency } from "@/lib/utils";
 
 const pageSize = 200;
 const maxEditBytes = 1 << 20;
@@ -175,13 +175,9 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   const names = useMemo(() => entries.map((e) => e.name), [entries]);
   const dirNames = entries.filter((e) => e.isDir && !e.isSymlink && e.access !== "denied").map((e) => e.name);
   // 目录大小在列表出来以后再统计，不拖慢列表。
-  const sizes = useQuery({
-    queryKey: ["node-dir-sizes", node.id, real, dirNames.join("/")],
-    queryFn: () => nodeClient.listNodeDirSizes({ nodeId: node.id, path: real, names: dirNames }),
-    enabled: ops && !!q.data && dirNames.length > 0,
-    staleTime: 30_000,
-    retry: false,
-  });
+  const dirSize = useDirSizes(["node-dir-sizes", node.id, real], dirNames, ops && !!q.data, (names, full) =>
+    nodeClient.listNodeDirSizes({ nodeId: node.id, path: real, names, full }),
+  );
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["node-dir", node.id] });
     queryClient.invalidateQueries({ queryKey: ["node-dir-sizes", node.id] });
@@ -551,10 +547,10 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
                 }
                 cols={[
                   {
-                    content: e.isSymlink ? "" : e.isDir ? ops && !blocked && <DirSizeText size={sizes.data?.sizes.find((s) => s.name === e.name)} pending={sizes.isFetching && !sizes.data} /> : fmtBytes(Number(e.size)),
+                    content: e.isSymlink ? "" : e.isDir ? ops && !blocked && <DirSizeText {...dirSize(e.name)} /> : fmtBytes(Number(e.size)),
                     num: true,
                   },
-                  { content: <span title={formatDateTime(toDate(e.modified))}>{timeAgo(toDate(e.modified))}</span> },
+                  { content: <span className="tabular-nums">{formatModified(toDate(e.modified))}</span> },
                 ]}
                 actionsWidth="w-8"
                 actions={

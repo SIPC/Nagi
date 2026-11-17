@@ -7,7 +7,7 @@ import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
-import { ClipboardBar, DirSizeText, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
+import { ClipboardBar, DirSizeText, formatModified, useDirSizes, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
 import type { UploadTarget } from "@/lib/chunked-upload";
 import { Alert, Button, Collapse, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Select, Spinner, Textarea } from "@/components/ui";
 import { MobileBar, mobileBarText } from "@/pages/layout";
@@ -17,7 +17,7 @@ import type { VolumeFileEntry } from "@/gen/nagi/v1/agent_pb";
 import type { Container, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
-import { capitalize, cn, eachLimit, formatClock, formatDateTime, formatMonthDay, timeAgo, uploadConcurrency } from "@/lib/utils";
+import { cn, eachLimit, formatClock, formatMonthDay, uploadConcurrency } from "@/lib/utils";
 
 // 目录一次显示的条数，内容多时点「显示更多」。
 const pageSize = 200;
@@ -105,13 +105,9 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const names = useMemo(() => entries.map((e) => e.name), [entries]);
   // 目录大小在列表出来以后再统计，不拖慢列表。
   const dirNames = entries.filter((e) => e.isDir && !e.isSymlink).map((e) => e.name);
-  const sizes = useQuery({
-    queryKey: ["volume-dir-sizes", project.id, container.name, volume, path, dirNames.join("/")],
-    queryFn: () => projectClient.listVolumeDirSizes({ ...base, path, names: dirNames }),
-    enabled: ops && !!files.data && dirNames.length > 0,
-    staleTime: 30_000,
-    retry: false,
-  });
+  const dirSize = useDirSizes(["volume-dir-sizes", project.id, container.name, volume, path], dirNames, ops && !!files.data, (names, full) =>
+    projectClient.listVolumeDirSizes({ ...base, path, names, full }),
+  );
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["volume-files", project.id, container.name, volume] });
     queryClient.invalidateQueries({ queryKey: ["volume-dir-sizes", project.id, container.name, volume] });
@@ -512,10 +508,10 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
                 }
                 cols={[
                   {
-                    content: e.isSymlink ? "" : e.isDir ? ops && <DirSizeText size={sizes.data?.sizes.find((s) => s.name === e.name)} pending={sizes.isFetching && !sizes.data} /> : fmtBytes(Number(e.size)),
+                    content: e.isSymlink ? "" : e.isDir ? ops && <DirSizeText {...dirSize(e.name)} /> : fmtBytes(Number(e.size)),
                     num: true,
                   },
-                  { content: <span title={formatDateTime(toDate(e.modified))}>{capitalize(timeAgo(toDate(e.modified)))}</span> },
+                  { content: <span className="tabular-nums">{formatModified(toDate(e.modified))}</span> },
                 ]}
                 // 快照里一行两个按钮（下载、恢复），英文要 140 左右，操作列放宽；同一列表的各行同宽。
                 actionsWidth={snapshot ? "w-40" : "w-28"}

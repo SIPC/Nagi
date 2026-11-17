@@ -2,13 +2,14 @@
 // 分块上传的进度、目录大小。两个页面各自提供 FileOpsAdapter（路径格式、接口），交互和文案一致。
 import { File as FileIcon, Pause, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { toast } from "sonner";
 import { Alert, Button, Check, Collapse, Dialog, DialogActions, Field, Input, List, Menu, Notice, Row, Segmented, Skeleton, Spinner, useIsMobile } from "@/components/ui";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fmtBytes, fmtRate } from "@/components/metrics";
 import type { DirSize, FileOpEvent } from "@/gen/nagi/v1/agent_pb";
-import { t } from "@/i18n";
+import { locale, t } from "@/i18n";
 import { errorMessage } from "@/lib/api";
 import { forgetPending, pendingUploads, UploadQueue, type PendingUpload, type UploadItem, type UploadTarget } from "@/lib/chunked-upload";
 import { cn, uploadConcurrency } from "@/lib/utils";
@@ -543,12 +544,46 @@ export function ClipboardBar({ clip: c, onPaste, disabled, busy }: { clip: Clip;
 
 // ---- 目录大小 ----
 
-// DirSizeText：列表里目录的大小。统计中显示占位，统计不完整时前面加 >，悬停说明。
+// formatModified：修改时间写具体的日期和时间（到分钟），例如 2026/11/17 14:35，不写「3 天前」。
+export function formatModified(date: Date | undefined): string {
+  if (!date) return "—";
+  return date.toLocaleString(locale, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// useDirSizes：目录列表出来以后统计子目录的大小，分两遍：先很快地统计一遍；没统计完的目录（文件多）再带 full
+// 请求一次，在后台算出真实的大小，算完之前显示占位。full 也没算完的（极大的目录）不显示大小。
+export function useDirSizes(key: unknown[], names: string[], enabled: boolean, fetch: (names: string[], full: boolean) => Promise<{ sizes: DirSize[] }>) {
+  const quick = useQuery({
+    queryKey: [...key, "quick", names.join("/")],
+    queryFn: () => fetch(names, false),
+    enabled: enabled && names.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const rest = (quick.data?.sizes ?? []).filter((s) => !s.complete).map((s) => s.name);
+  const full = useQuery({
+    queryKey: [...key, "full", rest.join("/")],
+    queryFn: () => fetch(rest, true),
+    enabled: enabled && rest.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return (name: string): { size?: DirSize; pending: boolean } => {
+    const q = quick.data?.sizes.find((s) => s.name === name);
+    if (!q) return { pending: quick.isFetching && !quick.data };
+    if (q.complete) return { size: q, pending: false };
+    const f = full.data?.sizes.find((s) => s.name === name);
+    if (f) return { size: f, pending: false };
+    return { pending: full.isFetching || full.isPending };
+  };
+}
+
+// DirSizeText：列表里目录的大小。统计中显示占位；极大的目录在限额内没统计完时不显示大小，悬停说明。
 export function DirSizeText({ size, pending }: { size?: DirSize; pending: boolean }) {
   if (pending) return <Skeleton className="ml-auto inline-block h-3 w-12 align-middle" />;
   if (!size) return null;
-  const text = fmtBytes(Number(size.size));
-  return size.complete ? <>{text}</> : <span title={fm.sizeIncomplete}>{`>${text}`}</span>;
+  if (!size.complete) return <span className="text-muted-foreground" title={fm.sizeIncomplete}>—</span>;
+  return <>{fmtBytes(Number(size.size))}</>;
 }
 
 // ---- 上传 ----

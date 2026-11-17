@@ -3183,7 +3183,10 @@ type VolumeDirSizesRequest struct {
 	// 所在目录，相对卷根目录。
 	Path string `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
 	// 要统计的子目录名。
-	Names         []string `protobuf:"bytes,5,rep,name=names,proto3" json:"names,omitempty"`
+	Names []string `protobuf:"bytes,5,rep,name=names,proto3" json:"names,omitempty"`
+	// full：统计完整的大小（见 fileops.DirSizeFull*）。不带时是很快返回的一遍，超出限额的标为不完整，
+	// 界面再对这些目录带 full 请求一次。
+	Full          bool `protobuf:"varint,6,opt,name=full,proto3" json:"full,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3251,6 +3254,13 @@ func (x *VolumeDirSizesRequest) GetNames() []string {
 		return x.Names
 	}
 	return nil
+}
+
+func (x *VolumeDirSizesRequest) GetFull() bool {
+	if x != nil {
+		return x.Full
+	}
+	return false
 }
 
 type FileOpResult struct {
@@ -6984,10 +6994,12 @@ func (x *NodeExtractRequest) GetConfirmed() bool {
 }
 
 type NodeDirSizesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Names         []string               `protobuf:"bytes,3,rep,name=names,proto3" json:"names,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Path   string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Names  []string               `protobuf:"bytes,3,rep,name=names,proto3" json:"names,omitempty"`
+	// full：同 VolumeDirSizesRequest.full。
+	Full          bool `protobuf:"varint,4,opt,name=full,proto3" json:"full,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7041,6 +7053,13 @@ func (x *NodeDirSizesRequest) GetNames() []string {
 		return x.Names
 	}
 	return nil
+}
+
+func (x *NodeDirSizesRequest) GetFull() bool {
+	if x != nil {
+		return x.Full
+	}
+	return false
 }
 
 // NodeFileUploadChunk 第一条带 ref 和 confirmed，之后是内容。
@@ -8309,14 +8328,15 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\bdest_dir\x18\x05 \x01(\tR\adestDir\x12 \n" +
 	"\finto_new_dir\x18\x06 \x01(\bR\n" +
 	"intoNewDir\x12\x1a\n" +
-	"\bconflict\x18\a \x01(\tR\bconflict\"\x96\x01\n" +
+	"\bconflict\x18\a \x01(\tR\bconflict\"\xaa\x01\n" +
 	"\x15VolumeDirSizesRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
 	"\tcontainer\x18\x02 \x01(\tR\tcontainer\x12\x16\n" +
 	"\x06volume\x18\x03 \x01(\tR\x06volume\x12\x12\n" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12\x14\n" +
-	"\x05names\x18\x05 \x03(\tR\x05names\"\x81\x01\n" +
+	"\x05names\x18\x05 \x03(\tR\x05names\x12\x12\n" +
+	"\x04full\x18\x06 \x01(\bR\x04full\"\x81\x01\n" +
 	"\fFileOpResult\x12\x1c\n" +
 	"\tconflicts\x18\x01 \x03(\tR\tconflicts\x12\x14\n" +
 	"\x05paths\x18\x02 \x03(\tR\x05paths\x12\x18\n" +
@@ -8565,11 +8585,12 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\finto_new_dir\x18\x04 \x01(\bR\n" +
 	"intoNewDir\x12\x1a\n" +
 	"\bconflict\x18\x05 \x01(\tR\bconflict\x12\x1c\n" +
-	"\tconfirmed\x18\x06 \x01(\bR\tconfirmed\"X\n" +
+	"\tconfirmed\x18\x06 \x01(\bR\tconfirmed\"l\n" +
 	"\x13NodeDirSizesRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x14\n" +
-	"\x05names\x18\x03 \x03(\tR\x05names\"o\n" +
+	"\x05names\x18\x03 \x03(\tR\x05names\x12\x12\n" +
+	"\x04full\x18\x04 \x01(\bR\x04full\"o\n" +
 	"\x13NodeFileUploadChunk\x12&\n" +
 	"\x03ref\x18\x01 \x01(\v2\x14.nagi.v1.NodeFileRefR\x03ref\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1c\n" +

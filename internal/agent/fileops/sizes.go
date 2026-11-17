@@ -14,6 +14,11 @@ import (
 const (
 	DirSizeTimeout    = 3 * time.Second
 	DirSizeMaxEntries = 300_000
+	// 完整统计（请求带 full）：界面对第一遍没统计完的目录再请求一次，要的是真实的大小。
+	// 限额放宽到 2 分钟、5000 万项，超出仍标为不完整（这种目录界面上不显示大小）。
+	// 同一个节点同时最多 fullSlots 个完整统计，其余的排队，免得磁盘被打满。
+	DirSizeFullTimeout    = 2 * time.Minute
+	DirSizeFullMaxEntries = 50_000_000
 	dirSizeWorkers    = 8
 )
 
@@ -25,6 +30,22 @@ type DirSize struct {
 	Complete bool
 	// Dir：确实是目录。符号链接和文件不统计（不跟随链接），调用方不返回它们。
 	Dir bool
+}
+
+var fullSlots = make(chan struct{}, 2)
+
+// DirSizeLimits 返回一次统计的时限和项数上限。full 时先占一个完整统计的名额（等到 ctx 结束为止），
+// 返回的 release 要在统计完以后调用。
+func DirSizeLimits(ctx context.Context, full bool) (timeout time.Duration, maxEntries int64, release func(), err error) {
+	if !full {
+		return DirSizeTimeout, DirSizeMaxEntries, func() {}, nil
+	}
+	select {
+	case fullSlots <- struct{}{}:
+		return DirSizeFullTimeout, DirSizeFullMaxEntries, func() { <-fullSlots }, nil
+	case <-ctx.Done():
+		return 0, 0, nil, ctx.Err()
+	}
 }
 
 // DirSizes 并行统计 fsys 里 dir 下各个子目录 names 的大小（普通文件的字节数之和，不跟随符号链接）。

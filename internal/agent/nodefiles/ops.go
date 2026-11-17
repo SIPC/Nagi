@@ -576,8 +576,13 @@ func (s *Service) DirSizes(ctx context.Context, req *nagiv1.NodeDirSizesRequest)
 		}
 	}
 	skip := func(p string) bool { return s.Access(path.Join(real, p)) == AccessDenied }
+	timeout, maxEntries, release, err := fileops.DirSizeLimits(ctx, req.GetFull())
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	out := &nagiv1.DirSizesResponse{}
-	for _, d := range fileops.DirSizes(ctx, os.DirFS(real), ".", keep, fileops.DirSizeTimeout, fileops.DirSizeMaxEntries, skip) {
+	for _, d := range fileops.DirSizes(ctx, os.DirFS(real), ".", keep, timeout, maxEntries, skip) {
 		if d.Dir {
 			out.Sizes = append(out.Sizes, &nagiv1.DirSize{Name: d.Name, Size: d.Size, Files: d.Files, Complete: d.Complete})
 		}

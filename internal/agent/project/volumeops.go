@@ -509,8 +509,13 @@ func (m *Manager) ListVolumeDirSizes(ctx context.Context, req *nagiv1.VolumeDirS
 		return nil, err
 	}
 	defer root.Close()
+	timeout, maxEntries, release, err := fileops.DirSizeLimits(ctx, req.GetFull())
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	out := &nagiv1.DirSizesResponse{}
-	for _, d := range fileops.DirSizes(ctx, root.FS(), slash(rel), names, fileops.DirSizeTimeout, fileops.DirSizeMaxEntries, nil) {
+	for _, d := range fileops.DirSizes(ctx, root.FS(), slash(rel), names, timeout, maxEntries, nil) {
 		if !d.Dir {
 			continue
 		}

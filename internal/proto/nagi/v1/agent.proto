@@ -549,6 +549,9 @@ message VolumeDirSizesRequest {
   string path = 4;
   // 要统计的子目录名。
   repeated string names = 5;
+  // full：统计完整的大小（见 fileops.DirSizeFull*）。不带时是很快返回的一遍，超出限额的标为不完整，
+  // 界面再对这些目录带 full 请求一次。
+  bool full = 6;
 }
 
 message FileOpResult {
@@ -963,6 +966,8 @@ message NodeDirSizesRequest {
   string node_id = 1;
   string path = 2;
   repeated string names = 3;
+  // full：同 VolumeDirSizesRequest.full。
+  bool full = 4;
 }
 
 // NodeFileUploadChunk 第一条带 ref 和 confirmed，之后是内容。
