@@ -27,6 +27,8 @@ export default {
   botToken: "Bot token",
   chatId: "Chat ID",
   webhookUrl: "URL",
+  allowPrivate: "Allow private addresses",
+  allowPrivateHelp: "Allow sending to addresses on your local network, such as a self-hosted notification service. Loopback and cloud metadata addresses are never allowed.",
   test: "Send test message",
   defaultValue: (v) => `Default ${v}`,
   rules: "Alert rules",

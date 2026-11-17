@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
 import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertConfig } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
+import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 import { HelpParts } from "@/components/help-parts";
 
@@ -64,9 +64,14 @@ function ChannelDialog({ initial, adding, onClose, onSave }: { initial: AlertCha
             </Field>
           </FormRow>
         ) : (
-          <Field label={t.alerts.webhookUrl} htmlFor="channel-url">
-            <Input id="channel-url" type="url" placeholder="https://" autoComplete="off" spellCheck={false} value={c.url} onChange={(e) => patch({ url: e.target.value })} />
-          </Field>
+          <>
+            <Field label={t.alerts.webhookUrl} htmlFor="channel-url">
+              <Input id="channel-url" type="url" placeholder="https://" autoComplete="off" spellCheck={false} value={c.url} onChange={(e) => patch({ url: e.target.value })} />
+            </Field>
+            <Check checked={c.allowPrivate} onChange={(v) => patch({ allowPrivate: v })} help={t.alerts.allowPrivateHelp}>
+              {t.alerts.allowPrivate}
+            </Check>
+          </>
         )}
         {error && <Alert>{error}</Alert>}
         <DialogActions>
@@ -164,7 +169,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
               <Row
                 key={i}
                 title={<span className="truncate">{channelName(c)}</span>}
-                sub={<span className="wrap-anywhere">{c.type === "telegram" ? `Telegram · ${c.telegramChatId}` : `Webhook · ${c.url}`}</span>}
+                sub={<span className="wrap-anywhere">{c.type === "telegram" ? `Telegram · ${c.telegramChatId}` : `Webhook · ${c.url}${c.allowPrivate ? ` · ${t.alerts.allowPrivate}` : ""}`}</span>}
                 // 测试和日志外送一样放在更多菜单里，行内只留 ⋯；测试中在右边转圈。
                 actions={
                   <span className="flex items-center gap-2">

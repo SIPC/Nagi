@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -20,6 +21,7 @@ import (
 // 拿到「管理面板」令牌的人改掉地址之前，原来的渠道已经收到了。
 func TestPanelAddressNoticeBefore(t *testing.T) {
 	h := newAuditHarness(t)
+	alert.AllowLoopbackForTest(t) // 收告警的 httptest 服务在本机
 	ctx := context.Background()
 	h.a.Nodes = nodes.NewRegistry(h.a.Q, slog.Default(), h.a.Sealer, nil)
 	type got struct{ title, addrAtSend, domainAtSend string }

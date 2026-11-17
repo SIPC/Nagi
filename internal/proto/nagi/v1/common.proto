@@ -581,6 +581,9 @@ message AlertChannel {
   // telegram：机器人令牌和聊天 ID。
   string telegram_token = 5 [debug_redact = true];
   string telegram_chat_id = 6;
+  // webhook：允许内网地址（10.0.0.0/8、172.16.0.0/12、192.168.0.0/16、100.64.0.0/10、fc00::/7）。
+  // 默认只发到公网地址；本机、链路本地和云服务器的元数据地址始终不允许（见 docs/monitoring.md#告警）。
+  bool allow_private = 7;
 }
 
 // AlertRules 是告警规则的阈值，0 表示用默认值。

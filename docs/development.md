@@ -22,6 +22,7 @@ internal/
 │   ├── db/           SQLite 打开、迁移
 │   ├── tunnel/       TLS + yamux 连接、反向 gRPC
 │   ├── alert/        告警发送（webhook、Telegram），面板和节点共用
+│   ├── safehttp/     按别人给的网址发请求的 HTTP 客户端：只连允许的地址（防 SSRF）
 │   ├── invite/       面板接入码的编码与解析
 │   ├── lease/        顶替的租约投票（面板和节点共用）
 │   └── mesh/         WireGuard mesh：收发层（直连 / UDP 中转 / TLS 中转）、进程内网络栈、MeshService
