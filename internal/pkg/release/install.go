@@ -199,7 +199,7 @@ func Download(ctx context.Context, base, dst string) error {
 // download 从 base 下载 nagi-linux-<架构> 到 dst，并按同一地址下的 SHA256SUMS 核对；pinned 不为空时
 // SHA256SUMS 里的值还必须等于它（直接从 GitHub 拿到的值，见 fetchFirst）。返回 SHA256SUMS 里的值，下载文件失败时也返回。
 func download(ctx context.Context, base, dst, pinned string) (string, error) {
-	name := "nagi-linux-" + runtime.GOARCH
+	name := binaryName()
 
 	sums, err := fetch(ctx, base+"/SHA256SUMS", 64<<10, nil)
 	if err != nil {
@@ -231,6 +231,9 @@ func download(ctx context.Context, base, dst, pinned string) (string, error) {
 	return want, nil
 }
 
+// binaryName 是本机架构的发布文件名。
+func binaryName() string { return "nagi-linux-" + runtime.GOARCH }
+
 func hostOf(raw string) string {
 	if u, err := url.Parse(raw); err == nil && u.Host != "" {
 		return u.Host
@@ -253,6 +256,14 @@ var (
 
 var errTooSlow = errors.New("download too slow")
 
+// statusError 是服务器回的 HTTP 状态不是 200。文字和包着的错误一样（按语言显示时用它的译文）。
+type statusError struct {
+	code int
+	error
+}
+
+func (e statusError) Unwrap() error { return e.error }
+
 // transport 是下载用的连接：在 http.DefaultTransport 的基础上（照常用 HTTPS_PROXY 等环境变量）缩短连接和等响应头的时间。
 var transport http.RoundTripper = func() http.RoundTripper {
 	t := http.DefaultTransport.(*http.Transport).Clone()
@@ -272,7 +283,8 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 	done := make(chan struct{})
 	defer close(done)
 	deadline, _ := ctx.Deadline()
-	go watchSpeed(&got, &total, deadline, done, func() { stop(errTooSlow) })
+	// 限速的参数在这里读好再交给 watchSpeed：它可能在 fetch 返回之后才开始运行（测试里会改这两个变量）。
+	go watchSpeed(&got, &total, deadline, lowSpeedTime, lowSpeedLimit, done, func() { stop(errTooSlow) })
 
 	req, err := http.NewRequestWithContext(wctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -293,7 +305,7 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, i18n.Errorf("无法下载 %s（HTTP %d），请检查镜像地址", name, resp.StatusCode)
+		return nil, statusError{resp.StatusCode, i18n.Errorf("无法下载 %s（HTTP %d），请检查镜像地址", name, resp.StatusCode)}
 	}
 	total.Store(resp.ContentLength)
 	body := &countingReader{r: resp.Body, n: &got}
@@ -316,7 +328,7 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 //     与其耗到超时，不如早点换下一个地址（例如中国大陆直连 GitHub，一直有数据但很慢）。
 //
 // done 关闭后退出。
-func watchSpeed(got, total *atomic.Int64, deadline time.Time, done <-chan struct{}, abort func()) {
+func watchSpeed(got, total *atomic.Int64, deadline time.Time, lowSpeedTime time.Duration, lowSpeedLimit int, done <-chan struct{}, abort func()) {
 	t := time.NewTicker(lowSpeedTime)
 	defer t.Stop()
 	start := time.Now()
@@ -361,10 +373,14 @@ var latestURL = "https://github.com/" + Repo + "/releases/latest"
 
 // Latest 返回最新发布的版本号。直接连不上 GitHub 时经加速代理再查（代理也转发重定向）：先用 proxy（记着的代理，可以为空），
 // 再依次用 GitHubProxies 里的其他代理。都查不到时返回直接查询的错误。
-func Latest(ctx context.Context, proxy string) (string, error) {
+//
+// via 是查到版本的加速代理（主机名），直接从 GitHub 查到时为空。经代理查到的版本号由代理决定，可能是 GitHub 上没有的
+// 版本：界面写明「查询自 <代理>」；下载时能连上 GitHub 就按 GitHub 上这个版本的 SHA256SUMS 核对，GitHub 上没有
+// 这个版本时不安装（见 fetchFirst）。节点升级的版本是面板自己正在运行的版本，不是这里查到的，所以这个版本号不会直接下发给节点。
+func Latest(ctx context.Context, proxy string) (version, via string, err error) {
 	v, err := latest(ctx, latestURL, 15*time.Second)
 	if err == nil {
-		return v, nil
+		return v, "", nil
 	}
 	tried := map[string]bool{}
 	for _, p := range append([]string{proxy}, knownProxies...) {
@@ -373,10 +389,10 @@ func Latest(ctx context.Context, proxy string) (string, error) {
 		}
 		tried[p] = true
 		if pv, perr := latest(ctx, p+latestURL, 10*time.Second); perr == nil {
-			return pv, nil
+			return pv, hostOf(p), nil
 		}
 	}
-	return "", err
+	return "", "", err
 }
 
 func latest(ctx context.Context, url string, timeout time.Duration) (string, error) {

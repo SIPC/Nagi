@@ -4,8 +4,10 @@ package directdl
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/netip"
 	"strings"
@@ -18,8 +20,9 @@ import (
 const PathPrefix = "/.nagi/download/"
 
 // TTL 是链接的有效期：期间可以开始下载、续传（多线程下载工具会用同一个链接发很多次分段请求）。
-// 已经开始的下载过了有效期照常传完。
-const TTL = 15 * time.Minute
+// 已经开始的下载过了有效期照常传完。链接本身就是凭据，不绑定用户和来源 IP，所以有效期短：
+// 撤销成员的权限后，面板还会给各节点换密钥，让没过期的链接也立即失效（见 docs/agent.md#直连下载）。
+const TTL = 5 * time.Minute
 
 // 下载的种类。
 const (
@@ -37,6 +40,17 @@ type Claims struct {
 	Snapshot  string `json:"s,omitempty"`
 	Path      string `json:"f"`
 	Expires   int64  `json:"e"`
+	// ID 是面板给这个链接的随机编号，面板的活动记录和节点的本地审计都记它，用来对上同一个链接。旧版本面板签的没有。
+	ID string `json:"i,omitempty"`
+	// User 是签发时的成员（面板说的），节点的本地审计记它。
+	User string `json:"u,omitempty"`
+}
+
+// NewID 返回一个新的链接编号（16 位十六进制）。
+func NewID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 var (
@@ -58,7 +72,8 @@ func Sign(key []byte, c Claims) string {
 	return payload + "." + base64.RawURLEncoding.EncodeToString(mac(key, payload))
 }
 
-// Verify 核对签名（任一密钥对得上即可）和有效期，返回链接里的内容。
+// Verify 核对签名（任一密钥对得上即可）和有效期，返回链接里的内容。签名对得上、只是过期时返回 ErrExpired，
+// 同时返回链接里的内容（节点记进本地审计）。
 func Verify(keys [][]byte, token string, now time.Time) (Claims, error) {
 	payload, sig, ok := strings.Cut(token, ".")
 	if !ok || len(token) > 4096 {
@@ -86,7 +101,7 @@ func Verify(keys [][]byte, token string, now time.Time) (Claims, error) {
 		return Claims{}, ErrInvalid
 	}
 	if now.Unix() > c.Expires {
-		return Claims{}, ErrExpired
+		return c, ErrExpired
 	}
 	return c, nil
 }

@@ -71,6 +71,8 @@ type API struct {
 	updates panelUpdates
 	reads   readDedup
 	origins originDenials
+	// directRot：正在给节点换直连下载的密钥（见 revokeDirectLinks）。
+	directRot directRotation
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -186,10 +188,16 @@ func (s *authService) Login(ctx context.Context, req *connect.Request[nagiv1.Log
 
 func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.LogoutRequest]) (*connect.Response[nagiv1.LogoutResponse], error) {
 	token := auth.SessionToken(req.Header())
-	if u, err := s.Auth.SessionUser(ctx, token); err == nil {
+	u, err := s.Auth.SessionUser(ctx, token)
+	if err == nil {
 		s.Record(auth.WithUser(ctx, u), audit.Event{Category: audit.Login, Action: "Logout"})
 	}
 	cookie := s.Auth.Logout(ctx, token)
+	// 退出登录后，这次登录签过的直连下载链接也不该再能用（见 revokeDirectLinks）。没有登录的请求不换：
+	// 谁都能调用退出登录，不能让人借它不停地换密钥。
+	if err == nil {
+		s.revokeDirectLinks()
+	}
 	resp := connect.NewResponse(&nagiv1.LogoutResponse{})
 	resp.Header().Set("Set-Cookie", cookie.String())
 	return resp, nil

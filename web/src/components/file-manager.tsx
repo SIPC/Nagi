@@ -552,10 +552,16 @@ export function formatModified(date: Date | undefined): string {
 
 // useDirSizes：目录列表出来以后统计子目录的大小，分两遍：先很快地统计一遍；没统计完的目录（文件多）再带 full
 // 请求一次，在后台算出真实的大小，算完之前显示占位。full 也没算完的（极大的目录）不显示大小。
-export function useDirSizes(key: unknown[], names: string[], enabled: boolean, fetch: (names: string[], full: boolean) => Promise<{ sizes: DirSize[] }>) {
+// fetch 要把 signal 交给请求：离开页面或换目录时取消，节点上的统计随之停下，不再占着名额。
+export function useDirSizes(
+  key: unknown[],
+  names: string[],
+  enabled: boolean,
+  fetch: (names: string[], full: boolean, signal: AbortSignal) => Promise<{ sizes: DirSize[] }>,
+) {
   const quick = useQuery({
     queryKey: [...key, "quick", names.join("/")],
-    queryFn: () => fetch(names, false),
+    queryFn: ({ signal }) => fetch(names, false, signal),
     enabled: enabled && names.length > 0,
     staleTime: 30_000,
     retry: false,
@@ -563,7 +569,7 @@ export function useDirSizes(key: unknown[], names: string[], enabled: boolean, f
   const rest = (quick.data?.sizes ?? []).filter((s) => !s.complete).map((s) => s.name);
   const full = useQuery({
     queryKey: [...key, "full", rest.join("/")],
-    queryFn: () => fetch(rest, true),
+    queryFn: ({ signal }) => fetch(rest, true, signal),
     enabled: enabled && rest.length > 0,
     staleTime: 30_000,
     retry: false,

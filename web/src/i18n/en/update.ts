@@ -8,6 +8,9 @@ export default {
   lessInfo: "Show less",
   upToDate: "Up to date",
   available: "Update available",
+  querySource: (host: string) => `Checked via ${host}`,
+  querySourceHelp:
+    "GitHub couldn't be reached, so the version was checked through a download proxy. If GitHub is reachable during the update, the download is verified against GitHub's checksums, and a version that doesn't exist on GitHub isn't installed.",
   primaryHint: "Standby panels are updated separately.",
   primaryHelp: "If their database version differs from this panel's, they pause syncing until both are on the same version.",
   standbyHint: "Only this standby panel is updated.",

@@ -142,6 +142,7 @@ func (s *settingsService) RevokeAccessToken(ctx context.Context, req *connect.Re
 	if n == 0 {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("令牌不存在"))
 	}
+	s.revokeDirectLinks()
 	return connect.NewResponse(&nagiv1.RevokeAccessTokenResponse{}), nil
 }
 

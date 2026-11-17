@@ -13,7 +13,7 @@ import (
 )
 
 // Upgrade 下载面板指定版本的 nagi（安装时指定的镜像；否则依次试记着的加速代理、GitHub Release、其他加速代理，
-// 见 release.Sources），按 SHA256SUMS 核对，
+// 见 release.Sources），按 SHA256SUMS 核对（能连上 GitHub 时各地址都按 GitHub 上的核对，GitHub 上没有这个版本时不升级），
 // 试运行确认能用、版本对得上，替换自己的可执行文件，返回后原地重启（同一个进程号，systemd 和容器里都适用）。
 // 项目容器由 Docker 运行，不受影响；内嵌的 Caddy 会中断一两秒。
 func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) (*nagiv1.UpgradeResponse, error) {

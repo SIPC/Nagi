@@ -19,7 +19,7 @@ const (
 	// 同一个节点同时最多 fullSlots 个完整统计，其余的排队，免得磁盘被打满。
 	DirSizeFullTimeout    = 2 * time.Minute
 	DirSizeFullMaxEntries = 50_000_000
-	dirSizeWorkers    = 8
+	dirSizeWorkers        = 8
 )
 
 // DirSize 是一个目录统计的结果。
@@ -34,15 +34,23 @@ type DirSize struct {
 
 var fullSlots = make(chan struct{}, 2)
 
-// DirSizeLimits 返回一次统计的时限和项数上限。full 时先占一个完整统计的名额（等到 ctx 结束为止），
-// 返回的 release 要在统计完以后调用。
+// fullWait 是等完整统计名额的上限（测试里改短）。名额被别的统计占着、等不到时，按快速统计的限额算一遍：
+// 这些目录多半还是统计不完，标为不完整，界面显示「—」；请求不会一直排着队，占不满的名额也就不会越排越长。
+var fullWait = 30 * time.Second
+
+// DirSizeLimits 返回一次统计的时限和项数上限。full 时先占一个完整统计的名额（最多等 fullWait，ctx 结束时不再等），
+// 等不到时返回快速统计的限额。返回的 release 要在统计完以后调用。
 func DirSizeLimits(ctx context.Context, full bool) (timeout time.Duration, maxEntries int64, release func(), err error) {
 	if !full {
 		return DirSizeTimeout, DirSizeMaxEntries, func() {}, nil
 	}
+	t := time.NewTimer(fullWait)
+	defer t.Stop()
 	select {
 	case fullSlots <- struct{}{}:
 		return DirSizeFullTimeout, DirSizeFullMaxEntries, func() { <-fullSlots }, nil
+	case <-t.C:
+		return DirSizeTimeout, DirSizeMaxEntries, func() {}, nil
 	case <-ctx.Done():
 		return 0, 0, nil, ctx.Err()
 	}

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net"
@@ -9,10 +11,12 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/pkg/directdl"
 	"github.com/SIPC/nagi/internal/pkg/filehttp"
@@ -25,7 +29,8 @@ import (
 
 // 直连下载（见 docs/agent.md#直连下载）：浏览器拿着面板签的链接，经 Caddy 的 443（节点公网 IP 的 Let's Encrypt
 // 证书）直接从节点下载，不经面板和 mesh。面板每次连上时告诉节点验证签名用的密钥和节点的公网地址；
-// 链接写明下载哪个文件、15 分钟内有效，权限由面板在签发前检查。浏览器先探测一下，连不上就照旧经面板下载。
+// 链接写明下载哪个文件、5 分钟内有效，权限由面板在签发前检查。浏览器先探测一下，连不上就照旧经面板下载。
+// 每次下载记进节点的本地审计（见 audit），随节点的审计外送。
 
 type directDL struct {
 	a  *agent
@@ -35,7 +40,19 @@ type directDL struct {
 	address string
 	// portErr：443 被别的程序占用，开不了；certErr：最近一次申请证书失败的原因。
 	portErr, certErr string
+
+	// 本地审计的限额（见 audit）：这一段时间从 auditStart 开始，记了 audited 条，超出的 dropped 条只计数。
+	auditStart       time.Time
+	audited, dropped int
 }
+
+// 直连下载记进本地审计的限额：每 10 分钟最多 directAuditLimit 条。拿着有效链接的人反复请求，不能把本地审计刷满、
+// 挤掉别的记录；超出的只计数，写进下一条记录。同一个链接从同一个地址的分段请求 10 分钟内只记第一次
+// （filehttp 按 Key 去重，和经面板下载一样），整个文件的下载每次都记。
+const (
+	directAuditWindow = 10 * time.Minute
+	directAuditLimit  = 500
+)
 
 func newDirectDL(a *agent) *directDL {
 	return &directDL{a: a, keys: map[string][]byte{}}
@@ -169,22 +186,114 @@ func (d *directDL) status(p *proxy.Proxy) *nagiv1.DirectDownload {
 	return st
 }
 
+// panelKey 是一个面板给的密钥，连同面板的指纹和本节点在这个面板上的 ID。
+type panelKey struct {
+	fp, node string
+	key      []byte
+}
+
 // keysFor 返回能验证 method 这种下载的密钥：信任列表里的面板给的，并且这个面板能调用 method（和经 mesh 下载的规则一样）。
-// 同时返回本节点在这些面板上的 ID。
-func (d *directDL) keysFor(method string) ([][]byte, map[string]bool) {
+func (d *directDL) keysFor(method string) []panelKey {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	var keys [][]byte
-	ids := map[string]bool{}
+	var keys []panelKey
 	for fp, k := range d.keys {
 		p, ok := d.a.id.panel(fp)
 		if !ok || d.a.checkPrimary(fp, method) != nil {
 			continue
 		}
-		keys = append(keys, k)
-		ids[p.NodeID] = true
+		keys = append(keys, panelKey{fp: fp, node: p.NodeID, key: k})
 	}
-	return keys, ids
+	return keys
+}
+
+// verify 核对链接：签名对得上某个能用的面板的密钥、种类对、写的是本节点在这个面板上的 ID、没过期。
+// 返回链接的内容和签发的面板；签名对得上、只是过期时也返回它们（记进本地审计），错误是 ErrExpired。
+func (d *directDL) verify(token string, now time.Time) (directdl.Claims, string, error) {
+	err := directdl.ErrInvalid
+	var expired directdl.Claims
+	var expiredBy string
+	for _, kind := range []string{directdl.KindVolume, directdl.KindNode} {
+		for _, k := range d.keysFor(directMethod(kind)) {
+			got, verr := directdl.Verify([][]byte{k.key}, token, now)
+			if got.Kind != kind || got.Node != k.node {
+				continue
+			}
+			if verr == nil {
+				return got, k.fp, nil
+			}
+			if errors.Is(verr, directdl.ErrExpired) {
+				err, expired, expiredBy = verr, got, k.fp
+			}
+		}
+	}
+	return expired, expiredBy, err
+}
+
+// audit 把一次直连下载记进节点的本地审计（见 docs/audit.md#节点本地审计），有限额（见 directAuditLimit）。
+// actor 是签发链接的成员（面板写在链接里），ip 是下载的来源地址；detail 写链接编号、范围。
+func (d *directDL) audit(panel string, c directdl.Claims, token string, r *http.Request, err error, result string) {
+	if d.a.audit == nil {
+		return
+	}
+	now := time.Now()
+	d.mu.Lock()
+	if now.Sub(d.auditStart) >= directAuditWindow {
+		d.auditStart, d.audited = now, 0
+	}
+	if d.audited >= directAuditLimit {
+		d.dropped++
+		d.mu.Unlock()
+		return
+	}
+	d.audited++
+	dropped := d.dropped
+	d.dropped = 0
+	d.mu.Unlock()
+
+	detail := []string{"kind=" + c.Kind, "link=" + linkID(c, token)}
+	if rg := r.Header.Get("Range"); rg != "" {
+		detail = append(detail, "range="+rg)
+	}
+	if c.Snapshot != "" {
+		detail = append(detail, "snapshot="+c.Snapshot)
+	}
+	if dropped > 0 {
+		detail = append(detail, "dropped="+strconv.Itoa(dropped))
+	}
+	target := c.Path
+	if c.Kind == directdl.KindVolume {
+		var parts []string
+		for _, p := range []string{c.Project, c.Container, c.Volume} {
+			if p != "" {
+				parts = append(parts, p)
+			}
+		}
+		target = strings.Join(parts, "/") + ":" + c.Path
+	}
+	ev := auditlog.Event{Panel: panel, Actor: c.User, IP: remoteIP(r), Action: "direct_download", Target: target,
+		Detail: strings.Join(detail, " "), Result: result}
+	if err != nil {
+		ev.Error = err.Error()
+	}
+	d.a.audit.Record(ev)
+}
+
+// linkID 是链接的编号：面板写在链接里的（和面板活动记录里的 direct_link 一样）；旧版本面板签的没有，用链接的哈希开头。
+func linkID(c directdl.Claims, token string) string {
+	if c.ID != "" {
+		return c.ID
+	}
+	h := sha256.Sum256([]byte(token))
+	return "sha256:" + hex.EncodeToString(h[:8])
+}
+
+func remoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // ServeHTTP 处理 Caddy 交过来的直连下载请求（只有节点公网 IP 上的请求）。
@@ -212,26 +321,21 @@ func (d *directDL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	// 先不知道是哪种下载：按种类分别取能用的密钥核对。
-	var c directdl.Claims
-	var err error = directdl.ErrInvalid
-	for _, kind := range []string{directdl.KindVolume, directdl.KindNode} {
-		keys, ids := d.keysFor(directMethod(kind))
-		got, verr := directdl.Verify(keys, token, time.Now())
-		if verr == nil && got.Kind == kind && ids[got.Node] {
-			c, err = got, nil
-			break
-		}
-		if errors.Is(verr, directdl.ErrExpired) {
-			err = verr
-		}
-	}
+	// 先不知道是哪种下载：按种类分别取能用的密钥核对。签名对不上的不记（谁都能乱发请求）；
+	// 过期的、节点访问关着被拒绝的记下（拿到过链接的人才发得出来），探测（HEAD）不记。
+	c, panel, err := d.verify(token, time.Now())
 	if err != nil {
+		if errors.Is(err, directdl.ErrExpired) && r.Method == http.MethodGet {
+			d.audit(panel, c, token, r, err, "denied")
+		}
 		fail(http.StatusForbidden, err)
 		return
 	}
 	if c.Kind == directdl.KindNode {
 		if err := d.a.checkNodeAccess(); err != nil {
+			if r.Method == http.MethodGet {
+				d.audit(panel, c, token, r, err, "denied")
+			}
 			fail(http.StatusForbidden, err)
 			return
 		}
@@ -242,6 +346,15 @@ func (d *directDL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filehttp.Download{
+		// 同一个链接从同一个地址的分段请求 10 分钟内只记第一次（多线程下载工具会发很多次）。
+		Key: "direct|" + linkID(c, token) + "|" + remoteIP(r),
+		Record: func(err error) {
+			result := "ok"
+			if err != nil {
+				result = "failed"
+			}
+			d.audit(panel, c, token, r, err, result)
+		},
 		Open: func(ctx context.Context, offset, length int64) (filehttp.ChunkStream, error) {
 			if c.Kind == directdl.KindNode {
 				return filehttp.Pipe(ctx, func(send func(*nagiv1.VolumeFileChunk) error) error {

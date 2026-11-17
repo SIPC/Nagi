@@ -551,10 +551,14 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 	if err := set(meshRelayOffFile(s.node.cfg.DataDir), req.GetRelayOff()); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if err := set(directOffFile(s.node.cfg.DataDir), req.GetDirectDownloadOff()); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	// 直连下载的开关只在请求带了它（set_direct_download）时改：v0.32.0 以前的面板不知道这一项，
+	// 它改 QUIC、中转时请求里没有 direct_download_off，不能当作「打开」，把管理员关掉的公网入口重新打开。
+	if req.GetSetDirectDownload() {
+		if err := set(directOffFile(s.node.cfg.DataDir), req.GetDirectDownloadOff()); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		s.node.changed() // 直连下载开关：重新生成 Caddy 配置
 	}
-	s.node.changed() // 直连下载开关：重新生成 Caddy 配置
 	n.m.SetQUIC(!req.GetQuicOff())
 	n.m.SetNodeRelay(!req.GetRelayOff())
 	s.node.log.Info("组网设置已修改", "quic", n.m.QUIC(), "relay", n.m.NodeRelay())

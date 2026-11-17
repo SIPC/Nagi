@@ -560,6 +560,10 @@ func toolCheckPanelUpdate(c *call, _ empty) (any, error) {
 	if r.GetUnsupported() != "" {
 		out["cannot_update"] = r.GetUnsupported()
 	}
+	if r.GetLatestSource() != "" {
+		// 版本号是经加速代理查到的，由代理决定（见 docs/panel.md#更新面板）。
+		out["latest_checked_via"] = r.GetLatestSource()
+	}
 	if r.GetAvailable() {
 		if notes, err := c.h.clients.settings.GetPanelReleaseNotes(c.ctx, connect.NewRequest(&nagiv1.GetPanelReleaseNotesRequest{})); err == nil {
 			list := []map[string]string{}
@@ -609,7 +613,11 @@ func toolUpdatePanel(c *call, in UpdatePanelArgs) (any, error) {
 		return map[string]any{"note": "the panel already runs the latest release " + r.GetCurrent()}, nil
 	}
 	if in.Confirm != r.GetLatest() {
-		return preview("update_panel", r.GetLatest(), fmt.Sprintf("the panel updates from %s to %s: it downloads and verifies the release, replaces itself and restarts. The web UI and MCP are unavailable for a short while; containers keep running. Release notes: %s", r.GetCurrent(), r.GetLatest(), r.GetReleaseUrl()), nil), nil
+		note := ""
+		if r.GetLatestSource() != "" {
+			note = fmt.Sprintf(" GitHub could not be reached, so %s was found through the download proxy %s; if GitHub is reachable during the update the download is verified against GitHub, and a version that does not exist on GitHub is not installed.", r.GetLatest(), r.GetLatestSource())
+		}
+		return preview("update_panel", r.GetLatest(), fmt.Sprintf("the panel updates from %s to %s: it downloads and verifies the release, replaces itself and restarts. The web UI and MCP are unavailable for a short while; containers keep running. Release notes: %s.%s", r.GetCurrent(), r.GetLatest(), r.GetReleaseUrl(), note), nil), nil
 	}
 	out, err := c.h.clients.settings.UpdatePanel(c.ctx, connect.NewRequest(&nagiv1.UpdatePanelRequest{}))
 	if err != nil {

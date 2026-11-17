@@ -109,7 +109,7 @@ func TestLatest(t *testing.T) {
 			}))
 			defer srv.Close()
 			latestURL = srv.URL
-			got, err := Latest(context.Background(), "")
+			got, _, err := Latest(context.Background(), "")
 			if got != c.want || (err == nil) != (c.want != "") {
 				t.Fatalf("得到 %q、%v，应为 %q", got, err, c.want)
 			}
@@ -176,10 +176,10 @@ func TestLatestViaProxy(t *testing.T) {
 		w.WriteHeader(http.StatusFound)
 	}))
 	defer srv.Close()
-	if got, err := Latest(context.Background(), srv.URL+"/"); got != "v0.6.0" || err != nil {
+	if got, via, err := Latest(context.Background(), srv.URL+"/"); got != "v0.6.0" || via != hostOf(srv.URL) || err != nil {
 		t.Fatalf("得到 %q、%v", got, err)
 	}
-	if _, err := Latest(context.Background(), ""); err == nil {
+	if _, _, err := Latest(context.Background(), ""); err == nil {
 		t.Fatal("没有代理时应报错")
 	}
 }
