@@ -1524,6 +1524,9 @@ message RegisterSessionKeyResponse {}
 message RotateSessionRequest {
   // 用会话私钥对响应头 Nagi-Session-Challenge 的签名（WebCrypto 的 r‖s 格式）。
   bytes signature = 1;
+  // 签名的是哪个挑战。和面板现在的挑战不同（签名期间挑战换过了）时不换发，也不算签名不符，
+  // 页面用之后响应里的新挑战再签。空表示旧版本的页面，按面板现在的挑战核对。
+  string challenge = 2;
 }
 
 message RotateSessionResponse {}

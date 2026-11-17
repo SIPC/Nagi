@@ -11137,7 +11137,10 @@ func (*RegisterSessionKeyResponse) Descriptor() ([]byte, []int) {
 type RotateSessionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 用会话私钥对响应头 Nagi-Session-Challenge 的签名（WebCrypto 的 r‖s 格式）。
-	Signature     []byte `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
+	Signature []byte `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
+	// 签名的是哪个挑战。和面板现在的挑战不同（签名期间挑战换过了）时不换发，也不算签名不符，
+	// 页面用之后响应里的新挑战再签。空表示旧版本的页面，按面板现在的挑战核对。
+	Challenge     string `protobuf:"bytes,2,opt,name=challenge,proto3" json:"challenge,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11177,6 +11180,13 @@ func (x *RotateSessionRequest) GetSignature() []byte {
 		return x.Signature
 	}
 	return nil
+}
+
+func (x *RotateSessionRequest) GetChallenge() string {
+	if x != nil {
+		return x.Challenge
+	}
+	return ""
 }
 
 type RotateSessionResponse struct {
@@ -13508,9 +13518,10 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x19RegisterSessionKeyRequest\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\"\x1c\n" +
-	"\x1aRegisterSessionKeyResponse\"4\n" +
+	"\x1aRegisterSessionKeyResponse\"R\n" +
 	"\x14RotateSessionRequest\x12\x1c\n" +
-	"\tsignature\x18\x01 \x01(\fR\tsignature\"\x17\n" +
+	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x1c\n" +
+	"\tchallenge\x18\x02 \x01(\tR\tchallenge\"\x17\n" +
 	"\x15RotateSessionResponse\"T\n" +
 	"\x0fReverifyRequest\x12\x1f\n" +
 	"\bpassword\x18\x01 \x01(\tB\x03\x80\x01\x01R\bpassword\x12 \n" +

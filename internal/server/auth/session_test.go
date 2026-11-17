@@ -150,7 +150,7 @@ func (h *sessionHarness) rotate(token string, key browserKey, info RequestInfo) 
 	if err != nil || res.challenge == "" {
 		h.t.Fatalf("到时间后没有挑战：%v", err)
 	}
-	next, err := h.s.RotateSession(context.Background(), token, key.sign(res.challenge), info)
+	next, err := h.s.RotateSession(context.Background(), token, res.challenge, key.sign(res.challenge), info)
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestSessionStolenCookieWithoutKey(t *testing.T) {
 		t.Fatalf("应收到挑战：%v", err)
 	}
 	// 用自己的密钥签名：对不上。
-	if _, err := h.s.RotateSession(ctx, token, newBrowserKey().sign(res.challenge), office); err == nil {
+	if _, err := h.s.RotateSession(ctx, token, res.challenge, newBrowserKey().sign(res.challenge), office); err == nil {
 		t.Fatal("签名对不上也换发了令牌")
 	}
 	var rv *ErrReverify
@@ -562,7 +562,7 @@ func TestSessionConcurrentRotate(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				issued[i], _ = h.s.RotateSession(ctx, token, sig, home)
+				issued[i], _ = h.s.RotateSession(ctx, token, res.challenge, sig, home)
 			}()
 		}
 		wg.Wait()
