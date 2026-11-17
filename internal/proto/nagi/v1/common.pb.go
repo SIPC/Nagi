@@ -2839,9 +2839,11 @@ type NodeInfo struct {
 	// 节点支持选择副本的存放位置（SetReplicaDir、MoveReplica、AcceptReplicaRequest.replica_dir，见 docs/snapshot.md#副本的存放位置）。旧版本的节点不报。
 	ReplicaDirs bool `protobuf:"varint,25,opt,name=replica_dirs,json=replicaDirs,proto3" json:"replica_dirs,omitempty"`
 	// 节点保存副本的默认目录，为空表示 <节点目录>/replicas。
-	ReplicaDir    string `protobuf:"bytes,26,opt,name=replica_dir,json=replicaDir,proto3" json:"replica_dir,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ReplicaDir string `protobuf:"bytes,26,opt,name=replica_dir,json=replicaDir,proto3" json:"replica_dir,omitempty"`
+	// 直连下载的状态（见 docs/agent.md#直连下载）。旧版本的节点不报。
+	DirectDownload *DirectDownload `protobuf:"bytes,30,opt,name=direct_download,json=directDownload,proto3" json:"direct_download,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -3049,6 +3051,95 @@ func (x *NodeInfo) GetReplicaDir() string {
 	return ""
 }
 
+func (x *NodeInfo) GetDirectDownload() *DirectDownload {
+	if x != nil {
+		return x.DirectDownload
+	}
+	return nil
+}
+
+// DirectDownload 是节点直连下载的状态：浏览器直接从节点下载文件，不经面板和 mesh。
+type DirectDownload struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 节点支持直连下载（旧版本的节点没有这一项）。
+	Supported bool `protobuf:"varint,1,opt,name=supported,proto3" json:"supported,omitempty"`
+	// 节点的网络设置里关了直连下载。
+	Off bool `protobuf:"varint,2,opt,name=off,proto3" json:"off,omitempty"`
+	// 面板告诉节点的公网地址，节点为它申请 IP 证书。
+	Address string `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	// 已经拿到这个地址的证书，可以直连下载。
+	Ready bool `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
+	// 不能直连的原因（端口被占用、证书申请失败等），可以直连时为空。
+	Error         string `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DirectDownload) Reset() {
+	*x = DirectDownload{}
+	mi := &file_nagi_v1_common_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DirectDownload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DirectDownload) ProtoMessage() {}
+
+func (x *DirectDownload) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_common_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DirectDownload.ProtoReflect.Descriptor instead.
+func (*DirectDownload) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *DirectDownload) GetSupported() bool {
+	if x != nil {
+		return x.Supported
+	}
+	return false
+}
+
+func (x *DirectDownload) GetOff() bool {
+	if x != nil {
+		return x.Off
+	}
+	return false
+}
+
+func (x *DirectDownload) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *DirectDownload) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+func (x *DirectDownload) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
 type DomainCert struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
@@ -3065,7 +3156,7 @@ type DomainCert struct {
 
 func (x *DomainCert) Reset() {
 	*x = DomainCert{}
-	mi := &file_nagi_v1_common_proto_msgTypes[28]
+	mi := &file_nagi_v1_common_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3077,7 +3168,7 @@ func (x *DomainCert) String() string {
 func (*DomainCert) ProtoMessage() {}
 
 func (x *DomainCert) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[28]
+	mi := &file_nagi_v1_common_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3090,7 +3181,7 @@ func (x *DomainCert) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DomainCert.ProtoReflect.Descriptor instead.
 func (*DomainCert) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{28}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *DomainCert) GetDomain() string {
@@ -3135,7 +3226,7 @@ type LogLine struct {
 
 func (x *LogLine) Reset() {
 	*x = LogLine{}
-	mi := &file_nagi_v1_common_proto_msgTypes[29]
+	mi := &file_nagi_v1_common_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3147,7 +3238,7 @@ func (x *LogLine) String() string {
 func (*LogLine) ProtoMessage() {}
 
 func (x *LogLine) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[29]
+	mi := &file_nagi_v1_common_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3160,7 +3251,7 @@ func (x *LogLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogLine.ProtoReflect.Descriptor instead.
 func (*LogLine) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{29}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *LogLine) GetService() string {
@@ -3211,7 +3302,7 @@ type DeployEvent struct {
 
 func (x *DeployEvent) Reset() {
 	*x = DeployEvent{}
-	mi := &file_nagi_v1_common_proto_msgTypes[30]
+	mi := &file_nagi_v1_common_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3223,7 +3314,7 @@ func (x *DeployEvent) String() string {
 func (*DeployEvent) ProtoMessage() {}
 
 func (x *DeployEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[30]
+	mi := &file_nagi_v1_common_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3236,7 +3327,7 @@ func (x *DeployEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployEvent.ProtoReflect.Descriptor instead.
 func (*DeployEvent) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{30}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *DeployEvent) GetEvent() isDeployEvent_Event {
@@ -3298,7 +3389,7 @@ type DeployResult struct {
 
 func (x *DeployResult) Reset() {
 	*x = DeployResult{}
-	mi := &file_nagi_v1_common_proto_msgTypes[31]
+	mi := &file_nagi_v1_common_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3310,7 +3401,7 @@ func (x *DeployResult) String() string {
 func (*DeployResult) ProtoMessage() {}
 
 func (x *DeployResult) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[31]
+	mi := &file_nagi_v1_common_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3323,7 +3414,7 @@ func (x *DeployResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployResult.ProtoReflect.Descriptor instead.
 func (*DeployResult) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{31}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeployResult) GetSuccess() bool {
@@ -3387,7 +3478,7 @@ type MetricSeries struct {
 
 func (x *MetricSeries) Reset() {
 	*x = MetricSeries{}
-	mi := &file_nagi_v1_common_proto_msgTypes[32]
+	mi := &file_nagi_v1_common_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3399,7 +3490,7 @@ func (x *MetricSeries) String() string {
 func (*MetricSeries) ProtoMessage() {}
 
 func (x *MetricSeries) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[32]
+	mi := &file_nagi_v1_common_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3412,7 +3503,7 @@ func (x *MetricSeries) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MetricSeries.ProtoReflect.Descriptor instead.
 func (*MetricSeries) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{32}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *MetricSeries) GetName() string {
@@ -3454,7 +3545,7 @@ type AlertChannel struct {
 
 func (x *AlertChannel) Reset() {
 	*x = AlertChannel{}
-	mi := &file_nagi_v1_common_proto_msgTypes[33]
+	mi := &file_nagi_v1_common_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3466,7 +3557,7 @@ func (x *AlertChannel) String() string {
 func (*AlertChannel) ProtoMessage() {}
 
 func (x *AlertChannel) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[33]
+	mi := &file_nagi_v1_common_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3479,7 +3570,7 @@ func (x *AlertChannel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertChannel.ProtoReflect.Descriptor instead.
 func (*AlertChannel) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{33}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AlertChannel) GetId() string {
@@ -3550,7 +3641,7 @@ type AlertRules struct {
 
 func (x *AlertRules) Reset() {
 	*x = AlertRules{}
-	mi := &file_nagi_v1_common_proto_msgTypes[34]
+	mi := &file_nagi_v1_common_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3562,7 +3653,7 @@ func (x *AlertRules) String() string {
 func (*AlertRules) ProtoMessage() {}
 
 func (x *AlertRules) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[34]
+	mi := &file_nagi_v1_common_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3575,7 +3666,7 @@ func (x *AlertRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertRules.ProtoReflect.Descriptor instead.
 func (*AlertRules) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{34}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AlertRules) GetDiskPercent() uint32 {
@@ -3653,7 +3744,7 @@ type AlertConfig struct {
 
 func (x *AlertConfig) Reset() {
 	*x = AlertConfig{}
-	mi := &file_nagi_v1_common_proto_msgTypes[35]
+	mi := &file_nagi_v1_common_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3665,7 +3756,7 @@ func (x *AlertConfig) String() string {
 func (*AlertConfig) ProtoMessage() {}
 
 func (x *AlertConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[35]
+	mi := &file_nagi_v1_common_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3678,7 +3769,7 @@ func (x *AlertConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertConfig.ProtoReflect.Descriptor instead.
 func (*AlertConfig) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{35}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *AlertConfig) GetChannels() []*AlertChannel {
@@ -3720,7 +3811,7 @@ type Alert struct {
 
 func (x *Alert) Reset() {
 	*x = Alert{}
-	mi := &file_nagi_v1_common_proto_msgTypes[36]
+	mi := &file_nagi_v1_common_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3732,7 +3823,7 @@ func (x *Alert) String() string {
 func (*Alert) ProtoMessage() {}
 
 func (x *Alert) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[36]
+	mi := &file_nagi_v1_common_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3745,7 +3836,7 @@ func (x *Alert) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Alert.ProtoReflect.Descriptor instead.
 func (*Alert) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{36}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *Alert) GetKey() string {
@@ -3816,7 +3907,7 @@ type TrustedPanel struct {
 
 func (x *TrustedPanel) Reset() {
 	*x = TrustedPanel{}
-	mi := &file_nagi_v1_common_proto_msgTypes[37]
+	mi := &file_nagi_v1_common_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3828,7 +3919,7 @@ func (x *TrustedPanel) String() string {
 func (*TrustedPanel) ProtoMessage() {}
 
 func (x *TrustedPanel) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[37]
+	mi := &file_nagi_v1_common_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3841,7 +3932,7 @@ func (x *TrustedPanel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrustedPanel.ProtoReflect.Descriptor instead.
 func (*TrustedPanel) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{37}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *TrustedPanel) GetAddress() string {
@@ -3904,7 +3995,7 @@ type MeshPeer struct {
 
 func (x *MeshPeer) Reset() {
 	*x = MeshPeer{}
-	mi := &file_nagi_v1_common_proto_msgTypes[38]
+	mi := &file_nagi_v1_common_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3916,7 +4007,7 @@ func (x *MeshPeer) String() string {
 func (*MeshPeer) ProtoMessage() {}
 
 func (x *MeshPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[38]
+	mi := &file_nagi_v1_common_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3929,7 +4020,7 @@ func (x *MeshPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshPeer.ProtoReflect.Descriptor instead.
 func (*MeshPeer) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{38}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *MeshPeer) GetPublicKey() []byte {
@@ -4020,7 +4111,7 @@ type MeshPeerStatus struct {
 
 func (x *MeshPeerStatus) Reset() {
 	*x = MeshPeerStatus{}
-	mi := &file_nagi_v1_common_proto_msgTypes[39]
+	mi := &file_nagi_v1_common_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4032,7 +4123,7 @@ func (x *MeshPeerStatus) String() string {
 func (*MeshPeerStatus) ProtoMessage() {}
 
 func (x *MeshPeerStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[39]
+	mi := &file_nagi_v1_common_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4045,7 +4136,7 @@ func (x *MeshPeerStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshPeerStatus.ProtoReflect.Descriptor instead.
 func (*MeshPeerStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{39}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *MeshPeerStatus) GetPublicKey() []byte {
@@ -4214,14 +4305,16 @@ type MeshStatus struct {
 	// 按别的成员看到的地址判断这一端的 NAT：none（不在 NAT 后面）、nat、symmetric（按目的地换端口）；不知道时为空。
 	Nat string `protobuf:"bytes,7,opt,name=nat,proto3" json:"nat,omitempty"`
 	// 这一端不替别的节点中转（节点的网络设置，见 docs/mesh.md#经节点中转）。
-	RelayOff      bool `protobuf:"varint,8,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RelayOff bool `protobuf:"varint,8,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
+	// 关闭了直连下载（节点的网络设置，见 docs/agent.md#直连下载）。
+	DirectDownloadOff bool `protobuf:"varint,9,opt,name=direct_download_off,json=directDownloadOff,proto3" json:"direct_download_off,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MeshStatus) Reset() {
 	*x = MeshStatus{}
-	mi := &file_nagi_v1_common_proto_msgTypes[40]
+	mi := &file_nagi_v1_common_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4233,7 +4326,7 @@ func (x *MeshStatus) String() string {
 func (*MeshStatus) ProtoMessage() {}
 
 func (x *MeshStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[40]
+	mi := &file_nagi_v1_common_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4246,7 +4339,7 @@ func (x *MeshStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshStatus.ProtoReflect.Descriptor instead.
 func (*MeshStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{40}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *MeshStatus) GetPublicKey() []byte {
@@ -4305,6 +4398,13 @@ func (x *MeshStatus) GetRelayOff() bool {
 	return false
 }
 
+func (x *MeshStatus) GetDirectDownloadOff() bool {
+	if x != nil {
+		return x.DirectDownloadOff
+	}
+	return false
+}
+
 type MeshPingRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	PublicKey []byte                 `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
@@ -4316,7 +4416,7 @@ type MeshPingRequest struct {
 
 func (x *MeshPingRequest) Reset() {
 	*x = MeshPingRequest{}
-	mi := &file_nagi_v1_common_proto_msgTypes[41]
+	mi := &file_nagi_v1_common_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4328,7 +4428,7 @@ func (x *MeshPingRequest) String() string {
 func (*MeshPingRequest) ProtoMessage() {}
 
 func (x *MeshPingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[41]
+	mi := &file_nagi_v1_common_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4341,7 +4441,7 @@ func (x *MeshPingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshPingRequest.ProtoReflect.Descriptor instead.
 func (*MeshPingRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{41}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *MeshPingRequest) GetPublicKey() []byte {
@@ -4367,7 +4467,7 @@ type MeshPingResponse struct {
 
 func (x *MeshPingResponse) Reset() {
 	*x = MeshPingResponse{}
-	mi := &file_nagi_v1_common_proto_msgTypes[42]
+	mi := &file_nagi_v1_common_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4379,7 +4479,7 @@ func (x *MeshPingResponse) String() string {
 func (*MeshPingResponse) ProtoMessage() {}
 
 func (x *MeshPingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[42]
+	mi := &file_nagi_v1_common_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4392,7 +4492,7 @@ func (x *MeshPingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshPingResponse.ProtoReflect.Descriptor instead.
 func (*MeshPingResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{42}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *MeshPingResponse) GetRttMs() float64 {
@@ -4424,7 +4524,7 @@ type MeshSpeedResponse struct {
 
 func (x *MeshSpeedResponse) Reset() {
 	*x = MeshSpeedResponse{}
-	mi := &file_nagi_v1_common_proto_msgTypes[43]
+	mi := &file_nagi_v1_common_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4436,7 +4536,7 @@ func (x *MeshSpeedResponse) String() string {
 func (*MeshSpeedResponse) ProtoMessage() {}
 
 func (x *MeshSpeedResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[43]
+	mi := &file_nagi_v1_common_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4449,7 +4549,7 @@ func (x *MeshSpeedResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshSpeedResponse.ProtoReflect.Descriptor instead.
 func (*MeshSpeedResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{43}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *MeshSpeedResponse) GetUpload() float64 {
@@ -4514,14 +4614,16 @@ type MeshOptions struct {
 	// 关闭 QUIC 快速通道：和所有成员之间的 TCP 连接都走 WireGuard。
 	QuicOff bool `protobuf:"varint,1,opt,name=quic_off,json=quicOff,proto3" json:"quic_off,omitempty"`
 	// 不替别的节点中转（流量按量计费的节点可以关掉）。
-	RelayOff      bool `protobuf:"varint,2,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RelayOff bool `protobuf:"varint,2,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
+	// 关闭直连下载：浏览器下载文件都经面板（见 docs/agent.md#直连下载）。
+	DirectDownloadOff bool `protobuf:"varint,3,opt,name=direct_download_off,json=directDownloadOff,proto3" json:"direct_download_off,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MeshOptions) Reset() {
 	*x = MeshOptions{}
-	mi := &file_nagi_v1_common_proto_msgTypes[44]
+	mi := &file_nagi_v1_common_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4533,7 +4635,7 @@ func (x *MeshOptions) String() string {
 func (*MeshOptions) ProtoMessage() {}
 
 func (x *MeshOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[44]
+	mi := &file_nagi_v1_common_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4546,7 +4648,7 @@ func (x *MeshOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeshOptions.ProtoReflect.Descriptor instead.
 func (*MeshOptions) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{44}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *MeshOptions) GetQuicOff() bool {
@@ -4559,6 +4661,13 @@ func (x *MeshOptions) GetQuicOff() bool {
 func (x *MeshOptions) GetRelayOff() bool {
 	if x != nil {
 		return x.RelayOff
+	}
+	return false
+}
+
+func (x *MeshOptions) GetDirectDownloadOff() bool {
+	if x != nil {
+		return x.DirectDownloadOff
 	}
 	return false
 }
@@ -4580,7 +4689,7 @@ type BackupStatus struct {
 
 func (x *BackupStatus) Reset() {
 	*x = BackupStatus{}
-	mi := &file_nagi_v1_common_proto_msgTypes[45]
+	mi := &file_nagi_v1_common_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4592,7 +4701,7 @@ func (x *BackupStatus) String() string {
 func (*BackupStatus) ProtoMessage() {}
 
 func (x *BackupStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[45]
+	mi := &file_nagi_v1_common_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4605,7 +4714,7 @@ func (x *BackupStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupStatus.ProtoReflect.Descriptor instead.
 func (*BackupStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{45}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *BackupStatus) GetTargetNodeId() string {
@@ -4663,7 +4772,7 @@ type Replica struct {
 
 func (x *Replica) Reset() {
 	*x = Replica{}
-	mi := &file_nagi_v1_common_proto_msgTypes[46]
+	mi := &file_nagi_v1_common_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4675,7 +4784,7 @@ func (x *Replica) String() string {
 func (*Replica) ProtoMessage() {}
 
 func (x *Replica) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[46]
+	mi := &file_nagi_v1_common_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4688,7 +4797,7 @@ func (x *Replica) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Replica.ProtoReflect.Descriptor instead.
 func (*Replica) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{46}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *Replica) GetProjectId() string {
@@ -4770,7 +4879,7 @@ type FailoverParticipant struct {
 
 func (x *FailoverParticipant) Reset() {
 	*x = FailoverParticipant{}
-	mi := &file_nagi_v1_common_proto_msgTypes[47]
+	mi := &file_nagi_v1_common_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4782,7 +4891,7 @@ func (x *FailoverParticipant) String() string {
 func (*FailoverParticipant) ProtoMessage() {}
 
 func (x *FailoverParticipant) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[47]
+	mi := &file_nagi_v1_common_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4795,7 +4904,7 @@ func (x *FailoverParticipant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailoverParticipant.ProtoReflect.Descriptor instead.
 func (*FailoverParticipant) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{47}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *FailoverParticipant) GetKey() []byte {
@@ -4851,7 +4960,7 @@ type FailoverConfig struct {
 
 func (x *FailoverConfig) Reset() {
 	*x = FailoverConfig{}
-	mi := &file_nagi_v1_common_proto_msgTypes[48]
+	mi := &file_nagi_v1_common_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4863,7 +4972,7 @@ func (x *FailoverConfig) String() string {
 func (*FailoverConfig) ProtoMessage() {}
 
 func (x *FailoverConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[48]
+	mi := &file_nagi_v1_common_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4876,7 +4985,7 @@ func (x *FailoverConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailoverConfig.ProtoReflect.Descriptor instead.
 func (*FailoverConfig) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{48}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *FailoverConfig) GetProjectId() string {
@@ -4981,7 +5090,7 @@ type FailoverStatus struct {
 
 func (x *FailoverStatus) Reset() {
 	*x = FailoverStatus{}
-	mi := &file_nagi_v1_common_proto_msgTypes[49]
+	mi := &file_nagi_v1_common_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4993,7 +5102,7 @@ func (x *FailoverStatus) String() string {
 func (*FailoverStatus) ProtoMessage() {}
 
 func (x *FailoverStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[49]
+	mi := &file_nagi_v1_common_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5006,7 +5115,7 @@ func (x *FailoverStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FailoverStatus.ProtoReflect.Descriptor instead.
 func (*FailoverStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{49}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *FailoverStatus) GetConfig() *FailoverConfig {
@@ -5125,7 +5234,7 @@ type LinkPlan struct {
 
 func (x *LinkPlan) Reset() {
 	*x = LinkPlan{}
-	mi := &file_nagi_v1_common_proto_msgTypes[50]
+	mi := &file_nagi_v1_common_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5137,7 +5246,7 @@ func (x *LinkPlan) String() string {
 func (*LinkPlan) ProtoMessage() {}
 
 func (x *LinkPlan) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[50]
+	mi := &file_nagi_v1_common_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5150,7 +5259,7 @@ func (x *LinkPlan) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkPlan.ProtoReflect.Descriptor instead.
 func (*LinkPlan) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{50}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *LinkPlan) GetProxies() []*LinkProxy {
@@ -5217,7 +5326,7 @@ type LinkEntry struct {
 
 func (x *LinkEntry) Reset() {
 	*x = LinkEntry{}
-	mi := &file_nagi_v1_common_proto_msgTypes[51]
+	mi := &file_nagi_v1_common_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5229,7 +5338,7 @@ func (x *LinkEntry) String() string {
 func (*LinkEntry) ProtoMessage() {}
 
 func (x *LinkEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[51]
+	mi := &file_nagi_v1_common_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5242,7 +5351,7 @@ func (x *LinkEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkEntry.ProtoReflect.Descriptor instead.
 func (*LinkEntry) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{51}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *LinkEntry) GetProjectId() string {
@@ -5351,7 +5460,7 @@ type LinkEntryAllow struct {
 
 func (x *LinkEntryAllow) Reset() {
 	*x = LinkEntryAllow{}
-	mi := &file_nagi_v1_common_proto_msgTypes[52]
+	mi := &file_nagi_v1_common_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5363,7 +5472,7 @@ func (x *LinkEntryAllow) String() string {
 func (*LinkEntryAllow) ProtoMessage() {}
 
 func (x *LinkEntryAllow) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[52]
+	mi := &file_nagi_v1_common_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5376,7 +5485,7 @@ func (x *LinkEntryAllow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkEntryAllow.ProtoReflect.Descriptor instead.
 func (*LinkEntryAllow) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{52}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *LinkEntryAllow) GetProjectId() string {
@@ -5434,7 +5543,7 @@ type LinkProxy struct {
 
 func (x *LinkProxy) Reset() {
 	*x = LinkProxy{}
-	mi := &file_nagi_v1_common_proto_msgTypes[53]
+	mi := &file_nagi_v1_common_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5446,7 +5555,7 @@ func (x *LinkProxy) String() string {
 func (*LinkProxy) ProtoMessage() {}
 
 func (x *LinkProxy) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[53]
+	mi := &file_nagi_v1_common_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5459,7 +5568,7 @@ func (x *LinkProxy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkProxy.ProtoReflect.Descriptor instead.
 func (*LinkProxy) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{53}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *LinkProxy) GetProjectId() string {
@@ -5522,7 +5631,7 @@ type LinkNode struct {
 
 func (x *LinkNode) Reset() {
 	*x = LinkNode{}
-	mi := &file_nagi_v1_common_proto_msgTypes[54]
+	mi := &file_nagi_v1_common_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5534,7 +5643,7 @@ func (x *LinkNode) String() string {
 func (*LinkNode) ProtoMessage() {}
 
 func (x *LinkNode) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[54]
+	mi := &file_nagi_v1_common_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5547,7 +5656,7 @@ func (x *LinkNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkNode.ProtoReflect.Descriptor instead.
 func (*LinkNode) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{54}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *LinkNode) GetKey() []byte {
@@ -5576,7 +5685,7 @@ type LinkAllow struct {
 
 func (x *LinkAllow) Reset() {
 	*x = LinkAllow{}
-	mi := &file_nagi_v1_common_proto_msgTypes[55]
+	mi := &file_nagi_v1_common_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5588,7 +5697,7 @@ func (x *LinkAllow) String() string {
 func (*LinkAllow) ProtoMessage() {}
 
 func (x *LinkAllow) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_common_proto_msgTypes[55]
+	mi := &file_nagi_v1_common_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5601,7 +5710,7 @@ func (x *LinkAllow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LinkAllow.ProtoReflect.Descriptor instead.
 func (*LinkAllow) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_common_proto_rawDescGZIP(), []int{55}
+	return file_nagi_v1_common_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *LinkAllow) GetProjectId() string {
@@ -5910,7 +6019,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xbf\x06\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\x81\a\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -5941,7 +6050,14 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\timage_ops\x18\x17 \x01(\bR\bimageOps\x12!\n" +
 	"\freplica_dirs\x18\x19 \x01(\bR\vreplicaDirs\x12\x1f\n" +
 	"\vreplica_dir\x18\x1a \x01(\tR\n" +
-	"replicaDir\"\x89\x01\n" +
+	"replicaDir\x12@\n" +
+	"\x0fdirect_download\x18\x1e \x01(\v2\x17.nagi.v1.DirectDownloadR\x0edirectDownload\"\x86\x01\n" +
+	"\x0eDirectDownload\x12\x1c\n" +
+	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\x10\n" +
+	"\x03off\x18\x02 \x01(\bR\x03off\x12\x18\n" +
+	"\aaddress\x18\x03 \x01(\tR\aaddress\x12\x14\n" +
+	"\x05ready\x18\x04 \x01(\bR\x05ready\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +
@@ -6050,7 +6166,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05tried\x18\x14 \x01(\rR\x05tried\x12\x14\n" +
 	"\x05heard\x18\x15 \x01(\bR\x05heard\x12\x1d\n" +
 	"\n" +
-	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xf0\x01\n" +
+	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xa0\x02\n" +
 	"\n" +
 	"MeshStatus\x12\x1d\n" +
 	"\n" +
@@ -6061,7 +6177,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05peers\x18\x05 \x03(\v2\x17.nagi.v1.MeshPeerStatusR\x05peers\x12\x19\n" +
 	"\bquic_off\x18\x06 \x01(\bR\aquicOff\x12\x10\n" +
 	"\x03nat\x18\a \x01(\tR\x03nat\x12\x1b\n" +
-	"\trelay_off\x18\b \x01(\bR\brelayOff\"M\n" +
+	"\trelay_off\x18\b \x01(\bR\brelayOff\x12.\n" +
+	"\x13direct_download_off\x18\t \x01(\bR\x11directDownloadOff\"M\n" +
 	"\x0fMeshPingRequest\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1b\n" +
@@ -6076,10 +6193,11 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x10wireguard_upload\x18\x05 \x01(\x01R\x0fwireguardUpload\x12-\n" +
 	"\x12wireguard_download\x18\x06 \x01(\x01R\x11wireguardDownload\x12\"\n" +
 	"\rquic_off_here\x18\a \x01(\bR\vquicOffHere\x12\"\n" +
-	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"E\n" +
+	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"u\n" +
 	"\vMeshOptions\x12\x19\n" +
 	"\bquic_off\x18\x01 \x01(\bR\aquicOff\x12\x1b\n" +
-	"\trelay_off\x18\x02 \x01(\bR\brelayOff\"\xc7\x01\n" +
+	"\trelay_off\x18\x02 \x01(\bR\brelayOff\x12.\n" +
+	"\x13direct_download_off\x18\x03 \x01(\bR\x11directDownloadOff\"\xc7\x01\n" +
 	"\fBackupStatus\x12$\n" +
 	"\x0etarget_node_id\x18\x01 \x01(\tR\ftargetNodeId\x12\x1f\n" +
 	"\vtarget_name\x18\x02 \x01(\tR\n" +
@@ -6207,7 +6325,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -6238,134 +6356,136 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	(*NodeUsage)(nil),             // 26: nagi.v1.NodeUsage
 	(*DiskUsage)(nil),             // 27: nagi.v1.DiskUsage
 	(*NodeInfo)(nil),              // 28: nagi.v1.NodeInfo
-	(*DomainCert)(nil),            // 29: nagi.v1.DomainCert
-	(*LogLine)(nil),               // 30: nagi.v1.LogLine
-	(*DeployEvent)(nil),           // 31: nagi.v1.DeployEvent
-	(*DeployResult)(nil),          // 32: nagi.v1.DeployResult
-	(*MetricSeries)(nil),          // 33: nagi.v1.MetricSeries
-	(*AlertChannel)(nil),          // 34: nagi.v1.AlertChannel
-	(*AlertRules)(nil),            // 35: nagi.v1.AlertRules
-	(*AlertConfig)(nil),           // 36: nagi.v1.AlertConfig
-	(*Alert)(nil),                 // 37: nagi.v1.Alert
-	(*TrustedPanel)(nil),          // 38: nagi.v1.TrustedPanel
-	(*MeshPeer)(nil),              // 39: nagi.v1.MeshPeer
-	(*MeshPeerStatus)(nil),        // 40: nagi.v1.MeshPeerStatus
-	(*MeshStatus)(nil),            // 41: nagi.v1.MeshStatus
-	(*MeshPingRequest)(nil),       // 42: nagi.v1.MeshPingRequest
-	(*MeshPingResponse)(nil),      // 43: nagi.v1.MeshPingResponse
-	(*MeshSpeedResponse)(nil),     // 44: nagi.v1.MeshSpeedResponse
-	(*MeshOptions)(nil),           // 45: nagi.v1.MeshOptions
-	(*BackupStatus)(nil),          // 46: nagi.v1.BackupStatus
-	(*Replica)(nil),               // 47: nagi.v1.Replica
-	(*FailoverParticipant)(nil),   // 48: nagi.v1.FailoverParticipant
-	(*FailoverConfig)(nil),        // 49: nagi.v1.FailoverConfig
-	(*FailoverStatus)(nil),        // 50: nagi.v1.FailoverStatus
-	(*LinkPlan)(nil),              // 51: nagi.v1.LinkPlan
-	(*LinkEntry)(nil),             // 52: nagi.v1.LinkEntry
-	(*LinkEntryAllow)(nil),        // 53: nagi.v1.LinkEntryAllow
-	(*LinkProxy)(nil),             // 54: nagi.v1.LinkProxy
-	(*LinkNode)(nil),              // 55: nagi.v1.LinkNode
-	(*LinkAllow)(nil),             // 56: nagi.v1.LinkAllow
-	nil,                           // 57: nagi.v1.Container.BackupReplicaDirsEntry
-	nil,                           // 58: nagi.v1.ContainerConfig.ServiceEnvEntry
-	nil,                           // 59: nagi.v1.Version.ImagesEntry
-	nil,                           // 60: nagi.v1.Deployment.VersionsEntry
-	nil,                           // 61: nagi.v1.ContainerSpec.ImagesEntry
-	nil,                           // 62: nagi.v1.DeployResult.ImagesEntry
-	nil,                           // 63: nagi.v1.AlertRules.EnabledEntry
-	(*timestamppb.Timestamp)(nil), // 64: google.protobuf.Timestamp
+	(*DirectDownload)(nil),        // 29: nagi.v1.DirectDownload
+	(*DomainCert)(nil),            // 30: nagi.v1.DomainCert
+	(*LogLine)(nil),               // 31: nagi.v1.LogLine
+	(*DeployEvent)(nil),           // 32: nagi.v1.DeployEvent
+	(*DeployResult)(nil),          // 33: nagi.v1.DeployResult
+	(*MetricSeries)(nil),          // 34: nagi.v1.MetricSeries
+	(*AlertChannel)(nil),          // 35: nagi.v1.AlertChannel
+	(*AlertRules)(nil),            // 36: nagi.v1.AlertRules
+	(*AlertConfig)(nil),           // 37: nagi.v1.AlertConfig
+	(*Alert)(nil),                 // 38: nagi.v1.Alert
+	(*TrustedPanel)(nil),          // 39: nagi.v1.TrustedPanel
+	(*MeshPeer)(nil),              // 40: nagi.v1.MeshPeer
+	(*MeshPeerStatus)(nil),        // 41: nagi.v1.MeshPeerStatus
+	(*MeshStatus)(nil),            // 42: nagi.v1.MeshStatus
+	(*MeshPingRequest)(nil),       // 43: nagi.v1.MeshPingRequest
+	(*MeshPingResponse)(nil),      // 44: nagi.v1.MeshPingResponse
+	(*MeshSpeedResponse)(nil),     // 45: nagi.v1.MeshSpeedResponse
+	(*MeshOptions)(nil),           // 46: nagi.v1.MeshOptions
+	(*BackupStatus)(nil),          // 47: nagi.v1.BackupStatus
+	(*Replica)(nil),               // 48: nagi.v1.Replica
+	(*FailoverParticipant)(nil),   // 49: nagi.v1.FailoverParticipant
+	(*FailoverConfig)(nil),        // 50: nagi.v1.FailoverConfig
+	(*FailoverStatus)(nil),        // 51: nagi.v1.FailoverStatus
+	(*LinkPlan)(nil),              // 52: nagi.v1.LinkPlan
+	(*LinkEntry)(nil),             // 53: nagi.v1.LinkEntry
+	(*LinkEntryAllow)(nil),        // 54: nagi.v1.LinkEntryAllow
+	(*LinkProxy)(nil),             // 55: nagi.v1.LinkProxy
+	(*LinkNode)(nil),              // 56: nagi.v1.LinkNode
+	(*LinkAllow)(nil),             // 57: nagi.v1.LinkAllow
+	nil,                           // 58: nagi.v1.Container.BackupReplicaDirsEntry
+	nil,                           // 59: nagi.v1.ContainerConfig.ServiceEnvEntry
+	nil,                           // 60: nagi.v1.Version.ImagesEntry
+	nil,                           // 61: nagi.v1.Deployment.VersionsEntry
+	nil,                           // 62: nagi.v1.ContainerSpec.ImagesEntry
+	nil,                           // 63: nagi.v1.DeployResult.ImagesEntry
+	nil,                           // 64: nagi.v1.AlertRules.EnabledEntry
+	(*timestamppb.Timestamp)(nil), // 65: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	64, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	65, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
 	14, // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
 	7,  // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
 	3,  // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
 	15, // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
 	2,  // 5: nagi.v1.Project.links:type_name -> nagi.v1.LinkedProject
-	64, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
+	65, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
 	15, // 7: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
-	35, // 8: nagi.v1.ProjectSettings.alert_rules:type_name -> nagi.v1.AlertRules
+	36, // 8: nagi.v1.ProjectSettings.alert_rules:type_name -> nagi.v1.AlertRules
 	6,  // 9: nagi.v1.ProjectSettings.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
 	4,  // 10: nagi.v1.ProjectSettings.egress:type_name -> nagi.v1.Egress
 	4,  // 11: nagi.v1.ProjectEgress.egress:type_name -> nagi.v1.Egress
-	64, // 12: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
+	65, // 12: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
 	9,  // 13: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
 	9,  // 14: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
-	46, // 15: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
-	49, // 16: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
-	50, // 17: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
-	50, // 18: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
-	35, // 19: nagi.v1.Container.alert_rules:type_name -> nagi.v1.AlertRules
+	47, // 15: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
+	50, // 16: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
+	51, // 17: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
+	51, // 18: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
+	36, // 19: nagi.v1.Container.alert_rules:type_name -> nagi.v1.AlertRules
 	6,  // 20: nagi.v1.Container.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
 	8,  // 21: nagi.v1.Container.pending_ha:type_name -> nagi.v1.PendingHA
-	46, // 22: nagi.v1.Container.backups:type_name -> nagi.v1.BackupStatus
-	57, // 23: nagi.v1.Container.backup_replica_dirs:type_name -> nagi.v1.Container.BackupReplicaDirsEntry
-	49, // 24: nagi.v1.PendingHA.failover:type_name -> nagi.v1.FailoverConfig
+	47, // 22: nagi.v1.Container.backups:type_name -> nagi.v1.BackupStatus
+	58, // 23: nagi.v1.Container.backup_replica_dirs:type_name -> nagi.v1.Container.BackupReplicaDirsEntry
+	50, // 24: nagi.v1.PendingHA.failover:type_name -> nagi.v1.FailoverConfig
 	15, // 25: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
-	58, // 26: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	59, // 26: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
 	17, // 27: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
 	13, // 28: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
 	0,  // 29: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
-	64, // 30: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	64, // 31: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	59, // 32: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	64, // 33: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
-	60, // 34: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
-	64, // 35: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	65, // 30: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	65, // 31: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	60, // 32: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	65, // 33: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
+	61, // 34: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
+	65, // 35: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
 	15, // 36: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
 	18, // 37: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
 	15, // 38: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
 	19, // 39: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
 	21, // 40: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	64, // 41: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	65, // 41: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
 	1,  // 42: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
 	20, // 43: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
 	9,  // 44: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
 	15, // 45: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
-	61, // 46: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
+	62, // 46: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
 	14, // 47: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
 	24, // 48: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
-	35, // 49: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
+	36, // 49: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
 	6,  // 50: nagi.v1.ContainerSpec.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
 	6,  // 51: nagi.v1.ContainerSpec.project_snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
 	24, // 52: nagi.v1.ContainerSpec.backups:type_name -> nagi.v1.BackupTarget
 	19, // 53: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
 	21, // 54: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	64, // 55: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	46, // 56: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
-	46, // 57: nagi.v1.ContainerStatus.backups:type_name -> nagi.v1.BackupStatus
+	65, // 55: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	47, // 56: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
+	47, // 57: nagi.v1.ContainerStatus.backups:type_name -> nagi.v1.BackupStatus
 	27, // 58: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
-	64, // 59: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
-	64, // 60: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
-	32, // 61: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	62, // 62: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
-	63, // 63: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
-	34, // 64: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
-	35, // 65: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	64, // 66: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	64, // 67: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
-	40, // 68: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	64, // 69: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	64, // 70: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	48, // 71: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	48, // 72: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	48, // 73: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	49, // 74: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	64, // 75: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	54, // 76: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	56, // 77: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	52, // 78: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
-	53, // 79: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
-	5,  // 80: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
-	55, // 81: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
-	35, // 82: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
-	55, // 83: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	16, // 84: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	85, // [85:85] is the sub-list for method output_type
-	85, // [85:85] is the sub-list for method input_type
-	85, // [85:85] is the sub-list for extension type_name
-	85, // [85:85] is the sub-list for extension extendee
-	0,  // [0:85] is the sub-list for field type_name
+	29, // 59: nagi.v1.NodeInfo.direct_download:type_name -> nagi.v1.DirectDownload
+	65, // 60: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
+	65, // 61: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	33, // 62: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
+	63, // 63: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
+	64, // 64: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
+	35, // 65: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
+	36, // 66: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
+	65, // 67: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	65, // 68: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	41, // 69: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	65, // 70: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	65, // 71: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	49, // 72: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	49, // 73: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	49, // 74: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	50, // 75: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	65, // 76: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	55, // 77: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	57, // 78: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	53, // 79: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	54, // 80: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	5,  // 81: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
+	56, // 82: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	36, // 83: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
+	56, // 84: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	16, // 85: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	86, // [86:86] is the sub-list for method output_type
+	86, // [86:86] is the sub-list for method input_type
+	86, // [86:86] is the sub-list for extension type_name
+	86, // [86:86] is the sub-list for extension extendee
+	0,  // [0:86] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -6373,7 +6493,7 @@ func file_nagi_v1_common_proto_init() {
 	if File_nagi_v1_common_proto != nil {
 		return
 	}
-	file_nagi_v1_common_proto_msgTypes[30].OneofWrappers = []any{
+	file_nagi_v1_common_proto_msgTypes[31].OneofWrappers = []any{
 		(*DeployEvent_Output)(nil),
 		(*DeployEvent_Result)(nil),
 	}
@@ -6383,7 +6503,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   63,
+			NumMessages:   64,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

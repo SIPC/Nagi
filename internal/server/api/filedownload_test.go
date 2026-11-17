@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/byterange"
+	"github.com/SIPC/nagi/internal/pkg/filehttp"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -68,9 +68,7 @@ func TestFileDownloadRanges(t *testing.T) {
 		{"旧版本节点忽略范围", "bytes=10-15", "", false, 200, string(data), "", 1},
 		{"多段请求按整个文件", "bytes=0-1,5-6", "", true, 200, string(data), "", 1},
 	}
-	recentRanges.Lock()
-	recentRanges.m = map[string]time.Time{}
-	recentRanges.Unlock()
+	filehttp.ResetRanges()
 	for _, c := range cases {
 		recorded := 0
 		req := httptest.NewRequest(http.MethodGet, "/api/volume-file", nil)

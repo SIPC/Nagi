@@ -125,6 +125,10 @@ type Conn struct {
 	domainSent bool
 	// accepted：节点最近一次上报认本面板是主面板（见 docs/standby.md）。之前下发的修改会被节点拒绝。
 	accepted bool
+	// directKey、directAddr：直连下载签名链接用的密钥和节点的公网地址（见 direct.go），这次连接上告诉过节点以后才有。
+	directKey  []byte
+	directAddr string
+	directSent bool
 }
 
 // Pending 返回节点是否在等管理员批准。
@@ -387,6 +391,9 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.conn.mu.Unlock()
 	if pushAlerts {
 		go p.r.pushAlertConfig(context.Background(), p.conn, nil)
+	}
+	if p.conn.takeDirectPush(req, pending, accepts) {
+		go p.r.pushDirect(p.conn)
 	}
 	if pushDomain {
 		// 面板自带的节点连上后，把面板域名告诉它（可能在节点离线时改过）。

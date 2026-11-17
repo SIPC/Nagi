@@ -1,6 +1,6 @@
 # Add a node
 
-A node is a Linux server that runs containers. After you add a node, you can deploy containers in your projects to it. Nodes connect out to the panel, so they don't need inbound ports.
+A node is a Linux server that runs containers. After you add a node, you can deploy containers in your projects to it. Nodes connect out to the panel, so they don't need inbound ports. If the server has a public IP and port 443 is open, browsers download files directly from the node instead of through the panel.
 
 Before you start, make sure the new server meets the [requirements](../../README.en.md#requirements) and can reach the panel's address and port.
 

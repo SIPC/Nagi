@@ -235,7 +235,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `remove_node` | 让面板忘记节点；节点上还有容器时接口拒绝 | 节点名 | `RemoveNode` |
 | `set_node_mirrors` | 替换节点的镜像加速地址（写 `/etc/docker/daemon.json`，再让 Docker 重新加载配置，不重启容器；重新加载不了时要重启 Docker 才用） | — | `SetNodeMirrors` |
 | `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器 | — | `SetNodeProjectsRoot` |
-| `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转，只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
+| `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转、关闭直连下载，只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
 | `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
 | `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
 | `reclaim_node_snapshots` | 立即清理节点上每个容器的快照仓库，回收没用到的数据，快照本身不删 | — | `ReclaimNodeSnapshots` |

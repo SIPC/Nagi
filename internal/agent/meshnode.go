@@ -462,7 +462,9 @@ func (s *agentService) GetMeshStatus(context.Context, *nagiv1.MeshStatusRequest)
 	if n == nil {
 		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
-	return mesh.StatusProto(n.m, n.name), nil
+	st := mesh.StatusProto(n.m, n.name)
+	st.DirectDownloadOff = s.node.direct.off()
+	return st, nil
 }
 
 func (s *agentService) MeshPing(ctx context.Context, req *nagiv1.MeshPingRequest) (*nagiv1.MeshPingResponse, error) {
@@ -549,10 +551,14 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 	if err := set(meshRelayOffFile(s.node.cfg.DataDir), req.GetRelayOff()); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	if err := set(directOffFile(s.node.cfg.DataDir), req.GetDirectDownloadOff()); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	s.node.changed() // 直连下载开关：重新生成 Caddy 配置
 	n.m.SetQUIC(!req.GetQuicOff())
 	n.m.SetNodeRelay(!req.GetRelayOff())
 	s.node.log.Info("组网设置已修改", "quic", n.m.QUIC(), "relay", n.m.NodeRelay())
-	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC(), RelayOff: !n.m.NodeRelay()}, nil
+	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC(), RelayOff: !n.m.NodeRelay(), DirectDownloadOff: s.node.direct.off()}, nil
 }
 
 // meshMetrics 是节点之间流量的指标来源：把每个 mesh 成员的累计字节换算成速率，存成 m:<成员公钥>:rx、:tx。

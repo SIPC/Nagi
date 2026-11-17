@@ -106,6 +106,9 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))
 	mux.Handle("/ws/node-shell", a.standbyBlock(a.NodeShellHandler()))
 	mux.Handle("/api/node-file", a.standbyBlock(a.NodeFileHandler()))
+	// 直连下载的签名链接（见 directdl.go）。
+	mux.Handle("GET /api/node-file/direct", a.standbyBlock(a.NodeDirectHandler()))
+	mux.Handle("GET /api/volume-file/direct", a.VolumeDirectHandler())
 	mux.Handle("POST /api/upload", a.standbyBlock(a.UploadHandler()))
 	mux.Handle("GET /api/volume-file", a.VolumeFileHandler())
 	mux.Handle("POST /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))

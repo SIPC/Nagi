@@ -163,3 +163,32 @@ func TestDomainPorts(t *testing.T) {
 		}
 	}
 }
+
+// 直连下载：443 上多一条只匹配节点 IP 的规则，IP 的证书向 Let's Encrypt 申请（shortlived），没有 SNI 时按这个 IP 找证书。
+// 没有别的规则时也要有 443。生成的配置要能被 Caddy 校验通过。
+func TestBuildDirect(t *testing.T) {
+	for _, routes := range [][]Route{
+		nil,
+		{{Project: "p1", Service: "web", Protocol: "http", Domains: []string{"example.com"}, Upstreams: []string{"10.200.0.2:80"}}},
+	} {
+		cfg := buildWith(routes, t.TempDir(), func(string) bool { return false }, "203.0.113.5")
+		data, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := caddy.Validate(mustConfig(t, data)); err != nil {
+			t.Fatalf("invalid caddy config: %v\n%s", err, data)
+		}
+		s := string(data)
+		for _, want := range []string{`"handler":"nagi_direct"`, `"host":["203.0.113.5"]`, `"profile":"shortlived"`, `"subjects":["203.0.113.5"]`, `"default_sni":"203.0.113.5"`, `":443"`} {
+			if !strings.Contains(s, want) {
+				t.Errorf("配置里没有 %s：%s", want, s)
+			}
+		}
+	}
+	// 不开直连时没有这些。
+	data, _ := json.Marshal(build(nil, t.TempDir(), func(string) bool { return false }))
+	if strings.Contains(string(data), "nagi_direct") || strings.Contains(string(data), "shortlived") {
+		t.Errorf("没开直连时不该有直连的规则：%s", data)
+	}
+}

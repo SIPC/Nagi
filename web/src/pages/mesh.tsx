@@ -4,6 +4,7 @@ import { confirmAction, notify } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
+import type { Node } from "@/gen/nagi/v1/api_pb";
 import { fmtBytes, fmtMs, fmtRate } from "@/components/metrics";
 import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
@@ -358,8 +359,24 @@ export function NodeMesh({ nodeId }: { nodeId: string }) {
 }
 
 // MeshOption：节点设置里的一项组网开关（保存在节点上）。一行设置：状态加一个按钮。
-// 接口每次提交全部开关，另一项照原样带上。
-function MeshOption({ nodeId, online, field, title, help, confirm }: { nodeId: string; online: boolean; field: "quicOff" | "relayOff"; title: string; help: string; confirm: string }) {
+// 接口每次提交全部开关，其他几项照原样带上。onStatus 是开着时的状态说明（不给时写「已开启」）。
+function MeshOption({
+  nodeId,
+  online,
+  field,
+  title,
+  help,
+  confirm,
+  onStatus,
+}: {
+  nodeId: string;
+  online: boolean;
+  field: "quicOff" | "relayOff" | "directDownloadOff";
+  title: string;
+  help: string;
+  confirm: string;
+  onStatus?: React.ReactNode;
+}) {
   const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -371,9 +388,13 @@ function MeshOption({ nodeId, online, field, title, help, confirm }: { nodeId: s
     if (!off && !(await confirmAction(confirm, { action: t.mesh.optionDisable }))) return;
     setBusy(true);
     try {
-      const r = await nodeClient.setNodeMeshOptions({ nodeId, options: { quicOff: q.data.quicOff, relayOff: q.data.relayOff, [field]: !off } });
-      queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff, relayOff: r.relayOff });
+      const r = await nodeClient.setNodeMeshOptions({
+        nodeId,
+        options: { quicOff: q.data.quicOff, relayOff: q.data.relayOff, directDownloadOff: q.data.directDownloadOff, [field]: !off },
+      });
+      queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff, relayOff: r.relayOff, directDownloadOff: r.directDownloadOff });
       queryClient.invalidateQueries({ queryKey: ["node-mesh", nodeId] });
+      queryClient.invalidateQueries({ queryKey: ["nodes"] });
     } catch (err) {
       await notify(errorMessage(err));
     } finally {
@@ -389,7 +410,7 @@ function MeshOption({ nodeId, online, field, title, help, confirm }: { nodeId: s
         failed ? (
           <span className="text-destructive">{errorMessage(q.error)}</span>
         ) : q.data ? (
-          off ? t.mesh.quicOff : t.mesh.quicOn
+          off ? t.mesh.quicOff : (onStatus ?? t.mesh.quicOn)
         ) : (
           // 加载中：占位条，和状态文字一样高。
           <span className="flex h-5 items-center">
@@ -423,6 +444,23 @@ export function NodeQUIC({ nodeId, online }: { nodeId: string; online: boolean }
 // NodeRelay：替别的节点中转（见 docs/mesh.md#经节点中转）。
 export function NodeRelay({ nodeId, online }: { nodeId: string; online: boolean }) {
   return <MeshOption nodeId={nodeId} online={online} field="relayOff" title={t.mesh.relayTitle} help={t.mesh.relayHelp} confirm={t.mesh.relayConfirm} />;
+}
+
+// NodeDirectDownload：直连下载（见 docs/agent.md#直连下载）。开着时写现在能不能直连、不能的原因。
+export function NodeDirectDownload({ node }: { node: Node }) {
+  const m = t.mesh.direct;
+  const d = node.info?.directDownload;
+  let status: React.ReactNode = m.pending;
+  if (!d) status = m.unsupported;
+  else if (d.ready) status = m.ready(d.address);
+  else if (d.error)
+    status = (
+      <span className="text-warning" title={d.error}>
+        {m.failed(d.error)}
+      </span>
+    );
+  else if (!d.address) status = m.noAddress;
+  return <MeshOption nodeId={node.id} online={node.online} field="directDownloadOff" title={m.title} help={m.help} confirm={m.confirm} onStatus={status} />;
 }
 
 // PanelMeshCard：设置页上面板自己的 mesh 状态。

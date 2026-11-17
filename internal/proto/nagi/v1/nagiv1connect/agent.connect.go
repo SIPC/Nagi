@@ -220,6 +220,9 @@ const (
 	// AgentServiceSetPanelDomainProcedure is the fully-qualified name of the AgentService's
 	// SetPanelDomain RPC.
 	AgentServiceSetPanelDomainProcedure = "/nagi.v1.AgentService/SetPanelDomain"
+	// AgentServiceSetDirectDownloadProcedure is the fully-qualified name of the AgentService's
+	// SetDirectDownload RPC.
+	AgentServiceSetDirectDownloadProcedure = "/nagi.v1.AgentService/SetDirectDownload"
 	// AgentServiceUpgradeProcedure is the fully-qualified name of the AgentService's Upgrade RPC.
 	AgentServiceUpgradeProcedure = "/nagi.v1.AgentService/Upgrade"
 	// AgentServiceCancelUpgradeProcedure is the fully-qualified name of the AgentService's
@@ -368,6 +371,9 @@ type AgentServiceClient interface {
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
 	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error)
+	// 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
+	// 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
+	SetDirectDownload(context.Context, *connect.Request[v1.SetDirectDownloadRequest]) (*connect.Response[v1.SetDirectDownloadResponse], error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -808,6 +814,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SetPanelDomain")),
 			connect.WithClientOptions(opts...),
 		),
+		setDirectDownload: connect.NewClient[v1.SetDirectDownloadRequest, v1.SetDirectDownloadResponse](
+			httpClient,
+			baseURL+AgentServiceSetDirectDownloadProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("SetDirectDownload")),
+			connect.WithClientOptions(opts...),
+		),
 		upgrade: connect.NewClient[v1.UpgradeRequest, v1.UpgradeResponse](
 			httpClient,
 			baseURL+AgentServiceUpgradeProcedure,
@@ -929,6 +941,7 @@ type agentServiceClient struct {
 	getMirrors            *connect.Client[v1.GetMirrorsRequest, v1.Mirrors]
 	setMirrors            *connect.Client[v1.Mirrors, v1.Mirrors]
 	setPanelDomain        *connect.Client[v1.SetPanelDomainRequest, v1.SetPanelDomainResponse]
+	setDirectDownload     *connect.Client[v1.SetDirectDownloadRequest, v1.SetDirectDownloadResponse]
 	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 	cancelUpgrade         *connect.Client[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse]
 	setAuditSink          *connect.Client[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse]
@@ -1279,6 +1292,11 @@ func (c *agentServiceClient) SetPanelDomain(ctx context.Context, req *connect.Re
 	return c.setPanelDomain.CallUnary(ctx, req)
 }
 
+// SetDirectDownload calls nagi.v1.AgentService.SetDirectDownload.
+func (c *agentServiceClient) SetDirectDownload(ctx context.Context, req *connect.Request[v1.SetDirectDownloadRequest]) (*connect.Response[v1.SetDirectDownloadResponse], error) {
+	return c.setDirectDownload.CallUnary(ctx, req)
+}
+
 // Upgrade calls nagi.v1.AgentService.Upgrade.
 func (c *agentServiceClient) Upgrade(ctx context.Context, req *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {
 	return c.upgrade.CallUnary(ctx, req)
@@ -1444,6 +1462,9 @@ type AgentServiceHandler interface {
 	SetMirrors(context.Context, *connect.Request[v1.Mirrors]) (*connect.Response[v1.Mirrors], error)
 	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error)
+	// 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
+	// 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
+	SetDirectDownload(context.Context, *connect.Request[v1.SetDirectDownloadRequest]) (*connect.Response[v1.SetDirectDownloadResponse], error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error)
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -1880,6 +1901,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SetPanelDomain")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceSetDirectDownloadHandler := connect.NewUnaryHandler(
+		AgentServiceSetDirectDownloadProcedure,
+		svc.SetDirectDownload,
+		connect.WithSchema(agentServiceMethods.ByName("SetDirectDownload")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceUpgradeHandler := connect.NewUnaryHandler(
 		AgentServiceUpgradeProcedure,
 		svc.Upgrade,
@@ -2066,6 +2093,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceSetMirrorsHandler.ServeHTTP(w, r)
 		case AgentServiceSetPanelDomainProcedure:
 			agentServiceSetPanelDomainHandler.ServeHTTP(w, r)
+		case AgentServiceSetDirectDownloadProcedure:
+			agentServiceSetDirectDownloadHandler.ServeHTTP(w, r)
 		case AgentServiceUpgradeProcedure:
 			agentServiceUpgradeHandler.ServeHTTP(w, r)
 		case AgentServiceCancelUpgradeProcedure:
@@ -2361,6 +2390,10 @@ func (UnimplementedAgentServiceHandler) SetMirrors(context.Context, *connect.Req
 
 func (UnimplementedAgentServiceHandler) SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainRequest]) (*connect.Response[v1.SetPanelDomainResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetPanelDomain is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) SetDirectDownload(context.Context, *connect.Request[v1.SetDirectDownloadRequest]) (*connect.Response[v1.SetDirectDownloadResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.SetDirectDownload is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) Upgrade(context.Context, *connect.Request[v1.UpgradeRequest]) (*connect.Response[v1.UpgradeResponse], error) {

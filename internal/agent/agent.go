@@ -160,6 +160,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.files = a.newNodeFiles()
 	a.info = a.nodeInfo(ctx)
 	a.intranet = newIntranet(a)
+	a.direct = newDirectDL(a)
 	a.egress = newEgress(a)
 	a.violations = newViolations(a)
 	a.openAudit(ctx)
@@ -265,6 +266,10 @@ func Run(ctx context.Context, cfg Config) error {
 		a.startFailover(ctx, id)
 	}
 	proxy.OnCertEvent(func(domain string, err error) {
+		if a.direct.certEvent(domain, err) {
+			go a.changed() // 直连下载的 IP 证书：只更新状态，不告警
+			return
+		}
 		a.certFails.set(domain, err)
 		go a.changed()
 		// Caddy 在申请证书的过程中同步调用，发送告警放到后台。
@@ -283,6 +288,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	if !cfg.DisableProxy {
 		a.proxy = proxy.New(filepath.Join(cfg.DataDir, "caddy"), log.With("component", "proxy"))
+		proxy.SetDirectHandler(a.direct)
 		a.proxyKick = make(chan struct{}, 1)
 		defer a.proxy.Stop()
 		go a.proxyLoop(ctx)
@@ -310,6 +316,7 @@ type agent struct {
 	alerts    *alerts.Engine
 	mesh      *meshNode
 	intranet  *intranet
+	direct    *directDL // 直连下载（见 directdl.go）
 	// egress 是容器出站限制（见 docs/agent.md#出站限制）。
 	egress *egress
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
@@ -438,6 +445,7 @@ func (a *agent) proxyLoop(ctx context.Context) {
 	for {
 		routes, err := a.allRoutes(ctx)
 		routes = append(routes, a.panelRoutes()...)
+		a.proxy.SetDirect(a.direct.wanted(a.proxy))
 		if err == nil {
 			err = a.proxy.Apply(routes)
 		}
@@ -655,6 +663,19 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	}
 }
 
+// liveInfo 是上报用的节点信息：启动时算好的（a.info）加上随时会变的部分。
+func (a *agent) liveInfo() *nagiv1.NodeInfo {
+	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
+	info.ProjectsRoot = a.projectsRoot()
+	_, info.ReplicaDir = a.replicas.defaultDir()
+	// 本地命令随时可能改这个开关，界面要跟着变。
+	info.NodeAccess = nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir)
+	info.NodeAccessDisabled = NodeAccessDisabled(a.cfg.DataDir)
+	// 证书签好、开关切换、地址变了都会变。a.info 算出来时 a.direct 还没有创建。
+	info.DirectDownload = a.direct.status(a.proxy)
+	return info
+}
+
 func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p trustedPanel) (*nagiv1.ReportResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -664,12 +685,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 			c.Error = explain(c.Error)
 		}
 	}
-	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
-	info.ProjectsRoot = a.projectsRoot()
-	_, info.ReplicaDir = a.replicas.defaultDir()
-	// 本地命令随时可能改这个开关，界面要跟着变。
-	info.NodeAccess = nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir)
-	info.NodeAccessDisabled = NodeAccessDisabled(a.cfg.DataDir)
+	info := a.liveInfo()
 	latest := a.metrics.Latest()
 	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
 	for _, d := range a.metrics.Disks() {

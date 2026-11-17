@@ -65,7 +65,7 @@ func init() {
 			procedures:  []string{ln, nagiv1connect.NodeServiceSetNodeProjectsRootProcedure}},
 			toolSetProjectsRoot),
 		def(tool{name: "set_node_mesh_options", title: "Set node network options", write: true, idempotent: true, adminOnly: true,
-			description: "Administrators only. Turn off the QUIC fast path (all TCP over WireGuard), or stop the node from relaying traffic for other nodes (for metered nodes).",
+			description: "Administrators only. Turn off the QUIC fast path (all TCP over WireGuard), stop the node from relaying traffic for other nodes (for metered nodes), or turn off direct download (browsers then always download its files through the panel).",
 			procedures:  []string{ln, nagiv1connect.NodeServiceGetNodeMeshProcedure, nagiv1connect.NodeServiceSetNodeMeshOptionsProcedure}},
 			toolSetMeshOptions),
 		def(tool{name: "test_mesh_speed", title: "Test network speed", write: true, adminOnly: true,
@@ -254,7 +254,7 @@ func meshView(st *nagiv1.MeshStatus) map[string]any {
 		peers = append(peers, peerView(p))
 	}
 	return map[string]any{"address": st.GetAddress(), "port": st.GetPort(), "endpoints": st.GetEndpoints(), "nat": st.GetNat(),
-		"quic_off": st.GetQuicOff(), "relay_off": st.GetRelayOff(), "peers": peers}
+		"quic_off": st.GetQuicOff(), "relay_off": st.GetRelayOff(), "direct_download_off": st.GetDirectDownloadOff(), "peers": peers}
 }
 
 // findPeer 在节点的 mesh 状态里按名称找成员。panel 表示本面板：按面板自己的公钥找（成员名里面板写的是「面板 <地址>」）。
@@ -491,6 +491,8 @@ type MeshOptionsArgs struct {
 	Node     string `json:"node" jsonschema:"node name or ID"`
 	QuicOff  *bool  `json:"quic_off,omitempty" jsonschema:"true sends all TCP over WireGuard instead of QUIC"`
 	RelayOff *bool  `json:"relay_off,omitempty" jsonschema:"true stops the node from relaying for other nodes"`
+	// 直连下载（见 docs/agent.md#直连下载）。
+	DirectDownloadOff *bool `json:"direct_download_off,omitempty" jsonschema:"true makes browsers always download this node's files through the panel instead of directly from the node"`
 }
 
 func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
@@ -502,18 +504,21 @@ func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts := &nagiv1.MeshOptions{QuicOff: st.Msg.GetQuicOff(), RelayOff: st.Msg.GetRelayOff()}
+	opts := &nagiv1.MeshOptions{QuicOff: st.Msg.GetQuicOff(), RelayOff: st.Msg.GetRelayOff(), DirectDownloadOff: st.Msg.GetDirectDownloadOff()}
 	if in.QuicOff != nil {
 		opts.QuicOff = *in.QuicOff
 	}
 	if in.RelayOff != nil {
 		opts.RelayOff = *in.RelayOff
 	}
+	if in.DirectDownloadOff != nil {
+		opts.DirectDownloadOff = *in.DirectDownloadOff
+	}
 	res, err := c.h.clients.nodes.SetNodeMeshOptions(c.ctx, connect.NewRequest(&nagiv1.SetNodeMeshOptionsRequest{NodeId: n.GetId(), Options: opts}))
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"node": n.GetName(), "quic_off": res.Msg.GetQuicOff(), "relay_off": res.Msg.GetRelayOff()}, nil
+	return map[string]any{"node": n.GetName(), "quic_off": res.Msg.GetQuicOff(), "relay_off": res.Msg.GetRelayOff(), "direct_download_off": res.Msg.GetDirectDownloadOff()}, nil
 }
 
 type SpeedArgs struct {

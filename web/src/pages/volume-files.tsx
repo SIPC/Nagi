@@ -2,6 +2,7 @@
 // 目录大小；以及查看快照里的文件并恢复单个文件。在存储标签里就地换内容（地址的 volume 参数），不开对话框。
 // 规则在节点上执行（只读角色看不到入口，接口也拒绝；有顶替的容器只在持有租约时能写）。
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { directEndpoint, directLink, saveFrom } from "@/lib/direct-download";
 import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -135,16 +136,13 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     if (snapshot) q.set("snapshot", snapshot);
     return `/api/volume-file?${q}`;
   };
-  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。确认后交给浏览器下载（大文件可以断点续传）。
+  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。确认后交给浏览器下载（大文件可以断点续传），
+  // 节点能直连时直接从节点下载（见 lib/direct-download.ts）。
   const download = (p: string) => {
     run(`download:${p}`, async () => {
       const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
-      const a = document.createElement("a");
-      a.href = fileURL(p);
-      a.rel = "noopener";
-      a.download = "";
-      a.click();
+      saveFrom((await directLink(directEndpoint(fileURL(p)))) ?? fileURL(p));
     });
   };
 

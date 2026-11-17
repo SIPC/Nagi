@@ -70,6 +70,8 @@ type Proxy struct {
 	ports []spec.PortKey // 加载成功的配置里监听的 80 和 443
 	// public 是加载成功的配置对外开放的所有端口：80、443（包括 HTTP/3 的 UDP 443）和 TCP/UDP 转发的端口。
 	public []spec.PortKey
+	// direct 是直连下载用的公网 IP（见 direct.go），directLoaded 是加载成功的配置里的。
+	direct, directLoaded string
 }
 
 // New 创建代理。storage 是证书等数据的存放目录。
@@ -79,7 +81,10 @@ func New(storage string, log *slog.Logger) *Proxy {
 
 // Apply 按给定的规则重新加载 Caddy。配置没变时什么都不做。
 func (p *Proxy) Apply(routes []Route) error {
-	cfg, err := json.Marshal(build(routes, p.storage, p.HasCert))
+	p.mu.Lock()
+	direct := p.direct
+	p.mu.Unlock()
+	cfg, err := json.Marshal(buildWith(routes, p.storage, p.HasCert, direct))
 	if err != nil {
 		return err
 	}
@@ -94,6 +99,18 @@ func (p *Proxy) Apply(routes []Route) error {
 	p.last = cfg
 	p.ports = domainPorts(routes)
 	p.public = publicPorts(routes)
+	p.directLoaded = direct
+	if direct != "" {
+		// 直连下载在 443 上（包括 HTTP/3 的 UDP 443）。
+		for _, k := range []spec.PortKey{{Proto: spec.ProtoTCP, Port: 443}, {Proto: spec.ProtoUDP, Port: 443}} {
+			if !slices.Contains(p.public, k) {
+				p.public = append(p.public, k)
+			}
+		}
+		if k := (spec.PortKey{Proto: spec.ProtoTCP, Port: 443}); !slices.Contains(p.ports, k) {
+			p.ports = append(p.ports, k)
+		}
+	}
 	p.log.Info("已更新对外访问规则", "routes", len(routes))
 	return nil
 }
@@ -116,7 +133,7 @@ func (p *Proxy) Reload() error {
 func (p *Proxy) Stop() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.last, p.ports = nil, nil
+	p.last, p.ports, p.directLoaded = nil, nil, ""
 	return caddy.Stop()
 }
 
@@ -183,6 +200,11 @@ func (p *Proxy) HasCert(domain string) bool {
 // 绑了域名的 http：先只开 HTTP；拿到证书以后同时开 HTTPS，并把 HTTP 跳转到 HTTPS。
 // 所以关闭 Caddy 自带的自动跳转，由这里按证书状态决定 80 端口上是转发还是跳转。
 func build(routes []Route, storage string, hasCert func(string) bool) obj {
+	return buildWith(routes, storage, hasCert, "")
+}
+
+// buildWith 和 build 一样，direct 不为空时在 443 上为这个 IP 开直连下载（见 direct.go）。
+func buildWith(routes []Route, storage string, hasCert func(string) bool, direct string) obj {
 	sort.SliceStable(routes, func(i, j int) bool {
 		if routes[i].Project != routes[j].Project {
 			return routes[i].Project < routes[j].Project
@@ -256,14 +278,23 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 		}
 	}
 
+	if direct != "" {
+		httpsRoutes = append(httpsRoutes, directRoute(direct))
+	}
 	if len(httpsRoutes) > 0 {
+		// 握手时记下 TLS 指纹，反代面板时转给面板（见 ja4.go）。
+		policy := obj{"match": obj{"nagi_ja4": obj{}}}
+		if direct != "" {
+			// 浏览器连 IP 时不发 SNI：按这个 IP 找证书。节点在 NAT 后面（端口转发）时，连接的本地地址是内网地址，
+			// Caddy 默认按它找不到证书。
+			policy["default_sni"] = direct
+		}
 		httpServers["https"] = obj{
-			"listen":          []string{":443"},
-			"routes":          httpsRoutes,
-			"automatic_https": obj{"disable_redirects": true},
-			"logs":            obj{},
-			// 握手时记下 TLS 指纹，反代面板时转给面板（见 ja4.go）。
-			"tls_connection_policies": []obj{{"match": obj{"nagi_ja4": obj{}}}},
+			"listen":                  []string{":443"},
+			"routes":                  httpsRoutes,
+			"automatic_https":         obj{"disable_redirects": true},
+			"logs":                    obj{},
+			"tls_connection_policies": []obj{policy},
 		}
 	}
 	// 80 端口：只开 HTTP 的域名、还没拿到证书的域名直接转发；已有证书的域名跳转到 HTTPS；
@@ -282,6 +313,9 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 	}
 	if len(l4Servers) > 0 {
 		apps["layer4"] = obj{"servers": l4Servers}
+	}
+	if direct != "" {
+		apps["tls"] = directTLS(direct)
 	}
 	return obj{
 		"admin": obj{"disabled": true, "config": obj{"persist": false}},

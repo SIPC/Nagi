@@ -87,6 +87,7 @@ const (
 	AgentService_GetMirrors_FullMethodName            = "/nagi.v1.AgentService/GetMirrors"
 	AgentService_SetMirrors_FullMethodName            = "/nagi.v1.AgentService/SetMirrors"
 	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
+	AgentService_SetDirectDownload_FullMethodName     = "/nagi.v1.AgentService/SetDirectDownload"
 	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
 	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
 	AgentService_SetAuditSink_FullMethodName          = "/nagi.v1.AgentService/SetAuditSink"
@@ -227,6 +228,9 @@ type AgentServiceClient interface {
 	SetMirrors(ctx context.Context, in *Mirrors, opts ...grpc.CallOption) (*Mirrors, error)
 	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
 	SetPanelDomain(ctx context.Context, in *SetPanelDomainRequest, opts ...grpc.CallOption) (*SetPanelDomainResponse, error)
+	// 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
+	// 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
+	SetDirectDownload(ctx context.Context, in *SetDirectDownloadRequest, opts ...grpc.CallOption) (*SetDirectDownloadResponse, error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -1104,6 +1108,16 @@ func (c *agentServiceClient) SetPanelDomain(ctx context.Context, in *SetPanelDom
 	return out, nil
 }
 
+func (c *agentServiceClient) SetDirectDownload(ctx context.Context, in *SetDirectDownloadRequest, opts ...grpc.CallOption) (*SetDirectDownloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetDirectDownloadResponse)
+	err := c.cc.Invoke(ctx, AgentService_SetDirectDownload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpgradeResponse)
@@ -1323,6 +1337,9 @@ type AgentServiceServer interface {
 	SetMirrors(context.Context, *Mirrors) (*Mirrors, error)
 	// 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
 	SetPanelDomain(context.Context, *SetPanelDomainRequest) (*SetPanelDomainResponse, error)
+	// 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
+	// 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
+	SetDirectDownload(context.Context, *SetDirectDownloadRequest) (*SetDirectDownloadResponse, error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error)
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -1555,6 +1572,9 @@ func (UnimplementedAgentServiceServer) SetMirrors(context.Context, *Mirrors) (*M
 }
 func (UnimplementedAgentServiceServer) SetPanelDomain(context.Context, *SetPanelDomainRequest) (*SetPanelDomainResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetPanelDomain not implemented")
+}
+func (UnimplementedAgentServiceServer) SetDirectDownload(context.Context, *SetDirectDownloadRequest) (*SetDirectDownloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetDirectDownload not implemented")
 }
 func (UnimplementedAgentServiceServer) Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Upgrade not implemented")
@@ -2677,6 +2697,24 @@ func _AgentService_SetPanelDomain_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_SetDirectDownload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetDirectDownloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).SetDirectDownload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_SetDirectDownload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).SetDirectDownload(ctx, req.(*SetDirectDownloadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_Upgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpgradeRequest)
 	if err := dec(in); err != nil {
@@ -3012,6 +3050,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetPanelDomain",
 			Handler:    _AgentService_SetPanelDomain_Handler,
+		},
+		{
+			MethodName: "SetDirectDownload",
+			Handler:    _AgentService_SetDirectDownload_Handler,
 		},
 		{
 			MethodName: "Upgrade",

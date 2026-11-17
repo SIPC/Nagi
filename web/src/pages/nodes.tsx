@@ -12,7 +12,7 @@ import { Breadcrumb, PageHeader } from "@/pages/layout";
 import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, useRangeSearch } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
-import { NodeMesh, NodeQUIC, NodeRelay, ratePair } from "@/pages/mesh";
+import { NodeDirectDownload, NodeMesh, NodeQUIC, NodeRelay, ratePair } from "@/pages/mesh";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
 import { EditNodeTags, ManageLabels, TagChip, TagFilter, tagsOf } from "@/components/labels";
 import {
@@ -1032,6 +1032,8 @@ function NodeSettings({ n }: { n: Node }) {
         </SettingRow>
         <NodeQUIC nodeId={n.id} online={n.online} />
         <NodeRelay nodeId={n.id} online={n.online} />
+        {/* 面板自带的节点和面板在同一台机器上，直连没有意义。 */}
+        {!n.ownEmbedded && <NodeDirectDownload node={n} />}
         <SettingRow label={m.title} help={m.description} description={!isAdmin ? m.adminOnly : undefined}>
           {isAdmin && (
             <Button variant="outline" disabled={reclaim.busy || !n.online} onClick={startReclaim}>

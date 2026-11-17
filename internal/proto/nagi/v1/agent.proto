@@ -140,6 +140,9 @@ service AgentService {
   rpc SetMirrors(Mirrors) returns (Mirrors);
   // 面板绑定的域名（只发给面板自带的节点）：节点的 Caddy 把这个域名反代到面板，证书由 Caddy 申请。为空表示取消。
   rpc SetPanelDomain(SetPanelDomainRequest) returns (SetPanelDomainResponse);
+  // 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
+  // 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
+  rpc SetDirectDownload(SetDirectDownloadRequest) returns (SetDirectDownloadResponse);
   // 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
   // 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -681,6 +684,15 @@ message SetPanelDomainRequest {
 }
 
 message SetPanelDomainResponse {}
+
+message SetDirectDownloadRequest {
+  // 验证下载链接签名（HMAC-SHA256）的密钥，面板为这次连接随机生成，只在内存里。
+  bytes key = 1;
+  // 面板看到的节点公网地址（IP），节点为它申请证书。为空表示不能直连（例如地址是内网的）。
+  string address = 2;
+}
+
+message SetDirectDownloadResponse {}
 
 message UpgradeRequest {
   // 不再使用：面板以前自己提供二进制时发的 SHA-256。

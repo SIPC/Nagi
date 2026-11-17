@@ -505,6 +505,22 @@ message NodeInfo {
   bool replica_dirs = 25;
   // 节点保存副本的默认目录，为空表示 <节点目录>/replicas。
   string replica_dir = 26;
+  // 直连下载的状态（见 docs/agent.md#直连下载）。旧版本的节点不报。
+  DirectDownload direct_download = 30;
+}
+
+// DirectDownload 是节点直连下载的状态：浏览器直接从节点下载文件，不经面板和 mesh。
+message DirectDownload {
+  // 节点支持直连下载（旧版本的节点没有这一项）。
+  bool supported = 1;
+  // 节点的网络设置里关了直连下载。
+  bool off = 2;
+  // 面板告诉节点的公网地址，节点为它申请 IP 证书。
+  string address = 3;
+  // 已经拿到这个地址的证书，可以直连下载。
+  bool ready = 4;
+  // 不能直连的原因（端口被占用、证书申请失败等），可以直连时为空。
+  string error = 5;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -687,6 +703,8 @@ message MeshStatus {
   string nat = 7;
   // 这一端不替别的节点中转（节点的网络设置，见 docs/mesh.md#经节点中转）。
   bool relay_off = 8;
+  // 关闭了直连下载（节点的网络设置，见 docs/agent.md#直连下载）。
+  bool direct_download_off = 9;
 }
 
 message MeshPingRequest {
@@ -722,6 +740,8 @@ message MeshOptions {
   bool quic_off = 1;
   // 不替别的节点中转（流量按量计费的节点可以关掉）。
   bool relay_off = 2;
+  // 关闭直连下载：浏览器下载文件都经面板（见 docs/agent.md#直连下载）。
+  bool direct_download_off = 3;
 }
 
 // BackupStatus 是容器同步到备份节点的状态（在源节点上）。
