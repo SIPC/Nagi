@@ -52,7 +52,8 @@ func (s *Service) backupSources(ctx context.Context, c store.Container) (store.N
 }
 
 // registerBackup 让一个备份节点登记（或更新）接收容器的副本：只接受 backupSources 的同步。
-func (s *Service) registerBackup(ctx context.Context, conn *nodes.Conn, p store.Project, c store.Container) error {
+// dir 是新登记时副本的存放位置（为空用节点的默认目录；已有的副本留在原处）。
+func (s *Service) registerBackup(ctx context.Context, conn *nodes.Conn, p store.Project, c store.Container, dir string) error {
 	source, extra, err := s.backupSources(ctx, c)
 	if err != nil {
 		return err
@@ -61,7 +62,7 @@ func (s *Service) registerBackup(ctx context.Context, conn *nodes.Conn, p store.
 	if err != nil {
 		return err
 	}
-	return s.acceptReplica(ctx, conn, sp, source, extra)
+	return s.acceptReplica(ctx, conn, sp, source, extra, dir)
 }
 
 // registerBackups 更新容器所有备份节点上的登记：容器换了节点、设置或取消了顶替以后，源节点变了。
@@ -80,7 +81,7 @@ func (s *Service) registerBackups(ctx context.Context, projectID, name string) {
 		if err != nil {
 			continue
 		}
-		if err := s.registerBackup(ctx, conn, p, c); err != nil {
+		if err := s.registerBackup(ctx, conn, p, c, ""); err != nil {
 			s.Log.Warn("更新备份节点上的副本登记失败", "project", projectID, "container", name, "node", id, "err", err)
 		}
 	}
@@ -99,7 +100,7 @@ func (s *Service) registerBackupsOn(ctx context.Context, conn *nodes.Conn) {
 		}
 		for _, c := range rows {
 			if slices.Contains(store.BackupNodes(c), conn.NodeID) {
-				if err := s.registerBackup(ctx, conn, p, c); err != nil {
+				if err := s.registerBackup(ctx, conn, p, c, ""); err != nil {
 					s.Log.Warn("更新备份节点上的副本登记失败", "project", p.ID, "container", c.Name, "node", conn.NodeID, "err", err)
 				}
 			}
@@ -137,7 +138,8 @@ func (s *Service) checkBackupNodes(ctx context.Context, c store.Container, cfg *
 
 // SetBackupNodes 设置容器的备份节点（整个列表，按顺序；为空表示取消）。新加的备份节点要在线，登记后立即开始第一次同步；
 // 去掉的备份节点上的副本在 deleteReplica 时删除（不在线的留着，可以在节点的「副本」里删）。
-func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, list []string, deleteReplica bool) (*nagiv1.Project, error) {
+// dirs 是新加的备份节点上副本的存放位置（节点 ID → 目录，见 docs/snapshot.md#副本的存放位置），只有管理员能指定（接口里检查）。
+func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, list []string, deleteReplica bool, dirs map[string]string) (*nagiv1.Project, error) {
 	ctx = context.WithoutCancel(ctx)
 	var clean []string
 	for _, id := range list {
@@ -189,14 +191,25 @@ func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, li
 			removed = append(removed, id)
 		}
 	}
+	dirOf, err := s.checkReplicaDirs(ctx, added, dirs)
+	if err != nil {
+		return nil, err
+	}
 	for _, id := range added {
 		target, _, err := s.targetNode(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.registerBackup(ctx, target, p, c); err != nil {
-			return nil, i18n.Errorf("备份节点 %s 未能登记副本：%w", s.NodeName(ctx, id), s.nodeErr(ctx, id, err))
+		if err := s.registerBackup(ctx, target, p, c, dirOf[id]); err != nil {
+			return nil, i18n.Errorf("备份节点 %s 未能登记副本：%w", s.NodeName(ctx, id), s.nodeErr(ctx, id, nodeMessage(err)))
 		}
+	}
+	// 记下新加的备份节点单独指定的存放位置；去掉的备份节点的记录删掉。
+	for _, id := range added {
+		_ = s.Q.SetBackupReplicaDir(ctx, projectID, name, id, dirOf[id])
+	}
+	for _, id := range removed {
+		_ = s.Q.SetBackupReplicaDir(ctx, projectID, name, id, "")
 	}
 	if err := s.Q.SetContainerBackupNode(ctx, store.SetContainerBackupNodeParams{BackupNodeID: store.JoinBackupNodes(list), ProjectID: projectID, Name: name}); err != nil {
 		return nil, err

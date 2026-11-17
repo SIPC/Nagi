@@ -174,7 +174,13 @@ func Run(ctx context.Context, cfg Config) error {
 		projects.ReservedDirs = append(projects.ReservedDirs, filepath.Dir(cfg.DataDir))
 	}
 	projects.ProjectsRoot = a.projectsRoot
-	a.replicas = &replicas{dir: filepath.Join(cfg.DataDir, "replicas")}
+	a.replicas = newReplicas(cfg.DataDir)
+	a.replicas.reserved = projects.ReservedDirs
+	a.replicas.managed = func() []string { return a.projects.Dirs(context.Background()) }
+	a.replicas.projectsRoot = a.projectsRoot
+	a.replicas.denied = func(real string) bool { return a.files.Access(real) == nodefiles.AccessDenied }
+	a.replicas.stateDir = a.replicaStateDir
+	projects.ReplicaRoots = a.replicas.roots
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.statuses
 	a.failovers = newFailovers(cfg.DataDir)
@@ -502,6 +508,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		MultiBackup:    true,
 		FileOps:        true,
 		ImageOps:       true,
+		ReplicaDirs:    true,
 		ProxyDisabled:  a.cfg.DisableProxy,
 		EgressError:    a.egress.Error(),
 		ReportsCerts:   true,
@@ -651,6 +658,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 	}
 	info := proto.Clone(a.info).(*nagiv1.NodeInfo)
 	info.ProjectsRoot = a.projectsRoot()
+	_, info.ReplicaDir = a.replicas.defaultDir()
 	// 本地命令随时可能改这个开关，界面要跟着变。
 	info.NodeAccess = nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir)
 	info.NodeAccessDisabled = NodeAccessDisabled(a.cfg.DataDir)

@@ -86,8 +86,16 @@ func (a *agent) newNodeFiles() *nodefiles.Service {
 		dirs = append(dirs, filepath.Dir(a.cfg.DataDir))
 	}
 	return &nodefiles.Service{
-		Denied:     dirs,
-		Managed:    func() []string { return a.projects.Dirs(context.Background()) },
+		Denied:  dirs,
+		Managed: func() []string { return a.projects.Dirs(context.Background()) },
+		// 副本可能不在数据目录里（见 replica_dirs.go），照样禁止访问。只禁止各个副本的目录，
+		// 存放位置里的其他文件不受影响。
+		DeniedFunc: func() []string {
+			if a.replicas == nil {
+				return nil
+			}
+			return a.replicas.roots()
+		},
 		BackupDir:  filepath.Join(a.cfg.DataDir, "file-backups"),
 		StagingDir: filepath.Join(a.cfg.DataDir, "node-files-staging"),
 	}

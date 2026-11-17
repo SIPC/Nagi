@@ -148,6 +148,8 @@ message Container {
   repeated string backup_node_ids = 29;
   // 同步到各个备份节点的状态（容器所在节点上报的），按 backup_node_ids 的顺序。
   repeated BackupStatus backups = 30;
+  // 单独指定了副本存放位置的备份节点：节点 ID → 存放位置（见 docs/snapshot.md#副本的存放位置）。没有的用节点的默认目录。
+  map<string, string> backup_replica_dirs = 31;
 }
 
 // PendingHA 是从节点缓存拼回的顶替设置和备份节点。它们会让别的节点接收这个容器的副本、在顶替时运行它的配置，
@@ -499,6 +501,10 @@ message NodeInfo {
   bool file_ops = 22;
   // 节点支持镜像管理（AgentService.ListImages 等，旧版本的节点不报）。
   bool image_ops = 23;
+  // 节点支持选择副本的存放位置（SetReplicaDir、MoveReplica、AcceptReplicaRequest.replica_dir，见 docs/snapshot.md#副本的存放位置）。旧版本的节点不报。
+  bool replica_dirs = 25;
+  // 节点保存副本的默认目录，为空表示 <节点目录>/replicas。
+  string replica_dir = 26;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -739,6 +745,10 @@ message Replica {
   string source_name = 4;
   google.protobuf.Timestamp last_sync = 5;
   int64 bytes = 6;
+  // 副本在节点上的目录（<存放位置>/<项目 ID>-<容器名>）。旧版本的节点不报。
+  string dir = 8;
+  // 这个副本单独指定了存放位置，不随节点的默认目录移动。
+  bool custom_dir = 9;
 }
 
 // FailoverParticipant 是顶替设置里的一个参与者。

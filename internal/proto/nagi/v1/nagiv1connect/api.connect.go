@@ -177,6 +177,9 @@ const (
 	// NodeServiceSetNodeProjectsRootProcedure is the fully-qualified name of the NodeService's
 	// SetNodeProjectsRoot RPC.
 	NodeServiceSetNodeProjectsRootProcedure = "/nagi.v1.NodeService/SetNodeProjectsRoot"
+	// NodeServiceSetNodeReplicaDirProcedure is the fully-qualified name of the NodeService's
+	// SetNodeReplicaDir RPC.
+	NodeServiceSetNodeReplicaDirProcedure = "/nagi.v1.NodeService/SetNodeReplicaDir"
 	// NodeServiceCreateEnrollCommandProcedure is the fully-qualified name of the NodeService's
 	// CreateEnrollCommand RPC.
 	NodeServiceCreateEnrollCommandProcedure = "/nagi.v1.NodeService/CreateEnrollCommand"
@@ -467,6 +470,9 @@ const (
 	// ProjectServiceListBackupSnapshotsProcedure is the fully-qualified name of the ProjectService's
 	// ListBackupSnapshots RPC.
 	ProjectServiceListBackupSnapshotsProcedure = "/nagi.v1.ProjectService/ListBackupSnapshots"
+	// ProjectServiceSetBackupReplicaDirProcedure is the fully-qualified name of the ProjectService's
+	// SetBackupReplicaDir RPC.
+	ProjectServiceSetBackupReplicaDirProcedure = "/nagi.v1.ProjectService/SetBackupReplicaDir"
 	// ProjectServiceRestoreFromBackupProcedure is the fully-qualified name of the ProjectService's
 	// RestoreFromBackup RPC.
 	ProjectServiceRestoreFromBackupProcedure = "/nagi.v1.ProjectService/RestoreFromBackup"
@@ -1187,6 +1193,8 @@ type NodeServiceClient interface {
 	ReclaimNodeSnapshots(context.Context, *connect.Request[v1.NodeRef]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
+	// 节点保存副本的默认目录，把在默认目录里的副本移过去（见 docs/snapshot.md#副本的存放位置）。只有管理员能用，要先做高权限确认。
+	SetNodeReplicaDir(context.Context, *connect.Request[v1.SetNodeReplicaDirRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -1422,6 +1430,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("SetNodeProjectsRoot")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeReplicaDir: connect.NewClient[v1.SetNodeReplicaDirRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+NodeServiceSetNodeReplicaDirProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeReplicaDir")),
+			connect.WithClientOptions(opts...),
+		),
 		createEnrollCommand: connect.NewClient[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse](
 			httpClient,
 			baseURL+NodeServiceCreateEnrollCommandProcedure,
@@ -1572,6 +1586,7 @@ type nodeServiceClient struct {
 	setNodeMirrors        *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
 	reclaimNodeSnapshots  *connect.Client[v1.NodeRef, v1.DeployEvent]
 	setNodeProjectsRoot   *connect.Client[v1.SetNodeProjectsRootRequest, v1.SetProjectsRootResponse]
+	setNodeReplicaDir     *connect.Client[v1.SetNodeReplicaDirRequest, v1.DeployEvent]
 	createEnrollCommand   *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics      *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
 	getNodeStorage        *connect.Client[v1.NodeRef, v1.NodeStorage]
@@ -1748,6 +1763,11 @@ func (c *nodeServiceClient) SetNodeProjectsRoot(ctx context.Context, req *connec
 	return c.setNodeProjectsRoot.CallUnary(ctx, req)
 }
 
+// SetNodeReplicaDir calls nagi.v1.NodeService.SetNodeReplicaDir.
+func (c *nodeServiceClient) SetNodeReplicaDir(ctx context.Context, req *connect.Request[v1.SetNodeReplicaDirRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.setNodeReplicaDir.CallServerStream(ctx, req)
+}
+
 // CreateEnrollCommand calls nagi.v1.NodeService.CreateEnrollCommand.
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, req *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
 	return c.createEnrollCommand.CallUnary(ctx, req)
@@ -1894,6 +1914,8 @@ type NodeServiceHandler interface {
 	ReclaimNodeSnapshots(context.Context, *connect.Request[v1.NodeRef], *connect.ServerStream[v1.DeployEvent]) error
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error)
+	// 节点保存副本的默认目录，把在默认目录里的副本移过去（见 docs/snapshot.md#副本的存放位置）。只有管理员能用，要先做高权限确认。
+	SetNodeReplicaDir(context.Context, *connect.Request[v1.SetNodeReplicaDirRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
@@ -2125,6 +2147,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("SetNodeProjectsRoot")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeReplicaDirHandler := connect.NewServerStreamHandler(
+		NodeServiceSetNodeReplicaDirProcedure,
+		svc.SetNodeReplicaDir,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeReplicaDir")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceCreateEnrollCommandHandler := connect.NewUnaryHandler(
 		NodeServiceCreateEnrollCommandProcedure,
 		svc.CreateEnrollCommand,
@@ -2303,6 +2331,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceReclaimNodeSnapshotsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeProjectsRootProcedure:
 			nodeServiceSetNodeProjectsRootHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeReplicaDirProcedure:
+			nodeServiceSetNodeReplicaDirHandler.ServeHTTP(w, r)
 		case NodeServiceCreateEnrollCommandProcedure:
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
@@ -2472,6 +2502,10 @@ func (UnimplementedNodeServiceHandler) ReclaimNodeSnapshots(context.Context, *co
 
 func (UnimplementedNodeServiceHandler) SetNodeProjectsRoot(context.Context, *connect.Request[v1.SetNodeProjectsRootRequest]) (*connect.Response[v1.SetProjectsRootResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeProjectsRoot is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeReplicaDir(context.Context, *connect.Request[v1.SetNodeReplicaDirRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeReplicaDir is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error) {
@@ -3942,6 +3976,8 @@ type ProjectServiceClient interface {
 	SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
+	SetBackupReplicaDir(context.Context, *connect.Request[v1.SetBackupReplicaDirRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -4198,6 +4234,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("ListBackupSnapshots")),
 			connect.WithClientOptions(opts...),
 		),
+		setBackupReplicaDir: connect.NewClient[v1.SetBackupReplicaDirRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+ProjectServiceSetBackupReplicaDirProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetBackupReplicaDir")),
+			connect.WithClientOptions(opts...),
+		),
 		restoreFromBackup: connect.NewClient[v1.RestoreFromBackupRequest, v1.DeployEvent](
 			httpClient,
 			baseURL+ProjectServiceRestoreFromBackupProcedure,
@@ -4410,6 +4452,7 @@ type projectServiceClient struct {
 	setContainerSnapshotSchedule *connect.Client[v1.SetContainerSnapshotScheduleRequest, v1.Project]
 	syncBackup                   *connect.Client[v1.BackupNodeRef, v1.Project]
 	listBackupSnapshots          *connect.Client[v1.BackupNodeRef, v1.ListSnapshotsResponse]
+	setBackupReplicaDir          *connect.Client[v1.SetBackupReplicaDirRequest, v1.DeployEvent]
 	restoreFromBackup            *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
 	migrateContainer             *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
 	redeployElsewhere            *connect.Client[v1.MoveContainerRequest, v1.DeployEvent]
@@ -4604,6 +4647,11 @@ func (c *projectServiceClient) SyncBackup(ctx context.Context, req *connect.Requ
 // ListBackupSnapshots calls nagi.v1.ProjectService.ListBackupSnapshots.
 func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, req *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return c.listBackupSnapshots.CallUnary(ctx, req)
+}
+
+// SetBackupReplicaDir calls nagi.v1.ProjectService.SetBackupReplicaDir.
+func (c *projectServiceClient) SetBackupReplicaDir(ctx context.Context, req *connect.Request[v1.SetBackupReplicaDirRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.setBackupReplicaDir.CallServerStream(ctx, req)
 }
 
 // RestoreFromBackup calls nagi.v1.ProjectService.RestoreFromBackup.
@@ -4813,6 +4861,8 @@ type ProjectServiceHandler interface {
 	SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
+	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
+	SetBackupReplicaDir(context.Context, *connect.Request[v1.SetBackupReplicaDirRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -5065,6 +5115,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		connect.WithSchema(projectServiceMethods.ByName("ListBackupSnapshots")),
 		connect.WithHandlerOptions(opts...),
 	)
+	projectServiceSetBackupReplicaDirHandler := connect.NewServerStreamHandler(
+		ProjectServiceSetBackupReplicaDirProcedure,
+		svc.SetBackupReplicaDir,
+		connect.WithSchema(projectServiceMethods.ByName("SetBackupReplicaDir")),
+		connect.WithHandlerOptions(opts...),
+	)
 	projectServiceRestoreFromBackupHandler := connect.NewServerStreamHandler(
 		ProjectServiceRestoreFromBackupProcedure,
 		svc.RestoreFromBackup,
@@ -5307,6 +5363,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSyncBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceListBackupSnapshotsProcedure:
 			projectServiceListBackupSnapshotsHandler.ServeHTTP(w, r)
+		case ProjectServiceSetBackupReplicaDirProcedure:
+			projectServiceSetBackupReplicaDirHandler.ServeHTTP(w, r)
 		case ProjectServiceRestoreFromBackupProcedure:
 			projectServiceRestoreFromBackupHandler.ServeHTTP(w, r)
 		case ProjectServiceMigrateContainerProcedure:
@@ -5504,6 +5562,10 @@ func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.R
 
 func (UnimplementedProjectServiceHandler) ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListBackupSnapshots is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetBackupReplicaDir(context.Context, *connect.Request[v1.SetBackupReplicaDirRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetBackupReplicaDir is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) RestoreFromBackup(context.Context, *connect.Request[v1.RestoreFromBackupRequest], *connect.ServerStream[v1.DeployEvent]) error {

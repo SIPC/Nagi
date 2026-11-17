@@ -39,7 +39,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 令牌属于授权它的成员，权限是成员的角色和访问范围，再按下面两个选项收窄。成员的角色、范围改了，令牌立即跟着变。
   - **可修改**：默认不勾，只能用查看类的工具。
   - **执行命令**：默认不勾，勾了才能用 `exec`。只读成员没有这一项。
-  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）和节点文件、导入现有目录、隔离节点这些网页上要先做高权限确认的操作（见[节点文件和节点级操作](#节点文件和节点级操作)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
+  - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）和节点文件、导入现有目录、隔离节点、副本的存放位置这些网页上要先做高权限确认的操作（见[节点文件和节点级操作](#节点文件和节点级操作)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
 - 节点镜像（见下面的[节点镜像](#节点镜像)）只给管理员的令牌：查看不用额外权限，删除、清理、拉取要勾「可修改」。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
@@ -174,7 +174,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `delete_node_images` | 只给管理员：删除节点上的镜像（连同全部标签，`images` 填标签或至少 12 位的 ID）或单个标签（`tags`）。预览列出会删除的和节点会拒绝的（有容器使用、Nagi 需要） | 预览给的确认码 | `ListNodeImages`、`DeleteNodeImages` |
 | `prune_node_images` | 只给管理员：一键清理节点上没有容器使用、Nagi 也不需要的镜像，`build_cache` 时（默认不）同时清理构建缓存。预览列出镜像和至少释放的空间 | 预览给的确认码 | `ListNodeImages`、`PruneNodeImages` |
 
-`change_witness`（更换见证人，顶替照常进行）不中断服务，不用确认。`get_container` 返回备份节点的同步状态和顶替的状态（在哪个节点上运行、最近一次同步、是否在等确认）。
+`change_witness`（更换见证人，顶替照常进行）不中断服务，不用确认。`get_container` 返回备份节点的同步状态、单独指定的副本存放位置（`replica_location`）和顶替的状态（在哪个节点上运行、最近一次同步、是否在等确认）。
 
 ### 文件
 
@@ -245,7 +245,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 和节点页的「镜像」标签同一组接口（见 [agent.md](agent.md#节点镜像)），能不能删由节点判断，有容器使用的、Nagi 需要的一律拒绝。
 
 - 只给管理员的令牌。`list_node_images` 不用额外权限；`delete_node_images`、`prune_node_images`、`pull_node_image` 要勾「可修改」，备用面板上没有。
-- 网页上删除和清理要先做高权限确认，令牌做不了交互式的确认，改由预览和确认码代替：不带 `confirm` 只返回预览，用户同意后带预览给的确认码再调用一次。确认码由节点和要删的镜像（清理时是可清理的镜像 ID 和是否清理构建缓存）算出，预览之后节点上的镜像变了就对不上，只会再返回一次预览。所以面板对令牌免去这两个接口的高权限确认（`api` 包的 `tokenConfirmed`），令牌只在 `/mcp` 有效，到这里的令牌请求都来自这两个工具。和 `node_exec` 一样，确认码只保证执行的就是预览过的内容。
+- 网页上删除和清理要先做高权限确认，令牌做不了交互式的确认，改由预览和确认码代替：不带 `confirm` 只返回预览，用户同意后带预览给的确认码再调用一次。确认码由节点和要删的镜像（清理时是可清理的镜像 ID 和是否清理构建缓存）算出，预览之后节点上的镜像变了就对不上，只会再返回一次预览。所以管理员的、勾了「可修改」的令牌调用这两个接口时算确认过（见[高权限确认](#高权限确认)），令牌只在 `/mcp` 有效，到这里的令牌请求都来自这两个工具。和 `node_exec` 一样，确认码只保证执行的就是预览过的内容。
 - `pull_node_image` 用节点全局的 Docker 登录信息和镜像加速拉取，等拉完才返回，最长 30 分钟。不用确认。
 - 删除、清理、拉取都记进审计，挂在这次工具调用下面。
 
@@ -262,7 +262,21 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - shell 和环境变量和节点终端一样（见 [node-access.md](node-access.md#终端)）：root 的登录 shell，`sh -lc` 执行，不分配终端，没有输入。节点跑在容器里时，命令进的是这个容器，返回里会注明。
 - 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。命令的输出和日志一样当作不可信数据。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec`、节点文件和节点级操作是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file`、`move_files`、`extract_file`、`delete_node_images`、`prune_node_images`、节点文件的修改、节点管理里要确认的操作和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+### 副本的存放位置
+
+修改副本存放在节点上的哪里（见 [snapshot.md](snapshot.md#副本的存放位置)）。这等于让节点以 root 在任意位置建目录、写数据，和 `node_exec` 同一级：
+
+| 工具 | 内容 | 用到的接口 |
+| --- | --- | --- |
+| `set_node_replica_dir` | 修改节点的副本目录（`dir` 为空是默认的 `<节点目录>/replicas`），节点把默认目录里的副本移过去。预览列出会移动的副本 | `ListNodes`、`ListNodeReplicas`、`SetNodeReplicaDir` |
+| `set_replica_location` | 修改容器在它的一个备份节点上的副本存放位置（`dir` 为空移回节点的副本目录），节点把副本移过去 | `ListProjects`、`GetProject`、`ListNodes`、`SetBackupReplicaDir` |
+
+- 只有管理员能用，令牌要勾「可修改」和「节点终端」，没勾的令牌看不到这两个工具；备用面板上没有。节点要升级到支持选择存放位置的版本，否则直接拒绝。
+- **每次都要确认**：和 `node_exec` 一样，不带 `confirm` 只返回预览（节点、容器、当前和新的位置），用户同意后用同样的参数再调用一次，`confirm` 填预览给的确认码。确认码由工具、节点、容器和整理过的目录算出，改了其中任何一项都对不上。
+- **接口上的高权限确认**：见[高权限确认](#高权限确认)，这两个接口要管理员的、勾了「可修改」和「节点终端」的令牌。
+- 移动的过程作为进度通知发给客户端，结果里有成功与否和最后几行输出。和网页一样记进活动记录（`SetNodeReplicaDir`、`SetBackupReplicaDir`）。添加备份节点（`set_backup_node`）时不能指定存放位置，加好以后用 `set_replica_location`。
+
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec`、节点文件、节点级操作和副本的存放位置是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file`、`move_files`、`extract_file`、`delete_node_images`、`prune_node_images`、`set_node_replica_dir`、`set_replica_location`、节点文件的修改、节点管理里要确认的操作和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 还没有的
 

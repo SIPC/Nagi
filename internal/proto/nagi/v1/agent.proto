@@ -88,6 +88,11 @@ service AgentService {
   rpc MigrateOut(MigrateOutRequest) returns (stream DeployEvent);
   // 源节点：迁移失败时撤销，重新启动容器。
   rpc MigrateResume(ContainerRef) returns (stream DeployEvent);
+  // 副本的存放位置（见 docs/snapshot.md#副本的存放位置）。节点自己校验路径，移动完、核对无误才切换。
+  // 修改节点保存副本的默认目录，把在默认目录里的副本移过去。dir 为空表示 <节点目录>/replicas。
+  rpc SetReplicaDir(SetReplicaDirRequest) returns (stream DeployEvent);
+  // 把一个副本移到 dir 下面；dir 为空表示移回节点的默认目录。
+  rpc MoveReplica(MoveReplicaRequest) returns (stream DeployEvent);
 
   // ---- 顶替（见 docs/failover.md） ----
   // 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
@@ -307,6 +312,8 @@ message AcceptReplicaRequest {
   string source_name = 4;
   // 也接受这些节点的同步：设置了顶替时，持有租约、运行容器的节点可能是另一个参与者。
   repeated bytes extra_source_keys = 5;
+  // 副本的存放位置，只在新登记时使用；为空时用节点的默认目录，已有的副本留在原处。旧版本的节点不认识，面板不发给它们。
+  string replica_dir = 6;
 }
 
 message SyncBackupRequest {
@@ -645,6 +652,16 @@ message SetProjectsRootRequest {
 }
 
 message SetProjectsRootResponse {}
+
+message SetReplicaDirRequest {
+  string dir = 1;
+}
+
+message MoveReplicaRequest {
+  string project_id = 1;
+  string container = 2;
+  string dir = 3;
+}
 
 message SetPanelDomainRequest {
   string domain = 1;

@@ -161,7 +161,7 @@ func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nag
 		return nil, err
 	}
 	// B 登记副本（只接受 A 的同步），带上它恢复时用的配置。
-	if err := s.acceptReplica(ctx, b, sp, aNode, nil); err != nil {
+	if err := s.acceptReplica(ctx, b, sp, aNode, nil, ""); err != nil {
 		return nil, err
 	}
 	// 见证人 → B → A。
@@ -580,7 +580,7 @@ func (s *Service) refreshStandby(ctx context.Context, c store.Container, cfg *na
 	if err != nil {
 		return
 	}
-	if err := s.acceptReplica(ctx, standby, sp, holder, nil); err != nil {
+	if err := s.acceptReplica(ctx, standby, sp, holder, nil, ""); err != nil {
 		s.Log.Warn("把最新的配置推给热备失败", "project", c.ProjectID, "container", c.Name, "node", standby.NodeID, "err", err)
 	}
 }

@@ -68,6 +68,8 @@ var sensitive = []string{
 type Service struct {
 	// Denied 是禁止访问的目录：Nagi 自己的数据目录，里面有私钥。
 	Denied []string
+	// DeniedFunc 返回另外禁止访问的目录：不在数据目录里的副本（会变，所以每次取）。
+	DeniedFunc func() []string
 	// Managed 返回容器目录。部署时会重写里面的文件，写入也绕过了容器的锁和租约，所以只读。
 	Managed func() []string
 	// BackupDir、StagingDir 是覆盖文件时的备份和上传暂存目录，都在节点目录里。
@@ -155,6 +157,13 @@ func (s *Service) deniedDirs() []string {
 	for _, d := range s.Denied {
 		out = append(out, realOf(d))
 	}
+	if s.DeniedFunc != nil {
+		for _, d := range s.DeniedFunc() {
+			if d != "" {
+				out = append(out, realOf(d))
+			}
+		}
+	}
 	return out
 }
 
@@ -221,14 +230,17 @@ func (s *Service) readable(p string) (string, string, error) {
 	}
 	a := s.Access(real)
 	if a == AccessDenied {
-		return "", "", denied(deniedReason(real))
+		return "", "", denied(s.deniedReason(real))
 	}
 	return real, a, nil
 }
 
-func deniedReason(real string) string {
+func (s *Service) deniedReason(real string) string {
 	if slices.ContainsFunc(systemDenied, func(d string) bool { return under(real, d) }) {
 		return "禁止访问系统虚拟文件系统"
+	}
+	if s.DeniedFunc != nil && slices.ContainsFunc(s.DeniedFunc(), func(d string) bool { return d != "" && under(real, realOf(d)) }) {
+		return "禁止访问副本目录"
 	}
 	return "禁止访问 Nagi 数据目录"
 }
@@ -763,7 +775,7 @@ func (s *Service) Delete(req *nagiv1.DeleteNodeFileRequest) error {
 	}
 	a := s.Access(real)
 	if a == AccessDenied {
-		return denied(deniedReason(real))
+		return denied(s.deniedReason(real))
 	}
 	if a == AccessReadonly {
 		return checkWrite(a, false)

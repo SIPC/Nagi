@@ -768,7 +768,8 @@ func toolGetContainer(c *call, in ContainerArg) (any, error) {
 		if i < len(m.GetBackups()) {
 			b = m.GetBackups()[i]
 		}
-		out.Backups = append(out.Backups, backupView{Node: nodeName(nodes, id), LastSync: ts(b.GetLastSync()), Error: b.GetLastError(), Syncing: b.GetSyncing()})
+		out.Backups = append(out.Backups, backupView{Node: nodeName(nodes, id), LastSync: ts(b.GetLastSync()), Error: b.GetLastError(), Syncing: b.GetSyncing(),
+			Location: m.GetBackupReplicaDirs()[id]})
 	}
 	if f := m.GetFailover(); f != nil {
 		out.Failover = "standby on " + nodeName(nodes, f.GetB().GetNodeId())
@@ -809,6 +810,8 @@ type backupView struct {
 	LastSync string `json:"last_sync,omitempty"`
 	Error    string `json:"error,omitempty"`
 	Syncing  bool   `json:"syncing,omitempty"`
+	// Location：单独指定的副本存放位置（见 set_replica_location），为空时在节点的副本目录里。
+	Location string `json:"replica_location,omitempty"`
 }
 
 type failoverView struct {

@@ -886,6 +886,7 @@ const (
 	NodeService_SetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/SetNodeMirrors"
 	NodeService_ReclaimNodeSnapshots_FullMethodName  = "/nagi.v1.NodeService/ReclaimNodeSnapshots"
 	NodeService_SetNodeProjectsRoot_FullMethodName   = "/nagi.v1.NodeService/SetNodeProjectsRoot"
+	NodeService_SetNodeReplicaDir_FullMethodName     = "/nagi.v1.NodeService/SetNodeReplicaDir"
 	NodeService_CreateEnrollCommand_FullMethodName   = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName      = "/nagi.v1.NodeService/QueryNodeMetrics"
 	NodeService_GetNodeStorage_FullMethodName        = "/nagi.v1.NodeService/GetNodeStorage"
@@ -960,6 +961,8 @@ type NodeServiceClient interface {
 	ReclaimNodeSnapshots(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(ctx context.Context, in *SetNodeProjectsRootRequest, opts ...grpc.CallOption) (*SetProjectsRootResponse, error)
+	// 节点保存副本的默认目录，把在默认目录里的副本移过去（见 docs/snapshot.md#副本的存放位置）。只有管理员能用，要先做高权限确认。
+	SetNodeReplicaDir(ctx context.Context, in *SetNodeReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
@@ -1361,6 +1364,25 @@ func (c *nodeServiceClient) SetNodeProjectsRoot(ctx context.Context, in *SetNode
 	return out, nil
 }
 
+func (c *nodeServiceClient) SetNodeReplicaDir(ctx context.Context, in *SetNodeReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[5], NodeService_SetNodeReplicaDir_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SetNodeReplicaDirRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_SetNodeReplicaDirClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *nodeServiceClient) CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateEnrollCommandResponse)
@@ -1543,7 +1565,7 @@ func (c *nodeServiceClient) PruneNodeImages(ctx context.Context, in *PruneNodeIm
 
 func (c *nodeServiceClient) PullNodeImage(ctx context.Context, in *PullNodeImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[5], NodeService_PullNodeImage_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[6], NodeService_PullNodeImage_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1613,6 +1635,8 @@ type NodeServiceServer interface {
 	ReclaimNodeSnapshots(*NodeRef, grpc.ServerStreamingServer[DeployEvent]) error
 	// 节点的项目根目录：容器目录默认是 <项目根目录>/<项目名的拼音>/<容器名>。
 	SetNodeProjectsRoot(context.Context, *SetNodeProjectsRootRequest) (*SetProjectsRootResponse, error)
+	// 节点保存副本的默认目录，把在默认目录里的副本移过去（见 docs/snapshot.md#副本的存放位置）。只有管理员能用，要先做高权限确认。
+	SetNodeReplicaDir(*SetNodeReplicaDirRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
@@ -1751,6 +1775,9 @@ func (UnimplementedNodeServiceServer) ReclaimNodeSnapshots(*NodeRef, grpc.Server
 }
 func (UnimplementedNodeServiceServer) SetNodeProjectsRoot(context.Context, *SetNodeProjectsRootRequest) (*SetProjectsRootResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetNodeProjectsRoot not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeReplicaDir(*SetNodeReplicaDirRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method SetNodeReplicaDir not implemented")
 }
 func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEnrollCommand not implemented")
@@ -2353,6 +2380,17 @@ func _NodeService_SetNodeProjectsRoot_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_SetNodeReplicaDir_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SetNodeReplicaDirRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).SetNodeReplicaDir(m, &grpc.GenericServerStream[SetNodeReplicaDirRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_SetNodeReplicaDirServer = grpc.ServerStreamingServer[DeployEvent]
+
 func _NodeService_CreateEnrollCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateEnrollCommandRequest)
 	if err := dec(in); err != nil {
@@ -2896,6 +2934,11 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ReclaimNodeSnapshots",
 			Handler:       _NodeService_ReclaimNodeSnapshots_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SetNodeReplicaDir",
+			Handler:       _NodeService_SetNodeReplicaDir_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -4862,6 +4905,7 @@ const (
 	ProjectService_SetContainerSnapshotSchedule_FullMethodName = "/nagi.v1.ProjectService/SetContainerSnapshotSchedule"
 	ProjectService_SyncBackup_FullMethodName                   = "/nagi.v1.ProjectService/SyncBackup"
 	ProjectService_ListBackupSnapshots_FullMethodName          = "/nagi.v1.ProjectService/ListBackupSnapshots"
+	ProjectService_SetBackupReplicaDir_FullMethodName          = "/nagi.v1.ProjectService/SetBackupReplicaDir"
 	ProjectService_RestoreFromBackup_FullMethodName            = "/nagi.v1.ProjectService/RestoreFromBackup"
 	ProjectService_MigrateContainer_FullMethodName             = "/nagi.v1.ProjectService/MigrateContainer"
 	ProjectService_RedeployElsewhere_FullMethodName            = "/nagi.v1.ProjectService/RedeployElsewhere"
@@ -4957,6 +5001,8 @@ type ProjectServiceClient interface {
 	SyncBackup(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*Project, error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
+	SetBackupReplicaDir(ctx context.Context, in *SetBackupReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -5387,9 +5433,28 @@ func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *Back
 	return out, nil
 }
 
+func (c *projectServiceClient) SetBackupReplicaDir(ctx context.Context, in *SetBackupReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_SetBackupReplicaDir_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SetBackupReplicaDirRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_SetBackupReplicaDirClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *projectServiceClient) RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5408,7 +5473,7 @@ type ProjectService_RestoreFromBackupClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_MigrateContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_MigrateContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5427,7 +5492,7 @@ type ProjectService_MigrateContainerClient = grpc.ServerStreamingClient[DeployEv
 
 func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5566,7 +5631,7 @@ func (c *projectServiceClient) RenameVolumeFile(ctx context.Context, in *VolumeT
 
 func (c *projectServiceClient) MoveVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5585,7 +5650,7 @@ type ProjectService_MoveVolumeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *projectServiceClient) CopyVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5604,7 +5669,7 @@ type ProjectService_CopyVolumeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *projectServiceClient) CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5623,7 +5688,7 @@ type ProjectService_CompressVolumeFilesClient = grpc.ServerStreamingClient[FileO
 
 func (c *projectServiceClient) ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5662,7 +5727,7 @@ func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerR
 
 func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5681,7 +5746,7 @@ type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEven
 
 func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[14], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5822,6 +5887,8 @@ type ProjectServiceServer interface {
 	SyncBackup(context.Context, *BackupNodeRef) (*Project, error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(context.Context, *BackupNodeRef) (*ListSnapshotsResponse, error)
+	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
+	SetBackupReplicaDir(*SetBackupReplicaDirRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 原节点离线时，在备份节点上把容器恢复出来。
 	RestoreFromBackup(*RestoreFromBackupRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 把容器迁移到另一个节点（两个节点都在线），不丢数据。
@@ -5975,6 +6042,9 @@ func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *BackupNode
 }
 func (UnimplementedProjectServiceServer) ListBackupSnapshots(context.Context, *BackupNodeRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBackupSnapshots not implemented")
+}
+func (UnimplementedProjectServiceServer) SetBackupReplicaDir(*SetBackupReplicaDirRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method SetBackupReplicaDir not implemented")
 }
 func (UnimplementedProjectServiceServer) RestoreFromBackup(*RestoreFromBackupRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method RestoreFromBackup not implemented")
@@ -6642,6 +6712,17 @@ func _ProjectService_ListBackupSnapshots_Handler(srv interface{}, ctx context.Co
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _ProjectService_SetBackupReplicaDir_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SetBackupReplicaDirRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).SetBackupReplicaDir(m, &grpc.GenericServerStream[SetBackupReplicaDirRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_SetBackupReplicaDirServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _ProjectService_RestoreFromBackup_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(RestoreFromBackupRequest)
@@ -7326,6 +7407,11 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamLogs",
 			Handler:       _ProjectService_StreamLogs_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SetBackupReplicaDir",
+			Handler:       _ProjectService_SetBackupReplicaDir_Handler,
 			ServerStreams: true,
 		},
 		{

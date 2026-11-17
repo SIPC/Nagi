@@ -76,18 +76,15 @@ var elevationRequired = map[string]bool{
 	// 删除、清理节点上的镜像（见 docs/agent.md#节点镜像）。
 	nagiv1connect.NodeServiceDeleteNodeImagesProcedure: true,
 	nagiv1connect.NodeServicePruneNodeImagesProcedure:  true,
+	// 副本的存放位置：在节点上任意位置建目录、写数据（见 docs/snapshot.md#副本的存放位置）。
+	// 设置备份节点时指定存放位置也要确认，在 SetBackupNodes 里检查。
+	nagiv1connect.NodeServiceSetNodeReplicaDirProcedure:      true,
+	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure: true,
 }
 
-// tokenConfirmed 是访问令牌不用高权限确认的接口：令牌做不了交互式的确认，改由 MCP 工具先预览、用户同意后带确认码调用
-// （见 docs/mcp.md#节点镜像）。令牌只在 /mcp 有效，到这里的令牌请求都来自 MCP 工具。
-var tokenConfirmed = map[string]bool{
-	nagiv1connect.NodeServiceDeleteNodeImagesProcedure: true,
-	nagiv1connect.NodeServicePruneNodeImagesProcedure:  true,
-}
-
-// needsElevation 判断这次调用要不要先做高权限确认。
+// needsElevation 判断这次调用要不要先做高权限确认。访问令牌按 auth.User.ElevatedFor 的规则（见 docs/mcp.md#高权限确认）。
 func needsElevation(u auth.User, procedure string) bool {
-	return elevationRequired[procedure] && !u.ElevatedFor(procedure) && !(u.TokenID != 0 && tokenConfirmed[procedure])
+	return elevationRequired[procedure] && !u.ElevatedFor(procedure)
 }
 
 func elevationError() error {
@@ -96,8 +93,7 @@ func elevationError() error {
 	return err
 }
 
-// elevationCheck 拦下没有做高权限确认的请求。放在角色检查之后。访问令牌按 auth.User.ElevatedFor 判断
-// （只有勾了「节点终端」的管理员令牌调用节点文件这类接口时算确认过，见 docs/mcp.md#节点文件和节点级操作）。
+// elevationCheck 拦下没有做高权限确认的请求。放在角色检查之后。
 type elevationCheck struct{}
 
 func (elevationCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {

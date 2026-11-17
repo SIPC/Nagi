@@ -373,6 +373,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 			mem.Backups = append(mem.Backups, st)
 		}
 		mem.Backup = mem.Backups[0]
+		mem.BackupReplicaDirs = s.backupReplicaDirs(ctx, c, mem.BackupNodeIds)
 	}
 	if cp, err := spec.Load(ctx, cfg, c.Name, settings.GetSharedEnv(), checkData(c), spec.ComposeProjectName(c.ProjectID, c.Name)); err == nil {
 		mem.Stateful = spec.IsStateful(cfg, cp, spec.PreservePaths(cfg, cp, checkData(c)))

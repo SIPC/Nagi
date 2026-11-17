@@ -81,12 +81,21 @@ func (s *Service) checkPlacement(ctx context.Context, conn *nodes.Conn, p store.
 	return sp, nil
 }
 
+// acceptMoveTimeout 是登记副本时顺带移动已有副本最多等多久；面板不等了节点也会做完。
+const acceptMoveTimeout = 6 * time.Hour
+
 // acceptReplica 让目标节点登记接收容器的副本，只接受源节点（和 extra 里的节点）的同步。
-func (s *Service) acceptReplica(ctx context.Context, target *nodes.Conn, sp *nagiv1.ContainerSpec, source store.Node, extra [][]byte) error {
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+// dir 是新登记时副本的存放位置，为空用节点的默认目录（旧版本的节点只支持为空，调用方先检查）。
+func (s *Service) acceptReplica(ctx context.Context, target *nodes.Conn, sp *nagiv1.ContainerSpec, source store.Node, extra [][]byte, dir string) error {
+	// 指定了存放位置时，节点上已有的旧副本要先移过去（见 docs/snapshot.md#副本的存放位置），可能要很久。
+	timeout := 30 * time.Second
+	if dir != "" {
+		timeout = acceptMoveTimeout
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	_, err := target.Agent.AcceptReplica(cctx, &nagiv1.AcceptReplicaRequest{
-		Spec: sp, SourceKey: source.MeshKey, SourceNodeId: source.ID, SourceName: source.Name, ExtraSourceKeys: extra,
+		Spec: sp, SourceKey: source.MeshKey, SourceNodeId: source.ID, SourceName: source.Name, ExtraSourceKeys: extra, ReplicaDir: dir,
 	})
 	return err
 }
@@ -116,6 +125,12 @@ func (s *Service) moved(ctx context.Context, projectID, name, nodeID, dir string
 	}
 	if err := s.Q.MoveContainer(ctx, store.MoveContainerParams{NodeID: nodeID, Dir: dir, ProjectID: projectID, Name: name}); err != nil {
 		return err
+	}
+	// 容器换到的节点、清掉的备份节点上单独指定的副本存放位置不用再记。
+	for _, id := range store.BackupNodes(c) {
+		if id == nodeID || !keepBackups {
+			_ = s.Q.SetBackupReplicaDir(ctx, projectID, name, id, "")
+		}
 	}
 	if keepBackups {
 		rest := slices.DeleteFunc(store.BackupNodes(c), func(id string) bool { return id == nodeID })
@@ -247,7 +262,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 		out(i18n.T(ctx, "容器还没有部署过，已移到 %s", targetNode.Name))
 		return nil
 	}
-	if err := s.acceptReplica(ctx, target, sp, sourceNode, nil); err != nil {
+	if err := s.acceptReplica(ctx, target, sp, sourceNode, nil, ""); err != nil {
 		return i18n.Errorf("目标节点未能登记副本：%w", err)
 	}
 	undo := func(cause error) error {

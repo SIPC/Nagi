@@ -144,6 +144,15 @@ export default {
     set: "Set up backup node",
     add: "Add backup node",
     unset: "Syncs snapshots to other nodes for manual restore.",
+    dir: "Location",
+    dirHint: "Leave empty to use the node's replica directory",
+    dirHelp: "The replica is stored at <location>/<project ID>-<container name>. Only admins can choose it, and the backup node validates the path. If the node already has a replica of this container, it moves there automatically.",
+    dirMoving: "Setting up. If the node already has a replica of this container, it moves to the chosen location first. Keep this page open until it finishes.",
+    dirPlaceholder: "/mnt/data/replicas",
+    editDir: "Edit location",
+    editDirDescription: (node) => `The replica moves to the new location, and the original copy is deleted once verified. Syncing pauses during the move. Backup node: ${node}.`,
+    storedAt: (dir) => `Stored at ${dir}`,
+    elevate: "Choosing a replica location creates directories and writes data on the node. Verify your identity first.",
   },
   restore: {
     confirm: (node, container) =>

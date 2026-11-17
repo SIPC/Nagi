@@ -64,6 +64,8 @@ const (
 	AgentService_DeleteReplica_FullMethodName         = "/nagi.v1.AgentService/DeleteReplica"
 	AgentService_MigrateOut_FullMethodName            = "/nagi.v1.AgentService/MigrateOut"
 	AgentService_MigrateResume_FullMethodName         = "/nagi.v1.AgentService/MigrateResume"
+	AgentService_SetReplicaDir_FullMethodName         = "/nagi.v1.AgentService/SetReplicaDir"
+	AgentService_MoveReplica_FullMethodName           = "/nagi.v1.AgentService/MoveReplica"
 	AgentService_SetFailover_FullMethodName           = "/nagi.v1.AgentService/SetFailover"
 	AgentService_ConfirmTakeover_FullMethodName       = "/nagi.v1.AgentService/ConfirmTakeover"
 	AgentService_GetCache_FullMethodName              = "/nagi.v1.AgentService/GetCache"
@@ -177,6 +179,11 @@ type AgentServiceClient interface {
 	MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 源节点：迁移失败时撤销，重新启动容器。
 	MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 副本的存放位置（见 docs/snapshot.md#副本的存放位置）。节点自己校验路径，移动完、核对无误才切换。
+	// 修改节点保存副本的默认目录，把在默认目录里的副本移过去。dir 为空表示 <节点目录>/replicas。
+	SetReplicaDir(ctx context.Context, in *SetReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 把一个副本移到 dir 下面；dir 为空表示移回节点的默认目录。
+	MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// ---- 顶替（见 docs/failover.md） ----
 	// 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
 	SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error)
@@ -849,6 +856,44 @@ func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_MigrateResumeClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *agentServiceClient) SetReplicaDir(ctx context.Context, in *SetReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[18], AgentService_SetReplicaDir_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SetReplicaDirRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_SetReplicaDirClient = grpc.ServerStreamingClient[DeployEvent]
+
+func (c *agentServiceClient) MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[19], AgentService_MoveReplica_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MoveReplicaRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MoveReplicaClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *agentServiceClient) SetFailover(ctx context.Context, in *SetFailoverRequest, opts ...grpc.CallOption) (*FailoverStatus, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FailoverStatus)
@@ -1131,7 +1176,7 @@ func (c *agentServiceClient) PruneImages(ctx context.Context, in *PruneImagesReq
 
 func (c *agentServiceClient) PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[18], AgentService_PullImage_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[20], AgentService_PullImage_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1230,6 +1275,11 @@ type AgentServiceServer interface {
 	MigrateOut(*MigrateOutRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 源节点：迁移失败时撤销，重新启动容器。
 	MigrateResume(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error
+	// 副本的存放位置（见 docs/snapshot.md#副本的存放位置）。节点自己校验路径，移动完、核对无误才切换。
+	// 修改节点保存副本的默认目录，把在默认目录里的副本移过去。dir 为空表示 <节点目录>/replicas。
+	SetReplicaDir(*SetReplicaDirRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 把一个副本移到 dir 下面；dir 为空表示移回节点的默认目录。
+	MoveReplica(*MoveReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// ---- 顶替（见 docs/failover.md） ----
 	// 保存或删除容器的顶替设置（A、B、见证人各一份）。本节点是 A 或 B 时开始续约或热备。
 	SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error)
@@ -1436,6 +1486,12 @@ func (UnimplementedAgentServiceServer) MigrateOut(*MigrateOutRequest, grpc.Serve
 }
 func (UnimplementedAgentServiceServer) MigrateResume(*ContainerRef, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method MigrateResume not implemented")
+}
+func (UnimplementedAgentServiceServer) SetReplicaDir(*SetReplicaDirRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method SetReplicaDir not implemented")
+}
+func (UnimplementedAgentServiceServer) MoveReplica(*MoveReplicaRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method MoveReplica not implemented")
 }
 func (UnimplementedAgentServiceServer) SetFailover(context.Context, *SetFailoverRequest) (*FailoverStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetFailover not implemented")
@@ -2220,6 +2276,28 @@ func _AgentService_MigrateResume_Handler(srv interface{}, stream grpc.ServerStre
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_MigrateResumeServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_SetReplicaDir_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SetReplicaDirRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).SetReplicaDir(m, &grpc.GenericServerStream[SetReplicaDirRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_SetReplicaDirServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_MoveReplica_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(MoveReplicaRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).MoveReplica(m, &grpc.GenericServerStream[MoveReplicaRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_MoveReplicaServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _AgentService_SetFailover_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetFailoverRequest)
@@ -3055,6 +3133,16 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "MigrateResume",
 			Handler:       _AgentService_MigrateResume_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SetReplicaDir",
+			Handler:       _AgentService_SetReplicaDir_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "MoveReplica",
+			Handler:       _AgentService_MoveReplica_Handler,
 			ServerStreams: true,
 		},
 		{

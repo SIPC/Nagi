@@ -67,7 +67,10 @@ func (s *agentService) GetStorage(ctx context.Context, _ *nagiv1.GetStorageReque
 		a, b := out.ContainerDirs[i], out.ContainerDirs[j]
 		return a.DataBytes+a.VolumesBytes+a.BackupsBytes > b.DataBytes+b.VolumesBytes+b.BackupsBytes
 	})
-	out.ReplicasBytes, _ = dirBytes(ctx, s.node.replicas.dir)
+	for _, d := range s.node.replicas.usageDirs() {
+		n, _ := dirBytes(ctx, d)
+		out.ReplicasBytes += n
+	}
 	return out, nil
 }
 

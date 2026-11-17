@@ -40,6 +40,11 @@ func TestAllowed(t *testing.T) {
 		{"", list, false}, {"root", list, false},
 		// 节点访问只给管理员，查询也一样：名字以 List 开头的默认会放行。
 		{RoleAdmin, "/nagi.v1.NodeService/ListNodeDir", true}, {RoleAdmin, "/nagi.v1.NodeService/ReadNodeFile", true},
+		// 副本的存放位置只给管理员（见 docs/snapshot.md#副本的存放位置）；操作员能设置备份节点，存放位置在接口里另外拦。
+		{RoleAdmin, "/nagi.v1.ProjectService/SetBackupReplicaDir", true}, {RoleAdmin, "/nagi.v1.NodeService/SetNodeReplicaDir", true},
+		{RoleOperator, "/nagi.v1.ProjectService/SetBackupReplicaDir", false}, {RoleViewer, "/nagi.v1.ProjectService/SetBackupReplicaDir", false},
+		{RoleOperator, "/nagi.v1.NodeService/SetNodeReplicaDir", false}, {RoleViewer, "/nagi.v1.NodeService/SetNodeReplicaDir", false},
+		{RoleOperator, "/nagi.v1.ProjectService/SetBackupNodes", true},
 	} {
 		if got := Allowed(c.role, c.procedure); got != c.want {
 			t.Errorf("Allowed(%q, %s) = %v，应为 %v", c.role, c.procedure, got, c.want)

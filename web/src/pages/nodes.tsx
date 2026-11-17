@@ -962,7 +962,8 @@ function AddNode({ onClose }: { onClose: () => void }) {
 function NodeSettings({ n }: { n: Node }) {
   const { isAdmin } = useRole();
   const reclaim = useRun("");
-  const [editing, setEditing] = useState<"root" | "mirrors" | "alerts" | null>(null);
+  const moving = useRun("");
+  const [editing, setEditing] = useState<"root" | "replicaDir" | "mirrors" | "alerts" | null>(null);
   const queryClient = useQueryClient();
   const root = n.info?.projectsRoot || "/srv/nagi";
   const mirrors = useQuery({ queryKey: ["node-mirrors", n.id], queryFn: () => nodeClient.getNodeMirrors({ nodeId: n.id }), enabled: isAdmin });
@@ -979,6 +980,30 @@ function NodeSettings({ n }: { n: Node }) {
         <SettingRow label={t.nodes.settings.root} help={t.nodes.settings.rootHelp} description={<span className="font-mono">{root}</span>}>
           {isAdmin && (
             <Button variant="outline" onClick={() => setEditing("root")}>
+              {t.common.actions.edit}
+            </Button>
+          )}
+        </SettingRow>
+        <SettingRow
+          label={t.nodes.replicaDir.title}
+          help={t.nodes.replicaDir.help}
+          description={
+            <span className="flex min-w-0 items-center gap-1">
+              <span className={cn("truncate", n.info?.replicaDir && "font-mono")} title={n.info?.replicaDir || undefined}>
+                {n.info?.replicaDir || t.nodes.replicaDir.default}
+              </span>
+              {isAdmin && n.info && !n.info.replicaDirs && (
+                <>
+                  <span className="shrink-0">·</span>
+                  <span className="shrink-0">{t.nodes.replicaDir.outdated}</span>
+                </>
+              )}
+            </span>
+          }
+        >
+          {isAdmin && n.info?.replicaDirs && (
+            <Button variant="outline" disabled={moving.busy || !n.online} onClick={() => setEditing("replicaDir")}>
+              {moving.busy && <Spinner />}
               {t.common.actions.edit}
             </Button>
           )}
@@ -1016,10 +1041,30 @@ function NodeSettings({ n }: { n: Node }) {
           )}
         </SettingRow>
       </SettingRows>
-      {/* 清理快照仓库的输出接在设置行下面。 */}
+      {/* 移动副本、清理快照仓库的输出接在设置行下面。 */}
+      {moving.hasOutput && <div className="mt-4">{moving.output}</div>}
       {reclaim.hasOutput && <div className="mt-4">{reclaim.output}</div>}
       <Dialog open={editing === "root"} onClose={() => setEditing(null)} title={t.nodes.settings.root}>
         <RootForm nodeId={n.id} root={root} onDone={() => setEditing(null)} />
+      </Dialog>
+      <Dialog open={editing === "replicaDir"} onClose={() => setEditing(null)} title={t.nodes.replicaDir.title} description={t.nodes.replicaDir.help}>
+        <ReplicaDirForm
+          nodeId={n.id}
+          dir={n.info?.replicaDir ?? ""}
+          onCancel={() => setEditing(null)}
+          onSave={async (dir) => {
+            if (!(await requireElevation(t.nodes.replicaDir.elevate))) return;
+            setEditing(null);
+            await moving.run(() => nodeClient.setNodeReplicaDir({ nodeId: n.id, dir }));
+            // 新的目录随节点下一次上报到面板，过一会再取一次。
+            const refresh = () => {
+              queryClient.invalidateQueries({ queryKey: ["nodes"] });
+              queryClient.invalidateQueries({ queryKey: ["node-replicas", n.id] });
+            };
+            refresh();
+            setTimeout(refresh, 2000);
+          }}
+        />
       </Dialog>
       <Dialog open={editing === "alerts"} onClose={() => setEditing(null)} title={t.alerts.rules} description={t.alerts.nodeRulesHelp} className="max-w-[560px]">
         <AlertRulesForm
@@ -1090,6 +1135,33 @@ function RootForm({ nodeId, root, onDone }: { nodeId: string; root: string; onDo
           {busy && <Spinner />}
           {t.common.actions.save}
         </Button>
+      </DialogActions>
+    </form>
+  );
+}
+
+// ReplicaDirForm：编辑节点保存副本的默认目录（见 docs/snapshot.md#副本的存放位置）。保存后由调用方确认身份、
+// 关掉对话框，移动的输出显示在设置行下面。
+function ReplicaDirForm({ nodeId, dir, onCancel, onSave }: { nodeId: string; dir: string; onCancel: () => void; onSave: (dir: string) => void }) {
+  const [value, setValue] = useState(dir);
+  const m = t.nodes.replicaDir;
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim() === dir) return onCancel();
+        onSave(value.trim());
+      }}
+    >
+      <Field label={m.label} htmlFor={`replica-dir-${nodeId}`} hint={m.hint}>
+        <Input id={`replica-dir-${nodeId}`} value={value} onChange={(e) => setValue(e.target.value)} placeholder={m.placeholder} className="font-mono" autoFocus autoComplete="off" autoCapitalize="none" spellCheck={false} />
+      </Field>
+      <DialogActions>
+        <Button variant="outline" readOnlyOk onClick={onCancel}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit">{t.common.actions.save}</Button>
       </DialogActions>
     </form>
   );
@@ -1204,11 +1276,25 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
             const label = `${r?.projectName || r?.projectId} / ${r?.container}`;
             const source = nodes.find((x) => x.id === r?.sourceNodeId)?.name || r?.sourceName;
             const detail = [source && t.nodes.replicas.source(source), r?.lastSync ? t.nodes.replicas.synced(timeAgo(toDate(r.lastSync))) : t.nodes.replicas.neverSynced].filter(Boolean).join(" · ");
+            // 副本所在的目录（旧版本的节点不报），单独指定了位置的注明。
+            const where = r?.dir ? r.dir + (r.customDir ? ` · ${t.nodes.replicas.customDir}` : "") : "";
+            const tip = [detail, where].filter(Boolean).join("\n");
             return (
               <Row
                 key={`${r?.projectId}-${r?.container}`}
                 title={<span className="truncate">{label}</span>}
-                sub={!inUse ? <span className="text-warning-text" title={detail}>{t.nodes.replicas.unused}</span> : detail}
+                sub={
+                  !inUse ? (
+                    <span className="text-warning-text" title={tip}>
+                      {t.nodes.replicas.unused}
+                    </span>
+                  ) : (
+                    <span className="wrap-anywhere" title={tip}>
+                      {detail}
+                      {r?.dir && <span className="font-mono"> · {r.dir}</span>}
+                    </span>
+                  )
+                }
                 cols={[{ content: <Roll value={fmtBytes(Number(r?.bytes ?? 0))} n={Number(r?.bytes ?? 0)} />, num: true }]}
                 actions={
                   inUse ? null : (

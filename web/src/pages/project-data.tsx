@@ -75,6 +75,9 @@ function useNodes() {
     name: (id: string, fallback?: string) => known.find((n) => n.id === id)?.name ?? fallback ?? id,
     online: (id: string) => known.find((n) => n.id === id)?.online === true,
     usable: list.filter((n) => n.online && !n.pending),
+    // 节点支持选择副本的存放位置；replicaDir 是节点的副本目录（为空是默认的 <节点目录>/replicas）。
+    replicaDirs: (id: string) => list.find((n) => n.id === id)?.info?.replicaDirs === true,
+    replicaDir: (id: string) => list.find((n) => n.id === id)?.info?.replicaDir ?? "",
   };
 }
 
@@ -156,7 +159,7 @@ export function ContainerHA({
       {restorable && <RestoreNotice project={project} container={container} nodes={nodes} run={run} />}
       <div className="min-w-0">
         {container.failover && <FailoverDetail project={project} container={container} nodes={nodes} />}
-        {container.backupNodeIds.length > 0 && <BackupDetail project={project} container={container} nodes={nodes} />}
+        {container.backupNodeIds.length > 0 && <BackupDetail project={project} container={container} nodes={nodes} run={run} />}
         {restorable && <RestorableSnapshots project={project} container={container} nodes={nodes} run={run} />}
         <Section>
           <List>
@@ -772,9 +775,13 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
   const b = t.projectData.backup;
   const { busy, error, call } = useCall(project.id);
   const candidates = backupCandidates(container, nodes);
+  const { isAdmin } = useRole();
   const [nodeId, setNodeId] = useState("");
+  const [dir, setDir] = useState("");
   const choice = nodeId || candidates[0]?.id || "";
   const first = container.backupNodeIds.length === 0;
+  // 存放位置只有管理员能指定，节点要支持（旧版本的节点不显示这一项）。
+  const canDir = isAdmin && nodes.replicaDirs(choice);
   return (
     <Dialog open onClose={onClose} title={first ? b.set : b.add} description={first ? b.description : b.addDescription}>
       <form
@@ -782,7 +789,10 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
         onSubmit={async (e) => {
           e.preventDefault();
           const ids = [...container.backupNodeIds, choice];
-          if (await call(() => projectClient.setBackupNodes({ projectId: project.id, container: container.name, backupNodeIds: ids, deleteReplica: false }))) onClose();
+          const path = canDir ? dir.trim() : "";
+          if (path && !(await requireElevation(b.elevate))) return;
+          const replicaDirs = path ? { [choice]: path } : {};
+          if (await call(() => projectClient.setBackupNodes({ projectId: project.id, container: container.name, backupNodeIds: ids, deleteReplica: false, replicaDirs }))) onClose();
         }}
       >
         <Field label={b.node} htmlFor="backup-node">
@@ -794,6 +804,13 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
             ))}
           </Select>
         </Field>
+        {canDir && (
+          <Field label={b.dir} htmlFor="backup-dir" hint={b.dirHint} help={b.dirHelp}>
+            <Input id="backup-dir" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={nodes.replicaDir(choice) || b.dirPlaceholder} className="font-mono" autoComplete="off" autoCapitalize="none" spellCheck={false} />
+          </Field>
+        )}
+        {/* 节点上已有这个容器的旧副本时，节点先把它移到指定的位置，可能要一会儿。 */}
+        {busy && canDir && dir.trim() && <Notice tone="info">{b.dirMoving}</Notice>}
         {error && <Alert>{error}</Alert>}
         <DialogActions>
           <Button variant="outline" readOnlyOk onClick={onClose}>
@@ -811,10 +828,14 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
 
 // BackupDetail：已设置的备份节点，一个一行：状态、上次同步，行末同步或移除。添加和全部同步在标题栏。
 // 参考 Proxmox 的复制任务列表：每个目标一行，各自的状态和上次同步时间。
-function BackupDetail({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
+function BackupDetail({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
   const b = t.projectData.backup;
   const { busy, pending, error, call } = useCall(project.id);
+  const { isAdmin } = useRole();
   const [adding, setAdding] = useState(false);
+  // editingDir：正在编辑存放位置的备份节点。
+  const [editingDir, setEditingDir] = useState("");
+  const dirs = container.backupReplicaDirs;
   const sourceOnline = nodes.online(container.nodeId);
   const ids = container.backupNodeIds;
   const syncing = container.backups.some((s) => s.syncing);
@@ -884,19 +905,26 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
                     {st.lastError}
                   </span>
                 ) : (
-                  <span title={formatDateTime(toDate(st?.lastSync))}>{last}</span>
+                  <span className="wrap-anywhere" title={[formatDateTime(toDate(st?.lastSync)), dirs[id] ? b.storedAt(dirs[id]) : ""].filter(Boolean).join("\n")}>
+                    {last}
+                    {dirs[id] && <span className="font-mono"> · {dirs[id]}</span>}
+                  </span>
                 )
               }
               cols={[{ content: state(id), phone: true }]}
               actionsWidth="w-9"
               actions={
-                pending === "remove:" + id || pending === "sync:" + id ? (
+                pending === "remove:" + id || pending === "sync:" + id || (run.busy && editingDir === id) ? (
                   <Spinner />
                 ) : (
                   <RowMenu
                     items={[
-                      { label: b.syncNow, disabled: busy || !sourceOnline || !!st?.syncing, onSelect: () => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name, nodeId: id }), "sync:" + id) },
-                      { label: b.removeOne, danger: true, disabled: busy, onSelect: () => remove(id) },
+                      { label: b.syncNow, disabled: busy || run.busy || !sourceOnline || !!st?.syncing, onSelect: () => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name, nodeId: id }), "sync:" + id) },
+                      // 存放位置只有管理员能改，节点要在线、支持（旧版本的节点没有这一项）。
+                      ...(isAdmin && nodes.replicaDirs(id)
+                        ? [{ label: b.editDir, disabled: busy || run.busy || !nodes.online(id), onSelect: () => setEditingDir(id) }]
+                        : []),
+                      { label: b.removeOne, danger: true, disabled: busy || run.busy, onSelect: () => remove(id) },
                     ]}
                   />
                 )
@@ -907,7 +935,49 @@ function BackupDetail({ project, container, nodes }: { project: Project; contain
       </List>
       {error && <Alert>{error}</Alert>}
       {adding && <BackupDialog project={project} container={container} nodes={nodes} onClose={() => setAdding(false)} />}
+      {editingDir && !run.busy && (
+        <ReplicaDirDialog
+          nodeName={nodes.name(editingDir)}
+          dir={dirs[editingDir] ?? ""}
+          placeholder={nodes.replicaDir(editingDir)}
+          onClose={() => setEditingDir("")}
+          onSave={async (dir) => {
+            if (!(await requireElevation(b.elevate))) return;
+            const nodeId = editingDir;
+            await run.run(() => projectClient.setBackupReplicaDir({ projectId: project.id, container: container.name, nodeId, dir }));
+            setEditingDir("");
+          }}
+        />
+      )}
     </Section>
+  );
+}
+
+// ReplicaDirDialog：编辑容器在一个备份节点上的副本存放位置。保存后对话框关掉，移动的输出显示在高可用标签的最上面。
+function ReplicaDirDialog({ nodeName, dir, placeholder, onClose, onSave }: { nodeName: string; dir: string; placeholder: string; onClose: () => void; onSave: (dir: string) => void }) {
+  const b = t.projectData.backup;
+  const [value, setValue] = useState(dir);
+  return (
+    <Dialog open onClose={onClose} title={b.editDir} description={b.editDirDescription(nodeName)}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (value.trim() === dir) return onClose();
+          onSave(value.trim());
+        }}
+      >
+        <Field label={b.dir} htmlFor="replica-dir" hint={b.dirHint} help={b.dirHelp}>
+          <Input id="replica-dir" value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder || b.dirPlaceholder} className="font-mono" autoFocus autoComplete="off" autoCapitalize="none" spellCheck={false} />
+        </Field>
+        <DialogActions>
+          <Button variant="outline" readOnlyOk onClick={onClose}>
+            {t.common.actions.cancel}
+          </Button>
+          <Button type="submit">{t.common.actions.save}</Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
 

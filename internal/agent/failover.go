@@ -727,6 +727,8 @@ var errAlreadyHere = errors.New("本节点上已经有这个容器，没有用�
 
 // restoreFromReplica 用副本把容器恢复到本节点的 dir 并启动，成功放到本节点上以后删除副本。
 func (a *agent) restoreFromReplica(ctx context.Context, pid, name, dir string, onLine func(string)) error {
+	unlock := a.replicas.lock(pid, name)
+	defer unlock()
 	_, sp, root, err := a.replicas.load(pid, name)
 	if err != nil {
 		return err
@@ -735,8 +737,6 @@ func (a *agent) restoreFromReplica(ctx context.Context, pid, name, dir string, o
 	if dir != "" {
 		sp.Dir = dir
 	}
-	unlock := a.replicas.lock(pid, name)
-	defer unlock()
 	if a.projects.Has(ctx, pid, name) {
 		// 不应该出现：本节点上已经有这个容器（缓存），副本保留，等人工处理。
 		return errAlreadyHere
@@ -744,8 +744,7 @@ func (a *agent) restoreFromReplica(ctx context.Context, pid, name, dir string, o
 	err = a.projects.RestoreReplica(ctx, sp, filepath.Join(root, "files", "repo"), "", onLine)
 	// 容器已经放到本节点上（启动失败也算），用自己的快照仓库了，副本没用了。
 	if a.projects.Has(ctx, pid, name) {
-		os.RemoveAll(root)
-		os.RemoveAll(a.replicaStateDir(pid, name))
+		_ = a.replicas.remove(pid, name)
 	}
 	a.changed()
 	return err
@@ -870,7 +869,9 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	}
 	_ = f.voter.Set(id, holder, epoch, leaseOf(cfg))
 	if sp != nil {
+		unlock := a.replicas.lock(pid, name)
 		_ = a.replicas.save(&replicaMeta{ProjectID: pid, Container: name, SourceKey: holder, SourceName: holderName}, sp)
+		unlock()
 	}
 	f.mu.Lock()
 	st.holder, st.epoch = holder, epoch
@@ -986,12 +987,16 @@ func (s *agentService) SetFailover(ctx context.Context, req *nagiv1.SetFailoverR
 	}
 	// 热备：副本由面板事先登记（AcceptReplica），这里确认接收的是持有者的同步。
 	if me != nil && !bytes.Equal(me.GetKey(), holder) {
+		unlock := a.replicas.lock(pid, name)
 		m, sp, _, err := a.replicas.load(pid, name)
 		if err != nil {
+			unlock()
 			return nil, status.Error(codes.FailedPrecondition, "顶替节点上还没有登记该容器的副本")
 		}
 		m.SourceKey, m.SourceName = holder, participantName(cfg, holder)
-		if err := a.replicas.save(m, sp); err != nil {
+		err = a.replicas.save(m, sp)
+		unlock()
+		if err != nil {
 			return nil, err
 		}
 	}

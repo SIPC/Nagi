@@ -5,9 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -15,23 +16,94 @@ import (
 	"github.com/SIPC/nagi/internal/server/auth"
 )
 
-// 网页上要先做高权限确认的项目和节点接口，勾了「节点终端」的管理员令牌（MCP）都能用，这样 MCP 能做网页能做的事；
-// 设置里要确认的（生成令牌、回放录制、管理员登录地址这些）令牌一律不能算确认过（见 docs/mcp.md#节点文件和节点级操作）。
-func TestTokenElevationCoversNodeProcedures(t *testing.T) {
-	node := auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
+// tokenElevationRules 是访问令牌对每个要高权限确认的接口的规则（见 docs/mcp.md#高权限确认）：
+// "" 表示令牌一律不算确认过；"write" 要勾「可修改」；"node" 要勾「节点终端」；"node+write" 两项都要。都只给管理员。
+// elevationRequired 里新加接口时，这里要跟着写明，否则测试失败。
+var tokenElevationRules = map[string]string{
+	nagiv1connect.SettingsServiceTestAuditSinkProcedure:            "",
+	nagiv1connect.SettingsServiceCreateAccessTokenProcedure:        "",
+	nagiv1connect.SettingsServiceBeginTOTPProcedure:                "",
+	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: "",
+	nagiv1connect.SettingsServiceSetAdminNetworksProcedure:         "",
+	nagiv1connect.SettingsServiceGetRecordingProcedure:             "",
+	nagiv1connect.NodeServiceListNodeDirProcedure:                  "node",
+	nagiv1connect.NodeServiceReadNodeFileProcedure:                 "node",
+	nagiv1connect.NodeServiceListNodeFileBackupsProcedure:          "node",
+	nagiv1connect.NodeServiceListNodeDirSizesProcedure:             "node",
+	nagiv1connect.NodeServiceInspectComposeDirProcedure:            "node",
+	nagiv1connect.NodeServiceWriteNodeFileProcedure:                "node+write",
+	nagiv1connect.NodeServiceDeleteNodeFileProcedure:               "node+write",
+	nagiv1connect.NodeServiceCreateNodeDirProcedure:                "node+write",
+	nagiv1connect.NodeServiceRestoreNodeFileBackupProcedure:        "node+write",
+	nagiv1connect.NodeServiceRenameNodeFileProcedure:               "node+write",
+	nagiv1connect.NodeServiceMoveNodeFilesProcedure:                "node+write",
+	nagiv1connect.NodeServiceCopyNodeFilesProcedure:                "node+write",
+	nagiv1connect.NodeServiceCompressNodeFilesProcedure:            "node+write",
+	nagiv1connect.NodeServiceExtractNodeFileProcedure:              "node+write",
+	nagiv1connect.ProjectServiceImportComposeDirProcedure:          "node+write",
+	nagiv1connect.NodeServiceIsolateNodeProcedure:                  "node+write",
+	nagiv1connect.NodeServiceUnisolateNodeProcedure:                "node+write",
+	nagiv1connect.NodeServiceConfirmPendingHAProcedure:             "node+write",
+	nagiv1connect.NodeServiceSetNodeReplicaDirProcedure:            "node+write",
+	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure:       "node+write",
+	nagiv1connect.NodeServiceDeleteNodeImagesProcedure:             "write",
+	nagiv1connect.NodeServicePruneNodeImagesProcedure:              "write",
+}
+
+// 每个要确认的接口都按上表判断：各种令牌（勾的选项、角色）能不能调用、算不算确认过；网页的会话只看有没有做过确认。
+func TestTokenElevationRules(t *testing.T) {
 	for p := range elevationRequired {
-		node := node
-		project := strings.HasPrefix(p, "/nagi.v1.ProjectService/") || strings.HasPrefix(p, "/nagi.v1.NodeService/")
-		if got := node.ElevatedFor(p); got != project {
-			t.Errorf("ElevatedFor(%s) = %v，想要 %v", p, got, project)
+		if _, ok := tokenElevationRules[p]; !ok {
+			t.Errorf("%s 要高权限确认，但没写访问令牌的规则", p)
 		}
-		if project && !auth.TokenAllowed(node, p) {
-			t.Errorf("勾了节点终端的管理员令牌应该能调用 %s", p)
+	}
+	for _, p := range auth.TokenElevatedProcedures() {
+		if !elevationRequired[p] {
+			t.Errorf("%s 不用高权限确认，不该在 auth.tokenElevated 里", p)
 		}
-		node.AllowNodeExec = false
-		if project && auth.TokenAllowed(node, p) {
-			t.Errorf("没勾节点终端的令牌不能调用 %s", p)
+	}
+	type token struct {
+		name        string
+		write, node bool
+		role        string
+	}
+	tokens := []token{
+		{"只读", false, false, auth.RoleAdmin}, {"可修改", true, false, auth.RoleAdmin}, {"节点终端", false, true, auth.RoleAdmin},
+		{"可修改+节点终端", true, true, auth.RoleAdmin}, {"操作员全勾", true, true, auth.RoleOperator},
+	}
+	for p, rule := range tokenElevationRules {
+		for _, tk := range tokens {
+			u := auth.User{ID: 1, Role: tk.role, TokenID: 9, AllowWrite: tk.write, AllowExec: tk.write || tk.node, AllowNodeExec: tk.node}
+			want := tk.role == auth.RoleAdmin && map[string]bool{
+				"":           false,
+				"write":      tk.write,
+				"node":       tk.node,
+				"node+write": tk.node && tk.write,
+			}[rule]
+			if got := u.ElevatedFor(p); got != want {
+				t.Errorf("%s，%s令牌：算确认过 = %v，想要 %v", p, tk.name, got, want)
+			}
+			if got := !needsElevation(u, p); got != want {
+				t.Errorf("%s，%s令牌：needsElevation 放行 = %v，想要 %v", p, tk.name, got, want)
+			}
+			// 管理员令牌能不能过 TokenAllowed 和规则一致（设置里的令牌本来就调不了）。
+			if tk.role == auth.RoleAdmin && auth.TokenAllowed(u, p) != want {
+				t.Errorf("%s，%s令牌：TokenAllowed = %v，想要 %v", p, tk.name, !want, want)
+			}
 		}
+		// 网页的会话：没确认要确认，确认过放行；勾选项对会话不起作用。
+		session := auth.User{ID: 1, Role: auth.RoleAdmin, AllowWrite: true, AllowNodeExec: true}
+		if !needsElevation(session, p) {
+			t.Errorf("%s：没做确认的网页会话应该要确认", p)
+		}
+		session.ElevatedUntil = time.Now().Add(time.Minute).Unix()
+		if needsElevation(session, p) {
+			t.Errorf("%s：确认过的网页会话应该放行", p)
+		}
+	}
+	// 不要确认的接口，令牌也不会被这条规则拦下或放行别的。
+	if slices.Contains(auth.TokenElevatedProcedures(), nagiv1connect.NodeServiceListNodesProcedure) {
+		t.Error("ListNodes 不该在 tokenElevated 里")
 	}
 }
 
