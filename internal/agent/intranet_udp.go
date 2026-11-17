@@ -529,7 +529,7 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 		reply("ERR 无权访问这个项目")
 		return
 	}
-	e, found := n.endpoint(ctx, projectID, name)
+	e, found, _ := n.lookupEndpoint(ctx, projectID, name)
 	if !found {
 		reply("ERR 不在这里")
 		return
@@ -574,7 +574,7 @@ func (n *intranet) handleRemoteUDP(ctx context.Context, c net.Conn, br *bufio.Re
 	// 放行被撤销时也拆掉，和 TCP 一样（见 watchAccess）：通道还开着，调用方就能开新的流。
 	defer n.watchAccess(func() { flows.close(); c.Close() }, still)()
 	keepAlive(c, br, flows.done(), func() bool {
-		cur, ok := n.endpoint(ctx, projectID, name)
+		cur, ok, _ := n.lookupEndpoint(ctx, projectID, name)
 		return ok && cur.IP == e.IP
 	}, func(b byte) {
 		if b == '?' {

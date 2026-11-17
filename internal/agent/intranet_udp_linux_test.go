@@ -60,6 +60,12 @@ func newTestNodeAgent(t *testing.T, ctx context.Context, log *slog.Logger, targe
 	return startTestNodeAgent(t, ctx, log, priv, 0, target, port)
 }
 
+// setAlive 把假容器放到（或移出）本节点，同时清空容器地址的缓存，相当于真节点上收到了 Docker 事件。
+func (tn *testNodeAgent) setAlive(v bool) {
+	tn.alive.Store(v)
+	tn.a.intranet.forgetEndpoints()
+}
+
 // startTestNodeAgent 用指定的私钥和 mesh 端口启动一个节点（模拟节点重启）。
 func startTestNodeAgent(t *testing.T, ctx context.Context, log *slog.Logger, priv mesh.Key, meshPort uint16, target netip.Addr, port uint16) *testNodeAgent {
 	t.Helper()
@@ -96,7 +102,7 @@ func TestUDPEndToEnd(t *testing.T) {
 	A := newTestNodeAgent(t, ctx, log, netip.Addr{}, 0)
 	B := newTestNodeAgent(t, ctx, log, ipB, port)
 	C := newTestNodeAgent(t, ctx, log, ipC, port)
-	B.alive.Store(true)
+	B.setAlive(true)
 
 	all := []*testNodeAgent{A, B, C}
 	for i, x := range all {
@@ -245,8 +251,8 @@ func TestUDPEndToEnd(t *testing.T) {
 	}
 
 	// 5. 顶替：容器从 B 挪到 C。B 的控制连接发现容器不在了就断开，A 重新握手，B 回"不在这里"，改连 C。
-	B.alive.Store(false)
-	C.alive.Store(true)
+	B.setAlive(false)
+	C.setAlive(true)
 	start = time.Now()
 	r := ask(c1, "after-failover", "C:", 40*time.Second)
 	t.Logf("顶替后 %s 切到 C：%q", time.Since(start).Round(time.Millisecond), r)
@@ -257,7 +263,7 @@ func TestUDPEndToEnd(t *testing.T) {
 	C.m.Close()
 	time.Sleep(2 * time.Second)
 	C2 := startTestNodeAgent(t, ctx, log, C.priv, cPort, ipC, port)
-	C2.alive.Store(true)
+	C2.setAlive(true)
 	C2.a.intranet.plan = &nagiv1.LinkPlan{Allows: []*nagiv1.LinkAllow{{ProjectId: testProject, Callers: [][]byte{kA[:]}}}}
 	if err := C2.m.SetPeers(peersOf(A, B)); err != nil {
 		t.Fatal(err)

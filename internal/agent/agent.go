@@ -185,6 +185,7 @@ func Run(ctx context.Context, cfg Config) error {
 	// 容器有变化时上报状态；容器重建后要重新接入项目内网（见 project/network.go）。
 	netSync := make(chan struct{}, 1)
 	go dc.WatchProjects(ctx, project.LabelProject, func() {
+		a.intranet.forgetEndpoints() // 容器启动、停止、重建：缓存的容器地址可能不对了
 		a.changed()
 		a.egress.trigger()
 		select {
@@ -241,7 +242,10 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.egress.run(ctx)
 	// 任何容器（包括不是 Nagi 管理的）接入网络时都重新生成出站规则：拦截模式的网桥上，地址不在规则里的连接会被丢弃，
 	// 同一个网桥上新启动的其他容器不能等 30 秒的定时同步（见 docs/agent.md#出站限制）。
-	go dc.WatchNetworkConnects(ctx, a.egress.trigger)
+	go dc.WatchNetworkConnects(ctx, func() {
+		a.intranet.forgetEndpoints() // 容器接入网络（分到了地址）
+		a.egress.trigger()
+	})
 	go a.violations.run(ctx)
 	for _, id := range a.failovers.ids() {
 		a.startFailover(ctx, id)

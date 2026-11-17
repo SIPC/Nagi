@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -58,8 +57,9 @@ type intranet struct {
 	// changed 在计划换掉时关闭并换一个新的，让检查放行的连接立刻重新检查（见 watchAccess）。
 	changed chan struct{}
 	build   string // 代理容器标签：nagi 换了版本就重建
-	// endpoint 找本节点上项目内网里的容器（project.Manager.FindEndpoint），测试时替换。
+	// endpoint 找本节点上项目内网里的容器（project.Manager.FindEndpoint），测试时替换。平时经 lookupEndpoint 用缓存。
 	endpoint func(ctx context.Context, projectID, name string) (project.Endpoint, bool)
+	eps      endpointCache
 }
 
 func newIntranet(a *agent) *intranet {
@@ -378,69 +378,6 @@ func (n *intranet) handleLocal(projectID string, c net.Conn) {
 	n.forward(c, br, p, port)
 }
 
-// forward 按计划里的顺序找目标所在的节点，把连接 c（数据从 r 读）转给目标的端口 port。
-func (n *intranet) forward(c net.Conn, r io.Reader, p *nagiv1.LinkProxy, port uint16) {
-	targets := p.GetNodes()
-	if len(targets) > maxProxyTarget {
-		targets = targets[:maxProxyTarget]
-	}
-	for _, t := range targets {
-		k, err := mesh.ParseKey(t.GetKey())
-		if err != nil {
-			continue
-		}
-		if n.a.mesh != nil && k == n.a.mesh.m.PublicKey() {
-			// 目标就在本节点上（例如连接了同一个节点上的另一个项目）。
-			e, ok := n.endpoint(n.a.ctx, p.GetTargetProject(), p.GetTargetName())
-			if !ok {
-				continue
-			}
-			tc, err := net.DialTimeout("tcp", netip.AddrPortFrom(e.IP, port).String(), 5*time.Second)
-			if err != nil {
-				continue
-			}
-			splice(c, r, tc, tc)
-			tc.Close()
-			return
-		}
-		mc, mbr, ok := n.dialRemote(k, t.GetName(), p, port)
-		if !ok {
-			continue
-		}
-		splice(c, r, mc, mbr)
-		mc.Close()
-		return
-	}
-}
-
-// dialRemote 经 mesh 请目标节点连到它上面的容器。对方说"不在这里"或者联系不上时返回 false。
-func (n *intranet) dialRemote(k mesh.Key, name string, p *nagiv1.LinkProxy, port uint16) (net.Conn, *bufio.Reader, bool) {
-	if n.a.mesh == nil {
-		return nil, nil, false
-	}
-	ctx, cancel := context.WithTimeout(n.a.ctx, 10*time.Second)
-	mc, err := n.a.mesh.m.Dial(ctx, k, linkPort)
-	cancel()
-	if err != nil {
-		n.a.log.Debug("经 mesh 连接目标节点失败", "name", p.GetAlias(), "node", name, "err", err)
-		return nil, nil, false
-	}
-	if _, err := fmt.Fprintf(mc, "%s %s %d\n", p.GetTargetProject(), p.GetTargetName(), port); err != nil {
-		mc.Close()
-		return nil, nil, false
-	}
-	mbr := bufio.NewReader(mc)
-	_ = mc.SetReadDeadline(time.Now().Add(10 * time.Second))
-	line, err := readLine(mbr)
-	if err != nil || line != "OK" {
-		n.a.log.Debug("目标节点没有接受连接", "name", p.GetAlias(), "node", name, "reply", line, "err", err)
-		mc.Close()
-		return nil, nil, false
-	}
-	_ = mc.SetReadDeadline(time.Time{})
-	return mc, mbr, true
-}
-
 // ---- 目标这一侧：经 mesh 连进来 ----
 
 // serve 在 mesh 的 7001 端口接受其他节点的连接。
@@ -559,21 +496,32 @@ func (n *intranet) handleRemote(ctx context.Context, c net.Conn) {
 		reply("ERR 无权访问这个项目")
 		return
 	}
-	e, found := n.endpoint(ctx, projectID, name)
+	e, found, _ := n.lookupEndpoint(ctx, projectID, name)
 	if !found {
 		reply("ERR 不在这里")
 		return
 	}
 	// 只转发开放的端口（容器声明的和项目设置里补的内部端口，以及入口节点的映射指向的端口）：调用方节点不一定可信，不能借此访问容器的其他端口。
-	still := func() bool { return n.portOpen(projectID, name, port, spec.ProtoTCP, caller, e.Ports) }
+	ports := e.Ports
+	still := func() bool { return n.portOpen(projectID, name, port, spec.ProtoTCP, caller, ports) }
 	if !still() {
 		n.a.violations.addCheck(caller, "intranet:connect", projectID, name, port, "port not open", func() bool { return !still() })
 		reply(fmt.Sprintf("ERR %s 没有开放端口 %d", name, port))
 		return
 	}
-	tc, err := net.DialTimeout("tcp", netip.AddrPortFrom(e.IP, port).String(), 5*time.Second)
+	tc, e, found, err := n.dialEndpoint(ctx, projectID, name, port)
+	if !found {
+		reply("ERR 不在这里")
+		return
+	}
 	if err != nil {
 		reply("ERR " + err.Error())
+		return
+	}
+	// 缓存的地址连不上、重新查到的容器可能换了声明的端口，再核对一次。
+	if ports = e.Ports; !still() {
+		tc.Close()
+		reply(fmt.Sprintf("ERR %s 没有开放端口 %d", name, port))
 		return
 	}
 	defer tc.Close()

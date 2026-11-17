@@ -145,7 +145,7 @@ func TestEntryEndToEnd(t *testing.T) {
 	A := newTestNodeAgent(t, ctx, log, netip.Addr{}, 0)
 	B := newTestNodeAgent(t, ctx, log, ipB, 0)
 	C := newTestNodeAgent(t, ctx, log, ipC, 0)
-	B.alive.Store(true)
+	B.setAlive(true)
 	connectMesh(t, A, B, C)
 
 	nodes := []*nagiv1.LinkNode{linkNode(B), linkNode(C)}
@@ -199,8 +199,8 @@ func TestEntryEndToEnd(t *testing.T) {
 	}
 
 	// 顶替：容器到了 C，不用改计划就能连上。
-	B.alive.Store(false)
-	C.alive.Store(true)
+	B.setAlive(false)
+	C.setAlive(true)
 	if got := tcpAsk(t, web.Upstreams[0], "hi"); got != "C:hi" {
 		t.Fatalf("顶替后 TCP 回答: %q", got)
 	}
