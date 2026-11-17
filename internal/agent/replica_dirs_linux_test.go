@@ -544,6 +544,66 @@ func TestCleanStaging(t *testing.T) {
 	}
 }
 
+// replica-dirs.json 损坏时（审查 L2）：原文件改名留着，不当成空的覆盖；修改存放位置、登记新的副本都拒绝。
+func TestCorruptReplicaIndex(t *testing.T) {
+	r, tmp := testReplicas(t)
+	addReplica(t, r, "web")
+	custom := filepath.Join(tmp, "custom")
+	if err := r.move(context.Background(), testPID, "web", custom, discard); err != nil {
+		t.Fatal(err)
+	}
+	good, err := os.ReadFile(r.file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 断电截断了文件。
+	if err := os.WriteFile(r.file, good[:len(good)/2], 0o600); err != nil {
+		t.Fatal(err)
+	}
+	broken := newReplicas(filepath.Dir(r.dir))
+	broken.forbidden, broken.reserved, broken.stateDir = r.forbidden, r.reserved, r.stateDir
+	if broken.usable() == nil {
+		t.Fatal("损坏的记录应该被发现")
+	}
+	matches, _ := filepath.Glob(r.file + ".corrupt-*")
+	if len(matches) != 1 {
+		t.Fatalf("原文件应该改名留着：%v", matches)
+	}
+	if b, _ := os.ReadFile(matches[0]); string(b) != string(good[:len(good)/2]) {
+		t.Fatal("留下的应该是原来的内容")
+	}
+	if err := broken.move(context.Background(), testPID, "web", "", discard); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("记录损坏时不能移动副本：%v", err)
+	}
+	if err := broken.setDefault(context.Background(), filepath.Join(tmp, "big"), discard); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("记录损坏时不能修改默认目录：%v", err)
+	}
+	s := &agentService{node: &agent{replicas: broken}}
+	if _, err := s.AcceptReplica(context.Background(), &nagiv1.AcceptReplicaRequest{
+		Spec: &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"}, SourceKey: make([]byte, 32),
+	}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("记录损坏时不能在默认目录新建副本：%v", err)
+	}
+	broken.forget(testPID + "-web")
+	if _, err := os.Stat(r.file); !os.IsNotExist(err) {
+		t.Fatal("记录损坏时不能写入新的记录")
+	}
+	// 修好放回去，重启后照常。
+	if err := os.Rename(matches[0], r.file); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.file, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fixed := newReplicas(filepath.Dir(r.dir))
+	if fixed.usable() != nil {
+		t.Fatal("修好以后应该可以用")
+	}
+	if root, _ := fixed.root(testPID, "web"); root != filepath.Join(custom, testPID+"-web") {
+		t.Fatalf("应该找到原来的位置，实际 %s", root)
+	}
+}
+
 func TestAcceptReplicaDir(t *testing.T) {
 	r, tmp := testReplicas(t)
 	s := &agentService{node: &agent{replicas: r}}

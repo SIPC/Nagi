@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -57,6 +58,9 @@ type replicas struct {
 	// mu 保护 idx、locks、syncing。
 	mu  sync.Mutex
 	idx replicaIndex
+	// broken：启动时 file 读不出来（损坏），见 markBroken；brokenCause 是原因，写进日志和告警。
+	broken      error
+	brokenCause string
 	// moving：同时只有一次移动（修改默认目录、移动一个副本）。
 	moving sync.Mutex
 	// layout：save 新建副本时拿读锁，修改默认目录、记下旧目录里有哪些副本时拿写锁，两者不会交错。
@@ -225,12 +229,42 @@ func (r *replicas) save(m *replicaMeta, s *nagiv1.ContainerSpec) error {
 	return writeAtomic(filepath.Join(root, "spec.pb"), raw)
 }
 
+// writeAtomic 写到临时文件、落盘后改名，再让所在目录落盘：断电时要么是旧内容，要么是新内容，不会是截断的文件。
 func writeAtomic(path string, data []byte) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return syncDir(filepath.Dir(path))
+}
+
+// syncDir 让目录项（改名的结果）落盘。Windows 上不能这样打开目录，跳过。
+func syncDir(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 // replicaStateDir 是副本快照仓库的连接配置和缓存，和容器自己的分开。
@@ -958,6 +992,9 @@ func (s *agentService) AcceptReplica(ctx context.Context, req *nagiv1.AcceptRepl
 		// 校验和移动互斥（checkBase 会建目录），拿副本的锁之前做，顺序和 moveTo 一致。
 		r.moving.Lock()
 		defer r.moving.Unlock()
+		if err := r.usable(); err != nil {
+			return nil, err
+		}
 		if base, err = r.checkBase(req.GetReplicaDir()); err != nil {
 			return nil, err
 		}
@@ -970,6 +1007,10 @@ func (s *agentService) AcceptReplica(ctx context.Context, req *nagiv1.AcceptRepl
 	created := false
 	switch {
 	case status.Code(err) == codes.NotFound:
+		// 位置记录损坏时，这个副本可能就在某个单独指定的位置，新建一份会从头同步、原来的成了孤儿。
+		if err := r.usable(); err != nil {
+			return nil, err
+		}
 		m = &replicaMeta{ProjectID: sp.GetProjectId(), Container: sp.GetName()}
 		if base != "" {
 			def, _ := r.defaultDir()

@@ -849,8 +849,9 @@ var en = map[string]string{
 	"现有目录 %s 与此节点上副本的存放位置 %s 重叠":     "The existing directory %s overlaps the replica location %s on this node",
 	"%s 和此节点上副本的存放位置重叠，无法导入":         "%s overlaps a replica location on this node and can't be imported",
 	"副本目录 %s 不是普通目录":                 "The replica directory %s isn't a regular directory",
-	"目标位置已有同名目录 %s，请先处理":             "The directory %s already exists at the destination. Deal with it first",
-	"移动副本时节点正在退出，已取消":                "The node was shutting down while moving the replica, so the move was canceled",
-	"节点 %s 版本过低，升级后才能选择副本的存放位置":      "Node %s is out of date. Upgrade it to choose where replicas are stored",
-	"禁止访问副本目录":                       "Access to replica directories isn't allowed",
+	"副本位置记录 replica-dirs.json 无法读取，原文件保存为 %s。修复后改回原名并重启节点，在此之前不能修改存放位置或登记新的副本": "The replica location record replica-dirs.json can't be read. The original was kept as %s. Fix it, rename it back, and restart the node. Until then, locations can't be changed and new replicas can't be registered",
+	"目标位置已有同名目录 %s，请先处理":        "The directory %s already exists at the destination. Deal with it first",
+	"移动副本时节点正在退出，已取消":           "The node was shutting down while moving the replica, so the move was canceled",
+	"节点 %s 版本过低，升级后才能选择副本的存放位置": "Node %s is out of date. Upgrade it to choose where replicas are stored",
+	"禁止访问副本目录":                  "Access to replica directories isn't allowed",
 }

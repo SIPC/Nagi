@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -66,11 +67,43 @@ func newReplicas(dataDir string) *replicas {
 		file:      filepath.Join(dataDir, "replica-dirs.json"),
 		forbidden: replicaForbidden,
 	}
-	if raw, err := os.ReadFile(r.file); err == nil {
-		_ = json.Unmarshal(raw, &r.idx)
+	raw, err := os.ReadFile(r.file)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(raw, &r.idx); err != nil {
+			r.idx = replicaIndex{}
+			r.markBroken(err)
+		}
+	case !errors.Is(err, fs.ErrNotExist):
+		r.markBroken(err)
 	}
-	r.cleanStaging()
+	if r.broken == nil {
+		r.cleanStaging()
+	}
 	return r
+}
+
+// markBroken 在 replica-dirs.json 读不出来时调用：原文件改名成 .corrupt-<时间> 留着（之后的写入不会覆盖它），
+// 记下错误。在修好之前拒绝修改存放位置、登记新的副本：不知道副本原来在哪里，当成空的会在默认目录从头同步一份，
+// 原来的副本成了孤儿（见 docs/snapshot.md#副本的存放位置）。
+func (r *replicas) markBroken(cause error) {
+	kept := r.file
+	if _, err := os.Stat(r.file); err == nil {
+		name := r.file + ".corrupt-" + time.Now().Format("20060102-150405")
+		if err := os.Rename(r.file, name); err == nil {
+			kept = name
+		}
+	}
+	r.brokenCause = cause.Error()
+	r.broken = status.Errorf(codes.FailedPrecondition,
+		"副本位置记录 replica-dirs.json 无法读取，原文件保存为 %s。修复后改回原名并重启节点，在此之前不能修改存放位置或登记新的副本", kept)
+}
+
+// usable 返回副本位置记录不可用时的错误（见 markBroken）。
+func (r *replicas) usable() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.broken
 }
 
 // defaultLocked 是节点的默认目录。调用时持有 mu。
@@ -97,6 +130,9 @@ func (r *replicas) baseLocked(id string) (string, bool) {
 }
 
 func (r *replicas) persistLocked() error {
+	if r.broken != nil {
+		return r.broken
+	}
 	raw, _ := json.MarshalIndent(r.idx, "", "  ")
 	return writeAtomic(r.file, raw)
 }
@@ -686,6 +722,9 @@ func (r *replicas) move(ctx context.Context, projectID, container, dir string, o
 	if _, err := replicaID(projectID, container); err != nil {
 		return err
 	}
+	if err := r.usable(); err != nil {
+		return err
+	}
 	def, _ := r.defaultDir()
 	base, custom := def, false
 	if strings.TrimSpace(dir) != "" {
@@ -703,6 +742,9 @@ func (r *replicas) move(ctx context.Context, projectID, container, dir string, o
 func (r *replicas) setDefault(ctx context.Context, dir string, onLine func(string)) error {
 	r.moving.Lock()
 	defer r.moving.Unlock()
+	if err := r.usable(); err != nil {
+		return err
+	}
 	base := r.dir
 	if strings.TrimSpace(dir) != "" {
 		b, err := r.checkBase(dir)

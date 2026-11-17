@@ -34,6 +34,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -242,6 +243,11 @@ func Run(ctx context.Context, cfg Config) error {
 		return out
 	}
 	go a.alerts.Run(ctx)
+	if err := a.replicas.usable(); err != nil {
+		msg := status.Convert(err).Message()
+		log.Error("副本位置记录无法读取", "file", a.replicas.file, "err", a.replicas.brokenCause, "detail", msg)
+		go a.alerts.Fire(ctx, "replica-index", "副本位置记录无法读取", msg, "")
+	}
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
