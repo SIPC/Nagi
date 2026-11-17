@@ -51,9 +51,9 @@ type Service struct {
 	pending map[int64]pendingTOTP // 正在开启两步验证、还没确认的密钥
 	// challenges 是通行密钥的一次性挑战（见 passkey.go）。
 	challenges map[string]passkeyChallenge
-	// loginKey 签无状态的通行密钥登录挑战，usedLogin 记着用过的编号和过期时间（见 passkey.go）。
+	// loginKey 签无状态的通行密钥登录挑战，usedLogin 按过期时间（分钟）分桶记着用过的编号（见 passkey.go）。
 	loginKey  []byte
-	usedLogin map[string]int64
+	usedLogin map[int64]map[string]bool
 	// tokenAlerts：令牌新网段告警的合并（见 tokennet.go）。
 	tokenAlerts tokenAlerts
 

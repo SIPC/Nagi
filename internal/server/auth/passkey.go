@@ -33,9 +33,7 @@ const (
 	maxPasskeyChallenges = 1000
 	// maxAddChallengesPerUser：一个成员同时有效的添加挑战个数。
 	maxAddChallengesPerUser = 5
-	// maxUsedLogin：记着的已用过的登录挑战个数上限（只在提交登录时记，提交按 IP 限速）。
-	maxUsedLogin = 100000
-	maxPasskeys  = 20
+	maxPasskeys             = 20
 )
 
 type passkeyChallenge struct {
@@ -81,8 +79,9 @@ func (s *Service) newLoginChallenge(rpID string, now time.Time) (string, []byte,
 	return hex.EncodeToString(id), loginMAC(key, "challenge", nonce, expires, rpID), nil
 }
 
-// takeLoginChallenge 核对登录挑战的编号，只能用一次。
-func (s *Service) takeLoginChallenge(id, rpID string, now time.Time) (passkeyChallenge, bool) {
+// verifyLoginChallenge 核对登录挑战的编号（HMAC、过期时间、域名），返回挑战和过期时间。不记任何状态：
+// 编号只能用一次由 markLoginUsed 保证，凭据确实存在以后才记。
+func (s *Service) verifyLoginChallenge(id, rpID string, now time.Time) (passkeyChallenge, bool) {
 	b, err := hex.DecodeString(id)
 	if err != nil || len(b) != 40 {
 		return passkeyChallenge{}, false
@@ -92,29 +91,36 @@ func (s *Service) takeLoginChallenge(id, rpID string, now time.Time) (passkeyCha
 		return passkeyChallenge{}, false
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	key := s.loginKeyLocked()
+	s.mu.Unlock()
 	if !hmac.Equal(b[24:], loginMAC(key, "id", nonce, expires, rpID)[:16]) {
 		return passkeyChallenge{}, false
 	}
-	if s.usedLogin == nil {
-		s.usedLogin = map[string]int64{}
-	}
-	if _, used := s.usedLogin[id]; used {
-		return passkeyChallenge{}, false
-	}
-	if len(s.usedLogin) >= maxUsedLogin {
-		for k, exp := range s.usedLogin {
-			if now.Unix() > exp {
-				delete(s.usedLogin, k)
-			}
-		}
-		if len(s.usedLogin) >= maxUsedLogin {
-			return passkeyChallenge{}, false
-		}
-	}
-	s.usedLogin[id] = expires
 	return passkeyChallenge{challenge: loginMAC(key, "challenge", nonce, expires, rpID), rpID: rpID, expires: time.Unix(expires, 0)}, true
+}
+
+// markLoginUsed 记下用过的编号，已经用过时返回 false。按过期时间每分钟一桶，过期的桶整桶丢弃，没有总数上限：
+// 只在凭据确实存在以后调用（见 PasskeyLogin），不认识的凭据不占表，没登录的人填不满它。
+func (s *Service) markLoginUsed(id string, expires time.Time, now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.usedLogin == nil {
+		s.usedLogin = map[int64]map[string]bool{}
+	}
+	for k := range s.usedLogin {
+		if (k+1)*60 < now.Unix() {
+			delete(s.usedLogin, k)
+		}
+	}
+	k := expires.Unix() / 60
+	if s.usedLogin[k][id] {
+		return false
+	}
+	if s.usedLogin[k] == nil {
+		s.usedLogin[k] = map[string]bool{}
+	}
+	s.usedLogin[k][id] = true
+	return true
 }
 
 // PasskeyDomain 返回能用通行密钥的域名（面板绑定的域名），没绑定时为空。
@@ -289,7 +295,7 @@ func (s *Service) PasskeyLogin(ctx context.Context, ip string, a PasskeyAssertio
 	}
 	result := outcomeFailure
 	defer func() { done(result) }()
-	c, ok := s.takeLoginChallenge(a.ChallengeID, s.PasskeyDomain(ctx), time.Now())
+	c, ok := s.verifyLoginChallenge(a.ChallengeID, s.PasskeyDomain(ctx), time.Now())
 	if !ok {
 		result = outcomeNeutral
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("请求已过期，请重试"))
@@ -308,6 +314,11 @@ func (s *Service) PasskeyLogin(ctx context.Context, ip string, a PasskeyAssertio
 	if err != nil {
 		result = outcomeNeutral
 		return nil, err
+	}
+	// 凭据确实存在才记下编号（只能用一次）：不认识的凭据不占表。
+	if !s.markLoginUsed(a.ChallengeID, c.expires, time.Now()) {
+		result = outcomeNeutral
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("请求已过期，请重试"))
 	}
 	user, err := s.q.GetUserByID(ctx, p.UserID)
 	if err != nil {

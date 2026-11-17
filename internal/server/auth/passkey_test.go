@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -211,23 +212,60 @@ func TestPasskeyChallengePool(t *testing.T) {
 	}
 	// 编号只能用一次，改过的编号、别的域名、过期的都不认。
 	now := time.Now()
-	c, ok := h.s.takeLoginChallenge(id, rp, now)
+	c, ok := h.s.verifyLoginChallenge(id, rp, now)
 	if !ok || string(c.challenge) != string(ch) {
 		t.Fatal("挑战应能取出，内容和发出去的一致")
 	}
-	if _, ok := h.s.takeLoginChallenge(id, rp, now); ok {
+	if !h.s.markLoginUsed(id, c.expires, now) || h.s.markLoginUsed(id, c.expires, now) {
 		t.Fatal("挑战只能用一次")
 	}
 	id2, _, _, _ := h.s.BeginPasskeyLogin(from)
 	bad := []byte(id2)
 	bad[0] ^= 1
-	if _, ok := h.s.takeLoginChallenge(string(bad), rp, now); ok {
+	if _, ok := h.s.verifyLoginChallenge(string(bad), rp, now); ok {
 		t.Fatal("改过的编号不应认")
 	}
-	if _, ok := h.s.takeLoginChallenge(id2, "evil.example.net", now); ok {
+	if _, ok := h.s.verifyLoginChallenge(id2, "evil.example.net", now); ok {
 		t.Fatal("别的域名不应认")
 	}
-	if _, ok := h.s.takeLoginChallenge(id2, rp, now.Add(passkeyChallengeTTL+time.Second)); ok {
+	if _, ok := h.s.verifyLoginChallenge(id2, rp, now.Add(passkeyChallengeTTL+time.Second)); ok {
 		t.Fatal("过期的不应认")
+	}
+}
+
+// S4：之前带一个随便的凭据提交，编号就记进「用过的编号」表；表有 10 万的上限，没登录的人换很多 /64 地址就能填满，
+// 之后所有人的通行密钥登录都失败。现在凭据确实存在以后才记，表按过期时间分桶、到期整桶丢弃，没有上限。
+func TestPasskeyLoginUnknownCredentialNotRecorded(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := context.Background()
+	_ = h.q.SetSetting(ctx, store.SetSettingParams{Key: settingDomain, Value: "nagi.example.com"})
+	for i := range 300 {
+		id, _, _, err := h.s.BeginPasskeyLogin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ip := fmt.Sprintf("2001:db8:%x::1", i)
+		_, _ = h.s.PasskeyLogin(ctx, ip, PasskeyAssertion{ChallengeID: id, CredentialID: []byte(fmt.Sprintf("unknown-%d", i))})
+	}
+	h.s.mu.Lock()
+	n := 0
+	for _, b := range h.s.usedLogin {
+		n += len(b)
+	}
+	h.s.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("不认识的凭据不应占表，实际记了 %d 条", n)
+	}
+	// 分桶：过期的整桶丢弃。
+	now := time.Now()
+	exp := now.Add(passkeyChallengeTTL)
+	if !h.s.markLoginUsed("a", exp, now) {
+		t.Fatal("第一次应能记下")
+	}
+	h.s.markLoginUsed("b", now.Add(time.Hour), now.Add(passkeyChallengeTTL+2*time.Minute))
+	h.s.mu.Lock()
+	defer h.s.mu.Unlock()
+	if _, ok := h.s.usedLogin[exp.Unix()/60]; ok {
+		t.Fatal("过期的桶应整桶丢弃")
 	}
 }
