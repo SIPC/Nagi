@@ -40,6 +40,9 @@ export default {
     empty: "No matching projects",
   },
   reorder: {
+    start: "Reorder",
+    done: "Done",
+    hint: "Drag group headings or project cards to reorder.",
     instructions: "Press Space to pick up, use the arrow keys to move, and press Space again to drop. Press Escape to cancel.",
     picked: (name: string) => `Picked up ${name}`,
     over: (name: string, target: string) => `${name} moved to the position of ${target}`,

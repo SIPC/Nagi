@@ -130,10 +130,8 @@ const projectsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/projects",
   // group：只看一个分组；ungrouped：只看未分组的。
-  // sort：name 按名称，custom 自定义（拖动调整的顺序），不写是最近创建。
-  validateSearch: (search: Record<string, unknown>): { q?: string; sort?: "name" | "custom"; group?: string; ungrouped?: true } => ({
+  validateSearch: (search: Record<string, unknown>): { q?: string; group?: string; ungrouped?: true } => ({
     q: typeof search.q === "string" && search.q ? search.q : undefined,
-    sort: search.sort === "name" || search.sort === "custom" ? search.sort : undefined,
     group: typeof search.group === "string" && search.group ? search.group : undefined,
     ungrouped: search.ungrouped === true || search.ungrouped === "true" ? true : undefined,
   }),

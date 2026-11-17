@@ -24,10 +24,13 @@ import (
 
 // auditSkipped 是不记录的接口：不改变状态或太频繁的调用。
 var auditSkipped = map[string]bool{
-	nagiv1connect.AuthServiceMeProcedure:             true,
-	nagiv1connect.AuthServiceSetLanguageProcedure:    true,
-	nagiv1connect.SetupServiceGetSetupStateProcedure: true,
-	nagiv1connect.EnrollServiceEnrollProcedure:       true,
+	nagiv1connect.AuthServiceMeProcedure:          true,
+	nagiv1connect.AuthServiceSetLanguageProcedure: true,
+	// 项目页排序只影响自己看到的顺序。
+	nagiv1connect.AuthServiceGetProjectOrderProcedure: true,
+	nagiv1connect.AuthServiceSetProjectOrderProcedure: true,
+	nagiv1connect.SetupServiceGetSetupStateProcedure:  true,
+	nagiv1connect.EnrollServiceEnrollProcedure:        true,
 	// 退出在处理函数里单独记（这时会话还在，查得到是谁）；登录在 auth 里记（成功时才知道是哪个成员）。
 	nagiv1connect.AuthServiceLogoutProcedure: true,
 	nagiv1connect.AuthServiceLoginProcedure:  true,

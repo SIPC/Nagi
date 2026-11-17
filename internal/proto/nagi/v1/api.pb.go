@@ -1167,6 +1167,140 @@ func (*SetLanguageResponse) Descriptor() ([]byte, []int) {
 	return file_nagi_v1_api_proto_rawDescGZIP(), []int{21}
 }
 
+type GetProjectOrderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetProjectOrderRequest) Reset() {
+	*x = GetProjectOrderRequest{}
+	mi := &file_nagi_v1_api_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetProjectOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetProjectOrderRequest) ProtoMessage() {}
+
+func (x *GetProjectOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetProjectOrderRequest.ProtoReflect.Descriptor instead.
+func (*GetProjectOrderRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{22}
+}
+
+type ProjectOrder struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 空是最近创建，"name" 按名称，"custom" 自定义。
+	Sort string `protobuf:"bytes,1,opt,name=sort,proto3" json:"sort,omitempty"`
+	// 自定义顺序里的分组名、项目 ID。没排过的不在里面。
+	Groups        []string `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
+	Projects      []string `protobuf:"bytes,3,rep,name=projects,proto3" json:"projects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProjectOrder) Reset() {
+	*x = ProjectOrder{}
+	mi := &file_nagi_v1_api_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProjectOrder) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProjectOrder) ProtoMessage() {}
+
+func (x *ProjectOrder) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProjectOrder.ProtoReflect.Descriptor instead.
+func (*ProjectOrder) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ProjectOrder) GetSort() string {
+	if x != nil {
+		return x.Sort
+	}
+	return ""
+}
+
+func (x *ProjectOrder) GetGroups() []string {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+func (x *ProjectOrder) GetProjects() []string {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
+type SetProjectOrderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetProjectOrderResponse) Reset() {
+	*x = SetProjectOrderResponse{}
+	mi := &file_nagi_v1_api_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProjectOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProjectOrderResponse) ProtoMessage() {}
+
+func (x *SetProjectOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_api_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProjectOrderResponse.ProtoReflect.Descriptor instead.
+func (*SetProjectOrderResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{24}
+}
+
 type SetNodeTagsRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -1178,7 +1312,7 @@ type SetNodeTagsRequest struct {
 
 func (x *SetNodeTagsRequest) Reset() {
 	*x = SetNodeTagsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[22]
+	mi := &file_nagi_v1_api_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1190,7 +1324,7 @@ func (x *SetNodeTagsRequest) String() string {
 func (*SetNodeTagsRequest) ProtoMessage() {}
 
 func (x *SetNodeTagsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[22]
+	mi := &file_nagi_v1_api_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1203,7 +1337,7 @@ func (x *SetNodeTagsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeTagsRequest.ProtoReflect.Descriptor instead.
 func (*SetNodeTagsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{22}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SetNodeTagsRequest) GetNodeId() string {
@@ -1228,7 +1362,7 @@ type SetNodeTagsResponse struct {
 
 func (x *SetNodeTagsResponse) Reset() {
 	*x = SetNodeTagsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[23]
+	mi := &file_nagi_v1_api_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1240,7 +1374,7 @@ func (x *SetNodeTagsResponse) String() string {
 func (*SetNodeTagsResponse) ProtoMessage() {}
 
 func (x *SetNodeTagsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[23]
+	mi := &file_nagi_v1_api_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1253,7 +1387,7 @@ func (x *SetNodeTagsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeTagsResponse.ProtoReflect.Descriptor instead.
 func (*SetNodeTagsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{23}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{26}
 }
 
 // RenameLabelRequest 重命名项目分组或节点标签。new_name 已存在时合并；为空表示删除：项目变成未分组，节点去掉这个标签，
@@ -1268,7 +1402,7 @@ type RenameLabelRequest struct {
 
 func (x *RenameLabelRequest) Reset() {
 	*x = RenameLabelRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[24]
+	mi := &file_nagi_v1_api_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1280,7 +1414,7 @@ func (x *RenameLabelRequest) String() string {
 func (*RenameLabelRequest) ProtoMessage() {}
 
 func (x *RenameLabelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[24]
+	mi := &file_nagi_v1_api_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1293,7 +1427,7 @@ func (x *RenameLabelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameLabelRequest.ProtoReflect.Descriptor instead.
 func (*RenameLabelRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{24}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RenameLabelRequest) GetName() string {
@@ -1318,7 +1452,7 @@ type RenameLabelResponse struct {
 
 func (x *RenameLabelResponse) Reset() {
 	*x = RenameLabelResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[25]
+	mi := &file_nagi_v1_api_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1330,7 +1464,7 @@ func (x *RenameLabelResponse) String() string {
 func (*RenameLabelResponse) ProtoMessage() {}
 
 func (x *RenameLabelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[25]
+	mi := &file_nagi_v1_api_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1343,7 +1477,7 @@ func (x *RenameLabelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameLabelResponse.ProtoReflect.Descriptor instead.
 func (*RenameLabelResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{25}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{28}
 }
 
 type NodeRef struct {
@@ -1355,7 +1489,7 @@ type NodeRef struct {
 
 func (x *NodeRef) Reset() {
 	*x = NodeRef{}
-	mi := &file_nagi_v1_api_proto_msgTypes[26]
+	mi := &file_nagi_v1_api_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1367,7 +1501,7 @@ func (x *NodeRef) String() string {
 func (*NodeRef) ProtoMessage() {}
 
 func (x *NodeRef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[26]
+	mi := &file_nagi_v1_api_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1380,7 +1514,7 @@ func (x *NodeRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeRef.ProtoReflect.Descriptor instead.
 func (*NodeRef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{26}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *NodeRef) GetNodeId() string {
@@ -1400,7 +1534,7 @@ type SetNodeProjectsRootRequest struct {
 
 func (x *SetNodeProjectsRootRequest) Reset() {
 	*x = SetNodeProjectsRootRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[27]
+	mi := &file_nagi_v1_api_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1412,7 +1546,7 @@ func (x *SetNodeProjectsRootRequest) String() string {
 func (*SetNodeProjectsRootRequest) ProtoMessage() {}
 
 func (x *SetNodeProjectsRootRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[27]
+	mi := &file_nagi_v1_api_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1425,7 +1559,7 @@ func (x *SetNodeProjectsRootRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeProjectsRootRequest.ProtoReflect.Descriptor instead.
 func (*SetNodeProjectsRootRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{27}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *SetNodeProjectsRootRequest) GetNodeId() string {
@@ -1451,7 +1585,7 @@ type ApproveNodeRequest struct {
 
 func (x *ApproveNodeRequest) Reset() {
 	*x = ApproveNodeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[28]
+	mi := &file_nagi_v1_api_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1463,7 +1597,7 @@ func (x *ApproveNodeRequest) String() string {
 func (*ApproveNodeRequest) ProtoMessage() {}
 
 func (x *ApproveNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[28]
+	mi := &file_nagi_v1_api_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1476,7 +1610,7 @@ func (x *ApproveNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveNodeRequest.ProtoReflect.Descriptor instead.
 func (*ApproveNodeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{28}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ApproveNodeRequest) GetNodeId() string {
@@ -1494,7 +1628,7 @@ type ApproveNodeResponse struct {
 
 func (x *ApproveNodeResponse) Reset() {
 	*x = ApproveNodeResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[29]
+	mi := &file_nagi_v1_api_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1506,7 +1640,7 @@ func (x *ApproveNodeResponse) String() string {
 func (*ApproveNodeResponse) ProtoMessage() {}
 
 func (x *ApproveNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[29]
+	mi := &file_nagi_v1_api_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1519,7 +1653,7 @@ func (x *ApproveNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApproveNodeResponse.ProtoReflect.Descriptor instead.
 func (*ApproveNodeResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{29}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{32}
 }
 
 type RenameNodeRequest struct {
@@ -1532,7 +1666,7 @@ type RenameNodeRequest struct {
 
 func (x *RenameNodeRequest) Reset() {
 	*x = RenameNodeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[30]
+	mi := &file_nagi_v1_api_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1544,7 +1678,7 @@ func (x *RenameNodeRequest) String() string {
 func (*RenameNodeRequest) ProtoMessage() {}
 
 func (x *RenameNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[30]
+	mi := &file_nagi_v1_api_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1557,7 +1691,7 @@ func (x *RenameNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameNodeRequest.ProtoReflect.Descriptor instead.
 func (*RenameNodeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{30}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RenameNodeRequest) GetNodeId() string {
@@ -1582,7 +1716,7 @@ type RenameNodeResponse struct {
 
 func (x *RenameNodeResponse) Reset() {
 	*x = RenameNodeResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[31]
+	mi := &file_nagi_v1_api_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1594,7 +1728,7 @@ func (x *RenameNodeResponse) String() string {
 func (*RenameNodeResponse) ProtoMessage() {}
 
 func (x *RenameNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[31]
+	mi := &file_nagi_v1_api_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1607,7 +1741,7 @@ func (x *RenameNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameNodeResponse.ProtoReflect.Descriptor instead.
 func (*RenameNodeResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{31}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{34}
 }
 
 type QueryNodeMetricsRequest struct {
@@ -1624,7 +1758,7 @@ type QueryNodeMetricsRequest struct {
 
 func (x *QueryNodeMetricsRequest) Reset() {
 	*x = QueryNodeMetricsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[32]
+	mi := &file_nagi_v1_api_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1636,7 +1770,7 @@ func (x *QueryNodeMetricsRequest) String() string {
 func (*QueryNodeMetricsRequest) ProtoMessage() {}
 
 func (x *QueryNodeMetricsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[32]
+	mi := &file_nagi_v1_api_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1649,7 +1783,7 @@ func (x *QueryNodeMetricsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryNodeMetricsRequest.ProtoReflect.Descriptor instead.
 func (*QueryNodeMetricsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{32}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *QueryNodeMetricsRequest) GetNodeId() string {
@@ -1696,7 +1830,7 @@ type RemoveNodeRequest struct {
 
 func (x *RemoveNodeRequest) Reset() {
 	*x = RemoveNodeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[33]
+	mi := &file_nagi_v1_api_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1708,7 +1842,7 @@ func (x *RemoveNodeRequest) String() string {
 func (*RemoveNodeRequest) ProtoMessage() {}
 
 func (x *RemoveNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[33]
+	mi := &file_nagi_v1_api_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1721,7 +1855,7 @@ func (x *RemoveNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNodeRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNodeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{33}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RemoveNodeRequest) GetNodeId() string {
@@ -1739,7 +1873,7 @@ type RemoveNodeResponse struct {
 
 func (x *RemoveNodeResponse) Reset() {
 	*x = RemoveNodeResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[34]
+	mi := &file_nagi_v1_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1751,7 +1885,7 @@ func (x *RemoveNodeResponse) String() string {
 func (*RemoveNodeResponse) ProtoMessage() {}
 
 func (x *RemoveNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[34]
+	mi := &file_nagi_v1_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1764,7 +1898,7 @@ func (x *RemoveNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNodeResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNodeResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{34}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{37}
 }
 
 type CreateEnrollCommandRequest struct {
@@ -1775,7 +1909,7 @@ type CreateEnrollCommandRequest struct {
 
 func (x *CreateEnrollCommandRequest) Reset() {
 	*x = CreateEnrollCommandRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[35]
+	mi := &file_nagi_v1_api_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1787,7 +1921,7 @@ func (x *CreateEnrollCommandRequest) String() string {
 func (*CreateEnrollCommandRequest) ProtoMessage() {}
 
 func (x *CreateEnrollCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[35]
+	mi := &file_nagi_v1_api_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1800,7 +1934,7 @@ func (x *CreateEnrollCommandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEnrollCommandRequest.ProtoReflect.Descriptor instead.
 func (*CreateEnrollCommandRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{35}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{38}
 }
 
 type GetNodeMeshRequest struct {
@@ -1812,7 +1946,7 @@ type GetNodeMeshRequest struct {
 
 func (x *GetNodeMeshRequest) Reset() {
 	*x = GetNodeMeshRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[36]
+	mi := &file_nagi_v1_api_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1824,7 +1958,7 @@ func (x *GetNodeMeshRequest) String() string {
 func (*GetNodeMeshRequest) ProtoMessage() {}
 
 func (x *GetNodeMeshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[36]
+	mi := &file_nagi_v1_api_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1837,7 +1971,7 @@ func (x *GetNodeMeshRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetNodeMeshRequest.ProtoReflect.Descriptor instead.
 func (*GetNodeMeshRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{36}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetNodeMeshRequest) GetNodeId() string {
@@ -1860,7 +1994,7 @@ type PingNodeMeshRequest struct {
 
 func (x *PingNodeMeshRequest) Reset() {
 	*x = PingNodeMeshRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[37]
+	mi := &file_nagi_v1_api_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1872,7 +2006,7 @@ func (x *PingNodeMeshRequest) String() string {
 func (*PingNodeMeshRequest) ProtoMessage() {}
 
 func (x *PingNodeMeshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[37]
+	mi := &file_nagi_v1_api_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1885,7 +2019,7 @@ func (x *PingNodeMeshRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingNodeMeshRequest.ProtoReflect.Descriptor instead.
 func (*PingNodeMeshRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{37}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *PingNodeMeshRequest) GetNodeId() string {
@@ -1919,7 +2053,7 @@ type SetNodeMeshOptionsRequest struct {
 
 func (x *SetNodeMeshOptionsRequest) Reset() {
 	*x = SetNodeMeshOptionsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[38]
+	mi := &file_nagi_v1_api_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1931,7 +2065,7 @@ func (x *SetNodeMeshOptionsRequest) String() string {
 func (*SetNodeMeshOptionsRequest) ProtoMessage() {}
 
 func (x *SetNodeMeshOptionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[38]
+	mi := &file_nagi_v1_api_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1944,7 +2078,7 @@ func (x *SetNodeMeshOptionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeMeshOptionsRequest.ProtoReflect.Descriptor instead.
 func (*SetNodeMeshOptionsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{38}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SetNodeMeshOptionsRequest) GetNodeId() string {
@@ -1969,7 +2103,7 @@ type GetPanelMeshRequest struct {
 
 func (x *GetPanelMeshRequest) Reset() {
 	*x = GetPanelMeshRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[39]
+	mi := &file_nagi_v1_api_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1981,7 +2115,7 @@ func (x *GetPanelMeshRequest) String() string {
 func (*GetPanelMeshRequest) ProtoMessage() {}
 
 func (x *GetPanelMeshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[39]
+	mi := &file_nagi_v1_api_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1994,7 +2128,7 @@ func (x *GetPanelMeshRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPanelMeshRequest.ProtoReflect.Descriptor instead.
 func (*GetPanelMeshRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{39}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{42}
 }
 
 type UpgradeNodeRequest struct {
@@ -2006,7 +2140,7 @@ type UpgradeNodeRequest struct {
 
 func (x *UpgradeNodeRequest) Reset() {
 	*x = UpgradeNodeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[40]
+	mi := &file_nagi_v1_api_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2018,7 +2152,7 @@ func (x *UpgradeNodeRequest) String() string {
 func (*UpgradeNodeRequest) ProtoMessage() {}
 
 func (x *UpgradeNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[40]
+	mi := &file_nagi_v1_api_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2031,7 +2165,7 @@ func (x *UpgradeNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeNodeRequest.ProtoReflect.Descriptor instead.
 func (*UpgradeNodeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{40}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *UpgradeNodeRequest) GetNodeId() string {
@@ -2049,7 +2183,7 @@ type UpgradeAllNodesRequest struct {
 
 func (x *UpgradeAllNodesRequest) Reset() {
 	*x = UpgradeAllNodesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[41]
+	mi := &file_nagi_v1_api_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2061,7 +2195,7 @@ func (x *UpgradeAllNodesRequest) String() string {
 func (*UpgradeAllNodesRequest) ProtoMessage() {}
 
 func (x *UpgradeAllNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[41]
+	mi := &file_nagi_v1_api_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2074,7 +2208,7 @@ func (x *UpgradeAllNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeAllNodesRequest.ProtoReflect.Descriptor instead.
 func (*UpgradeAllNodesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{41}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{44}
 }
 
 type CancelNodeUpgradeRequest struct {
@@ -2087,7 +2221,7 @@ type CancelNodeUpgradeRequest struct {
 
 func (x *CancelNodeUpgradeRequest) Reset() {
 	*x = CancelNodeUpgradeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[42]
+	mi := &file_nagi_v1_api_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2099,7 +2233,7 @@ func (x *CancelNodeUpgradeRequest) String() string {
 func (*CancelNodeUpgradeRequest) ProtoMessage() {}
 
 func (x *CancelNodeUpgradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[42]
+	mi := &file_nagi_v1_api_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2112,7 +2246,7 @@ func (x *CancelNodeUpgradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelNodeUpgradeRequest.ProtoReflect.Descriptor instead.
 func (*CancelNodeUpgradeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{42}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *CancelNodeUpgradeRequest) GetNodeId() string {
@@ -2130,7 +2264,7 @@ type CancelNodeUpgradeResponse struct {
 
 func (x *CancelNodeUpgradeResponse) Reset() {
 	*x = CancelNodeUpgradeResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[43]
+	mi := &file_nagi_v1_api_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2142,7 +2276,7 @@ func (x *CancelNodeUpgradeResponse) String() string {
 func (*CancelNodeUpgradeResponse) ProtoMessage() {}
 
 func (x *CancelNodeUpgradeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[43]
+	mi := &file_nagi_v1_api_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2155,7 +2289,7 @@ func (x *CancelNodeUpgradeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelNodeUpgradeResponse.ProtoReflect.Descriptor instead.
 func (*CancelNodeUpgradeResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{43}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{46}
 }
 
 type UpgradeAllNodesResponse struct {
@@ -2170,7 +2304,7 @@ type UpgradeAllNodesResponse struct {
 
 func (x *UpgradeAllNodesResponse) Reset() {
 	*x = UpgradeAllNodesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[44]
+	mi := &file_nagi_v1_api_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2316,7 @@ func (x *UpgradeAllNodesResponse) String() string {
 func (*UpgradeAllNodesResponse) ProtoMessage() {}
 
 func (x *UpgradeAllNodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[44]
+	mi := &file_nagi_v1_api_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2329,7 @@ func (x *UpgradeAllNodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpgradeAllNodesResponse.ProtoReflect.Descriptor instead.
 func (*UpgradeAllNodesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{44}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *UpgradeAllNodesResponse) GetNodeIds() []string {
@@ -2222,7 +2356,7 @@ type SetNodeMirrorsRequest struct {
 
 func (x *SetNodeMirrorsRequest) Reset() {
 	*x = SetNodeMirrorsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[45]
+	mi := &file_nagi_v1_api_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2234,7 +2368,7 @@ func (x *SetNodeMirrorsRequest) String() string {
 func (*SetNodeMirrorsRequest) ProtoMessage() {}
 
 func (x *SetNodeMirrorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[45]
+	mi := &file_nagi_v1_api_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2247,7 +2381,7 @@ func (x *SetNodeMirrorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeMirrorsRequest.ProtoReflect.Descriptor instead.
 func (*SetNodeMirrorsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{45}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *SetNodeMirrorsRequest) GetNodeId() string {
@@ -2273,7 +2407,7 @@ type ListNodePanelsRequest struct {
 
 func (x *ListNodePanelsRequest) Reset() {
 	*x = ListNodePanelsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[46]
+	mi := &file_nagi_v1_api_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2285,7 +2419,7 @@ func (x *ListNodePanelsRequest) String() string {
 func (*ListNodePanelsRequest) ProtoMessage() {}
 
 func (x *ListNodePanelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[46]
+	mi := &file_nagi_v1_api_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2298,7 +2432,7 @@ func (x *ListNodePanelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodePanelsRequest.ProtoReflect.Descriptor instead.
 func (*ListNodePanelsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{46}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListNodePanelsRequest) GetNodeId() string {
@@ -2317,7 +2451,7 @@ type ListNodePanelsResponse struct {
 
 func (x *ListNodePanelsResponse) Reset() {
 	*x = ListNodePanelsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[47]
+	mi := &file_nagi_v1_api_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2329,7 +2463,7 @@ func (x *ListNodePanelsResponse) String() string {
 func (*ListNodePanelsResponse) ProtoMessage() {}
 
 func (x *ListNodePanelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[47]
+	mi := &file_nagi_v1_api_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2342,7 +2476,7 @@ func (x *ListNodePanelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodePanelsResponse.ProtoReflect.Descriptor instead.
 func (*ListNodePanelsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{47}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ListNodePanelsResponse) GetPanels() []*TrustedPanel {
@@ -2361,7 +2495,7 @@ type ListNodeReplicasResponse struct {
 
 func (x *ListNodeReplicasResponse) Reset() {
 	*x = ListNodeReplicasResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[48]
+	mi := &file_nagi_v1_api_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2373,7 +2507,7 @@ func (x *ListNodeReplicasResponse) String() string {
 func (*ListNodeReplicasResponse) ProtoMessage() {}
 
 func (x *ListNodeReplicasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[48]
+	mi := &file_nagi_v1_api_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2386,7 +2520,7 @@ func (x *ListNodeReplicasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodeReplicasResponse.ProtoReflect.Descriptor instead.
 func (*ListNodeReplicasResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{48}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListNodeReplicasResponse) GetReplicas() []*NodeReplica {
@@ -2407,7 +2541,7 @@ type NodeReplica struct {
 
 func (x *NodeReplica) Reset() {
 	*x = NodeReplica{}
-	mi := &file_nagi_v1_api_proto_msgTypes[49]
+	mi := &file_nagi_v1_api_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2419,7 +2553,7 @@ func (x *NodeReplica) String() string {
 func (*NodeReplica) ProtoMessage() {}
 
 func (x *NodeReplica) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[49]
+	mi := &file_nagi_v1_api_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2432,7 +2566,7 @@ func (x *NodeReplica) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeReplica.ProtoReflect.Descriptor instead.
 func (*NodeReplica) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{49}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *NodeReplica) GetReplica() *Replica {
@@ -2460,7 +2594,7 @@ type DeleteNodeReplicaRequest struct {
 
 func (x *DeleteNodeReplicaRequest) Reset() {
 	*x = DeleteNodeReplicaRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[50]
+	mi := &file_nagi_v1_api_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2472,7 +2606,7 @@ func (x *DeleteNodeReplicaRequest) String() string {
 func (*DeleteNodeReplicaRequest) ProtoMessage() {}
 
 func (x *DeleteNodeReplicaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[50]
+	mi := &file_nagi_v1_api_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2485,7 +2619,7 @@ func (x *DeleteNodeReplicaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeReplicaRequest.ProtoReflect.Descriptor instead.
 func (*DeleteNodeReplicaRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{50}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *DeleteNodeReplicaRequest) GetNodeId() string {
@@ -2517,7 +2651,7 @@ type DeleteNodeReplicaResponse struct {
 
 func (x *DeleteNodeReplicaResponse) Reset() {
 	*x = DeleteNodeReplicaResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[51]
+	mi := &file_nagi_v1_api_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2529,7 +2663,7 @@ func (x *DeleteNodeReplicaResponse) String() string {
 func (*DeleteNodeReplicaResponse) ProtoMessage() {}
 
 func (x *DeleteNodeReplicaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[51]
+	mi := &file_nagi_v1_api_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2542,7 +2676,7 @@ func (x *DeleteNodeReplicaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteNodeReplicaResponse.ProtoReflect.Descriptor instead.
 func (*DeleteNodeReplicaResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{51}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{54}
 }
 
 type HandoverNodesRequest struct {
@@ -2556,7 +2690,7 @@ type HandoverNodesRequest struct {
 
 func (x *HandoverNodesRequest) Reset() {
 	*x = HandoverNodesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[52]
+	mi := &file_nagi_v1_api_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2568,7 +2702,7 @@ func (x *HandoverNodesRequest) String() string {
 func (*HandoverNodesRequest) ProtoMessage() {}
 
 func (x *HandoverNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[52]
+	mi := &file_nagi_v1_api_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2581,7 +2715,7 @@ func (x *HandoverNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandoverNodesRequest.ProtoReflect.Descriptor instead.
 func (*HandoverNodesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{52}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *HandoverNodesRequest) GetNodeIds() []string {
@@ -2607,7 +2741,7 @@ type HandoverNodesResponse struct {
 
 func (x *HandoverNodesResponse) Reset() {
 	*x = HandoverNodesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[53]
+	mi := &file_nagi_v1_api_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2619,7 +2753,7 @@ func (x *HandoverNodesResponse) String() string {
 func (*HandoverNodesResponse) ProtoMessage() {}
 
 func (x *HandoverNodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[53]
+	mi := &file_nagi_v1_api_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2632,7 +2766,7 @@ func (x *HandoverNodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandoverNodesResponse.ProtoReflect.Descriptor instead.
 func (*HandoverNodesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{53}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *HandoverNodesResponse) GetResults() []*HandoverResult {
@@ -2653,7 +2787,7 @@ type HandoverResult struct {
 
 func (x *HandoverResult) Reset() {
 	*x = HandoverResult{}
-	mi := &file_nagi_v1_api_proto_msgTypes[54]
+	mi := &file_nagi_v1_api_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2665,7 +2799,7 @@ func (x *HandoverResult) String() string {
 func (*HandoverResult) ProtoMessage() {}
 
 func (x *HandoverResult) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[54]
+	mi := &file_nagi_v1_api_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2678,7 +2812,7 @@ func (x *HandoverResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandoverResult.ProtoReflect.Descriptor instead.
 func (*HandoverResult) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{54}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *HandoverResult) GetNodeId() string {
@@ -2705,7 +2839,7 @@ type RemoveNodePanelRequest struct {
 
 func (x *RemoveNodePanelRequest) Reset() {
 	*x = RemoveNodePanelRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[55]
+	mi := &file_nagi_v1_api_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2717,7 +2851,7 @@ func (x *RemoveNodePanelRequest) String() string {
 func (*RemoveNodePanelRequest) ProtoMessage() {}
 
 func (x *RemoveNodePanelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[55]
+	mi := &file_nagi_v1_api_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2730,7 +2864,7 @@ func (x *RemoveNodePanelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNodePanelRequest.ProtoReflect.Descriptor instead.
 func (*RemoveNodePanelRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{55}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *RemoveNodePanelRequest) GetNodeId() string {
@@ -2755,7 +2889,7 @@ type RemoveNodePanelResponse struct {
 
 func (x *RemoveNodePanelResponse) Reset() {
 	*x = RemoveNodePanelResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[56]
+	mi := &file_nagi_v1_api_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2767,7 +2901,7 @@ func (x *RemoveNodePanelResponse) String() string {
 func (*RemoveNodePanelResponse) ProtoMessage() {}
 
 func (x *RemoveNodePanelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[56]
+	mi := &file_nagi_v1_api_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2780,7 +2914,7 @@ func (x *RemoveNodePanelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveNodePanelResponse.ProtoReflect.Descriptor instead.
 func (*RemoveNodePanelResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{56}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{59}
 }
 
 type CreateEnrollCommandResponse struct {
@@ -2793,7 +2927,7 @@ type CreateEnrollCommandResponse struct {
 
 func (x *CreateEnrollCommandResponse) Reset() {
 	*x = CreateEnrollCommandResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[57]
+	mi := &file_nagi_v1_api_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2805,7 +2939,7 @@ func (x *CreateEnrollCommandResponse) String() string {
 func (*CreateEnrollCommandResponse) ProtoMessage() {}
 
 func (x *CreateEnrollCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[57]
+	mi := &file_nagi_v1_api_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2818,7 +2952,7 @@ func (x *CreateEnrollCommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateEnrollCommandResponse.ProtoReflect.Descriptor instead.
 func (*CreateEnrollCommandResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{57}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *CreateEnrollCommandResponse) GetCommand() string {
@@ -2862,7 +2996,7 @@ type AccessToken struct {
 
 func (x *AccessToken) Reset() {
 	*x = AccessToken{}
-	mi := &file_nagi_v1_api_proto_msgTypes[58]
+	mi := &file_nagi_v1_api_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2874,7 +3008,7 @@ func (x *AccessToken) String() string {
 func (*AccessToken) ProtoMessage() {}
 
 func (x *AccessToken) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[58]
+	mi := &file_nagi_v1_api_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2887,7 +3021,7 @@ func (x *AccessToken) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessToken.ProtoReflect.Descriptor instead.
 func (*AccessToken) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{58}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *AccessToken) GetId() int64 {
@@ -2983,7 +3117,7 @@ type ListAccessTokensRequest struct {
 
 func (x *ListAccessTokensRequest) Reset() {
 	*x = ListAccessTokensRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[59]
+	mi := &file_nagi_v1_api_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2995,7 +3129,7 @@ func (x *ListAccessTokensRequest) String() string {
 func (*ListAccessTokensRequest) ProtoMessage() {}
 
 func (x *ListAccessTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[59]
+	mi := &file_nagi_v1_api_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3008,7 +3142,7 @@ func (x *ListAccessTokensRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccessTokensRequest.ProtoReflect.Descriptor instead.
 func (*ListAccessTokensRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{59}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ListAccessTokensRequest) GetUserId() int64 {
@@ -3027,7 +3161,7 @@ type ListAccessTokensResponse struct {
 
 func (x *ListAccessTokensResponse) Reset() {
 	*x = ListAccessTokensResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[60]
+	mi := &file_nagi_v1_api_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3039,7 +3173,7 @@ func (x *ListAccessTokensResponse) String() string {
 func (*ListAccessTokensResponse) ProtoMessage() {}
 
 func (x *ListAccessTokensResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[60]
+	mi := &file_nagi_v1_api_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3052,7 +3186,7 @@ func (x *ListAccessTokensResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccessTokensResponse.ProtoReflect.Descriptor instead.
 func (*ListAccessTokensResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{60}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *ListAccessTokensResponse) GetTokens() []*AccessToken {
@@ -3079,7 +3213,7 @@ type CreateAccessTokenRequest struct {
 
 func (x *CreateAccessTokenRequest) Reset() {
 	*x = CreateAccessTokenRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[61]
+	mi := &file_nagi_v1_api_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3091,7 +3225,7 @@ func (x *CreateAccessTokenRequest) String() string {
 func (*CreateAccessTokenRequest) ProtoMessage() {}
 
 func (x *CreateAccessTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[61]
+	mi := &file_nagi_v1_api_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3104,7 +3238,7 @@ func (x *CreateAccessTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAccessTokenRequest.ProtoReflect.Descriptor instead.
 func (*CreateAccessTokenRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{61}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *CreateAccessTokenRequest) GetName() string {
@@ -3160,7 +3294,7 @@ type CreateAccessTokenResponse struct {
 
 func (x *CreateAccessTokenResponse) Reset() {
 	*x = CreateAccessTokenResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[62]
+	mi := &file_nagi_v1_api_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3172,7 +3306,7 @@ func (x *CreateAccessTokenResponse) String() string {
 func (*CreateAccessTokenResponse) ProtoMessage() {}
 
 func (x *CreateAccessTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[62]
+	mi := &file_nagi_v1_api_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3185,7 +3319,7 @@ func (x *CreateAccessTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAccessTokenResponse.ProtoReflect.Descriptor instead.
 func (*CreateAccessTokenResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{62}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *CreateAccessTokenResponse) GetToken() *AccessToken {
@@ -3211,7 +3345,7 @@ type RevokeAccessTokenRequest struct {
 
 func (x *RevokeAccessTokenRequest) Reset() {
 	*x = RevokeAccessTokenRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[63]
+	mi := &file_nagi_v1_api_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3223,7 +3357,7 @@ func (x *RevokeAccessTokenRequest) String() string {
 func (*RevokeAccessTokenRequest) ProtoMessage() {}
 
 func (x *RevokeAccessTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[63]
+	mi := &file_nagi_v1_api_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3236,7 +3370,7 @@ func (x *RevokeAccessTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeAccessTokenRequest.ProtoReflect.Descriptor instead.
 func (*RevokeAccessTokenRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{63}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *RevokeAccessTokenRequest) GetId() int64 {
@@ -3254,7 +3388,7 @@ type RevokeAccessTokenResponse struct {
 
 func (x *RevokeAccessTokenResponse) Reset() {
 	*x = RevokeAccessTokenResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[64]
+	mi := &file_nagi_v1_api_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3266,7 +3400,7 @@ func (x *RevokeAccessTokenResponse) String() string {
 func (*RevokeAccessTokenResponse) ProtoMessage() {}
 
 func (x *RevokeAccessTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[64]
+	mi := &file_nagi_v1_api_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3279,7 +3413,7 @@ func (x *RevokeAccessTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeAccessTokenResponse.ProtoReflect.Descriptor instead.
 func (*RevokeAccessTokenResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{64}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{67}
 }
 
 type GetSecurityRequest struct {
@@ -3290,7 +3424,7 @@ type GetSecurityRequest struct {
 
 func (x *GetSecurityRequest) Reset() {
 	*x = GetSecurityRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[65]
+	mi := &file_nagi_v1_api_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3302,7 +3436,7 @@ func (x *GetSecurityRequest) String() string {
 func (*GetSecurityRequest) ProtoMessage() {}
 
 func (x *GetSecurityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[65]
+	mi := &file_nagi_v1_api_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3315,7 +3449,7 @@ func (x *GetSecurityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSecurityRequest.ProtoReflect.Descriptor instead.
 func (*GetSecurityRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{65}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{68}
 }
 
 type Security struct {
@@ -3335,7 +3469,7 @@ type Security struct {
 
 func (x *Security) Reset() {
 	*x = Security{}
-	mi := &file_nagi_v1_api_proto_msgTypes[66]
+	mi := &file_nagi_v1_api_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3347,7 +3481,7 @@ func (x *Security) String() string {
 func (*Security) ProtoMessage() {}
 
 func (x *Security) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[66]
+	mi := &file_nagi_v1_api_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3360,7 +3494,7 @@ func (x *Security) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Security.ProtoReflect.Descriptor instead.
 func (*Security) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{66}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *Security) GetTotpEnabled() bool {
@@ -3406,7 +3540,7 @@ type BeginTOTPRequest struct {
 
 func (x *BeginTOTPRequest) Reset() {
 	*x = BeginTOTPRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[67]
+	mi := &file_nagi_v1_api_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3418,7 +3552,7 @@ func (x *BeginTOTPRequest) String() string {
 func (*BeginTOTPRequest) ProtoMessage() {}
 
 func (x *BeginTOTPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[67]
+	mi := &file_nagi_v1_api_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3431,7 +3565,7 @@ func (x *BeginTOTPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginTOTPRequest.ProtoReflect.Descriptor instead.
 func (*BeginTOTPRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{67}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{70}
 }
 
 type BeginTOTPResponse struct {
@@ -3444,7 +3578,7 @@ type BeginTOTPResponse struct {
 
 func (x *BeginTOTPResponse) Reset() {
 	*x = BeginTOTPResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[68]
+	mi := &file_nagi_v1_api_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3456,7 +3590,7 @@ func (x *BeginTOTPResponse) String() string {
 func (*BeginTOTPResponse) ProtoMessage() {}
 
 func (x *BeginTOTPResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[68]
+	mi := &file_nagi_v1_api_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3469,7 +3603,7 @@ func (x *BeginTOTPResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginTOTPResponse.ProtoReflect.Descriptor instead.
 func (*BeginTOTPResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{68}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *BeginTOTPResponse) GetSecret() string {
@@ -3495,7 +3629,7 @@ type EnableTOTPRequest struct {
 
 func (x *EnableTOTPRequest) Reset() {
 	*x = EnableTOTPRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[69]
+	mi := &file_nagi_v1_api_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3507,7 +3641,7 @@ func (x *EnableTOTPRequest) String() string {
 func (*EnableTOTPRequest) ProtoMessage() {}
 
 func (x *EnableTOTPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[69]
+	mi := &file_nagi_v1_api_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3520,7 +3654,7 @@ func (x *EnableTOTPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnableTOTPRequest.ProtoReflect.Descriptor instead.
 func (*EnableTOTPRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{69}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *EnableTOTPRequest) GetCode() string {
@@ -3540,7 +3674,7 @@ type DisableTOTPRequest struct {
 
 func (x *DisableTOTPRequest) Reset() {
 	*x = DisableTOTPRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[70]
+	mi := &file_nagi_v1_api_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3552,7 +3686,7 @@ func (x *DisableTOTPRequest) String() string {
 func (*DisableTOTPRequest) ProtoMessage() {}
 
 func (x *DisableTOTPRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[70]
+	mi := &file_nagi_v1_api_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3565,7 +3699,7 @@ func (x *DisableTOTPRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisableTOTPRequest.ProtoReflect.Descriptor instead.
 func (*DisableTOTPRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{70}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *DisableTOTPRequest) GetCode() string {
@@ -3591,7 +3725,7 @@ type SetEntranceRequest struct {
 
 func (x *SetEntranceRequest) Reset() {
 	*x = SetEntranceRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[71]
+	mi := &file_nagi_v1_api_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3603,7 +3737,7 @@ func (x *SetEntranceRequest) String() string {
 func (*SetEntranceRequest) ProtoMessage() {}
 
 func (x *SetEntranceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[71]
+	mi := &file_nagi_v1_api_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3616,7 +3750,7 @@ func (x *SetEntranceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetEntranceRequest.ProtoReflect.Descriptor instead.
 func (*SetEntranceRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{71}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *SetEntranceRequest) GetEnabled() bool {
@@ -3634,7 +3768,7 @@ type CreateInviteRequest struct {
 
 func (x *CreateInviteRequest) Reset() {
 	*x = CreateInviteRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[72]
+	mi := &file_nagi_v1_api_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3646,7 +3780,7 @@ func (x *CreateInviteRequest) String() string {
 func (*CreateInviteRequest) ProtoMessage() {}
 
 func (x *CreateInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[72]
+	mi := &file_nagi_v1_api_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3659,7 +3793,7 @@ func (x *CreateInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInviteRequest.ProtoReflect.Descriptor instead.
 func (*CreateInviteRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{72}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{75}
 }
 
 type CreateInviteResponse struct {
@@ -3672,7 +3806,7 @@ type CreateInviteResponse struct {
 
 func (x *CreateInviteResponse) Reset() {
 	*x = CreateInviteResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[73]
+	mi := &file_nagi_v1_api_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3684,7 +3818,7 @@ func (x *CreateInviteResponse) String() string {
 func (*CreateInviteResponse) ProtoMessage() {}
 
 func (x *CreateInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[73]
+	mi := &file_nagi_v1_api_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3697,7 +3831,7 @@ func (x *CreateInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateInviteResponse.ProtoReflect.Descriptor instead.
 func (*CreateInviteResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{73}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *CreateInviteResponse) GetInvite() string {
@@ -3722,7 +3856,7 @@ type ListInvitesRequest struct {
 
 func (x *ListInvitesRequest) Reset() {
 	*x = ListInvitesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[74]
+	mi := &file_nagi_v1_api_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3734,7 +3868,7 @@ func (x *ListInvitesRequest) String() string {
 func (*ListInvitesRequest) ProtoMessage() {}
 
 func (x *ListInvitesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[74]
+	mi := &file_nagi_v1_api_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3747,7 +3881,7 @@ func (x *ListInvitesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitesRequest.ProtoReflect.Descriptor instead.
 func (*ListInvitesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{74}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{77}
 }
 
 type Invite struct {
@@ -3763,7 +3897,7 @@ type Invite struct {
 
 func (x *Invite) Reset() {
 	*x = Invite{}
-	mi := &file_nagi_v1_api_proto_msgTypes[75]
+	mi := &file_nagi_v1_api_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3775,7 +3909,7 @@ func (x *Invite) String() string {
 func (*Invite) ProtoMessage() {}
 
 func (x *Invite) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[75]
+	mi := &file_nagi_v1_api_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3788,7 +3922,7 @@ func (x *Invite) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Invite.ProtoReflect.Descriptor instead.
 func (*Invite) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{75}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *Invite) GetId() string {
@@ -3828,7 +3962,7 @@ type ListInvitesResponse struct {
 
 func (x *ListInvitesResponse) Reset() {
 	*x = ListInvitesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[76]
+	mi := &file_nagi_v1_api_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3840,7 +3974,7 @@ func (x *ListInvitesResponse) String() string {
 func (*ListInvitesResponse) ProtoMessage() {}
 
 func (x *ListInvitesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[76]
+	mi := &file_nagi_v1_api_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3853,7 +3987,7 @@ func (x *ListInvitesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListInvitesResponse.ProtoReflect.Descriptor instead.
 func (*ListInvitesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{76}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *ListInvitesResponse) GetInvites() []*Invite {
@@ -3872,7 +4006,7 @@ type RevokeInviteRequest struct {
 
 func (x *RevokeInviteRequest) Reset() {
 	*x = RevokeInviteRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[77]
+	mi := &file_nagi_v1_api_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3884,7 +4018,7 @@ func (x *RevokeInviteRequest) String() string {
 func (*RevokeInviteRequest) ProtoMessage() {}
 
 func (x *RevokeInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[77]
+	mi := &file_nagi_v1_api_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3897,7 +4031,7 @@ func (x *RevokeInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeInviteRequest.ProtoReflect.Descriptor instead.
 func (*RevokeInviteRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{77}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *RevokeInviteRequest) GetId() string {
@@ -3915,7 +4049,7 @@ type RevokeInviteResponse struct {
 
 func (x *RevokeInviteResponse) Reset() {
 	*x = RevokeInviteResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[78]
+	mi := &file_nagi_v1_api_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3927,7 +4061,7 @@ func (x *RevokeInviteResponse) String() string {
 func (*RevokeInviteResponse) ProtoMessage() {}
 
 func (x *RevokeInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[78]
+	mi := &file_nagi_v1_api_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3940,7 +4074,7 @@ func (x *RevokeInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeInviteResponse.ProtoReflect.Descriptor instead.
 func (*RevokeInviteResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{78}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{81}
 }
 
 type GetAlertConfigRequest struct {
@@ -3951,7 +4085,7 @@ type GetAlertConfigRequest struct {
 
 func (x *GetAlertConfigRequest) Reset() {
 	*x = GetAlertConfigRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[79]
+	mi := &file_nagi_v1_api_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3963,7 +4097,7 @@ func (x *GetAlertConfigRequest) String() string {
 func (*GetAlertConfigRequest) ProtoMessage() {}
 
 func (x *GetAlertConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[79]
+	mi := &file_nagi_v1_api_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3976,7 +4110,7 @@ func (x *GetAlertConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAlertConfigRequest.ProtoReflect.Descriptor instead.
 func (*GetAlertConfigRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{79}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{82}
 }
 
 type GetAlertConfigResponse struct {
@@ -3991,7 +4125,7 @@ type GetAlertConfigResponse struct {
 
 func (x *GetAlertConfigResponse) Reset() {
 	*x = GetAlertConfigResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[80]
+	mi := &file_nagi_v1_api_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4003,7 +4137,7 @@ func (x *GetAlertConfigResponse) String() string {
 func (*GetAlertConfigResponse) ProtoMessage() {}
 
 func (x *GetAlertConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[80]
+	mi := &file_nagi_v1_api_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4016,7 +4150,7 @@ func (x *GetAlertConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAlertConfigResponse.ProtoReflect.Descriptor instead.
 func (*GetAlertConfigResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{80}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *GetAlertConfigResponse) GetConfig() *AlertConfig {
@@ -4042,7 +4176,7 @@ type UpdateAlertConfigRequest struct {
 
 func (x *UpdateAlertConfigRequest) Reset() {
 	*x = UpdateAlertConfigRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[81]
+	mi := &file_nagi_v1_api_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4054,7 +4188,7 @@ func (x *UpdateAlertConfigRequest) String() string {
 func (*UpdateAlertConfigRequest) ProtoMessage() {}
 
 func (x *UpdateAlertConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[81]
+	mi := &file_nagi_v1_api_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4067,7 +4201,7 @@ func (x *UpdateAlertConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateAlertConfigRequest.ProtoReflect.Descriptor instead.
 func (*UpdateAlertConfigRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{81}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *UpdateAlertConfigRequest) GetConfig() *AlertConfig {
@@ -4086,7 +4220,7 @@ type UpdateAlertConfigResponse struct {
 
 func (x *UpdateAlertConfigResponse) Reset() {
 	*x = UpdateAlertConfigResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[82]
+	mi := &file_nagi_v1_api_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4098,7 +4232,7 @@ func (x *UpdateAlertConfigResponse) String() string {
 func (*UpdateAlertConfigResponse) ProtoMessage() {}
 
 func (x *UpdateAlertConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[82]
+	mi := &file_nagi_v1_api_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4111,7 +4245,7 @@ func (x *UpdateAlertConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateAlertConfigResponse.ProtoReflect.Descriptor instead.
 func (*UpdateAlertConfigResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{82}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *UpdateAlertConfigResponse) GetConfig() *AlertConfig {
@@ -4130,7 +4264,7 @@ type TestAlertChannelRequest struct {
 
 func (x *TestAlertChannelRequest) Reset() {
 	*x = TestAlertChannelRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[83]
+	mi := &file_nagi_v1_api_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4142,7 +4276,7 @@ func (x *TestAlertChannelRequest) String() string {
 func (*TestAlertChannelRequest) ProtoMessage() {}
 
 func (x *TestAlertChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[83]
+	mi := &file_nagi_v1_api_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4155,7 +4289,7 @@ func (x *TestAlertChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestAlertChannelRequest.ProtoReflect.Descriptor instead.
 func (*TestAlertChannelRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{83}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *TestAlertChannelRequest) GetChannel() *AlertChannel {
@@ -4173,7 +4307,7 @@ type TestAlertChannelResponse struct {
 
 func (x *TestAlertChannelResponse) Reset() {
 	*x = TestAlertChannelResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[84]
+	mi := &file_nagi_v1_api_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4185,7 +4319,7 @@ func (x *TestAlertChannelResponse) String() string {
 func (*TestAlertChannelResponse) ProtoMessage() {}
 
 func (x *TestAlertChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[84]
+	mi := &file_nagi_v1_api_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4198,7 +4332,7 @@ func (x *TestAlertChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestAlertChannelResponse.ProtoReflect.Descriptor instead.
 func (*TestAlertChannelResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{84}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{87}
 }
 
 type PanelSettings struct {
@@ -4220,7 +4354,7 @@ type PanelSettings struct {
 
 func (x *PanelSettings) Reset() {
 	*x = PanelSettings{}
-	mi := &file_nagi_v1_api_proto_msgTypes[85]
+	mi := &file_nagi_v1_api_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4232,7 +4366,7 @@ func (x *PanelSettings) String() string {
 func (*PanelSettings) ProtoMessage() {}
 
 func (x *PanelSettings) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[85]
+	mi := &file_nagi_v1_api_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4245,7 +4379,7 @@ func (x *PanelSettings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PanelSettings.ProtoReflect.Descriptor instead.
 func (*PanelSettings) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{85}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *PanelSettings) GetPublicAddress() string {
@@ -4298,7 +4432,7 @@ type GetSettingsRequest struct {
 
 func (x *GetSettingsRequest) Reset() {
 	*x = GetSettingsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[86]
+	mi := &file_nagi_v1_api_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4310,7 +4444,7 @@ func (x *GetSettingsRequest) String() string {
 func (*GetSettingsRequest) ProtoMessage() {}
 
 func (x *GetSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[86]
+	mi := &file_nagi_v1_api_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4323,7 +4457,7 @@ func (x *GetSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSettingsRequest.ProtoReflect.Descriptor instead.
 func (*GetSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{86}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{89}
 }
 
 type SetPanelDomainApiRequest struct {
@@ -4335,7 +4469,7 @@ type SetPanelDomainApiRequest struct {
 
 func (x *SetPanelDomainApiRequest) Reset() {
 	*x = SetPanelDomainApiRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[87]
+	mi := &file_nagi_v1_api_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4347,7 +4481,7 @@ func (x *SetPanelDomainApiRequest) String() string {
 func (*SetPanelDomainApiRequest) ProtoMessage() {}
 
 func (x *SetPanelDomainApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[87]
+	mi := &file_nagi_v1_api_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4360,7 +4494,7 @@ func (x *SetPanelDomainApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPanelDomainApiRequest.ProtoReflect.Descriptor instead.
 func (*SetPanelDomainApiRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{87}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *SetPanelDomainApiRequest) GetDomain() string {
@@ -4379,7 +4513,7 @@ type GetSettingsResponse struct {
 
 func (x *GetSettingsResponse) Reset() {
 	*x = GetSettingsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[88]
+	mi := &file_nagi_v1_api_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4391,7 +4525,7 @@ func (x *GetSettingsResponse) String() string {
 func (*GetSettingsResponse) ProtoMessage() {}
 
 func (x *GetSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[88]
+	mi := &file_nagi_v1_api_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4404,7 +4538,7 @@ func (x *GetSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSettingsResponse.ProtoReflect.Descriptor instead.
 func (*GetSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{88}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *GetSettingsResponse) GetSettings() *PanelSettings {
@@ -4423,7 +4557,7 @@ type UpdateSettingsRequest struct {
 
 func (x *UpdateSettingsRequest) Reset() {
 	*x = UpdateSettingsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[89]
+	mi := &file_nagi_v1_api_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4435,7 +4569,7 @@ func (x *UpdateSettingsRequest) String() string {
 func (*UpdateSettingsRequest) ProtoMessage() {}
 
 func (x *UpdateSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[89]
+	mi := &file_nagi_v1_api_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4448,7 +4582,7 @@ func (x *UpdateSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSettingsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{89}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *UpdateSettingsRequest) GetPublicAddress() string {
@@ -4467,7 +4601,7 @@ type UpdateSettingsResponse struct {
 
 func (x *UpdateSettingsResponse) Reset() {
 	*x = UpdateSettingsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[90]
+	mi := &file_nagi_v1_api_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4479,7 +4613,7 @@ func (x *UpdateSettingsResponse) String() string {
 func (*UpdateSettingsResponse) ProtoMessage() {}
 
 func (x *UpdateSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[90]
+	mi := &file_nagi_v1_api_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4492,7 +4626,7 @@ func (x *UpdateSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSettingsResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{90}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *UpdateSettingsResponse) GetSettings() *PanelSettings {
@@ -4538,7 +4672,7 @@ type Node struct {
 
 func (x *Node) Reset() {
 	*x = Node{}
-	mi := &file_nagi_v1_api_proto_msgTypes[91]
+	mi := &file_nagi_v1_api_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4550,7 +4684,7 @@ func (x *Node) String() string {
 func (*Node) ProtoMessage() {}
 
 func (x *Node) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[91]
+	mi := &file_nagi_v1_api_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4563,7 +4697,7 @@ func (x *Node) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Node.ProtoReflect.Descriptor instead.
 func (*Node) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{91}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *Node) GetId() string {
@@ -4681,7 +4815,7 @@ type SetNodeAlertRulesRequest struct {
 
 func (x *SetNodeAlertRulesRequest) Reset() {
 	*x = SetNodeAlertRulesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[92]
+	mi := &file_nagi_v1_api_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4693,7 +4827,7 @@ func (x *SetNodeAlertRulesRequest) String() string {
 func (*SetNodeAlertRulesRequest) ProtoMessage() {}
 
 func (x *SetNodeAlertRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[92]
+	mi := &file_nagi_v1_api_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4706,7 +4840,7 @@ func (x *SetNodeAlertRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeAlertRulesRequest.ProtoReflect.Descriptor instead.
 func (*SetNodeAlertRulesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{92}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *SetNodeAlertRulesRequest) GetNodeId() string {
@@ -4731,7 +4865,7 @@ type SetNodeAlertRulesResponse struct {
 
 func (x *SetNodeAlertRulesResponse) Reset() {
 	*x = SetNodeAlertRulesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[93]
+	mi := &file_nagi_v1_api_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4743,7 +4877,7 @@ func (x *SetNodeAlertRulesResponse) String() string {
 func (*SetNodeAlertRulesResponse) ProtoMessage() {}
 
 func (x *SetNodeAlertRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[93]
+	mi := &file_nagi_v1_api_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4756,7 +4890,7 @@ func (x *SetNodeAlertRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetNodeAlertRulesResponse.ProtoReflect.Descriptor instead.
 func (*SetNodeAlertRulesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{93}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{96}
 }
 
 type StaleProject struct {
@@ -4769,7 +4903,7 @@ type StaleProject struct {
 
 func (x *StaleProject) Reset() {
 	*x = StaleProject{}
-	mi := &file_nagi_v1_api_proto_msgTypes[94]
+	mi := &file_nagi_v1_api_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4781,7 +4915,7 @@ func (x *StaleProject) String() string {
 func (*StaleProject) ProtoMessage() {}
 
 func (x *StaleProject) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[94]
+	mi := &file_nagi_v1_api_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4794,7 +4928,7 @@ func (x *StaleProject) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StaleProject.ProtoReflect.Descriptor instead.
 func (*StaleProject) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{94}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *StaleProject) GetProjectId() string {
@@ -4821,7 +4955,7 @@ type AdoptStaleProjectRequest struct {
 
 func (x *AdoptStaleProjectRequest) Reset() {
 	*x = AdoptStaleProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[95]
+	mi := &file_nagi_v1_api_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4833,7 +4967,7 @@ func (x *AdoptStaleProjectRequest) String() string {
 func (*AdoptStaleProjectRequest) ProtoMessage() {}
 
 func (x *AdoptStaleProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[95]
+	mi := &file_nagi_v1_api_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4846,7 +4980,7 @@ func (x *AdoptStaleProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdoptStaleProjectRequest.ProtoReflect.Descriptor instead.
 func (*AdoptStaleProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{95}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *AdoptStaleProjectRequest) GetNodeId() string {
@@ -4871,7 +5005,7 @@ type AdoptStaleProjectResponse struct {
 
 func (x *AdoptStaleProjectResponse) Reset() {
 	*x = AdoptStaleProjectResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[96]
+	mi := &file_nagi_v1_api_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4883,7 +5017,7 @@ func (x *AdoptStaleProjectResponse) String() string {
 func (*AdoptStaleProjectResponse) ProtoMessage() {}
 
 func (x *AdoptStaleProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[96]
+	mi := &file_nagi_v1_api_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4896,7 +5030,7 @@ func (x *AdoptStaleProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdoptStaleProjectResponse.ProtoReflect.Descriptor instead.
 func (*AdoptStaleProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{96}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{99}
 }
 
 type ConfirmPendingHARequest struct {
@@ -4911,7 +5045,7 @@ type ConfirmPendingHARequest struct {
 
 func (x *ConfirmPendingHARequest) Reset() {
 	*x = ConfirmPendingHARequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[97]
+	mi := &file_nagi_v1_api_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4923,7 +5057,7 @@ func (x *ConfirmPendingHARequest) String() string {
 func (*ConfirmPendingHARequest) ProtoMessage() {}
 
 func (x *ConfirmPendingHARequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[97]
+	mi := &file_nagi_v1_api_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4936,7 +5070,7 @@ func (x *ConfirmPendingHARequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmPendingHARequest.ProtoReflect.Descriptor instead.
 func (*ConfirmPendingHARequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{97}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *ConfirmPendingHARequest) GetProjectId() string {
@@ -4968,7 +5102,7 @@ type ConfirmPendingHAResponse struct {
 
 func (x *ConfirmPendingHAResponse) Reset() {
 	*x = ConfirmPendingHAResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[98]
+	mi := &file_nagi_v1_api_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4980,7 +5114,7 @@ func (x *ConfirmPendingHAResponse) String() string {
 func (*ConfirmPendingHAResponse) ProtoMessage() {}
 
 func (x *ConfirmPendingHAResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[98]
+	mi := &file_nagi_v1_api_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4993,7 +5127,7 @@ func (x *ConfirmPendingHAResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmPendingHAResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmPendingHAResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{98}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{101}
 }
 
 type UnknownContainer struct {
@@ -5007,7 +5141,7 @@ type UnknownContainer struct {
 
 func (x *UnknownContainer) Reset() {
 	*x = UnknownContainer{}
-	mi := &file_nagi_v1_api_proto_msgTypes[99]
+	mi := &file_nagi_v1_api_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5019,7 +5153,7 @@ func (x *UnknownContainer) String() string {
 func (*UnknownContainer) ProtoMessage() {}
 
 func (x *UnknownContainer) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[99]
+	mi := &file_nagi_v1_api_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5032,7 +5166,7 @@ func (x *UnknownContainer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnknownContainer.ProtoReflect.Descriptor instead.
 func (*UnknownContainer) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{99}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *UnknownContainer) GetProjectId() string {
@@ -5067,7 +5201,7 @@ type AdoptNodeContainerRequest struct {
 
 func (x *AdoptNodeContainerRequest) Reset() {
 	*x = AdoptNodeContainerRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[100]
+	mi := &file_nagi_v1_api_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5079,7 +5213,7 @@ func (x *AdoptNodeContainerRequest) String() string {
 func (*AdoptNodeContainerRequest) ProtoMessage() {}
 
 func (x *AdoptNodeContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[100]
+	mi := &file_nagi_v1_api_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5092,7 +5226,7 @@ func (x *AdoptNodeContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdoptNodeContainerRequest.ProtoReflect.Descriptor instead.
 func (*AdoptNodeContainerRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{100}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *AdoptNodeContainerRequest) GetNodeId() string {
@@ -5124,7 +5258,7 @@ type AdoptNodeContainerResponse struct {
 
 func (x *AdoptNodeContainerResponse) Reset() {
 	*x = AdoptNodeContainerResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[101]
+	mi := &file_nagi_v1_api_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5136,7 +5270,7 @@ func (x *AdoptNodeContainerResponse) String() string {
 func (*AdoptNodeContainerResponse) ProtoMessage() {}
 
 func (x *AdoptNodeContainerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[101]
+	mi := &file_nagi_v1_api_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5149,7 +5283,7 @@ func (x *AdoptNodeContainerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdoptNodeContainerResponse.ProtoReflect.Descriptor instead.
 func (*AdoptNodeContainerResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{101}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{104}
 }
 
 type ListNodesRequest struct {
@@ -5160,7 +5294,7 @@ type ListNodesRequest struct {
 
 func (x *ListNodesRequest) Reset() {
 	*x = ListNodesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[102]
+	mi := &file_nagi_v1_api_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5172,7 +5306,7 @@ func (x *ListNodesRequest) String() string {
 func (*ListNodesRequest) ProtoMessage() {}
 
 func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[102]
+	mi := &file_nagi_v1_api_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5185,7 +5319,7 @@ func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodesRequest.ProtoReflect.Descriptor instead.
 func (*ListNodesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{102}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{105}
 }
 
 type ListNodesResponse struct {
@@ -5200,7 +5334,7 @@ type ListNodesResponse struct {
 
 func (x *ListNodesResponse) Reset() {
 	*x = ListNodesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[103]
+	mi := &file_nagi_v1_api_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5212,7 +5346,7 @@ func (x *ListNodesResponse) String() string {
 func (*ListNodesResponse) ProtoMessage() {}
 
 func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[103]
+	mi := &file_nagi_v1_api_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5225,7 +5359,7 @@ func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNodesResponse.ProtoReflect.Descriptor instead.
 func (*ListNodesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{103}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *ListNodesResponse) GetNodes() []*Node {
@@ -5256,7 +5390,7 @@ type SetBackupNodesRequest struct {
 
 func (x *SetBackupNodesRequest) Reset() {
 	*x = SetBackupNodesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[104]
+	mi := &file_nagi_v1_api_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5268,7 +5402,7 @@ func (x *SetBackupNodesRequest) String() string {
 func (*SetBackupNodesRequest) ProtoMessage() {}
 
 func (x *SetBackupNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[104]
+	mi := &file_nagi_v1_api_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5281,7 +5415,7 @@ func (x *SetBackupNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetBackupNodesRequest.ProtoReflect.Descriptor instead.
 func (*SetBackupNodesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{104}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *SetBackupNodesRequest) GetProjectId() string {
@@ -5323,7 +5457,7 @@ type BackupNodeRef struct {
 
 func (x *BackupNodeRef) Reset() {
 	*x = BackupNodeRef{}
-	mi := &file_nagi_v1_api_proto_msgTypes[105]
+	mi := &file_nagi_v1_api_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5335,7 +5469,7 @@ func (x *BackupNodeRef) String() string {
 func (*BackupNodeRef) ProtoMessage() {}
 
 func (x *BackupNodeRef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[105]
+	mi := &file_nagi_v1_api_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5348,7 +5482,7 @@ func (x *BackupNodeRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BackupNodeRef.ProtoReflect.Descriptor instead.
 func (*BackupNodeRef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{105}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *BackupNodeRef) GetProjectId() string {
@@ -5383,7 +5517,7 @@ type SetContainerAlertRulesRequest struct {
 
 func (x *SetContainerAlertRulesRequest) Reset() {
 	*x = SetContainerAlertRulesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[106]
+	mi := &file_nagi_v1_api_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5395,7 +5529,7 @@ func (x *SetContainerAlertRulesRequest) String() string {
 func (*SetContainerAlertRulesRequest) ProtoMessage() {}
 
 func (x *SetContainerAlertRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[106]
+	mi := &file_nagi_v1_api_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5408,7 +5542,7 @@ func (x *SetContainerAlertRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetContainerAlertRulesRequest.ProtoReflect.Descriptor instead.
 func (*SetContainerAlertRulesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{106}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *SetContainerAlertRulesRequest) GetProjectId() string {
@@ -5443,7 +5577,7 @@ type SetContainerSnapshotScheduleRequest struct {
 
 func (x *SetContainerSnapshotScheduleRequest) Reset() {
 	*x = SetContainerSnapshotScheduleRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[107]
+	mi := &file_nagi_v1_api_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5455,7 +5589,7 @@ func (x *SetContainerSnapshotScheduleRequest) String() string {
 func (*SetContainerSnapshotScheduleRequest) ProtoMessage() {}
 
 func (x *SetContainerSnapshotScheduleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[107]
+	mi := &file_nagi_v1_api_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5468,7 +5602,7 @@ func (x *SetContainerSnapshotScheduleRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use SetContainerSnapshotScheduleRequest.ProtoReflect.Descriptor instead.
 func (*SetContainerSnapshotScheduleRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{107}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *SetContainerSnapshotScheduleRequest) GetProjectId() string {
@@ -5503,7 +5637,7 @@ type SetContainerDisplayNameRequest struct {
 
 func (x *SetContainerDisplayNameRequest) Reset() {
 	*x = SetContainerDisplayNameRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[108]
+	mi := &file_nagi_v1_api_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5515,7 +5649,7 @@ func (x *SetContainerDisplayNameRequest) String() string {
 func (*SetContainerDisplayNameRequest) ProtoMessage() {}
 
 func (x *SetContainerDisplayNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[108]
+	mi := &file_nagi_v1_api_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5528,7 +5662,7 @@ func (x *SetContainerDisplayNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetContainerDisplayNameRequest.ProtoReflect.Descriptor instead.
 func (*SetContainerDisplayNameRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{108}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *SetContainerDisplayNameRequest) GetProjectId() string {
@@ -5571,7 +5705,7 @@ type SetFailoverApiRequest struct {
 
 func (x *SetFailoverApiRequest) Reset() {
 	*x = SetFailoverApiRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[109]
+	mi := &file_nagi_v1_api_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5583,7 +5717,7 @@ func (x *SetFailoverApiRequest) String() string {
 func (*SetFailoverApiRequest) ProtoMessage() {}
 
 func (x *SetFailoverApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[109]
+	mi := &file_nagi_v1_api_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5596,7 +5730,7 @@ func (x *SetFailoverApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetFailoverApiRequest.ProtoReflect.Descriptor instead.
 func (*SetFailoverApiRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{109}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *SetFailoverApiRequest) GetProjectId() string {
@@ -5667,7 +5801,7 @@ type ChangeWitnessRequest struct {
 
 func (x *ChangeWitnessRequest) Reset() {
 	*x = ChangeWitnessRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[110]
+	mi := &file_nagi_v1_api_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5679,7 +5813,7 @@ func (x *ChangeWitnessRequest) String() string {
 func (*ChangeWitnessRequest) ProtoMessage() {}
 
 func (x *ChangeWitnessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[110]
+	mi := &file_nagi_v1_api_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5692,7 +5826,7 @@ func (x *ChangeWitnessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeWitnessRequest.ProtoReflect.Descriptor instead.
 func (*ChangeWitnessRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{110}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *ChangeWitnessRequest) GetProjectId() string {
@@ -5732,7 +5866,7 @@ type RestoreFromBackupRequest struct {
 
 func (x *RestoreFromBackupRequest) Reset() {
 	*x = RestoreFromBackupRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[111]
+	mi := &file_nagi_v1_api_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5744,7 +5878,7 @@ func (x *RestoreFromBackupRequest) String() string {
 func (*RestoreFromBackupRequest) ProtoMessage() {}
 
 func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[111]
+	mi := &file_nagi_v1_api_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5757,7 +5891,7 @@ func (x *RestoreFromBackupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFromBackupRequest.ProtoReflect.Descriptor instead.
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{111}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *RestoreFromBackupRequest) GetProjectId() string {
@@ -5808,7 +5942,7 @@ type MoveContainerRequest struct {
 
 func (x *MoveContainerRequest) Reset() {
 	*x = MoveContainerRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[112]
+	mi := &file_nagi_v1_api_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5820,7 +5954,7 @@ func (x *MoveContainerRequest) String() string {
 func (*MoveContainerRequest) ProtoMessage() {}
 
 func (x *MoveContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[112]
+	mi := &file_nagi_v1_api_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5833,7 +5967,7 @@ func (x *MoveContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MoveContainerRequest.ProtoReflect.Descriptor instead.
 func (*MoveContainerRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{112}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *MoveContainerRequest) GetProjectId() string {
@@ -5872,7 +6006,7 @@ type CreateStandbyCodeRequest struct {
 
 func (x *CreateStandbyCodeRequest) Reset() {
 	*x = CreateStandbyCodeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[113]
+	mi := &file_nagi_v1_api_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5884,7 +6018,7 @@ func (x *CreateStandbyCodeRequest) String() string {
 func (*CreateStandbyCodeRequest) ProtoMessage() {}
 
 func (x *CreateStandbyCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[113]
+	mi := &file_nagi_v1_api_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5897,7 +6031,7 @@ func (x *CreateStandbyCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStandbyCodeRequest.ProtoReflect.Descriptor instead.
 func (*CreateStandbyCodeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{113}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{116}
 }
 
 type CreateStandbyCodeResponse struct {
@@ -5910,7 +6044,7 @@ type CreateStandbyCodeResponse struct {
 
 func (x *CreateStandbyCodeResponse) Reset() {
 	*x = CreateStandbyCodeResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[114]
+	mi := &file_nagi_v1_api_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5922,7 +6056,7 @@ func (x *CreateStandbyCodeResponse) String() string {
 func (*CreateStandbyCodeResponse) ProtoMessage() {}
 
 func (x *CreateStandbyCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[114]
+	mi := &file_nagi_v1_api_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5935,7 +6069,7 @@ func (x *CreateStandbyCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateStandbyCodeResponse.ProtoReflect.Descriptor instead.
 func (*CreateStandbyCodeResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{114}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *CreateStandbyCodeResponse) GetCode() string {
@@ -5960,7 +6094,7 @@ type GetStandbysRequest struct {
 
 func (x *GetStandbysRequest) Reset() {
 	*x = GetStandbysRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[115]
+	mi := &file_nagi_v1_api_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5972,7 +6106,7 @@ func (x *GetStandbysRequest) String() string {
 func (*GetStandbysRequest) ProtoMessage() {}
 
 func (x *GetStandbysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[115]
+	mi := &file_nagi_v1_api_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5985,7 +6119,7 @@ func (x *GetStandbysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStandbysRequest.ProtoReflect.Descriptor instead.
 func (*GetStandbysRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{115}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{118}
 }
 
 type GetStandbysResponse struct {
@@ -6005,7 +6139,7 @@ type GetStandbysResponse struct {
 
 func (x *GetStandbysResponse) Reset() {
 	*x = GetStandbysResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[116]
+	mi := &file_nagi_v1_api_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6017,7 +6151,7 @@ func (x *GetStandbysResponse) String() string {
 func (*GetStandbysResponse) ProtoMessage() {}
 
 func (x *GetStandbysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[116]
+	mi := &file_nagi_v1_api_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6030,7 +6164,7 @@ func (x *GetStandbysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStandbysResponse.ProtoReflect.Descriptor instead.
 func (*GetStandbysResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{116}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *GetStandbysResponse) GetIsStandby() bool {
@@ -6089,7 +6223,7 @@ type StandbyPanel struct {
 
 func (x *StandbyPanel) Reset() {
 	*x = StandbyPanel{}
-	mi := &file_nagi_v1_api_proto_msgTypes[117]
+	mi := &file_nagi_v1_api_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6101,7 +6235,7 @@ func (x *StandbyPanel) String() string {
 func (*StandbyPanel) ProtoMessage() {}
 
 func (x *StandbyPanel) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[117]
+	mi := &file_nagi_v1_api_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6114,7 +6248,7 @@ func (x *StandbyPanel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StandbyPanel.ProtoReflect.Descriptor instead.
 func (*StandbyPanel) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{117}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *StandbyPanel) GetId() string {
@@ -6182,7 +6316,7 @@ type PanelUser struct {
 
 func (x *PanelUser) Reset() {
 	*x = PanelUser{}
-	mi := &file_nagi_v1_api_proto_msgTypes[118]
+	mi := &file_nagi_v1_api_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6194,7 +6328,7 @@ func (x *PanelUser) String() string {
 func (*PanelUser) ProtoMessage() {}
 
 func (x *PanelUser) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[118]
+	mi := &file_nagi_v1_api_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6207,7 +6341,7 @@ func (x *PanelUser) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PanelUser.ProtoReflect.Descriptor instead.
 func (*PanelUser) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{118}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *PanelUser) GetId() int64 {
@@ -6304,7 +6438,7 @@ type UserScope struct {
 
 func (x *UserScope) Reset() {
 	*x = UserScope{}
-	mi := &file_nagi_v1_api_proto_msgTypes[119]
+	mi := &file_nagi_v1_api_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6316,7 +6450,7 @@ func (x *UserScope) String() string {
 func (*UserScope) ProtoMessage() {}
 
 func (x *UserScope) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[119]
+	mi := &file_nagi_v1_api_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6329,7 +6463,7 @@ func (x *UserScope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserScope.ProtoReflect.Descriptor instead.
 func (*UserScope) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{119}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *UserScope) GetAllProjects() bool {
@@ -6382,7 +6516,7 @@ type ListUsersRequest struct {
 
 func (x *ListUsersRequest) Reset() {
 	*x = ListUsersRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[120]
+	mi := &file_nagi_v1_api_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6394,7 +6528,7 @@ func (x *ListUsersRequest) String() string {
 func (*ListUsersRequest) ProtoMessage() {}
 
 func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[120]
+	mi := &file_nagi_v1_api_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6407,7 +6541,7 @@ func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersRequest.ProtoReflect.Descriptor instead.
 func (*ListUsersRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{120}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{123}
 }
 
 type ListUsersResponse struct {
@@ -6419,7 +6553,7 @@ type ListUsersResponse struct {
 
 func (x *ListUsersResponse) Reset() {
 	*x = ListUsersResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[121]
+	mi := &file_nagi_v1_api_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6431,7 +6565,7 @@ func (x *ListUsersResponse) String() string {
 func (*ListUsersResponse) ProtoMessage() {}
 
 func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[121]
+	mi := &file_nagi_v1_api_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6444,7 +6578,7 @@ func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUsersResponse.ProtoReflect.Descriptor instead.
 func (*ListUsersResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{121}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *ListUsersResponse) GetUsers() []*PanelUser {
@@ -6467,7 +6601,7 @@ type CreateUserRequest struct {
 
 func (x *CreateUserRequest) Reset() {
 	*x = CreateUserRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[122]
+	mi := &file_nagi_v1_api_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6479,7 +6613,7 @@ func (x *CreateUserRequest) String() string {
 func (*CreateUserRequest) ProtoMessage() {}
 
 func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[122]
+	mi := &file_nagi_v1_api_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6492,7 +6626,7 @@ func (x *CreateUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateUserRequest.ProtoReflect.Descriptor instead.
 func (*CreateUserRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{122}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *CreateUserRequest) GetUsername() string {
@@ -6541,7 +6675,7 @@ type UpdateUserRequest struct {
 
 func (x *UpdateUserRequest) Reset() {
 	*x = UpdateUserRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[123]
+	mi := &file_nagi_v1_api_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6553,7 +6687,7 @@ func (x *UpdateUserRequest) String() string {
 func (*UpdateUserRequest) ProtoMessage() {}
 
 func (x *UpdateUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[123]
+	mi := &file_nagi_v1_api_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6566,7 +6700,7 @@ func (x *UpdateUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUserRequest.ProtoReflect.Descriptor instead.
 func (*UpdateUserRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{123}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *UpdateUserRequest) GetId() int64 {
@@ -6619,7 +6753,7 @@ type UpdateUserResponse struct {
 
 func (x *UpdateUserResponse) Reset() {
 	*x = UpdateUserResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[124]
+	mi := &file_nagi_v1_api_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6631,7 +6765,7 @@ func (x *UpdateUserResponse) String() string {
 func (*UpdateUserResponse) ProtoMessage() {}
 
 func (x *UpdateUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[124]
+	mi := &file_nagi_v1_api_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6644,7 +6778,7 @@ func (x *UpdateUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateUserResponse.ProtoReflect.Descriptor instead.
 func (*UpdateUserResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{124}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{127}
 }
 
 type DeleteUserRequest struct {
@@ -6656,7 +6790,7 @@ type DeleteUserRequest struct {
 
 func (x *DeleteUserRequest) Reset() {
 	*x = DeleteUserRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[125]
+	mi := &file_nagi_v1_api_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6668,7 +6802,7 @@ func (x *DeleteUserRequest) String() string {
 func (*DeleteUserRequest) ProtoMessage() {}
 
 func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[125]
+	mi := &file_nagi_v1_api_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6681,7 +6815,7 @@ func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{125}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *DeleteUserRequest) GetId() int64 {
@@ -6699,7 +6833,7 @@ type DeleteUserResponse struct {
 
 func (x *DeleteUserResponse) Reset() {
 	*x = DeleteUserResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[126]
+	mi := &file_nagi_v1_api_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6711,7 +6845,7 @@ func (x *DeleteUserResponse) String() string {
 func (*DeleteUserResponse) ProtoMessage() {}
 
 func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[126]
+	mi := &file_nagi_v1_api_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6724,7 +6858,7 @@ func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserResponse.ProtoReflect.Descriptor instead.
 func (*DeleteUserResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{126}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{129}
 }
 
 type LoginSession struct {
@@ -6746,7 +6880,7 @@ type LoginSession struct {
 
 func (x *LoginSession) Reset() {
 	*x = LoginSession{}
-	mi := &file_nagi_v1_api_proto_msgTypes[127]
+	mi := &file_nagi_v1_api_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6758,7 +6892,7 @@ func (x *LoginSession) String() string {
 func (*LoginSession) ProtoMessage() {}
 
 func (x *LoginSession) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[127]
+	mi := &file_nagi_v1_api_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6771,7 +6905,7 @@ func (x *LoginSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginSession.ProtoReflect.Descriptor instead.
 func (*LoginSession) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{127}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *LoginSession) GetId() string {
@@ -6838,7 +6972,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[128]
+	mi := &file_nagi_v1_api_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6850,7 +6984,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[128]
+	mi := &file_nagi_v1_api_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6863,7 +6997,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{128}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{131}
 }
 
 type ListSessionsResponse struct {
@@ -6875,7 +7009,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[129]
+	mi := &file_nagi_v1_api_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6887,7 +7021,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[129]
+	mi := &file_nagi_v1_api_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6900,7 +7034,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{129}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*LoginSession {
@@ -6919,7 +7053,7 @@ type RevokeSessionRequest struct {
 
 func (x *RevokeSessionRequest) Reset() {
 	*x = RevokeSessionRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[130]
+	mi := &file_nagi_v1_api_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6931,7 +7065,7 @@ func (x *RevokeSessionRequest) String() string {
 func (*RevokeSessionRequest) ProtoMessage() {}
 
 func (x *RevokeSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[130]
+	mi := &file_nagi_v1_api_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6944,7 +7078,7 @@ func (x *RevokeSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeSessionRequest.ProtoReflect.Descriptor instead.
 func (*RevokeSessionRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{130}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *RevokeSessionRequest) GetId() string {
@@ -6962,7 +7096,7 @@ type RevokeSessionResponse struct {
 
 func (x *RevokeSessionResponse) Reset() {
 	*x = RevokeSessionResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[131]
+	mi := &file_nagi_v1_api_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6974,7 +7108,7 @@ func (x *RevokeSessionResponse) String() string {
 func (*RevokeSessionResponse) ProtoMessage() {}
 
 func (x *RevokeSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[131]
+	mi := &file_nagi_v1_api_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6987,7 +7121,7 @@ func (x *RevokeSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeSessionResponse.ProtoReflect.Descriptor instead.
 func (*RevokeSessionResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{131}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{134}
 }
 
 type ListActivityRequest struct {
@@ -7003,7 +7137,7 @@ type ListActivityRequest struct {
 
 func (x *ListActivityRequest) Reset() {
 	*x = ListActivityRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[132]
+	mi := &file_nagi_v1_api_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7015,7 +7149,7 @@ func (x *ListActivityRequest) String() string {
 func (*ListActivityRequest) ProtoMessage() {}
 
 func (x *ListActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[132]
+	mi := &file_nagi_v1_api_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7028,7 +7162,7 @@ func (x *ListActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListActivityRequest.ProtoReflect.Descriptor instead.
 func (*ListActivityRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{132}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *ListActivityRequest) GetKind() string {
@@ -7074,7 +7208,7 @@ type ActivityEntry struct {
 
 func (x *ActivityEntry) Reset() {
 	*x = ActivityEntry{}
-	mi := &file_nagi_v1_api_proto_msgTypes[133]
+	mi := &file_nagi_v1_api_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7086,7 +7220,7 @@ func (x *ActivityEntry) String() string {
 func (*ActivityEntry) ProtoMessage() {}
 
 func (x *ActivityEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[133]
+	mi := &file_nagi_v1_api_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7099,7 +7233,7 @@ func (x *ActivityEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivityEntry.ProtoReflect.Descriptor instead.
 func (*ActivityEntry) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{133}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *ActivityEntry) GetId() int64 {
@@ -7181,7 +7315,7 @@ type ListActivityResponse struct {
 
 func (x *ListActivityResponse) Reset() {
 	*x = ListActivityResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[134]
+	mi := &file_nagi_v1_api_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7193,7 +7327,7 @@ func (x *ListActivityResponse) String() string {
 func (*ListActivityResponse) ProtoMessage() {}
 
 func (x *ListActivityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[134]
+	mi := &file_nagi_v1_api_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7206,7 +7340,7 @@ func (x *ListActivityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListActivityResponse.ProtoReflect.Descriptor instead.
 func (*ListActivityResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{134}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *ListActivityResponse) GetEntries() []*ActivityEntry {
@@ -7225,7 +7359,7 @@ type RemoveStandbyRequest struct {
 
 func (x *RemoveStandbyRequest) Reset() {
 	*x = RemoveStandbyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[135]
+	mi := &file_nagi_v1_api_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7237,7 +7371,7 @@ func (x *RemoveStandbyRequest) String() string {
 func (*RemoveStandbyRequest) ProtoMessage() {}
 
 func (x *RemoveStandbyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[135]
+	mi := &file_nagi_v1_api_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7250,7 +7384,7 @@ func (x *RemoveStandbyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveStandbyRequest.ProtoReflect.Descriptor instead.
 func (*RemoveStandbyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{135}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *RemoveStandbyRequest) GetId() string {
@@ -7268,7 +7402,7 @@ type RemoveStandbyResponse struct {
 
 func (x *RemoveStandbyResponse) Reset() {
 	*x = RemoveStandbyResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[136]
+	mi := &file_nagi_v1_api_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7280,7 +7414,7 @@ func (x *RemoveStandbyResponse) String() string {
 func (*RemoveStandbyResponse) ProtoMessage() {}
 
 func (x *RemoveStandbyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[136]
+	mi := &file_nagi_v1_api_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7293,7 +7427,7 @@ func (x *RemoveStandbyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveStandbyResponse.ProtoReflect.Descriptor instead.
 func (*RemoveStandbyResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{136}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{139}
 }
 
 type PromoteStandbyRequest struct {
@@ -7304,7 +7438,7 @@ type PromoteStandbyRequest struct {
 
 func (x *PromoteStandbyRequest) Reset() {
 	*x = PromoteStandbyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[137]
+	mi := &file_nagi_v1_api_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7316,7 +7450,7 @@ func (x *PromoteStandbyRequest) String() string {
 func (*PromoteStandbyRequest) ProtoMessage() {}
 
 func (x *PromoteStandbyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[137]
+	mi := &file_nagi_v1_api_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7329,7 +7463,7 @@ func (x *PromoteStandbyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteStandbyRequest.ProtoReflect.Descriptor instead.
 func (*PromoteStandbyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{137}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{140}
 }
 
 type PromoteStandbyResponse struct {
@@ -7341,7 +7475,7 @@ type PromoteStandbyResponse struct {
 
 func (x *PromoteStandbyResponse) Reset() {
 	*x = PromoteStandbyResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[138]
+	mi := &file_nagi_v1_api_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7353,7 +7487,7 @@ func (x *PromoteStandbyResponse) String() string {
 func (*PromoteStandbyResponse) ProtoMessage() {}
 
 func (x *PromoteStandbyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[138]
+	mi := &file_nagi_v1_api_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7366,7 +7500,7 @@ func (x *PromoteStandbyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteStandbyResponse.ProtoReflect.Descriptor instead.
 func (*PromoteStandbyResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{138}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *PromoteStandbyResponse) GetTerm() uint64 {
@@ -7386,7 +7520,7 @@ type CheckPanelUpdateRequest struct {
 
 func (x *CheckPanelUpdateRequest) Reset() {
 	*x = CheckPanelUpdateRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[139]
+	mi := &file_nagi_v1_api_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7398,7 +7532,7 @@ func (x *CheckPanelUpdateRequest) String() string {
 func (*CheckPanelUpdateRequest) ProtoMessage() {}
 
 func (x *CheckPanelUpdateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[139]
+	mi := &file_nagi_v1_api_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7411,7 +7545,7 @@ func (x *CheckPanelUpdateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPanelUpdateRequest.ProtoReflect.Descriptor instead.
 func (*CheckPanelUpdateRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{139}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *CheckPanelUpdateRequest) GetForce() bool {
@@ -7441,7 +7575,7 @@ type CheckPanelUpdateResponse struct {
 
 func (x *CheckPanelUpdateResponse) Reset() {
 	*x = CheckPanelUpdateResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[140]
+	mi := &file_nagi_v1_api_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7453,7 +7587,7 @@ func (x *CheckPanelUpdateResponse) String() string {
 func (*CheckPanelUpdateResponse) ProtoMessage() {}
 
 func (x *CheckPanelUpdateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[140]
+	mi := &file_nagi_v1_api_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7466,7 +7600,7 @@ func (x *CheckPanelUpdateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPanelUpdateResponse.ProtoReflect.Descriptor instead.
 func (*CheckPanelUpdateResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{140}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *CheckPanelUpdateResponse) GetCurrent() string {
@@ -7519,7 +7653,7 @@ type GetPanelReleaseNotesRequest struct {
 
 func (x *GetPanelReleaseNotesRequest) Reset() {
 	*x = GetPanelReleaseNotesRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[141]
+	mi := &file_nagi_v1_api_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7531,7 +7665,7 @@ func (x *GetPanelReleaseNotesRequest) String() string {
 func (*GetPanelReleaseNotesRequest) ProtoMessage() {}
 
 func (x *GetPanelReleaseNotesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[141]
+	mi := &file_nagi_v1_api_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7544,7 +7678,7 @@ func (x *GetPanelReleaseNotesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPanelReleaseNotesRequest.ProtoReflect.Descriptor instead.
 func (*GetPanelReleaseNotesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{141}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{144}
 }
 
 type GetPanelReleaseNotesResponse struct {
@@ -7557,7 +7691,7 @@ type GetPanelReleaseNotesResponse struct {
 
 func (x *GetPanelReleaseNotesResponse) Reset() {
 	*x = GetPanelReleaseNotesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[142]
+	mi := &file_nagi_v1_api_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7569,7 +7703,7 @@ func (x *GetPanelReleaseNotesResponse) String() string {
 func (*GetPanelReleaseNotesResponse) ProtoMessage() {}
 
 func (x *GetPanelReleaseNotesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[142]
+	mi := &file_nagi_v1_api_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7582,7 +7716,7 @@ func (x *GetPanelReleaseNotesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPanelReleaseNotesResponse.ProtoReflect.Descriptor instead.
 func (*GetPanelReleaseNotesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{142}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *GetPanelReleaseNotesResponse) GetReleases() []*ReleaseNotes {
@@ -7603,7 +7737,7 @@ type ReleaseNotes struct {
 
 func (x *ReleaseNotes) Reset() {
 	*x = ReleaseNotes{}
-	mi := &file_nagi_v1_api_proto_msgTypes[143]
+	mi := &file_nagi_v1_api_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7615,7 +7749,7 @@ func (x *ReleaseNotes) String() string {
 func (*ReleaseNotes) ProtoMessage() {}
 
 func (x *ReleaseNotes) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[143]
+	mi := &file_nagi_v1_api_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7628,7 +7762,7 @@ func (x *ReleaseNotes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleaseNotes.ProtoReflect.Descriptor instead.
 func (*ReleaseNotes) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{143}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *ReleaseNotes) GetVersion() string {
@@ -7653,7 +7787,7 @@ type UpdatePanelRequest struct {
 
 func (x *UpdatePanelRequest) Reset() {
 	*x = UpdatePanelRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[144]
+	mi := &file_nagi_v1_api_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7665,7 +7799,7 @@ func (x *UpdatePanelRequest) String() string {
 func (*UpdatePanelRequest) ProtoMessage() {}
 
 func (x *UpdatePanelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[144]
+	mi := &file_nagi_v1_api_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7678,7 +7812,7 @@ func (x *UpdatePanelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePanelRequest.ProtoReflect.Descriptor instead.
 func (*UpdatePanelRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{144}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{147}
 }
 
 type UpdatePanelResponse struct {
@@ -7691,7 +7825,7 @@ type UpdatePanelResponse struct {
 
 func (x *UpdatePanelResponse) Reset() {
 	*x = UpdatePanelResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[145]
+	mi := &file_nagi_v1_api_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7703,7 +7837,7 @@ func (x *UpdatePanelResponse) String() string {
 func (*UpdatePanelResponse) ProtoMessage() {}
 
 func (x *UpdatePanelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[145]
+	mi := &file_nagi_v1_api_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7716,7 +7850,7 @@ func (x *UpdatePanelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdatePanelResponse.ProtoReflect.Descriptor instead.
 func (*UpdatePanelResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{145}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *UpdatePanelResponse) GetVersion() string {
@@ -7734,7 +7868,7 @@ type GetUpdateStatusRequest struct {
 
 func (x *GetUpdateStatusRequest) Reset() {
 	*x = GetUpdateStatusRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[146]
+	mi := &file_nagi_v1_api_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7746,7 +7880,7 @@ func (x *GetUpdateStatusRequest) String() string {
 func (*GetUpdateStatusRequest) ProtoMessage() {}
 
 func (x *GetUpdateStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[146]
+	mi := &file_nagi_v1_api_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7759,7 +7893,7 @@ func (x *GetUpdateStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUpdateStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetUpdateStatusRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{146}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{149}
 }
 
 type UpdateState struct {
@@ -7779,7 +7913,7 @@ type UpdateState struct {
 
 func (x *UpdateState) Reset() {
 	*x = UpdateState{}
-	mi := &file_nagi_v1_api_proto_msgTypes[147]
+	mi := &file_nagi_v1_api_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7791,7 +7925,7 @@ func (x *UpdateState) String() string {
 func (*UpdateState) ProtoMessage() {}
 
 func (x *UpdateState) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[147]
+	mi := &file_nagi_v1_api_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7804,7 +7938,7 @@ func (x *UpdateState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateState.ProtoReflect.Descriptor instead.
 func (*UpdateState) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{147}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *UpdateState) GetTarget() string {
@@ -7856,7 +7990,7 @@ type GetUpdateStatusResponse struct {
 
 func (x *GetUpdateStatusResponse) Reset() {
 	*x = GetUpdateStatusResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[148]
+	mi := &file_nagi_v1_api_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7868,7 +8002,7 @@ func (x *GetUpdateStatusResponse) String() string {
 func (*GetUpdateStatusResponse) ProtoMessage() {}
 
 func (x *GetUpdateStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[148]
+	mi := &file_nagi_v1_api_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7881,7 +8015,7 @@ func (x *GetUpdateStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUpdateStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetUpdateStatusResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{148}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *GetUpdateStatusResponse) GetVersion() string {
@@ -7915,7 +8049,7 @@ type ConnectProjectRequest struct {
 
 func (x *ConnectProjectRequest) Reset() {
 	*x = ConnectProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[149]
+	mi := &file_nagi_v1_api_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7927,7 +8061,7 @@ func (x *ConnectProjectRequest) String() string {
 func (*ConnectProjectRequest) ProtoMessage() {}
 
 func (x *ConnectProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[149]
+	mi := &file_nagi_v1_api_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7940,7 +8074,7 @@ func (x *ConnectProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConnectProjectRequest.ProtoReflect.Descriptor instead.
 func (*ConnectProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{149}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *ConnectProjectRequest) GetProjectId() string {
@@ -7966,7 +8100,7 @@ type ProjectRef struct {
 
 func (x *ProjectRef) Reset() {
 	*x = ProjectRef{}
-	mi := &file_nagi_v1_api_proto_msgTypes[150]
+	mi := &file_nagi_v1_api_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7978,7 +8112,7 @@ func (x *ProjectRef) String() string {
 func (*ProjectRef) ProtoMessage() {}
 
 func (x *ProjectRef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[150]
+	mi := &file_nagi_v1_api_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7991,7 +8125,7 @@ func (x *ProjectRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectRef.ProtoReflect.Descriptor instead.
 func (*ProjectRef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{150}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *ProjectRef) GetProjectId() string {
@@ -8011,7 +8145,7 @@ type ProjectRevisionRef struct {
 
 func (x *ProjectRevisionRef) Reset() {
 	*x = ProjectRevisionRef{}
-	mi := &file_nagi_v1_api_proto_msgTypes[151]
+	mi := &file_nagi_v1_api_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8023,7 +8157,7 @@ func (x *ProjectRevisionRef) String() string {
 func (*ProjectRevisionRef) ProtoMessage() {}
 
 func (x *ProjectRevisionRef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[151]
+	mi := &file_nagi_v1_api_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8036,7 +8170,7 @@ func (x *ProjectRevisionRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectRevisionRef.ProtoReflect.Descriptor instead.
 func (*ProjectRevisionRef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{151}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *ProjectRevisionRef) GetProjectId() string {
@@ -8064,7 +8198,7 @@ type ContainerRevisionRef struct {
 
 func (x *ContainerRevisionRef) Reset() {
 	*x = ContainerRevisionRef{}
-	mi := &file_nagi_v1_api_proto_msgTypes[152]
+	mi := &file_nagi_v1_api_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8076,7 +8210,7 @@ func (x *ContainerRevisionRef) String() string {
 func (*ContainerRevisionRef) ProtoMessage() {}
 
 func (x *ContainerRevisionRef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[152]
+	mi := &file_nagi_v1_api_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8089,7 +8223,7 @@ func (x *ContainerRevisionRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerRevisionRef.ProtoReflect.Descriptor instead.
 func (*ContainerRevisionRef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{152}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *ContainerRevisionRef) GetProjectId() string {
@@ -8121,7 +8255,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[153]
+	mi := &file_nagi_v1_api_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8133,7 +8267,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[153]
+	mi := &file_nagi_v1_api_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8146,7 +8280,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{153}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{156}
 }
 
 type ListProjectsResponse struct {
@@ -8158,7 +8292,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[154]
+	mi := &file_nagi_v1_api_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8170,7 +8304,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[154]
+	mi := &file_nagi_v1_api_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8183,7 +8317,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{154}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*ProjectSummary {
@@ -8211,7 +8345,7 @@ type CreateProjectRequest struct {
 
 func (x *CreateProjectRequest) Reset() {
 	*x = CreateProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[155]
+	mi := &file_nagi_v1_api_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8223,7 +8357,7 @@ func (x *CreateProjectRequest) String() string {
 func (*CreateProjectRequest) ProtoMessage() {}
 
 func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[155]
+	mi := &file_nagi_v1_api_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8236,7 +8370,7 @@ func (x *CreateProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateProjectRequest.ProtoReflect.Descriptor instead.
 func (*CreateProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{155}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *CreateProjectRequest) GetName() string {
@@ -8302,7 +8436,7 @@ type UpdateProjectSettingsRequest struct {
 
 func (x *UpdateProjectSettingsRequest) Reset() {
 	*x = UpdateProjectSettingsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[156]
+	mi := &file_nagi_v1_api_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8314,7 +8448,7 @@ func (x *UpdateProjectSettingsRequest) String() string {
 func (*UpdateProjectSettingsRequest) ProtoMessage() {}
 
 func (x *UpdateProjectSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[156]
+	mi := &file_nagi_v1_api_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8327,7 +8461,7 @@ func (x *UpdateProjectSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateProjectSettingsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateProjectSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{156}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *UpdateProjectSettingsRequest) GetProjectId() string {
@@ -8376,7 +8510,7 @@ type SetProjectGroupRequest struct {
 
 func (x *SetProjectGroupRequest) Reset() {
 	*x = SetProjectGroupRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[157]
+	mi := &file_nagi_v1_api_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8388,7 +8522,7 @@ func (x *SetProjectGroupRequest) String() string {
 func (*SetProjectGroupRequest) ProtoMessage() {}
 
 func (x *SetProjectGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[157]
+	mi := &file_nagi_v1_api_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8401,7 +8535,7 @@ func (x *SetProjectGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectGroupRequest.ProtoReflect.Descriptor instead.
 func (*SetProjectGroupRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{157}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *SetProjectGroupRequest) GetProjectId() string {
@@ -8429,7 +8563,7 @@ type SaveSharedEnvRequest struct {
 
 func (x *SaveSharedEnvRequest) Reset() {
 	*x = SaveSharedEnvRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[158]
+	mi := &file_nagi_v1_api_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8441,7 +8575,7 @@ func (x *SaveSharedEnvRequest) String() string {
 func (*SaveSharedEnvRequest) ProtoMessage() {}
 
 func (x *SaveSharedEnvRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[158]
+	mi := &file_nagi_v1_api_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8454,7 +8588,7 @@ func (x *SaveSharedEnvRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSharedEnvRequest.ProtoReflect.Descriptor instead.
 func (*SaveSharedEnvRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{158}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *SaveSharedEnvRequest) GetProjectId() string {
@@ -8489,7 +8623,7 @@ type SaveSharedEnvResponse struct {
 
 func (x *SaveSharedEnvResponse) Reset() {
 	*x = SaveSharedEnvResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[159]
+	mi := &file_nagi_v1_api_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8501,7 +8635,7 @@ func (x *SaveSharedEnvResponse) String() string {
 func (*SaveSharedEnvResponse) ProtoMessage() {}
 
 func (x *SaveSharedEnvResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[159]
+	mi := &file_nagi_v1_api_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8514,7 +8648,7 @@ func (x *SaveSharedEnvResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSharedEnvResponse.ProtoReflect.Descriptor instead.
 func (*SaveSharedEnvResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{159}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *SaveSharedEnvResponse) GetProject() *Project {
@@ -8544,7 +8678,7 @@ type DeleteProjectRequest struct {
 
 func (x *DeleteProjectRequest) Reset() {
 	*x = DeleteProjectRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[160]
+	mi := &file_nagi_v1_api_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8556,7 +8690,7 @@ func (x *DeleteProjectRequest) String() string {
 func (*DeleteProjectRequest) ProtoMessage() {}
 
 func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[160]
+	mi := &file_nagi_v1_api_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8569,7 +8703,7 @@ func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeleteProjectRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{160}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *DeleteProjectRequest) GetProjectId() string {
@@ -8608,7 +8742,7 @@ type DeleteProjectResponse struct {
 
 func (x *DeleteProjectResponse) Reset() {
 	*x = DeleteProjectResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[161]
+	mi := &file_nagi_v1_api_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8620,7 +8754,7 @@ func (x *DeleteProjectResponse) String() string {
 func (*DeleteProjectResponse) ProtoMessage() {}
 
 func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[161]
+	mi := &file_nagi_v1_api_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8633,7 +8767,7 @@ func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectResponse.ProtoReflect.Descriptor instead.
 func (*DeleteProjectResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{161}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{164}
 }
 
 type ComposeDirPreview struct {
@@ -8660,7 +8794,7 @@ type ComposeDirPreview struct {
 
 func (x *ComposeDirPreview) Reset() {
 	*x = ComposeDirPreview{}
-	mi := &file_nagi_v1_api_proto_msgTypes[162]
+	mi := &file_nagi_v1_api_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8672,7 +8806,7 @@ func (x *ComposeDirPreview) String() string {
 func (*ComposeDirPreview) ProtoMessage() {}
 
 func (x *ComposeDirPreview) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[162]
+	mi := &file_nagi_v1_api_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8685,7 +8819,7 @@ func (x *ComposeDirPreview) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComposeDirPreview.ProtoReflect.Descriptor instead.
 func (*ComposeDirPreview) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{162}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *ComposeDirPreview) GetPath() string {
@@ -8772,7 +8906,7 @@ type ImportComposeDirRequest struct {
 
 func (x *ImportComposeDirRequest) Reset() {
 	*x = ImportComposeDirRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[163]
+	mi := &file_nagi_v1_api_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8784,7 +8918,7 @@ func (x *ImportComposeDirRequest) String() string {
 func (*ImportComposeDirRequest) ProtoMessage() {}
 
 func (x *ImportComposeDirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[163]
+	mi := &file_nagi_v1_api_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8797,7 +8931,7 @@ func (x *ImportComposeDirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportComposeDirRequest.ProtoReflect.Descriptor instead.
 func (*ImportComposeDirRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{163}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *ImportComposeDirRequest) GetProjectId() string {
@@ -8849,7 +8983,7 @@ type AddContainerRequest struct {
 
 func (x *AddContainerRequest) Reset() {
 	*x = AddContainerRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[164]
+	mi := &file_nagi_v1_api_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8861,7 +8995,7 @@ func (x *AddContainerRequest) String() string {
 func (*AddContainerRequest) ProtoMessage() {}
 
 func (x *AddContainerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[164]
+	mi := &file_nagi_v1_api_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8874,7 +9008,7 @@ func (x *AddContainerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddContainerRequest.ProtoReflect.Descriptor instead.
 func (*AddContainerRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{164}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *AddContainerRequest) GetProjectId() string {
@@ -8925,7 +9059,7 @@ type DeleteContainerApiRequest struct {
 
 func (x *DeleteContainerApiRequest) Reset() {
 	*x = DeleteContainerApiRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[165]
+	mi := &file_nagi_v1_api_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8937,7 +9071,7 @@ func (x *DeleteContainerApiRequest) String() string {
 func (*DeleteContainerApiRequest) ProtoMessage() {}
 
 func (x *DeleteContainerApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[165]
+	mi := &file_nagi_v1_api_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8950,7 +9084,7 @@ func (x *DeleteContainerApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteContainerApiRequest.ProtoReflect.Descriptor instead.
 func (*DeleteContainerApiRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{165}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *DeleteContainerApiRequest) GetProjectId() string {
@@ -8994,7 +9128,7 @@ type SaveDraftRequest struct {
 
 func (x *SaveDraftRequest) Reset() {
 	*x = SaveDraftRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[166]
+	mi := &file_nagi_v1_api_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9006,7 +9140,7 @@ func (x *SaveDraftRequest) String() string {
 func (*SaveDraftRequest) ProtoMessage() {}
 
 func (x *SaveDraftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[166]
+	mi := &file_nagi_v1_api_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9019,7 +9153,7 @@ func (x *SaveDraftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveDraftRequest.ProtoReflect.Descriptor instead.
 func (*SaveDraftRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{166}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *SaveDraftRequest) GetProjectId() string {
@@ -9062,7 +9196,7 @@ type DeployTarget struct {
 
 func (x *DeployTarget) Reset() {
 	*x = DeployTarget{}
-	mi := &file_nagi_v1_api_proto_msgTypes[167]
+	mi := &file_nagi_v1_api_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9074,7 +9208,7 @@ func (x *DeployTarget) String() string {
 func (*DeployTarget) ProtoMessage() {}
 
 func (x *DeployTarget) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[167]
+	mi := &file_nagi_v1_api_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9087,7 +9221,7 @@ func (x *DeployTarget) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployTarget.ProtoReflect.Descriptor instead.
 func (*DeployTarget) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{167}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *DeployTarget) GetContainer() string {
@@ -9123,7 +9257,7 @@ type DeployRequest struct {
 
 func (x *DeployRequest) Reset() {
 	*x = DeployRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[168]
+	mi := &file_nagi_v1_api_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9135,7 +9269,7 @@ func (x *DeployRequest) String() string {
 func (*DeployRequest) ProtoMessage() {}
 
 func (x *DeployRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[168]
+	mi := &file_nagi_v1_api_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9148,7 +9282,7 @@ func (x *DeployRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployRequest.ProtoReflect.Descriptor instead.
 func (*DeployRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{168}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *DeployRequest) GetProjectId() string {
@@ -9209,7 +9343,7 @@ type ListVersionsResponse struct {
 
 func (x *ListVersionsResponse) Reset() {
 	*x = ListVersionsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[169]
+	mi := &file_nagi_v1_api_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9221,7 +9355,7 @@ func (x *ListVersionsResponse) String() string {
 func (*ListVersionsResponse) ProtoMessage() {}
 
 func (x *ListVersionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[169]
+	mi := &file_nagi_v1_api_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9234,7 +9368,7 @@ func (x *ListVersionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListVersionsResponse.ProtoReflect.Descriptor instead.
 func (*ListVersionsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{169}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *ListVersionsResponse) GetVersions() []*Version {
@@ -9257,7 +9391,7 @@ type RollbackRequest struct {
 
 func (x *RollbackRequest) Reset() {
 	*x = RollbackRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[170]
+	mi := &file_nagi_v1_api_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9269,7 +9403,7 @@ func (x *RollbackRequest) String() string {
 func (*RollbackRequest) ProtoMessage() {}
 
 func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[170]
+	mi := &file_nagi_v1_api_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9282,7 +9416,7 @@ func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackRequest.ProtoReflect.Descriptor instead.
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{170}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *RollbackRequest) GetProjectId() string {
@@ -9322,7 +9456,7 @@ type ListDeploymentsResponse struct {
 
 func (x *ListDeploymentsResponse) Reset() {
 	*x = ListDeploymentsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[171]
+	mi := &file_nagi_v1_api_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9334,7 +9468,7 @@ func (x *ListDeploymentsResponse) String() string {
 func (*ListDeploymentsResponse) ProtoMessage() {}
 
 func (x *ListDeploymentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[171]
+	mi := &file_nagi_v1_api_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9347,7 +9481,7 @@ func (x *ListDeploymentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDeploymentsResponse.ProtoReflect.Descriptor instead.
 func (*ListDeploymentsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{171}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *ListDeploymentsResponse) GetDeployments() []*Deployment {
@@ -9367,7 +9501,7 @@ type RestoreDeploymentRequest struct {
 
 func (x *RestoreDeploymentRequest) Reset() {
 	*x = RestoreDeploymentRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[172]
+	mi := &file_nagi_v1_api_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9379,7 +9513,7 @@ func (x *RestoreDeploymentRequest) String() string {
 func (*RestoreDeploymentRequest) ProtoMessage() {}
 
 func (x *RestoreDeploymentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[172]
+	mi := &file_nagi_v1_api_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9392,7 +9526,7 @@ func (x *RestoreDeploymentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreDeploymentRequest.ProtoReflect.Descriptor instead.
 func (*RestoreDeploymentRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{172}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *RestoreDeploymentRequest) GetProjectId() string {
@@ -9422,7 +9556,7 @@ type StreamLogsApiRequest struct {
 
 func (x *StreamLogsApiRequest) Reset() {
 	*x = StreamLogsApiRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[173]
+	mi := &file_nagi_v1_api_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9434,7 +9568,7 @@ func (x *StreamLogsApiRequest) String() string {
 func (*StreamLogsApiRequest) ProtoMessage() {}
 
 func (x *StreamLogsApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[173]
+	mi := &file_nagi_v1_api_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9447,7 +9581,7 @@ func (x *StreamLogsApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamLogsApiRequest.ProtoReflect.Descriptor instead.
 func (*StreamLogsApiRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{173}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *StreamLogsApiRequest) GetProjectId() string {
@@ -9496,7 +9630,7 @@ type SaveRouteRequest struct {
 
 func (x *SaveRouteRequest) Reset() {
 	*x = SaveRouteRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[174]
+	mi := &file_nagi_v1_api_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9508,7 +9642,7 @@ func (x *SaveRouteRequest) String() string {
 func (*SaveRouteRequest) ProtoMessage() {}
 
 func (x *SaveRouteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[174]
+	mi := &file_nagi_v1_api_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9521,7 +9655,7 @@ func (x *SaveRouteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveRouteRequest.ProtoReflect.Descriptor instead.
 func (*SaveRouteRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{174}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *SaveRouteRequest) GetProjectId() string {
@@ -9548,7 +9682,7 @@ type DeleteRouteRequest struct {
 
 func (x *DeleteRouteRequest) Reset() {
 	*x = DeleteRouteRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[175]
+	mi := &file_nagi_v1_api_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9560,7 +9694,7 @@ func (x *DeleteRouteRequest) String() string {
 func (*DeleteRouteRequest) ProtoMessage() {}
 
 func (x *DeleteRouteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[175]
+	mi := &file_nagi_v1_api_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9573,7 +9707,7 @@ func (x *DeleteRouteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRouteRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRouteRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{175}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *DeleteRouteRequest) GetProjectId() string {
@@ -9602,7 +9736,7 @@ type RetryDomainCertRequest struct {
 
 func (x *RetryDomainCertRequest) Reset() {
 	*x = RetryDomainCertRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[176]
+	mi := &file_nagi_v1_api_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9614,7 +9748,7 @@ func (x *RetryDomainCertRequest) String() string {
 func (*RetryDomainCertRequest) ProtoMessage() {}
 
 func (x *RetryDomainCertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[176]
+	mi := &file_nagi_v1_api_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9627,7 +9761,7 @@ func (x *RetryDomainCertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryDomainCertRequest.ProtoReflect.Descriptor instead.
 func (*RetryDomainCertRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{176}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *RetryDomainCertRequest) GetProjectId() string {
@@ -9666,7 +9800,7 @@ type RetryDomainCertResponse struct {
 
 func (x *RetryDomainCertResponse) Reset() {
 	*x = RetryDomainCertResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[177]
+	mi := &file_nagi_v1_api_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9678,7 +9812,7 @@ func (x *RetryDomainCertResponse) String() string {
 func (*RetryDomainCertResponse) ProtoMessage() {}
 
 func (x *RetryDomainCertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[177]
+	mi := &file_nagi_v1_api_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9691,7 +9825,7 @@ func (x *RetryDomainCertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryDomainCertResponse.ProtoReflect.Descriptor instead.
 func (*RetryDomainCertResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{177}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{180}
 }
 
 type CheckDomainsRequest struct {
@@ -9704,7 +9838,7 @@ type CheckDomainsRequest struct {
 
 func (x *CheckDomainsRequest) Reset() {
 	*x = CheckDomainsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[178]
+	mi := &file_nagi_v1_api_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9716,7 +9850,7 @@ func (x *CheckDomainsRequest) String() string {
 func (*CheckDomainsRequest) ProtoMessage() {}
 
 func (x *CheckDomainsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[178]
+	mi := &file_nagi_v1_api_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9729,7 +9863,7 @@ func (x *CheckDomainsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckDomainsRequest.ProtoReflect.Descriptor instead.
 func (*CheckDomainsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{178}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *CheckDomainsRequest) GetProjectId() string {
@@ -9755,7 +9889,7 @@ type CheckDomainsResponse struct {
 
 func (x *CheckDomainsResponse) Reset() {
 	*x = CheckDomainsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[179]
+	mi := &file_nagi_v1_api_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9767,7 +9901,7 @@ func (x *CheckDomainsResponse) String() string {
 func (*CheckDomainsResponse) ProtoMessage() {}
 
 func (x *CheckDomainsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[179]
+	mi := &file_nagi_v1_api_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9780,7 +9914,7 @@ func (x *CheckDomainsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckDomainsResponse.ProtoReflect.Descriptor instead.
 func (*CheckDomainsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{179}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *CheckDomainsResponse) GetDomains() []*DomainCheck {
@@ -9805,7 +9939,7 @@ type DomainCheck struct {
 
 func (x *DomainCheck) Reset() {
 	*x = DomainCheck{}
-	mi := &file_nagi_v1_api_proto_msgTypes[180]
+	mi := &file_nagi_v1_api_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9817,7 +9951,7 @@ func (x *DomainCheck) String() string {
 func (*DomainCheck) ProtoMessage() {}
 
 func (x *DomainCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[180]
+	mi := &file_nagi_v1_api_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9830,7 +9964,7 @@ func (x *DomainCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DomainCheck.ProtoReflect.Descriptor instead.
 func (*DomainCheck) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{180}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *DomainCheck) GetRoute() string {
@@ -9881,7 +10015,7 @@ type DomainEntryCheck struct {
 
 func (x *DomainEntryCheck) Reset() {
 	*x = DomainEntryCheck{}
-	mi := &file_nagi_v1_api_proto_msgTypes[181]
+	mi := &file_nagi_v1_api_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9893,7 +10027,7 @@ func (x *DomainEntryCheck) String() string {
 func (*DomainEntryCheck) ProtoMessage() {}
 
 func (x *DomainEntryCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[181]
+	mi := &file_nagi_v1_api_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9906,7 +10040,7 @@ func (x *DomainEntryCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DomainEntryCheck.ProtoReflect.Descriptor instead.
 func (*DomainEntryCheck) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{181}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *DomainEntryCheck) GetNodeId() string {
@@ -9967,7 +10101,7 @@ type GetBackupKeyResponse struct {
 
 func (x *GetBackupKeyResponse) Reset() {
 	*x = GetBackupKeyResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[182]
+	mi := &file_nagi_v1_api_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9979,7 +10113,7 @@ func (x *GetBackupKeyResponse) String() string {
 func (*GetBackupKeyResponse) ProtoMessage() {}
 
 func (x *GetBackupKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[182]
+	mi := &file_nagi_v1_api_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9992,7 +10126,7 @@ func (x *GetBackupKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBackupKeyResponse.ProtoReflect.Descriptor instead.
 func (*GetBackupKeyResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{182}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *GetBackupKeyResponse) GetKey() string {
@@ -10012,7 +10146,7 @@ type RegistriesResponse struct {
 
 func (x *RegistriesResponse) Reset() {
 	*x = RegistriesResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[183]
+	mi := &file_nagi_v1_api_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10024,7 +10158,7 @@ func (x *RegistriesResponse) String() string {
 func (*RegistriesResponse) ProtoMessage() {}
 
 func (x *RegistriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[183]
+	mi := &file_nagi_v1_api_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10037,7 +10171,7 @@ func (x *RegistriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistriesResponse.ProtoReflect.Descriptor instead.
 func (*RegistriesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{183}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *RegistriesResponse) GetRegistries() []string {
@@ -10059,7 +10193,7 @@ type LoginRegistryApiRequest struct {
 
 func (x *LoginRegistryApiRequest) Reset() {
 	*x = LoginRegistryApiRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[184]
+	mi := &file_nagi_v1_api_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10071,7 +10205,7 @@ func (x *LoginRegistryApiRequest) String() string {
 func (*LoginRegistryApiRequest) ProtoMessage() {}
 
 func (x *LoginRegistryApiRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[184]
+	mi := &file_nagi_v1_api_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10084,7 +10218,7 @@ func (x *LoginRegistryApiRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRegistryApiRequest.ProtoReflect.Descriptor instead.
 func (*LoginRegistryApiRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{184}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *LoginRegistryApiRequest) GetProjectId() string {
@@ -10125,7 +10259,7 @@ type LogoutRegistryRequest struct {
 
 func (x *LogoutRegistryRequest) Reset() {
 	*x = LogoutRegistryRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[185]
+	mi := &file_nagi_v1_api_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10137,7 +10271,7 @@ func (x *LogoutRegistryRequest) String() string {
 func (*LogoutRegistryRequest) ProtoMessage() {}
 
 func (x *LogoutRegistryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[185]
+	mi := &file_nagi_v1_api_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10150,7 +10284,7 @@ func (x *LogoutRegistryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRegistryRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRegistryRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{185}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{188}
 }
 
 func (x *LogoutRegistryRequest) GetProjectId() string {
@@ -10183,7 +10317,7 @@ type ListProjectEventsRequest struct {
 
 func (x *ListProjectEventsRequest) Reset() {
 	*x = ListProjectEventsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[186]
+	mi := &file_nagi_v1_api_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10195,7 +10329,7 @@ func (x *ListProjectEventsRequest) String() string {
 func (*ListProjectEventsRequest) ProtoMessage() {}
 
 func (x *ListProjectEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[186]
+	mi := &file_nagi_v1_api_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10208,7 +10342,7 @@ func (x *ListProjectEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectEventsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{186}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *ListProjectEventsRequest) GetProjectId() string {
@@ -10292,7 +10426,7 @@ type AuditEvent struct {
 
 func (x *AuditEvent) Reset() {
 	*x = AuditEvent{}
-	mi := &file_nagi_v1_api_proto_msgTypes[187]
+	mi := &file_nagi_v1_api_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10304,7 +10438,7 @@ func (x *AuditEvent) String() string {
 func (*AuditEvent) ProtoMessage() {}
 
 func (x *AuditEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[187]
+	mi := &file_nagi_v1_api_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10317,7 +10451,7 @@ func (x *AuditEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
 func (*AuditEvent) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{187}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *AuditEvent) GetId() int64 {
@@ -10520,7 +10654,7 @@ type AuditFilter struct {
 
 func (x *AuditFilter) Reset() {
 	*x = AuditFilter{}
-	mi := &file_nagi_v1_api_proto_msgTypes[188]
+	mi := &file_nagi_v1_api_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10532,7 +10666,7 @@ func (x *AuditFilter) String() string {
 func (*AuditFilter) ProtoMessage() {}
 
 func (x *AuditFilter) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[188]
+	mi := &file_nagi_v1_api_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10545,7 +10679,7 @@ func (x *AuditFilter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditFilter.ProtoReflect.Descriptor instead.
 func (*AuditFilter) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{188}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{191}
 }
 
 func (x *AuditFilter) GetFrom() *timestamppb.Timestamp {
@@ -10626,7 +10760,7 @@ type ListAuditEventsRequest struct {
 
 func (x *ListAuditEventsRequest) Reset() {
 	*x = ListAuditEventsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[189]
+	mi := &file_nagi_v1_api_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10638,7 +10772,7 @@ func (x *ListAuditEventsRequest) String() string {
 func (*ListAuditEventsRequest) ProtoMessage() {}
 
 func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[189]
+	mi := &file_nagi_v1_api_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10651,7 +10785,7 @@ func (x *ListAuditEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditEventsRequest.ProtoReflect.Descriptor instead.
 func (*ListAuditEventsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{189}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *ListAuditEventsRequest) GetFilter() *AuditFilter {
@@ -10691,7 +10825,7 @@ type ListAuditEventsResponse struct {
 
 func (x *ListAuditEventsResponse) Reset() {
 	*x = ListAuditEventsResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[190]
+	mi := &file_nagi_v1_api_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10703,7 +10837,7 @@ func (x *ListAuditEventsResponse) String() string {
 func (*ListAuditEventsResponse) ProtoMessage() {}
 
 func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[190]
+	mi := &file_nagi_v1_api_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10716,7 +10850,7 @@ func (x *ListAuditEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuditEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListAuditEventsResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{190}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *ListAuditEventsResponse) GetEvents() []*AuditEvent {
@@ -10735,7 +10869,7 @@ type GetAuditEventRequest struct {
 
 func (x *GetAuditEventRequest) Reset() {
 	*x = GetAuditEventRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[191]
+	mi := &file_nagi_v1_api_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10747,7 +10881,7 @@ func (x *GetAuditEventRequest) String() string {
 func (*GetAuditEventRequest) ProtoMessage() {}
 
 func (x *GetAuditEventRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[191]
+	mi := &file_nagi_v1_api_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10760,7 +10894,7 @@ func (x *GetAuditEventRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditEventRequest.ProtoReflect.Descriptor instead.
 func (*GetAuditEventRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{191}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{194}
 }
 
 func (x *GetAuditEventRequest) GetId() int64 {
@@ -10781,7 +10915,7 @@ type GetAuditEventResponse struct {
 
 func (x *GetAuditEventResponse) Reset() {
 	*x = GetAuditEventResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[192]
+	mi := &file_nagi_v1_api_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10793,7 +10927,7 @@ func (x *GetAuditEventResponse) String() string {
 func (*GetAuditEventResponse) ProtoMessage() {}
 
 func (x *GetAuditEventResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[192]
+	mi := &file_nagi_v1_api_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10806,7 +10940,7 @@ func (x *GetAuditEventResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditEventResponse.ProtoReflect.Descriptor instead.
 func (*GetAuditEventResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{192}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *GetAuditEventResponse) GetEvent() *AuditEvent {
@@ -10839,7 +10973,7 @@ type ExportAuditEventsRequest struct {
 
 func (x *ExportAuditEventsRequest) Reset() {
 	*x = ExportAuditEventsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[193]
+	mi := &file_nagi_v1_api_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10851,7 +10985,7 @@ func (x *ExportAuditEventsRequest) String() string {
 func (*ExportAuditEventsRequest) ProtoMessage() {}
 
 func (x *ExportAuditEventsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[193]
+	mi := &file_nagi_v1_api_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10864,7 +10998,7 @@ func (x *ExportAuditEventsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportAuditEventsRequest.ProtoReflect.Descriptor instead.
 func (*ExportAuditEventsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{193}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *ExportAuditEventsRequest) GetFilter() *AuditFilter {
@@ -10884,7 +11018,7 @@ type ExportAuditEventsChunk struct {
 
 func (x *ExportAuditEventsChunk) Reset() {
 	*x = ExportAuditEventsChunk{}
-	mi := &file_nagi_v1_api_proto_msgTypes[194]
+	mi := &file_nagi_v1_api_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10896,7 +11030,7 @@ func (x *ExportAuditEventsChunk) String() string {
 func (*ExportAuditEventsChunk) ProtoMessage() {}
 
 func (x *ExportAuditEventsChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[194]
+	mi := &file_nagi_v1_api_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10909,7 +11043,7 @@ func (x *ExportAuditEventsChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportAuditEventsChunk.ProtoReflect.Descriptor instead.
 func (*ExportAuditEventsChunk) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{194}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *ExportAuditEventsChunk) GetData() []byte {
@@ -10929,7 +11063,7 @@ type RegisterSessionKeyRequest struct {
 
 func (x *RegisterSessionKeyRequest) Reset() {
 	*x = RegisterSessionKeyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[195]
+	mi := &file_nagi_v1_api_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10941,7 +11075,7 @@ func (x *RegisterSessionKeyRequest) String() string {
 func (*RegisterSessionKeyRequest) ProtoMessage() {}
 
 func (x *RegisterSessionKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[195]
+	mi := &file_nagi_v1_api_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10954,7 +11088,7 @@ func (x *RegisterSessionKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterSessionKeyRequest.ProtoReflect.Descriptor instead.
 func (*RegisterSessionKeyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{195}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{198}
 }
 
 func (x *RegisterSessionKeyRequest) GetPublicKey() []byte {
@@ -10972,7 +11106,7 @@ type RegisterSessionKeyResponse struct {
 
 func (x *RegisterSessionKeyResponse) Reset() {
 	*x = RegisterSessionKeyResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[196]
+	mi := &file_nagi_v1_api_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10984,7 +11118,7 @@ func (x *RegisterSessionKeyResponse) String() string {
 func (*RegisterSessionKeyResponse) ProtoMessage() {}
 
 func (x *RegisterSessionKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[196]
+	mi := &file_nagi_v1_api_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10997,7 +11131,7 @@ func (x *RegisterSessionKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterSessionKeyResponse.ProtoReflect.Descriptor instead.
 func (*RegisterSessionKeyResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{196}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{199}
 }
 
 type RotateSessionRequest struct {
@@ -11010,7 +11144,7 @@ type RotateSessionRequest struct {
 
 func (x *RotateSessionRequest) Reset() {
 	*x = RotateSessionRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[197]
+	mi := &file_nagi_v1_api_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11022,7 +11156,7 @@ func (x *RotateSessionRequest) String() string {
 func (*RotateSessionRequest) ProtoMessage() {}
 
 func (x *RotateSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[197]
+	mi := &file_nagi_v1_api_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11035,7 +11169,7 @@ func (x *RotateSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateSessionRequest.ProtoReflect.Descriptor instead.
 func (*RotateSessionRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{197}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{200}
 }
 
 func (x *RotateSessionRequest) GetSignature() []byte {
@@ -11053,7 +11187,7 @@ type RotateSessionResponse struct {
 
 func (x *RotateSessionResponse) Reset() {
 	*x = RotateSessionResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[198]
+	mi := &file_nagi_v1_api_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11065,7 +11199,7 @@ func (x *RotateSessionResponse) String() string {
 func (*RotateSessionResponse) ProtoMessage() {}
 
 func (x *RotateSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[198]
+	mi := &file_nagi_v1_api_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11078,7 +11212,7 @@ func (x *RotateSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateSessionResponse.ProtoReflect.Descriptor instead.
 func (*RotateSessionResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{198}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{201}
 }
 
 type ReverifyRequest struct {
@@ -11091,7 +11225,7 @@ type ReverifyRequest struct {
 
 func (x *ReverifyRequest) Reset() {
 	*x = ReverifyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[199]
+	mi := &file_nagi_v1_api_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11103,7 +11237,7 @@ func (x *ReverifyRequest) String() string {
 func (*ReverifyRequest) ProtoMessage() {}
 
 func (x *ReverifyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[199]
+	mi := &file_nagi_v1_api_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11116,7 +11250,7 @@ func (x *ReverifyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReverifyRequest.ProtoReflect.Descriptor instead.
 func (*ReverifyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{199}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *ReverifyRequest) GetPassword() string {
@@ -11141,7 +11275,7 @@ type ReverifyResponse struct {
 
 func (x *ReverifyResponse) Reset() {
 	*x = ReverifyResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[200]
+	mi := &file_nagi_v1_api_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11153,7 +11287,7 @@ func (x *ReverifyResponse) String() string {
 func (*ReverifyResponse) ProtoMessage() {}
 
 func (x *ReverifyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[200]
+	mi := &file_nagi_v1_api_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11166,7 +11300,7 @@ func (x *ReverifyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReverifyResponse.ProtoReflect.Descriptor instead.
 func (*ReverifyResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{200}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{203}
 }
 
 type GetSessionPolicyRequest struct {
@@ -11177,7 +11311,7 @@ type GetSessionPolicyRequest struct {
 
 func (x *GetSessionPolicyRequest) Reset() {
 	*x = GetSessionPolicyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[201]
+	mi := &file_nagi_v1_api_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11189,7 +11323,7 @@ func (x *GetSessionPolicyRequest) String() string {
 func (*GetSessionPolicyRequest) ProtoMessage() {}
 
 func (x *GetSessionPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[201]
+	mi := &file_nagi_v1_api_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11202,7 +11336,7 @@ func (x *GetSessionPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionPolicyRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{201}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{204}
 }
 
 type SessionPolicy struct {
@@ -11221,7 +11355,7 @@ type SessionPolicy struct {
 
 func (x *SessionPolicy) Reset() {
 	*x = SessionPolicy{}
-	mi := &file_nagi_v1_api_proto_msgTypes[202]
+	mi := &file_nagi_v1_api_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11233,7 +11367,7 @@ func (x *SessionPolicy) String() string {
 func (*SessionPolicy) ProtoMessage() {}
 
 func (x *SessionPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[202]
+	mi := &file_nagi_v1_api_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11246,7 +11380,7 @@ func (x *SessionPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionPolicy.ProtoReflect.Descriptor instead.
 func (*SessionPolicy) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{202}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *SessionPolicy) GetIdleMinutes() int32 {
@@ -11286,7 +11420,7 @@ type GetRecordingRequest struct {
 
 func (x *GetRecordingRequest) Reset() {
 	*x = GetRecordingRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[203]
+	mi := &file_nagi_v1_api_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11298,7 +11432,7 @@ func (x *GetRecordingRequest) String() string {
 func (*GetRecordingRequest) ProtoMessage() {}
 
 func (x *GetRecordingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[203]
+	mi := &file_nagi_v1_api_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11311,7 +11445,7 @@ func (x *GetRecordingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRecordingRequest.ProtoReflect.Descriptor instead.
 func (*GetRecordingRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{203}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{206}
 }
 
 func (x *GetRecordingRequest) GetId() string {
@@ -11331,7 +11465,7 @@ type RecordingChunk struct {
 
 func (x *RecordingChunk) Reset() {
 	*x = RecordingChunk{}
-	mi := &file_nagi_v1_api_proto_msgTypes[204]
+	mi := &file_nagi_v1_api_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11343,7 +11477,7 @@ func (x *RecordingChunk) String() string {
 func (*RecordingChunk) ProtoMessage() {}
 
 func (x *RecordingChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[204]
+	mi := &file_nagi_v1_api_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11356,7 +11490,7 @@ func (x *RecordingChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordingChunk.ProtoReflect.Descriptor instead.
 func (*RecordingChunk) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{204}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *RecordingChunk) GetData() []byte {
@@ -11374,7 +11508,7 @@ type GetAuditSettingsRequest struct {
 
 func (x *GetAuditSettingsRequest) Reset() {
 	*x = GetAuditSettingsRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[205]
+	mi := &file_nagi_v1_api_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11386,7 +11520,7 @@ func (x *GetAuditSettingsRequest) String() string {
 func (*GetAuditSettingsRequest) ProtoMessage() {}
 
 func (x *GetAuditSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[205]
+	mi := &file_nagi_v1_api_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11399,7 +11533,7 @@ func (x *GetAuditSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditSettingsRequest.ProtoReflect.Descriptor instead.
 func (*GetAuditSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{205}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{208}
 }
 
 type AuditSettings struct {
@@ -11424,7 +11558,7 @@ type AuditSettings struct {
 
 func (x *AuditSettings) Reset() {
 	*x = AuditSettings{}
-	mi := &file_nagi_v1_api_proto_msgTypes[206]
+	mi := &file_nagi_v1_api_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11436,7 +11570,7 @@ func (x *AuditSettings) String() string {
 func (*AuditSettings) ProtoMessage() {}
 
 func (x *AuditSettings) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[206]
+	mi := &file_nagi_v1_api_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11449,7 +11583,7 @@ func (x *AuditSettings) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditSettings.ProtoReflect.Descriptor instead.
 func (*AuditSettings) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{206}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{209}
 }
 
 func (x *AuditSettings) GetRecording() bool {
@@ -11542,7 +11676,7 @@ type AuditSink struct {
 
 func (x *AuditSink) Reset() {
 	*x = AuditSink{}
-	mi := &file_nagi_v1_api_proto_msgTypes[207]
+	mi := &file_nagi_v1_api_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11554,7 +11688,7 @@ func (x *AuditSink) String() string {
 func (*AuditSink) ProtoMessage() {}
 
 func (x *AuditSink) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[207]
+	mi := &file_nagi_v1_api_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11567,7 +11701,7 @@ func (x *AuditSink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditSink.ProtoReflect.Descriptor instead.
 func (*AuditSink) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{207}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{210}
 }
 
 func (x *AuditSink) GetId() string {
@@ -11706,7 +11840,7 @@ type AuditSinkHeader struct {
 
 func (x *AuditSinkHeader) Reset() {
 	*x = AuditSinkHeader{}
-	mi := &file_nagi_v1_api_proto_msgTypes[208]
+	mi := &file_nagi_v1_api_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11718,7 +11852,7 @@ func (x *AuditSinkHeader) String() string {
 func (*AuditSinkHeader) ProtoMessage() {}
 
 func (x *AuditSinkHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[208]
+	mi := &file_nagi_v1_api_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11731,7 +11865,7 @@ func (x *AuditSinkHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditSinkHeader.ProtoReflect.Descriptor instead.
 func (*AuditSinkHeader) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{208}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{211}
 }
 
 func (x *AuditSinkHeader) GetName() string {
@@ -11756,7 +11890,7 @@ type TestAuditSinkResponse struct {
 
 func (x *TestAuditSinkResponse) Reset() {
 	*x = TestAuditSinkResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[209]
+	mi := &file_nagi_v1_api_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11768,7 +11902,7 @@ func (x *TestAuditSinkResponse) String() string {
 func (*TestAuditSinkResponse) ProtoMessage() {}
 
 func (x *TestAuditSinkResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[209]
+	mi := &file_nagi_v1_api_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11781,7 +11915,7 @@ func (x *TestAuditSinkResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestAuditSinkResponse.ProtoReflect.Descriptor instead.
 func (*TestAuditSinkResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{209}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{212}
 }
 
 type VerifyAuditRequest struct {
@@ -11792,7 +11926,7 @@ type VerifyAuditRequest struct {
 
 func (x *VerifyAuditRequest) Reset() {
 	*x = VerifyAuditRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[210]
+	mi := &file_nagi_v1_api_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11804,7 +11938,7 @@ func (x *VerifyAuditRequest) String() string {
 func (*VerifyAuditRequest) ProtoMessage() {}
 
 func (x *VerifyAuditRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[210]
+	mi := &file_nagi_v1_api_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11817,7 +11951,7 @@ func (x *VerifyAuditRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyAuditRequest.ProtoReflect.Descriptor instead.
 func (*VerifyAuditRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{210}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{213}
 }
 
 type AuditChainStatus struct {
@@ -11837,7 +11971,7 @@ type AuditChainStatus struct {
 
 func (x *AuditChainStatus) Reset() {
 	*x = AuditChainStatus{}
-	mi := &file_nagi_v1_api_proto_msgTypes[211]
+	mi := &file_nagi_v1_api_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11849,7 +11983,7 @@ func (x *AuditChainStatus) String() string {
 func (*AuditChainStatus) ProtoMessage() {}
 
 func (x *AuditChainStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[211]
+	mi := &file_nagi_v1_api_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11862,7 +11996,7 @@ func (x *AuditChainStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditChainStatus.ProtoReflect.Descriptor instead.
 func (*AuditChainStatus) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{211}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *AuditChainStatus) GetVerifiedAt() *timestamppb.Timestamp {
@@ -11925,7 +12059,7 @@ type IsolateNodeRequest struct {
 
 func (x *IsolateNodeRequest) Reset() {
 	*x = IsolateNodeRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[212]
+	mi := &file_nagi_v1_api_proto_msgTypes[215]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11937,7 +12071,7 @@ func (x *IsolateNodeRequest) String() string {
 func (*IsolateNodeRequest) ProtoMessage() {}
 
 func (x *IsolateNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[212]
+	mi := &file_nagi_v1_api_proto_msgTypes[215]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11950,7 +12084,7 @@ func (x *IsolateNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsolateNodeRequest.ProtoReflect.Descriptor instead.
 func (*IsolateNodeRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{212}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{215}
 }
 
 func (x *IsolateNodeRequest) GetNodeId() string {
@@ -11975,7 +12109,7 @@ type IsolateNodeResponse struct {
 
 func (x *IsolateNodeResponse) Reset() {
 	*x = IsolateNodeResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[213]
+	mi := &file_nagi_v1_api_proto_msgTypes[216]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11987,7 +12121,7 @@ func (x *IsolateNodeResponse) String() string {
 func (*IsolateNodeResponse) ProtoMessage() {}
 
 func (x *IsolateNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[213]
+	mi := &file_nagi_v1_api_proto_msgTypes[216]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12000,7 +12134,7 @@ func (x *IsolateNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsolateNodeResponse.ProtoReflect.Descriptor instead.
 func (*IsolateNodeResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{213}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{216}
 }
 
 type Passkey struct {
@@ -12018,7 +12152,7 @@ type Passkey struct {
 
 func (x *Passkey) Reset() {
 	*x = Passkey{}
-	mi := &file_nagi_v1_api_proto_msgTypes[214]
+	mi := &file_nagi_v1_api_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12030,7 +12164,7 @@ func (x *Passkey) String() string {
 func (*Passkey) ProtoMessage() {}
 
 func (x *Passkey) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[214]
+	mi := &file_nagi_v1_api_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12043,7 +12177,7 @@ func (x *Passkey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Passkey.ProtoReflect.Descriptor instead.
 func (*Passkey) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{214}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{217}
 }
 
 func (x *Passkey) GetId() int64 {
@@ -12089,7 +12223,7 @@ type BeginPasskeyLoginRequest struct {
 
 func (x *BeginPasskeyLoginRequest) Reset() {
 	*x = BeginPasskeyLoginRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[215]
+	mi := &file_nagi_v1_api_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12101,7 +12235,7 @@ func (x *BeginPasskeyLoginRequest) String() string {
 func (*BeginPasskeyLoginRequest) ProtoMessage() {}
 
 func (x *BeginPasskeyLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[215]
+	mi := &file_nagi_v1_api_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12114,7 +12248,7 @@ func (x *BeginPasskeyLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginPasskeyLoginRequest.ProtoReflect.Descriptor instead.
 func (*BeginPasskeyLoginRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{215}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{218}
 }
 
 type PasskeyChallenge struct {
@@ -12128,7 +12262,7 @@ type PasskeyChallenge struct {
 
 func (x *PasskeyChallenge) Reset() {
 	*x = PasskeyChallenge{}
-	mi := &file_nagi_v1_api_proto_msgTypes[216]
+	mi := &file_nagi_v1_api_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12140,7 +12274,7 @@ func (x *PasskeyChallenge) String() string {
 func (*PasskeyChallenge) ProtoMessage() {}
 
 func (x *PasskeyChallenge) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[216]
+	mi := &file_nagi_v1_api_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12153,7 +12287,7 @@ func (x *PasskeyChallenge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyChallenge.ProtoReflect.Descriptor instead.
 func (*PasskeyChallenge) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{216}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{219}
 }
 
 func (x *PasskeyChallenge) GetChallengeId() string {
@@ -12191,7 +12325,7 @@ type PasskeyLoginRequest struct {
 
 func (x *PasskeyLoginRequest) Reset() {
 	*x = PasskeyLoginRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[217]
+	mi := &file_nagi_v1_api_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12203,7 +12337,7 @@ func (x *PasskeyLoginRequest) String() string {
 func (*PasskeyLoginRequest) ProtoMessage() {}
 
 func (x *PasskeyLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[217]
+	mi := &file_nagi_v1_api_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12216,7 +12350,7 @@ func (x *PasskeyLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PasskeyLoginRequest.ProtoReflect.Descriptor instead.
 func (*PasskeyLoginRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{217}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{220}
 }
 
 func (x *PasskeyLoginRequest) GetChallengeId() string {
@@ -12269,7 +12403,7 @@ type BeginPasskeyRegistrationRequest struct {
 
 func (x *BeginPasskeyRegistrationRequest) Reset() {
 	*x = BeginPasskeyRegistrationRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[218]
+	mi := &file_nagi_v1_api_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12281,7 +12415,7 @@ func (x *BeginPasskeyRegistrationRequest) String() string {
 func (*BeginPasskeyRegistrationRequest) ProtoMessage() {}
 
 func (x *BeginPasskeyRegistrationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[218]
+	mi := &file_nagi_v1_api_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12294,7 +12428,7 @@ func (x *BeginPasskeyRegistrationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginPasskeyRegistrationRequest.ProtoReflect.Descriptor instead.
 func (*BeginPasskeyRegistrationRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{218}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{221}
 }
 
 type BeginPasskeyRegistrationResponse struct {
@@ -12313,7 +12447,7 @@ type BeginPasskeyRegistrationResponse struct {
 
 func (x *BeginPasskeyRegistrationResponse) Reset() {
 	*x = BeginPasskeyRegistrationResponse{}
-	mi := &file_nagi_v1_api_proto_msgTypes[219]
+	mi := &file_nagi_v1_api_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12325,7 +12459,7 @@ func (x *BeginPasskeyRegistrationResponse) String() string {
 func (*BeginPasskeyRegistrationResponse) ProtoMessage() {}
 
 func (x *BeginPasskeyRegistrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[219]
+	mi := &file_nagi_v1_api_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12338,7 +12472,7 @@ func (x *BeginPasskeyRegistrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginPasskeyRegistrationResponse.ProtoReflect.Descriptor instead.
 func (*BeginPasskeyRegistrationResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{219}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{222}
 }
 
 func (x *BeginPasskeyRegistrationResponse) GetChallengeId() string {
@@ -12402,7 +12536,7 @@ type AddPasskeyRequest struct {
 
 func (x *AddPasskeyRequest) Reset() {
 	*x = AddPasskeyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[220]
+	mi := &file_nagi_v1_api_proto_msgTypes[223]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12414,7 +12548,7 @@ func (x *AddPasskeyRequest) String() string {
 func (*AddPasskeyRequest) ProtoMessage() {}
 
 func (x *AddPasskeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[220]
+	mi := &file_nagi_v1_api_proto_msgTypes[223]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12427,7 +12561,7 @@ func (x *AddPasskeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPasskeyRequest.ProtoReflect.Descriptor instead.
 func (*AddPasskeyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{220}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{223}
 }
 
 func (x *AddPasskeyRequest) GetChallengeId() string {
@@ -12467,7 +12601,7 @@ type DeletePasskeyRequest struct {
 
 func (x *DeletePasskeyRequest) Reset() {
 	*x = DeletePasskeyRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[221]
+	mi := &file_nagi_v1_api_proto_msgTypes[224]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12479,7 +12613,7 @@ func (x *DeletePasskeyRequest) String() string {
 func (*DeletePasskeyRequest) ProtoMessage() {}
 
 func (x *DeletePasskeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[221]
+	mi := &file_nagi_v1_api_proto_msgTypes[224]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12492,7 +12626,7 @@ func (x *DeletePasskeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePasskeyRequest.ProtoReflect.Descriptor instead.
 func (*DeletePasskeyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{221}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{224}
 }
 
 func (x *DeletePasskeyRequest) GetId() int64 {
@@ -12510,7 +12644,7 @@ type GetAdminNetworksRequest struct {
 
 func (x *GetAdminNetworksRequest) Reset() {
 	*x = GetAdminNetworksRequest{}
-	mi := &file_nagi_v1_api_proto_msgTypes[222]
+	mi := &file_nagi_v1_api_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12522,7 +12656,7 @@ func (x *GetAdminNetworksRequest) String() string {
 func (*GetAdminNetworksRequest) ProtoMessage() {}
 
 func (x *GetAdminNetworksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[222]
+	mi := &file_nagi_v1_api_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12535,7 +12669,7 @@ func (x *GetAdminNetworksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAdminNetworksRequest.ProtoReflect.Descriptor instead.
 func (*GetAdminNetworksRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{222}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{225}
 }
 
 type AdminNetworks struct {
@@ -12550,7 +12684,7 @@ type AdminNetworks struct {
 
 func (x *AdminNetworks) Reset() {
 	*x = AdminNetworks{}
-	mi := &file_nagi_v1_api_proto_msgTypes[223]
+	mi := &file_nagi_v1_api_proto_msgTypes[226]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12562,7 +12696,7 @@ func (x *AdminNetworks) String() string {
 func (*AdminNetworks) ProtoMessage() {}
 
 func (x *AdminNetworks) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_api_proto_msgTypes[223]
+	mi := &file_nagi_v1_api_proto_msgTypes[226]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12575,7 +12709,7 @@ func (x *AdminNetworks) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminNetworks.ProtoReflect.Descriptor instead.
 func (*AdminNetworks) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_api_proto_rawDescGZIP(), []int{223}
+	return file_nagi_v1_api_proto_rawDescGZIP(), []int{226}
 }
 
 func (x *AdminNetworks) GetNetworks() []string {
@@ -12665,7 +12799,13 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x15UpdateProfileResponse\"0\n" +
 	"\x12SetLanguageRequest\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\"\x15\n" +
-	"\x13SetLanguageResponse\"A\n" +
+	"\x13SetLanguageResponse\"\x18\n" +
+	"\x16GetProjectOrderRequest\"V\n" +
+	"\fProjectOrder\x12\x12\n" +
+	"\x04sort\x18\x01 \x01(\tR\x04sort\x12\x16\n" +
+	"\x06groups\x18\x02 \x03(\tR\x06groups\x12\x1a\n" +
+	"\bprojects\x18\x03 \x03(\tR\bprojects\"\x19\n" +
+	"\x17SetProjectOrderResponse\"A\n" +
 	"\x12SetNodeTagsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04tags\x18\x02 \x03(\tR\x04tags\"\x15\n" +
@@ -13485,7 +13625,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"current_ip\x18\x02 \x01(\tR\tcurrentIp2\x96\x01\n" +
 	"\fSetupService\x12N\n" +
 	"\rGetSetupState\x12\x1d.nagi.v1.GetSetupStateRequest\x1a\x1e.nagi.v1.GetSetupStateResponse\x126\n" +
-	"\x05Setup\x12\x15.nagi.v1.SetupRequest\x1a\x16.nagi.v1.SetupResponse2\xfc\a\n" +
+	"\x05Setup\x12\x15.nagi.v1.SetupRequest\x1a\x16.nagi.v1.SetupResponse2\x93\t\n" +
 	"\vAuthService\x126\n" +
 	"\x05Login\x12\x15.nagi.v1.LoginRequest\x1a\x16.nagi.v1.LoginResponse\x129\n" +
 	"\x06Logout\x12\x16.nagi.v1.LogoutRequest\x1a\x17.nagi.v1.LogoutResponse\x12-\n" +
@@ -13500,7 +13640,9 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\rRotateSession\x12\x1d.nagi.v1.RotateSessionRequest\x1a\x1e.nagi.v1.RotateSessionResponse\x12?\n" +
 	"\bReverify\x12\x18.nagi.v1.ReverifyRequest\x1a\x19.nagi.v1.ReverifyResponse\x12Q\n" +
 	"\x11BeginPasskeyLogin\x12!.nagi.v1.BeginPasskeyLoginRequest\x1a\x19.nagi.v1.PasskeyChallenge\x12D\n" +
-	"\fPasskeyLogin\x12\x1c.nagi.v1.PasskeyLoginRequest\x1a\x16.nagi.v1.LoginResponse2\xec\x1b\n" +
+	"\fPasskeyLogin\x12\x1c.nagi.v1.PasskeyLoginRequest\x1a\x16.nagi.v1.LoginResponse\x12I\n" +
+	"\x0fGetProjectOrder\x12\x1f.nagi.v1.GetProjectOrderRequest\x1a\x15.nagi.v1.ProjectOrder\x12J\n" +
+	"\x0fSetProjectOrder\x12\x15.nagi.v1.ProjectOrder\x1a .nagi.v1.SetProjectOrderResponse2\xec\x1b\n" +
 	"\vNodeService\x12B\n" +
 	"\tListNodes\x12\x19.nagi.v1.ListNodesRequest\x1a\x1a.nagi.v1.ListNodesResponse\x12A\n" +
 	"\vListNodeDir\x12\x14.nagi.v1.NodeFileRef\x1a\x1c.nagi.v1.ListNodeDirResponse\x12C\n" +
@@ -13682,7 +13824,7 @@ func file_nagi_v1_api_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_api_proto_rawDescData
 }
 
-var file_nagi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 225)
+var file_nagi_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 228)
 var file_nagi_v1_api_proto_goTypes = []any{
 	(*GetSetupStateRequest)(nil),                // 0: nagi.v1.GetSetupStateRequest
 	(*GetSetupStateResponse)(nil),               // 1: nagi.v1.GetSetupStateResponse
@@ -13706,362 +13848,365 @@ var file_nagi_v1_api_proto_goTypes = []any{
 	(*UpdateProfileResponse)(nil),               // 19: nagi.v1.UpdateProfileResponse
 	(*SetLanguageRequest)(nil),                  // 20: nagi.v1.SetLanguageRequest
 	(*SetLanguageResponse)(nil),                 // 21: nagi.v1.SetLanguageResponse
-	(*SetNodeTagsRequest)(nil),                  // 22: nagi.v1.SetNodeTagsRequest
-	(*SetNodeTagsResponse)(nil),                 // 23: nagi.v1.SetNodeTagsResponse
-	(*RenameLabelRequest)(nil),                  // 24: nagi.v1.RenameLabelRequest
-	(*RenameLabelResponse)(nil),                 // 25: nagi.v1.RenameLabelResponse
-	(*NodeRef)(nil),                             // 26: nagi.v1.NodeRef
-	(*SetNodeProjectsRootRequest)(nil),          // 27: nagi.v1.SetNodeProjectsRootRequest
-	(*ApproveNodeRequest)(nil),                  // 28: nagi.v1.ApproveNodeRequest
-	(*ApproveNodeResponse)(nil),                 // 29: nagi.v1.ApproveNodeResponse
-	(*RenameNodeRequest)(nil),                   // 30: nagi.v1.RenameNodeRequest
-	(*RenameNodeResponse)(nil),                  // 31: nagi.v1.RenameNodeResponse
-	(*QueryNodeMetricsRequest)(nil),             // 32: nagi.v1.QueryNodeMetricsRequest
-	(*RemoveNodeRequest)(nil),                   // 33: nagi.v1.RemoveNodeRequest
-	(*RemoveNodeResponse)(nil),                  // 34: nagi.v1.RemoveNodeResponse
-	(*CreateEnrollCommandRequest)(nil),          // 35: nagi.v1.CreateEnrollCommandRequest
-	(*GetNodeMeshRequest)(nil),                  // 36: nagi.v1.GetNodeMeshRequest
-	(*PingNodeMeshRequest)(nil),                 // 37: nagi.v1.PingNodeMeshRequest
-	(*SetNodeMeshOptionsRequest)(nil),           // 38: nagi.v1.SetNodeMeshOptionsRequest
-	(*GetPanelMeshRequest)(nil),                 // 39: nagi.v1.GetPanelMeshRequest
-	(*UpgradeNodeRequest)(nil),                  // 40: nagi.v1.UpgradeNodeRequest
-	(*UpgradeAllNodesRequest)(nil),              // 41: nagi.v1.UpgradeAllNodesRequest
-	(*CancelNodeUpgradeRequest)(nil),            // 42: nagi.v1.CancelNodeUpgradeRequest
-	(*CancelNodeUpgradeResponse)(nil),           // 43: nagi.v1.CancelNodeUpgradeResponse
-	(*UpgradeAllNodesResponse)(nil),             // 44: nagi.v1.UpgradeAllNodesResponse
-	(*SetNodeMirrorsRequest)(nil),               // 45: nagi.v1.SetNodeMirrorsRequest
-	(*ListNodePanelsRequest)(nil),               // 46: nagi.v1.ListNodePanelsRequest
-	(*ListNodePanelsResponse)(nil),              // 47: nagi.v1.ListNodePanelsResponse
-	(*ListNodeReplicasResponse)(nil),            // 48: nagi.v1.ListNodeReplicasResponse
-	(*NodeReplica)(nil),                         // 49: nagi.v1.NodeReplica
-	(*DeleteNodeReplicaRequest)(nil),            // 50: nagi.v1.DeleteNodeReplicaRequest
-	(*DeleteNodeReplicaResponse)(nil),           // 51: nagi.v1.DeleteNodeReplicaResponse
-	(*HandoverNodesRequest)(nil),                // 52: nagi.v1.HandoverNodesRequest
-	(*HandoverNodesResponse)(nil),               // 53: nagi.v1.HandoverNodesResponse
-	(*HandoverResult)(nil),                      // 54: nagi.v1.HandoverResult
-	(*RemoveNodePanelRequest)(nil),              // 55: nagi.v1.RemoveNodePanelRequest
-	(*RemoveNodePanelResponse)(nil),             // 56: nagi.v1.RemoveNodePanelResponse
-	(*CreateEnrollCommandResponse)(nil),         // 57: nagi.v1.CreateEnrollCommandResponse
-	(*AccessToken)(nil),                         // 58: nagi.v1.AccessToken
-	(*ListAccessTokensRequest)(nil),             // 59: nagi.v1.ListAccessTokensRequest
-	(*ListAccessTokensResponse)(nil),            // 60: nagi.v1.ListAccessTokensResponse
-	(*CreateAccessTokenRequest)(nil),            // 61: nagi.v1.CreateAccessTokenRequest
-	(*CreateAccessTokenResponse)(nil),           // 62: nagi.v1.CreateAccessTokenResponse
-	(*RevokeAccessTokenRequest)(nil),            // 63: nagi.v1.RevokeAccessTokenRequest
-	(*RevokeAccessTokenResponse)(nil),           // 64: nagi.v1.RevokeAccessTokenResponse
-	(*GetSecurityRequest)(nil),                  // 65: nagi.v1.GetSecurityRequest
-	(*Security)(nil),                            // 66: nagi.v1.Security
-	(*BeginTOTPRequest)(nil),                    // 67: nagi.v1.BeginTOTPRequest
-	(*BeginTOTPResponse)(nil),                   // 68: nagi.v1.BeginTOTPResponse
-	(*EnableTOTPRequest)(nil),                   // 69: nagi.v1.EnableTOTPRequest
-	(*DisableTOTPRequest)(nil),                  // 70: nagi.v1.DisableTOTPRequest
-	(*SetEntranceRequest)(nil),                  // 71: nagi.v1.SetEntranceRequest
-	(*CreateInviteRequest)(nil),                 // 72: nagi.v1.CreateInviteRequest
-	(*CreateInviteResponse)(nil),                // 73: nagi.v1.CreateInviteResponse
-	(*ListInvitesRequest)(nil),                  // 74: nagi.v1.ListInvitesRequest
-	(*Invite)(nil),                              // 75: nagi.v1.Invite
-	(*ListInvitesResponse)(nil),                 // 76: nagi.v1.ListInvitesResponse
-	(*RevokeInviteRequest)(nil),                 // 77: nagi.v1.RevokeInviteRequest
-	(*RevokeInviteResponse)(nil),                // 78: nagi.v1.RevokeInviteResponse
-	(*GetAlertConfigRequest)(nil),               // 79: nagi.v1.GetAlertConfigRequest
-	(*GetAlertConfigResponse)(nil),              // 80: nagi.v1.GetAlertConfigResponse
-	(*UpdateAlertConfigRequest)(nil),            // 81: nagi.v1.UpdateAlertConfigRequest
-	(*UpdateAlertConfigResponse)(nil),           // 82: nagi.v1.UpdateAlertConfigResponse
-	(*TestAlertChannelRequest)(nil),             // 83: nagi.v1.TestAlertChannelRequest
-	(*TestAlertChannelResponse)(nil),            // 84: nagi.v1.TestAlertChannelResponse
-	(*PanelSettings)(nil),                       // 85: nagi.v1.PanelSettings
-	(*GetSettingsRequest)(nil),                  // 86: nagi.v1.GetSettingsRequest
-	(*SetPanelDomainApiRequest)(nil),            // 87: nagi.v1.SetPanelDomainApiRequest
-	(*GetSettingsResponse)(nil),                 // 88: nagi.v1.GetSettingsResponse
-	(*UpdateSettingsRequest)(nil),               // 89: nagi.v1.UpdateSettingsRequest
-	(*UpdateSettingsResponse)(nil),              // 90: nagi.v1.UpdateSettingsResponse
-	(*Node)(nil),                                // 91: nagi.v1.Node
-	(*SetNodeAlertRulesRequest)(nil),            // 92: nagi.v1.SetNodeAlertRulesRequest
-	(*SetNodeAlertRulesResponse)(nil),           // 93: nagi.v1.SetNodeAlertRulesResponse
-	(*StaleProject)(nil),                        // 94: nagi.v1.StaleProject
-	(*AdoptStaleProjectRequest)(nil),            // 95: nagi.v1.AdoptStaleProjectRequest
-	(*AdoptStaleProjectResponse)(nil),           // 96: nagi.v1.AdoptStaleProjectResponse
-	(*ConfirmPendingHARequest)(nil),             // 97: nagi.v1.ConfirmPendingHARequest
-	(*ConfirmPendingHAResponse)(nil),            // 98: nagi.v1.ConfirmPendingHAResponse
-	(*UnknownContainer)(nil),                    // 99: nagi.v1.UnknownContainer
-	(*AdoptNodeContainerRequest)(nil),           // 100: nagi.v1.AdoptNodeContainerRequest
-	(*AdoptNodeContainerResponse)(nil),          // 101: nagi.v1.AdoptNodeContainerResponse
-	(*ListNodesRequest)(nil),                    // 102: nagi.v1.ListNodesRequest
-	(*ListNodesResponse)(nil),                   // 103: nagi.v1.ListNodesResponse
-	(*SetBackupNodesRequest)(nil),               // 104: nagi.v1.SetBackupNodesRequest
-	(*BackupNodeRef)(nil),                       // 105: nagi.v1.BackupNodeRef
-	(*SetContainerAlertRulesRequest)(nil),       // 106: nagi.v1.SetContainerAlertRulesRequest
-	(*SetContainerSnapshotScheduleRequest)(nil), // 107: nagi.v1.SetContainerSnapshotScheduleRequest
-	(*SetContainerDisplayNameRequest)(nil),      // 108: nagi.v1.SetContainerDisplayNameRequest
-	(*SetFailoverApiRequest)(nil),               // 109: nagi.v1.SetFailoverApiRequest
-	(*ChangeWitnessRequest)(nil),                // 110: nagi.v1.ChangeWitnessRequest
-	(*RestoreFromBackupRequest)(nil),            // 111: nagi.v1.RestoreFromBackupRequest
-	(*MoveContainerRequest)(nil),                // 112: nagi.v1.MoveContainerRequest
-	(*CreateStandbyCodeRequest)(nil),            // 113: nagi.v1.CreateStandbyCodeRequest
-	(*CreateStandbyCodeResponse)(nil),           // 114: nagi.v1.CreateStandbyCodeResponse
-	(*GetStandbysRequest)(nil),                  // 115: nagi.v1.GetStandbysRequest
-	(*GetStandbysResponse)(nil),                 // 116: nagi.v1.GetStandbysResponse
-	(*StandbyPanel)(nil),                        // 117: nagi.v1.StandbyPanel
-	(*PanelUser)(nil),                           // 118: nagi.v1.PanelUser
-	(*UserScope)(nil),                           // 119: nagi.v1.UserScope
-	(*ListUsersRequest)(nil),                    // 120: nagi.v1.ListUsersRequest
-	(*ListUsersResponse)(nil),                   // 121: nagi.v1.ListUsersResponse
-	(*CreateUserRequest)(nil),                   // 122: nagi.v1.CreateUserRequest
-	(*UpdateUserRequest)(nil),                   // 123: nagi.v1.UpdateUserRequest
-	(*UpdateUserResponse)(nil),                  // 124: nagi.v1.UpdateUserResponse
-	(*DeleteUserRequest)(nil),                   // 125: nagi.v1.DeleteUserRequest
-	(*DeleteUserResponse)(nil),                  // 126: nagi.v1.DeleteUserResponse
-	(*LoginSession)(nil),                        // 127: nagi.v1.LoginSession
-	(*ListSessionsRequest)(nil),                 // 128: nagi.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),                // 129: nagi.v1.ListSessionsResponse
-	(*RevokeSessionRequest)(nil),                // 130: nagi.v1.RevokeSessionRequest
-	(*RevokeSessionResponse)(nil),               // 131: nagi.v1.RevokeSessionResponse
-	(*ListActivityRequest)(nil),                 // 132: nagi.v1.ListActivityRequest
-	(*ActivityEntry)(nil),                       // 133: nagi.v1.ActivityEntry
-	(*ListActivityResponse)(nil),                // 134: nagi.v1.ListActivityResponse
-	(*RemoveStandbyRequest)(nil),                // 135: nagi.v1.RemoveStandbyRequest
-	(*RemoveStandbyResponse)(nil),               // 136: nagi.v1.RemoveStandbyResponse
-	(*PromoteStandbyRequest)(nil),               // 137: nagi.v1.PromoteStandbyRequest
-	(*PromoteStandbyResponse)(nil),              // 138: nagi.v1.PromoteStandbyResponse
-	(*CheckPanelUpdateRequest)(nil),             // 139: nagi.v1.CheckPanelUpdateRequest
-	(*CheckPanelUpdateResponse)(nil),            // 140: nagi.v1.CheckPanelUpdateResponse
-	(*GetPanelReleaseNotesRequest)(nil),         // 141: nagi.v1.GetPanelReleaseNotesRequest
-	(*GetPanelReleaseNotesResponse)(nil),        // 142: nagi.v1.GetPanelReleaseNotesResponse
-	(*ReleaseNotes)(nil),                        // 143: nagi.v1.ReleaseNotes
-	(*UpdatePanelRequest)(nil),                  // 144: nagi.v1.UpdatePanelRequest
-	(*UpdatePanelResponse)(nil),                 // 145: nagi.v1.UpdatePanelResponse
-	(*GetUpdateStatusRequest)(nil),              // 146: nagi.v1.GetUpdateStatusRequest
-	(*UpdateState)(nil),                         // 147: nagi.v1.UpdateState
-	(*GetUpdateStatusResponse)(nil),             // 148: nagi.v1.GetUpdateStatusResponse
-	(*ConnectProjectRequest)(nil),               // 149: nagi.v1.ConnectProjectRequest
-	(*ProjectRef)(nil),                          // 150: nagi.v1.ProjectRef
-	(*ProjectRevisionRef)(nil),                  // 151: nagi.v1.ProjectRevisionRef
-	(*ContainerRevisionRef)(nil),                // 152: nagi.v1.ContainerRevisionRef
-	(*ListProjectsRequest)(nil),                 // 153: nagi.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),                // 154: nagi.v1.ListProjectsResponse
-	(*CreateProjectRequest)(nil),                // 155: nagi.v1.CreateProjectRequest
-	(*UpdateProjectSettingsRequest)(nil),        // 156: nagi.v1.UpdateProjectSettingsRequest
-	(*SetProjectGroupRequest)(nil),              // 157: nagi.v1.SetProjectGroupRequest
-	(*SaveSharedEnvRequest)(nil),                // 158: nagi.v1.SaveSharedEnvRequest
-	(*SaveSharedEnvResponse)(nil),               // 159: nagi.v1.SaveSharedEnvResponse
-	(*DeleteProjectRequest)(nil),                // 160: nagi.v1.DeleteProjectRequest
-	(*DeleteProjectResponse)(nil),               // 161: nagi.v1.DeleteProjectResponse
-	(*ComposeDirPreview)(nil),                   // 162: nagi.v1.ComposeDirPreview
-	(*ImportComposeDirRequest)(nil),             // 163: nagi.v1.ImportComposeDirRequest
-	(*AddContainerRequest)(nil),                 // 164: nagi.v1.AddContainerRequest
-	(*DeleteContainerApiRequest)(nil),           // 165: nagi.v1.DeleteContainerApiRequest
-	(*SaveDraftRequest)(nil),                    // 166: nagi.v1.SaveDraftRequest
-	(*DeployTarget)(nil),                        // 167: nagi.v1.DeployTarget
-	(*DeployRequest)(nil),                       // 168: nagi.v1.DeployRequest
-	(*ListVersionsResponse)(nil),                // 169: nagi.v1.ListVersionsResponse
-	(*RollbackRequest)(nil),                     // 170: nagi.v1.RollbackRequest
-	(*ListDeploymentsResponse)(nil),             // 171: nagi.v1.ListDeploymentsResponse
-	(*RestoreDeploymentRequest)(nil),            // 172: nagi.v1.RestoreDeploymentRequest
-	(*StreamLogsApiRequest)(nil),                // 173: nagi.v1.StreamLogsApiRequest
-	(*SaveRouteRequest)(nil),                    // 174: nagi.v1.SaveRouteRequest
-	(*DeleteRouteRequest)(nil),                  // 175: nagi.v1.DeleteRouteRequest
-	(*RetryDomainCertRequest)(nil),              // 176: nagi.v1.RetryDomainCertRequest
-	(*RetryDomainCertResponse)(nil),             // 177: nagi.v1.RetryDomainCertResponse
-	(*CheckDomainsRequest)(nil),                 // 178: nagi.v1.CheckDomainsRequest
-	(*CheckDomainsResponse)(nil),                // 179: nagi.v1.CheckDomainsResponse
-	(*DomainCheck)(nil),                         // 180: nagi.v1.DomainCheck
-	(*DomainEntryCheck)(nil),                    // 181: nagi.v1.DomainEntryCheck
-	(*GetBackupKeyResponse)(nil),                // 182: nagi.v1.GetBackupKeyResponse
-	(*RegistriesResponse)(nil),                  // 183: nagi.v1.RegistriesResponse
-	(*LoginRegistryApiRequest)(nil),             // 184: nagi.v1.LoginRegistryApiRequest
-	(*LogoutRegistryRequest)(nil),               // 185: nagi.v1.LogoutRegistryRequest
-	(*ListProjectEventsRequest)(nil),            // 186: nagi.v1.ListProjectEventsRequest
-	(*AuditEvent)(nil),                          // 187: nagi.v1.AuditEvent
-	(*AuditFilter)(nil),                         // 188: nagi.v1.AuditFilter
-	(*ListAuditEventsRequest)(nil),              // 189: nagi.v1.ListAuditEventsRequest
-	(*ListAuditEventsResponse)(nil),             // 190: nagi.v1.ListAuditEventsResponse
-	(*GetAuditEventRequest)(nil),                // 191: nagi.v1.GetAuditEventRequest
-	(*GetAuditEventResponse)(nil),               // 192: nagi.v1.GetAuditEventResponse
-	(*ExportAuditEventsRequest)(nil),            // 193: nagi.v1.ExportAuditEventsRequest
-	(*ExportAuditEventsChunk)(nil),              // 194: nagi.v1.ExportAuditEventsChunk
-	(*RegisterSessionKeyRequest)(nil),           // 195: nagi.v1.RegisterSessionKeyRequest
-	(*RegisterSessionKeyResponse)(nil),          // 196: nagi.v1.RegisterSessionKeyResponse
-	(*RotateSessionRequest)(nil),                // 197: nagi.v1.RotateSessionRequest
-	(*RotateSessionResponse)(nil),               // 198: nagi.v1.RotateSessionResponse
-	(*ReverifyRequest)(nil),                     // 199: nagi.v1.ReverifyRequest
-	(*ReverifyResponse)(nil),                    // 200: nagi.v1.ReverifyResponse
-	(*GetSessionPolicyRequest)(nil),             // 201: nagi.v1.GetSessionPolicyRequest
-	(*SessionPolicy)(nil),                       // 202: nagi.v1.SessionPolicy
-	(*GetRecordingRequest)(nil),                 // 203: nagi.v1.GetRecordingRequest
-	(*RecordingChunk)(nil),                      // 204: nagi.v1.RecordingChunk
-	(*GetAuditSettingsRequest)(nil),             // 205: nagi.v1.GetAuditSettingsRequest
-	(*AuditSettings)(nil),                       // 206: nagi.v1.AuditSettings
-	(*AuditSink)(nil),                           // 207: nagi.v1.AuditSink
-	(*AuditSinkHeader)(nil),                     // 208: nagi.v1.AuditSinkHeader
-	(*TestAuditSinkResponse)(nil),               // 209: nagi.v1.TestAuditSinkResponse
-	(*VerifyAuditRequest)(nil),                  // 210: nagi.v1.VerifyAuditRequest
-	(*AuditChainStatus)(nil),                    // 211: nagi.v1.AuditChainStatus
-	(*IsolateNodeRequest)(nil),                  // 212: nagi.v1.IsolateNodeRequest
-	(*IsolateNodeResponse)(nil),                 // 213: nagi.v1.IsolateNodeResponse
-	(*Passkey)(nil),                             // 214: nagi.v1.Passkey
-	(*BeginPasskeyLoginRequest)(nil),            // 215: nagi.v1.BeginPasskeyLoginRequest
-	(*PasskeyChallenge)(nil),                    // 216: nagi.v1.PasskeyChallenge
-	(*PasskeyLoginRequest)(nil),                 // 217: nagi.v1.PasskeyLoginRequest
-	(*BeginPasskeyRegistrationRequest)(nil),     // 218: nagi.v1.BeginPasskeyRegistrationRequest
-	(*BeginPasskeyRegistrationResponse)(nil),    // 219: nagi.v1.BeginPasskeyRegistrationResponse
-	(*AddPasskeyRequest)(nil),                   // 220: nagi.v1.AddPasskeyRequest
-	(*DeletePasskeyRequest)(nil),                // 221: nagi.v1.DeletePasskeyRequest
-	(*GetAdminNetworksRequest)(nil),             // 222: nagi.v1.GetAdminNetworksRequest
-	(*AdminNetworks)(nil),                       // 223: nagi.v1.AdminNetworks
-	nil,                                         // 224: nagi.v1.GetUpdateStatusResponse.NodesEntry
-	(*timestamppb.Timestamp)(nil),               // 225: google.protobuf.Timestamp
-	(*MeshOptions)(nil),                         // 226: nagi.v1.MeshOptions
-	(*TrustedPanel)(nil),                        // 227: nagi.v1.TrustedPanel
-	(*Replica)(nil),                             // 228: nagi.v1.Replica
-	(*AlertConfig)(nil),                         // 229: nagi.v1.AlertConfig
-	(*AlertChannel)(nil),                        // 230: nagi.v1.AlertChannel
-	(*NodeInfo)(nil),                            // 231: nagi.v1.NodeInfo
-	(*NodeUsage)(nil),                           // 232: nagi.v1.NodeUsage
-	(*AlertRules)(nil),                          // 233: nagi.v1.AlertRules
-	(*SnapshotSchedule)(nil),                    // 234: nagi.v1.SnapshotSchedule
-	(*ProjectSummary)(nil),                      // 235: nagi.v1.ProjectSummary
-	(*ProjectSettings)(nil),                     // 236: nagi.v1.ProjectSettings
-	(*ContainerConfig)(nil),                     // 237: nagi.v1.ContainerConfig
-	(*EnvVar)(nil),                              // 238: nagi.v1.EnvVar
-	(*Project)(nil),                             // 239: nagi.v1.Project
-	(*Version)(nil),                             // 240: nagi.v1.Version
-	(*Deployment)(nil),                          // 241: nagi.v1.Deployment
-	(*Exposure)(nil),                            // 242: nagi.v1.Exposure
-	(*NodeFileRef)(nil),                         // 243: nagi.v1.NodeFileRef
-	(*WriteNodeFileRequest)(nil),                // 244: nagi.v1.WriteNodeFileRequest
-	(*DeleteNodeFileRequest)(nil),               // 245: nagi.v1.DeleteNodeFileRequest
-	(*RestoreNodeFileBackupRequest)(nil),        // 246: nagi.v1.RestoreNodeFileBackupRequest
-	(*NodeTransferRequest)(nil),                 // 247: nagi.v1.NodeTransferRequest
-	(*NodeCompressRequest)(nil),                 // 248: nagi.v1.NodeCompressRequest
-	(*NodeExtractRequest)(nil),                  // 249: nagi.v1.NodeExtractRequest
-	(*NodeDirSizesRequest)(nil),                 // 250: nagi.v1.NodeDirSizesRequest
-	(*ControlContainerRequest)(nil),             // 251: nagi.v1.ControlContainerRequest
-	(*ContainerRef)(nil),                        // 252: nagi.v1.ContainerRef
-	(*VolumeFileRef)(nil),                       // 253: nagi.v1.VolumeFileRef
-	(*VolumeTransferRequest)(nil),               // 254: nagi.v1.VolumeTransferRequest
-	(*VolumeCompressRequest)(nil),               // 255: nagi.v1.VolumeCompressRequest
-	(*VolumeExtractRequest)(nil),                // 256: nagi.v1.VolumeExtractRequest
-	(*VolumeDirSizesRequest)(nil),               // 257: nagi.v1.VolumeDirSizesRequest
-	(*RestoreSnapshotRequest)(nil),              // 258: nagi.v1.RestoreSnapshotRequest
-	(*ListNodeDirResponse)(nil),                 // 259: nagi.v1.ListNodeDirResponse
-	(*ReadNodeFileResponse)(nil),                // 260: nagi.v1.ReadNodeFileResponse
-	(*WriteNodeFileResponse)(nil),               // 261: nagi.v1.WriteNodeFileResponse
-	(*NodeFileOpResponse)(nil),                  // 262: nagi.v1.NodeFileOpResponse
-	(*ListNodeFileBackupsResponse)(nil),         // 263: nagi.v1.ListNodeFileBackupsResponse
-	(*FileOpResult)(nil),                        // 264: nagi.v1.FileOpResult
-	(*FileOpEvent)(nil),                         // 265: nagi.v1.FileOpEvent
-	(*DirSizesResponse)(nil),                    // 266: nagi.v1.DirSizesResponse
-	(*MeshStatus)(nil),                          // 267: nagi.v1.MeshStatus
-	(*MeshPingResponse)(nil),                    // 268: nagi.v1.MeshPingResponse
-	(*MeshSpeedResponse)(nil),                   // 269: nagi.v1.MeshSpeedResponse
-	(*UpgradeResponse)(nil),                     // 270: nagi.v1.UpgradeResponse
-	(*Mirrors)(nil),                             // 271: nagi.v1.Mirrors
-	(*DeployEvent)(nil),                         // 272: nagi.v1.DeployEvent
-	(*SetProjectsRootResponse)(nil),             // 273: nagi.v1.SetProjectsRootResponse
-	(*QueryMetricsResponse)(nil),                // 274: nagi.v1.QueryMetricsResponse
-	(*NodeStorage)(nil),                         // 275: nagi.v1.NodeStorage
-	(*LogLine)(nil),                             // 276: nagi.v1.LogLine
-	(*ListSnapshotsResponse)(nil),               // 277: nagi.v1.ListSnapshotsResponse
-	(*ListVolumesResponse)(nil),                 // 278: nagi.v1.ListVolumesResponse
-	(*ListVolumeFilesResponse)(nil),             // 279: nagi.v1.ListVolumeFilesResponse
-	(*VolumeFileOpResponse)(nil),                // 280: nagi.v1.VolumeFileOpResponse
-	(*CheckImagesResponse)(nil),                 // 281: nagi.v1.CheckImagesResponse
+	(*GetProjectOrderRequest)(nil),              // 22: nagi.v1.GetProjectOrderRequest
+	(*ProjectOrder)(nil),                        // 23: nagi.v1.ProjectOrder
+	(*SetProjectOrderResponse)(nil),             // 24: nagi.v1.SetProjectOrderResponse
+	(*SetNodeTagsRequest)(nil),                  // 25: nagi.v1.SetNodeTagsRequest
+	(*SetNodeTagsResponse)(nil),                 // 26: nagi.v1.SetNodeTagsResponse
+	(*RenameLabelRequest)(nil),                  // 27: nagi.v1.RenameLabelRequest
+	(*RenameLabelResponse)(nil),                 // 28: nagi.v1.RenameLabelResponse
+	(*NodeRef)(nil),                             // 29: nagi.v1.NodeRef
+	(*SetNodeProjectsRootRequest)(nil),          // 30: nagi.v1.SetNodeProjectsRootRequest
+	(*ApproveNodeRequest)(nil),                  // 31: nagi.v1.ApproveNodeRequest
+	(*ApproveNodeResponse)(nil),                 // 32: nagi.v1.ApproveNodeResponse
+	(*RenameNodeRequest)(nil),                   // 33: nagi.v1.RenameNodeRequest
+	(*RenameNodeResponse)(nil),                  // 34: nagi.v1.RenameNodeResponse
+	(*QueryNodeMetricsRequest)(nil),             // 35: nagi.v1.QueryNodeMetricsRequest
+	(*RemoveNodeRequest)(nil),                   // 36: nagi.v1.RemoveNodeRequest
+	(*RemoveNodeResponse)(nil),                  // 37: nagi.v1.RemoveNodeResponse
+	(*CreateEnrollCommandRequest)(nil),          // 38: nagi.v1.CreateEnrollCommandRequest
+	(*GetNodeMeshRequest)(nil),                  // 39: nagi.v1.GetNodeMeshRequest
+	(*PingNodeMeshRequest)(nil),                 // 40: nagi.v1.PingNodeMeshRequest
+	(*SetNodeMeshOptionsRequest)(nil),           // 41: nagi.v1.SetNodeMeshOptionsRequest
+	(*GetPanelMeshRequest)(nil),                 // 42: nagi.v1.GetPanelMeshRequest
+	(*UpgradeNodeRequest)(nil),                  // 43: nagi.v1.UpgradeNodeRequest
+	(*UpgradeAllNodesRequest)(nil),              // 44: nagi.v1.UpgradeAllNodesRequest
+	(*CancelNodeUpgradeRequest)(nil),            // 45: nagi.v1.CancelNodeUpgradeRequest
+	(*CancelNodeUpgradeResponse)(nil),           // 46: nagi.v1.CancelNodeUpgradeResponse
+	(*UpgradeAllNodesResponse)(nil),             // 47: nagi.v1.UpgradeAllNodesResponse
+	(*SetNodeMirrorsRequest)(nil),               // 48: nagi.v1.SetNodeMirrorsRequest
+	(*ListNodePanelsRequest)(nil),               // 49: nagi.v1.ListNodePanelsRequest
+	(*ListNodePanelsResponse)(nil),              // 50: nagi.v1.ListNodePanelsResponse
+	(*ListNodeReplicasResponse)(nil),            // 51: nagi.v1.ListNodeReplicasResponse
+	(*NodeReplica)(nil),                         // 52: nagi.v1.NodeReplica
+	(*DeleteNodeReplicaRequest)(nil),            // 53: nagi.v1.DeleteNodeReplicaRequest
+	(*DeleteNodeReplicaResponse)(nil),           // 54: nagi.v1.DeleteNodeReplicaResponse
+	(*HandoverNodesRequest)(nil),                // 55: nagi.v1.HandoverNodesRequest
+	(*HandoverNodesResponse)(nil),               // 56: nagi.v1.HandoverNodesResponse
+	(*HandoverResult)(nil),                      // 57: nagi.v1.HandoverResult
+	(*RemoveNodePanelRequest)(nil),              // 58: nagi.v1.RemoveNodePanelRequest
+	(*RemoveNodePanelResponse)(nil),             // 59: nagi.v1.RemoveNodePanelResponse
+	(*CreateEnrollCommandResponse)(nil),         // 60: nagi.v1.CreateEnrollCommandResponse
+	(*AccessToken)(nil),                         // 61: nagi.v1.AccessToken
+	(*ListAccessTokensRequest)(nil),             // 62: nagi.v1.ListAccessTokensRequest
+	(*ListAccessTokensResponse)(nil),            // 63: nagi.v1.ListAccessTokensResponse
+	(*CreateAccessTokenRequest)(nil),            // 64: nagi.v1.CreateAccessTokenRequest
+	(*CreateAccessTokenResponse)(nil),           // 65: nagi.v1.CreateAccessTokenResponse
+	(*RevokeAccessTokenRequest)(nil),            // 66: nagi.v1.RevokeAccessTokenRequest
+	(*RevokeAccessTokenResponse)(nil),           // 67: nagi.v1.RevokeAccessTokenResponse
+	(*GetSecurityRequest)(nil),                  // 68: nagi.v1.GetSecurityRequest
+	(*Security)(nil),                            // 69: nagi.v1.Security
+	(*BeginTOTPRequest)(nil),                    // 70: nagi.v1.BeginTOTPRequest
+	(*BeginTOTPResponse)(nil),                   // 71: nagi.v1.BeginTOTPResponse
+	(*EnableTOTPRequest)(nil),                   // 72: nagi.v1.EnableTOTPRequest
+	(*DisableTOTPRequest)(nil),                  // 73: nagi.v1.DisableTOTPRequest
+	(*SetEntranceRequest)(nil),                  // 74: nagi.v1.SetEntranceRequest
+	(*CreateInviteRequest)(nil),                 // 75: nagi.v1.CreateInviteRequest
+	(*CreateInviteResponse)(nil),                // 76: nagi.v1.CreateInviteResponse
+	(*ListInvitesRequest)(nil),                  // 77: nagi.v1.ListInvitesRequest
+	(*Invite)(nil),                              // 78: nagi.v1.Invite
+	(*ListInvitesResponse)(nil),                 // 79: nagi.v1.ListInvitesResponse
+	(*RevokeInviteRequest)(nil),                 // 80: nagi.v1.RevokeInviteRequest
+	(*RevokeInviteResponse)(nil),                // 81: nagi.v1.RevokeInviteResponse
+	(*GetAlertConfigRequest)(nil),               // 82: nagi.v1.GetAlertConfigRequest
+	(*GetAlertConfigResponse)(nil),              // 83: nagi.v1.GetAlertConfigResponse
+	(*UpdateAlertConfigRequest)(nil),            // 84: nagi.v1.UpdateAlertConfigRequest
+	(*UpdateAlertConfigResponse)(nil),           // 85: nagi.v1.UpdateAlertConfigResponse
+	(*TestAlertChannelRequest)(nil),             // 86: nagi.v1.TestAlertChannelRequest
+	(*TestAlertChannelResponse)(nil),            // 87: nagi.v1.TestAlertChannelResponse
+	(*PanelSettings)(nil),                       // 88: nagi.v1.PanelSettings
+	(*GetSettingsRequest)(nil),                  // 89: nagi.v1.GetSettingsRequest
+	(*SetPanelDomainApiRequest)(nil),            // 90: nagi.v1.SetPanelDomainApiRequest
+	(*GetSettingsResponse)(nil),                 // 91: nagi.v1.GetSettingsResponse
+	(*UpdateSettingsRequest)(nil),               // 92: nagi.v1.UpdateSettingsRequest
+	(*UpdateSettingsResponse)(nil),              // 93: nagi.v1.UpdateSettingsResponse
+	(*Node)(nil),                                // 94: nagi.v1.Node
+	(*SetNodeAlertRulesRequest)(nil),            // 95: nagi.v1.SetNodeAlertRulesRequest
+	(*SetNodeAlertRulesResponse)(nil),           // 96: nagi.v1.SetNodeAlertRulesResponse
+	(*StaleProject)(nil),                        // 97: nagi.v1.StaleProject
+	(*AdoptStaleProjectRequest)(nil),            // 98: nagi.v1.AdoptStaleProjectRequest
+	(*AdoptStaleProjectResponse)(nil),           // 99: nagi.v1.AdoptStaleProjectResponse
+	(*ConfirmPendingHARequest)(nil),             // 100: nagi.v1.ConfirmPendingHARequest
+	(*ConfirmPendingHAResponse)(nil),            // 101: nagi.v1.ConfirmPendingHAResponse
+	(*UnknownContainer)(nil),                    // 102: nagi.v1.UnknownContainer
+	(*AdoptNodeContainerRequest)(nil),           // 103: nagi.v1.AdoptNodeContainerRequest
+	(*AdoptNodeContainerResponse)(nil),          // 104: nagi.v1.AdoptNodeContainerResponse
+	(*ListNodesRequest)(nil),                    // 105: nagi.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),                   // 106: nagi.v1.ListNodesResponse
+	(*SetBackupNodesRequest)(nil),               // 107: nagi.v1.SetBackupNodesRequest
+	(*BackupNodeRef)(nil),                       // 108: nagi.v1.BackupNodeRef
+	(*SetContainerAlertRulesRequest)(nil),       // 109: nagi.v1.SetContainerAlertRulesRequest
+	(*SetContainerSnapshotScheduleRequest)(nil), // 110: nagi.v1.SetContainerSnapshotScheduleRequest
+	(*SetContainerDisplayNameRequest)(nil),      // 111: nagi.v1.SetContainerDisplayNameRequest
+	(*SetFailoverApiRequest)(nil),               // 112: nagi.v1.SetFailoverApiRequest
+	(*ChangeWitnessRequest)(nil),                // 113: nagi.v1.ChangeWitnessRequest
+	(*RestoreFromBackupRequest)(nil),            // 114: nagi.v1.RestoreFromBackupRequest
+	(*MoveContainerRequest)(nil),                // 115: nagi.v1.MoveContainerRequest
+	(*CreateStandbyCodeRequest)(nil),            // 116: nagi.v1.CreateStandbyCodeRequest
+	(*CreateStandbyCodeResponse)(nil),           // 117: nagi.v1.CreateStandbyCodeResponse
+	(*GetStandbysRequest)(nil),                  // 118: nagi.v1.GetStandbysRequest
+	(*GetStandbysResponse)(nil),                 // 119: nagi.v1.GetStandbysResponse
+	(*StandbyPanel)(nil),                        // 120: nagi.v1.StandbyPanel
+	(*PanelUser)(nil),                           // 121: nagi.v1.PanelUser
+	(*UserScope)(nil),                           // 122: nagi.v1.UserScope
+	(*ListUsersRequest)(nil),                    // 123: nagi.v1.ListUsersRequest
+	(*ListUsersResponse)(nil),                   // 124: nagi.v1.ListUsersResponse
+	(*CreateUserRequest)(nil),                   // 125: nagi.v1.CreateUserRequest
+	(*UpdateUserRequest)(nil),                   // 126: nagi.v1.UpdateUserRequest
+	(*UpdateUserResponse)(nil),                  // 127: nagi.v1.UpdateUserResponse
+	(*DeleteUserRequest)(nil),                   // 128: nagi.v1.DeleteUserRequest
+	(*DeleteUserResponse)(nil),                  // 129: nagi.v1.DeleteUserResponse
+	(*LoginSession)(nil),                        // 130: nagi.v1.LoginSession
+	(*ListSessionsRequest)(nil),                 // 131: nagi.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),                // 132: nagi.v1.ListSessionsResponse
+	(*RevokeSessionRequest)(nil),                // 133: nagi.v1.RevokeSessionRequest
+	(*RevokeSessionResponse)(nil),               // 134: nagi.v1.RevokeSessionResponse
+	(*ListActivityRequest)(nil),                 // 135: nagi.v1.ListActivityRequest
+	(*ActivityEntry)(nil),                       // 136: nagi.v1.ActivityEntry
+	(*ListActivityResponse)(nil),                // 137: nagi.v1.ListActivityResponse
+	(*RemoveStandbyRequest)(nil),                // 138: nagi.v1.RemoveStandbyRequest
+	(*RemoveStandbyResponse)(nil),               // 139: nagi.v1.RemoveStandbyResponse
+	(*PromoteStandbyRequest)(nil),               // 140: nagi.v1.PromoteStandbyRequest
+	(*PromoteStandbyResponse)(nil),              // 141: nagi.v1.PromoteStandbyResponse
+	(*CheckPanelUpdateRequest)(nil),             // 142: nagi.v1.CheckPanelUpdateRequest
+	(*CheckPanelUpdateResponse)(nil),            // 143: nagi.v1.CheckPanelUpdateResponse
+	(*GetPanelReleaseNotesRequest)(nil),         // 144: nagi.v1.GetPanelReleaseNotesRequest
+	(*GetPanelReleaseNotesResponse)(nil),        // 145: nagi.v1.GetPanelReleaseNotesResponse
+	(*ReleaseNotes)(nil),                        // 146: nagi.v1.ReleaseNotes
+	(*UpdatePanelRequest)(nil),                  // 147: nagi.v1.UpdatePanelRequest
+	(*UpdatePanelResponse)(nil),                 // 148: nagi.v1.UpdatePanelResponse
+	(*GetUpdateStatusRequest)(nil),              // 149: nagi.v1.GetUpdateStatusRequest
+	(*UpdateState)(nil),                         // 150: nagi.v1.UpdateState
+	(*GetUpdateStatusResponse)(nil),             // 151: nagi.v1.GetUpdateStatusResponse
+	(*ConnectProjectRequest)(nil),               // 152: nagi.v1.ConnectProjectRequest
+	(*ProjectRef)(nil),                          // 153: nagi.v1.ProjectRef
+	(*ProjectRevisionRef)(nil),                  // 154: nagi.v1.ProjectRevisionRef
+	(*ContainerRevisionRef)(nil),                // 155: nagi.v1.ContainerRevisionRef
+	(*ListProjectsRequest)(nil),                 // 156: nagi.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),                // 157: nagi.v1.ListProjectsResponse
+	(*CreateProjectRequest)(nil),                // 158: nagi.v1.CreateProjectRequest
+	(*UpdateProjectSettingsRequest)(nil),        // 159: nagi.v1.UpdateProjectSettingsRequest
+	(*SetProjectGroupRequest)(nil),              // 160: nagi.v1.SetProjectGroupRequest
+	(*SaveSharedEnvRequest)(nil),                // 161: nagi.v1.SaveSharedEnvRequest
+	(*SaveSharedEnvResponse)(nil),               // 162: nagi.v1.SaveSharedEnvResponse
+	(*DeleteProjectRequest)(nil),                // 163: nagi.v1.DeleteProjectRequest
+	(*DeleteProjectResponse)(nil),               // 164: nagi.v1.DeleteProjectResponse
+	(*ComposeDirPreview)(nil),                   // 165: nagi.v1.ComposeDirPreview
+	(*ImportComposeDirRequest)(nil),             // 166: nagi.v1.ImportComposeDirRequest
+	(*AddContainerRequest)(nil),                 // 167: nagi.v1.AddContainerRequest
+	(*DeleteContainerApiRequest)(nil),           // 168: nagi.v1.DeleteContainerApiRequest
+	(*SaveDraftRequest)(nil),                    // 169: nagi.v1.SaveDraftRequest
+	(*DeployTarget)(nil),                        // 170: nagi.v1.DeployTarget
+	(*DeployRequest)(nil),                       // 171: nagi.v1.DeployRequest
+	(*ListVersionsResponse)(nil),                // 172: nagi.v1.ListVersionsResponse
+	(*RollbackRequest)(nil),                     // 173: nagi.v1.RollbackRequest
+	(*ListDeploymentsResponse)(nil),             // 174: nagi.v1.ListDeploymentsResponse
+	(*RestoreDeploymentRequest)(nil),            // 175: nagi.v1.RestoreDeploymentRequest
+	(*StreamLogsApiRequest)(nil),                // 176: nagi.v1.StreamLogsApiRequest
+	(*SaveRouteRequest)(nil),                    // 177: nagi.v1.SaveRouteRequest
+	(*DeleteRouteRequest)(nil),                  // 178: nagi.v1.DeleteRouteRequest
+	(*RetryDomainCertRequest)(nil),              // 179: nagi.v1.RetryDomainCertRequest
+	(*RetryDomainCertResponse)(nil),             // 180: nagi.v1.RetryDomainCertResponse
+	(*CheckDomainsRequest)(nil),                 // 181: nagi.v1.CheckDomainsRequest
+	(*CheckDomainsResponse)(nil),                // 182: nagi.v1.CheckDomainsResponse
+	(*DomainCheck)(nil),                         // 183: nagi.v1.DomainCheck
+	(*DomainEntryCheck)(nil),                    // 184: nagi.v1.DomainEntryCheck
+	(*GetBackupKeyResponse)(nil),                // 185: nagi.v1.GetBackupKeyResponse
+	(*RegistriesResponse)(nil),                  // 186: nagi.v1.RegistriesResponse
+	(*LoginRegistryApiRequest)(nil),             // 187: nagi.v1.LoginRegistryApiRequest
+	(*LogoutRegistryRequest)(nil),               // 188: nagi.v1.LogoutRegistryRequest
+	(*ListProjectEventsRequest)(nil),            // 189: nagi.v1.ListProjectEventsRequest
+	(*AuditEvent)(nil),                          // 190: nagi.v1.AuditEvent
+	(*AuditFilter)(nil),                         // 191: nagi.v1.AuditFilter
+	(*ListAuditEventsRequest)(nil),              // 192: nagi.v1.ListAuditEventsRequest
+	(*ListAuditEventsResponse)(nil),             // 193: nagi.v1.ListAuditEventsResponse
+	(*GetAuditEventRequest)(nil),                // 194: nagi.v1.GetAuditEventRequest
+	(*GetAuditEventResponse)(nil),               // 195: nagi.v1.GetAuditEventResponse
+	(*ExportAuditEventsRequest)(nil),            // 196: nagi.v1.ExportAuditEventsRequest
+	(*ExportAuditEventsChunk)(nil),              // 197: nagi.v1.ExportAuditEventsChunk
+	(*RegisterSessionKeyRequest)(nil),           // 198: nagi.v1.RegisterSessionKeyRequest
+	(*RegisterSessionKeyResponse)(nil),          // 199: nagi.v1.RegisterSessionKeyResponse
+	(*RotateSessionRequest)(nil),                // 200: nagi.v1.RotateSessionRequest
+	(*RotateSessionResponse)(nil),               // 201: nagi.v1.RotateSessionResponse
+	(*ReverifyRequest)(nil),                     // 202: nagi.v1.ReverifyRequest
+	(*ReverifyResponse)(nil),                    // 203: nagi.v1.ReverifyResponse
+	(*GetSessionPolicyRequest)(nil),             // 204: nagi.v1.GetSessionPolicyRequest
+	(*SessionPolicy)(nil),                       // 205: nagi.v1.SessionPolicy
+	(*GetRecordingRequest)(nil),                 // 206: nagi.v1.GetRecordingRequest
+	(*RecordingChunk)(nil),                      // 207: nagi.v1.RecordingChunk
+	(*GetAuditSettingsRequest)(nil),             // 208: nagi.v1.GetAuditSettingsRequest
+	(*AuditSettings)(nil),                       // 209: nagi.v1.AuditSettings
+	(*AuditSink)(nil),                           // 210: nagi.v1.AuditSink
+	(*AuditSinkHeader)(nil),                     // 211: nagi.v1.AuditSinkHeader
+	(*TestAuditSinkResponse)(nil),               // 212: nagi.v1.TestAuditSinkResponse
+	(*VerifyAuditRequest)(nil),                  // 213: nagi.v1.VerifyAuditRequest
+	(*AuditChainStatus)(nil),                    // 214: nagi.v1.AuditChainStatus
+	(*IsolateNodeRequest)(nil),                  // 215: nagi.v1.IsolateNodeRequest
+	(*IsolateNodeResponse)(nil),                 // 216: nagi.v1.IsolateNodeResponse
+	(*Passkey)(nil),                             // 217: nagi.v1.Passkey
+	(*BeginPasskeyLoginRequest)(nil),            // 218: nagi.v1.BeginPasskeyLoginRequest
+	(*PasskeyChallenge)(nil),                    // 219: nagi.v1.PasskeyChallenge
+	(*PasskeyLoginRequest)(nil),                 // 220: nagi.v1.PasskeyLoginRequest
+	(*BeginPasskeyRegistrationRequest)(nil),     // 221: nagi.v1.BeginPasskeyRegistrationRequest
+	(*BeginPasskeyRegistrationResponse)(nil),    // 222: nagi.v1.BeginPasskeyRegistrationResponse
+	(*AddPasskeyRequest)(nil),                   // 223: nagi.v1.AddPasskeyRequest
+	(*DeletePasskeyRequest)(nil),                // 224: nagi.v1.DeletePasskeyRequest
+	(*GetAdminNetworksRequest)(nil),             // 225: nagi.v1.GetAdminNetworksRequest
+	(*AdminNetworks)(nil),                       // 226: nagi.v1.AdminNetworks
+	nil,                                         // 227: nagi.v1.GetUpdateStatusResponse.NodesEntry
+	(*timestamppb.Timestamp)(nil),               // 228: google.protobuf.Timestamp
+	(*MeshOptions)(nil),                         // 229: nagi.v1.MeshOptions
+	(*TrustedPanel)(nil),                        // 230: nagi.v1.TrustedPanel
+	(*Replica)(nil),                             // 231: nagi.v1.Replica
+	(*AlertConfig)(nil),                         // 232: nagi.v1.AlertConfig
+	(*AlertChannel)(nil),                        // 233: nagi.v1.AlertChannel
+	(*NodeInfo)(nil),                            // 234: nagi.v1.NodeInfo
+	(*NodeUsage)(nil),                           // 235: nagi.v1.NodeUsage
+	(*AlertRules)(nil),                          // 236: nagi.v1.AlertRules
+	(*SnapshotSchedule)(nil),                    // 237: nagi.v1.SnapshotSchedule
+	(*ProjectSummary)(nil),                      // 238: nagi.v1.ProjectSummary
+	(*ProjectSettings)(nil),                     // 239: nagi.v1.ProjectSettings
+	(*ContainerConfig)(nil),                     // 240: nagi.v1.ContainerConfig
+	(*EnvVar)(nil),                              // 241: nagi.v1.EnvVar
+	(*Project)(nil),                             // 242: nagi.v1.Project
+	(*Version)(nil),                             // 243: nagi.v1.Version
+	(*Deployment)(nil),                          // 244: nagi.v1.Deployment
+	(*Exposure)(nil),                            // 245: nagi.v1.Exposure
+	(*NodeFileRef)(nil),                         // 246: nagi.v1.NodeFileRef
+	(*WriteNodeFileRequest)(nil),                // 247: nagi.v1.WriteNodeFileRequest
+	(*DeleteNodeFileRequest)(nil),               // 248: nagi.v1.DeleteNodeFileRequest
+	(*RestoreNodeFileBackupRequest)(nil),        // 249: nagi.v1.RestoreNodeFileBackupRequest
+	(*NodeTransferRequest)(nil),                 // 250: nagi.v1.NodeTransferRequest
+	(*NodeCompressRequest)(nil),                 // 251: nagi.v1.NodeCompressRequest
+	(*NodeExtractRequest)(nil),                  // 252: nagi.v1.NodeExtractRequest
+	(*NodeDirSizesRequest)(nil),                 // 253: nagi.v1.NodeDirSizesRequest
+	(*ControlContainerRequest)(nil),             // 254: nagi.v1.ControlContainerRequest
+	(*ContainerRef)(nil),                        // 255: nagi.v1.ContainerRef
+	(*VolumeFileRef)(nil),                       // 256: nagi.v1.VolumeFileRef
+	(*VolumeTransferRequest)(nil),               // 257: nagi.v1.VolumeTransferRequest
+	(*VolumeCompressRequest)(nil),               // 258: nagi.v1.VolumeCompressRequest
+	(*VolumeExtractRequest)(nil),                // 259: nagi.v1.VolumeExtractRequest
+	(*VolumeDirSizesRequest)(nil),               // 260: nagi.v1.VolumeDirSizesRequest
+	(*RestoreSnapshotRequest)(nil),              // 261: nagi.v1.RestoreSnapshotRequest
+	(*ListNodeDirResponse)(nil),                 // 262: nagi.v1.ListNodeDirResponse
+	(*ReadNodeFileResponse)(nil),                // 263: nagi.v1.ReadNodeFileResponse
+	(*WriteNodeFileResponse)(nil),               // 264: nagi.v1.WriteNodeFileResponse
+	(*NodeFileOpResponse)(nil),                  // 265: nagi.v1.NodeFileOpResponse
+	(*ListNodeFileBackupsResponse)(nil),         // 266: nagi.v1.ListNodeFileBackupsResponse
+	(*FileOpResult)(nil),                        // 267: nagi.v1.FileOpResult
+	(*FileOpEvent)(nil),                         // 268: nagi.v1.FileOpEvent
+	(*DirSizesResponse)(nil),                    // 269: nagi.v1.DirSizesResponse
+	(*MeshStatus)(nil),                          // 270: nagi.v1.MeshStatus
+	(*MeshPingResponse)(nil),                    // 271: nagi.v1.MeshPingResponse
+	(*MeshSpeedResponse)(nil),                   // 272: nagi.v1.MeshSpeedResponse
+	(*UpgradeResponse)(nil),                     // 273: nagi.v1.UpgradeResponse
+	(*Mirrors)(nil),                             // 274: nagi.v1.Mirrors
+	(*DeployEvent)(nil),                         // 275: nagi.v1.DeployEvent
+	(*SetProjectsRootResponse)(nil),             // 276: nagi.v1.SetProjectsRootResponse
+	(*QueryMetricsResponse)(nil),                // 277: nagi.v1.QueryMetricsResponse
+	(*NodeStorage)(nil),                         // 278: nagi.v1.NodeStorage
+	(*LogLine)(nil),                             // 279: nagi.v1.LogLine
+	(*ListSnapshotsResponse)(nil),               // 280: nagi.v1.ListSnapshotsResponse
+	(*ListVolumesResponse)(nil),                 // 281: nagi.v1.ListVolumesResponse
+	(*ListVolumeFilesResponse)(nil),             // 282: nagi.v1.ListVolumeFilesResponse
+	(*VolumeFileOpResponse)(nil),                // 283: nagi.v1.VolumeFileOpResponse
+	(*CheckImagesResponse)(nil),                 // 284: nagi.v1.CheckImagesResponse
 }
 var file_nagi_v1_api_proto_depIdxs = []int32{
 	4,   // 0: nagi.v1.ApproveOAuthRequest.request:type_name -> nagi.v1.OAuthRequest
-	225, // 1: nagi.v1.MeResponse.elevated_until:type_name -> google.protobuf.Timestamp
-	225, // 2: nagi.v1.ElevateResponse.elevated_until:type_name -> google.protobuf.Timestamp
-	225, // 3: nagi.v1.QueryNodeMetricsRequest.from:type_name -> google.protobuf.Timestamp
-	225, // 4: nagi.v1.QueryNodeMetricsRequest.to:type_name -> google.protobuf.Timestamp
-	226, // 5: nagi.v1.SetNodeMeshOptionsRequest.options:type_name -> nagi.v1.MeshOptions
-	227, // 6: nagi.v1.ListNodePanelsResponse.panels:type_name -> nagi.v1.TrustedPanel
-	49,  // 7: nagi.v1.ListNodeReplicasResponse.replicas:type_name -> nagi.v1.NodeReplica
-	228, // 8: nagi.v1.NodeReplica.replica:type_name -> nagi.v1.Replica
-	54,  // 9: nagi.v1.HandoverNodesResponse.results:type_name -> nagi.v1.HandoverResult
-	225, // 10: nagi.v1.CreateEnrollCommandResponse.expires_at:type_name -> google.protobuf.Timestamp
-	225, // 11: nagi.v1.AccessToken.created_at:type_name -> google.protobuf.Timestamp
-	225, // 12: nagi.v1.AccessToken.expires_at:type_name -> google.protobuf.Timestamp
-	225, // 13: nagi.v1.AccessToken.last_used_at:type_name -> google.protobuf.Timestamp
-	58,  // 14: nagi.v1.ListAccessTokensResponse.tokens:type_name -> nagi.v1.AccessToken
-	58,  // 15: nagi.v1.CreateAccessTokenResponse.token:type_name -> nagi.v1.AccessToken
-	214, // 16: nagi.v1.Security.passkeys:type_name -> nagi.v1.Passkey
-	225, // 17: nagi.v1.CreateInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
-	225, // 18: nagi.v1.Invite.created_at:type_name -> google.protobuf.Timestamp
-	225, // 19: nagi.v1.Invite.expires_at:type_name -> google.protobuf.Timestamp
-	75,  // 20: nagi.v1.ListInvitesResponse.invites:type_name -> nagi.v1.Invite
-	229, // 21: nagi.v1.GetAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
-	229, // 22: nagi.v1.UpdateAlertConfigRequest.config:type_name -> nagi.v1.AlertConfig
-	229, // 23: nagi.v1.UpdateAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
-	230, // 24: nagi.v1.TestAlertChannelRequest.channel:type_name -> nagi.v1.AlertChannel
-	85,  // 25: nagi.v1.GetSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
-	85,  // 26: nagi.v1.UpdateSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
-	225, // 27: nagi.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
-	231, // 28: nagi.v1.Node.info:type_name -> nagi.v1.NodeInfo
-	232, // 29: nagi.v1.Node.usage:type_name -> nagi.v1.NodeUsage
-	99,  // 30: nagi.v1.Node.unknown_containers:type_name -> nagi.v1.UnknownContainer
-	94,  // 31: nagi.v1.Node.stale_projects:type_name -> nagi.v1.StaleProject
-	233, // 32: nagi.v1.Node.alert_rules:type_name -> nagi.v1.AlertRules
-	233, // 33: nagi.v1.SetNodeAlertRulesRequest.rules:type_name -> nagi.v1.AlertRules
-	91,  // 34: nagi.v1.ListNodesResponse.nodes:type_name -> nagi.v1.Node
-	91,  // 35: nagi.v1.ListNodesResponse.other_nodes:type_name -> nagi.v1.Node
-	233, // 36: nagi.v1.SetContainerAlertRulesRequest.rules:type_name -> nagi.v1.AlertRules
-	234, // 37: nagi.v1.SetContainerSnapshotScheduleRequest.schedule:type_name -> nagi.v1.SnapshotSchedule
-	225, // 38: nagi.v1.CreateStandbyCodeResponse.expires_at:type_name -> google.protobuf.Timestamp
-	225, // 39: nagi.v1.GetStandbysResponse.last_sync:type_name -> google.protobuf.Timestamp
-	117, // 40: nagi.v1.GetStandbysResponse.standbys:type_name -> nagi.v1.StandbyPanel
-	225, // 41: nagi.v1.StandbyPanel.created_at:type_name -> google.protobuf.Timestamp
-	225, // 42: nagi.v1.StandbyPanel.last_sync:type_name -> google.protobuf.Timestamp
-	225, // 43: nagi.v1.PanelUser.created_at:type_name -> google.protobuf.Timestamp
-	119, // 44: nagi.v1.PanelUser.scope:type_name -> nagi.v1.UserScope
-	214, // 45: nagi.v1.PanelUser.passkeys:type_name -> nagi.v1.Passkey
-	118, // 46: nagi.v1.ListUsersResponse.users:type_name -> nagi.v1.PanelUser
-	119, // 47: nagi.v1.CreateUserRequest.scope:type_name -> nagi.v1.UserScope
-	119, // 48: nagi.v1.UpdateUserRequest.scope:type_name -> nagi.v1.UserScope
-	225, // 49: nagi.v1.LoginSession.created_at:type_name -> google.protobuf.Timestamp
-	225, // 50: nagi.v1.LoginSession.expires_at:type_name -> google.protobuf.Timestamp
-	225, // 51: nagi.v1.LoginSession.last_seen:type_name -> google.protobuf.Timestamp
-	127, // 52: nagi.v1.ListSessionsResponse.sessions:type_name -> nagi.v1.LoginSession
-	225, // 53: nagi.v1.ActivityEntry.time:type_name -> google.protobuf.Timestamp
-	133, // 54: nagi.v1.ListActivityResponse.entries:type_name -> nagi.v1.ActivityEntry
-	225, // 55: nagi.v1.CheckPanelUpdateResponse.checked_at:type_name -> google.protobuf.Timestamp
-	143, // 56: nagi.v1.GetPanelReleaseNotesResponse.releases:type_name -> nagi.v1.ReleaseNotes
-	225, // 57: nagi.v1.UpdateState.started_at:type_name -> google.protobuf.Timestamp
-	147, // 58: nagi.v1.GetUpdateStatusResponse.panel:type_name -> nagi.v1.UpdateState
-	224, // 59: nagi.v1.GetUpdateStatusResponse.nodes:type_name -> nagi.v1.GetUpdateStatusResponse.NodesEntry
-	235, // 60: nagi.v1.ListProjectsResponse.projects:type_name -> nagi.v1.ProjectSummary
-	236, // 61: nagi.v1.CreateProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
-	237, // 62: nagi.v1.CreateProjectRequest.container:type_name -> nagi.v1.ContainerConfig
-	236, // 63: nagi.v1.UpdateProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
-	238, // 64: nagi.v1.SaveSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
-	239, // 65: nagi.v1.SaveSharedEnvResponse.project:type_name -> nagi.v1.Project
-	237, // 66: nagi.v1.AddContainerRequest.config:type_name -> nagi.v1.ContainerConfig
-	237, // 67: nagi.v1.SaveDraftRequest.config:type_name -> nagi.v1.ContainerConfig
-	167, // 68: nagi.v1.DeployRequest.targets:type_name -> nagi.v1.DeployTarget
-	240, // 69: nagi.v1.ListVersionsResponse.versions:type_name -> nagi.v1.Version
-	241, // 70: nagi.v1.ListDeploymentsResponse.deployments:type_name -> nagi.v1.Deployment
-	242, // 71: nagi.v1.SaveRouteRequest.route:type_name -> nagi.v1.Exposure
-	242, // 72: nagi.v1.CheckDomainsRequest.routes:type_name -> nagi.v1.Exposure
-	180, // 73: nagi.v1.CheckDomainsResponse.domains:type_name -> nagi.v1.DomainCheck
-	181, // 74: nagi.v1.DomainCheck.entries:type_name -> nagi.v1.DomainEntryCheck
-	225, // 75: nagi.v1.DomainEntryCheck.cert_not_after:type_name -> google.protobuf.Timestamp
-	225, // 76: nagi.v1.AuditEvent.time:type_name -> google.protobuf.Timestamp
-	225, // 77: nagi.v1.AuditFilter.from:type_name -> google.protobuf.Timestamp
-	225, // 78: nagi.v1.AuditFilter.to:type_name -> google.protobuf.Timestamp
-	188, // 79: nagi.v1.ListAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
-	187, // 80: nagi.v1.ListAuditEventsResponse.events:type_name -> nagi.v1.AuditEvent
-	187, // 81: nagi.v1.GetAuditEventResponse.event:type_name -> nagi.v1.AuditEvent
-	187, // 82: nagi.v1.GetAuditEventResponse.parent:type_name -> nagi.v1.AuditEvent
-	187, // 83: nagi.v1.GetAuditEventResponse.children:type_name -> nagi.v1.AuditEvent
-	188, // 84: nagi.v1.ExportAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
-	207, // 85: nagi.v1.AuditSettings.sinks:type_name -> nagi.v1.AuditSink
-	211, // 86: nagi.v1.AuditSettings.chain:type_name -> nagi.v1.AuditChainStatus
-	208, // 87: nagi.v1.AuditSink.headers:type_name -> nagi.v1.AuditSinkHeader
-	225, // 88: nagi.v1.AuditSink.last_success:type_name -> google.protobuf.Timestamp
-	225, // 89: nagi.v1.AuditChainStatus.verified_at:type_name -> google.protobuf.Timestamp
-	225, // 90: nagi.v1.AuditChainStatus.anchor_at:type_name -> google.protobuf.Timestamp
-	225, // 91: nagi.v1.Passkey.created_at:type_name -> google.protobuf.Timestamp
-	225, // 92: nagi.v1.Passkey.last_used_at:type_name -> google.protobuf.Timestamp
-	147, // 93: nagi.v1.GetUpdateStatusResponse.NodesEntry.value:type_name -> nagi.v1.UpdateState
+	228, // 1: nagi.v1.MeResponse.elevated_until:type_name -> google.protobuf.Timestamp
+	228, // 2: nagi.v1.ElevateResponse.elevated_until:type_name -> google.protobuf.Timestamp
+	228, // 3: nagi.v1.QueryNodeMetricsRequest.from:type_name -> google.protobuf.Timestamp
+	228, // 4: nagi.v1.QueryNodeMetricsRequest.to:type_name -> google.protobuf.Timestamp
+	229, // 5: nagi.v1.SetNodeMeshOptionsRequest.options:type_name -> nagi.v1.MeshOptions
+	230, // 6: nagi.v1.ListNodePanelsResponse.panels:type_name -> nagi.v1.TrustedPanel
+	52,  // 7: nagi.v1.ListNodeReplicasResponse.replicas:type_name -> nagi.v1.NodeReplica
+	231, // 8: nagi.v1.NodeReplica.replica:type_name -> nagi.v1.Replica
+	57,  // 9: nagi.v1.HandoverNodesResponse.results:type_name -> nagi.v1.HandoverResult
+	228, // 10: nagi.v1.CreateEnrollCommandResponse.expires_at:type_name -> google.protobuf.Timestamp
+	228, // 11: nagi.v1.AccessToken.created_at:type_name -> google.protobuf.Timestamp
+	228, // 12: nagi.v1.AccessToken.expires_at:type_name -> google.protobuf.Timestamp
+	228, // 13: nagi.v1.AccessToken.last_used_at:type_name -> google.protobuf.Timestamp
+	61,  // 14: nagi.v1.ListAccessTokensResponse.tokens:type_name -> nagi.v1.AccessToken
+	61,  // 15: nagi.v1.CreateAccessTokenResponse.token:type_name -> nagi.v1.AccessToken
+	217, // 16: nagi.v1.Security.passkeys:type_name -> nagi.v1.Passkey
+	228, // 17: nagi.v1.CreateInviteResponse.expires_at:type_name -> google.protobuf.Timestamp
+	228, // 18: nagi.v1.Invite.created_at:type_name -> google.protobuf.Timestamp
+	228, // 19: nagi.v1.Invite.expires_at:type_name -> google.protobuf.Timestamp
+	78,  // 20: nagi.v1.ListInvitesResponse.invites:type_name -> nagi.v1.Invite
+	232, // 21: nagi.v1.GetAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
+	232, // 22: nagi.v1.UpdateAlertConfigRequest.config:type_name -> nagi.v1.AlertConfig
+	232, // 23: nagi.v1.UpdateAlertConfigResponse.config:type_name -> nagi.v1.AlertConfig
+	233, // 24: nagi.v1.TestAlertChannelRequest.channel:type_name -> nagi.v1.AlertChannel
+	88,  // 25: nagi.v1.GetSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
+	88,  // 26: nagi.v1.UpdateSettingsResponse.settings:type_name -> nagi.v1.PanelSettings
+	228, // 27: nagi.v1.Node.last_seen:type_name -> google.protobuf.Timestamp
+	234, // 28: nagi.v1.Node.info:type_name -> nagi.v1.NodeInfo
+	235, // 29: nagi.v1.Node.usage:type_name -> nagi.v1.NodeUsage
+	102, // 30: nagi.v1.Node.unknown_containers:type_name -> nagi.v1.UnknownContainer
+	97,  // 31: nagi.v1.Node.stale_projects:type_name -> nagi.v1.StaleProject
+	236, // 32: nagi.v1.Node.alert_rules:type_name -> nagi.v1.AlertRules
+	236, // 33: nagi.v1.SetNodeAlertRulesRequest.rules:type_name -> nagi.v1.AlertRules
+	94,  // 34: nagi.v1.ListNodesResponse.nodes:type_name -> nagi.v1.Node
+	94,  // 35: nagi.v1.ListNodesResponse.other_nodes:type_name -> nagi.v1.Node
+	236, // 36: nagi.v1.SetContainerAlertRulesRequest.rules:type_name -> nagi.v1.AlertRules
+	237, // 37: nagi.v1.SetContainerSnapshotScheduleRequest.schedule:type_name -> nagi.v1.SnapshotSchedule
+	228, // 38: nagi.v1.CreateStandbyCodeResponse.expires_at:type_name -> google.protobuf.Timestamp
+	228, // 39: nagi.v1.GetStandbysResponse.last_sync:type_name -> google.protobuf.Timestamp
+	120, // 40: nagi.v1.GetStandbysResponse.standbys:type_name -> nagi.v1.StandbyPanel
+	228, // 41: nagi.v1.StandbyPanel.created_at:type_name -> google.protobuf.Timestamp
+	228, // 42: nagi.v1.StandbyPanel.last_sync:type_name -> google.protobuf.Timestamp
+	228, // 43: nagi.v1.PanelUser.created_at:type_name -> google.protobuf.Timestamp
+	122, // 44: nagi.v1.PanelUser.scope:type_name -> nagi.v1.UserScope
+	217, // 45: nagi.v1.PanelUser.passkeys:type_name -> nagi.v1.Passkey
+	121, // 46: nagi.v1.ListUsersResponse.users:type_name -> nagi.v1.PanelUser
+	122, // 47: nagi.v1.CreateUserRequest.scope:type_name -> nagi.v1.UserScope
+	122, // 48: nagi.v1.UpdateUserRequest.scope:type_name -> nagi.v1.UserScope
+	228, // 49: nagi.v1.LoginSession.created_at:type_name -> google.protobuf.Timestamp
+	228, // 50: nagi.v1.LoginSession.expires_at:type_name -> google.protobuf.Timestamp
+	228, // 51: nagi.v1.LoginSession.last_seen:type_name -> google.protobuf.Timestamp
+	130, // 52: nagi.v1.ListSessionsResponse.sessions:type_name -> nagi.v1.LoginSession
+	228, // 53: nagi.v1.ActivityEntry.time:type_name -> google.protobuf.Timestamp
+	136, // 54: nagi.v1.ListActivityResponse.entries:type_name -> nagi.v1.ActivityEntry
+	228, // 55: nagi.v1.CheckPanelUpdateResponse.checked_at:type_name -> google.protobuf.Timestamp
+	146, // 56: nagi.v1.GetPanelReleaseNotesResponse.releases:type_name -> nagi.v1.ReleaseNotes
+	228, // 57: nagi.v1.UpdateState.started_at:type_name -> google.protobuf.Timestamp
+	150, // 58: nagi.v1.GetUpdateStatusResponse.panel:type_name -> nagi.v1.UpdateState
+	227, // 59: nagi.v1.GetUpdateStatusResponse.nodes:type_name -> nagi.v1.GetUpdateStatusResponse.NodesEntry
+	238, // 60: nagi.v1.ListProjectsResponse.projects:type_name -> nagi.v1.ProjectSummary
+	239, // 61: nagi.v1.CreateProjectRequest.settings:type_name -> nagi.v1.ProjectSettings
+	240, // 62: nagi.v1.CreateProjectRequest.container:type_name -> nagi.v1.ContainerConfig
+	239, // 63: nagi.v1.UpdateProjectSettingsRequest.settings:type_name -> nagi.v1.ProjectSettings
+	241, // 64: nagi.v1.SaveSharedEnvRequest.vars:type_name -> nagi.v1.EnvVar
+	242, // 65: nagi.v1.SaveSharedEnvResponse.project:type_name -> nagi.v1.Project
+	240, // 66: nagi.v1.AddContainerRequest.config:type_name -> nagi.v1.ContainerConfig
+	240, // 67: nagi.v1.SaveDraftRequest.config:type_name -> nagi.v1.ContainerConfig
+	170, // 68: nagi.v1.DeployRequest.targets:type_name -> nagi.v1.DeployTarget
+	243, // 69: nagi.v1.ListVersionsResponse.versions:type_name -> nagi.v1.Version
+	244, // 70: nagi.v1.ListDeploymentsResponse.deployments:type_name -> nagi.v1.Deployment
+	245, // 71: nagi.v1.SaveRouteRequest.route:type_name -> nagi.v1.Exposure
+	245, // 72: nagi.v1.CheckDomainsRequest.routes:type_name -> nagi.v1.Exposure
+	183, // 73: nagi.v1.CheckDomainsResponse.domains:type_name -> nagi.v1.DomainCheck
+	184, // 74: nagi.v1.DomainCheck.entries:type_name -> nagi.v1.DomainEntryCheck
+	228, // 75: nagi.v1.DomainEntryCheck.cert_not_after:type_name -> google.protobuf.Timestamp
+	228, // 76: nagi.v1.AuditEvent.time:type_name -> google.protobuf.Timestamp
+	228, // 77: nagi.v1.AuditFilter.from:type_name -> google.protobuf.Timestamp
+	228, // 78: nagi.v1.AuditFilter.to:type_name -> google.protobuf.Timestamp
+	191, // 79: nagi.v1.ListAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
+	190, // 80: nagi.v1.ListAuditEventsResponse.events:type_name -> nagi.v1.AuditEvent
+	190, // 81: nagi.v1.GetAuditEventResponse.event:type_name -> nagi.v1.AuditEvent
+	190, // 82: nagi.v1.GetAuditEventResponse.parent:type_name -> nagi.v1.AuditEvent
+	190, // 83: nagi.v1.GetAuditEventResponse.children:type_name -> nagi.v1.AuditEvent
+	191, // 84: nagi.v1.ExportAuditEventsRequest.filter:type_name -> nagi.v1.AuditFilter
+	210, // 85: nagi.v1.AuditSettings.sinks:type_name -> nagi.v1.AuditSink
+	214, // 86: nagi.v1.AuditSettings.chain:type_name -> nagi.v1.AuditChainStatus
+	211, // 87: nagi.v1.AuditSink.headers:type_name -> nagi.v1.AuditSinkHeader
+	228, // 88: nagi.v1.AuditSink.last_success:type_name -> google.protobuf.Timestamp
+	228, // 89: nagi.v1.AuditChainStatus.verified_at:type_name -> google.protobuf.Timestamp
+	228, // 90: nagi.v1.AuditChainStatus.anchor_at:type_name -> google.protobuf.Timestamp
+	228, // 91: nagi.v1.Passkey.created_at:type_name -> google.protobuf.Timestamp
+	228, // 92: nagi.v1.Passkey.last_used_at:type_name -> google.protobuf.Timestamp
+	150, // 93: nagi.v1.GetUpdateStatusResponse.NodesEntry.value:type_name -> nagi.v1.UpdateState
 	0,   // 94: nagi.v1.SetupService.GetSetupState:input_type -> nagi.v1.GetSetupStateRequest
 	2,   // 95: nagi.v1.SetupService.Setup:input_type -> nagi.v1.SetupRequest
 	8,   // 96: nagi.v1.AuthService.Login:input_type -> nagi.v1.LoginRequest
@@ -14073,339 +14218,343 @@ var file_nagi_v1_api_proto_depIdxs = []int32{
 	18,  // 102: nagi.v1.AuthService.UpdateProfile:input_type -> nagi.v1.UpdateProfileRequest
 	4,   // 103: nagi.v1.AuthService.GetOAuthRequest:input_type -> nagi.v1.OAuthRequest
 	6,   // 104: nagi.v1.AuthService.ApproveOAuth:input_type -> nagi.v1.ApproveOAuthRequest
-	195, // 105: nagi.v1.AuthService.RegisterSessionKey:input_type -> nagi.v1.RegisterSessionKeyRequest
-	197, // 106: nagi.v1.AuthService.RotateSession:input_type -> nagi.v1.RotateSessionRequest
-	199, // 107: nagi.v1.AuthService.Reverify:input_type -> nagi.v1.ReverifyRequest
-	215, // 108: nagi.v1.AuthService.BeginPasskeyLogin:input_type -> nagi.v1.BeginPasskeyLoginRequest
-	217, // 109: nagi.v1.AuthService.PasskeyLogin:input_type -> nagi.v1.PasskeyLoginRequest
-	102, // 110: nagi.v1.NodeService.ListNodes:input_type -> nagi.v1.ListNodesRequest
-	243, // 111: nagi.v1.NodeService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
-	243, // 112: nagi.v1.NodeService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
-	244, // 113: nagi.v1.NodeService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
-	245, // 114: nagi.v1.NodeService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
-	243, // 115: nagi.v1.NodeService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
-	243, // 116: nagi.v1.NodeService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
-	246, // 117: nagi.v1.NodeService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
-	247, // 118: nagi.v1.NodeService.RenameNodeFile:input_type -> nagi.v1.NodeTransferRequest
-	247, // 119: nagi.v1.NodeService.MoveNodeFiles:input_type -> nagi.v1.NodeTransferRequest
-	247, // 120: nagi.v1.NodeService.CopyNodeFiles:input_type -> nagi.v1.NodeTransferRequest
-	248, // 121: nagi.v1.NodeService.CompressNodeFiles:input_type -> nagi.v1.NodeCompressRequest
-	249, // 122: nagi.v1.NodeService.ExtractNodeFile:input_type -> nagi.v1.NodeExtractRequest
-	250, // 123: nagi.v1.NodeService.ListNodeDirSizes:input_type -> nagi.v1.NodeDirSizesRequest
-	46,  // 124: nagi.v1.NodeService.ListNodePanels:input_type -> nagi.v1.ListNodePanelsRequest
-	52,  // 125: nagi.v1.NodeService.HandoverNodes:input_type -> nagi.v1.HandoverNodesRequest
-	55,  // 126: nagi.v1.NodeService.RemoveNodePanel:input_type -> nagi.v1.RemoveNodePanelRequest
-	26,  // 127: nagi.v1.NodeService.ListNodeReplicas:input_type -> nagi.v1.NodeRef
-	50,  // 128: nagi.v1.NodeService.DeleteNodeReplica:input_type -> nagi.v1.DeleteNodeReplicaRequest
-	36,  // 129: nagi.v1.NodeService.GetNodeMesh:input_type -> nagi.v1.GetNodeMeshRequest
-	37,  // 130: nagi.v1.NodeService.PingNodeMesh:input_type -> nagi.v1.PingNodeMeshRequest
-	37,  // 131: nagi.v1.NodeService.TestNodeMeshSpeed:input_type -> nagi.v1.PingNodeMeshRequest
-	38,  // 132: nagi.v1.NodeService.SetNodeMeshOptions:input_type -> nagi.v1.SetNodeMeshOptionsRequest
-	39,  // 133: nagi.v1.NodeService.GetPanelMesh:input_type -> nagi.v1.GetPanelMeshRequest
-	40,  // 134: nagi.v1.NodeService.UpgradeNode:input_type -> nagi.v1.UpgradeNodeRequest
-	41,  // 135: nagi.v1.NodeService.UpgradeAllNodes:input_type -> nagi.v1.UpgradeAllNodesRequest
-	42,  // 136: nagi.v1.NodeService.CancelNodeUpgrade:input_type -> nagi.v1.CancelNodeUpgradeRequest
-	26,  // 137: nagi.v1.NodeService.GetNodeMirrors:input_type -> nagi.v1.NodeRef
-	45,  // 138: nagi.v1.NodeService.SetNodeMirrors:input_type -> nagi.v1.SetNodeMirrorsRequest
-	26,  // 139: nagi.v1.NodeService.ReclaimNodeSnapshots:input_type -> nagi.v1.NodeRef
-	27,  // 140: nagi.v1.NodeService.SetNodeProjectsRoot:input_type -> nagi.v1.SetNodeProjectsRootRequest
-	35,  // 141: nagi.v1.NodeService.CreateEnrollCommand:input_type -> nagi.v1.CreateEnrollCommandRequest
-	32,  // 142: nagi.v1.NodeService.QueryNodeMetrics:input_type -> nagi.v1.QueryNodeMetricsRequest
-	26,  // 143: nagi.v1.NodeService.GetNodeStorage:input_type -> nagi.v1.NodeRef
-	33,  // 144: nagi.v1.NodeService.RemoveNode:input_type -> nagi.v1.RemoveNodeRequest
-	28,  // 145: nagi.v1.NodeService.ApproveNode:input_type -> nagi.v1.ApproveNodeRequest
-	30,  // 146: nagi.v1.NodeService.RenameNode:input_type -> nagi.v1.RenameNodeRequest
-	100, // 147: nagi.v1.NodeService.AdoptNodeContainer:input_type -> nagi.v1.AdoptNodeContainerRequest
-	95,  // 148: nagi.v1.NodeService.AdoptStaleProject:input_type -> nagi.v1.AdoptStaleProjectRequest
-	97,  // 149: nagi.v1.NodeService.ConfirmPendingHA:input_type -> nagi.v1.ConfirmPendingHARequest
-	92,  // 150: nagi.v1.NodeService.SetNodeAlertRules:input_type -> nagi.v1.SetNodeAlertRulesRequest
-	243, // 151: nagi.v1.NodeService.InspectComposeDir:input_type -> nagi.v1.NodeFileRef
-	22,  // 152: nagi.v1.NodeService.SetNodeTags:input_type -> nagi.v1.SetNodeTagsRequest
-	24,  // 153: nagi.v1.NodeService.RenameNodeTag:input_type -> nagi.v1.RenameLabelRequest
-	212, // 154: nagi.v1.NodeService.IsolateNode:input_type -> nagi.v1.IsolateNodeRequest
-	212, // 155: nagi.v1.NodeService.UnisolateNode:input_type -> nagi.v1.IsolateNodeRequest
-	86,  // 156: nagi.v1.SettingsService.GetSettings:input_type -> nagi.v1.GetSettingsRequest
-	89,  // 157: nagi.v1.SettingsService.UpdateSettings:input_type -> nagi.v1.UpdateSettingsRequest
-	87,  // 158: nagi.v1.SettingsService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainApiRequest
-	79,  // 159: nagi.v1.SettingsService.GetAlertConfig:input_type -> nagi.v1.GetAlertConfigRequest
-	81,  // 160: nagi.v1.SettingsService.UpdateAlertConfig:input_type -> nagi.v1.UpdateAlertConfigRequest
-	83,  // 161: nagi.v1.SettingsService.TestAlertChannel:input_type -> nagi.v1.TestAlertChannelRequest
-	72,  // 162: nagi.v1.SettingsService.CreateInvite:input_type -> nagi.v1.CreateInviteRequest
-	74,  // 163: nagi.v1.SettingsService.ListInvites:input_type -> nagi.v1.ListInvitesRequest
-	77,  // 164: nagi.v1.SettingsService.RevokeInvite:input_type -> nagi.v1.RevokeInviteRequest
-	113, // 165: nagi.v1.SettingsService.CreateStandbyCode:input_type -> nagi.v1.CreateStandbyCodeRequest
-	115, // 166: nagi.v1.SettingsService.GetStandbys:input_type -> nagi.v1.GetStandbysRequest
-	135, // 167: nagi.v1.SettingsService.RemoveStandby:input_type -> nagi.v1.RemoveStandbyRequest
-	137, // 168: nagi.v1.SettingsService.PromoteStandby:input_type -> nagi.v1.PromoteStandbyRequest
-	139, // 169: nagi.v1.SettingsService.CheckPanelUpdate:input_type -> nagi.v1.CheckPanelUpdateRequest
-	144, // 170: nagi.v1.SettingsService.UpdatePanel:input_type -> nagi.v1.UpdatePanelRequest
-	141, // 171: nagi.v1.SettingsService.GetPanelReleaseNotes:input_type -> nagi.v1.GetPanelReleaseNotesRequest
-	146, // 172: nagi.v1.SettingsService.GetUpdateStatus:input_type -> nagi.v1.GetUpdateStatusRequest
-	65,  // 173: nagi.v1.SettingsService.GetSecurity:input_type -> nagi.v1.GetSecurityRequest
-	67,  // 174: nagi.v1.SettingsService.BeginTOTP:input_type -> nagi.v1.BeginTOTPRequest
-	69,  // 175: nagi.v1.SettingsService.EnableTOTP:input_type -> nagi.v1.EnableTOTPRequest
-	70,  // 176: nagi.v1.SettingsService.DisableTOTP:input_type -> nagi.v1.DisableTOTPRequest
-	71,  // 177: nagi.v1.SettingsService.SetEntrance:input_type -> nagi.v1.SetEntranceRequest
-	132, // 178: nagi.v1.SettingsService.ListActivity:input_type -> nagi.v1.ListActivityRequest
-	120, // 179: nagi.v1.SettingsService.ListUsers:input_type -> nagi.v1.ListUsersRequest
-	122, // 180: nagi.v1.SettingsService.CreateUser:input_type -> nagi.v1.CreateUserRequest
-	123, // 181: nagi.v1.SettingsService.UpdateUser:input_type -> nagi.v1.UpdateUserRequest
-	125, // 182: nagi.v1.SettingsService.DeleteUser:input_type -> nagi.v1.DeleteUserRequest
-	128, // 183: nagi.v1.SettingsService.ListSessions:input_type -> nagi.v1.ListSessionsRequest
-	130, // 184: nagi.v1.SettingsService.RevokeSession:input_type -> nagi.v1.RevokeSessionRequest
-	59,  // 185: nagi.v1.SettingsService.ListAccessTokens:input_type -> nagi.v1.ListAccessTokensRequest
-	61,  // 186: nagi.v1.SettingsService.CreateAccessToken:input_type -> nagi.v1.CreateAccessTokenRequest
-	63,  // 187: nagi.v1.SettingsService.RevokeAccessToken:input_type -> nagi.v1.RevokeAccessTokenRequest
-	189, // 188: nagi.v1.SettingsService.ListAuditEvents:input_type -> nagi.v1.ListAuditEventsRequest
-	191, // 189: nagi.v1.SettingsService.GetAuditEvent:input_type -> nagi.v1.GetAuditEventRequest
-	193, // 190: nagi.v1.SettingsService.ExportAuditEvents:input_type -> nagi.v1.ExportAuditEventsRequest
-	201, // 191: nagi.v1.SettingsService.GetSessionPolicy:input_type -> nagi.v1.GetSessionPolicyRequest
-	202, // 192: nagi.v1.SettingsService.SetSessionPolicy:input_type -> nagi.v1.SessionPolicy
-	203, // 193: nagi.v1.SettingsService.GetRecording:input_type -> nagi.v1.GetRecordingRequest
-	205, // 194: nagi.v1.SettingsService.GetAuditSettings:input_type -> nagi.v1.GetAuditSettingsRequest
-	206, // 195: nagi.v1.SettingsService.SetAuditSettings:input_type -> nagi.v1.AuditSettings
-	207, // 196: nagi.v1.SettingsService.TestAuditSink:input_type -> nagi.v1.AuditSink
-	210, // 197: nagi.v1.SettingsService.VerifyAudit:input_type -> nagi.v1.VerifyAuditRequest
-	218, // 198: nagi.v1.SettingsService.BeginPasskeyRegistration:input_type -> nagi.v1.BeginPasskeyRegistrationRequest
-	220, // 199: nagi.v1.SettingsService.AddPasskey:input_type -> nagi.v1.AddPasskeyRequest
-	221, // 200: nagi.v1.SettingsService.DeletePasskey:input_type -> nagi.v1.DeletePasskeyRequest
-	222, // 201: nagi.v1.SettingsService.GetAdminNetworks:input_type -> nagi.v1.GetAdminNetworksRequest
-	223, // 202: nagi.v1.SettingsService.SetAdminNetworks:input_type -> nagi.v1.AdminNetworks
-	153, // 203: nagi.v1.ProjectService.ListProjects:input_type -> nagi.v1.ListProjectsRequest
-	155, // 204: nagi.v1.ProjectService.CreateProject:input_type -> nagi.v1.CreateProjectRequest
-	150, // 205: nagi.v1.ProjectService.GetProject:input_type -> nagi.v1.ProjectRef
-	156, // 206: nagi.v1.ProjectService.UpdateProjectSettings:input_type -> nagi.v1.UpdateProjectSettingsRequest
-	157, // 207: nagi.v1.ProjectService.SetProjectGroup:input_type -> nagi.v1.SetProjectGroupRequest
-	24,  // 208: nagi.v1.ProjectService.RenameProjectGroup:input_type -> nagi.v1.RenameLabelRequest
-	158, // 209: nagi.v1.ProjectService.SaveSharedEnv:input_type -> nagi.v1.SaveSharedEnvRequest
-	151, // 210: nagi.v1.ProjectService.DiscardSharedEnv:input_type -> nagi.v1.ProjectRevisionRef
-	160, // 211: nagi.v1.ProjectService.DeleteProject:input_type -> nagi.v1.DeleteProjectRequest
-	164, // 212: nagi.v1.ProjectService.AddContainer:input_type -> nagi.v1.AddContainerRequest
-	163, // 213: nagi.v1.ProjectService.ImportComposeDir:input_type -> nagi.v1.ImportComposeDirRequest
-	165, // 214: nagi.v1.ProjectService.DeleteContainer:input_type -> nagi.v1.DeleteContainerApiRequest
-	251, // 215: nagi.v1.ProjectService.ControlContainer:input_type -> nagi.v1.ControlContainerRequest
-	166, // 216: nagi.v1.ProjectService.SaveDraft:input_type -> nagi.v1.SaveDraftRequest
-	152, // 217: nagi.v1.ProjectService.DiscardDraft:input_type -> nagi.v1.ContainerRevisionRef
-	168, // 218: nagi.v1.ProjectService.Deploy:input_type -> nagi.v1.DeployRequest
-	252, // 219: nagi.v1.ProjectService.ListVersions:input_type -> nagi.v1.ContainerRef
-	252, // 220: nagi.v1.ProjectService.ListContainerEvents:input_type -> nagi.v1.ContainerRef
-	186, // 221: nagi.v1.ProjectService.ListProjectEvents:input_type -> nagi.v1.ListProjectEventsRequest
-	170, // 222: nagi.v1.ProjectService.Rollback:input_type -> nagi.v1.RollbackRequest
-	150, // 223: nagi.v1.ProjectService.ListDeployments:input_type -> nagi.v1.ProjectRef
-	172, // 224: nagi.v1.ProjectService.RestoreDeployment:input_type -> nagi.v1.RestoreDeploymentRequest
-	173, // 225: nagi.v1.ProjectService.StreamLogs:input_type -> nagi.v1.StreamLogsApiRequest
-	174, // 226: nagi.v1.ProjectService.SaveRoute:input_type -> nagi.v1.SaveRouteRequest
-	175, // 227: nagi.v1.ProjectService.DeleteRoute:input_type -> nagi.v1.DeleteRouteRequest
-	178, // 228: nagi.v1.ProjectService.CheckDomains:input_type -> nagi.v1.CheckDomainsRequest
-	176, // 229: nagi.v1.ProjectService.RetryDomainCert:input_type -> nagi.v1.RetryDomainCertRequest
-	104, // 230: nagi.v1.ProjectService.SetBackupNodes:input_type -> nagi.v1.SetBackupNodesRequest
-	108, // 231: nagi.v1.ProjectService.SetContainerDisplayName:input_type -> nagi.v1.SetContainerDisplayNameRequest
-	106, // 232: nagi.v1.ProjectService.SetContainerAlertRules:input_type -> nagi.v1.SetContainerAlertRulesRequest
-	107, // 233: nagi.v1.ProjectService.SetContainerSnapshotSchedule:input_type -> nagi.v1.SetContainerSnapshotScheduleRequest
-	105, // 234: nagi.v1.ProjectService.SyncBackup:input_type -> nagi.v1.BackupNodeRef
-	105, // 235: nagi.v1.ProjectService.ListBackupSnapshots:input_type -> nagi.v1.BackupNodeRef
-	111, // 236: nagi.v1.ProjectService.RestoreFromBackup:input_type -> nagi.v1.RestoreFromBackupRequest
-	112, // 237: nagi.v1.ProjectService.MigrateContainer:input_type -> nagi.v1.MoveContainerRequest
-	112, // 238: nagi.v1.ProjectService.RedeployElsewhere:input_type -> nagi.v1.MoveContainerRequest
-	109, // 239: nagi.v1.ProjectService.SetFailover:input_type -> nagi.v1.SetFailoverApiRequest
-	252, // 240: nagi.v1.ProjectService.ClearFailover:input_type -> nagi.v1.ContainerRef
-	110, // 241: nagi.v1.ProjectService.ChangeWitness:input_type -> nagi.v1.ChangeWitnessRequest
-	252, // 242: nagi.v1.ProjectService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
-	149, // 243: nagi.v1.ProjectService.ConnectProject:input_type -> nagi.v1.ConnectProjectRequest
-	149, // 244: nagi.v1.ProjectService.DisconnectProject:input_type -> nagi.v1.ConnectProjectRequest
-	252, // 245: nagi.v1.ProjectService.ListVolumes:input_type -> nagi.v1.ContainerRef
-	253, // 246: nagi.v1.ProjectService.ListVolumeFiles:input_type -> nagi.v1.VolumeFileRef
-	253, // 247: nagi.v1.ProjectService.DeleteVolumeFile:input_type -> nagi.v1.VolumeFileRef
-	253, // 248: nagi.v1.ProjectService.CreateVolumeDir:input_type -> nagi.v1.VolumeFileRef
-	253, // 249: nagi.v1.ProjectService.RestoreVolumeFile:input_type -> nagi.v1.VolumeFileRef
-	254, // 250: nagi.v1.ProjectService.RenameVolumeFile:input_type -> nagi.v1.VolumeTransferRequest
-	254, // 251: nagi.v1.ProjectService.MoveVolumeFiles:input_type -> nagi.v1.VolumeTransferRequest
-	254, // 252: nagi.v1.ProjectService.CopyVolumeFiles:input_type -> nagi.v1.VolumeTransferRequest
-	255, // 253: nagi.v1.ProjectService.CompressVolumeFiles:input_type -> nagi.v1.VolumeCompressRequest
-	256, // 254: nagi.v1.ProjectService.ExtractVolumeFile:input_type -> nagi.v1.VolumeExtractRequest
-	257, // 255: nagi.v1.ProjectService.ListVolumeDirSizes:input_type -> nagi.v1.VolumeDirSizesRequest
-	252, // 256: nagi.v1.ProjectService.ListSnapshots:input_type -> nagi.v1.ContainerRef
-	252, // 257: nagi.v1.ProjectService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
-	258, // 258: nagi.v1.ProjectService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	258, // 259: nagi.v1.ProjectService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
-	252, // 260: nagi.v1.ProjectService.GetBackupKey:input_type -> nagi.v1.ContainerRef
-	150, // 261: nagi.v1.ProjectService.ListRegistries:input_type -> nagi.v1.ProjectRef
-	184, // 262: nagi.v1.ProjectService.LoginRegistry:input_type -> nagi.v1.LoginRegistryApiRequest
-	185, // 263: nagi.v1.ProjectService.LogoutRegistry:input_type -> nagi.v1.LogoutRegistryRequest
-	150, // 264: nagi.v1.ProjectService.CheckImages:input_type -> nagi.v1.ProjectRef
-	1,   // 265: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
-	3,   // 266: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
-	11,  // 267: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
-	13,  // 268: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
-	15,  // 269: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
-	17,  // 270: nagi.v1.AuthService.Elevate:output_type -> nagi.v1.ElevateResponse
-	10,  // 271: nagi.v1.AuthService.ChangePassword:output_type -> nagi.v1.ChangePasswordResponse
-	21,  // 272: nagi.v1.AuthService.SetLanguage:output_type -> nagi.v1.SetLanguageResponse
-	19,  // 273: nagi.v1.AuthService.UpdateProfile:output_type -> nagi.v1.UpdateProfileResponse
-	5,   // 274: nagi.v1.AuthService.GetOAuthRequest:output_type -> nagi.v1.GetOAuthRequestResponse
-	7,   // 275: nagi.v1.AuthService.ApproveOAuth:output_type -> nagi.v1.ApproveOAuthResponse
-	196, // 276: nagi.v1.AuthService.RegisterSessionKey:output_type -> nagi.v1.RegisterSessionKeyResponse
-	198, // 277: nagi.v1.AuthService.RotateSession:output_type -> nagi.v1.RotateSessionResponse
-	200, // 278: nagi.v1.AuthService.Reverify:output_type -> nagi.v1.ReverifyResponse
-	216, // 279: nagi.v1.AuthService.BeginPasskeyLogin:output_type -> nagi.v1.PasskeyChallenge
-	11,  // 280: nagi.v1.AuthService.PasskeyLogin:output_type -> nagi.v1.LoginResponse
-	103, // 281: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
-	259, // 282: nagi.v1.NodeService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
-	260, // 283: nagi.v1.NodeService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
-	261, // 284: nagi.v1.NodeService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
-	262, // 285: nagi.v1.NodeService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
-	262, // 286: nagi.v1.NodeService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
-	263, // 287: nagi.v1.NodeService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
-	261, // 288: nagi.v1.NodeService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
-	264, // 289: nagi.v1.NodeService.RenameNodeFile:output_type -> nagi.v1.FileOpResult
-	265, // 290: nagi.v1.NodeService.MoveNodeFiles:output_type -> nagi.v1.FileOpEvent
-	265, // 291: nagi.v1.NodeService.CopyNodeFiles:output_type -> nagi.v1.FileOpEvent
-	265, // 292: nagi.v1.NodeService.CompressNodeFiles:output_type -> nagi.v1.FileOpEvent
-	265, // 293: nagi.v1.NodeService.ExtractNodeFile:output_type -> nagi.v1.FileOpEvent
-	266, // 294: nagi.v1.NodeService.ListNodeDirSizes:output_type -> nagi.v1.DirSizesResponse
-	47,  // 295: nagi.v1.NodeService.ListNodePanels:output_type -> nagi.v1.ListNodePanelsResponse
-	53,  // 296: nagi.v1.NodeService.HandoverNodes:output_type -> nagi.v1.HandoverNodesResponse
-	56,  // 297: nagi.v1.NodeService.RemoveNodePanel:output_type -> nagi.v1.RemoveNodePanelResponse
-	48,  // 298: nagi.v1.NodeService.ListNodeReplicas:output_type -> nagi.v1.ListNodeReplicasResponse
-	51,  // 299: nagi.v1.NodeService.DeleteNodeReplica:output_type -> nagi.v1.DeleteNodeReplicaResponse
-	267, // 300: nagi.v1.NodeService.GetNodeMesh:output_type -> nagi.v1.MeshStatus
-	268, // 301: nagi.v1.NodeService.PingNodeMesh:output_type -> nagi.v1.MeshPingResponse
-	269, // 302: nagi.v1.NodeService.TestNodeMeshSpeed:output_type -> nagi.v1.MeshSpeedResponse
-	226, // 303: nagi.v1.NodeService.SetNodeMeshOptions:output_type -> nagi.v1.MeshOptions
-	267, // 304: nagi.v1.NodeService.GetPanelMesh:output_type -> nagi.v1.MeshStatus
-	270, // 305: nagi.v1.NodeService.UpgradeNode:output_type -> nagi.v1.UpgradeResponse
-	44,  // 306: nagi.v1.NodeService.UpgradeAllNodes:output_type -> nagi.v1.UpgradeAllNodesResponse
-	43,  // 307: nagi.v1.NodeService.CancelNodeUpgrade:output_type -> nagi.v1.CancelNodeUpgradeResponse
-	271, // 308: nagi.v1.NodeService.GetNodeMirrors:output_type -> nagi.v1.Mirrors
-	271, // 309: nagi.v1.NodeService.SetNodeMirrors:output_type -> nagi.v1.Mirrors
-	272, // 310: nagi.v1.NodeService.ReclaimNodeSnapshots:output_type -> nagi.v1.DeployEvent
-	273, // 311: nagi.v1.NodeService.SetNodeProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
-	57,  // 312: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
-	274, // 313: nagi.v1.NodeService.QueryNodeMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	275, // 314: nagi.v1.NodeService.GetNodeStorage:output_type -> nagi.v1.NodeStorage
-	34,  // 315: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
-	29,  // 316: nagi.v1.NodeService.ApproveNode:output_type -> nagi.v1.ApproveNodeResponse
-	31,  // 317: nagi.v1.NodeService.RenameNode:output_type -> nagi.v1.RenameNodeResponse
-	101, // 318: nagi.v1.NodeService.AdoptNodeContainer:output_type -> nagi.v1.AdoptNodeContainerResponse
-	96,  // 319: nagi.v1.NodeService.AdoptStaleProject:output_type -> nagi.v1.AdoptStaleProjectResponse
-	98,  // 320: nagi.v1.NodeService.ConfirmPendingHA:output_type -> nagi.v1.ConfirmPendingHAResponse
-	93,  // 321: nagi.v1.NodeService.SetNodeAlertRules:output_type -> nagi.v1.SetNodeAlertRulesResponse
-	162, // 322: nagi.v1.NodeService.InspectComposeDir:output_type -> nagi.v1.ComposeDirPreview
-	23,  // 323: nagi.v1.NodeService.SetNodeTags:output_type -> nagi.v1.SetNodeTagsResponse
-	25,  // 324: nagi.v1.NodeService.RenameNodeTag:output_type -> nagi.v1.RenameLabelResponse
-	213, // 325: nagi.v1.NodeService.IsolateNode:output_type -> nagi.v1.IsolateNodeResponse
-	213, // 326: nagi.v1.NodeService.UnisolateNode:output_type -> nagi.v1.IsolateNodeResponse
-	88,  // 327: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
-	90,  // 328: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
-	90,  // 329: nagi.v1.SettingsService.SetPanelDomain:output_type -> nagi.v1.UpdateSettingsResponse
-	80,  // 330: nagi.v1.SettingsService.GetAlertConfig:output_type -> nagi.v1.GetAlertConfigResponse
-	82,  // 331: nagi.v1.SettingsService.UpdateAlertConfig:output_type -> nagi.v1.UpdateAlertConfigResponse
-	84,  // 332: nagi.v1.SettingsService.TestAlertChannel:output_type -> nagi.v1.TestAlertChannelResponse
-	73,  // 333: nagi.v1.SettingsService.CreateInvite:output_type -> nagi.v1.CreateInviteResponse
-	76,  // 334: nagi.v1.SettingsService.ListInvites:output_type -> nagi.v1.ListInvitesResponse
-	78,  // 335: nagi.v1.SettingsService.RevokeInvite:output_type -> nagi.v1.RevokeInviteResponse
-	114, // 336: nagi.v1.SettingsService.CreateStandbyCode:output_type -> nagi.v1.CreateStandbyCodeResponse
-	116, // 337: nagi.v1.SettingsService.GetStandbys:output_type -> nagi.v1.GetStandbysResponse
-	136, // 338: nagi.v1.SettingsService.RemoveStandby:output_type -> nagi.v1.RemoveStandbyResponse
-	138, // 339: nagi.v1.SettingsService.PromoteStandby:output_type -> nagi.v1.PromoteStandbyResponse
-	140, // 340: nagi.v1.SettingsService.CheckPanelUpdate:output_type -> nagi.v1.CheckPanelUpdateResponse
-	145, // 341: nagi.v1.SettingsService.UpdatePanel:output_type -> nagi.v1.UpdatePanelResponse
-	142, // 342: nagi.v1.SettingsService.GetPanelReleaseNotes:output_type -> nagi.v1.GetPanelReleaseNotesResponse
-	148, // 343: nagi.v1.SettingsService.GetUpdateStatus:output_type -> nagi.v1.GetUpdateStatusResponse
-	66,  // 344: nagi.v1.SettingsService.GetSecurity:output_type -> nagi.v1.Security
-	68,  // 345: nagi.v1.SettingsService.BeginTOTP:output_type -> nagi.v1.BeginTOTPResponse
-	66,  // 346: nagi.v1.SettingsService.EnableTOTP:output_type -> nagi.v1.Security
-	66,  // 347: nagi.v1.SettingsService.DisableTOTP:output_type -> nagi.v1.Security
-	66,  // 348: nagi.v1.SettingsService.SetEntrance:output_type -> nagi.v1.Security
-	134, // 349: nagi.v1.SettingsService.ListActivity:output_type -> nagi.v1.ListActivityResponse
-	121, // 350: nagi.v1.SettingsService.ListUsers:output_type -> nagi.v1.ListUsersResponse
-	118, // 351: nagi.v1.SettingsService.CreateUser:output_type -> nagi.v1.PanelUser
-	124, // 352: nagi.v1.SettingsService.UpdateUser:output_type -> nagi.v1.UpdateUserResponse
-	126, // 353: nagi.v1.SettingsService.DeleteUser:output_type -> nagi.v1.DeleteUserResponse
-	129, // 354: nagi.v1.SettingsService.ListSessions:output_type -> nagi.v1.ListSessionsResponse
-	131, // 355: nagi.v1.SettingsService.RevokeSession:output_type -> nagi.v1.RevokeSessionResponse
-	60,  // 356: nagi.v1.SettingsService.ListAccessTokens:output_type -> nagi.v1.ListAccessTokensResponse
-	62,  // 357: nagi.v1.SettingsService.CreateAccessToken:output_type -> nagi.v1.CreateAccessTokenResponse
-	64,  // 358: nagi.v1.SettingsService.RevokeAccessToken:output_type -> nagi.v1.RevokeAccessTokenResponse
-	190, // 359: nagi.v1.SettingsService.ListAuditEvents:output_type -> nagi.v1.ListAuditEventsResponse
-	192, // 360: nagi.v1.SettingsService.GetAuditEvent:output_type -> nagi.v1.GetAuditEventResponse
-	194, // 361: nagi.v1.SettingsService.ExportAuditEvents:output_type -> nagi.v1.ExportAuditEventsChunk
-	202, // 362: nagi.v1.SettingsService.GetSessionPolicy:output_type -> nagi.v1.SessionPolicy
-	202, // 363: nagi.v1.SettingsService.SetSessionPolicy:output_type -> nagi.v1.SessionPolicy
-	204, // 364: nagi.v1.SettingsService.GetRecording:output_type -> nagi.v1.RecordingChunk
-	206, // 365: nagi.v1.SettingsService.GetAuditSettings:output_type -> nagi.v1.AuditSettings
-	206, // 366: nagi.v1.SettingsService.SetAuditSettings:output_type -> nagi.v1.AuditSettings
-	209, // 367: nagi.v1.SettingsService.TestAuditSink:output_type -> nagi.v1.TestAuditSinkResponse
-	211, // 368: nagi.v1.SettingsService.VerifyAudit:output_type -> nagi.v1.AuditChainStatus
-	219, // 369: nagi.v1.SettingsService.BeginPasskeyRegistration:output_type -> nagi.v1.BeginPasskeyRegistrationResponse
-	66,  // 370: nagi.v1.SettingsService.AddPasskey:output_type -> nagi.v1.Security
-	66,  // 371: nagi.v1.SettingsService.DeletePasskey:output_type -> nagi.v1.Security
-	223, // 372: nagi.v1.SettingsService.GetAdminNetworks:output_type -> nagi.v1.AdminNetworks
-	223, // 373: nagi.v1.SettingsService.SetAdminNetworks:output_type -> nagi.v1.AdminNetworks
-	154, // 374: nagi.v1.ProjectService.ListProjects:output_type -> nagi.v1.ListProjectsResponse
-	239, // 375: nagi.v1.ProjectService.CreateProject:output_type -> nagi.v1.Project
-	235, // 376: nagi.v1.ProjectService.GetProject:output_type -> nagi.v1.ProjectSummary
-	239, // 377: nagi.v1.ProjectService.UpdateProjectSettings:output_type -> nagi.v1.Project
-	239, // 378: nagi.v1.ProjectService.SetProjectGroup:output_type -> nagi.v1.Project
-	25,  // 379: nagi.v1.ProjectService.RenameProjectGroup:output_type -> nagi.v1.RenameLabelResponse
-	159, // 380: nagi.v1.ProjectService.SaveSharedEnv:output_type -> nagi.v1.SaveSharedEnvResponse
-	239, // 381: nagi.v1.ProjectService.DiscardSharedEnv:output_type -> nagi.v1.Project
-	161, // 382: nagi.v1.ProjectService.DeleteProject:output_type -> nagi.v1.DeleteProjectResponse
-	239, // 383: nagi.v1.ProjectService.AddContainer:output_type -> nagi.v1.Project
-	239, // 384: nagi.v1.ProjectService.ImportComposeDir:output_type -> nagi.v1.Project
-	239, // 385: nagi.v1.ProjectService.DeleteContainer:output_type -> nagi.v1.Project
-	272, // 386: nagi.v1.ProjectService.ControlContainer:output_type -> nagi.v1.DeployEvent
-	239, // 387: nagi.v1.ProjectService.SaveDraft:output_type -> nagi.v1.Project
-	239, // 388: nagi.v1.ProjectService.DiscardDraft:output_type -> nagi.v1.Project
-	272, // 389: nagi.v1.ProjectService.Deploy:output_type -> nagi.v1.DeployEvent
-	169, // 390: nagi.v1.ProjectService.ListVersions:output_type -> nagi.v1.ListVersionsResponse
-	134, // 391: nagi.v1.ProjectService.ListContainerEvents:output_type -> nagi.v1.ListActivityResponse
-	134, // 392: nagi.v1.ProjectService.ListProjectEvents:output_type -> nagi.v1.ListActivityResponse
-	272, // 393: nagi.v1.ProjectService.Rollback:output_type -> nagi.v1.DeployEvent
-	171, // 394: nagi.v1.ProjectService.ListDeployments:output_type -> nagi.v1.ListDeploymentsResponse
-	272, // 395: nagi.v1.ProjectService.RestoreDeployment:output_type -> nagi.v1.DeployEvent
-	276, // 396: nagi.v1.ProjectService.StreamLogs:output_type -> nagi.v1.LogLine
-	239, // 397: nagi.v1.ProjectService.SaveRoute:output_type -> nagi.v1.Project
-	239, // 398: nagi.v1.ProjectService.DeleteRoute:output_type -> nagi.v1.Project
-	179, // 399: nagi.v1.ProjectService.CheckDomains:output_type -> nagi.v1.CheckDomainsResponse
-	177, // 400: nagi.v1.ProjectService.RetryDomainCert:output_type -> nagi.v1.RetryDomainCertResponse
-	239, // 401: nagi.v1.ProjectService.SetBackupNodes:output_type -> nagi.v1.Project
-	239, // 402: nagi.v1.ProjectService.SetContainerDisplayName:output_type -> nagi.v1.Project
-	239, // 403: nagi.v1.ProjectService.SetContainerAlertRules:output_type -> nagi.v1.Project
-	239, // 404: nagi.v1.ProjectService.SetContainerSnapshotSchedule:output_type -> nagi.v1.Project
-	239, // 405: nagi.v1.ProjectService.SyncBackup:output_type -> nagi.v1.Project
-	277, // 406: nagi.v1.ProjectService.ListBackupSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	272, // 407: nagi.v1.ProjectService.RestoreFromBackup:output_type -> nagi.v1.DeployEvent
-	272, // 408: nagi.v1.ProjectService.MigrateContainer:output_type -> nagi.v1.DeployEvent
-	272, // 409: nagi.v1.ProjectService.RedeployElsewhere:output_type -> nagi.v1.DeployEvent
-	239, // 410: nagi.v1.ProjectService.SetFailover:output_type -> nagi.v1.Project
-	239, // 411: nagi.v1.ProjectService.ClearFailover:output_type -> nagi.v1.Project
-	239, // 412: nagi.v1.ProjectService.ChangeWitness:output_type -> nagi.v1.Project
-	239, // 413: nagi.v1.ProjectService.ConfirmTakeover:output_type -> nagi.v1.Project
-	239, // 414: nagi.v1.ProjectService.ConnectProject:output_type -> nagi.v1.Project
-	239, // 415: nagi.v1.ProjectService.DisconnectProject:output_type -> nagi.v1.Project
-	278, // 416: nagi.v1.ProjectService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
-	279, // 417: nagi.v1.ProjectService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
-	280, // 418: nagi.v1.ProjectService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	280, // 419: nagi.v1.ProjectService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
-	280, // 420: nagi.v1.ProjectService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
-	264, // 421: nagi.v1.ProjectService.RenameVolumeFile:output_type -> nagi.v1.FileOpResult
-	265, // 422: nagi.v1.ProjectService.MoveVolumeFiles:output_type -> nagi.v1.FileOpEvent
-	265, // 423: nagi.v1.ProjectService.CopyVolumeFiles:output_type -> nagi.v1.FileOpEvent
-	265, // 424: nagi.v1.ProjectService.CompressVolumeFiles:output_type -> nagi.v1.FileOpEvent
-	265, // 425: nagi.v1.ProjectService.ExtractVolumeFile:output_type -> nagi.v1.FileOpEvent
-	266, // 426: nagi.v1.ProjectService.ListVolumeDirSizes:output_type -> nagi.v1.DirSizesResponse
-	277, // 427: nagi.v1.ProjectService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
-	272, // 428: nagi.v1.ProjectService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
-	272, // 429: nagi.v1.ProjectService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
-	277, // 430: nagi.v1.ProjectService.DeleteSnapshot:output_type -> nagi.v1.ListSnapshotsResponse
-	182, // 431: nagi.v1.ProjectService.GetBackupKey:output_type -> nagi.v1.GetBackupKeyResponse
-	183, // 432: nagi.v1.ProjectService.ListRegistries:output_type -> nagi.v1.RegistriesResponse
-	183, // 433: nagi.v1.ProjectService.LoginRegistry:output_type -> nagi.v1.RegistriesResponse
-	183, // 434: nagi.v1.ProjectService.LogoutRegistry:output_type -> nagi.v1.RegistriesResponse
-	281, // 435: nagi.v1.ProjectService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
-	265, // [265:436] is the sub-list for method output_type
-	94,  // [94:265] is the sub-list for method input_type
+	198, // 105: nagi.v1.AuthService.RegisterSessionKey:input_type -> nagi.v1.RegisterSessionKeyRequest
+	200, // 106: nagi.v1.AuthService.RotateSession:input_type -> nagi.v1.RotateSessionRequest
+	202, // 107: nagi.v1.AuthService.Reverify:input_type -> nagi.v1.ReverifyRequest
+	218, // 108: nagi.v1.AuthService.BeginPasskeyLogin:input_type -> nagi.v1.BeginPasskeyLoginRequest
+	220, // 109: nagi.v1.AuthService.PasskeyLogin:input_type -> nagi.v1.PasskeyLoginRequest
+	22,  // 110: nagi.v1.AuthService.GetProjectOrder:input_type -> nagi.v1.GetProjectOrderRequest
+	23,  // 111: nagi.v1.AuthService.SetProjectOrder:input_type -> nagi.v1.ProjectOrder
+	105, // 112: nagi.v1.NodeService.ListNodes:input_type -> nagi.v1.ListNodesRequest
+	246, // 113: nagi.v1.NodeService.ListNodeDir:input_type -> nagi.v1.NodeFileRef
+	246, // 114: nagi.v1.NodeService.ReadNodeFile:input_type -> nagi.v1.NodeFileRef
+	247, // 115: nagi.v1.NodeService.WriteNodeFile:input_type -> nagi.v1.WriteNodeFileRequest
+	248, // 116: nagi.v1.NodeService.DeleteNodeFile:input_type -> nagi.v1.DeleteNodeFileRequest
+	246, // 117: nagi.v1.NodeService.CreateNodeDir:input_type -> nagi.v1.NodeFileRef
+	246, // 118: nagi.v1.NodeService.ListNodeFileBackups:input_type -> nagi.v1.NodeFileRef
+	249, // 119: nagi.v1.NodeService.RestoreNodeFileBackup:input_type -> nagi.v1.RestoreNodeFileBackupRequest
+	250, // 120: nagi.v1.NodeService.RenameNodeFile:input_type -> nagi.v1.NodeTransferRequest
+	250, // 121: nagi.v1.NodeService.MoveNodeFiles:input_type -> nagi.v1.NodeTransferRequest
+	250, // 122: nagi.v1.NodeService.CopyNodeFiles:input_type -> nagi.v1.NodeTransferRequest
+	251, // 123: nagi.v1.NodeService.CompressNodeFiles:input_type -> nagi.v1.NodeCompressRequest
+	252, // 124: nagi.v1.NodeService.ExtractNodeFile:input_type -> nagi.v1.NodeExtractRequest
+	253, // 125: nagi.v1.NodeService.ListNodeDirSizes:input_type -> nagi.v1.NodeDirSizesRequest
+	49,  // 126: nagi.v1.NodeService.ListNodePanels:input_type -> nagi.v1.ListNodePanelsRequest
+	55,  // 127: nagi.v1.NodeService.HandoverNodes:input_type -> nagi.v1.HandoverNodesRequest
+	58,  // 128: nagi.v1.NodeService.RemoveNodePanel:input_type -> nagi.v1.RemoveNodePanelRequest
+	29,  // 129: nagi.v1.NodeService.ListNodeReplicas:input_type -> nagi.v1.NodeRef
+	53,  // 130: nagi.v1.NodeService.DeleteNodeReplica:input_type -> nagi.v1.DeleteNodeReplicaRequest
+	39,  // 131: nagi.v1.NodeService.GetNodeMesh:input_type -> nagi.v1.GetNodeMeshRequest
+	40,  // 132: nagi.v1.NodeService.PingNodeMesh:input_type -> nagi.v1.PingNodeMeshRequest
+	40,  // 133: nagi.v1.NodeService.TestNodeMeshSpeed:input_type -> nagi.v1.PingNodeMeshRequest
+	41,  // 134: nagi.v1.NodeService.SetNodeMeshOptions:input_type -> nagi.v1.SetNodeMeshOptionsRequest
+	42,  // 135: nagi.v1.NodeService.GetPanelMesh:input_type -> nagi.v1.GetPanelMeshRequest
+	43,  // 136: nagi.v1.NodeService.UpgradeNode:input_type -> nagi.v1.UpgradeNodeRequest
+	44,  // 137: nagi.v1.NodeService.UpgradeAllNodes:input_type -> nagi.v1.UpgradeAllNodesRequest
+	45,  // 138: nagi.v1.NodeService.CancelNodeUpgrade:input_type -> nagi.v1.CancelNodeUpgradeRequest
+	29,  // 139: nagi.v1.NodeService.GetNodeMirrors:input_type -> nagi.v1.NodeRef
+	48,  // 140: nagi.v1.NodeService.SetNodeMirrors:input_type -> nagi.v1.SetNodeMirrorsRequest
+	29,  // 141: nagi.v1.NodeService.ReclaimNodeSnapshots:input_type -> nagi.v1.NodeRef
+	30,  // 142: nagi.v1.NodeService.SetNodeProjectsRoot:input_type -> nagi.v1.SetNodeProjectsRootRequest
+	38,  // 143: nagi.v1.NodeService.CreateEnrollCommand:input_type -> nagi.v1.CreateEnrollCommandRequest
+	35,  // 144: nagi.v1.NodeService.QueryNodeMetrics:input_type -> nagi.v1.QueryNodeMetricsRequest
+	29,  // 145: nagi.v1.NodeService.GetNodeStorage:input_type -> nagi.v1.NodeRef
+	36,  // 146: nagi.v1.NodeService.RemoveNode:input_type -> nagi.v1.RemoveNodeRequest
+	31,  // 147: nagi.v1.NodeService.ApproveNode:input_type -> nagi.v1.ApproveNodeRequest
+	33,  // 148: nagi.v1.NodeService.RenameNode:input_type -> nagi.v1.RenameNodeRequest
+	103, // 149: nagi.v1.NodeService.AdoptNodeContainer:input_type -> nagi.v1.AdoptNodeContainerRequest
+	98,  // 150: nagi.v1.NodeService.AdoptStaleProject:input_type -> nagi.v1.AdoptStaleProjectRequest
+	100, // 151: nagi.v1.NodeService.ConfirmPendingHA:input_type -> nagi.v1.ConfirmPendingHARequest
+	95,  // 152: nagi.v1.NodeService.SetNodeAlertRules:input_type -> nagi.v1.SetNodeAlertRulesRequest
+	246, // 153: nagi.v1.NodeService.InspectComposeDir:input_type -> nagi.v1.NodeFileRef
+	25,  // 154: nagi.v1.NodeService.SetNodeTags:input_type -> nagi.v1.SetNodeTagsRequest
+	27,  // 155: nagi.v1.NodeService.RenameNodeTag:input_type -> nagi.v1.RenameLabelRequest
+	215, // 156: nagi.v1.NodeService.IsolateNode:input_type -> nagi.v1.IsolateNodeRequest
+	215, // 157: nagi.v1.NodeService.UnisolateNode:input_type -> nagi.v1.IsolateNodeRequest
+	89,  // 158: nagi.v1.SettingsService.GetSettings:input_type -> nagi.v1.GetSettingsRequest
+	92,  // 159: nagi.v1.SettingsService.UpdateSettings:input_type -> nagi.v1.UpdateSettingsRequest
+	90,  // 160: nagi.v1.SettingsService.SetPanelDomain:input_type -> nagi.v1.SetPanelDomainApiRequest
+	82,  // 161: nagi.v1.SettingsService.GetAlertConfig:input_type -> nagi.v1.GetAlertConfigRequest
+	84,  // 162: nagi.v1.SettingsService.UpdateAlertConfig:input_type -> nagi.v1.UpdateAlertConfigRequest
+	86,  // 163: nagi.v1.SettingsService.TestAlertChannel:input_type -> nagi.v1.TestAlertChannelRequest
+	75,  // 164: nagi.v1.SettingsService.CreateInvite:input_type -> nagi.v1.CreateInviteRequest
+	77,  // 165: nagi.v1.SettingsService.ListInvites:input_type -> nagi.v1.ListInvitesRequest
+	80,  // 166: nagi.v1.SettingsService.RevokeInvite:input_type -> nagi.v1.RevokeInviteRequest
+	116, // 167: nagi.v1.SettingsService.CreateStandbyCode:input_type -> nagi.v1.CreateStandbyCodeRequest
+	118, // 168: nagi.v1.SettingsService.GetStandbys:input_type -> nagi.v1.GetStandbysRequest
+	138, // 169: nagi.v1.SettingsService.RemoveStandby:input_type -> nagi.v1.RemoveStandbyRequest
+	140, // 170: nagi.v1.SettingsService.PromoteStandby:input_type -> nagi.v1.PromoteStandbyRequest
+	142, // 171: nagi.v1.SettingsService.CheckPanelUpdate:input_type -> nagi.v1.CheckPanelUpdateRequest
+	147, // 172: nagi.v1.SettingsService.UpdatePanel:input_type -> nagi.v1.UpdatePanelRequest
+	144, // 173: nagi.v1.SettingsService.GetPanelReleaseNotes:input_type -> nagi.v1.GetPanelReleaseNotesRequest
+	149, // 174: nagi.v1.SettingsService.GetUpdateStatus:input_type -> nagi.v1.GetUpdateStatusRequest
+	68,  // 175: nagi.v1.SettingsService.GetSecurity:input_type -> nagi.v1.GetSecurityRequest
+	70,  // 176: nagi.v1.SettingsService.BeginTOTP:input_type -> nagi.v1.BeginTOTPRequest
+	72,  // 177: nagi.v1.SettingsService.EnableTOTP:input_type -> nagi.v1.EnableTOTPRequest
+	73,  // 178: nagi.v1.SettingsService.DisableTOTP:input_type -> nagi.v1.DisableTOTPRequest
+	74,  // 179: nagi.v1.SettingsService.SetEntrance:input_type -> nagi.v1.SetEntranceRequest
+	135, // 180: nagi.v1.SettingsService.ListActivity:input_type -> nagi.v1.ListActivityRequest
+	123, // 181: nagi.v1.SettingsService.ListUsers:input_type -> nagi.v1.ListUsersRequest
+	125, // 182: nagi.v1.SettingsService.CreateUser:input_type -> nagi.v1.CreateUserRequest
+	126, // 183: nagi.v1.SettingsService.UpdateUser:input_type -> nagi.v1.UpdateUserRequest
+	128, // 184: nagi.v1.SettingsService.DeleteUser:input_type -> nagi.v1.DeleteUserRequest
+	131, // 185: nagi.v1.SettingsService.ListSessions:input_type -> nagi.v1.ListSessionsRequest
+	133, // 186: nagi.v1.SettingsService.RevokeSession:input_type -> nagi.v1.RevokeSessionRequest
+	62,  // 187: nagi.v1.SettingsService.ListAccessTokens:input_type -> nagi.v1.ListAccessTokensRequest
+	64,  // 188: nagi.v1.SettingsService.CreateAccessToken:input_type -> nagi.v1.CreateAccessTokenRequest
+	66,  // 189: nagi.v1.SettingsService.RevokeAccessToken:input_type -> nagi.v1.RevokeAccessTokenRequest
+	192, // 190: nagi.v1.SettingsService.ListAuditEvents:input_type -> nagi.v1.ListAuditEventsRequest
+	194, // 191: nagi.v1.SettingsService.GetAuditEvent:input_type -> nagi.v1.GetAuditEventRequest
+	196, // 192: nagi.v1.SettingsService.ExportAuditEvents:input_type -> nagi.v1.ExportAuditEventsRequest
+	204, // 193: nagi.v1.SettingsService.GetSessionPolicy:input_type -> nagi.v1.GetSessionPolicyRequest
+	205, // 194: nagi.v1.SettingsService.SetSessionPolicy:input_type -> nagi.v1.SessionPolicy
+	206, // 195: nagi.v1.SettingsService.GetRecording:input_type -> nagi.v1.GetRecordingRequest
+	208, // 196: nagi.v1.SettingsService.GetAuditSettings:input_type -> nagi.v1.GetAuditSettingsRequest
+	209, // 197: nagi.v1.SettingsService.SetAuditSettings:input_type -> nagi.v1.AuditSettings
+	210, // 198: nagi.v1.SettingsService.TestAuditSink:input_type -> nagi.v1.AuditSink
+	213, // 199: nagi.v1.SettingsService.VerifyAudit:input_type -> nagi.v1.VerifyAuditRequest
+	221, // 200: nagi.v1.SettingsService.BeginPasskeyRegistration:input_type -> nagi.v1.BeginPasskeyRegistrationRequest
+	223, // 201: nagi.v1.SettingsService.AddPasskey:input_type -> nagi.v1.AddPasskeyRequest
+	224, // 202: nagi.v1.SettingsService.DeletePasskey:input_type -> nagi.v1.DeletePasskeyRequest
+	225, // 203: nagi.v1.SettingsService.GetAdminNetworks:input_type -> nagi.v1.GetAdminNetworksRequest
+	226, // 204: nagi.v1.SettingsService.SetAdminNetworks:input_type -> nagi.v1.AdminNetworks
+	156, // 205: nagi.v1.ProjectService.ListProjects:input_type -> nagi.v1.ListProjectsRequest
+	158, // 206: nagi.v1.ProjectService.CreateProject:input_type -> nagi.v1.CreateProjectRequest
+	153, // 207: nagi.v1.ProjectService.GetProject:input_type -> nagi.v1.ProjectRef
+	159, // 208: nagi.v1.ProjectService.UpdateProjectSettings:input_type -> nagi.v1.UpdateProjectSettingsRequest
+	160, // 209: nagi.v1.ProjectService.SetProjectGroup:input_type -> nagi.v1.SetProjectGroupRequest
+	27,  // 210: nagi.v1.ProjectService.RenameProjectGroup:input_type -> nagi.v1.RenameLabelRequest
+	161, // 211: nagi.v1.ProjectService.SaveSharedEnv:input_type -> nagi.v1.SaveSharedEnvRequest
+	154, // 212: nagi.v1.ProjectService.DiscardSharedEnv:input_type -> nagi.v1.ProjectRevisionRef
+	163, // 213: nagi.v1.ProjectService.DeleteProject:input_type -> nagi.v1.DeleteProjectRequest
+	167, // 214: nagi.v1.ProjectService.AddContainer:input_type -> nagi.v1.AddContainerRequest
+	166, // 215: nagi.v1.ProjectService.ImportComposeDir:input_type -> nagi.v1.ImportComposeDirRequest
+	168, // 216: nagi.v1.ProjectService.DeleteContainer:input_type -> nagi.v1.DeleteContainerApiRequest
+	254, // 217: nagi.v1.ProjectService.ControlContainer:input_type -> nagi.v1.ControlContainerRequest
+	169, // 218: nagi.v1.ProjectService.SaveDraft:input_type -> nagi.v1.SaveDraftRequest
+	155, // 219: nagi.v1.ProjectService.DiscardDraft:input_type -> nagi.v1.ContainerRevisionRef
+	171, // 220: nagi.v1.ProjectService.Deploy:input_type -> nagi.v1.DeployRequest
+	255, // 221: nagi.v1.ProjectService.ListVersions:input_type -> nagi.v1.ContainerRef
+	255, // 222: nagi.v1.ProjectService.ListContainerEvents:input_type -> nagi.v1.ContainerRef
+	189, // 223: nagi.v1.ProjectService.ListProjectEvents:input_type -> nagi.v1.ListProjectEventsRequest
+	173, // 224: nagi.v1.ProjectService.Rollback:input_type -> nagi.v1.RollbackRequest
+	153, // 225: nagi.v1.ProjectService.ListDeployments:input_type -> nagi.v1.ProjectRef
+	175, // 226: nagi.v1.ProjectService.RestoreDeployment:input_type -> nagi.v1.RestoreDeploymentRequest
+	176, // 227: nagi.v1.ProjectService.StreamLogs:input_type -> nagi.v1.StreamLogsApiRequest
+	177, // 228: nagi.v1.ProjectService.SaveRoute:input_type -> nagi.v1.SaveRouteRequest
+	178, // 229: nagi.v1.ProjectService.DeleteRoute:input_type -> nagi.v1.DeleteRouteRequest
+	181, // 230: nagi.v1.ProjectService.CheckDomains:input_type -> nagi.v1.CheckDomainsRequest
+	179, // 231: nagi.v1.ProjectService.RetryDomainCert:input_type -> nagi.v1.RetryDomainCertRequest
+	107, // 232: nagi.v1.ProjectService.SetBackupNodes:input_type -> nagi.v1.SetBackupNodesRequest
+	111, // 233: nagi.v1.ProjectService.SetContainerDisplayName:input_type -> nagi.v1.SetContainerDisplayNameRequest
+	109, // 234: nagi.v1.ProjectService.SetContainerAlertRules:input_type -> nagi.v1.SetContainerAlertRulesRequest
+	110, // 235: nagi.v1.ProjectService.SetContainerSnapshotSchedule:input_type -> nagi.v1.SetContainerSnapshotScheduleRequest
+	108, // 236: nagi.v1.ProjectService.SyncBackup:input_type -> nagi.v1.BackupNodeRef
+	108, // 237: nagi.v1.ProjectService.ListBackupSnapshots:input_type -> nagi.v1.BackupNodeRef
+	114, // 238: nagi.v1.ProjectService.RestoreFromBackup:input_type -> nagi.v1.RestoreFromBackupRequest
+	115, // 239: nagi.v1.ProjectService.MigrateContainer:input_type -> nagi.v1.MoveContainerRequest
+	115, // 240: nagi.v1.ProjectService.RedeployElsewhere:input_type -> nagi.v1.MoveContainerRequest
+	112, // 241: nagi.v1.ProjectService.SetFailover:input_type -> nagi.v1.SetFailoverApiRequest
+	255, // 242: nagi.v1.ProjectService.ClearFailover:input_type -> nagi.v1.ContainerRef
+	113, // 243: nagi.v1.ProjectService.ChangeWitness:input_type -> nagi.v1.ChangeWitnessRequest
+	255, // 244: nagi.v1.ProjectService.ConfirmTakeover:input_type -> nagi.v1.ContainerRef
+	152, // 245: nagi.v1.ProjectService.ConnectProject:input_type -> nagi.v1.ConnectProjectRequest
+	152, // 246: nagi.v1.ProjectService.DisconnectProject:input_type -> nagi.v1.ConnectProjectRequest
+	255, // 247: nagi.v1.ProjectService.ListVolumes:input_type -> nagi.v1.ContainerRef
+	256, // 248: nagi.v1.ProjectService.ListVolumeFiles:input_type -> nagi.v1.VolumeFileRef
+	256, // 249: nagi.v1.ProjectService.DeleteVolumeFile:input_type -> nagi.v1.VolumeFileRef
+	256, // 250: nagi.v1.ProjectService.CreateVolumeDir:input_type -> nagi.v1.VolumeFileRef
+	256, // 251: nagi.v1.ProjectService.RestoreVolumeFile:input_type -> nagi.v1.VolumeFileRef
+	257, // 252: nagi.v1.ProjectService.RenameVolumeFile:input_type -> nagi.v1.VolumeTransferRequest
+	257, // 253: nagi.v1.ProjectService.MoveVolumeFiles:input_type -> nagi.v1.VolumeTransferRequest
+	257, // 254: nagi.v1.ProjectService.CopyVolumeFiles:input_type -> nagi.v1.VolumeTransferRequest
+	258, // 255: nagi.v1.ProjectService.CompressVolumeFiles:input_type -> nagi.v1.VolumeCompressRequest
+	259, // 256: nagi.v1.ProjectService.ExtractVolumeFile:input_type -> nagi.v1.VolumeExtractRequest
+	260, // 257: nagi.v1.ProjectService.ListVolumeDirSizes:input_type -> nagi.v1.VolumeDirSizesRequest
+	255, // 258: nagi.v1.ProjectService.ListSnapshots:input_type -> nagi.v1.ContainerRef
+	255, // 259: nagi.v1.ProjectService.CreateSnapshot:input_type -> nagi.v1.ContainerRef
+	261, // 260: nagi.v1.ProjectService.RestoreSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	261, // 261: nagi.v1.ProjectService.DeleteSnapshot:input_type -> nagi.v1.RestoreSnapshotRequest
+	255, // 262: nagi.v1.ProjectService.GetBackupKey:input_type -> nagi.v1.ContainerRef
+	153, // 263: nagi.v1.ProjectService.ListRegistries:input_type -> nagi.v1.ProjectRef
+	187, // 264: nagi.v1.ProjectService.LoginRegistry:input_type -> nagi.v1.LoginRegistryApiRequest
+	188, // 265: nagi.v1.ProjectService.LogoutRegistry:input_type -> nagi.v1.LogoutRegistryRequest
+	153, // 266: nagi.v1.ProjectService.CheckImages:input_type -> nagi.v1.ProjectRef
+	1,   // 267: nagi.v1.SetupService.GetSetupState:output_type -> nagi.v1.GetSetupStateResponse
+	3,   // 268: nagi.v1.SetupService.Setup:output_type -> nagi.v1.SetupResponse
+	11,  // 269: nagi.v1.AuthService.Login:output_type -> nagi.v1.LoginResponse
+	13,  // 270: nagi.v1.AuthService.Logout:output_type -> nagi.v1.LogoutResponse
+	15,  // 271: nagi.v1.AuthService.Me:output_type -> nagi.v1.MeResponse
+	17,  // 272: nagi.v1.AuthService.Elevate:output_type -> nagi.v1.ElevateResponse
+	10,  // 273: nagi.v1.AuthService.ChangePassword:output_type -> nagi.v1.ChangePasswordResponse
+	21,  // 274: nagi.v1.AuthService.SetLanguage:output_type -> nagi.v1.SetLanguageResponse
+	19,  // 275: nagi.v1.AuthService.UpdateProfile:output_type -> nagi.v1.UpdateProfileResponse
+	5,   // 276: nagi.v1.AuthService.GetOAuthRequest:output_type -> nagi.v1.GetOAuthRequestResponse
+	7,   // 277: nagi.v1.AuthService.ApproveOAuth:output_type -> nagi.v1.ApproveOAuthResponse
+	199, // 278: nagi.v1.AuthService.RegisterSessionKey:output_type -> nagi.v1.RegisterSessionKeyResponse
+	201, // 279: nagi.v1.AuthService.RotateSession:output_type -> nagi.v1.RotateSessionResponse
+	203, // 280: nagi.v1.AuthService.Reverify:output_type -> nagi.v1.ReverifyResponse
+	219, // 281: nagi.v1.AuthService.BeginPasskeyLogin:output_type -> nagi.v1.PasskeyChallenge
+	11,  // 282: nagi.v1.AuthService.PasskeyLogin:output_type -> nagi.v1.LoginResponse
+	23,  // 283: nagi.v1.AuthService.GetProjectOrder:output_type -> nagi.v1.ProjectOrder
+	24,  // 284: nagi.v1.AuthService.SetProjectOrder:output_type -> nagi.v1.SetProjectOrderResponse
+	106, // 285: nagi.v1.NodeService.ListNodes:output_type -> nagi.v1.ListNodesResponse
+	262, // 286: nagi.v1.NodeService.ListNodeDir:output_type -> nagi.v1.ListNodeDirResponse
+	263, // 287: nagi.v1.NodeService.ReadNodeFile:output_type -> nagi.v1.ReadNodeFileResponse
+	264, // 288: nagi.v1.NodeService.WriteNodeFile:output_type -> nagi.v1.WriteNodeFileResponse
+	265, // 289: nagi.v1.NodeService.DeleteNodeFile:output_type -> nagi.v1.NodeFileOpResponse
+	265, // 290: nagi.v1.NodeService.CreateNodeDir:output_type -> nagi.v1.NodeFileOpResponse
+	266, // 291: nagi.v1.NodeService.ListNodeFileBackups:output_type -> nagi.v1.ListNodeFileBackupsResponse
+	264, // 292: nagi.v1.NodeService.RestoreNodeFileBackup:output_type -> nagi.v1.WriteNodeFileResponse
+	267, // 293: nagi.v1.NodeService.RenameNodeFile:output_type -> nagi.v1.FileOpResult
+	268, // 294: nagi.v1.NodeService.MoveNodeFiles:output_type -> nagi.v1.FileOpEvent
+	268, // 295: nagi.v1.NodeService.CopyNodeFiles:output_type -> nagi.v1.FileOpEvent
+	268, // 296: nagi.v1.NodeService.CompressNodeFiles:output_type -> nagi.v1.FileOpEvent
+	268, // 297: nagi.v1.NodeService.ExtractNodeFile:output_type -> nagi.v1.FileOpEvent
+	269, // 298: nagi.v1.NodeService.ListNodeDirSizes:output_type -> nagi.v1.DirSizesResponse
+	50,  // 299: nagi.v1.NodeService.ListNodePanels:output_type -> nagi.v1.ListNodePanelsResponse
+	56,  // 300: nagi.v1.NodeService.HandoverNodes:output_type -> nagi.v1.HandoverNodesResponse
+	59,  // 301: nagi.v1.NodeService.RemoveNodePanel:output_type -> nagi.v1.RemoveNodePanelResponse
+	51,  // 302: nagi.v1.NodeService.ListNodeReplicas:output_type -> nagi.v1.ListNodeReplicasResponse
+	54,  // 303: nagi.v1.NodeService.DeleteNodeReplica:output_type -> nagi.v1.DeleteNodeReplicaResponse
+	270, // 304: nagi.v1.NodeService.GetNodeMesh:output_type -> nagi.v1.MeshStatus
+	271, // 305: nagi.v1.NodeService.PingNodeMesh:output_type -> nagi.v1.MeshPingResponse
+	272, // 306: nagi.v1.NodeService.TestNodeMeshSpeed:output_type -> nagi.v1.MeshSpeedResponse
+	229, // 307: nagi.v1.NodeService.SetNodeMeshOptions:output_type -> nagi.v1.MeshOptions
+	270, // 308: nagi.v1.NodeService.GetPanelMesh:output_type -> nagi.v1.MeshStatus
+	273, // 309: nagi.v1.NodeService.UpgradeNode:output_type -> nagi.v1.UpgradeResponse
+	47,  // 310: nagi.v1.NodeService.UpgradeAllNodes:output_type -> nagi.v1.UpgradeAllNodesResponse
+	46,  // 311: nagi.v1.NodeService.CancelNodeUpgrade:output_type -> nagi.v1.CancelNodeUpgradeResponse
+	274, // 312: nagi.v1.NodeService.GetNodeMirrors:output_type -> nagi.v1.Mirrors
+	274, // 313: nagi.v1.NodeService.SetNodeMirrors:output_type -> nagi.v1.Mirrors
+	275, // 314: nagi.v1.NodeService.ReclaimNodeSnapshots:output_type -> nagi.v1.DeployEvent
+	276, // 315: nagi.v1.NodeService.SetNodeProjectsRoot:output_type -> nagi.v1.SetProjectsRootResponse
+	60,  // 316: nagi.v1.NodeService.CreateEnrollCommand:output_type -> nagi.v1.CreateEnrollCommandResponse
+	277, // 317: nagi.v1.NodeService.QueryNodeMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	278, // 318: nagi.v1.NodeService.GetNodeStorage:output_type -> nagi.v1.NodeStorage
+	37,  // 319: nagi.v1.NodeService.RemoveNode:output_type -> nagi.v1.RemoveNodeResponse
+	32,  // 320: nagi.v1.NodeService.ApproveNode:output_type -> nagi.v1.ApproveNodeResponse
+	34,  // 321: nagi.v1.NodeService.RenameNode:output_type -> nagi.v1.RenameNodeResponse
+	104, // 322: nagi.v1.NodeService.AdoptNodeContainer:output_type -> nagi.v1.AdoptNodeContainerResponse
+	99,  // 323: nagi.v1.NodeService.AdoptStaleProject:output_type -> nagi.v1.AdoptStaleProjectResponse
+	101, // 324: nagi.v1.NodeService.ConfirmPendingHA:output_type -> nagi.v1.ConfirmPendingHAResponse
+	96,  // 325: nagi.v1.NodeService.SetNodeAlertRules:output_type -> nagi.v1.SetNodeAlertRulesResponse
+	165, // 326: nagi.v1.NodeService.InspectComposeDir:output_type -> nagi.v1.ComposeDirPreview
+	26,  // 327: nagi.v1.NodeService.SetNodeTags:output_type -> nagi.v1.SetNodeTagsResponse
+	28,  // 328: nagi.v1.NodeService.RenameNodeTag:output_type -> nagi.v1.RenameLabelResponse
+	216, // 329: nagi.v1.NodeService.IsolateNode:output_type -> nagi.v1.IsolateNodeResponse
+	216, // 330: nagi.v1.NodeService.UnisolateNode:output_type -> nagi.v1.IsolateNodeResponse
+	91,  // 331: nagi.v1.SettingsService.GetSettings:output_type -> nagi.v1.GetSettingsResponse
+	93,  // 332: nagi.v1.SettingsService.UpdateSettings:output_type -> nagi.v1.UpdateSettingsResponse
+	93,  // 333: nagi.v1.SettingsService.SetPanelDomain:output_type -> nagi.v1.UpdateSettingsResponse
+	83,  // 334: nagi.v1.SettingsService.GetAlertConfig:output_type -> nagi.v1.GetAlertConfigResponse
+	85,  // 335: nagi.v1.SettingsService.UpdateAlertConfig:output_type -> nagi.v1.UpdateAlertConfigResponse
+	87,  // 336: nagi.v1.SettingsService.TestAlertChannel:output_type -> nagi.v1.TestAlertChannelResponse
+	76,  // 337: nagi.v1.SettingsService.CreateInvite:output_type -> nagi.v1.CreateInviteResponse
+	79,  // 338: nagi.v1.SettingsService.ListInvites:output_type -> nagi.v1.ListInvitesResponse
+	81,  // 339: nagi.v1.SettingsService.RevokeInvite:output_type -> nagi.v1.RevokeInviteResponse
+	117, // 340: nagi.v1.SettingsService.CreateStandbyCode:output_type -> nagi.v1.CreateStandbyCodeResponse
+	119, // 341: nagi.v1.SettingsService.GetStandbys:output_type -> nagi.v1.GetStandbysResponse
+	139, // 342: nagi.v1.SettingsService.RemoveStandby:output_type -> nagi.v1.RemoveStandbyResponse
+	141, // 343: nagi.v1.SettingsService.PromoteStandby:output_type -> nagi.v1.PromoteStandbyResponse
+	143, // 344: nagi.v1.SettingsService.CheckPanelUpdate:output_type -> nagi.v1.CheckPanelUpdateResponse
+	148, // 345: nagi.v1.SettingsService.UpdatePanel:output_type -> nagi.v1.UpdatePanelResponse
+	145, // 346: nagi.v1.SettingsService.GetPanelReleaseNotes:output_type -> nagi.v1.GetPanelReleaseNotesResponse
+	151, // 347: nagi.v1.SettingsService.GetUpdateStatus:output_type -> nagi.v1.GetUpdateStatusResponse
+	69,  // 348: nagi.v1.SettingsService.GetSecurity:output_type -> nagi.v1.Security
+	71,  // 349: nagi.v1.SettingsService.BeginTOTP:output_type -> nagi.v1.BeginTOTPResponse
+	69,  // 350: nagi.v1.SettingsService.EnableTOTP:output_type -> nagi.v1.Security
+	69,  // 351: nagi.v1.SettingsService.DisableTOTP:output_type -> nagi.v1.Security
+	69,  // 352: nagi.v1.SettingsService.SetEntrance:output_type -> nagi.v1.Security
+	137, // 353: nagi.v1.SettingsService.ListActivity:output_type -> nagi.v1.ListActivityResponse
+	124, // 354: nagi.v1.SettingsService.ListUsers:output_type -> nagi.v1.ListUsersResponse
+	121, // 355: nagi.v1.SettingsService.CreateUser:output_type -> nagi.v1.PanelUser
+	127, // 356: nagi.v1.SettingsService.UpdateUser:output_type -> nagi.v1.UpdateUserResponse
+	129, // 357: nagi.v1.SettingsService.DeleteUser:output_type -> nagi.v1.DeleteUserResponse
+	132, // 358: nagi.v1.SettingsService.ListSessions:output_type -> nagi.v1.ListSessionsResponse
+	134, // 359: nagi.v1.SettingsService.RevokeSession:output_type -> nagi.v1.RevokeSessionResponse
+	63,  // 360: nagi.v1.SettingsService.ListAccessTokens:output_type -> nagi.v1.ListAccessTokensResponse
+	65,  // 361: nagi.v1.SettingsService.CreateAccessToken:output_type -> nagi.v1.CreateAccessTokenResponse
+	67,  // 362: nagi.v1.SettingsService.RevokeAccessToken:output_type -> nagi.v1.RevokeAccessTokenResponse
+	193, // 363: nagi.v1.SettingsService.ListAuditEvents:output_type -> nagi.v1.ListAuditEventsResponse
+	195, // 364: nagi.v1.SettingsService.GetAuditEvent:output_type -> nagi.v1.GetAuditEventResponse
+	197, // 365: nagi.v1.SettingsService.ExportAuditEvents:output_type -> nagi.v1.ExportAuditEventsChunk
+	205, // 366: nagi.v1.SettingsService.GetSessionPolicy:output_type -> nagi.v1.SessionPolicy
+	205, // 367: nagi.v1.SettingsService.SetSessionPolicy:output_type -> nagi.v1.SessionPolicy
+	207, // 368: nagi.v1.SettingsService.GetRecording:output_type -> nagi.v1.RecordingChunk
+	209, // 369: nagi.v1.SettingsService.GetAuditSettings:output_type -> nagi.v1.AuditSettings
+	209, // 370: nagi.v1.SettingsService.SetAuditSettings:output_type -> nagi.v1.AuditSettings
+	212, // 371: nagi.v1.SettingsService.TestAuditSink:output_type -> nagi.v1.TestAuditSinkResponse
+	214, // 372: nagi.v1.SettingsService.VerifyAudit:output_type -> nagi.v1.AuditChainStatus
+	222, // 373: nagi.v1.SettingsService.BeginPasskeyRegistration:output_type -> nagi.v1.BeginPasskeyRegistrationResponse
+	69,  // 374: nagi.v1.SettingsService.AddPasskey:output_type -> nagi.v1.Security
+	69,  // 375: nagi.v1.SettingsService.DeletePasskey:output_type -> nagi.v1.Security
+	226, // 376: nagi.v1.SettingsService.GetAdminNetworks:output_type -> nagi.v1.AdminNetworks
+	226, // 377: nagi.v1.SettingsService.SetAdminNetworks:output_type -> nagi.v1.AdminNetworks
+	157, // 378: nagi.v1.ProjectService.ListProjects:output_type -> nagi.v1.ListProjectsResponse
+	242, // 379: nagi.v1.ProjectService.CreateProject:output_type -> nagi.v1.Project
+	238, // 380: nagi.v1.ProjectService.GetProject:output_type -> nagi.v1.ProjectSummary
+	242, // 381: nagi.v1.ProjectService.UpdateProjectSettings:output_type -> nagi.v1.Project
+	242, // 382: nagi.v1.ProjectService.SetProjectGroup:output_type -> nagi.v1.Project
+	28,  // 383: nagi.v1.ProjectService.RenameProjectGroup:output_type -> nagi.v1.RenameLabelResponse
+	162, // 384: nagi.v1.ProjectService.SaveSharedEnv:output_type -> nagi.v1.SaveSharedEnvResponse
+	242, // 385: nagi.v1.ProjectService.DiscardSharedEnv:output_type -> nagi.v1.Project
+	164, // 386: nagi.v1.ProjectService.DeleteProject:output_type -> nagi.v1.DeleteProjectResponse
+	242, // 387: nagi.v1.ProjectService.AddContainer:output_type -> nagi.v1.Project
+	242, // 388: nagi.v1.ProjectService.ImportComposeDir:output_type -> nagi.v1.Project
+	242, // 389: nagi.v1.ProjectService.DeleteContainer:output_type -> nagi.v1.Project
+	275, // 390: nagi.v1.ProjectService.ControlContainer:output_type -> nagi.v1.DeployEvent
+	242, // 391: nagi.v1.ProjectService.SaveDraft:output_type -> nagi.v1.Project
+	242, // 392: nagi.v1.ProjectService.DiscardDraft:output_type -> nagi.v1.Project
+	275, // 393: nagi.v1.ProjectService.Deploy:output_type -> nagi.v1.DeployEvent
+	172, // 394: nagi.v1.ProjectService.ListVersions:output_type -> nagi.v1.ListVersionsResponse
+	137, // 395: nagi.v1.ProjectService.ListContainerEvents:output_type -> nagi.v1.ListActivityResponse
+	137, // 396: nagi.v1.ProjectService.ListProjectEvents:output_type -> nagi.v1.ListActivityResponse
+	275, // 397: nagi.v1.ProjectService.Rollback:output_type -> nagi.v1.DeployEvent
+	174, // 398: nagi.v1.ProjectService.ListDeployments:output_type -> nagi.v1.ListDeploymentsResponse
+	275, // 399: nagi.v1.ProjectService.RestoreDeployment:output_type -> nagi.v1.DeployEvent
+	279, // 400: nagi.v1.ProjectService.StreamLogs:output_type -> nagi.v1.LogLine
+	242, // 401: nagi.v1.ProjectService.SaveRoute:output_type -> nagi.v1.Project
+	242, // 402: nagi.v1.ProjectService.DeleteRoute:output_type -> nagi.v1.Project
+	182, // 403: nagi.v1.ProjectService.CheckDomains:output_type -> nagi.v1.CheckDomainsResponse
+	180, // 404: nagi.v1.ProjectService.RetryDomainCert:output_type -> nagi.v1.RetryDomainCertResponse
+	242, // 405: nagi.v1.ProjectService.SetBackupNodes:output_type -> nagi.v1.Project
+	242, // 406: nagi.v1.ProjectService.SetContainerDisplayName:output_type -> nagi.v1.Project
+	242, // 407: nagi.v1.ProjectService.SetContainerAlertRules:output_type -> nagi.v1.Project
+	242, // 408: nagi.v1.ProjectService.SetContainerSnapshotSchedule:output_type -> nagi.v1.Project
+	242, // 409: nagi.v1.ProjectService.SyncBackup:output_type -> nagi.v1.Project
+	280, // 410: nagi.v1.ProjectService.ListBackupSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	275, // 411: nagi.v1.ProjectService.RestoreFromBackup:output_type -> nagi.v1.DeployEvent
+	275, // 412: nagi.v1.ProjectService.MigrateContainer:output_type -> nagi.v1.DeployEvent
+	275, // 413: nagi.v1.ProjectService.RedeployElsewhere:output_type -> nagi.v1.DeployEvent
+	242, // 414: nagi.v1.ProjectService.SetFailover:output_type -> nagi.v1.Project
+	242, // 415: nagi.v1.ProjectService.ClearFailover:output_type -> nagi.v1.Project
+	242, // 416: nagi.v1.ProjectService.ChangeWitness:output_type -> nagi.v1.Project
+	242, // 417: nagi.v1.ProjectService.ConfirmTakeover:output_type -> nagi.v1.Project
+	242, // 418: nagi.v1.ProjectService.ConnectProject:output_type -> nagi.v1.Project
+	242, // 419: nagi.v1.ProjectService.DisconnectProject:output_type -> nagi.v1.Project
+	281, // 420: nagi.v1.ProjectService.ListVolumes:output_type -> nagi.v1.ListVolumesResponse
+	282, // 421: nagi.v1.ProjectService.ListVolumeFiles:output_type -> nagi.v1.ListVolumeFilesResponse
+	283, // 422: nagi.v1.ProjectService.DeleteVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	283, // 423: nagi.v1.ProjectService.CreateVolumeDir:output_type -> nagi.v1.VolumeFileOpResponse
+	283, // 424: nagi.v1.ProjectService.RestoreVolumeFile:output_type -> nagi.v1.VolumeFileOpResponse
+	267, // 425: nagi.v1.ProjectService.RenameVolumeFile:output_type -> nagi.v1.FileOpResult
+	268, // 426: nagi.v1.ProjectService.MoveVolumeFiles:output_type -> nagi.v1.FileOpEvent
+	268, // 427: nagi.v1.ProjectService.CopyVolumeFiles:output_type -> nagi.v1.FileOpEvent
+	268, // 428: nagi.v1.ProjectService.CompressVolumeFiles:output_type -> nagi.v1.FileOpEvent
+	268, // 429: nagi.v1.ProjectService.ExtractVolumeFile:output_type -> nagi.v1.FileOpEvent
+	269, // 430: nagi.v1.ProjectService.ListVolumeDirSizes:output_type -> nagi.v1.DirSizesResponse
+	280, // 431: nagi.v1.ProjectService.ListSnapshots:output_type -> nagi.v1.ListSnapshotsResponse
+	275, // 432: nagi.v1.ProjectService.CreateSnapshot:output_type -> nagi.v1.DeployEvent
+	275, // 433: nagi.v1.ProjectService.RestoreSnapshot:output_type -> nagi.v1.DeployEvent
+	280, // 434: nagi.v1.ProjectService.DeleteSnapshot:output_type -> nagi.v1.ListSnapshotsResponse
+	185, // 435: nagi.v1.ProjectService.GetBackupKey:output_type -> nagi.v1.GetBackupKeyResponse
+	186, // 436: nagi.v1.ProjectService.ListRegistries:output_type -> nagi.v1.RegistriesResponse
+	186, // 437: nagi.v1.ProjectService.LoginRegistry:output_type -> nagi.v1.RegistriesResponse
+	186, // 438: nagi.v1.ProjectService.LogoutRegistry:output_type -> nagi.v1.RegistriesResponse
+	284, // 439: nagi.v1.ProjectService.CheckImages:output_type -> nagi.v1.CheckImagesResponse
+	267, // [267:440] is the sub-list for method output_type
+	94,  // [94:267] is the sub-list for method input_type
 	94,  // [94:94] is the sub-list for extension type_name
 	94,  // [94:94] is the sub-list for extension extendee
 	0,   // [0:94] is the sub-list for field type_name
@@ -14424,7 +14573,7 @@ func file_nagi_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_api_proto_rawDesc), len(file_nagi_v1_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   225,
+			NumMessages:   228,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

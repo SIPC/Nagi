@@ -173,6 +173,8 @@ const (
 	AuthService_Reverify_FullMethodName           = "/nagi.v1.AuthService/Reverify"
 	AuthService_BeginPasskeyLogin_FullMethodName  = "/nagi.v1.AuthService/BeginPasskeyLogin"
 	AuthService_PasskeyLogin_FullMethodName       = "/nagi.v1.AuthService/PasskeyLogin"
+	AuthService_GetProjectOrder_FullMethodName    = "/nagi.v1.AuthService/GetProjectOrder"
+	AuthService_SetProjectOrder_FullMethodName    = "/nagi.v1.AuthService/SetProjectOrder"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -203,6 +205,10 @@ type AuthServiceClient interface {
 	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
 	BeginPasskeyLogin(ctx context.Context, in *BeginPasskeyLoginRequest, opts ...grpc.CallOption) (*PasskeyChallenge, error)
 	PasskeyLogin(ctx context.Context, in *PasskeyLoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	// 自己的项目页排序（见 docs/panel.md#分组和标签）：排序方式和自定义顺序，存在面板上，每个成员各自一份。
+	GetProjectOrder(ctx context.Context, in *GetProjectOrderRequest, opts ...grpc.CallOption) (*ProjectOrder, error)
+	// 整份覆盖。
+	SetProjectOrder(ctx context.Context, in *ProjectOrder, opts ...grpc.CallOption) (*SetProjectOrderResponse, error)
 }
 
 type authServiceClient struct {
@@ -353,6 +359,26 @@ func (c *authServiceClient) PasskeyLogin(ctx context.Context, in *PasskeyLoginRe
 	return out, nil
 }
 
+func (c *authServiceClient) GetProjectOrder(ctx context.Context, in *GetProjectOrderRequest, opts ...grpc.CallOption) (*ProjectOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProjectOrder)
+	err := c.cc.Invoke(ctx, AuthService_GetProjectOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) SetProjectOrder(ctx context.Context, in *ProjectOrder, opts ...grpc.CallOption) (*SetProjectOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetProjectOrderResponse)
+	err := c.cc.Invoke(ctx, AuthService_SetProjectOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -381,6 +407,10 @@ type AuthServiceServer interface {
 	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
 	BeginPasskeyLogin(context.Context, *BeginPasskeyLoginRequest) (*PasskeyChallenge, error)
 	PasskeyLogin(context.Context, *PasskeyLoginRequest) (*LoginResponse, error)
+	// 自己的项目页排序（见 docs/panel.md#分组和标签）：排序方式和自定义顺序，存在面板上，每个成员各自一份。
+	GetProjectOrder(context.Context, *GetProjectOrderRequest) (*ProjectOrder, error)
+	// 整份覆盖。
+	SetProjectOrder(context.Context, *ProjectOrder) (*SetProjectOrderResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -432,6 +462,12 @@ func (UnimplementedAuthServiceServer) BeginPasskeyLogin(context.Context, *BeginP
 }
 func (UnimplementedAuthServiceServer) PasskeyLogin(context.Context, *PasskeyLoginRequest) (*LoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PasskeyLogin not implemented")
+}
+func (UnimplementedAuthServiceServer) GetProjectOrder(context.Context, *GetProjectOrderRequest) (*ProjectOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProjectOrder not implemented")
+}
+func (UnimplementedAuthServiceServer) SetProjectOrder(context.Context, *ProjectOrder) (*SetProjectOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProjectOrder not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -706,6 +742,42 @@ func _AuthService_PasskeyLogin_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_GetProjectOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetProjectOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetProjectOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetProjectOrder(ctx, req.(*GetProjectOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_SetProjectOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProjectOrder)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).SetProjectOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_SetProjectOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).SetProjectOrder(ctx, req.(*ProjectOrder))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -768,6 +840,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PasskeyLogin",
 			Handler:    _AuthService_PasskeyLogin_Handler,
+		},
+		{
+			MethodName: "GetProjectOrder",
+			Handler:    _AuthService_GetProjectOrder_Handler,
+		},
+		{
+			MethodName: "SetProjectOrder",
+			Handler:    _AuthService_SetProjectOrder_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

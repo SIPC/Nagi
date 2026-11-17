@@ -219,6 +219,43 @@ func (s *authService) SetLanguage(ctx context.Context, req *connect.Request[nagi
 	return connect.NewResponse(&nagiv1.SetLanguageResponse{}), nil
 }
 
+// 项目页排序的上限：顺序里最多这么多项，每项不超过这么长（项目 ID、分组名都远短于此）。
+const (
+	maxOrderItems = 5000
+	maxOrderItem  = 128
+)
+
+// GetProjectOrder 返回自己的项目页排序。
+func (s *authService) GetProjectOrder(ctx context.Context, _ *connect.Request[nagiv1.GetProjectOrderRequest]) (*connect.Response[nagiv1.ProjectOrder], error) {
+	o, err := s.Q.GetProjectOrder(ctx, auth.CurrentUser(ctx).ID)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.ProjectOrder{Sort: o.Sort, Groups: o.Groups, Projects: o.Projects}), nil
+}
+
+// SetProjectOrder 保存自己的项目页排序，整份覆盖。只影响自己看到的顺序，不检查项目和分组是否存在。
+func (s *authService) SetProjectOrder(ctx context.Context, req *connect.Request[nagiv1.ProjectOrder]) (*connect.Response[nagiv1.SetProjectOrderResponse], error) {
+	m := req.Msg
+	if sort := m.GetSort(); sort != "" && sort != "name" && sort != "custom" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("排序方式不正确"))
+	}
+	for _, list := range [][]string{m.GetGroups(), m.GetProjects()} {
+		if len(list) > maxOrderItems {
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("排序的项目过多"))
+		}
+		for _, v := range list {
+			if v == "" || len(v) > maxOrderItem || strings.ContainsAny(v, "\r\n") {
+				return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("排序的项目不正确"))
+			}
+		}
+	}
+	if err := s.Q.SetProjectOrder(ctx, auth.CurrentUser(ctx).ID, store.ProjectOrder{Sort: m.GetSort(), Groups: m.GetGroups(), Projects: m.GetProjects()}); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.SetProjectOrderResponse{}), nil
+}
+
 // avatarType 按内容判断头像的类型，不是允许的图片时返回空。头像显示在页面里，所以不接受 SVG 这类能带脚本的格式。
 func avatarType(avatar []byte) string {
 	switch t := http.DetectContentType(avatar); t {

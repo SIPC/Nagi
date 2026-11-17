@@ -40,6 +40,9 @@ var en = map[string]string{
 
 	// ---- 账号 ----
 	"语言只能是 zh-CN 或 en": "Language must be zh-CN or en",
+	"排序方式不正确":          "Invalid sort order",
+	"排序的项目过多":          "Too many items to sort",
+	"排序的项目不正确":         "Invalid item to sort",
 	"面板已完成初始化":         "The panel is already set up",
 	"初始化链接不正确，请使用面板启动日志里的初始化链接":            "This setup link isn't valid. Use the setup link from the panel's startup log",
 	"初始化链接已过期（24 小时内有效），请重启面板获取新的链接":       "The setup link has expired (it's valid for 24 hours). Restart the panel to get a new link",

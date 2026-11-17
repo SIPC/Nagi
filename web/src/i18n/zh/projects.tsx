@@ -38,6 +38,9 @@ export default {
     empty: "没有匹配的项目",
   },
   reorder: {
+    start: "调整顺序",
+    done: "完成",
+    hint: "拖动分组标题或项目卡片调整顺序。",
     instructions: "按空格键拿起，用方向键移动，再按空格键放下，按 Esc 取消。",
     picked: (name: string) => `已拿起 ${name}`,
     over: (name: string, target: string) => `${name} 移到 ${target} 的位置`,

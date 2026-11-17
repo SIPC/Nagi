@@ -82,6 +82,12 @@ const (
 	// AuthServicePasskeyLoginProcedure is the fully-qualified name of the AuthService's PasskeyLogin
 	// RPC.
 	AuthServicePasskeyLoginProcedure = "/nagi.v1.AuthService/PasskeyLogin"
+	// AuthServiceGetProjectOrderProcedure is the fully-qualified name of the AuthService's
+	// GetProjectOrder RPC.
+	AuthServiceGetProjectOrderProcedure = "/nagi.v1.AuthService/GetProjectOrder"
+	// AuthServiceSetProjectOrderProcedure is the fully-qualified name of the AuthService's
+	// SetProjectOrder RPC.
+	AuthServiceSetProjectOrderProcedure = "/nagi.v1.AuthService/SetProjectOrder"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodeDirProcedure is the fully-qualified name of the NodeService's ListNodeDir RPC.
@@ -660,6 +666,10 @@ type AuthServiceClient interface {
 	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
 	BeginPasskeyLogin(context.Context, *connect.Request[v1.BeginPasskeyLoginRequest]) (*connect.Response[v1.PasskeyChallenge], error)
 	PasskeyLogin(context.Context, *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error)
+	// 自己的项目页排序（见 docs/panel.md#分组和标签）：排序方式和自定义顺序，存在面板上，每个成员各自一份。
+	GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error)
+	// 整份覆盖。
+	SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -757,6 +767,18 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("PasskeyLogin")),
 			connect.WithClientOptions(opts...),
 		),
+		getProjectOrder: connect.NewClient[v1.GetProjectOrderRequest, v1.ProjectOrder](
+			httpClient,
+			baseURL+AuthServiceGetProjectOrderProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetProjectOrder")),
+			connect.WithClientOptions(opts...),
+		),
+		setProjectOrder: connect.NewClient[v1.ProjectOrder, v1.SetProjectOrderResponse](
+			httpClient,
+			baseURL+AuthServiceSetProjectOrderProcedure,
+			connect.WithSchema(authServiceMethods.ByName("SetProjectOrder")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -776,6 +798,8 @@ type authServiceClient struct {
 	reverify           *connect.Client[v1.ReverifyRequest, v1.ReverifyResponse]
 	beginPasskeyLogin  *connect.Client[v1.BeginPasskeyLoginRequest, v1.PasskeyChallenge]
 	passkeyLogin       *connect.Client[v1.PasskeyLoginRequest, v1.LoginResponse]
+	getProjectOrder    *connect.Client[v1.GetProjectOrderRequest, v1.ProjectOrder]
+	setProjectOrder    *connect.Client[v1.ProjectOrder, v1.SetProjectOrderResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -848,6 +872,16 @@ func (c *authServiceClient) PasskeyLogin(ctx context.Context, req *connect.Reque
 	return c.passkeyLogin.CallUnary(ctx, req)
 }
 
+// GetProjectOrder calls nagi.v1.AuthService.GetProjectOrder.
+func (c *authServiceClient) GetProjectOrder(ctx context.Context, req *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error) {
+	return c.getProjectOrder.CallUnary(ctx, req)
+}
+
+// SetProjectOrder calls nagi.v1.AuthService.SetProjectOrder.
+func (c *authServiceClient) SetProjectOrder(ctx context.Context, req *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error) {
+	return c.setProjectOrder.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
 	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
@@ -874,6 +908,10 @@ type AuthServiceHandler interface {
 	// 用通行密钥登录（见 docs/panel.md#通行密钥）：先取挑战，浏览器签名后提交。
 	BeginPasskeyLogin(context.Context, *connect.Request[v1.BeginPasskeyLoginRequest]) (*connect.Response[v1.PasskeyChallenge], error)
 	PasskeyLogin(context.Context, *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error)
+	// 自己的项目页排序（见 docs/panel.md#分组和标签）：排序方式和自定义顺序，存在面板上，每个成员各自一份。
+	GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error)
+	// 整份覆盖。
+	SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -967,6 +1005,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("PasskeyLogin")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceGetProjectOrderHandler := connect.NewUnaryHandler(
+		AuthServiceGetProjectOrderProcedure,
+		svc.GetProjectOrder,
+		connect.WithSchema(authServiceMethods.ByName("GetProjectOrder")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceSetProjectOrderHandler := connect.NewUnaryHandler(
+		AuthServiceSetProjectOrderProcedure,
+		svc.SetProjectOrder,
+		connect.WithSchema(authServiceMethods.ByName("SetProjectOrder")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -997,6 +1047,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceBeginPasskeyLoginHandler.ServeHTTP(w, r)
 		case AuthServicePasskeyLoginProcedure:
 			authServicePasskeyLoginHandler.ServeHTTP(w, r)
+		case AuthServiceGetProjectOrderProcedure:
+			authServiceGetProjectOrderHandler.ServeHTTP(w, r)
+		case AuthServiceSetProjectOrderProcedure:
+			authServiceSetProjectOrderHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1060,6 +1114,14 @@ func (UnimplementedAuthServiceHandler) BeginPasskeyLogin(context.Context, *conne
 
 func (UnimplementedAuthServiceHandler) PasskeyLogin(context.Context, *connect.Request[v1.PasskeyLoginRequest]) (*connect.Response[v1.LoginResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.PasskeyLogin is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.GetProjectOrder is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.SetProjectOrder is not implemented"))
 }
 
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
