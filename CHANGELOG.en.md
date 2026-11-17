@@ -8,6 +8,30 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.31.0
+
+### New features
+
+- The node page adds Images, where you can see the images on a node and what uses them, delete unused images, clean up, and pull images (administrators only).
+- You can choose where a backup node stores replicas: set a replica directory for the node, or a location for a single container. Existing replicas move to the new location automatically.
+- MCP supports the project, node and file management available on the web, including node files, node images and replica locations.
+- Access tokens add a "Panel administration" permission for viewing and changing panel settings and alert channels, viewing and exporting audit records, and updating the panel through MCP (administrators only).
+
+### Improvements
+
+- MCP confirmation codes can only be obtained from a preview and expire after a while.
+- Changing the panel's public address or domain sends a notification through the alert channels first.
+- Audit records no longer include file content written through MCP or alert channel webhook URLs.
+
+### Fixes
+
+- Fixed an issue where a background browser tab or multiple open tabs could falsely report a session key signature mismatch and ask to verify again.
+- Fixed several security issues involving container directories, replica locations and node images.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.31.0 to use image management and replica locations.
+
 ## v0.30.0
 
 ### New features
