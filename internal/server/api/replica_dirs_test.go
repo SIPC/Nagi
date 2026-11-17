@@ -66,3 +66,30 @@ func TestReplicaDirNeedsElevation(t *testing.T) {
 		}
 	}
 }
+
+// 访问令牌（MCP）做不了高权限确认：只有副本存放位置这两个接口，对勾了「可修改」和「节点终端」的管理员令牌放行
+// （工具先预览、用户同意后带确认码才调用）。别的要确认的接口，令牌照样被拦。
+func TestReplicaDirTokenElevation(t *testing.T) {
+	full := auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 7, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
+	noNode, noWrite, operator, session := full, full, full, auth.User{ID: 1, Role: auth.RoleAdmin}
+	noNode.AllowNodeExec = false
+	noWrite.AllowWrite = false
+	operator.Role = auth.RoleOperator
+	elevated := session
+	elevated.ElevatedUntil = time.Now().Add(time.Minute).Unix()
+	for _, p := range []string{nagiv1connect.NodeServiceSetNodeReplicaDirProcedure, nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure} {
+		for i, c := range []struct {
+			u    auth.User
+			want bool
+		}{{full, true}, {noNode, false}, {noWrite, false}, {operator, false}, {session, false}, {elevated, true}} {
+			if got := elevationOK(c.u, p); got != c.want {
+				t.Errorf("%s case %d：elevationOK = %v，想要 %v", p, i, got, c.want)
+			}
+		}
+	}
+	for p := range elevationRequired {
+		if !tokenElevation[p] && elevationOK(full, p) {
+			t.Errorf("令牌不应该免去 %s 的高权限确认", p)
+		}
+	}
+}

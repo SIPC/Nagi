@@ -79,6 +79,22 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure: true,
 }
 
+// tokenElevation 是访问令牌（MCP）不做高权限确认也能调用的接口。令牌没法交互地确认身份，由 MCP 工具先给预览、
+// 用户同意后带上按工具、节点和参数算出的确认码才调用（见 docs/mcp.md#副本的存放位置）。只给管理员的令牌，
+// 而且要勾了「可修改」和「节点终端」：这些接口让节点以 root 在任意位置写数据，和节点命令同一级。
+var tokenElevation = map[string]bool{
+	nagiv1connect.NodeServiceSetNodeReplicaDirProcedure:      true,
+	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure: true,
+}
+
+// elevationOK 判断要高权限确认的接口能不能调用：会话做过确认，或者是 tokenElevation 里的接口、令牌符合条件。
+func elevationOK(u auth.User, procedure string) bool {
+	if u.Elevated() {
+		return true
+	}
+	return u.TokenID != 0 && tokenElevation[procedure] && u.Role == auth.RoleAdmin && u.AllowWrite && u.AllowNodeExec
+}
+
 func elevationError() error {
 	err := connect.NewError(connect.CodePermissionDenied, i18n.New("请先验证身份"))
 	err.Meta().Set(elevationHeader, "required")
@@ -90,7 +106,7 @@ type elevationCheck struct{}
 
 func (elevationCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		if elevationRequired[req.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+		if elevationRequired[req.Spec().Procedure] && !elevationOK(auth.CurrentUser(ctx), req.Spec().Procedure) {
 			return nil, elevationError()
 		}
 		return next(ctx, req)
@@ -103,7 +119,7 @@ func (elevationCheck) WrapStreamingClient(next connect.StreamingClientFunc) conn
 
 func (elevationCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		if elevationRequired[conn.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+		if elevationRequired[conn.Spec().Procedure] && !elevationOK(auth.CurrentUser(ctx), conn.Spec().Procedure) {
 			return elevationError()
 		}
 		return next(ctx, conn)
