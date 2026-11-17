@@ -11,7 +11,9 @@ import (
 // 面板看不到终端的回显状态（容器终端的 pty 在容器里），所以按回显判断，而且判断得很严：宁可把有回显的
 // 当成没有回显（只记个数），也不能把密码当成回显录下来。
 //   - 回车之前：敲的字符要由紧接着的输出原样开头（去掉颜色等控制序列以后）才算回显。
-//     中间有别的输出、或者输出开头对不上，就算没有回显。
+//     中间有别的输出、或者输出开头对不上，就算没有回显。一个个敲的字符还要求这段输出正好就是它们的回显：
+//     开头对上、后面还有别的（例如先敲了密码、提示符才出来），也算没有回显。
+//     粘贴的一整段可以只是输出的开头，也可以分几段回显。
 //   - 按回车时：还在等回显的字符合成一整串，要由回车之后的输出原样开头、并且紧跟着换行（回车本身的回显）
 //     才算回显（粘贴一条命令再回车就是这样）。输密码时回显关着，回车后的输出是程序自己打印的换行、
 //     「Sorry, try again」或新的提示符，开头对不上，整串记成未回显。
@@ -200,13 +202,35 @@ func (rec *Recorder) matchEchoLocked(out string, now time.Time) {
 				rec.typed = rec.typed[1:]
 			}
 		default:
-			if after, ok := strings.CutPrefix(rest, t.text); ok {
-				rec.inputEventAt(t.at, t.text)
-				rec.typed = rec.typed[1:]
+			// 从 t 起，连续对上的都算进这一段（打字比回显快时，几个字符的回显在同一段输出里）。
+			n, after := 0, rest
+			single := true
+			for n < len(rec.typed) && !rec.typed[n].entered && !rec.typed[n].needNewline && after != "" {
+				a, ok := strings.CutPrefix(after, rec.typed[n].text)
+				if !ok {
+					break
+				}
+				if utf8.RuneCountInString(rec.typed[n].text) > 1 {
+					single = false
+				}
+				n, after = n+1, a
+			}
+			if n > 0 {
+				// 一个个敲的字符：输出（去掉控制序列以后）必须正好是它们的回显，后面不能还有别的。输密码时回显关着，
+				// 这时恰好到达的输出（后来才打印的提示符「Password: 」、后台日志）开头对上了，不能当成回显。
+				// 粘贴的一整段不受这个限制。
+				if single && after != "" {
+					rec.hideLocked(rec.typed[:n])
+				} else {
+					for _, e := range rec.typed[:n] {
+						rec.inputEventAt(e.at, e.text)
+					}
+				}
+				rec.typed = rec.typed[n:]
 				rest = after
 				continue
 			}
-			if strings.HasPrefix(t.text, rest) {
+			if utf8.RuneCountInString(t.text) > 1 && strings.HasPrefix(t.text, rest) {
 				// 回显被拆成了几段输出（粘贴的长命令）：先录对上的部分，剩下的接着等。
 				rec.inputEventAt(t.at, rest)
 				t.text = t.text[len(rest):]

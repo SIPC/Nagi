@@ -160,3 +160,39 @@ func TestRecordingInputPasteSplitNewline(t *testing.T) {
 		t.Fatalf("应照录：%q", got)
 	}
 }
+
+// S1：输密码时回显关着，这时恰好到达的输出开头和刚敲的字符对上（先敲了密码、提示符才出来；后台日志），
+// 之前会被当成回显。现在一个个敲的字符要求这段输出正好就是它们的回显。
+func TestRecordingInputCoincidentPrefix(t *testing.T) {
+	cases := []struct {
+		typed string
+		out   string
+	}{
+		{"Password1", "Password: "},
+		{"hun", "hunting for updates...\r\n"},
+	}
+	for _, c := range cases {
+		r := testRecordings(t)
+		rec := r.Start(context.Background(), 80, 24)
+		for _, ch := range c.typed {
+			rec.Input([]byte(string(ch)))
+		}
+		rec.Output([]byte(c.out))
+		rec.Input([]byte("\r"))
+		rec.Output([]byte("\r\n"))
+		for _, ev := range inputEvents(t, readAll(t, r, rec.Close().ID)) {
+			if ev != "⏎" && strings.Trim(ev, "•") != "" {
+				t.Fatalf("敲了 %q、输出 %q：被当成了回显：%q", c.typed, c.out, ev)
+			}
+		}
+	}
+	// 打字比回显快：几个字符的回显在同一段里，照录。
+	r := testRecordings(t)
+	rec := r.Start(context.Background(), 80, 24)
+	rec.Input([]byte("l"))
+	rec.Input([]byte("s"))
+	rec.Output([]byte("\x1b[1ml\x1b[0ms"))
+	if got := strings.Join(inputEvents(t, readAll(t, r, rec.Close().ID)), "|"); got != "l|s" {
+		t.Fatalf("同一段里的两个回显应照录：%q", got)
+	}
+}
