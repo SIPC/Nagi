@@ -31,7 +31,9 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 
 只给管理员的前提是操作员没有别的路拿到 root。容器能以特权运行或者挂载主机目录时，就等于拿到了 root，所以这类配置只有管理员能保存（`spec.PrivilegeReasons`）。能碰到别的项目的容器、卷和网络的写法也一样（限定了项目范围的操作员不能借此越过范围）：
 
-- `privileged`，`cap_add`、`devices`、`security_opt` 等扩大权限的字段
+- 服务字段按白名单判断：`image`、`command`、`environment`、`ports`、`healthcheck`、`restart`、资源限制这类不碰节点的字段直接放行（`safeServiceFields`），下面单独检查值的字段按规则判断，其余字段一律算有特权，`x-` 开头的扩展字段除外。例如 `privileged`，`cap_add`、`devices`、`security_opt`、`gpus`、`blkio_config`，以及把节点的 docker.sock 挂进容器的 `use_api_socket`。compose 还在不断增加字段，节点上的版本也不由 Nagi 决定，所以不按「已知危险的字段」逐个列。顶层段同样按白名单，`services`、`volumes`、`networks`、`secrets`、`configs`、`name`、`version` 和 `x-` 以外的（例如 `models`）算有特权
+- `logging` 的驱动只放行 `json-file`、`local`、`none`：`syslog`、`gelf`、`fluentd` 这类由 dockerd 在节点的网络里发送，能绕过[出站限制](agent.md#出站限制)访问节点所在的内网；`deploy` 里的设备（`resources.reservations.devices`）；`label_file` 和 `env_file` 一样只能是容器目录里的相对路径
+- YAML 写法上：多个文档、显式标签（包括 `!!merge` 这类标准标签）、`%TAG` 这类指令，普通的 YAML 解析和 compose 理解不一样，一律算有特权；另外按 compose 自己的解析库（`compose-go`）读出的结果再检查一遍，解析不了的也算有特权
 - `network_mode`、`pid`、`ipc`、`uts`、`userns_mode`、`cgroup` 设为 `none`、`bridge`、`default`、`private`、`shareable` 和指向同一个 compose 里的服务的 `service:<服务>` 以外的值：`host` 和节点共用，`container:<名字>` 和节点上任意一个容器（包括别的项目的）共用，`network_mode` 写网络名时直接接进那个网络
 - `volumes_from`
 - 一个挂载的源路径包含另一个挂载的源路径或 `secrets`、`configs` 的文件（例如同时挂载 `.` 和 `./uploads`）：能写上级目录的容器可以把下级换成符号链接，Docker 下次启动容器时会跟着它挂载宿主机的目录

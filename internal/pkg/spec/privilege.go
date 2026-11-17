@@ -29,6 +29,29 @@ var privilegedFields = []string{
 	"provider",
 }
 
+// safeServiceFields 是服务里不碰节点的字段，不用再看值。服务字段按白名单判断：不在这里、也不在下面单独检查的字段
+// （privilegedFields、hookFields、hostModeFields、env_file、label_file、volumes、logging、deploy）一律算有特权，
+// x- 开头的扩展字段除外。compose 还在不断增加字段（例如 use_api_socket 把节点的 docker.sock 挂进容器），
+// 节点上的版本也不由 Nagi 决定，按「已知危险的字段」逐个列出总会漏掉新字段。
+var safeServiceFields = []string{
+	"image", "command", "entrypoint", "environment", "ports", "expose", "healthcheck", "restart", "depends_on",
+	"labels", "annotations", "working_dir", "user", "group_add", "hostname", "domainname", "container_name",
+	"networks", "dns", "dns_opt", "dns_search", "extra_hosts", "links", "mac_address",
+	"configs", "secrets", "tmpfs", "read_only", "init", "tty", "stdin_open", "attach",
+	"stop_signal", "stop_grace_period", "platform", "pull_policy", "pull_refresh_after", "profiles", "scale",
+	"cpus", "cpu_count", "cpu_percent", "cpu_shares", "cpu_period", "cpu_quota", "cpuset",
+	"mem_limit", "mem_reservation", "mem_swappiness", "memswap_limit", "shm_size", "pids_limit", "ulimits",
+	"oom_kill_disable", "oom_score_adj", "sysctls", "isolation",
+}
+
+// safeTopLevel 是顶层不碰节点的段（volumes、networks、secrets、configs 另外检查值）。其他顶层段一律算有特权，
+// x- 开头的除外（例如 models、include）。
+var safeTopLevel = []string{"services", "volumes", "networks", "secrets", "configs", "name", "version"}
+
+// safeLogDrivers 是在容器自己那里写日志的驱动：syslog、gelf、fluentd 这类由 dockerd 在节点的网络里发出去，
+// 能绕过出站限制访问节点所在的内网。
+var safeLogDrivers = []string{"", "json-file", "local", "none"}
+
 // hookFields 是容器的生命周期钩子：在容器里执行命令，可以单独设 privileged，以特权执行。
 var hookFields = []string{"post_start", "pre_stop"}
 
@@ -123,6 +146,32 @@ func composeModel(text string) (map[string]any, error) {
 }
 
 func checkService(name string, svc map[string]any, services map[string]any, add func(bool, string, ...any)) {
+	checked := []string{"env_file", "label_file", "volumes", "logging", "deploy"}
+	for field, v := range svc {
+		switch {
+		case strings.HasPrefix(field, "x-"), slices.Contains(safeServiceFields, field), slices.Contains(checked, field),
+			slices.Contains(privilegedFields, field), slices.Contains(hookFields, field), slices.Contains(hostModeFields, field):
+		default:
+			add(hasVar(v), "%s: %s", name, field)
+		}
+	}
+	// label_file 和 env_file 一样由 compose 在节点上以 root 读取，只能是容器目录里的相对路径。
+	for _, v := range listOf(svc["label_file"]) {
+		if s, ok := v.(string); !ok || !safeRelative(s) {
+			add(hasVar(v), "%s: label_file", name)
+		}
+	}
+	if v, ok := svc["logging"]; ok && v != nil {
+		m, isMap := v.(map[string]any)
+		driver, _ := m["driver"].(string)
+		if !isMap || !slices.Contains(safeLogDrivers, driver) {
+			add(hasVar(v), "%s: logging", name)
+		}
+	}
+	// deploy 里只有设备（GPU 这类）碰节点：resources.reservations.devices。
+	if v, ok := svc["deploy"]; ok && v != nil && containsKey(v, "devices") {
+		add(hasVar(v), "%s: deploy.devices", name)
+	}
 	for _, field := range privilegedFields {
 		v, ok := svc[field]
 		if !ok || v == nil || v == false {
@@ -190,7 +239,31 @@ func checkService(name string, svc map[string]any, services map[string]any, add 
 	}
 }
 
+// containsKey 判断 v 里（任意层）有没有名为 key 的字段。
+func containsKey(v any, key string) bool {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, e := range x {
+			if k == key || containsKey(e, key) {
+				return true
+			}
+		}
+	case []any:
+		for _, e := range x {
+			if containsKey(e, key) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func checkTopLevel(doc map[string]any, add func(bool, string, ...any)) {
+	for section, v := range doc {
+		if section != "include" && !strings.HasPrefix(section, "x-") && !slices.Contains(safeTopLevel, section) {
+			add(hasVar(v), "%s", section)
+		}
+	}
 	for _, section := range []string{"secrets", "configs"} {
 		m, _ := doc[section].(map[string]any)
 		for name, raw := range m {
