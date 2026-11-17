@@ -10,7 +10,11 @@ import (
 func TestSignVerify(t *testing.T) {
 	key, other := []byte("0123456789abcdef0123456789abcdef"), []byte("another key another key another!")
 	now := time.Unix(1_800_000_000, 0)
-	c := Claims{Node: "n1", Kind: KindVolume, Project: "p", Container: "web", Volume: "data", Path: "a/b.txt", Expires: now.Add(TTL).Unix()}
+	c := Claims{Node: "n1", Kind: KindVolume, Project: "p", Container: "web", Volume: "data", Path: "a/b.txt", Expires: now.Add(TTL).Unix(),
+		ID: NewID(), User: "bob"}
+	if TTL > 5*time.Minute {
+		t.Fatalf("链接的有效期应不超过 5 分钟：%v", TTL)
+	}
 	tok := Sign(key, c)
 	if got, err := Verify([][]byte{other, key}, tok, now); err != nil || got != c {
 		t.Fatalf("应该通过：%+v %v", got, err)
@@ -18,8 +22,9 @@ func TestSignVerify(t *testing.T) {
 	if _, err := Verify([][]byte{other}, tok, now); err != ErrInvalid {
 		t.Errorf("别的密钥不该通过：%v", err)
 	}
-	if _, err := Verify([][]byte{key}, tok, now.Add(TTL+time.Second)); err != ErrExpired {
-		t.Errorf("过期的不该通过：%v", err)
+	// 过期的不通过，但签名对得上，返回链接里的内容（节点记进本地审计）。
+	if got, err := Verify([][]byte{key}, tok, now.Add(TTL+time.Second)); err != ErrExpired || got.ID != c.ID {
+		t.Errorf("过期的不该通过：%+v %v", got, err)
 	}
 	// 改了内容（换一个文件）签名就对不上。
 	payload, sig, _ := strings.Cut(tok, ".")

@@ -267,12 +267,33 @@ func (s *settingsService) lastAdmin(ctx context.Context, u store.User) (bool, er
 	return n <= 1, err
 }
 
+// roleRank 是角色的权限高低，用来判断是不是降低了角色。
+func roleRank(role string) int {
+	switch role {
+	case auth.RoleAdmin:
+		return 3
+	case auth.RoleOperator:
+		return 2
+	case auth.RoleViewer:
+		return 1
+	}
+	return 0
+}
+
 func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[nagiv1.UpdateUserRequest]) (*connect.Response[nagiv1.UpdateUserResponse], error) {
 	m := req.Msg
 	u, err := s.Q.GetUserByID(ctx, m.GetId())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("成员不存在"))
 	}
+	// 降低角色、重置密码、修改访问范围都可能撤销这个成员已有的权限：之后换掉直连下载的密钥，
+	// 让他已经拿到的链接立即失效（见 revokeDirectLinks）。中途出错时已经改了的部分也算。
+	revoked := false
+	defer func() {
+		if revoked {
+			s.revokeDirectLinks()
+		}
+	}()
 	if sc := m.GetScope(); sc != nil {
 		if err := s.checkScope(ctx, sc); err != nil {
 			return nil, err
@@ -292,6 +313,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if err := s.Q.SetUserRole(ctx, store.SetUserRoleParams{Role: role, ID: u.ID}); err != nil {
 			return nil, err
 		}
+		revoked = roleRank(role) < roleRank(u.Role)
 	}
 	if m.GetPassword() != "" {
 		if err := checkNewPassword(m.GetPassword()); err != nil {
@@ -304,6 +326,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if err := s.Q.UpdatePassword(ctx, store.UpdatePasswordParams{PasswordHash: hash, ID: u.ID}); err != nil {
 			return nil, err
 		}
+		revoked = true
 		// 别人重置了密码，这个用户已有的登录和访问令牌都要失效。
 		if err := s.Q.DeleteUserSessions(ctx, u.ID); err != nil {
 			return nil, err
@@ -325,6 +348,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		}
 	}
 	if sc := m.GetScope(); sc != nil {
+		revoked = true
 		if err := s.saveScope(ctx, u.ID, sc); err != nil {
 			return nil, err
 		}
@@ -351,6 +375,7 @@ func (s *settingsService) DeleteUser(ctx context.Context, req *connect.Request[n
 	if err := s.Q.DeleteUser(ctx, id); err != nil {
 		return nil, err
 	}
+	s.revokeDirectLinks()
 	return connect.NewResponse(&nagiv1.DeleteUserResponse{}), nil
 }
 
@@ -388,5 +413,6 @@ func (s *settingsService) RevokeSession(ctx context.Context, req *connect.Reques
 	if n == 0 {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("登录设备不存在"))
 	}
+	s.revokeDirectLinks()
 	return connect.NewResponse(&nagiv1.RevokeSessionResponse{}), nil
 }

@@ -129,6 +129,8 @@ type Conn struct {
 	directKey  []byte
 	directAddr string
 	directSent bool
+	// directPush：同一时间只告诉节点一次密钥（连上时的和换密钥的可能同时），两边最后的密钥一样。
+	directPush sync.Mutex
 }
 
 // Pending 返回节点是否在等管理员批准。

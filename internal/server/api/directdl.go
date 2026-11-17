@@ -1,18 +1,62 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"github.com/SIPC/nagi/internal/pkg/directdl"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/nodes"
 )
 
-// 直连下载（见 docs/agent.md#直连下载）：权限和经面板下载一样在这里检查，通过后签一个 15 分钟有效的链接，
-// 浏览器拿着它直接从节点下载。节点不能直连时回 204，浏览器照旧经面板下载。签发链接时就记进活动记录：
-// 之后的下载不经面板，面板看不到。
+// revokeDirectLinks 在成员的权限被撤销后调用：给各节点换直连下载的密钥，之前签的链接立即失效
+// （链接不绑定用户，见 nodes.Registry.RotateDirect）。在后台进行，不拖慢请求；正在换时再调用，
+// 换完以后再换一次（合并成一次），不同时发很多次。
+func (a *API) revokeDirectLinks() {
+	if a.Nodes == nil {
+		return
+	}
+	r := &a.directRot
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.running {
+		r.again = true
+		return
+	}
+	r.running = true
+	go func() {
+		for {
+			rotateDirect(a.Nodes)
+			r.mu.Lock()
+			if !r.again {
+				r.running = false
+				r.mu.Unlock()
+				return
+			}
+			r.again = false
+			r.mu.Unlock()
+		}
+	}()
+}
+
+type directRotation struct {
+	mu      sync.Mutex
+	running bool
+	again   bool
+}
+
+// rotateDirect 是 Registry.RotateDirect，测试里换掉。
+var rotateDirect = func(r *nodes.Registry) { r.RotateDirect() }
+
+// 直连下载（见 docs/agent.md#直连下载）：权限和经面板下载一样在这里检查，通过后签一个 5 分钟有效的链接，
+// 浏览器拿着它直接从节点下载。节点不能直连时回 204，浏览器照旧经面板下载。签发链接时就记进活动记录，
+// 带上链接的编号（direct_link）：之后的下载不经面板，由节点记进它的本地审计（同一个编号），随节点的审计外送。
+// 撤销成员的权限时面板给各节点换密钥，没过期的链接也立即失效（revokeDirectLinks）。
 
 func writeDirect(w http.ResponseWriter, url string) {
 	if url == "" {
@@ -59,10 +103,11 @@ func (a *API) VolumeDirectHandler() http.Handler {
 			writeDirect(w, "")
 			return
 		}
+		id := directdl.NewID()
 		url := conn.DirectLink(directdl.Claims{Kind: directdl.KindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
-			Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath()})
+			Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath(), ID: id, User: u.Name})
 		if url != "" {
-			a.recordOperation(ctx, "/DownloadVolumeFile", ref, "")
+			a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, map[string]any{"direct_link": id})
 		}
 		writeDirect(w, url)
 	})
@@ -94,9 +139,12 @@ func (a *API) NodeDirectHandler() http.Handler {
 			writeDirect(w, "")
 			return
 		}
-		url := conn.DirectLink(directdl.Claims{Kind: directdl.KindNode, Path: path})
+		id := directdl.NewID()
+		url := conn.DirectLink(directdl.Claims{Kind: directdl.KindNode, Path: path, ID: id, User: u.Name})
 		if url != "" {
-			a.recordNodeAccess(ctx, "DownloadNodeFile", nodeID, path, false)
+			b, _ := json.Marshal(map[string]string{"detail": path, "direct_link": id})
+			a.Record(context.WithoutCancel(ctx), audit.Event{Action: "DownloadNodeFile", TargetType: "node", TargetID: nodeID,
+				TargetName: a.nodeName(ctx, nodeID), Params: string(b)})
 		}
 		writeDirect(w, url)
 	})
