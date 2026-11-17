@@ -8,6 +8,47 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.29.1
+
+### New features
+
+- The project list can be sorted by "Custom": drag groups, and projects within a group, to reorder them (saved in this browser only).
+- A node that repeatedly fails to start after an upgrade goes back to its previous version automatically.
+- Terminal replays record typed commands. Input that isn't echoed, such as passwords, is recorded only as a character count. The replay lists the input, and clicking a line jumps to it.
+- A terminal that is still open can be replayed from the audit log up to the current point.
+
+### Improvements
+
+- Replays of commands run through MCP include the command and its full output.
+- The panel now forwards nodes' audit records, so nodes no longer store credentials for log forwarding destinations.
+
+- Groups animate when they expand and collapse.
+- The master key and secure entry moved to Settings > Panel access, and "Security" in Settings is renamed "Security policy".
+- Shortening audit record retention, relaxing the egress restriction and turning off a container's own alert rules now ask for confirmation.
+- Layout, spacing, type sizes and wording are consistent across pages.
+
+### Fixes
+
+- Fixes an issue where opening a node or container terminal signed you out.
+- Fixes an issue where phone browsers were often asked to verify identity again.
+- Fixes an issue where switching a phone browser to "desktop site" signed you out.
+- Fixes an issue where having several tabs open caused a session key signature mismatch.
+- Fixes an issue where the egress restriction blocked containers from reaching domains on their own node.
+- Fixes an issue where changing project links or migrating a container reported unauthorized requests between nodes.
+- Fixes several security issues in log forwarding, sessions, passkeys, egress restriction, replica sync and standby panels.
+
+### Behavior changes
+
+- Switching back and forth between Wi-Fi and mobile data no longer asks for identity verification. It's recorded in the audit log.
+- Administrators no longer need to verify again when switching between their last 5 verified networks.
+- Editing or testing a log forwarding destination and shortening audit record retention require identity verification.
+- The egress restriction only allows ports the node exposes on its public addresses.
+- You need to sign in again once after upgrading.
+
+### Upgrade notes
+
+- Nodes must be upgraded to v0.29.1 for the egress restriction and unauthorized-request fixes to take effect. Automatic return to the previous version applies to upgrades after v0.29.1.
+
 ## v0.29.0
 
 ### New features
