@@ -173,6 +173,12 @@ func (s *meshService) VolumeUploadPart(stream nagiv1.MeshService_VolumeUploadPar
 	if err := s.checkMeshPanel(stream.Context(), nagiv1.MeshService_VolumeUploadPart_FullMethodName); err != nil {
 		return err
 	}
+	// 每一块都整块读进内存核对哈希，和节点文件的块一样占上传名额，限制同时占用的内存。
+	release, err := acquireUpload()
+	if err != nil {
+		return err
+	}
+	defer release()
 	first, err := stream.Recv()
 	if err != nil {
 		return err

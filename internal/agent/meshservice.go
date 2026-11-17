@@ -19,13 +19,17 @@ const maxUploads = 4
 
 var uploadSlots = make(chan struct{}, maxUploads)
 
+// UploadBusy 是上传名额满了时的说明。面板的分块上传按它区分「稍后重试」和「磁盘空间不足」
+// （都是 ResourceExhausted），见 internal/server/api/chunkupload.go 的 chunkFail。
+const UploadBusy = "节点正在接收其他上传，请稍后重试"
+
 // acquireUpload 占一个上传名额，返回的函数释放它。满了时返回 ResourceExhausted。
 func acquireUpload() (func(), error) {
 	select {
 	case uploadSlots <- struct{}{}:
 		return func() { <-uploadSlots }, nil
 	default:
-		return nil, status.Error(codes.ResourceExhausted, "节点正在接收其他上传，请稍后重试")
+		return nil, status.Error(codes.ResourceExhausted, UploadBusy)
 	}
 }
 

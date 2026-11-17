@@ -2,6 +2,9 @@ module github.com/SIPC/nagi
 
 go 1.26.2
 
+// 构建用的 Go 至少是这个补丁版本：旧版本标准库有已知漏洞（例如 os.Root 的 GO-2026-4970）。
+toolchain go1.26.11
+
 require (
 	connectrpc.com/connect v1.21.1
 	github.com/apernet/quic-go v0.63.1-0.20261004180939-a10df75c260c

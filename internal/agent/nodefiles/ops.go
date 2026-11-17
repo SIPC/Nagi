@@ -75,18 +75,34 @@ func (s *Service) checkDest(real string, confirmed bool) error {
 func (s *Service) checkTree(real string) error {
 	for _, d := range s.deniedDirs() {
 		if under(d, real) {
-			return denied("目录包含 Nagi 数据目录，无法删除或移动")
+			return denied("目录包含 Nagi 数据目录，无法删除、移动或覆盖")
 		}
 	}
 	for _, d := range s.managedDirs() {
 		if under(d, real) {
-			return denied("目录包含容器目录，无法删除或移动")
+			return denied("目录包含容器目录，无法删除、移动或覆盖")
 		}
 	}
 	for _, m := range mountPoints() {
 		if under(m, real) {
-			return denied("不能删除或移动挂载点或包含挂载点的目录")
+			return denied("不能删除、移动或覆盖挂载点或包含挂载点的目录")
 		}
+	}
+	return nil
+}
+
+// checkReplace：覆盖同名时，被替换掉的旧内容按删除的规则检查：不能覆盖一级目录（含其中的文件），
+// 被替换的旧目录里不能有 Nagi 数据目录、容器目录或挂载点。目标不存在时不用检查。
+func (s *Service) checkReplace(dst string) error {
+	info, err := os.Lstat(dst)
+	if err != nil {
+		return nil
+	}
+	if path.Dir(dst) == "/" {
+		return denied("不能覆盖根目录下的项目")
+	}
+	if info.IsDir() {
+		return s.checkTree(dst)
 	}
 	return nil
 }
@@ -189,6 +205,11 @@ func (s *Service) Transfer(ctx context.Context, req *nagiv1.NodeTransferRequest,
 		}
 		if err := s.checkDest(dst, req.GetConfirmed()); err != nil {
 			return nil, err
+		}
+		if policy == fileops.ConflictOverwrite && dst != real {
+			if err := s.checkReplace(dst); err != nil {
+				return nil, err
+			}
 		}
 		it := nodeItem{src: real, dst: dst, info: info, same: dst == real}
 		if it.same && !req.GetCopy() {
@@ -445,6 +466,11 @@ func (s *Service) Extract(ctx context.Context, req *nagiv1.NodeExtractRequest, p
 		if info, err := os.Stat(parent); err != nil || !info.IsDir() {
 			return nil, invalid("目标目录不存在")
 		}
+		if policy == fileops.ConflictOverwrite {
+			if err := s.checkReplace(dest); err != nil {
+				return nil, err
+			}
+		}
 	} else {
 		if dest, err = s.destDirOf(req.GetDestDir(), req.GetConfirmed()); err != nil {
 			return nil, err
@@ -453,6 +479,11 @@ func (s *Service) Extract(ctx context.Context, req *nagiv1.NodeExtractRequest, p
 		for _, top := range a.Top {
 			if err := s.checkDest(path.Join(dest, top), req.GetConfirmed()); err != nil {
 				return nil, err
+			}
+			if policy == fileops.ConflictOverwrite {
+				if err := s.checkReplace(path.Join(dest, top)); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

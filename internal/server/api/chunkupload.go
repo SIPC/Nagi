@@ -43,6 +43,9 @@ type chunkUploader struct {
 	record func(failure string)
 }
 
+// uploadBusy 和节点的 agent.UploadBusy 相同（面板不引用节点的包）：节点的上传名额满了。
+const uploadBusy = "节点正在接收其他上传，请稍后重试"
+
 // chunkFail 写错误：除了说明，还带上节点返回的错误码，界面据此决定重试、重新开始还是放弃。
 func chunkFail(w http.ResponseWriter, r *http.Request, code int, err error) {
 	lang := requestLang(r)
@@ -62,6 +65,9 @@ func chunkFail(w http.ResponseWriter, r *http.Request, code int, err error) {
 			code = http.StatusNotFound
 		case codes.ResourceExhausted:
 			code = http.StatusInsufficientStorage
+			if status.Convert(err).Message() == uploadBusy {
+				code = http.StatusTooManyRequests
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
