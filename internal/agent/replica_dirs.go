@@ -35,6 +35,9 @@ type replicaIndex struct {
 	Dir string `json:"dir,omitempty"`
 	// Locations 是不在默认目录里的副本：键是"项目 ID-容器名"。
 	Locations map[string]replicaLocation `json:"locations,omitempty"`
+	// Moving 是正在往里移动副本的存放位置：节点中途退出时，启动后到这里清掉复制了一半的临时目录
+	// （新指定的位置还不在 Locations 里）。
+	Moving []string `json:"moving,omitempty"`
 }
 
 type replicaLocation struct {
@@ -232,6 +235,7 @@ func (r *replicas) cleanStaging() {
 	for _, l := range r.idx.Locations {
 		bases = append(bases, l.Base)
 	}
+	bases = append(bases, r.idx.Moving...)
 	for _, b := range bases {
 		entries, _ := os.ReadDir(b)
 		for _, e := range entries {
@@ -240,6 +244,21 @@ func (r *replicas) cleanStaging() {
 			}
 		}
 	}
+	if len(r.idx.Moving) > 0 {
+		r.idx.Moving = nil
+		_ = r.persistLocked()
+	}
+}
+
+// markMoving 记下（on 为 false 时去掉）正在往 base 里移动副本，见 replicaIndex.Moving。
+func (r *replicas) markMoving(base string, on bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.idx.Moving = slices.DeleteFunc(r.idx.Moving, func(b string) bool { return b == base })
+	if on {
+		r.idx.Moving = append(r.idx.Moving, base)
+	}
+	return r.persistLocked()
 }
 
 // ---- 校验 ----
@@ -604,6 +623,10 @@ func (r *replicas) moveTo(ctx context.Context, projectID, container, base string
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return err
 	}
+	if err := r.markMoving(base, true); err != nil {
+		return err
+	}
+	defer func() { _ = r.markMoving(base, false) }()
 	onLine("移动 " + src + " → " + dst)
 	renamed, err := relocate(ctx, src, dst, onLine)
 	if err != nil {

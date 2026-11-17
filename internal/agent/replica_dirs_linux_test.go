@@ -401,9 +401,22 @@ func TestCleanStaging(t *testing.T) {
 	os.MkdirAll(filepath.Join(staging, "files"), 0o700)
 	keep := filepath.Join(r.dir, ".prepull-x")
 	os.MkdirAll(keep, 0o700)
-	newReplicas(filepath.Dir(r.dir))
+	// 往新指定的位置移动时退出：位置还不在 Locations 里，靠 Moving 找到。
+	other := filepath.Join(t.TempDir(), "big")
+	otherStaging := filepath.Join(other, "."+testPID+"-db"+replicaStagingMark+"def")
+	os.MkdirAll(otherStaging, 0o700)
+	if err := r.markMoving(other, true); err != nil {
+		t.Fatal(err)
+	}
+	again := newReplicas(filepath.Dir(r.dir))
 	if _, err := os.Stat(staging); !os.IsNotExist(err) {
 		t.Fatal("中途退出留下的临时目录应该删掉")
+	}
+	if _, err := os.Stat(otherStaging); !os.IsNotExist(err) {
+		t.Fatal("新位置里复制了一半的临时目录应该删掉")
+	}
+	if len(again.idx.Moving) != 0 {
+		t.Fatal("清理以后不用再记")
 	}
 	if _, err := os.Stat(keep); err != nil {
 		t.Fatal("其他目录不能删")
