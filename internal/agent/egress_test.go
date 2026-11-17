@@ -169,33 +169,38 @@ func TestBuildRulesetBridgesOnly(t *testing.T) {
 	}
 }
 
-// R7：N1 只限定了放行的目标，拦截模式的容器连本机公网地址时，Caddy 看到的来源仍是容器的网桥私有地址，转给后端的
-// X-Forwarded-For 也是它。现在在 nat 表的 input hook 上把源地址改成这个公网地址。
+// R7：拦截模式的容器连本机公网地址时，源地址改成这个公网地址（nat 表 input hook 上的 SNAT）。
+// S2：nat 链放在单独的 ip、ip6 nagi_nat 表里：inet 族的 nat 链要 5.2 以上的内核，放在 inet nagi 里的话，旧内核上整张
+// 过滤表都加载不了。
 func TestBuildRulesetSNATPublic(t *testing.T) {
 	st := egressState{
 		containers: []egressContainer{
-			{project: "aaaa", name: "web", addrs: []netip.Addr{netip.MustParseAddr("172.20.0.2")}},
+			{project: "aaaa", name: "web", addrs: []netip.Addr{netip.MustParseAddr("172.20.0.2"), netip.MustParseAddr("fd00:20::2")}},
 			{project: "bbbb", name: "log", addrs: []netip.Addr{netip.MustParseAddr("172.21.0.2")}},
 		},
 		projects: map[string]*nagiv1.Egress{"aaaa": {Mode: "block"}, "bbbb": {Mode: "log"}},
 		local:    []netip.Addr{netip.MustParseAddr("192.168.1.5"), netip.MustParseAddr("203.0.113.7"), netip.MustParseAddr("2001:db8::7")},
 		public:   []spec.PortKey{{Proto: spec.ProtoTCP, Port: 443}, {Proto: spec.ProtoUDP, Port: 443}},
 	}
-	r := buildRuleset(st)
+	if r := buildRuleset(st); strings.Contains(r, "nat") {
+		t.Errorf("过滤表里不应有 nat 链：\n%s", r)
+	}
+	r := buildNATRuleset(st)
 	for _, want := range []string{
-		"type nat hook input priority srcnat; policy accept;",
-		"ip saddr @paaaa_4 ip daddr 203.0.113.7 meta l4proto tcp th dport { 443 } snat ip to 203.0.113.7",
-		"ip6 saddr @paaaa_6 ip6 daddr 2001:db8::7 meta l4proto udp th dport { 443 } snat ip6 to 2001:db8::7",
+		"table ip nagi_nat {", "table ip6 nagi_nat {", "type nat hook input priority srcnat; policy accept;",
+		"elements = { 172.20.0.2 }", "elements = { fd00:20::2 }",
+		"ip saddr @block ip daddr 203.0.113.7 meta l4proto tcp th dport { 443 } snat to 203.0.113.7",
+		"ip6 saddr @block ip6 daddr 2001:db8::7 meta l4proto udp th dport { 443 } snat to 2001:db8::7",
 	} {
 		if !strings.Contains(r, want) {
 			t.Errorf("缺少 %q：\n%s", want, r)
 		}
 	}
-	if strings.Contains(r, "@pbbbb_4 ip daddr 203.0.113.7") || strings.Contains(r, "snat ip to 192.168.1.5") {
+	if strings.Contains(r, "172.21.0.2") || strings.Contains(r, "snat to 192.168.1.5") {
 		t.Errorf("只改拦截模式的容器连公网地址的连接：\n%s", r)
 	}
 	st.local = st.local[:1]
-	if r := buildRuleset(st); strings.Contains(r, "nat_input") {
-		t.Errorf("没有公网地址时不需要：\n%s", r)
+	if r := buildNATRuleset(st); strings.Contains(r, "{") || !strings.Contains(r, "delete table ip nagi_nat") {
+		t.Errorf("没有公网地址时只删掉 nat 表：\n%s", r)
 	}
 }

@@ -25,6 +25,8 @@ type egress struct {
 	mu      sync.Mutex
 	err     string // 不能限制时的原因，随节点信息上报
 	applied string
+	// appliedNAT 是最近一次成功应用的 nat 表（见 applyNAT），natErr 是上一次失败的原因。
+	appliedNAT, natErr string
 	// byIP 是最近一次生成规则时容器的地址 → 项目、容器名，读日志时找是哪个容器。
 	byIP   map[string]egressContainer
 	modes  map[string]string
@@ -48,9 +50,7 @@ func restoreEgress(dataDir string, log *slog.Logger) {
 	if _, err := exec.LookPath("nft"); err != nil {
 		return
 	}
-	cmd := exec.Command("nft", "-f", "-")
-	cmd.Stdin = strings.NewReader(string(b))
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runNft(context.Background(), string(b)); err != nil {
 		log.Warn("加载上次的出站限制规则失败", "err", err, "output", strings.TrimSpace(string(out)))
 		return
 	}
@@ -136,14 +136,15 @@ func (e *egress) sync(ctx context.Context) {
 	}
 	e.mu.Lock()
 	e.byIP, e.modes = byIP, modes
+	e.mu.Unlock()
+	e.applyNAT(ctx, buildNATRuleset(st))
+	e.mu.Lock()
 	same := rules == e.applied
 	e.mu.Unlock()
 	if same {
 		return
 	}
-	cmd := exec.CommandContext(ctx, "nft", "-f", "-")
-	cmd.Stdin = strings.NewReader(rules)
-	out, err := cmd.CombinedOutput()
+	out, err := runNft(ctx, rules)
 	if err != nil {
 		e.a.log.Warn("应用出站限制失败", "err", err, "output", strings.TrimSpace(string(out)))
 		e.setErr(i18n.Errorf("无法应用出站限制的规则：%s", strings.TrimSpace(string(out))).Error())
@@ -158,6 +159,35 @@ func (e *egress) sync(ctx context.Context) {
 	}
 	e.setErr("")
 	e.a.log.Info("已更新容器出站限制", "containers", len(st.containers))
+}
+
+func runNft(ctx context.Context, script string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "nft", "-f", "-")
+	cmd.Stdin = strings.NewReader(script)
+	return cmd.CombinedOutput()
+}
+
+// applyNAT 单独应用 nat 表（见 buildNATRuleset）。失败只记日志（同样的错误只记一次），不影响过滤规则：
+// 旧内核加载不了 input hook 上的 nat 链时，出站限制照常生效，只是容器访问本机公网端口时来源仍是网桥地址。
+func (e *egress) applyNAT(ctx context.Context, script string) {
+	e.mu.Lock()
+	same := script == e.appliedNAT
+	e.mu.Unlock()
+	if same {
+		return
+	}
+	out, err := runNft(ctx, script)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != e.natErr {
+			e.natErr = msg
+			e.a.log.Warn("无法改写容器访问本机公网端口的来源地址，出站限制照常生效", "err", err, "output", msg)
+		}
+		return
+	}
+	e.appliedNAT, e.natErr = script, ""
 }
 
 // watchHits 每 5 秒读一次命中集合，新出现的连接汇总成告警（同一个容器、同一个目标 10 分钟内一次）。

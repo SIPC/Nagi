@@ -261,48 +261,71 @@ func buildRuleset(st egressState) string {
 	}
 	chain("forward", "forward", false)
 	chain("input", "input", true)
-	natInput(&b, st, ids, pub4, pub6)
 	b.WriteString("}\n")
 	return b.String()
 }
 
-// natInput 写 nat 表 input hook 上的链：拦截模式的容器连本机公网地址上对外开放的端口（访问自己或别的项目的域名）时，
+// buildNATRuleset 生成 nat 表的脚本：拦截模式的容器连本机公网地址上对外开放的端口（访问自己或别的项目的域名）时，
 // 源地址改成这个公网地址。否则 Caddy 看到的来源、转给后端的 X-Forwarded-For 是容器的网桥私有地址，按私有网段信任
 // 来源的后端（应用的「受信任网络」、管理员登录地址）会把它当成内网访问（见 docs/agent.md#出站限制）。
-// 本机投递不经过 POSTROUTING，所以在 input hook 上做 SNAT。
-func natInput(b *strings.Builder, st egressState, ids, pub4, pub6 []string) {
-	var rules []string
-	for _, proto := range []string{spec.ProtoTCP, spec.ProtoUDP} {
-		var ports []string
-		for _, p := range st.public {
-			if p.Proto == proto {
-				ports = append(ports, strconv.FormatUint(uint64(p.Port), 10))
+// 本机投递不经过 POSTROUTING，所以在 input hook 上做 SNAT。放在单独的 ip、ip6 表里、单独应用：inet 族的 nat 链要
+// Linux 5.2 以上，和过滤规则放在一起的话，旧内核上整张出站限制表都加载不了。没有要改的连接时只删掉这两张表。
+func buildNATRuleset(st egressState) string {
+	var pub4, pub6 []string
+	for _, a := range st.local {
+		if publicAddr(a) {
+			if a.Is4() {
+				pub4 = append(pub4, a.String())
+			} else {
+				pub6 = append(pub6, a.String())
 			}
 		}
-		if len(ports) == 0 {
+	}
+	var src4, src6 []string
+	for _, c := range st.containers {
+		if spec.EgressMode(st.projects[c.project]) != spec.EgressBlock {
 			continue
 		}
-		for _, id := range ids {
-			if spec.EgressMode(st.projects[id]) != spec.EgressBlock {
-				continue
-			}
-			k := projectKey(id)
-			for _, a := range pub4 {
-				rules = append(rules, fmt.Sprintf("\t\tip saddr @p%s_4 ip daddr %s meta l4proto %s th dport { %s } snat ip to %s\n", k, a, proto, strings.Join(ports, ", "), a))
-			}
-			for _, a := range pub6 {
-				rules = append(rules, fmt.Sprintf("\t\tip6 saddr @p%s_6 ip6 daddr %s meta l4proto %s th dport { %s } snat ip6 to %s\n", k, a, proto, strings.Join(ports, ", "), a))
+		for _, a := range c.addrs {
+			if a.Is4() {
+				src4 = append(src4, a.String())
+			} else {
+				src6 = append(src6, a.String())
 			}
 		}
 	}
-	if len(rules) == 0 {
-		return
+	var b strings.Builder
+	for _, fam := range []struct {
+		name, typ, ipk string
+		src, pub       []string
+	}{{"ip", "ipv4_addr", "ip", src4, pub4}, {"ip6", "ipv6_addr", "ip6", src6, pub6}} {
+		fmt.Fprintf(&b, "table %s nagi_nat\ndelete table %s nagi_nat\n", fam.name, fam.name)
+		var rules []string
+		for _, proto := range []string{spec.ProtoTCP, spec.ProtoUDP} {
+			var ports []string
+			for _, p := range st.public {
+				if p.Proto == proto {
+					ports = append(ports, strconv.FormatUint(uint64(p.Port), 10))
+				}
+			}
+			if len(ports) == 0 || len(fam.src) == 0 {
+				continue
+			}
+			for _, a := range fam.pub {
+				rules = append(rules, fmt.Sprintf("\t\t%s saddr @block %s daddr %s meta l4proto %s th dport { %s } snat to %s\n", fam.ipk, fam.ipk, a, proto, strings.Join(ports, ", "), a))
+			}
+		}
+		if len(rules) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "table %s nagi_nat {\n\tset block {\n\t\ttype %s\n\t\telements = { %s }\n\t}\n", fam.name, fam.typ, strings.Join(fam.src, ", "))
+		b.WriteString("\tchain input {\n\t\ttype nat hook input priority srcnat; policy accept;\n")
+		for _, r := range rules {
+			b.WriteString(r)
+		}
+		b.WriteString("\t}\n}\n")
 	}
-	b.WriteString("\tchain nat_input {\n\t\ttype nat hook input priority srcnat; policy accept;\n")
-	for _, r := range rules {
-		b.WriteString(r)
-	}
-	b.WriteString("\t}\n")
+	return b.String()
 }
 
 // egressStateOf 列出节点上 Nagi 管理的容器，和代理计划里各项目的出站限制合起来。
