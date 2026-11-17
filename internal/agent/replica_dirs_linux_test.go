@@ -562,13 +562,20 @@ func TestSetReplicaDefaultPartialFailure(t *testing.T) {
 
 func TestCleanStaging(t *testing.T) {
 	r, _ := testReplicas(t)
-	staging := filepath.Join(r.dir, "."+testPID+"-web"+replicaStagingMark+"abc")
+	staging := filepath.Join(r.dir, "."+testPID+"-web"+replicaStagingMark+"0123456789ab")
 	os.MkdirAll(filepath.Join(staging, "files"), 0o700)
 	keep := filepath.Join(r.dir, ".prepull-x")
 	os.MkdirAll(keep, 0o700)
+	// 名字里带着标记、格式却不完整的不删。
+	var odd []string
+	for _, name := range []string{"." + testPID + "-web" + replicaStagingMark + "abc", ".mine" + replicaStagingMark + "0123456789ab", "x" + testPID + "-web" + replicaStagingMark + "0123456789ab"} {
+		p := filepath.Join(r.dir, name)
+		os.MkdirAll(p, 0o700)
+		odd = append(odd, p)
+	}
 	// 往新指定的位置移动时退出：位置还不在 Locations 里，靠 Moving 找到。
 	other := filepath.Join(t.TempDir(), "big")
-	otherStaging := filepath.Join(other, "."+testPID+"-db"+replicaStagingMark+"def")
+	otherStaging := filepath.Join(other, "."+testPID+"-db"+replicaStagingMark+"cdef01234567")
 	os.MkdirAll(otherStaging, 0o700)
 	if err := r.markMoving(other, true); err != nil {
 		t.Fatal(err)
@@ -585,6 +592,130 @@ func TestCleanStaging(t *testing.T) {
 	}
 	if _, err := os.Stat(keep); err != nil {
 		t.Fatal("其他目录不能删")
+	}
+	for _, p := range odd {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("格式不完整的 %s 不能删", filepath.Base(p))
+		}
+	}
+}
+
+// 移动时先记下目标位置。改名成功、记录没写进去时节点退出：启动后采用目标位置，不用从头同步（加固建议）。
+func TestRecoverInterruptedMove(t *testing.T) {
+	t.Run("改名完成、记录没写", func(t *testing.T) {
+		r, tmp := testReplicas(t)
+		old := addReplica(t, r, "web")
+		big := filepath.Join(tmp, "big")
+		os.MkdirAll(big, 0o700)
+		mv := replicaMove{ID: testPID + "-web", From: r.dir, To: big, Custom: true}
+		if err := r.markMove(mv, true); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(old, filepath.Join(big, testPID+"-web")); err != nil {
+			t.Fatal(err)
+		}
+		again := newReplicas(filepath.Dir(r.dir))
+		root, _ := again.root(testPID, "web")
+		if root != filepath.Join(big, testPID+"-web") {
+			t.Fatalf("应采用目标位置，实际 %s", root)
+		}
+		checkReplicaFiles(t, root, "web")
+		if l := again.idx.Locations[testPID+"-web"]; !l.Custom || l.Base != big {
+			t.Fatalf("应记成单独指定的位置：%+v", l)
+		}
+		if len(again.idx.Moves) != 0 || len(again.idx.Moving) != 0 {
+			t.Fatal("收尾以后不用再记")
+		}
+		// 记录已经写盘：再启动一次也一样。
+		if root, _ := newReplicas(filepath.Dir(r.dir)).root(testPID, "web"); root != filepath.Join(big, testPID+"-web") {
+			t.Fatalf("记录应已保存，实际 %s", root)
+		}
+	})
+	t.Run("复制完成、记录没写", func(t *testing.T) {
+		r, tmp := testReplicas(t)
+		old := addReplica(t, r, "web")
+		big := filepath.Join(tmp, "big")
+		os.MkdirAll(big, 0o700)
+		if err := r.markMove(replicaMove{ID: testPID + "-web", From: r.dir, To: big, Custom: true}, true); err != nil {
+			t.Fatal(err)
+		}
+		// 复制、核对完改了名，还没切换：两边都在，记录指着原位置。原位置照常用，删掉复制过去的。
+		if _, _, err := copyReplicaTree(context.Background(), old, filepath.Join(big, testPID+"-web"), discard); err != nil {
+			t.Fatal(err)
+		}
+		again := newReplicas(filepath.Dir(r.dir))
+		if root, _ := again.root(testPID, "web"); root != old {
+			t.Fatalf("应留在原位置，实际 %s", root)
+		}
+		checkReplicaFiles(t, old, "web")
+		if _, err := os.Stat(filepath.Join(big, testPID+"-web")); !os.IsNotExist(err) {
+			t.Fatal("复制过去的应删掉，免得挡住下次移动")
+		}
+	})
+	t.Run("切换完成、原位置没删", func(t *testing.T) {
+		r, tmp := testReplicas(t)
+		old := addReplica(t, r, "web")
+		big := filepath.Join(tmp, "big")
+		os.MkdirAll(big, 0o700)
+		mv := replicaMove{ID: testPID + "-web", From: r.dir, To: big, Custom: true}
+		if err := r.markMove(mv, true); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := copyReplicaTree(context.Background(), old, filepath.Join(big, testPID+"-web"), discard); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.setLocation(testPID+"-web", big, true); err != nil {
+			t.Fatal(err)
+		}
+		again := newReplicas(filepath.Dir(r.dir))
+		root, _ := again.root(testPID, "web")
+		if root != filepath.Join(big, testPID+"-web") {
+			t.Fatalf("应在新位置，实际 %s", root)
+		}
+		checkReplicaFiles(t, root, "web")
+		if _, err := os.Stat(old); !os.IsNotExist(err) {
+			t.Fatal("原位置应删掉")
+		}
+	})
+}
+
+// 节点文件禁止访问整个存放位置（还没有副本的也算）、正在移入的位置和移动用的临时目录；
+// 校验存放位置时不因为它已经是存放位置就拒绝（同一个位置可以放几个副本）。
+func TestNodeFilesDenyReplicaBases(t *testing.T) {
+	r, tmp := testReplicas(t)
+	a := &agent{cfg: Config{DataDir: filepath.Dir(r.dir)}, replicas: r}
+	files := a.newNodeFiles()
+	empty := filepath.Join(tmp, "empty")
+	moving := filepath.Join(tmp, "moving")
+	os.MkdirAll(empty, 0o700)
+	os.MkdirAll(moving, 0o700)
+	if err := r.setLocation(testPID+"-gone", empty, true); err != nil { // 记录还在、副本已经不在
+		t.Fatal(err)
+	}
+	if err := r.markMoving(moving, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{empty, filepath.Join(empty, "x"), moving, filepath.Join(moving, "."+testPID+"-web"+replicaStagingMark+"0123456789ab")} {
+		if got := files.Access(p); got != "denied" {
+			t.Errorf("%s 应禁止访问，实际 %s", p, got)
+		}
+		if files.DeniedBesidesFunc(p) {
+			t.Errorf("%s 校验存放位置时不应算禁止访问", p)
+		}
+	}
+	if !files.DeniedBesidesFunc(filepath.Join(r.dir, "x")) {
+		t.Error("数据目录照样禁止")
+	}
+}
+
+// /var/crash 这类会被系统清理的粘滞位目录和 /tmp 一样不能用。
+func TestReplicaBaseStickySystemDirs(t *testing.T) {
+	r, _ := testReplicas(t)
+	r.forbidden = replicaForbidden
+	for _, dir := range []string{"/var/crash/nagi", "/var/lib/php/sessions/x", "/var/tmp/nagi", "/dev/shm/nagi"} {
+		if _, err := r.checkBase(dir); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("%s 应拒绝：%v", dir, err)
+		}
 	}
 }
 

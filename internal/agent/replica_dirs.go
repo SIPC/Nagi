@@ -39,6 +39,16 @@ type replicaIndex struct {
 	// Moving 是正在往里移动副本的存放位置：节点中途退出时，启动后到这里清掉复制了一半的临时目录
 	// （新指定的位置还不在 Locations 里）。
 	Moving []string `json:"moving,omitempty"`
+	// Moves 是正在进行的移动：改名或复制之前记下，节点中途退出时启动后据此收尾（见 recoverMoves）。v0.31.0 起。
+	Moves []replicaMove `json:"moves,omitempty"`
+}
+
+// replicaMove 是一次移动：副本 ID 从 From 移到 To（都是存放位置），Custom 是移过去以后是不是单独指定的位置。
+type replicaMove struct {
+	ID     string `json:"id"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Custom bool   `json:"custom,omitempty"`
 }
 
 type replicaLocation struct {
@@ -56,6 +66,8 @@ var replicaForbidden = []string{
 	"/etc", "/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32", "/boot", "/proc", "/sys", "/dev", "/run",
 	"/var/run", "/var/lock", "/tmp", "/var/tmp", "/var/log", "/var/cache", "/var/spool", "/var/mail",
 	"/var/lib/docker", "/var/lib/containerd", "/snap",
+	// 和 /tmp 一样会被系统定时清理、或者谁都能写的粘滞位目录。
+	"/var/crash", "/var/lib/php", "/var/lib/systemd/coredump", "/var/metrics",
 }
 
 // replicaShallow 是不能直接用作存放位置的上级目录（下面的子目录可以），免得副本和其他目录混在一起。
@@ -78,9 +90,52 @@ func newReplicas(dataDir string) *replicas {
 		r.markBroken(err)
 	}
 	if r.broken == nil {
+		r.recoverMoves()
 		r.cleanStaging()
 	}
 	return r
+}
+
+// recoverMoves 在启动时收尾中途退出的移动（idx.Moves），调用时还没有别的 goroutine：
+//   - 原位置没有副本、目标位置有完整的副本（改名或复制已经完成，记录没写进去）：采用目标位置，不用从头同步；
+//   - 记录已经指向目标位置：移动完成了，只是原位置还没删（复制的情况），删掉原位置；
+//   - 原位置的副本还在、记录指向原位置：移动没有完成，删掉目标位置复制好的副本（移动开始前确认过那里没有东西）。
+//
+// 副本完整以 meta.json 在为准：改名是原子的，复制是核对完才改名成正式的名字。
+func (r *replicas) recoverMoves() {
+	if len(r.idx.Moves) == 0 {
+		return
+	}
+	has := func(root string) bool {
+		info, err := os.Lstat(filepath.Join(root, "meta.json"))
+		return err == nil && info.Mode().IsRegular()
+	}
+	for _, m := range r.idx.Moves {
+		if _, _, ok := splitReplicaID(m.ID); !ok || m.From == "" || m.To == "" {
+			continue
+		}
+		src, dst := filepath.Join(m.From, m.ID), filepath.Join(m.To, m.ID)
+		cur, _ := r.baseLocked(m.ID)
+		switch {
+		case cur == m.To && has(dst):
+			if has(src) {
+				os.RemoveAll(src)
+			}
+		case cur == m.From && !has(src) && has(dst):
+			if !m.Custom && m.To == r.defaultLocked() {
+				delete(r.idx.Locations, m.ID)
+			} else {
+				if r.idx.Locations == nil {
+					r.idx.Locations = map[string]replicaLocation{}
+				}
+				r.idx.Locations[m.ID] = replicaLocation{Base: m.To, Custom: m.Custom}
+			}
+		case cur == m.From && has(src) && has(dst):
+			os.RemoveAll(dst)
+		}
+	}
+	r.idx.Moves = nil
+	_ = r.persistLocked()
 }
 
 // markBroken 在 replica-dirs.json 读不出来时调用：原文件改名成 .corrupt-<时间> 留着（之后的写入不会覆盖它），
@@ -296,7 +351,8 @@ func (r *replicas) cleanStaging() {
 	for _, b := range bases {
 		entries, _ := os.ReadDir(b)
 		for _, e := range entries {
-			if e.IsDir() && strings.HasPrefix(e.Name(), ".") && strings.Contains(e.Name(), replicaStagingMark) {
+			// ReadDir 不跟随符号链接：指向别处的链接不是目录，不会删到链接指向的地方。
+			if e.IsDir() && isStagingName(e.Name()) {
 				os.RemoveAll(filepath.Join(b, e.Name()))
 			}
 		}
@@ -307,13 +363,43 @@ func (r *replicas) cleanStaging() {
 	}
 }
 
+// isStagingName 判断目录名是不是移动用的临时目录，只认完整的格式：.<项目 ID>-<容器名>.nagi-moving-<12 位十六进制>。
+// 存放位置里别人放的、名字碰巧带着标记的目录不删。
+func isStagingName(name string) bool {
+	if !strings.HasPrefix(name, ".") {
+		return false
+	}
+	i := strings.LastIndex(name, replicaStagingMark)
+	if i < 0 {
+		return false
+	}
+	suffix := name[i+len(replicaStagingMark):]
+	if len(suffix) != 12 || strings.Trim(suffix, "0123456789abcdef") != "" {
+		return false
+	}
+	_, _, ok := splitReplicaID(name[1:i])
+	return ok
+}
+
 // markMoving 记下（on 为 false 时去掉）正在往 base 里移动副本，见 replicaIndex.Moving。
 func (r *replicas) markMoving(base string, on bool) error {
+	return r.markMove(replicaMove{To: base}, on)
+}
+
+// markMove 记下（on 为 false 时去掉）一次移动：目标位置记进 Moving（清理临时目录用），
+// m.ID 不为空时整条记进 Moves（启动时收尾用，见 recoverMoves）。改名、复制之前写盘。
+func (r *replicas) markMove(m replicaMove, on bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.idx.Moving = slices.DeleteFunc(r.idx.Moving, func(b string) bool { return b == base })
+	r.idx.Moving = slices.DeleteFunc(r.idx.Moving, func(b string) bool { return b == m.To })
+	if m.ID != "" {
+		r.idx.Moves = slices.DeleteFunc(r.idx.Moves, func(x replicaMove) bool { return x.ID == m.ID })
+	}
 	if on {
-		r.idx.Moving = append(r.idx.Moving, base)
+		r.idx.Moving = append(r.idx.Moving, m.To)
+		if m.ID != "" {
+			r.idx.Moves = append(r.idx.Moves, m)
+		}
 	}
 	return r.persistLocked()
 }
@@ -709,10 +795,11 @@ func (r *replicas) moveTo(ctx context.Context, projectID, container, base string
 	if err := os.MkdirAll(base, 0o700); err != nil {
 		return err
 	}
-	if err := r.markMoving(base, true); err != nil {
+	mv := replicaMove{ID: id, From: filepath.Dir(src), To: base, Custom: custom}
+	if err := r.markMove(mv, true); err != nil {
 		return err
 	}
-	defer func() { _ = r.markMoving(base, false) }()
+	defer func() { _ = r.markMove(mv, false) }()
 	onLine("移动 " + src + " → " + dst)
 	renamed, err := relocate(ctx, src, dst, onLine)
 	if err != nil {

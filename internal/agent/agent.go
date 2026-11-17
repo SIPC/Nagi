@@ -179,7 +179,7 @@ func Run(ctx context.Context, cfg Config) error {
 	a.replicas.reserved = projects.ReservedDirs
 	a.replicas.managed = func() []string { return a.projects.ManagedDirs(context.Background()) }
 	a.replicas.projectsRoot = a.projectsRoot
-	a.replicas.denied = func(real string) bool { return a.files.Access(real) == nodefiles.AccessDenied }
+	a.replicas.denied = a.files.DeniedBesidesFunc
 	a.replicas.stateDir = a.replicaStateDir
 	projects.ReplicaRoots = a.replicas.roots
 	projects.ReplicaBases = a.replicas.bases

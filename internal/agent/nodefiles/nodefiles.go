@@ -68,7 +68,7 @@ var sensitive = []string{
 type Service struct {
 	// Denied 是禁止访问的目录：Nagi 自己的数据目录，里面有私钥。
 	Denied []string
-	// DeniedFunc 返回另外禁止访问的目录：不在数据目录里的副本（会变，所以每次取）。
+	// DeniedFunc 返回另外禁止访问的目录：副本的存放位置（包括正在移入的位置和移动用的临时目录，会变，所以每次取）。
 	DeniedFunc func() []string
 	// Managed 返回容器目录。部署时会重写里面的文件，写入也绕过了容器的锁和租约，所以只读。
 	Managed func() []string
@@ -178,6 +178,15 @@ func (s *Service) managedDirs() []string {
 		}
 	}
 	return out
+}
+
+// DeniedBesidesFunc 判断真实路径是否在系统虚拟文件系统或 Denied 里（不算 DeniedFunc）。
+// 校验副本的存放位置时用：同一个存放位置可以放几个副本，不能因为它已经是存放位置就拒绝。
+func (s *Service) DeniedBesidesFunc(real string) bool {
+	if slices.ContainsFunc(systemDenied, func(d string) bool { return under(real, d) }) {
+		return true
+	}
+	return slices.ContainsFunc(s.Denied, func(d string) bool { return under(real, realOf(d)) })
 }
 
 // Access 返回真实路径的访问级别。

@@ -88,13 +88,13 @@ func (a *agent) newNodeFiles() *nodefiles.Service {
 	return &nodefiles.Service{
 		Denied:  dirs,
 		Managed: func() []string { return a.projects.Dirs(context.Background()) },
-		// 副本可能不在数据目录里（见 replica_dirs.go），照样禁止访问。只禁止各个副本的目录，
-		// 存放位置里的其他文件不受影响。
+		// 副本可能不在数据目录里（见 replica_dirs.go），照样禁止访问：整个存放位置（还没有副本的也算）、
+		// 正在移入的位置，移动用的临时目录在它们里面。存放位置被删掉或换成符号链接，之后的副本就会写到别处。
 		DeniedFunc: func() []string {
 			if a.replicas == nil {
 				return nil
 			}
-			return a.replicas.roots()
+			return append(a.replicas.bases(), a.replicas.roots()...)
 		},
 		BackupDir:  filepath.Join(a.cfg.DataDir, "file-backups"),
 		StagingDir: filepath.Join(a.cfg.DataDir, "node-files-staging"),
