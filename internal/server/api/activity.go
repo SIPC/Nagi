@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -196,13 +198,18 @@ func withRecording(ctx context.Context, id string) context.Context {
 }
 
 func (a *API) recordCall(ctx context.Context, procedure string, req proto.Message, result, failure string, d time.Duration) {
+	a.recordCallWith(ctx, procedure, req, result, failure, d, nil)
+}
+
+// recordCallWith 同 recordCall，extra 合并进记录的参数（例如批量操作里失败的几项）。
+func (a *API) recordCallWith(ctx context.Context, procedure string, req proto.Message, result, failure string, d time.Duration, extra map[string]any) {
 	ctx = context.WithoutCancel(ctx)
 	method := methodOf(procedure)
 	e := audit.Event{
 		Category:   categoryOf(method),
 		Action:     method,
 		ProjectID:  activityField(req, "project_id"),
-		Params:     audit.Params(req),
+		Params:     withExtraParams(audit.Params(req), extra),
 		Result:     result,
 		Error:      failure,
 		DurationMS: d.Milliseconds(),
@@ -327,10 +334,17 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			return res, err
 		}
 		result, failure := audit.ResultOK, ""
+		var extra map[string]any
 		if err != nil {
 			result, failure = errorResult(err), activityFailure(err)
+		} else if failed, all := batchFailures(msg, res.Any()); len(failed) > 0 {
+			// 批量操作（删除、清理镜像）：每一项都失败时记为失败；部分成功仍记为成功，参数里列出失败的几项。
+			extra = map[string]any{"failed": failed}
+			if all {
+				result, failure = audit.ResultFailed, failed[0]
+			}
 		}
-		l.a.recordCall(ctx, procedure, msg, result, failure, time.Since(start))
+		l.a.recordCallWith(ctx, procedure, msg, result, failure, time.Since(start), extra)
 		return res, err
 	}
 }
@@ -401,4 +415,65 @@ func (c *activityConn) Send(m any) error {
 		}
 	}
 	return c.StreamingHandlerConn.Send(m)
+}
+
+// maxBatchFailures 是记录里最多列出的失败项。
+const maxBatchFailures = 20
+
+// batchFailures 取批量操作回复里失败的几项（简短的「对象：原因」），all 表示没有一项成功。
+func batchFailures(req proto.Message, res any) (failed []string, all bool) {
+	item := func(id, tag, reason string) string {
+		obj := strings.TrimPrefix(id, "sha256:")
+		obj = obj[:min(12, len(obj))]
+		if tag != "" {
+			obj = tag
+		}
+		if obj == "" {
+			return clipActivity(reason, 120)
+		}
+		return clipActivity(obj+": "+reason, 120)
+	}
+	switch m := res.(type) {
+	case *nagiv1.DeleteImagesResponse:
+		for _, r := range m.GetResults() {
+			if r.GetError() != "" {
+				failed = append(failed, item(r.GetId(), r.GetTag(), r.GetError()))
+			}
+		}
+		all = len(failed) > 0 && len(failed) == len(m.GetResults())
+	case *nagiv1.PruneImagesResponse:
+		cacheFailed := false
+		for _, r := range m.GetFailed() {
+			failed = append(failed, item(r.GetId(), r.GetTag(), r.GetError()))
+			cacheFailed = cacheFailed || r.GetId() == ""
+		}
+		wantCache := false
+		if p, ok := req.(*nagiv1.PruneNodeImagesRequest); ok {
+			wantCache = p.GetBuildCache()
+		}
+		all = len(failed) > 0 && m.GetDeleted() == 0 && (!wantCache || cacheFailed)
+	}
+	if len(failed) > maxBatchFailures {
+		failed = append(failed[:maxBatchFailures], fmt.Sprintf("+%d", len(failed)-maxBatchFailures))
+	}
+	return failed, all
+}
+
+// withExtraParams 把 extra 合并进记录的参数（JSON 对象）。
+func withExtraParams(params string, extra map[string]any) string {
+	if len(extra) == 0 {
+		return params
+	}
+	obj := map[string]any{}
+	if params != "" && json.Unmarshal([]byte(params), &obj) != nil {
+		return params
+	}
+	for k, v := range extra {
+		obj[k] = v
+	}
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return params
+	}
+	return audit.TruncateParams(string(b))
 }

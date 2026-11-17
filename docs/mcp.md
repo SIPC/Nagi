@@ -40,7 +40,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
   - **可修改**：默认不勾，只能用查看类的工具。
   - **执行命令**：默认不勾，勾了才能用 `exec`。只读成员没有这一项。
   - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
-- 节点文件（见 [node-access.md](node-access.md#权限)）和节点镜像的管理（见 [agent.md](agent.md#节点镜像)）一律不能用令牌。
+- 节点文件（见 [node-access.md](node-access.md#权限)）一律不能用令牌。
+- 节点镜像（见下面的[节点镜像](#节点镜像)）只给管理员的令牌：查看不用额外权限，删除、清理、拉取要勾「可修改」。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
 ### 个人访问令牌
@@ -116,6 +117,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `check_routes` | 端口映射的域名检查：是否解析到入口节点、证书状态。用面板自己的检查，不按 agent 给的地址发请求，不能被拿来探测内网 | `CheckDomains` |
 | `query_events` | 项目的活动记录，可以按容器、只看失败的筛选，翻页 | `ListProjectEvents` |
 | `inspect_node_storage` | 只给管理员（内容涉及节点上所有项目）：Docker 镜像、容器可写层、数据卷、构建缓存的占用和可回收空间，最大的镜像，每个容器的 data、volumes、快照占用。只读，不清理 | `GetNodeStorage`（节点的 `GetStorage`） |
+| `list_node_images` | 只给管理员：节点上的镜像（标签、ID、大小、创建时间、使用它的容器、Nagi 需要它的原因），一键清理会删除几个、至少释放多少，可回收的构建缓存。可以按文字筛选，最多列 300 个 | `ListNodeImages` |
 
 ### 日常操作
 
@@ -144,6 +146,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 立即依次同步到所有备份节点（或只同步 `backup_node`），同步完才返回各自的结果 | `SyncBackup` |
+| `pull_node_image` | 只给管理员：在节点上拉取镜像，用节点全局的 Docker 登录信息和镜像加速，等拉完才返回，最长 30 分钟 | `PullNodeImage` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用，操作员不能进入特权容器；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 
 ### 不可逆或会中断服务的操作
@@ -163,6 +166,9 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `clear_failover` | 取消顶替 | 容器名 | `ClearFailover` |
 | `confirm_takeover` | 有状态容器的节点失联、热备在等确认时，让热备用最近同步的数据顶替 | 容器名 | `ConfirmTakeover` |
 
+| `delete_node_images` | 只给管理员：删除节点上的镜像（连同全部标签，`images` 填标签或至少 12 位的 ID）或单个标签（`tags`）。预览列出会删除的和节点会拒绝的（有容器使用、Nagi 需要） | 预览给的确认码 | `ListNodeImages`、`DeleteNodeImages` |
+| `prune_node_images` | 只给管理员：一键清理节点上没有容器使用、Nagi 也不需要的镜像，`build_cache` 时（默认不）同时清理构建缓存。预览列出镜像和至少释放的空间 | 预览给的确认码 | `ListNodeImages`、`PruneNodeImages` |
+
 `change_witness`（更换见证人，顶替照常进行）不中断服务，不用确认。`get_container` 返回备份节点的同步状态和顶替的状态（在哪个节点上运行、最近一次同步、是否在等确认）。
 
 ### 文件
@@ -180,6 +186,15 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 不提供改名。读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file` 会修改卷，令牌还要勾「可修改」。文件内容和日志一样当作不可信数据。
 
+### 节点镜像
+
+和节点页的「镜像」标签同一组接口（见 [agent.md](agent.md#节点镜像)），能不能删由节点判断，有容器使用的、Nagi 需要的一律拒绝。
+
+- 只给管理员的令牌。`list_node_images` 不用额外权限；`delete_node_images`、`prune_node_images`、`pull_node_image` 要勾「可修改」，备用面板上没有。
+- 网页上删除和清理要先做高权限确认，令牌做不了交互式的确认，改由预览和确认码代替：不带 `confirm` 只返回预览，用户同意后带预览给的确认码再调用一次。确认码由节点和要删的镜像（清理时是可清理的镜像 ID 和是否清理构建缓存）算出，预览之后节点上的镜像变了就对不上，只会再返回一次预览。所以面板对令牌免去这两个接口的高权限确认（`api` 包的 `tokenConfirmed`），令牌只在 `/mcp` 有效，到这里的令牌请求都来自这两个工具。和 `node_exec` 一样，确认码只保证执行的就是预览过的内容。
+- `pull_node_image` 用节点全局的 Docker 登录信息和镜像加速拉取，等拉完才返回，最长 30 分钟。不用确认。
+- 删除、清理、拉取都记进审计，挂在这次工具调用下面。
+
 ### 节点命令
 
 `node_exec` 以 root 身份在节点上执行一条命令，等它结束，返回输出（最多 64 KB）和退出码。默认 30 秒、最长 120 秒超时，到时结束整个进程组。这等于把整台机器交给 agent，所以比网页的节点终端还多几道限制：
@@ -193,11 +208,11 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - shell 和环境变量和节点终端一样（见 [node-access.md](node-access.md#终端)）：root 的登录 shell，`sh -lc` 执行，不分配终端，没有输入。节点跑在容器里时，命令进的是这个容器，返回里会注明。
 - 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。命令的输出和日志一样当作不可信数据。
 
-工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec` 是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file` 和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
+工具都带 MCP 的工具标注（`readOnlyHint`、`destructiveHint`、`openWorldHint`、`idempotentHint`），`_meta.securitySchemes` 里写需要的 OAuth 范围（查看类 `nagi:read`，修改类 `nagi:write`，`exec` 和文件工具是 `nagi:exec`，`node_exec` 是 `nagi:node`），ChatGPT 按它判断工具要不要授权。`deploy`、`control_container`、`rollback`、`restore_snapshot`、`delete_snapshot`、`disconnect_project`、`delete_route`、`exec`、`node_exec`、`write_file`、`restore_file`、`delete_file`、`delete_node_images`、`prune_node_images` 和上面不可逆的操作标为 `destructiveHint`，客户端一般会先问用户。部署这类操作用不跟着客户端取消的 ctx：agent 断开或者等不及，操作在面板上照样做完。
 
 ### 还没有的
 
-- 整个集群和面板的管理，计划之后只给管理员：节点管理和磁盘清理、节点上的文件、面板设置（包括告警）、成员。
+- 整个集群和面板的管理，计划之后只给管理员：节点管理、节点上的文件、面板设置（包括告警）、成员。节点镜像的清理已经有了（见[节点镜像](#节点镜像)）。
 - 一直不提供：初始化、登录、提升权限、改密码、两步验证、会话、OAuth 授权、访问令牌，以及会把凭据放进对话的操作（邀请链接、节点加入命令、备用面板配对码、备份密钥）、安全入口。也不做按 agent 给的地址发 HTTP 请求的探测（会被拿来探测内网），用 `check_routes` 代替。
 
 ## 给 agent 的说明

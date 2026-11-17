@@ -34,6 +34,7 @@ export default {
   neededHint: "Needed by Nagi",
   sizeTitle: (unique) => `${unique} unique`,
   createdTitle: (time) => `Created ${time}`,
+  elevate: "Verify your identity before deleting images on the node. You won't be asked again for 15 minutes.",
   copyId: "Copy ID",
   deleteImage: "Delete image",
   deleteTag: (tag) => `Delete tag ${tag}`,

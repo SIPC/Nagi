@@ -33,6 +33,7 @@ export default {
   neededHint: "Nagi 需要，不能删除",
   sizeTitle: (unique: string) => `独占 ${unique}`,
   createdTitle: (time: string) => `创建于 ${time}`,
+  elevate: "删除节点上的镜像前需验证身份。验证后 15 分钟内无需再次验证。",
   copyId: "复制 ID",
   deleteImage: "删除镜像",
   deleteTag: (tag: string) => `删除标签 ${tag}`,

@@ -32,6 +32,7 @@ var adminReads = map[string]bool{
 	// 节点的磁盘明细：涉及节点上所有项目（镜像、容器目录）。
 	"GetNodeStorage": true,
 	// 节点上的镜像（见 docs/agent.md#节点镜像）：涉及节点上所有项目。删除、清理、拉取是 NodeService 的修改，默认只给管理员。
+	// 访问令牌按 TokenAllowed 的规则：查看不用额外权限，删除、清理、拉取要勾「可修改」。
 	"ListNodeImages": true,
 	// 终端录制和审计设置（见 docs/audit.md）。
 	"GetRecording": true, "GetAuditSettings": true,
@@ -49,12 +50,6 @@ var operatorReads = map[string]bool{
 	"GetBackupKey": true, "ListRegistries": true, "ListVolumeFiles": true, "ListVolumeDirSizes": true,
 }
 
-// noTokenMethods 是访问令牌不能调用的接口（见 docs/mcp.md#权限）：节点镜像管理只在界面上用，
-// 令牌（MCP）只能看磁盘明细（GetNodeStorage），不能删除、清理镜像，也不能让节点拉取任意镜像。
-var noTokenMethods = map[string]bool{
-	"ListNodeImages": true, "DeleteNodeImages": true, "PruneNodeImages": true, "PullNodeImage": true,
-}
-
 var readPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping"}
 
 func isRead(method string) bool {
@@ -70,7 +65,7 @@ func isRead(method string) bool {
 // （见 docs/mcp.md#权限）。角色的限制另由 Allowed 检查。
 func TokenAllowed(u User, procedure string) bool {
 	parts := strings.Split(strings.TrimPrefix(procedure, "/"), "/")
-	if len(parts) != 2 || parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" || noTokenMethods[parts[1]] {
+	if len(parts) != 2 || parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" {
 		return false
 	}
 	return u.AllowWrite || isRead(parts[1])

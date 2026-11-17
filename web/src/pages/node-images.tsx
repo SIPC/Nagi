@@ -10,6 +10,7 @@ import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { fmtBytes } from "@/components/metrics";
 import { confirmAction } from "@/components/confirm";
+import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { SelectBox, SelectionBar, useSelection } from "@/components/file-manager";
 import { Alert, Button, Check, Collapse, Dialog, DialogActions, EmptyRow, Field, HelpTip, Input, List, Notice, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select } from "@/components/ui";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -22,6 +23,17 @@ const m = t.nodeImages;
 
 type Sort = "size" | "created" | "name";
 const sorts: Sort[] = ["size", "created", "name"];
+
+// elevated：删除、清理前先做高权限确认（见 docs/agent.md#节点镜像）。确认在请求之间过期时再问一次。取消时返回 undefined。
+async function elevated<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  if (!(await requireElevation(m.elevate, { suggestTotp: false }))) return undefined;
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isElevationRequired(err) || !(await requireElevation(m.elevate, { suggestTotp: false }))) throw err;
+    return await fn();
+  }
+}
 
 const shortId = (id: string) => id.replace(/^sha256:/, "").slice(0, 12);
 const imageName = (im: NodeImage) => im.tags[0] ?? "";
@@ -92,7 +104,8 @@ export function NodeImages({ node }: { node: Node }) {
     setError([]);
     setBusy(true);
     try {
-      const res = await nodeClient.deleteNodeImages({ nodeId: node.id, images: refs });
+      const res = await elevated(() => nodeClient.deleteNodeImages({ nodeId: node.id, images: refs }));
+      if (!res) return;
       const failed = res.results.filter((r) => r.error);
       const ok = res.results.length - failed.length;
       if (failed.length > 0) setError([m.failed(failed.length), ...failed.map((r) => `${label(r.id, r.tag)}：${r.error}`)]); // i18n-ignore
@@ -254,14 +267,15 @@ function PruneImages({ nodeId, list, busy, setBusy, onDone, onCancel }: { nodeId
   const d = m.pruneDialog;
   const candidates = list.images.filter((im) => list.pruneIds.includes(im.id));
   const cache = Number(list.buildCacheBytes);
-  const [withCache, setWithCache] = useState(cache > 0);
+  const [withCache, setWithCache] = useState(false);
   const [error, setError] = useState("");
   const nothing = candidates.length === 0 && cache === 0;
   const run = async () => {
     setError("");
     setBusy(true);
     try {
-      const res = await nodeClient.pruneNodeImages({ nodeId, ids: list.pruneIds, buildCache: withCache && cache > 0 });
+      const res = await elevated(() => nodeClient.pruneNodeImages({ nodeId, ids: list.pruneIds, buildCache: withCache && cache > 0 }));
+      if (!res) return;
       toast.success(withCache && cache > 0 ? d.done(res.deleted, fmtBytes(Number(res.buildCacheFreed))) : d.doneImages(res.deleted));
       const lines = res.failed.map((f) => (f.id ? `${shortId(f.id)}：${f.error}` : f.error)); // i18n-ignore
       if (res.skipped > 0) lines.unshift(d.skipped(res.skipped));

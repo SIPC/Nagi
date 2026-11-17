@@ -73,6 +73,21 @@ var elevationRequired = map[string]bool{
 	// 隔离和解除隔离节点（见 docs/mesh.md#隔离）。
 	nagiv1connect.NodeServiceIsolateNodeProcedure:   true,
 	nagiv1connect.NodeServiceUnisolateNodeProcedure: true,
+	// 删除、清理节点上的镜像（见 docs/agent.md#节点镜像）。
+	nagiv1connect.NodeServiceDeleteNodeImagesProcedure: true,
+	nagiv1connect.NodeServicePruneNodeImagesProcedure:  true,
+}
+
+// tokenConfirmed 是访问令牌不用高权限确认的接口：令牌做不了交互式的确认，改由 MCP 工具先预览、用户同意后带确认码调用
+// （见 docs/mcp.md#节点镜像）。令牌只在 /mcp 有效，到这里的令牌请求都来自 MCP 工具。
+var tokenConfirmed = map[string]bool{
+	nagiv1connect.NodeServiceDeleteNodeImagesProcedure: true,
+	nagiv1connect.NodeServicePruneNodeImagesProcedure:  true,
+}
+
+// needsElevation 判断这次调用要不要先做高权限确认。
+func needsElevation(u auth.User, procedure string) bool {
+	return elevationRequired[procedure] && !u.Elevated() && !(u.TokenID != 0 && tokenConfirmed[procedure])
 }
 
 func elevationError() error {
@@ -86,7 +101,7 @@ type elevationCheck struct{}
 
 func (elevationCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		if elevationRequired[req.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+		if needsElevation(auth.CurrentUser(ctx), req.Spec().Procedure) {
 			return nil, elevationError()
 		}
 		return next(ctx, req)
@@ -99,7 +114,7 @@ func (elevationCheck) WrapStreamingClient(next connect.StreamingClientFunc) conn
 
 func (elevationCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
-		if elevationRequired[conn.Spec().Procedure] && !auth.CurrentUser(ctx).Elevated() {
+		if needsElevation(auth.CurrentUser(ctx), conn.Spec().Procedure) {
 			return elevationError()
 		}
 		return next(ctx, conn)
