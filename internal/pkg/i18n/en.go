@@ -848,6 +848,8 @@ var en = map[string]string{
 	"目录与此节点上副本的存放位置 %s 重叠，请更换目录":     "The directory overlaps the replica location %s on this node. Choose another directory",
 	"现有目录 %s 与此节点上副本的存放位置 %s 重叠":     "The existing directory %s overlaps the replica location %s on this node",
 	"%s 和此节点上副本的存放位置重叠，无法导入":         "%s overlaps a replica location on this node and can't be imported",
+	"副本同步进行中，请稍后重试":                  "The replica is syncing. Try again later",
+	"同步副本的单次传输超过 6 小时，已断开":           "A single replica transfer ran longer than 6 hours and was disconnected",
 	"副本目录 %s 不是普通目录":                 "The replica directory %s isn't a regular directory",
 	"副本位置记录 replica-dirs.json 无法读取，原文件保存为 %s。修复后改回原名并重启节点，在此之前不能修改存放位置或登记新的副本": "The replica location record replica-dirs.json can't be read. The original was kept as %s. Fix it, rename it back, and restart the node. Until then, locations can't be changed and new replicas can't be registered",
 	"目标位置已有同名目录 %s，请先处理":        "The directory %s already exists at the destination. Deal with it first",

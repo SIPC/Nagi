@@ -439,6 +439,9 @@ func isReplicaTemp(name string) bool { return strings.Contains(name, replicaTemp
 // replicaIdle 是同步副本时多久收不到数据就放弃：源节点挂了、网络断了时不一直占着锁和临时文件。
 const replicaIdle = 2 * time.Minute
 
+// replicaPutMax 是一条 ReplicaPut 流最长的时间（文案里写的是 6 小时，改的话一起改）。
+const replicaPutMax = 6 * time.Hour
+
 // ReplicaPut 接收源节点同步来的文件。不限大小（快照仓库可以很大），但磁盘剩余空间不够时停下（见 metrics.CheckDisk）。
 func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
 	var (
@@ -501,12 +504,18 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 	}()
 	idle := time.NewTimer(replicaIdle)
 	defer idle.Stop()
+	// 一条流拿着副本的读锁，总时长也有上限：被攻破的源节点不能靠一直慢慢发数据占着锁，挡住提交和恢复。
+	// 正常的源节点断开以后会换一条流接着传（见 resumeSync）。
+	total := time.NewTimer(replicaPutMax)
+	defer total.Stop()
 	for {
 		var r recv
 		select {
 		case r = <-ch:
 		case <-idle.C:
 			return status.Error(codes.DeadlineExceeded, "同步副本时长时间没有收到数据")
+		case <-total.C:
+			return status.Error(codes.DeadlineExceeded, "同步副本的单次传输超过 6 小时，已断开")
 		}
 		idle.Reset(replicaIdle)
 		c, err := r.c, r.err
@@ -1002,7 +1011,16 @@ func (s *agentService) AcceptReplica(ctx context.Context, req *nagiv1.AcceptRepl
 			return nil, err
 		}
 	}
-	defer r.lock(sp.GetProjectId(), sp.GetName())()
+	// 拿着 moving 时不能一直等副本的锁（见 replicaLockWait）。
+	unlock := func() {}
+	if base != "" {
+		if unlock, err = r.lockWithin(ctx, sp.GetProjectId(), sp.GetName(), replicaLockWait); err != nil {
+			return nil, err
+		}
+	} else {
+		unlock = r.lock(sp.GetProjectId(), sp.GetName())
+	}
+	defer unlock()
 	m, _, root, err := r.load(sp.GetProjectId(), sp.GetName())
 	created := false
 	switch {

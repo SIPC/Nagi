@@ -655,15 +655,43 @@ func verifyReplicaTree(ctx context.Context, dir string, sums map[string]fileSum)
 	return err
 }
 
+// replicaLockWait 是移动副本时最多等多久正在进行的同步、恢复结束。移动时拿着节点级的 moving，
+// 一直等下去的话，被攻破的源节点不停地发数据就能卡住这个节点所有的移动（审查 L3）。
+var replicaLockWait = time.Minute
+
+// lockWithin 在 wait 之内拿到副本的锁，拿不到时返回「同步进行中」。不排队等写锁：排队的写锁会挡住后来的读锁，
+// 一条不结束的流就能让这个副本所有的同步都停下。
+func (r *replicas) lockWithin(ctx context.Context, projectID, container string, wait time.Duration) (func(), error) {
+	l := r.lockOf(projectID, container)
+	deadline := time.Now().Add(wait)
+	for {
+		if l.TryLock() {
+			return l.Unlock, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, status.Error(codes.Aborted, "副本同步进行中，请稍后重试")
+		}
+		select {
+		case <-ctx.Done():
+			return nil, status.Error(codes.Canceled, "移动副本时节点正在退出，已取消")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
 // moveTo 把一个副本移到 base 下面，custom 表示是单独指定的存放位置。调用时持有 moving。
-// 拿着这个副本的锁：同步写入、提交、查看快照、恢复都要等它结束。移动完、核对无误才记下新位置；
+// 拿着这个副本的锁：同步写入、提交、查看快照、恢复都要等它结束；等不到（replicaLockWait）就放弃。移动完、核对无误才记下新位置；
 // 记不下来时撤销移动。复制过去的才删除原位置，删除失败只提示，数据已经在新位置了。
 func (r *replicas) moveTo(ctx context.Context, projectID, container, base string, custom bool, onLine func(string)) error {
 	id, err := replicaID(projectID, container)
 	if err != nil {
 		return err
 	}
-	defer r.lock(projectID, container)()
+	unlock, err := r.lockWithin(ctx, projectID, container, replicaLockWait)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	src, err := r.root(projectID, container)
 	if err != nil {
 		return err

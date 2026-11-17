@@ -436,6 +436,50 @@ func TestMoveReplicaWaitsForSync(t *testing.T) {
 	}
 }
 
+// 一条同步流一直不结束时（审查 L3），移动等一段时间就放弃，报「同步进行中」，不一直占着节点级的 moving：
+// 别的副本照样能移动，被卡住的副本的同步也不受影响。
+func TestMoveReplicaGivesUpOnStuckSync(t *testing.T) {
+	prev := replicaLockWait
+	replicaLockWait = 300 * time.Millisecond
+	defer func() { replicaLockWait = prev }()
+	r, tmp := testReplicas(t)
+	addReplica(t, r, "web")
+	addReplica(t, r, "db")
+	unlock := r.rlock(testPID, "web") // 被攻破的源节点占着
+	defer unlock()
+	start := time.Now()
+	err := r.move(context.Background(), testPID, "web", filepath.Join(tmp, "big"), discard)
+	if status.Code(err) != codes.Aborted || !strings.Contains(err.Error(), "同步进行中") {
+		t.Fatalf("应该报同步进行中：%v", err)
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Fatal("等太久了")
+	}
+	if root, _ := r.root(testPID, "web"); !strings.HasPrefix(root, r.dir) {
+		t.Fatal("位置不应该变")
+	}
+	// 别的副本照样能移动。
+	if err := r.move(context.Background(), testPID, "db", filepath.Join(tmp, "big"), discard); err != nil {
+		t.Fatal(err)
+	}
+	// 等的时候没有排队的写锁：同一个副本的同步照样能开始。
+	done := make(chan struct{})
+	go func() { r.rlock(testPID, "web")(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("同步被挡住了")
+	}
+	// 添加备份节点时指定位置也一样，不会一直等。
+	s := &agentService{node: &agent{replicas: r}}
+	_, err = s.AcceptReplica(context.Background(), &nagiv1.AcceptReplicaRequest{
+		Spec: &nagiv1.ContainerSpec{ProjectId: testPID, Name: "web"}, SourceKey: make([]byte, 32), ReplicaDir: filepath.Join(tmp, "big"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "同步进行中") {
+		t.Fatalf("应该报同步进行中：%v", err)
+	}
+}
+
 func TestSetReplicaDefault(t *testing.T) {
 	r, tmp := testReplicas(t)
 	addReplica(t, r, "a")
