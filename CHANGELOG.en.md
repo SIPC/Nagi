@@ -8,6 +8,34 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.32.0
+
+### New features
+
+- When a node has a public IP, the browser downloads files directly from the node instead of through the panel.
+- Registry mirrors add "Use defaults", and changes take effect immediately without restarting Docker.
+- Alert channels add "Allow private addresses" for sending alerts to services on a local network.
+
+### Improvements
+
+- When a panel update or node upgrade fails to download, another download address is tried automatically, and the working address is remembered.
+- The file manager shows actual directory sizes, and modification times show the exact date and time.
+
+### Fixes
+
+- Fixed several security issues involving compose privilege checks, alert channels, upgrade downloads and direct download links.
+
+### Behavior changes
+
+- Nodes with a public IP serve direct downloads on port 443. You can turn off direct download in the node's settings.
+- Alert webhooks can only send to public addresses by default.
+- Compose fields that aren't on the allow list, such as `container_name` and `use_api_socket`, can only be saved by an administrator.
+
+### Upgrade notes
+
+- For alert channels that use a local network address, select "Allow private addresses" on the channel.
+- Upgrade nodes to v0.32.0 to use direct download and full directory size calculation.
+
 ## v0.31.0
 
 ### New features
