@@ -1159,6 +1159,9 @@ message CheckPanelUpdateResponse {
   string unsupported = 5;
   // 上次向 GitHub 查询最新版本的时间（结果缓存 1 小时）。
   google.protobuf.Timestamp checked_at = 6;
+  // 直接连不上 GitHub、经加速代理查到的最新版本时是这个代理的主机名，界面写明「查询自 <代理>」；直接从 GitHub 查到时为空。
+  // 版本号由代理决定，下载时能连上 GitHub 就按 GitHub 上的校验值核对（见 docs/panel.md#更新面板）。
+  string latest_source = 7;
 }
 
 message GetPanelReleaseNotesRequest {}

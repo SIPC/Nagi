@@ -450,6 +450,13 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
             {/* 检查失败：红字写原因，下面的「检查更新」兼作重试。 */}
             {!d && q.error && <span className="text-destructive">{errorMessage(q.error)}</span>}
             {state && <span>{state}</span>}
+            {/* 经加速代理查到的版本号由代理决定，写明查询自哪里（见 docs/panel.md#更新面板）。 */}
+            {d?.available && d.latestSource && !active && (
+              <span className="inline-flex items-center gap-1">
+                {t.update.querySource(d.latestSource)}
+                <HelpTip>{t.update.querySourceHelp}</HelpTip>
+              </span>
+            )}
             {showChecked && <span>{t.update.checkedAgo(timeAgo(checkedAt))}</span>}
             {canUpdate && scopeHint && (
               <span className="inline-flex items-center gap-1">

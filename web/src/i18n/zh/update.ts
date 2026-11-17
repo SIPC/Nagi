@@ -7,6 +7,8 @@ export default {
   lessInfo: "收起",
   upToDate: "已是最新版本",
   available: "有可用更新",
+  querySource: (host: string) => `查询自 ${host}`,
+  querySourceHelp: "无法直连 GitHub，版本号经加速代理查询。更新时如能连上 GitHub，按 GitHub 上的校验值核对；GitHub 上没有此版本时不会更新。",
   primaryHint: "备用面板需单独更新。",
   primaryHelp: "两边的数据库版本不同时，备用面板会暂停同步，直到更新到同一版本。",
   standbyHint: "仅更新本备用面板。",

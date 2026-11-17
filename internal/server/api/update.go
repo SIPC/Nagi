@@ -24,6 +24,8 @@ type panelUpdates struct {
 	mu      sync.Mutex
 	latest  string
 	checked time.Time
+	// via：latest 是经这个加速代理查到的（主机名），直接从 GitHub 查到时为空（见 release.Latest）。
+	via string
 	// running：正在更新。成功以后进程被替换，不会再回到 false。
 	running atomic.Bool
 
@@ -62,24 +64,35 @@ func (u *panelUpdates) changelog(ctx context.Context, base, version string, lang
 
 // get 返回最新发布的版本号，force 时不用缓存。连不上 GitHub 时经 proxy（安装时用上的加速代理，可以为空）查。
 func (u *panelUpdates) get(ctx context.Context, force bool, proxy string) (string, error) {
-	v, _, err := u.getChecked(ctx, force, proxy)
-	return v, err
+	c, err := u.getChecked(ctx, force, proxy)
+	return c.version, err
 }
 
-// getChecked 和 get 一样，另外返回查询的时间。
-func (u *panelUpdates) getChecked(ctx context.Context, force bool, proxy string) (string, time.Time, error) {
+// latestCheck 是一次最新版本的查询结果。
+type latestCheck struct {
+	version string
+	// via：经这个加速代理查到的（主机名），直接从 GitHub 查到时为空。
+	via     string
+	checked time.Time
+}
+
+// getChecked 和 get 一样，另外返回查询的时间和经哪个加速代理查到。
+func (u *panelUpdates) getChecked(ctx context.Context, force bool, proxy string) (latestCheck, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if !force && u.latest != "" && time.Since(u.checked) < updateCheckTTL {
-		return u.latest, u.checked, nil
+		return latestCheck{u.latest, u.via, u.checked}, nil
 	}
-	v, err := release.Latest(ctx, proxy)
+	v, via, err := latestFunc(ctx, proxy)
 	if err != nil {
-		return "", time.Time{}, err
+		return latestCheck{}, err
 	}
-	u.latest, u.checked = v, time.Now()
-	return v, u.checked, nil
+	u.latest, u.via, u.checked = v, via, time.Now()
+	return latestCheck{v, via, u.checked}, nil
 }
+
+// latestFunc 是 release.Latest，测试里换掉。
+var latestFunc = release.Latest
 
 // updateUnsupported 返回本面板不能一键更新的原因，能更新时返回空。发布的文件只有 Linux 版，本地编译的版本没有对应的发布文件。
 func (p *PanelInfo) updateUnsupported() error {
@@ -98,12 +111,13 @@ func (s *settingsService) CheckPanelUpdate(ctx context.Context, req *connect.Req
 		out.Unsupported = i18n.Localize(i18n.FromContext(ctx), err)
 		return connect.NewResponse(out), nil
 	}
-	latest, checked, err := s.updates.getChecked(ctx, req.Msg.GetForce(), release.ProxyFor(s.Panel.DataDir))
+	c, err := s.updates.getChecked(ctx, req.Msg.GetForce(), release.ProxyFor(s.Panel.DataDir))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}
-	out.Latest, out.ReleaseUrl, out.CheckedAt = latest, release.PageURL(latest), timestamppb.New(checked)
-	out.Available = release.Older(s.Panel.Version, latest)
+	out.Latest, out.ReleaseUrl, out.CheckedAt = c.version, release.PageURL(c.version), timestamppb.New(c.checked)
+	out.Available = release.Older(s.Panel.Version, c.version)
+	out.LatestSource = c.via
 	return connect.NewResponse(out), nil
 }
 

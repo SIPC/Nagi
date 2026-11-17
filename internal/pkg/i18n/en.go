@@ -149,6 +149,8 @@ var en = map[string]string{
 	"已尝试 %d 个下载地址，均未成功（%s：%w）":        "All %d download sources failed (%s: %v)",
 	"%s 提供的 SHA256SUMS 和 GitHub 上的不一致，已跳过": "The SHA256SUMS from %s doesn't match the one on GitHub, so it was skipped",
 	"下载 %s 的速度过慢，已停止":                  "Downloading %s was too slow and was stopped",
+	"GitHub 上没有版本 %s，已停止下载":            "Version %s doesn't exist on GitHub, so the download was stopped",
+	"GitHub 上的 %s 没有 %s，已停止下载":          "Release %s on GitHub has no %s, so the download was stopped",
 
 	// ---- 面板设置 ----
 	"对外地址须为 IP 地址或域名，不含端口":        "The public address must be an IP address or domain name without a port",

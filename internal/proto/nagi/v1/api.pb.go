@@ -7888,7 +7888,10 @@ type CheckPanelUpdateResponse struct {
 	// 本面板不能一键更新的原因（例如本地编译的版本），能更新时为空。
 	Unsupported string `protobuf:"bytes,5,opt,name=unsupported,proto3" json:"unsupported,omitempty"`
 	// 上次向 GitHub 查询最新版本的时间（结果缓存 1 小时）。
-	CheckedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	CheckedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	// 直接连不上 GitHub、经加速代理查到的最新版本时是这个代理的主机名，界面写明「查询自 <代理>」；直接从 GitHub 查到时为空。
+	// 版本号由代理决定，下载时能连上 GitHub 就按 GitHub 上的校验值核对（见 docs/panel.md#更新面板）。
+	LatestSource  string `protobuf:"bytes,7,opt,name=latest_source,json=latestSource,proto3" json:"latest_source,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7963,6 +7966,13 @@ func (x *CheckPanelUpdateResponse) GetCheckedAt() *timestamppb.Timestamp {
 		return x.CheckedAt
 	}
 	return nil
+}
+
+func (x *CheckPanelUpdateResponse) GetLatestSource() string {
+	if x != nil {
+		return x.LatestSource
+	}
+	return ""
 }
 
 type GetPanelReleaseNotesRequest struct {
@@ -13581,7 +13591,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x16PromoteStandbyResponse\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x04R\x04term\"/\n" +
 	"\x17CheckPanelUpdateRequest\x12\x14\n" +
-	"\x05force\x18\x01 \x01(\bR\x05force\"\xe8\x01\n" +
+	"\x05force\x18\x01 \x01(\bR\x05force\"\x8d\x02\n" +
 	"\x18CheckPanelUpdateResponse\x12\x18\n" +
 	"\acurrent\x18\x01 \x01(\tR\acurrent\x12\x16\n" +
 	"\x06latest\x18\x02 \x01(\tR\x06latest\x12\x1c\n" +
@@ -13590,7 +13600,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"releaseUrl\x12 \n" +
 	"\vunsupported\x18\x05 \x01(\tR\vunsupported\x129\n" +
 	"\n" +
-	"checked_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\"\x1d\n" +
+	"checked_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcheckedAt\x12#\n" +
+	"\rlatest_source\x18\a \x01(\tR\flatestSource\"\x1d\n" +
 	"\x1bGetPanelReleaseNotesRequest\"Q\n" +
 	"\x1cGetPanelReleaseNotesResponse\x121\n" +
 	"\breleases\x18\x01 \x03(\v2\x15.nagi.v1.ReleaseNotesR\breleases\"<\n" +

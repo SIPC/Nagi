@@ -83,7 +83,9 @@ func TestGitHubProxiesFormat(t *testing.T) {
 //   - hang：发了响应头就不再发数据；
 //   - trickle：文件一直有数据，但很慢（每秒约 4 KB，1 MB 要四分多钟）；
 //   - corrupt：文件被改过，SHA256SUMS 还是原来的；
-//   - evil：换了一份文件，SHA256SUMS 也换成和它对得上的。
+//   - evil：换了一份文件，SHA256SUMS 也换成和它对得上的；
+//   - missing：没有这个版本（都返回 404，GitHub 上没有的版本就是这样）；
+//   - otherArch：SHA256SUMS 里没有本机架构的文件。
 type fakeRelease struct {
 	srv  *httptest.Server
 	mode string
@@ -106,6 +108,10 @@ func newFake(t *testing.T, mode string) *fakeRelease {
 			return
 		}
 		switch f.mode {
+		case "missing":
+			http.NotFound(w, r)
+		case "otherArch":
+			w.Write([]byte(sum(goodBin) + "  nagi-linux-other\n"))
 		case "down":
 			w.WriteHeader(http.StatusInternalServerError)
 		case "binDown":
@@ -163,10 +169,10 @@ func setup(t *testing.T) {
 	t.Helper()
 	noKnownProxies(t)
 	probe := httptest.NewTLSServer(http.NotFoundHandler())
-	oldT, oldTime := transport, lowSpeedTime
-	transport, lowSpeedTime = probe.Client().Transport, 300*time.Millisecond
+	oldT, oldTime, oldPin := transport, lowSpeedTime, pinTimeout
+	transport, lowSpeedTime, pinTimeout = probe.Client().Transport, 300*time.Millisecond, 2*time.Second
 	probe.Close()
-	t.Cleanup(func() { transport, lowSpeedTime = oldT, oldTime })
+	t.Cleanup(func() { transport, lowSpeedTime, pinTimeout = oldT, oldTime, oldPin })
 }
 
 // sourcesOf 按顺序排出地址：第一个是「GitHub」，其余是经它的加速代理。
@@ -326,6 +332,90 @@ func TestFetchFirst(t *testing.T) {
 	})
 }
 
+// 能连上 GitHub 时，排在最前的（记着的）加速代理也要按 GitHub 上的 SHA256SUMS 核对；GitHub 上没有这个版本时
+// 不去试代理（代理可以谎报一个 GitHub 上没有的新版本，见 Latest）；完全连不上 GitHub 时才信任代理自己的 SHA256SUMS。
+func TestFetchFirstPinsGitHub(t *testing.T) {
+	setup(t)
+	quiet := slog.New(slog.DiscardHandler)
+	run := func(t *testing.T, sources []Source) (Source, string, error) {
+		t.Helper()
+		dst := filepath.Join(t.TempDir(), "nagi.new")
+		src, err := fetchFirst(context.Background(), sources, dst, nil, quiet)
+		b, _ := os.ReadFile(dst)
+		return src, string(b), err
+	}
+	// recordedFirst 和 Sources 一样，把（记着的）代理排在 GitHub 前面。
+	recordedFirst := func(direct, recorded *fakeRelease, rest ...*fakeRelease) []Source {
+		s := sourcesOf(direct, append([]*fakeRelease{recorded}, rest...)...)
+		return append([]Source{s[1], s[0]}, s[2:]...)
+	}
+
+	t.Run("记着的代理换了文件，GitHub 能连上：不用代理的文件", func(t *testing.T) {
+		direct, evil := newFake(t, "ok"), newFake(t, "evil")
+		src, got, err := run(t, recordedFirst(direct, evil))
+		if err != nil || !src.direct() || got != goodBin {
+			t.Fatalf("得到 %+v、%q、%v", src, got, err)
+		}
+		if n := evil.hits.Load(); n != 1 {
+			t.Fatalf("代理的 SHA256SUMS 对不上时不应下载它的文件，请求了 %d 次", n)
+		}
+	})
+
+	t.Run("记着的代理换了文件，GitHub 只能取到 SHA256SUMS：失败", func(t *testing.T) {
+		direct, evil := newFake(t, "binDown"), newFake(t, "evil")
+		_, got, err := run(t, recordedFirst(direct, evil))
+		if err == nil || got == evilBin {
+			t.Fatalf("应失败，实际 %q、%v", got, err)
+		}
+		if !strings.Contains(err.Error(), "和 GitHub 上的不一致") && !strings.Contains(err.Error(), "已尝试") {
+			t.Fatalf("错误：%v", err)
+		}
+	})
+
+	t.Run("记着的代理正常，GitHub 能连上：照常经代理下载", func(t *testing.T) {
+		direct, recorded := newFake(t, "ok"), newFake(t, "ok")
+		src, got, err := run(t, recordedFirst(direct, recorded))
+		if err != nil || src.Proxy != recorded.srv.URL+"/" || got != goodBin {
+			t.Fatalf("得到 %+v、%q、%v", src, got, err)
+		}
+	})
+
+	t.Run("GitHub 连不上：信任代理自己的 SHA256SUMS", func(t *testing.T) {
+		for _, mode := range []string{"down", "hang"} {
+			direct, recorded := newFake(t, mode), newFake(t, "evil")
+			src, got, err := run(t, recordedFirst(direct, recorded))
+			if err != nil || src.Proxy != recorded.srv.URL+"/" || got != evilBin {
+				t.Fatalf("%s：得到 %+v、%q、%v", mode, src, got, err)
+			}
+		}
+	})
+
+	t.Run("代理谎报的版本 GitHub 上没有：不试代理", func(t *testing.T) {
+		direct, recorded, other := newFake(t, "missing"), newFake(t, "evil"), newFake(t, "evil")
+		_, got, err := run(t, recordedFirst(direct, recorded, other))
+		if err == nil || !strings.Contains(err.Error(), "GitHub 上没有版本 v0.1.0") || got != "" {
+			t.Fatalf("应报 GitHub 上没有这个版本，实际 %q、%v", got, err)
+		}
+		if recorded.hits.Load() != 0 || other.hits.Load() != 0 {
+			t.Fatalf("不应再试代理：%d、%d", recorded.hits.Load(), other.hits.Load())
+		}
+	})
+
+	t.Run("GitHub 的 SHA256SUMS 里没有本机架构：不试代理", func(t *testing.T) {
+		direct, recorded := newFake(t, "otherArch"), newFake(t, "evil")
+		if _, _, err := run(t, recordedFirst(direct, recorded)); err == nil || recorded.hits.Load() != 0 {
+			t.Fatalf("应失败且不试代理，实际 %v、%d", err, recorded.hits.Load())
+		}
+	})
+
+	t.Run("只有 GitHub 时不另取 SHA256SUMS", func(t *testing.T) {
+		direct := newFake(t, "ok")
+		if _, got, err := run(t, sourcesOf(direct)); err != nil || got != goodBin || direct.hits.Load() != 2 {
+			t.Fatalf("得到 %q、%v，请求 %d 次", got, err, direct.hits.Load())
+		}
+	})
+}
+
 // 记着的是镜像时不动 github-proxy。
 func TestRememberMirror(t *testing.T) {
 	dir := t.TempDir()
@@ -349,7 +439,17 @@ func TestLatestViaKnownProxies(t *testing.T) {
 	}))
 	defer good.Close()
 	knownProxies = []string{"http://127.0.0.1:1/", good.URL + "/"}
-	if got, err := Latest(context.Background(), ""); got != "v0.7.0" || err != nil {
+	got, via, err := Latest(context.Background(), "")
+	if got != "v0.7.0" || err != nil {
 		t.Fatalf("得到 %q、%v", got, err)
+	}
+	// 经代理查到的版本要写明查询自哪个代理：版本号由代理决定。
+	if via != hostOf(good.URL) {
+		t.Fatalf("via 是 %q，应为 %q", via, hostOf(good.URL))
+	}
+	// 直接查到时 via 为空。
+	latestURL = good.URL + "/releases/latest"
+	if got, via, err := Latest(context.Background(), ""); got != "v0.7.0" || via != "" || err != nil {
+		t.Fatalf("直接查询：%q、%q、%v", got, via, err)
 	}
 }
