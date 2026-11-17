@@ -3186,7 +3186,9 @@ type VolumeDirSizesRequest struct {
 	Names []string `protobuf:"bytes,5,rep,name=names,proto3" json:"names,omitempty"`
 	// full：统计完整的大小（见 fileops.DirSizeFull*）。不带时是很快返回的一遍，超出限额的标为不完整，
 	// 界面再对这些目录带 full 请求一次。
-	Full          bool `protobuf:"varint,6,opt,name=full,proto3" json:"full,omitempty"`
+	Full bool `protobuf:"varint,6,opt,name=full,proto3" json:"full,omitempty"`
+	// max_bytes：统计到的大小超过它就停下，标为 too_large（界面自动统计时用 5 GiB，用户点「计算」时不限）。0 表示不限。
+	MaxBytes      int64 `protobuf:"varint,7,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3261,6 +3263,13 @@ func (x *VolumeDirSizesRequest) GetFull() bool {
 		return x.Full
 	}
 	return false
+}
+
+func (x *VolumeDirSizesRequest) GetMaxBytes() int64 {
+	if x != nil {
+		return x.MaxBytes
+	}
+	return 0
 }
 
 type FileOpResult struct {
@@ -3402,7 +3411,9 @@ type DirSize struct {
 	Size  int64                  `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
 	Files int64                  `protobuf:"varint,3,opt,name=files,proto3" json:"files,omitempty"`
 	// false：超出了时间或文件数的限额，size 只是已经统计到的部分。
-	Complete      bool `protobuf:"varint,4,opt,name=complete,proto3" json:"complete,omitempty"`
+	Complete bool `protobuf:"varint,4,opt,name=complete,proto3" json:"complete,omitempty"`
+	// too_large：超过了请求里的 max_bytes，没有统计完（complete 为 false）。
+	TooLarge      bool `protobuf:"varint,5,opt,name=too_large,json=tooLarge,proto3" json:"too_large,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3461,6 +3472,13 @@ func (x *DirSize) GetFiles() int64 {
 func (x *DirSize) GetComplete() bool {
 	if x != nil {
 		return x.Complete
+	}
+	return false
+}
+
+func (x *DirSize) GetTooLarge() bool {
+	if x != nil {
+		return x.TooLarge
 	}
 	return false
 }
@@ -6998,8 +7016,9 @@ type NodeDirSizesRequest struct {
 	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Path   string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
 	Names  []string               `protobuf:"bytes,3,rep,name=names,proto3" json:"names,omitempty"`
-	// full：同 VolumeDirSizesRequest.full。
-	Full          bool `protobuf:"varint,4,opt,name=full,proto3" json:"full,omitempty"`
+	// full、max_bytes：同 VolumeDirSizesRequest。
+	Full          bool  `protobuf:"varint,4,opt,name=full,proto3" json:"full,omitempty"`
+	MaxBytes      int64 `protobuf:"varint,5,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7060,6 +7079,13 @@ func (x *NodeDirSizesRequest) GetFull() bool {
 		return x.Full
 	}
 	return false
+}
+
+func (x *NodeDirSizesRequest) GetMaxBytes() int64 {
+	if x != nil {
+		return x.MaxBytes
+	}
+	return 0
 }
 
 // NodeFileUploadChunk 第一条带 ref 和 confirmed，之后是内容。
@@ -8328,7 +8354,7 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\bdest_dir\x18\x05 \x01(\tR\adestDir\x12 \n" +
 	"\finto_new_dir\x18\x06 \x01(\bR\n" +
 	"intoNewDir\x12\x1a\n" +
-	"\bconflict\x18\a \x01(\tR\bconflict\"\xaa\x01\n" +
+	"\bconflict\x18\a \x01(\tR\bconflict\"\xc7\x01\n" +
 	"\x15VolumeDirSizesRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
@@ -8336,7 +8362,8 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x06volume\x18\x03 \x01(\tR\x06volume\x12\x12\n" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12\x14\n" +
 	"\x05names\x18\x05 \x03(\tR\x05names\x12\x12\n" +
-	"\x04full\x18\x06 \x01(\bR\x04full\"\x81\x01\n" +
+	"\x04full\x18\x06 \x01(\bR\x04full\x12\x1b\n" +
+	"\tmax_bytes\x18\a \x01(\x03R\bmaxBytes\"\x81\x01\n" +
 	"\fFileOpResult\x12\x1c\n" +
 	"\tconflicts\x18\x01 \x03(\tR\tconflicts\x12\x14\n" +
 	"\x05paths\x18\x02 \x03(\tR\x05paths\x12\x18\n" +
@@ -8345,12 +8372,13 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\vFileOpEvent\x12\x14\n" +
 	"\x05bytes\x18\x01 \x01(\x03R\x05bytes\x12\x14\n" +
 	"\x05files\x18\x02 \x01(\x03R\x05files\x12-\n" +
-	"\x06result\x18\x03 \x01(\v2\x15.nagi.v1.FileOpResultR\x06result\"c\n" +
+	"\x06result\x18\x03 \x01(\v2\x15.nagi.v1.FileOpResultR\x06result\"\x80\x01\n" +
 	"\aDirSize\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\x12\x14\n" +
 	"\x05files\x18\x03 \x01(\x03R\x05files\x12\x1a\n" +
-	"\bcomplete\x18\x04 \x01(\bR\bcomplete\":\n" +
+	"\bcomplete\x18\x04 \x01(\bR\bcomplete\x12\x1b\n" +
+	"\ttoo_large\x18\x05 \x01(\bR\btooLarge\":\n" +
 	"\x10DirSizesResponse\x12&\n" +
 	"\x05sizes\x18\x01 \x03(\v2\x10.nagi.v1.DirSizeR\x05sizes\"\xb2\x01\n" +
 	"\x12UploadBeginRequest\x12.\n" +
@@ -8585,12 +8613,13 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\finto_new_dir\x18\x04 \x01(\bR\n" +
 	"intoNewDir\x12\x1a\n" +
 	"\bconflict\x18\x05 \x01(\tR\bconflict\x12\x1c\n" +
-	"\tconfirmed\x18\x06 \x01(\bR\tconfirmed\"l\n" +
+	"\tconfirmed\x18\x06 \x01(\bR\tconfirmed\"\x89\x01\n" +
 	"\x13NodeDirSizesRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x14\n" +
 	"\x05names\x18\x03 \x03(\tR\x05names\x12\x12\n" +
-	"\x04full\x18\x04 \x01(\bR\x04full\"o\n" +
+	"\x04full\x18\x04 \x01(\bR\x04full\x12\x1b\n" +
+	"\tmax_bytes\x18\x05 \x01(\x03R\bmaxBytes\"o\n" +
 	"\x13NodeFileUploadChunk\x12&\n" +
 	"\x03ref\x18\x01 \x01(\v2\x14.nagi.v1.NodeFileRefR\x03ref\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1c\n" +

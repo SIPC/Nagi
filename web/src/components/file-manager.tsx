@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
 import { toast } from "sonner";
-import { Alert, Button, Check, Collapse, Dialog, DialogActions, Field, Input, List, Menu, Notice, Row, Segmented, Skeleton, Spinner, useIsMobile } from "@/components/ui";
+import { Alert, Button, Check, textLink, Collapse, Dialog, DialogActions, Field, Input, List, Menu, Notice, Row, Segmented, Skeleton, Spinner, useIsMobile } from "@/components/ui";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fmtBytes, fmtRate } from "@/components/metrics";
 import type { DirSize, FileOpEvent } from "@/gen/nagi/v1/agent_pb";
@@ -550,18 +550,20 @@ export function formatModified(date: Date | undefined): string {
   return date.toLocaleString(locale, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-// useDirSizes：目录列表出来以后统计子目录的大小，分两遍：先很快地统计一遍；没统计完的目录（文件多）再带 full
-// 请求一次，在后台算出真实的大小，算完之前显示占位。full 也没算完的（极大的目录）不显示大小。
-// fetch 要把 signal 交给请求：离开页面或换目录时取消，节点上的统计随之停下，不再占着名额。
-export function useDirSizes(
-  key: unknown[],
-  names: string[],
-  enabled: boolean,
-  fetch: (names: string[], full: boolean, signal: AbortSignal) => Promise<{ sizes: DirSize[] }>,
-) {
+// autoSizeLimit：自动统计到这么大为止。更大的目录要用户点「计算」才完整统计，免得每次打开目录都把磁盘读一遍。
+const autoSizeLimit = 5 * 1024 ** 3;
+
+type DirSizeFetch = (names: string[], full: boolean, maxBytes: number, signal: AbortSignal) => Promise<{ sizes: DirSize[] }>;
+
+export type DirSizeState = { size?: DirSize; pending: boolean; onCompute?: () => void };
+
+// useDirSizes：目录列表出来以后统计子目录的大小，分几步：先很快地统计一遍；没统计完的目录（文件多）再在后台完整统计，
+// 最多统计到 5 GiB；超过的目录显示「计算」，用户点了才统计完整的大小。算完之前显示占位，
+// 完整统计也没算完的（极大的目录）不显示大小。
+export function useDirSizes(key: unknown[], names: string[], enabled: boolean, fetch: DirSizeFetch) {
   const quick = useQuery({
     queryKey: [...key, "quick", names.join("/")],
-    queryFn: ({ signal }) => fetch(names, false, signal),
+    queryFn: ({ signal }) => fetch(names, false, 0, signal),
     enabled: enabled && names.length > 0,
     staleTime: 30_000,
     retry: false,
@@ -569,24 +571,55 @@ export function useDirSizes(
   const rest = (quick.data?.sizes ?? []).filter((s) => !s.complete).map((s) => s.name);
   const full = useQuery({
     queryKey: [...key, "full", rest.join("/")],
-    queryFn: ({ signal }) => fetch(rest, true, signal),
+    queryFn: ({ signal }) => fetch(rest, true, autoSizeLimit, signal),
     enabled: enabled && rest.length > 0,
     staleTime: 30_000,
     retry: false,
   });
-  return (name: string): { size?: DirSize; pending: boolean } => {
+  // 用户点了「计算」的目录，不限大小地统计。换目录（key 变了）时清空。
+  const [asked, setAsked] = useState<string[]>([]);
+  const keyText = JSON.stringify(key);
+  useEffect(() => setAsked([]), [keyText]);
+  const manual = useQuery({
+    queryKey: [...key, "manual", asked.join("/")],
+    queryFn: ({ signal }) => fetch(asked, true, 0, signal),
+    enabled: enabled && asked.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return (name: string): DirSizeState => {
     const q = quick.data?.sizes.find((s) => s.name === name);
     if (!q) return { pending: quick.isFetching && !quick.data };
     if (q.complete) return { size: q, pending: false };
     const f = full.data?.sizes.find((s) => s.name === name);
-    if (f) return { size: f, pending: false };
-    return { pending: full.isFetching || full.isPending };
+    if (!f) return { pending: full.isFetching || full.isPending };
+    if (!f.tooLarge) return { size: f, pending: false };
+    if (!asked.includes(name)) return { pending: false, onCompute: () => setAsked((a) => [...a, name]) };
+    const m = manual.data?.sizes.find((s) => s.name === name);
+    if (m && !manual.isFetching) return { size: m, pending: false };
+    return { pending: true };
   };
 }
 
-// DirSizeText：列表里目录的大小。统计中显示占位；极大的目录在限额内没统计完时不显示大小，悬停说明。
-export function DirSizeText({ size, pending }: { size?: DirSize; pending: boolean }) {
+// DirSizeText：列表里目录的大小。统计中显示占位；超过自动统计上限的目录显示「计算」按钮；
+// 极大的目录在限额内没统计完时不显示大小，悬停说明。
+export function DirSizeText({ size, pending, onCompute }: DirSizeState) {
   if (pending) return <Skeleton className="ml-auto inline-block h-3 w-12 align-middle" />;
+  if (onCompute)
+    return (
+      <button
+        type="button"
+        className={textLink}
+        title={fm.sizeTooLarge}
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onCompute();
+        }}
+      >
+        {fm.computeSize}
+      </button>
+    );
   if (!size) return null;
   if (!size.complete) return <span className="text-muted-foreground" title={fm.sizeIncomplete}>—</span>;
   return <>{fmtBytes(Number(size.size))}</>;

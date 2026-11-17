@@ -552,6 +552,8 @@ message VolumeDirSizesRequest {
   // full：统计完整的大小（见 fileops.DirSizeFull*）。不带时是很快返回的一遍，超出限额的标为不完整，
   // 界面再对这些目录带 full 请求一次。
   bool full = 6;
+  // max_bytes：统计到的大小超过它就停下，标为 too_large（界面自动统计时用 5 GiB，用户点「计算」时不限）。0 表示不限。
+  int64 max_bytes = 7;
 }
 
 message FileOpResult {
@@ -578,6 +580,8 @@ message DirSize {
   int64 files = 3;
   // false：超出了时间或文件数的限额，size 只是已经统计到的部分。
   bool complete = 4;
+  // too_large：超过了请求里的 max_bytes，没有统计完（complete 为 false）。
+  bool too_large = 5;
 }
 
 message DirSizesResponse {
@@ -966,8 +970,9 @@ message NodeDirSizesRequest {
   string node_id = 1;
   string path = 2;
   repeated string names = 3;
-  // full：同 VolumeDirSizesRequest.full。
+  // full、max_bytes：同 VolumeDirSizesRequest。
   bool full = 4;
+  int64 max_bytes = 5;
 }
 
 // NodeFileUploadChunk 第一条带 ref 和 confirmed，之后是内容。
