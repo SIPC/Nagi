@@ -226,7 +226,11 @@ docker compose -p nagi-<项目 ID>-<容器名> \
 
 - **镜像更新**：节点每天检查一次本节点上各容器用到的镜像有没有新版本（只查询镜像摘要，不下载，也不消耗 Docker Hub 的拉取次数），上报面板标出来，不自动升级。用户点"更新镜像"时拉取新镜像并重新部署这个容器，记为这个容器的新版本，出问题可以回滚。检查到新版本时按钮显示在容器页标题旁；没检查到时（还没到检查时间、从未部署成功的容器不参与检查）也可以随时从容器页的 ⋯ 菜单手动更新。有草稿时草稿会一起部署，界面上先确认。
 - **版本记录镜像摘要**：容器的每个版本记录部署时每个镜像的实际摘要（digest）。回滚时用旧摘要，即使镜像标签是 `latest`，也能回到当时那一份镜像。
-- **镜像加速**：可以在面板上按节点配置镜像加速地址，国内节点配置、海外节点不配。只有用户配置了，Nagi 才会写入 Docker 的配置（`/etc/docker/daemon.json`），并提示需要重启 Docker。重启 Docker 会让容器短暂中断，建议同时开启 Docker 的 `live-restore`。
+- **镜像加速**：可以在面板上按节点配置 Docker Hub 镜像加速地址，国内节点配置、海外节点不配。只有用户配置了，Nagi 才会写入 Docker 的配置（`/etc/docker/daemon.json` 的 `registry-mirrors`，保留其他配置），不会自己改。
+  - **默认地址**：编辑对话框里的「使用默认加速」填入面板给的默认地址（`Mirrors.defaults`，来自 `api.DefaultRegistryMirrors`），和安装脚本在中国大陆网络写入的 `REGISTRY_MIRRORS` 是同一份（`TestInstallConstants` 检查），用 `--download-url` 或在海外安装的节点也能一键配上。
+  - **立即生效，不重启 Docker**：写入后节点让 dockerd 重新加载配置（`internal/agent/dockerreload.go`）：由 systemd 管理、docker 服务在运行时用 `systemctl reload docker`（docker.service 的 `ExecReload` 就是发 SIGHUP）；不行时按 `/var/run/docker.pid` 找到 dockerd（先核对 `/proc/<pid>/comm` 确实是 `dockerd`，pid 文件可能是旧的）发 SIGHUP；再不行在所有进程里找唯一一个 `dockerd`。`registry-mirrors` 可以热加载，容器不受影响。然后最多等 5 秒，用 `docker info` 核对 Docker 正在用的地址和写入的一致（忽略末尾的 `/`），响应里的 `reloaded` 表示已生效；没生效时 `reload_error` 写原因（找不到 dockerd、Docker 拒绝了配置等），界面上说明要重启 Docker 才生效。Nagi 不重启 Docker：重启会让容器短暂中断，建议同时开启 Docker 的 `live-restore`。旧版本的节点不重新加载，界面看到写入的和正在用的不一样，提示重启 Docker 后生效。
+  - **清空**：写空列表 `"registry-mirrors": []`，不删掉这一项：Docker 重新加载配置时只改文件里有的项，删掉的话它会接着用原来的地址（在 docker:dind 里实测）。
+  - **检查**：地址须为 `http://` 或 `https://` 开头的完整地址，不能带账号、查询参数或 `#`（和 Docker 自己的检查一样，不合规的地址会让 Docker 拒绝整份配置、重启时起不来）。
 - **私有仓库认证**：每个项目有自己的认证（项目里所有容器共用），存在面板上（主密钥加密），部署时写进容器目录的 `docker/config.json`，通过 `DOCKER_CONFIG` 指向它，不碰全局的 `~/.docker`。两个项目用同一个仓库的不同账号也不会冲突。
   - 在项目上登录仓库时，由一个在线节点用 `docker login` 向仓库验证账号（接口只返回仓库地址，不返回密码）。项目登录过仓库才设置 `DOCKER_CONFIG`；没有时照旧用机器全局的配置。认证随配置下发给顶替节点和备份节点，热备提前拉镜像时也用它。
 - **镜像更新的实现**：节点启动 5 分钟后检查一次，之后每 24 小时一次，也可以在容器上手动检查。对每个正在运行的容器，用 Docker 的 distribution 接口（HEAD 请求清单）查询标签当前的摘要，和本地镜像的仓库摘要比较。回滚时固定了摘要的镜像、本地构建（没有仓库摘要）的镜像跳过。"更新"就是带 `pull_images` 的容器部署：先 `docker compose pull` 再启动。

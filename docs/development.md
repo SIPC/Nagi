@@ -133,7 +133,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 面板安装脚本的其他要点：
 
 - 用了 `--download-url` 时把地址记在 `<数据目录>/panel/download-url`，面板一键更新时也从这里下载（见 [panel.md](panel.md#更新面板)）。
-- 检测到中国大陆网络时经 GitHub 加速代理下载，用上的代理记在 `<数据目录>/panel/github-proxy`，一键更新先经它下载，不行再换别的地址（见 [guide/install.md](guide/install.md#中国大陆服务器)、[panel.md](panel.md#更新面板)）。代理列表 `GH_PROXIES` 在 Go 里也有一份（`release.GitHubProxies`），改动时一起改，`TestInstallConstants` 会检查。
+- 检测到中国大陆网络时经 GitHub 加速代理下载，用上的代理记在 `<数据目录>/panel/github-proxy`，一键更新先经它下载，不行再换别的地址（见 [guide/install.md](guide/install.md#中国大陆服务器)、[panel.md](panel.md#更新面板)）。代理列表 `GH_PROXIES` 和 Docker Hub 镜像加速地址 `REGISTRY_MIRRORS` 在 Go 里各有一份（`release.GitHubProxies`、`api.DefaultRegistryMirrors`），改动时一起改，`TestInstallConstants` 会检查。
 - 已安装时再次执行即为升级，只更换二进制并重启；端口、数据目录、是否带内嵌节点不允许在升级时修改（已加入的节点按原端口连接面板）。
 - `--standby <配对码>` 安装备用面板：首次启动带上配对码，配对成功（数据目录出现 `panel/paired`）后从服务配置中去掉。
 - 本机已有节点（`nagi-agent` 服务）时拒绝安装带内嵌节点的面板；只装面板时需 `--no-agent` 并使用另一个数据目录。

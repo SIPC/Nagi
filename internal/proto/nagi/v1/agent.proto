@@ -706,8 +706,14 @@ message GetMirrorsRequest {}
 message Mirrors {
   // 写在 daemon.json 里的地址。
   repeated string mirrors = 1;
-  // Docker 当前生效的地址（只读）。和 mirrors 不一样说明还没有重启 Docker。
+  // Docker 当前生效的地址（只读）。和 mirrors 不一样说明 Docker 还没有重新加载配置。
   repeated string active = 2;
+  // 只在 SetMirrors 的响应里：节点写入后让 Docker 重新加载了配置，并且 Docker 已在使用新的地址。v0.32.0 起有。
+  bool reloaded = 3;
+  // 只在 SetMirrors 的响应里：没能让 Docker 重新加载配置的原因（中文，面板按请求的语言翻译），为空表示成功或旧版本的节点。
+  string reload_error = 4;
+  // 默认的加速地址（和安装脚本在中国大陆网络写入的一样），由面板填写，节点不填。
+  repeated string defaults = 5;
 }
 
 message MeshStatusRequest {}

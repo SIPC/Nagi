@@ -31,12 +31,20 @@ func TestSharedScript(t *testing.T) {
 	}
 }
 
-// 安装脚本里的加速代理要和 Go 里的一致：一键升级按 release.GitHubProxies 换代理。
-// scripts/install.sh 由 TestSharedScript 保证和 sharedScript 一样。
+// 安装脚本里的加速代理和 Docker Hub 镜像加速地址要和 Go 里的一致：一键升级按 release.GitHubProxies 换代理，
+// 界面上「使用默认加速」填 DefaultRegistryMirrors。scripts/install.sh 由 TestSharedScript 保证和 sharedScript 一样。
 func TestInstallConstants(t *testing.T) {
 	proxies := `GH_PROXIES="` + release.GitHubProxies + `"` + "\n"
 	if !strings.Contains(sharedScript, proxies) {
 		t.Errorf("sharedScript 里的 GH_PROXIES 和 release.GitHubProxies 不一致，应为 %s", proxies)
+	}
+	quoted := make([]string, len(DefaultRegistryMirrors))
+	for i, m := range DefaultRegistryMirrors {
+		quoted[i] = `"` + m + `"`
+	}
+	mirrors := `REGISTRY_MIRRORS='` + strings.Join(quoted, ", ") + `'` + "\n"
+	if !strings.Contains(sharedScript, mirrors) {
+		t.Errorf("sharedScript 里的 REGISTRY_MIRRORS 和 DefaultRegistryMirrors 不一致，应为 %s", mirrors)
 	}
 }
 

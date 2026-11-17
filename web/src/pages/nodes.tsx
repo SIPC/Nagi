@@ -1174,7 +1174,7 @@ function sameMirrors(a: string[], b: string[]) {
   return a.length === b.length && a.every((m, i) => trimSlash(m) === trimSlash(b[i]));
 }
 
-// MirrorsSummary：镜像加速那一行的状态：当前的加速地址；daemon.json 里的和 Docker 正在用的不一样时（还没有重启 Docker），后面写「重启 Docker 后生效」。
+// MirrorsSummary：镜像加速那一行的状态：当前的加速地址；daemon.json 里的和 Docker 正在用的不一样时（Docker 没能重新加载配置，或者旧版本的节点），后面写「重启 Docker 后生效」。
 function MirrorsSummary({ mirrors }: { mirrors: Mirrors }) {
   const pending = !sameMirrors(mirrors.mirrors, mirrors.active);
   const list = t.common.list(mirrors.mirrors) || t.nodes.mirrors.empty;
@@ -1196,12 +1196,16 @@ function MirrorsSummary({ mirrors }: { mirrors: Mirrors }) {
   );
 }
 
-// MirrorsForm：编辑节点的 Docker 镜像加速地址（见 docs/agent.md#镜像），放在对话框里。
+// MirrorsForm：编辑节点的 Docker 镜像加速地址（见 docs/agent.md 的「镜像加速」），放在对话框里。保存后节点让 Docker 重新加载配置；
+// 没能重新加载时留在对话框里说明原因，要重启 Docker 才生效。「使用默认加速」填入面板给的默认地址（和安装脚本的一样）。
 function MirrorsForm({ nodeId, mirrors, onDone }: { nodeId: string; mirrors: Mirrors; onDone: () => void }) {
   const queryClient = useQueryClient();
+  const m = t.nodes.mirrors;
   const [value, setValue] = useState(mirrors.mirrors.join("\n"));
   const [error, setError] = useState("");
+  const [reloadError, setReloadError] = useState("");
   const [busy, setBusy] = useState(false);
+  const id = `mirrors-${nodeId}`;
   const save = async () => {
     setBusy(true);
     setError("");
@@ -1212,13 +1216,28 @@ function MirrorsForm({ nodeId, mirrors, onDone }: { nodeId: string; mirrors: Mir
         .filter(Boolean);
       const res = await nodeClient.setNodeMirrors({ nodeId, mirrors: list });
       queryClient.setQueryData(["node-mirrors", nodeId], res);
-      onDone();
+      if (res.reloadError) setReloadError(res.reloadError);
+      else onDone();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
   };
+  if (reloadError) {
+    return (
+      <div className="grid gap-4">
+        <Notice tone="warning" title={m.reloadFailedTitle}>
+          {m.reloadFailedText(reloadError)}
+        </Notice>
+        <DialogActions>
+          <Button readOnlyOk onClick={onDone} autoFocus>
+            {t.common.actions.done}
+          </Button>
+        </DialogActions>
+      </div>
+    );
+  }
   return (
     <form
       className="grid gap-4"
@@ -1227,11 +1246,25 @@ function MirrorsForm({ nodeId, mirrors, onDone }: { nodeId: string; mirrors: Mir
         save();
       }}
     >
-      <Field label={t.nodes.mirrors.label} htmlFor={`mirrors-${nodeId}`} hint={t.nodes.mirrors.hint} help={t.nodes.mirrors.help}>
-        <Textarea id={`mirrors-${nodeId}`} rows={4} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://mirror.example.com" autoFocus spellCheck={false} className="py-2" />
+      <Field label={m.label} htmlFor={id} hint={m.hint} help={m.help}>
+        <Textarea id={id} rows={4} value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://mirror.example.com" autoFocus spellCheck={false} className="py-2" />
       </Field>
       {error && <Alert keepFocus>{error}</Alert>}
       <DialogActions>
+        {mirrors.defaults.length > 0 && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="mr-auto"
+            title={mirrors.defaults.join("\n")}
+            onClick={() => {
+              setValue(mirrors.defaults.join("\n"));
+              document.getElementById(id)?.focus();
+            }}
+          >
+            {m.useDefaults}
+          </Button>
+        )}
         <Button variant="outline" readOnlyOk onClick={onDone}>
           {t.common.actions.cancel}
         </Button>

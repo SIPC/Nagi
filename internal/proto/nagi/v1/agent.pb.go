@@ -4688,8 +4688,14 @@ type Mirrors struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 写在 daemon.json 里的地址。
 	Mirrors []string `protobuf:"bytes,1,rep,name=mirrors,proto3" json:"mirrors,omitempty"`
-	// Docker 当前生效的地址（只读）。和 mirrors 不一样说明还没有重启 Docker。
-	Active        []string `protobuf:"bytes,2,rep,name=active,proto3" json:"active,omitempty"`
+	// Docker 当前生效的地址（只读）。和 mirrors 不一样说明 Docker 还没有重新加载配置。
+	Active []string `protobuf:"bytes,2,rep,name=active,proto3" json:"active,omitempty"`
+	// 只在 SetMirrors 的响应里：节点写入后让 Docker 重新加载了配置，并且 Docker 已在使用新的地址。v0.32.0 起有。
+	Reloaded bool `protobuf:"varint,3,opt,name=reloaded,proto3" json:"reloaded,omitempty"`
+	// 只在 SetMirrors 的响应里：没能让 Docker 重新加载配置的原因（中文，面板按请求的语言翻译），为空表示成功或旧版本的节点。
+	ReloadError string `protobuf:"bytes,4,opt,name=reload_error,json=reloadError,proto3" json:"reload_error,omitempty"`
+	// 默认的加速地址（和安装脚本在中国大陆网络写入的一样），由面板填写，节点不填。
+	Defaults      []string `protobuf:"bytes,5,rep,name=defaults,proto3" json:"defaults,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4734,6 +4740,27 @@ func (x *Mirrors) GetMirrors() []string {
 func (x *Mirrors) GetActive() []string {
 	if x != nil {
 		return x.Active
+	}
+	return nil
+}
+
+func (x *Mirrors) GetReloaded() bool {
+	if x != nil {
+		return x.Reloaded
+	}
+	return false
+}
+
+func (x *Mirrors) GetReloadError() string {
+	if x != nil {
+		return x.ReloadError
+	}
+	return ""
+}
+
+func (x *Mirrors) GetDefaults() []string {
+	if x != nil {
+		return x.Defaults
 	}
 	return nil
 }
@@ -8288,10 +8315,13 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\x06source\x18\x02 \x01(\tR\x06source\"\x16\n" +
 	"\x14CancelUpgradeRequest\"\x17\n" +
 	"\x15CancelUpgradeResponse\"\x13\n" +
-	"\x11GetMirrorsRequest\";\n" +
+	"\x11GetMirrorsRequest\"\x96\x01\n" +
 	"\aMirrors\x12\x18\n" +
 	"\amirrors\x18\x01 \x03(\tR\amirrors\x12\x16\n" +
-	"\x06active\x18\x02 \x03(\tR\x06active\"\x13\n" +
+	"\x06active\x18\x02 \x03(\tR\x06active\x12\x1a\n" +
+	"\breloaded\x18\x03 \x01(\bR\breloaded\x12!\n" +
+	"\freload_error\x18\x04 \x01(\tR\vreloadError\x12\x1a\n" +
+	"\bdefaults\x18\x05 \x03(\tR\bdefaults\"\x13\n" +
 	"\x11MeshStatusRequest\"\x13\n" +
 	"\x11ListPanelsRequest\"C\n" +
 	"\x12ListPanelsResponse\x12-\n" +

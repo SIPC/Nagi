@@ -294,8 +294,13 @@ func (s *nodeService) GetNodeMirrors(ctx context.Context, req *connect.Request[n
 	if err != nil {
 		return nil, fromGRPC(err)
 	}
+	resp.Defaults = DefaultRegistryMirrors
 	return connect.NewResponse(resp), nil
 }
+
+// DefaultRegistryMirrors 是默认的 Docker Hub 镜像加速地址：安装脚本在中国大陆网络写进 daemon.json 的就是它们
+// （REGISTRY_MIRRORS，TestInstallConstants 检查两边一致），界面上「使用默认加速」也填它们。都是第三方服务，可能失效。
+var DefaultRegistryMirrors = []string{"https://docker.m.daocloud.io", "https://docker.1ms.run"}
 
 func (s *nodeService) SetNodeMirrors(ctx context.Context, req *connect.Request[nagiv1.SetNodeMirrorsRequest]) (*connect.Response[nagiv1.Mirrors], error) {
 	a, err := s.agent(req.Msg.GetNodeId())
@@ -306,6 +311,8 @@ func (s *nodeService) SetNodeMirrors(ctx context.Context, req *connect.Request[n
 	if err != nil {
 		return nil, fromGRPC(err)
 	}
+	resp.ReloadError = i18n.Text(i18n.FromContext(ctx), resp.GetReloadError())
+	resp.Defaults = DefaultRegistryMirrors
 	return connect.NewResponse(resp), nil
 }
 

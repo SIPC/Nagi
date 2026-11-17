@@ -75,7 +75,7 @@ case "$DATA_DIR" in "" | /*) ;; *) fail "数据目录须为绝对路径" ;; esac
 
 # 中国大陆网络（见 docs/guide/install.md#中国大陆服务器）：detect_cn 检测到以后 CN=1，GitHub 上的文件经加速代理下载，
 # Docker 用阿里云的软件源，并配置 Docker Hub 镜像加速。代理和加速地址都是第三方服务，按顺序试，失效了换下一个。
-# GH_PROXIES 在 Go 里也有一份（release.GitHubProxies，一键升级时换代理用），有测试检查一致。
+# 两个列表在 Go 里也有一份（release.GitHubProxies：一键升级时换代理用；api.DefaultRegistryMirrors：界面上的默认加速），有测试检查一致。
 GH_PROXIES="https://ghfast.top/ https://gh-proxy.com/ https://ghproxy.net/"
 REGISTRY_MIRRORS='"https://docker.m.daocloud.io", "https://docker.1ms.run"'
 CN=""

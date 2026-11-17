@@ -31,7 +31,7 @@ func init() {
 			procedures:  []string{ln, nagiv1connect.NodeServiceGetNodeMeshProcedure, nagiv1connect.NodeServiceGetPanelMeshProcedure, nagiv1connect.NodeServicePingNodeMeshProcedure}},
 			toolCheckMesh),
 		def(tool{name: "get_node_mirrors", title: "Get registry mirrors", idempotent: true, adminOnly: true,
-			description: "Administrators only. The Docker Hub registry mirrors configured on a node, and the ones Docker currently uses (they differ until Docker restarts).",
+			description: "Administrators only. The Docker Hub registry mirrors configured on a node, the ones Docker currently uses (they differ until Docker reloads its configuration), and the default mirrors.",
 			procedures:  []string{ln, nagiv1connect.NodeServiceGetNodeMirrorsProcedure}},
 			toolGetNodeMirrors),
 
@@ -57,7 +57,7 @@ func init() {
 			procedures:  []string{ln, nagiv1connect.NodeServiceRemoveNodeProcedure}},
 			toolRemoveNode),
 		def(tool{name: "set_node_mirrors", title: "Set registry mirrors", write: true, idempotent: true, adminOnly: true,
-			description: "Administrators only. Replace a node's Docker Hub registry mirrors (http or https URLs; empty removes them) in /etc/docker/daemon.json. Docker uses them after it restarts, which Nagi does not do.",
+			description: "Administrators only. Replace a node's Docker Hub registry mirrors (http or https URLs; empty removes them) in /etc/docker/daemon.json, then make Docker reload its configuration without restarting containers. If the reload fails, Docker uses them after it restarts, which Nagi does not do.",
 			procedures:  []string{ln, nagiv1connect.NodeServiceSetNodeMirrorsProcedure}},
 			toolSetNodeMirrors),
 		def(tool{name: "set_node_projects_root", title: "Set projects root", write: true, idempotent: true, adminOnly: true,
@@ -326,7 +326,7 @@ func toolGetNodeMirrors(c *call, in NodeArg) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"node": n.GetName(), "configured": orEmpty(res.Msg.GetMirrors()), "active": orEmpty(res.Msg.GetActive())}, nil
+	return map[string]any{"node": n.GetName(), "configured": orEmpty(res.Msg.GetMirrors()), "active": orEmpty(res.Msg.GetActive()), "defaults": orEmpty(res.Msg.GetDefaults())}, nil
 }
 
 // ---- 修改 ----
@@ -458,8 +458,17 @@ func toolSetNodeMirrors(c *call, in MirrorsArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"configured": orEmpty(res.Msg.GetMirrors()), "active": orEmpty(res.Msg.GetActive()),
-		"note": "written to /etc/docker/daemon.json; Docker uses them after a restart (restarting Docker briefly interrupts containers unless live-restore is on)"}, nil
+	out := map[string]any{"configured": orEmpty(res.Msg.GetMirrors()), "active": orEmpty(res.Msg.GetActive()), "reloaded": res.Msg.GetReloaded()}
+	switch {
+	case res.Msg.GetReloaded():
+		out["note"] = "written to /etc/docker/daemon.json; Docker reloaded its configuration and uses them now"
+	case res.Msg.GetReloadError() != "":
+		out["reload_error"] = res.Msg.GetReloadError()
+		out["note"] = "written to /etc/docker/daemon.json, but Docker didn't reload it; Docker uses them after a restart (restarting Docker briefly interrupts containers unless live-restore is on)"
+	default: // 旧版本的节点不重新加载
+		out["note"] = "written to /etc/docker/daemon.json; Docker uses them after a restart (restarting Docker briefly interrupts containers unless live-restore is on)"
+	}
+	return out, nil
 }
 
 type ProjectsRootArgs struct {

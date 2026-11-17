@@ -145,7 +145,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_versions` | 容器的全部版本：创建和部署时间、镜像、git 提交、是否保存了文件、回滚自哪个版本（`get_container` 只给最近 5 个） | `ListVersions` |
 | `get_node` | 一个节点的详情：系统和版本、占用、标签、告警规则、项目根目录、节点访问是否可用、面板不认识的容器和以节点为准的项目（见下面的 `adopt_*`）、信任的面板、节点上保存的副本 | `ListNodes`、`ListNodePanels`、`ListNodeReplicas` |
 | `check_mesh` | 一个节点（或面板自己）看到的节点网络：每个成员的路径（直连、中转）、延迟、丢包、最近握手；带 `peer` 时让节点立即 ping 这个成员 | `GetNodeMesh`、`GetPanelMesh`、`PingNodeMesh` |
-| `get_node_mirrors` | 只给管理员：节点的镜像加速地址和 Docker 当前生效的 | `GetNodeMirrors` |
+| `get_node_mirrors` | 只给管理员：节点的镜像加速地址、Docker 当前生效的和默认的加速地址 | `GetNodeMirrors` |
 | `list_node_images` | 只给管理员：节点上的镜像（标签、ID、大小、创建时间、使用它的容器、Nagi 需要它的原因），一键清理会删除几个、至少释放多少，可回收的构建缓存。可以按文字筛选，最多列 300 个 | `ListNodeImages` |
 
 ### 日常操作
@@ -233,7 +233,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `rename_project_group` | 改项目分组名；`new_name` 为空时删除分组（要确认），项目变为未分组 | 分组名（删除时） | `RenameProjectGroup` |
 | `approve_node` | 批准用接入码加入、在等批准的节点。预览给出节点报告的主机名、地址、系统、版本（标明是节点报告的，不可信），提醒接入码可能泄露 | 节点名 | `ApproveNode` |
 | `remove_node` | 让面板忘记节点；节点上还有容器时接口拒绝 | 节点名 | `RemoveNode` |
-| `set_node_mirrors` | 替换节点的镜像加速地址（写 `/etc/docker/daemon.json`，Docker 重启后才用） | — | `SetNodeMirrors` |
+| `set_node_mirrors` | 替换节点的镜像加速地址（写 `/etc/docker/daemon.json`，再让 Docker 重新加载配置，不重启容器；重新加载不了时要重启 Docker 才用） | — | `SetNodeMirrors` |
 | `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器 | — | `SetNodeProjectsRoot` |
 | `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转，只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
 | `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
