@@ -501,13 +501,18 @@ func BindMountPaths(proj *types.Project, dataDir string) []string {
 				continue
 			}
 			rel, err := filepath.Rel(dataDir, v.Source)
-			if err != nil || rel == "." || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+			if err != nil || rel == "." || relOutside(rel) {
 				continue
 			}
 			out = append(out, filepath.ToSlash(rel))
 		}
 	}
 	return out
+}
+
+// relOutside 判断 filepath.Rel 的结果是不是在起点之外：`..` 本身或以 `../` 开头。`..x` 这样的名字在里面。
+func relOutside(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel)
 }
 
 // DataServices 返回挂载了 data/ 里文件的服务。文件更新后要重建这些服务的容器，
@@ -520,7 +525,7 @@ func DataServices(proj *types.Project, dataDir string) []string {
 				continue
 			}
 			rel, err := filepath.Rel(dataDir, v.Source)
-			if err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
+			if err == nil && !relOutside(rel) {
 				out = append(out, name)
 				break
 			}

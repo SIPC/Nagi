@@ -788,6 +788,7 @@ var en = map[string]string{
 	"不能把目录移动或复制到它自己里面":               "Can't move or copy a directory into itself",
 	"不能用目录里的内容覆盖这个目录":                "Can't replace a directory with an item inside it",
 	"不能移动一级目录":                       "Can't move a top-level directory",
+	"容器目录不能包含以 .. 开头的名称":             "The container directory can't contain a name that starts with ..",
 	"不能覆盖根目录下的项目":                    "Can't overwrite an item directly under the root directory",
 	"不能选择卷的根目录":                      "Can't select the volume's root directory",
 	"不能选择根目录":                        "Can't select the root directory",

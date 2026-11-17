@@ -206,6 +206,13 @@ func (s *projectService) checkOperatorDir(ctx context.Context, nodeID, dir strin
 		root = path.Clean(c.LastReport().GetNode().GetProjectsRoot())
 	}
 	clean := path.Clean(dir)
+	// 以 .. 开头的路径段（例如 `..x`）一律不收：节点按相对路径判断是否在项目根目录里，这类名字容易被误判成在外面，
+	// 进而跳过符号链接的检查。
+	for _, seg := range strings.Split(clean, "/") {
+		if strings.HasPrefix(seg, "..") {
+			return connect.NewError(connect.CodeInvalidArgument, i18n.New("容器目录不能包含以 .. 开头的名称"))
+		}
+	}
 	if root != "." && root != "/" && path.IsAbs(root) && strings.HasPrefix(clean, root+"/") {
 		return nil
 	}

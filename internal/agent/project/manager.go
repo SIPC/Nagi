@@ -396,6 +396,12 @@ func (m *Manager) CheckDir(ctx context.Context, dir string) (string, error) {
 	if dir == filepath.Dir(dir) {
 		return "", invalid("不能使用根目录作为容器目录")
 	}
+	// 以 .. 开头的路径段（例如 `..x`）一律不收：按相对路径判断里外时容易被误判，见 within。
+	for _, seg := range strings.Split(dir, "/") {
+		if strings.HasPrefix(seg, "..") {
+			return "", invalid("容器目录不能包含以 .. 开头的名称")
+		}
+	}
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		return "", invalid("目录 %s 已存在且不为空，请更换目录。如果是迁移、顶替或删除后留下的旧目录，确认不再需要后请在节点上删除", dir)
 	}
@@ -496,13 +502,19 @@ func linkBelow(root, dir string) bool {
 	return false
 }
 
-// within 判断 child 是否等于 parent 或位于 parent 之内。
+// within 判断 child 是否等于 parent 或位于 parent 之内。注意 rel 可以是 `..x`（parent 下一个名字以 .. 开头的目录），
+// 它在里面：只有 `..` 本身或以 `../` 开头才在外面。
 func within(child, parent string) bool {
 	rel, err := filepath.Rel(parent, child)
 	if err != nil {
 		return false
 	}
-	return rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
+	return !outside(rel)
+}
+
+// outside 判断 filepath.Rel 的结果是不是在起点之外。
+func outside(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel)
 }
 
 // ---- 容器网段 ----
