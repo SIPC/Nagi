@@ -2,6 +2,7 @@ package spec
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,8 +10,11 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/compose-spec/compose-go/v2/loader"
+	"github.com/compose-spec/compose-go/v2/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,6 +58,28 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 		reasons = append(reasons, fmt.Sprintf(format, args...))
 		dynamic = dynamic || dyn
 	}
+	checkDoc(doc, add)
+	// 再按 compose 自己的解析结果检查一遍：合并键、锚点、标签这类写法，compose 和这里用的 YAML 库理解可能不同，
+	// 检查要看到节点上 compose 实际读到的内容。compose 解析不了的算有特权。
+	model, err := composeModel(text)
+	if err != nil {
+		add(false, "compose")
+	} else {
+		checkDoc(model, add)
+	}
+	// 现有目录：compose 在节点上的任意目录里运行，相对路径都指向那里。
+	if cfg.GetProjectDir() != "" {
+		add(false, "project_dir")
+	}
+	if p := cfg.GetBackupPaths(); len(p) > 0 {
+		add(false, "backup_paths: %s", strings.Join(p, ", "))
+	}
+	sort.Strings(reasons)
+	return slices.Compact(reasons), dynamic
+}
+
+// checkDoc 检查一份解析出来的 compose（顶层 map）。
+func checkDoc(doc map[string]any, add func(bool, string, ...any)) {
 	if doc["include"] != nil {
 		add(false, "include")
 	}
@@ -71,15 +97,29 @@ func PrivilegeReasons(cfg *nagiv1.ContainerConfig, container string) (reasons []
 	}
 	checkTopLevel(doc, add)
 	checkNestedBinds(doc, services, add)
-	// 现有目录：compose 在节点上的任意目录里运行，相对路径都指向那里。
-	if cfg.GetProjectDir() != "" {
-		add(false, "project_dir")
-	}
-	if p := cfg.GetBackupPaths(); len(p) > 0 {
-		add(false, "backup_paths: %s", strings.Join(p, ", "))
-	}
-	sort.Strings(reasons)
-	return slices.Compact(reasons), dynamic
+}
+
+// composeModel 用 compose 的解析库（和节点上部署时同一套规则）把 compose 读成 map：合并多个文档、展开锚点和合并键、
+// 按 !reset / !override 处理。不做变量替换、不补默认值、不解析相对路径，保持和原文一样的写法，交给 checkDoc。
+func composeModel(text string) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return loader.LoadModelWithContext(ctx, types.ConfigDetails{
+		WorkingDir:  "/nagi-privilege-check",
+		ConfigFiles: []types.ConfigFile{{Filename: "compose.yml", Content: []byte(text)}},
+		Environment: types.Mapping{},
+	}, func(o *loader.Options) {
+		o.SetProjectName("nagi-privilege-check", true)
+		o.SkipInterpolation = true
+		o.SkipValidation = true
+		o.SkipNormalization = true
+		o.SkipConsistencyCheck = true
+		o.SkipResolveEnvironment = true
+		o.SkipDefaultValues = true
+		o.SkipInclude = true
+		o.SkipExtends = true
+		o.ResolvePaths = false
+	})
 }
 
 func checkService(name string, svc map[string]any, services map[string]any, add func(bool, string, ...any)) {
@@ -312,12 +352,19 @@ func hasVar(v any) bool {
 	return false
 }
 
-// yamlShapeReason：下面按第一个 YAML 文档的普通 map 检查，所以 compose 实际会读到、而这里看不到的写法一律算有特权：
-//   - 多个文档（`---` 分隔）：compose 会把后面的文档合并进来，后面的文档里写什么这里都看不到；
-//   - 自定义标签（`!reset`、`!override` 这类不以 `!!` 开头的）：compose 按它们重置、覆盖前面的值，普通解析看不出来。
+// yamlShapeReason：普通的 YAML 解析和 compose 理解不一样的写法一律算有特权（读不懂就当作有特权）：
+//   - 多个文档（`---` 分隔）：compose 会把后面的文档合并进来；
+//   - 显式写了标签的（`!reset`、`!override`，以及 `!!merge` 这类标准标签）：compose 按标签处理，例如把带 `!!merge`
+//     的普通键当作合并键展开，这里的 YAML 库却当作普通键；正常的 compose 用不到显式标签；
+//   - `%TAG` 这类指令：能把自定义的前缀展开成标准标签。
 //
 // 不是合法 YAML 的交给后面的解析报错。
 func yamlShapeReason(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "%") {
+			return "compose: YAML directive"
+		}
+	}
 	dec := yaml.NewDecoder(bytes.NewReader([]byte(text)))
 	// 下面的检查只读第一个文档，所以除了第一个，后面的文档都得是空的（例如末尾多一个 ---）。
 	for i := 0; ; i++ {
@@ -354,7 +401,7 @@ func emptyDoc(n *yaml.Node) bool {
 }
 
 func customTag(n *yaml.Node) bool {
-	if n.Tag != "" && !strings.HasPrefix(n.Tag, "!!") && n.Tag != "!" {
+	if n.Style&yaml.TaggedStyle != 0 || n.Tag != "" && !strings.HasPrefix(n.Tag, "!!") {
 		return true
 	}
 	for _, c := range n.Content {
