@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
 )
 
@@ -16,10 +17,21 @@ const (
 	detachedStreamTimeout = 2 * time.Hour
 )
 
-func detachUnary(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+func detachUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	if cancelable[info.FullMethod] {
+		return handler(ctx, req)
+	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedUnaryTimeout)
 	defer cancel()
 	return handler(ctx, req)
+}
+
+// cancelable 是跟着调用方取消的查询：只读、停在中途不留下半截状态，又可能做很久。
+// 目录大小的完整统计最多 2 分钟，并且全节点只有 2 个名额（见 fileops.DirSizeLimits），
+// 浏览器离开页面或换目录后要停下，把名额让出来。
+var cancelable = map[string]bool{
+	nagiv1.AgentService_ListVolumeDirSizes_FullMethodName: true,
+	nagiv1.AgentService_ListNodeDirSizes_FullMethodName:   true,
 }
 
 func detachStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {

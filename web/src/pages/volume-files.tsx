@@ -105,8 +105,8 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const names = useMemo(() => entries.map((e) => e.name), [entries]);
   // 目录大小在列表出来以后再统计，不拖慢列表。
   const dirNames = entries.filter((e) => e.isDir && !e.isSymlink).map((e) => e.name);
-  const dirSize = useDirSizes(["volume-dir-sizes", project.id, container.name, volume, path], dirNames, ops && !!files.data, (names, full) =>
-    projectClient.listVolumeDirSizes({ ...base, path, names, full }),
+  const dirSize = useDirSizes(["volume-dir-sizes", project.id, container.name, volume, path], dirNames, ops && !!files.data, (names, full, signal) =>
+    projectClient.listVolumeDirSizes({ ...base, path, names, full }, { signal }),
   );
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["volume-files", project.id, container.name, volume] });
