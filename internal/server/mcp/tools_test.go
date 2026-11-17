@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"slices"
 	"strings"
 	"testing"
@@ -179,19 +181,63 @@ func TestNodeExecAllowed(t *testing.T) {
 
 // 节点命令的确认码绑定节点、工作目录、超时和命令：预览之后改了哪一项都不能用原来的确认码执行。
 func TestNodeExecCode(t *testing.T) {
-	base := nodeExecCode("n1", "/tmp", "ls", 30*time.Second)
-	if base != nodeExecCode("n1", "/tmp", "ls", 30*time.Second) {
+	c := &call{u: auth.User{ID: 1, TokenID: 7}}
+	code := func(nodeID, cwd, command string, timeout time.Duration) string {
+		return c.confirmCode(nodeExecParts(nodeID, cwd, command, timeout)...)
+	}
+	base := code("n1", "/tmp", "ls", 30*time.Second)
+	if base != code("n1", "/tmp", "ls", 30*time.Second) {
 		t.Fatal("同样的参数应该得到同样的确认码")
 	}
 	for i, other := range []string{
-		nodeExecCode("n2", "/tmp", "ls", 30*time.Second),
-		nodeExecCode("n1", "/", "ls", 30*time.Second),
-		nodeExecCode("n1", "/tmp", "ls", 60*time.Second),
-		nodeExecCode("n1", "/tmp", "ls; rm -rf /", 30*time.Second),
+		code("n2", "/tmp", "ls", 30*time.Second),
+		code("n1", "/", "ls", 30*time.Second),
+		code("n1", "/tmp", "ls", 60*time.Second),
+		code("n1", "/tmp", "ls; rm -rf /", 30*time.Second),
 	} {
 		if other == base {
 			t.Errorf("case %d: 参数变了，确认码却一样", i)
 		}
+	}
+}
+
+// 确认码只能来自预览（见 docs/mcp.md#确认码）：调用方按参数自己算不出来（混入了面板进程的随机密钥），
+// 别的令牌预览得到的用不了，过了有效期作废。
+func TestConfirmCodeOnlyFromPreview(t *testing.T) {
+	now := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
+	confirmNow = func() time.Time { return now }
+	defer func() { confirmNow = time.Now }()
+	a := &call{u: auth.User{ID: 1, TokenID: 7}}
+	parts := []string{"delete", "n1", "sha256:abc||"}
+	code := a.confirmCode(parts...)
+	// 旧的算法：不带密钥的 sha256(参数)。
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	if code == hex.EncodeToString(sum[:6]) {
+		t.Fatal("确认码不能只由参数算出")
+	}
+	if _, ok := a.confirm(code, parts...); !ok {
+		t.Fatal("刚预览得到的确认码应该能用")
+	}
+	if _, ok := a.confirm(code, "delete", "n1", "sha256:abd||"); ok {
+		t.Fatal("参数变了不能用")
+	}
+	if _, ok := (&call{u: auth.User{ID: 1, TokenID: 8}}).confirm(code, parts...); ok {
+		t.Fatal("别的令牌不能用")
+	}
+	if _, ok := (&call{u: auth.User{ID: 2, TokenID: 7}}).confirm(code, parts...); ok {
+		t.Fatal("别的成员不能用")
+	}
+	if _, ok := a.confirm("", parts...); ok {
+		t.Fatal("空的不能用")
+	}
+	// 至少 10 分钟内有效，至多 20 分钟。
+	now = now.Add(confirmWindow + confirmWindow/2)
+	if _, ok := a.confirm(code, parts...); !ok {
+		t.Fatal("15 分钟以内（上一个时间段）应该还能用")
+	}
+	now = now.Add(confirmWindow)
+	if _, ok := a.confirm(code, parts...); ok {
+		t.Fatal("过期的确认码不能用")
 	}
 }
 

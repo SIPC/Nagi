@@ -143,11 +143,10 @@ func toolUpdatePanelSettings(c *call, in PanelSettingsArgs) (any, error) {
 	if len(changes) == 0 {
 		return map[string]any{"note": "nothing changed"}, nil
 	}
-	code := confirmCode("update_panel_settings", fmt.Sprint(in.PublicAddress != nil), deref(in.PublicAddress), fmt.Sprint(in.Domain != nil), deref(in.Domain))
-	if in.Confirm != code {
-		out := preview("update_panel_settings", code, strings.Join(changes, "; ")+".", nil)
+	if code, ok := c.confirm(in.Confirm, "update_panel_settings", fmt.Sprint(in.PublicAddress != nil), deref(in.PublicAddress), fmt.Sprint(in.Domain != nil), deref(in.Domain)); !ok {
+		out := preview("update_panel_settings", code, strings.Join(changes, "; ")+". The current alert channels get a notice about this change first.", nil)
 		if in.Confirm != "" {
-			out["note"] = "the confirm code does not match these arguments; show this preview to the user again"
+			out["note"] = mismatchNote
 		}
 		return out, nil
 	}
@@ -296,11 +295,10 @@ func toolUpdateAlertChannels(c *call, in AlertChannelArgs) (any, error) {
 		return nil, errors.New("action must be add, update, rename or remove")
 	}
 	if text != "" {
-		code := confirmCode("update_alert_channels", in.Action, in.Channel, in.Name, in.Type, in.WebhookURL, in.TelegramToken, in.TelegramChatID)
-		if in.Confirm != code {
+		if code, ok := c.confirm(in.Confirm, "update_alert_channels", in.Action, in.Channel, in.Name, in.Type, in.WebhookURL, in.TelegramToken, in.TelegramChatID); !ok {
 			out := preview("update_alert_channels", code, text+" The current channels get a notice about this change first.", nil)
 			if in.Confirm != "" {
-				out["note"] = "the confirm code does not match these arguments; show this preview to the user again"
+				out["note"] = mismatchNote
 			}
 			return out, nil
 		}

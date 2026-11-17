@@ -88,9 +88,9 @@ func nodePath(p string) (string, error) {
 }
 
 // nodeConfirm 是节点文件操作的预览：确认码由工具、节点和参数算出。返回 nil 表示 confirm 对得上，可以执行。
-func nodeConfirm(tool, confirm string, n *nagiv1.Node, text string, extra map[string]any, args ...string) map[string]any {
-	code := confirmCode(append([]string{tool, n.GetId()}, args...)...)
-	if confirm == code {
+func (c *call) nodeConfirm(tool, confirm string, n *nagiv1.Node, text string, extra map[string]any, args ...string) map[string]any {
+	code, ok := c.confirm(confirm, append([]string{tool, n.GetId()}, args...)...)
+	if ok {
 		return nil
 	}
 	if extra == nil {
@@ -99,7 +99,7 @@ func nodeConfirm(tool, confirm string, n *nagiv1.Node, text string, extra map[st
 	extra["node"] = n.GetName()
 	out := preview(tool, code, text+" This runs as root on the node. Nothing changes until the user agrees.", extra)
 	if confirm != "" {
-		out["note"] = "the confirm code does not match these arguments; show this preview to the user again"
+		out["note"] = mismatchNote
 	}
 	if note := inContainerNote(n); note != "" {
 		out["in_container"] = note
@@ -290,7 +290,7 @@ func toolWriteNodeFile(c *call, in WriteNodeFileArgs) (any, error) {
 	if note := accessNote(access); note != "" {
 		extra["warning"] = note
 	}
-	if pv := nodeConfirm("write_node_file", in.Confirm, n, fmt.Sprintf("%s on node %s is %s.", p, n.GetName(), verb), extra, p, digest(content), in.ExpectedSHA256); pv != nil {
+	if pv := c.nodeConfirm("write_node_file", in.Confirm, n, fmt.Sprintf("%s on node %s is %s.", p, n.GetName(), verb), extra, p, digest(content), in.ExpectedSHA256); pv != nil {
 		return pv, nil
 	}
 	expected := ""
@@ -359,7 +359,7 @@ func toolDeleteNodeFile(c *call, in NodeConfirmPathArgs) (any, error) {
 	if note := accessNote(e.GetAccess()); note != "" {
 		extra["warning"] = note
 	}
-	if pv := nodeConfirm("delete_node_file", in.Confirm, n, fmt.Sprintf("the %s %s on node %s is deleted. There is no backup.", what, p, n.GetName()), extra, p); pv != nil {
+	if pv := c.nodeConfirm("delete_node_file", in.Confirm, n, fmt.Sprintf("the %s %s on node %s is deleted. There is no backup.", what, p, n.GetName()), extra, p); pv != nil {
 		return pv, nil
 	}
 	if _, err := c.h.clients.nodes.DeleteNodeFile(c.ctx, connect.NewRequest(&nagiv1.DeleteNodeFileRequest{NodeId: n.GetId(), Path: p, ConfirmName: path.Base(p)})); err != nil {
@@ -433,7 +433,7 @@ func toolMoveNodeFiles(c *call, in MoveNodeFilesArgs) (any, error) {
 	if in.Conflict == "overwrite" {
 		text += " Existing items with the same names at the target are replaced and their old content is lost."
 	}
-	if pv := nodeConfirm("move_node_files", in.Confirm, n, text, nil, action, strings.Join(paths, "\x01"), req.GetDestDir(), req.GetNewName(), in.Conflict); pv != nil {
+	if pv := c.nodeConfirm("move_node_files", in.Confirm, n, text, nil, action, strings.Join(paths, "\x01"), req.GetDestDir(), req.GetNewName(), in.Conflict); pv != nil {
 		return pv, nil
 	}
 	if action == "rename" {
@@ -480,7 +480,7 @@ func toolCompressNodeFiles(c *call, in CompressNodeFilesArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if pv := nodeConfirm("compress_node_files", in.Confirm, n, fmt.Sprintf("pack %s into %s (%s) on node %s.", strings.Join(paths, ", "), dest, format, n.GetName()), nil,
+	if pv := c.nodeConfirm("compress_node_files", in.Confirm, n, fmt.Sprintf("pack %s into %s (%s) on node %s.", strings.Join(paths, ", "), dest, format, n.GetName()), nil,
 		strings.Join(paths, "\x01"), dest, format, in.Conflict); pv != nil {
 		return pv, nil
 	}
@@ -523,7 +523,7 @@ func toolExtractNodeFile(c *call, in ExtractNodeFileArgs) (any, error) {
 	if in.Conflict == "overwrite" {
 		text += " Existing items with the same names are replaced and their old content is lost."
 	}
-	if pv := nodeConfirm("extract_node_file", in.Confirm, n, text, nil, p, dest, fmt.Sprint(in.Merge), in.Conflict); pv != nil {
+	if pv := c.nodeConfirm("extract_node_file", in.Confirm, n, text, nil, p, dest, fmt.Sprint(in.Merge), in.Conflict); pv != nil {
 		return pv, nil
 	}
 	return c.fileOp(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.FileOpEvent], error) {
@@ -566,7 +566,7 @@ func toolRestoreNodeFile(c *call, in RestoreNodeFileArgs) (any, error) {
 	if i < 0 {
 		return nil, fmt.Errorf("no kept version %q of %s", in.BackupID, p)
 	}
-	if pv := nodeConfirm("restore_node_file", in.Confirm, n, fmt.Sprintf("%s on node %s is replaced with the version from %s; the current content is kept as another backup.", p, n.GetName(), list[i].Time),
+	if pv := c.nodeConfirm("restore_node_file", in.Confirm, n, fmt.Sprintf("%s on node %s is replaced with the version from %s; the current content is kept as another backup.", p, n.GetName(), list[i].Time),
 		nil, p, in.BackupID); pv != nil {
 		return pv, nil
 	}
@@ -611,14 +611,13 @@ func toolImportComposeDir(c *call, in ImportComposeDirArgs) (any, error) {
 	if backup == nil {
 		backup = pr.GetBackupPaths()
 	}
-	code := confirmCode("import_compose_dir", s.GetProject().GetId(), n.GetId(), dir, name, strings.Join(backup, "\x01"))
-	if in.Confirm != code {
+	if code, ok := c.confirm(in.Confirm, "import_compose_dir", s.GetProject().GetId(), n.GetId(), dir, name, strings.Join(backup, "\x01")); !ok {
 		out := preview("import_compose_dir", code, fmt.Sprintf("the compose directory %s on node %s becomes container group %s in project %s. Data stays where it is. Nothing is deployed yet; deploying replaces the running compose project listed here.",
 			pr.GetPath(), n.GetName(), name, s.GetProject().GetName()),
 			map[string]any{"compose_file": pr.GetComposeFile(), "compose": pr.GetCompose(), "variables": pr.GetVariables(), "secret_variables": pr.GetSecretVariables(),
 				"running_project": pr.GetProject(), "running_containers": pr.GetContainers(), "notes": pr.GetNotes(), "backup_paths": backup, "untrusted": nodeUntrusted})
 		if in.Confirm != "" {
-			out["note"] = "the confirm code does not match these arguments; show this preview to the user again"
+			out["note"] = mismatchNote
 		}
 		return out, nil
 	}

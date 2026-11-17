@@ -91,6 +91,9 @@ func (s *settingsService) UpdateSettings(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("对外地址须为 IP 地址或域名，不含端口"))
 	}
 	old := s.Panel.PublicAddress(ctx)
+	if addr != old {
+		s.noticeBefore(ctx, "security:panel-address", i18n.Errorf("账号 %s 修改了面板对外地址：%s → %s", auth.CurrentUser(ctx).Name, old, addr).Error())
+	}
 	if err := s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingPublicAddress, Value: addr}); err != nil {
 		return nil, err
 	}
@@ -109,6 +112,13 @@ func (s *settingsService) SetPanelDomain(ctx context.Context, req *connect.Reque
 	d := strings.ToLower(strings.TrimSpace(req.Msg.GetDomain()))
 	if d != "" && (net.ParseIP(d) != nil || !hostnameRe.MatchString(d) || !strings.Contains(d, ".")) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("请填写域名，例如 panel.example.com"))
+	}
+	if old := s.Panel.Domain(ctx); d != old {
+		title := i18n.Errorf("账号 %s 修改了面板域名：%s", auth.CurrentUser(ctx).Name, d).Error()
+		if d == "" {
+			title = i18n.Errorf("账号 %s 解除了面板域名 %s", auth.CurrentUser(ctx).Name, old).Error()
+		}
+		s.noticeBefore(ctx, "security:panel-domain", title)
 	}
 	var err error
 	if d == "" {
@@ -180,6 +190,20 @@ func (s *settingsService) UpdateAlertConfig(ctx context.Context, req *connect.Re
 		return nil, err
 	}
 	return connect.NewResponse(&nagiv1.UpdateAlertConfigResponse{Config: cfg}), nil
+}
+
+// noticeBefore 在修改生效之前，用现在的告警渠道发一条通知并等它发完（见 docs/audit.md#安全告警）：
+// 面板的对外地址、域名被改掉之前，原来的渠道已经收到。拿到「管理面板」令牌的人也绕不过去。发送失败不挡修改。
+func (s *settingsService) noticeBefore(ctx context.Context, key, title string) {
+	if s.Nodes == nil || s.Panel == nil || s.Panel.Standby != nil {
+		return
+	}
+	u := auth.CurrentUser(ctx)
+	msg := i18n.Errorf("成员：%s；来源：%s", u.Name, auth.RequestMeta(ctx).IP).Error()
+	if u.TokenID != 0 {
+		msg += "（MCP）"
+	}
+	_ = s.Nodes.SendAlert(ctx, &nagiv1.Alert{Key: key, Status: "firing", Title: title, Message: msg, Time: timestamppb.Now()}, nil)
 }
 
 func (s *settingsService) TestAlertChannel(ctx context.Context, req *connect.Request[nagiv1.TestAlertChannelRequest]) (*connect.Response[nagiv1.TestAlertChannelResponse], error) {

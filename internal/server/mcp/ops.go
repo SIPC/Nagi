@@ -3,8 +3,6 @@ package mcp
 import (
 	"cmp"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -934,10 +932,9 @@ type NodeExecArgs struct {
 	Confirm string `json:"confirm,omitempty" jsonschema:"omit to get a preview; after the user agreed, call again with the same node, command, cwd and timeout and confirm set to the code from the preview"`
 }
 
-// nodeExecCode 是节点命令的确认码：由节点、工作目录、超时和命令算出，预览之后改了其中任何一项都对不上。
-func nodeExecCode(nodeID, cwd, command string, timeout time.Duration) string {
-	sum := sha256.Sum256([]byte(nodeID + "\x00" + cwd + "\x00" + timeout.String() + "\x00" + command))
-	return hex.EncodeToString(sum[:6])
+// nodeExecParts 是算节点命令确认码的参数：节点、工作目录、超时和命令，预览之后改了其中任何一项都对不上。
+func nodeExecParts(nodeID, cwd, command string, timeout time.Duration) []string {
+	return []string{"node_exec", nodeID, cwd, timeout.String(), command}
 }
 
 // toolNodeExec 在节点上执行一条命令（见 docs/mcp.md#节点命令）。每次都分两步：先预览，用户同意后带确认码执行。
@@ -961,11 +958,11 @@ func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
 	if in.TimeoutSeconds > 0 {
 		timeout = time.Duration(min(in.TimeoutSeconds, 120)) * time.Second
 	}
-	if code := nodeExecCode(n.GetId(), in.Cwd, in.Command, timeout); in.Confirm != code {
+	if code, ok := c.confirm(in.Confirm, nodeExecParts(n.GetId(), in.Cwd, in.Command, timeout)...); !ok {
 		out := preview("node_exec", code, fmt.Sprintf("this command runs as root on node %s, with full control of the machine. Nothing runs until the user agrees.", n.GetName()),
 			map[string]any{"node": n.GetName(), "command": in.Command, "cwd": cmp.Or(in.Cwd, "(root's home)"), "timeout_seconds": int(timeout / time.Second), "reason": in.Reason})
 		if in.Confirm != "" {
-			out["note"] = "the confirm code does not match this node, command, cwd and timeout; show this preview to the user again"
+			out["note"] = "the confirm code does not match this node, command, cwd and timeout, or has expired (codes are valid for at least 10 minutes and only from a preview); show this preview to the user again"
 		}
 		if note := inContainerNote(n); note != "" {
 			out["in_container"] = note

@@ -2,8 +2,6 @@ package mcp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"path"
@@ -36,13 +34,6 @@ func init() {
 			procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceExtractVolumeFileProcedure}},
 			toolExtractFile),
 	)
-}
-
-// confirmCode 是两步操作的确认码：由工具和参数算出，预览之后改了任何一项都对不上。和 node_exec 的确认码一样，
-// 只保证执行的就是预览过的操作，用户同意靠 agent 和客户端的确认提示。
-func confirmCode(parts ...string) string {
-	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return hex.EncodeToString(sum[:6])
 }
 
 // conflictModes 是同名时的处理：空表示有同名就什么都不改、返回冲突（网页先问用户的那一步）。
@@ -145,16 +136,24 @@ func (c *call) fileOp(open func(ctx context.Context) (*connect.ServerStreamForCl
 }
 
 // overwritePreview：覆盖同名会丢掉目标位置原来的内容，先预览。返回 nil 表示可以执行。
-func overwritePreview(tool, conflict, confirm, code, text string) map[string]any {
-	if conflict != "overwrite" || confirm == code {
+// args 是算确认码的参数（不含工具名）。
+func (c *call) overwritePreview(tool, conflict, confirm, text string, args ...string) map[string]any {
+	if conflict != "overwrite" {
+		return nil
+	}
+	code, ok := c.confirm(confirm, append([]string{tool}, args...)...)
+	if ok {
 		return nil
 	}
 	out := preview(tool, code, text+" Existing files and directories with the same names at the target are replaced and their old content is lost.", nil)
 	if confirm != "" {
-		out["note"] = "the confirm code does not match these arguments; show this preview to the user again"
+		out["note"] = mismatchNote
 	}
 	return out
 }
+
+// mismatchNote 是确认码对不上时的说明：参数变了，或者确认码过期了、不是这个令牌预览得到的。
+const mismatchNote = "the confirm code does not match these arguments or has expired (codes are valid for at least 10 minutes and only from a preview); show this preview to the user again"
 
 func cleanPaths(paths []string) ([]string, error) {
 	if len(paths) == 0 {
@@ -214,8 +213,8 @@ func toolMoveFiles(c *call, in MoveFilesArgs) (any, error) {
 	default:
 		return nil, errors.New("action must be move, copy or rename")
 	}
-	code := confirmCode("move_files", req.GetProjectId(), req.GetContainer(), req.GetVolume(), action, strings.Join(paths, "\x01"), req.GetDestDir(), req.GetNewName())
-	if p := overwritePreview("move_files", in.Conflict, in.Confirm, code, fmt.Sprintf("%s %s in volume %s of %s to %s.", action, strings.Join(paths, ", "), in.Volume, m.GetName(), "/"+req.GetDestDir())); p != nil {
+	if p := c.overwritePreview("move_files", in.Conflict, in.Confirm, fmt.Sprintf("%s %s in volume %s of %s to %s.", action, strings.Join(paths, ", "), in.Volume, m.GetName(), "/"+req.GetDestDir()),
+		req.GetProjectId(), req.GetContainer(), req.GetVolume(), action, strings.Join(paths, "\x01"), req.GetDestDir(), req.GetNewName()); p != nil {
 		return p, nil
 	}
 	if action == "rename" {
@@ -290,8 +289,8 @@ func toolCompressFiles(c *call, in CompressFilesArgs) (any, error) {
 		return nil, err
 	}
 	req := &nagiv1.VolumeCompressRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName(), Volume: in.Volume, Paths: paths, Dest: dest, Format: format, Conflict: in.Conflict}
-	code := confirmCode("compress_files", req.GetProjectId(), req.GetContainer(), req.GetVolume(), strings.Join(paths, "\x01"), dest, format)
-	if p := overwritePreview("compress_files", in.Conflict, in.Confirm, code, fmt.Sprintf("pack %s in volume %s of %s into %s.", strings.Join(paths, ", "), in.Volume, m.GetName(), dest)); p != nil {
+	if p := c.overwritePreview("compress_files", in.Conflict, in.Confirm, fmt.Sprintf("pack %s in volume %s of %s into %s.", strings.Join(paths, ", "), in.Volume, m.GetName(), dest),
+		req.GetProjectId(), req.GetContainer(), req.GetVolume(), strings.Join(paths, "\x01"), dest, format); p != nil {
 		return p, nil
 	}
 	return c.fileOp(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.FileOpEvent], error) {
@@ -332,8 +331,8 @@ func toolExtractFile(c *call, in ExtractFileArgs) (any, error) {
 		dest = strings.TrimPrefix(path.Join(dest, archiveBase(path.Base(p))), "/")
 	}
 	req := &nagiv1.VolumeExtractRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName(), Volume: in.Volume, Path: p, DestDir: dest, IntoNewDir: !in.Merge, Conflict: in.Conflict}
-	code := confirmCode("extract_file", req.GetProjectId(), req.GetContainer(), req.GetVolume(), p, dest, fmt.Sprint(in.Merge))
-	if pv := overwritePreview("extract_file", in.Conflict, in.Confirm, code, fmt.Sprintf("extract %s in volume %s of %s into %s.", p, in.Volume, m.GetName(), "/"+dest)); pv != nil {
+	if pv := c.overwritePreview("extract_file", in.Conflict, in.Confirm, fmt.Sprintf("extract %s in volume %s of %s into %s.", p, in.Volume, m.GetName(), "/"+dest),
+		req.GetProjectId(), req.GetContainer(), req.GetVolume(), p, dest, fmt.Sprint(in.Merge)); pv != nil {
 		return pv, nil
 	}
 	return c.fileOp(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.FileOpEvent], error) {
