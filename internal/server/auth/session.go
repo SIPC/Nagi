@@ -465,12 +465,14 @@ func sha256Sum(b []byte) []byte {
 }
 
 // RotateSession 用页面对挑战的签名换发新令牌。新令牌先处于待确认状态，浏览器带着它来请求以后才转正。
-func (s *Service) RotateSession(ctx context.Context, token string, signature []byte, info RequestInfo) (string, error) {
+// challenge 是页面签名的那个挑战：页面拿到挑战到提交签名之间，挑战可能已经换了（过期再发、别的标签页轮换了），
+// 这时签名对不上是正常的，不换发，也不算签名不符，页面用之后响应里的新挑战再签。为空时（旧版本的页面）按现在的挑战核对。
+func (s *Service) RotateSession(ctx context.Context, token, challenge string, signature []byte, info RequestInfo) (string, error) {
 	st, _, err := s.liveSession(ctx, token)
 	if err != nil {
 		return "", connect.NewError(connect.CodeUnauthenticated, err)
 	}
-	if st.Challenge == "" {
+	if st.Challenge == "" || challenge != "" && challenge != st.Challenge {
 		return "", connect.NewError(connect.CodeFailedPrecondition, i18n.New("现在不需要更换会话令牌"))
 	}
 	pk, err := parseP256(st.PublicKey)

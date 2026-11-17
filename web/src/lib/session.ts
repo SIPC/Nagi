@@ -81,7 +81,8 @@ function rotate(challenge: string) {
     const k = await loadKey();
     if (!k) return;
     const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, k.privateKey, new TextEncoder().encode(challenge));
-    await authClient.rotateSession({ signature: new Uint8Array(sig) });
+    // 带上签的是哪个挑战：签名期间挑战换了时，面板不会当成签名不符。
+    await authClient.rotateSession({ signature: new Uint8Array(sig), challenge });
   })()
     .catch(() => {
       // 签名失败时面板会要求重新验证，界面在那时处理。

@@ -30,7 +30,7 @@ func (s *authService) RegisterSessionKey(ctx context.Context, req *connect.Reque
 }
 
 func (s *authService) RotateSession(ctx context.Context, req *connect.Request[nagiv1.RotateSessionRequest]) (*connect.Response[nagiv1.RotateSessionResponse], error) {
-	next, err := s.Auth.RotateSession(ctx, auth.SessionToken(req.Header()), req.Msg.GetSignature(), requestInfo(ctx))
+	next, err := s.Auth.RotateSession(ctx, auth.SessionToken(req.Header()), req.Msg.GetChallenge(), req.Msg.GetSignature(), requestInfo(ctx))
 	if err != nil {
 		return nil, err
 	}
