@@ -324,17 +324,17 @@ function ConflictDialog({ names, check, hint, onClose }: { names: string[]; chec
           { value: "skip", label: fm.skip },
         ]}
       />
-      {(check || hint) && (
-        <Collapse open={choice === "overwrite"}>
-          {check ? (
+      {/* 覆盖是整个替换，目录不合并（见 docs/agent.md#存储）。 */}
+      <Collapse open={choice === "overwrite"}>
+        <div className="grid gap-4">
+          <p className="leading-5 text-muted-foreground">{`${fm.replaceNote}${t.common.sentenceEnd}${hint ?? ""}`.trim()}</p>
+          {check && (
             <Check checked={checked} onChange={setChecked}>
               {check}
             </Check>
-          ) : (
-            <p className="leading-5 text-muted-foreground">{hint}</p>
           )}
-        </Collapse>
-      )}
+        </div>
+      </Collapse>
       <DialogActions>
         <Button variant="outline" readOnlyOk onClick={() => onClose(null)}>
           {t.common.actions.cancel}

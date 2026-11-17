@@ -27,6 +27,7 @@ export default {
   conflictTitle: (names: string[]) => (names.length === 1 ? `已有同名项目 ${names[0]}` : `已有 ${names.length} 个同名项目`),
   conflictText: (names: string) => `同名项目：${names}`,
   more: (n: number) => `等 ${n} 项`,
+  replaceNote: "同名的文件和目录将被整个替换，目录内容不合并",
   keepBoth: "保留两者",
   overwrite: "覆盖",
   skip: "跳过",

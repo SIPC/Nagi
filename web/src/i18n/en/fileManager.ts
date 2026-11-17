@@ -28,6 +28,7 @@ export default {
   conflictTitle: (names) => (names.length === 1 ? `${names[0]} already exists` : `${names.length} items already exist`),
   conflictText: (names) => `Items with the same name: ${names}`,
   more: (n) => `and ${n} more`,
+  replaceNote: "Items with the same name are replaced entirely. Directory contents aren't merged",
   keepBoth: "Keep both",
   overwrite: "Replace",
   skip: "Skip",
