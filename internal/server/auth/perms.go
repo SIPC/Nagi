@@ -225,6 +225,8 @@ var adminProcedures = map[string]bool{
 	// 节点信任的面板（地址、指纹）、移交节点、面板的 mesh（面板的地址和所有对端）。
 	"/nagi.v1.NodeService/ListNodePanels": true, "/nagi.v1.NodeService/HandoverNodes": true,
 	"/nagi.v1.NodeService/RemoveNodePanel": true, "/nagi.v1.NodeService/GetPanelMesh": true,
+	// 升级全部节点：会升级范围外的节点。
+	"/nagi.v1.NodeService/UpgradeAllNodes": true,
 	// 重命名、删除分组和标签：会改到成员范围外的项目和节点。
 	"/nagi.v1.ProjectService/RenameProjectGroup": true, "/nagi.v1.NodeService/RenameNodeTag": true,
 }
@@ -297,8 +299,8 @@ var procedurePerms = map[string]Perm{
 
 	"/nagi.v1.NodeService/RemoveNode": PermNodeManage, "/nagi.v1.NodeService/ApproveNode": PermNodeManage,
 	"/nagi.v1.NodeService/RenameNode": PermNodeManage, "/nagi.v1.NodeService/UpgradeNode": PermNodeManage,
-	"/nagi.v1.NodeService/UpgradeAllNodes": PermNodeManage, "/nagi.v1.NodeService/CancelNodeUpgrade": PermNodeManage,
-	"/nagi.v1.NodeService/GetNodeMirrors": PermNodeManage, "/nagi.v1.NodeService/SetNodeMirrors": PermNodeManage,
+	"/nagi.v1.NodeService/CancelNodeUpgrade": PermNodeManage,
+	"/nagi.v1.NodeService/GetNodeMirrors":    PermNodeManage, "/nagi.v1.NodeService/SetNodeMirrors": PermNodeManage,
 	"/nagi.v1.NodeService/ReclaimNodeSnapshots": PermNodeManage, "/nagi.v1.NodeService/SetNodeProjectsRoot": PermNodeManage,
 	"/nagi.v1.NodeService/GetNodeStorage": PermNodeManage, "/nagi.v1.NodeService/AdoptNodeContainer": PermNodeManage,
 	"/nagi.v1.NodeService/AdoptStaleProject": PermNodeManage, "/nagi.v1.NodeService/ConfirmPendingHA": PermNodeManage,

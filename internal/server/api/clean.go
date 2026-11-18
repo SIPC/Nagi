@@ -68,7 +68,6 @@ var cleanedFields = map[string]string{
 	"nagi.v1.PortMapping.published":           "要查看配置（整个 config）",
 	"nagi.v1.PortMapping.target":              "要查看配置（整个 config）",
 	"nagi.v1.ImageForm.workdir":               "要查看配置（整个 config）",
-	"nagi.v1.Source.ssh_key_path":             "要查看配置（整个 config）",
 	"nagi.v1.DomainCheck.addresses":           "要查看访问地址",
 	"nagi.v1.DomainEntryCheck.node_id":        "看不到的清空",
 	"nagi.v1.DomainEntryCheck.node_name":      "看不到的清空",
@@ -81,8 +80,6 @@ var cleanedFields = map[string]string{
 	"nagi.v1.ActivityEntry.detail":            "去掉看不到的节点名",
 	"nagi.v1.ListVolumesResponse.volumes":     "保留：容器自己的卷",
 	"nagi.v1.VolumeInfo.host_path":            "要查看节点详情",
-	"nagi.v1.VolumeInfo.target":               "保留：容器内的路径",
-	"nagi.v1.Version.config":                  "接口要查看配置",
 	"nagi.v1.ImageUpdate.current_digest":      "保留",
 	"nagi.v1.ImageUpdate.latest_digest":       "保留",
 
@@ -119,7 +116,6 @@ var cleanedFields = map[string]string{
 	"nagi.v1.Replica.source_name":                 "看不到的清空",
 	"nagi.v1.Replica.dir":                         "要查看节点详情",
 	"nagi.v1.Replica.project_name":                "范围外的项目整条去掉",
-	"nagi.v1.StorageItem.path":                    "接口要节点管理",
 	"nagi.v1.TrustedPanel.address":                "接口只给管理员",
 	"nagi.v1.TrustedPanel.fingerprint":            "接口只给管理员",
 	"nagi.v1.TrustedPanel.last_error":             "接口只给管理员",
@@ -127,9 +123,7 @@ var cleanedFields = map[string]string{
 	"nagi.v1.CreateEnrollCommandResponse.command": "接口只给管理员",
 	"nagi.v1.HandoverResult.node_id":              "接口只给管理员",
 	"nagi.v1.UnknownContainer.project_name":       "非管理员清空",
-	"nagi.v1.NodeImage.containers":                "接口要节点镜像",
 	"nagi.v1.ComposeDirPreview.path":              "接口要节点终端和文件",
-	"nagi.v1.FileEntry.path":                      "接口要文件查看或节点终端和文件",
 
 	// ---- 面板 ----
 	"nagi.v1.PanelSettings.public_address":        "非管理员清空（B3）",
@@ -154,9 +148,31 @@ var cleanedFields = map[string]string{
 	"nagi.v1.AccessToken.last_ip":                 "保留：本人的令牌（看别人的只给管理员）",
 	"nagi.v1.AccessToken.networks":                "保留：本人的令牌",
 	"nagi.v1.AdminNetworks.networks":              "接口要安全设置",
-	"nagi.v1.AdminNetworks.current":               "接口要安全设置",
 	"nagi.v1.AlertChannel.url":                    "接口要面板设置",
 	"nagi.v1.AuditSink.address":                   "接口要审计日志",
+	"nagi.v1.AccessToken.allow_node_exec":         "保留：令牌的选项",
+	"nagi.v1.ActivityEntry.via":                   "保留：来源（网页、MCP 令牌名）",
+	"nagi.v1.AuditEvent.via":                      "保留：来源",
+	"nagi.v1.AlertConfig.node_name":               "接口要面板设置；只在下发给节点时填写",
+	"nagi.v1.Container.failover_holder":           "要高可用权限；持有者看不到时清空名称和公钥",
+	"nagi.v1.Container.host_network_services":     "保留：服务名",
+	"nagi.v1.ContainerDirUsage.dir":               "接口要节点管理（整个节点的磁盘明细）",
+	"nagi.v1.NodeStorage.container_dirs":          "接口要节点管理（整个节点的磁盘明细）",
+	"nagi.v1.FailoverConfig.witness":              "要高可用权限；看不到的见证节点清空",
+	"nagi.v1.GetUpdateStatusResponse.nodes":       "接口要面板设置；看不到的节点去掉",
+	"nagi.v1.ListNodesResponse.nodes":             "只留看得到的节点",
+	"nagi.v1.NodeFileEntry.is_dir":                "接口要节点终端和文件",
+	"nagi.v1.VolumeFileEntry.is_dir":              "保留",
+	"nagi.v1.NodeInfo.cross_node_entry":           "保留：能力标记",
+	"nagi.v1.NodeInfo.node_access":                "保留：能力标记",
+	"nagi.v1.NodeInfo.node_access_disabled":       "保留：能力标记",
+	"nagi.v1.NodeInfo.replica_dirs":               "保留：能力标记",
+	"nagi.v1.Replica.custom_dir":                  "保留",
+	"nagi.v1.UpgradeAllNodesResponse.node_ids":    "接口只给管理员（会升级范围外的节点）",
+	"nagi.v1.UserScope.all_nodes":                 "保留：成员自己或管理的成员的范围",
+	"nagi.v1.UserScope.node_ids":                  "接口要成员权限；非管理员设的范围不超过自己的",
+	"nagi.v1.UserScope.node_tags":                 "保留",
+	"nagi.v1.UserScope.nodes_follow":              "保留",
 }
 
 // otherNode 是看不到的节点在文字里的名称。
@@ -231,6 +247,12 @@ func (a *API) filterReply(ctx context.Context, x *access, msg any) {
 		cleanSettings(x, m.GetSettings())
 	case *nagiv1.GetStandbysResponse:
 		cleanStandbys(m)
+	case *nagiv1.GetUpdateStatusResponse:
+		for id := range m.GetNodes() {
+			if !x.node(id) {
+				delete(m.Nodes, id)
+			}
+		}
 	case *nagiv1.AppInfoResponse:
 		if m.GetDomain() != "" {
 			m.PublicAddress = ""
@@ -390,13 +412,10 @@ func (a *API) cleanFailoverStatus(ctx context.Context, x *access, st *nagiv1.Fai
 func (a *API) filterNodes(ctx context.Context, x *access, m *nagiv1.ListNodesResponse) {
 	count := map[string]int32{}
 	if x.projects != nil {
-		summaries, _ := a.Projects.List(ctx)
-		for _, s := range summaries {
-			if !x.project(s.GetProject().GetId()) {
-				continue
-			}
-			for _, c := range s.GetProject().GetContainers() {
-				count[c.GetNodeId()]++
+		rows, _ := a.Q.ContainerNodes(ctx)
+		for _, r := range rows {
+			if x.project(r.ProjectID) {
+				count[r.NodeID]++
 			}
 		}
 	}
