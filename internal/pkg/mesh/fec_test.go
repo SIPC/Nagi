@@ -289,12 +289,12 @@ func TestFECLoss(t *testing.T) {
 // TestFECLossyLink：直连随机丢 2% 的包，FEC 自动开启并恢复丢包，数据原样到达。
 func TestFECLossyLink(t *testing.T) {
 	testNoQUIC = true // QUIC 不经过 WireGuard，也就没有 FEC
-	defer func() { dropUDP, testNoQUIC = nil, false }()
+	defer func() { setDropUDP(nil); testNoQUIC = false }()
 	_, a, b := setupWith(t, func(_, a, b testNode) {
-		dropUDP = func(from uint16, to netip.AddrPort) bool {
+		setDropUDP(func(from uint16, to netip.AddrPort) bool {
 			between := (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
 			return between && mrand.Float64() < 0.02
-		}
+		})
 	})
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	ln, err := b.m.Listen(7100)
@@ -369,7 +369,7 @@ func TestFECLossyLink(t *testing.T) {
 
 // TestFECOldPeer：对端不支持 FEC（旧版本）时不加 FEC 包头，照常能通。
 func TestFECOldPeer(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var pa, pb Key
 	_, _ = rand.Read(pa[:])

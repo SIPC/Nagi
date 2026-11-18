@@ -33,8 +33,18 @@ const (
 // msgInitiation 是 WireGuard 握手发起包的类型（第一个字节）。
 const msgInitiation = 1
 
-// dropUDP 只用于测试：返回 true 时丢弃这个 UDP 包，模拟网络不通。
-var dropUDP func(fromPort uint16, to netip.AddrPort) bool
+// dropUDP 只用于测试：返回 true 时丢弃这个 UDP 包，模拟网络不通。测试换它的时候，上一个测试的成员可能还在发包
+// （例如 FEC 的定时器），所以用原子指针（见 setDropUDP）。
+var dropUDP atomic.Pointer[func(fromPort uint16, to netip.AddrPort) bool]
+
+// setDropUDP 换掉 dropUDP，nil 表示不丢。
+func setDropUDP(f func(fromPort uint16, to netip.AddrPort) bool) {
+	if f == nil {
+		dropUDP.Store(nil)
+		return
+	}
+	dropUDP.Store(&f)
+}
 
 // endpoint 是 WireGuard 眼里的对端地址。这里它就是对端本身（公钥），走哪条路径由 Bind 决定。
 // 同一个对端始终是同一个 endpoint，所以 WireGuard 的漫游不会把它换掉。
@@ -270,6 +280,7 @@ func (b *Bind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	tuneUDP(c)
 	b.conns = []*net.UDPConn{c}
 	for range b.extra {
 		x, err := net.ListenUDP("udp", &net.UDPAddr{})
@@ -277,6 +288,7 @@ func (b *Bind) Open(port uint16) ([]conn.ReceiveFunc, uint16, error) {
 			b.log.Warn("mesh 备用端口打不开", "err", err)
 			continue
 		}
+		tuneUDP(x)
 		b.conns = append(b.conns, x)
 	}
 	b.port = uint16(c.LocalAddr().(*net.UDPAddr).Port)
@@ -448,7 +460,10 @@ func (b *Bind) receiveRelayed(ch chan delivery, done chan struct{}) conn.Receive
 // ---- 发送 ----
 
 func (b *Bind) write(c *net.UDPConn, pkt []byte, to netip.AddrPort) {
-	if c == nil || (dropUDP != nil && dropUDP(uint16(c.LocalAddr().(*net.UDPAddr).Port), to)) {
+	if c == nil {
+		return
+	}
+	if drop := dropUDP.Load(); drop != nil && (*drop)(uint16(c.LocalAddr().(*net.UDPAddr).Port), to) {
 		return
 	}
 	_, _ = c.WriteToUDPAddrPort(pkt, to)
