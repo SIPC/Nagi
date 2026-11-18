@@ -162,6 +162,42 @@ func (c *Conn) LastReport() *nagiv1.ReportRequest {
 	return c.report
 }
 
+// PatchBackup 把节点刚回答的一个备份节点的同步状态（「立即同步」「停止同步」时 SyncBackup 返回的）先合进节点最近一次的上报，
+// 界面马上就能看到「同步中」「已停止」，不用等节点下一次上报（最多 5 秒，再加上界面刷新的间隔）。下一次上报照常整个替换它。
+// 上报被替换成新的副本（不改原来的）：别处拿到的旧上报不会在读的时候被改。
+func (r *Registry) PatchBackup(nodeID, projectID, container string, st *nagiv1.BackupStatus) {
+	if st == nil || st.GetTargetNodeId() == "" {
+		return
+	}
+	c, err := r.Peek(nodeID)
+	if err != nil {
+		return
+	}
+	c.mu.Lock()
+	patched := false
+	if c.report != nil {
+		for i, cs := range c.report.GetContainers() {
+			if cs.GetProjectId() != projectID || cs.GetName() != container {
+				continue
+			}
+			for j, b := range cs.GetBackups() {
+				if b.GetTargetNodeId() != st.GetTargetNodeId() {
+					continue
+				}
+				report := proto.Clone(c.report).(*nagiv1.ReportRequest)
+				report.Containers[i].Backups[j] = proto.Clone(st).(*nagiv1.BackupStatus)
+				c.report, patched = report, true
+				break
+			}
+			break
+		}
+	}
+	c.mu.Unlock()
+	if patched {
+		r.Changes.Bump()
+	}
+}
+
 // NewRegistry 创建节点注册表。
 func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer, ca *tlsutil.CA) *Registry {
 	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}}

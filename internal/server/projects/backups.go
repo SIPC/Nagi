@@ -295,9 +295,12 @@ func (s *Service) syncBackup(ctx context.Context, projectID, name string, nodeID
 		defer cancel()
 		var errs []error
 		for _, id := range list {
-			if _, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id, Async: true}); err != nil {
+			st, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id, Async: true})
+			if err != nil {
 				errs = append(errs, err)
+				continue
 			}
+			s.Nodes.PatchBackup(c.NodeID, projectID, name, st)
 		}
 		return errors.Join(errs...)
 	}
@@ -363,9 +366,12 @@ func (s *Service) stopBackupSync(ctx context.Context, projectID, name, nodeID st
 	defer cancel()
 	var errs []error
 	for _, id := range list {
-		if _, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id, Async: true, Cancel: true}); err != nil {
+		st, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id, Async: true, Cancel: true})
+		if err != nil {
 			errs = append(errs, err)
+			continue
 		}
+		s.Nodes.PatchBackup(c.NodeID, projectID, name, st)
 	}
 	return errors.Join(errs...)
 }
