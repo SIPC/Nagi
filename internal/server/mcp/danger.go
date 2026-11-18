@@ -219,7 +219,8 @@ func toolSetBackupNode(c *call, in BackupNodeArgs) (any, error) {
 		list = append(list, n.GetId())
 	}
 	req.BackupNodeIds = list
-	if _, err := c.h.clients.projects.SetBackupNodes(c.ctx, connect.NewRequest(req)); err != nil {
+	res, err := c.h.clients.projects.SetBackupNodes(c.ctx, connect.NewRequest(req))
+	if err != nil {
 		return nil, err
 	}
 	names := []string{}
@@ -229,7 +230,13 @@ func toolSetBackupNode(c *call, in BackupNodeArgs) (any, error) {
 	if in.Remove {
 		return map[string]any{"note": "backup node removed", "backup_nodes": names}, nil
 	}
-	return map[string]any{"note": "backup node added; the first sync starts now, later ones after each scheduled snapshot (or with sync_backup)", "backup_nodes": names}, nil
+	out := map[string]any{"note": "backup node added; the first sync starts now, later ones after each scheduled snapshot (or with sync_backup)", "backup_nodes": names}
+	if m2, err := findContainer(res.Msg, m.GetName()); err == nil {
+		if w := backupScheduleWarning(m2, containerSchedule(res.Msg, m2)); w != "" {
+			out["warnings"] = []string{w}
+		}
+	}
+	return out, nil
 }
 
 type RestoreFromBackupArgs struct {

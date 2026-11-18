@@ -139,7 +139,19 @@ func toolSetSnapshotSchedule(c *call, in ContainerScheduleArgs) (any, error) {
 	}
 	out := map[string]any{"changed": changed, "note": "takes effect immediately"}
 	if m2, err := findContainer(res.Msg, m.GetName()); err == nil {
-		out["schedule"] = containerSchedule(res.Msg, m2)
+		sch := containerSchedule(res.Msg, m2)
+		out["schedule"] = sch
+		if w := backupScheduleWarning(m2, sch); w != "" {
+			out["warnings"] = []string{w}
+		}
 	}
 	return out, nil
+}
+
+// backupScheduleWarning：设了备份节点或顶替的容器关掉了定时快照。备份节点在每次定时快照后同步，关掉以后副本不再更新。
+func backupScheduleWarning(m *nagiv1.Container, sch scheduleView) string {
+	if sch.Enabled || len(m.GetBackupNodeIds()) == 0 && m.GetFailover() == nil {
+		return ""
+	}
+	return "Scheduled snapshots are off for a container with backup nodes or failover. Backup nodes sync after each scheduled snapshot, so their copy stops being updated (failover still takes a snapshot every 15 minutes). Keep scheduled snapshots on, and use a short interval for databases."
 }

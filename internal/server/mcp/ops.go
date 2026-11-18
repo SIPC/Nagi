@@ -30,6 +30,17 @@ type opResult struct {
 	Version      int64    `json:"version,omitempty"`
 	Error        string   `json:"error,omitempty"`
 	Output       []string `json:"last_output,omitempty"`
+	// 部署日志里的提醒（端口没导入、匿名卷、部署前快照失败这类），成功时也返回。
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// deployNotices 是部署日志里要放进 warnings 的行：节点和面板写的「注意：」「警告：」，端口导入和跳过的提示，
+// 保留路径覆盖了上传的内容。面板写的行按请求的语言（MCP 默认中文），节点写的是中文，两种都认。
+var deployNotices = []string{"注意：", "警告：", "Warning:", "Note:", "已按配置中的端口添加端口映射", "Added a port mapping from the configuration",
+	"未开放", "isn't exposed", "被忽略"}
+
+func deployNotice(line string) bool {
+	return slices.ContainsFunc(deployNotices, func(s string) bool { return strings.Contains(line, s) })
 }
 
 // follow 跟着一个流式操作（部署、启停、回滚、快照），把输出作为进度通知发给客户端，等到结果。
@@ -64,7 +75,7 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 	if c.req.Params != nil {
 		token = c.req.Params.GetProgressToken()
 	}
-	var tail []string
+	var tail, warnings []string
 	n := 0
 	timer := time.NewTimer(deployWait)
 	defer timer.Stop()
@@ -72,14 +83,14 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 		select {
 		case it, ok := <-ch:
 			if !ok {
-				return opResult{Error: "the operation ended without a result; check the container state", Output: tail}, nil
+				return opResult{Error: "the operation ended without a result; check the container state", Output: tail, Warnings: warnings}, nil
 			}
 			switch {
 			case it.err != nil:
 				return opResult{}, it.err
 			case it.result != nil:
 				r := it.result
-				out := opResult{Success: r.GetSuccess(), Version: r.GetVersion(), Error: r.GetError()}
+				out := opResult{Success: r.GetSuccess(), Version: r.GetVersion(), Error: r.GetError(), Warnings: warnings}
 				if !r.GetSuccess() {
 					out.Output = tail
 				}
@@ -87,6 +98,9 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 			}
 			n++
 			tail = append(tail, it.line)
+			if deployNotice(it.line) && len(warnings) < 20 && !slices.Contains(warnings, it.line) {
+				warnings = append(warnings, it.line)
+			}
 			if len(tail) > 50 {
 				tail = tail[len(tail)-50:]
 			}
@@ -99,7 +113,7 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 				for range ch {
 				}
 			}()
-			return opResult{StillRunning: true, Output: tail}, nil
+			return opResult{StillRunning: true, Output: tail, Warnings: warnings}, nil
 		case <-c.ctx.Done():
 			go func() {
 				for range ch {
@@ -129,7 +143,7 @@ func toolCreateProject(c *call, in CreateProjectArgs) (any, error) {
 // ---- 添加容器 ----
 
 type portArg struct {
-	Published uint32 `json:"published" jsonschema:"port published on the node. Containers in the project reach each other without this; for HTTP prefer save_route"`
+	Published uint32 `json:"published" jsonschema:"port opened to the outside on the node: on the first deploy it becomes a port mapping, on all addresses. Imported once; change it later with save_route. Containers in the project reach each other without ports, so databases and caches need none; for HTTP use save_route with domains"`
 	Target    uint32 `json:"target" jsonschema:"port inside the container"`
 	Protocol  string `json:"protocol,omitempty" jsonschema:"tcp (default) or udp"`
 }
@@ -137,21 +151,25 @@ type portArg struct {
 type AddContainerArgs struct {
 	ProjectArg
 	Name    string            `json:"name,omitempty" jsonschema:"container name (lowercase letters, digits and -); taken from the image when omitted; required with compose"`
-	Image   string            `json:"image,omitempty" jsonschema:"image to run, e.g. nginx:1.27; use either image or compose"`
-	Compose string            `json:"compose,omitempty" jsonschema:"a whole compose file, added as a container group"`
+	Image   string            `json:"image,omitempty" jsonschema:"image to run, e.g. nginx:1.27 (the image form); use either image or compose. A single service always uses image. Pin a major version for containers with data (postgres:16)"`
+	Compose string            `json:"compose,omitempty" jsonschema:"a whole compose file, added as a container group. Only when the user gives a compose file or several services must run together on one node. Write values as ${NAME} and set them with env; keep data in relative paths or named volumes"`
 	Command string            `json:"command,omitempty" jsonschema:"command for an image container"`
 	Ports   []portArg         `json:"ports,omitempty"`
-	Env     map[string]string `json:"env,omitempty" jsonschema:"environment variables of an image container, or ${VARIABLES} of a compose file"`
-	Volumes []string          `json:"volumes,omitempty" jsonschema:"paths inside an image container to persist, e.g. /var/lib/postgresql/data"`
-	Node    string            `json:"node,omitempty" jsonschema:"node name or ID; default is the online node running most of the project's containers"`
-	Dir     string            `json:"dir,omitempty" jsonschema:"container directory on the node; default <projects root>/<network name>/<container>"`
-	Deploy  bool              `json:"deploy,omitempty" jsonschema:"deploy right away; default false (call deploy separately)"`
+	Env     map[string]string `json:"env,omitempty" jsonschema:"environment variables of an image container, or ${VARIABLES} of a compose file. Configuration and secrets go here, not in the compose file or a .env file"`
+	// 添加时就把密码这类变量标为密钥，不用再调一次 update_container。
+	EnvSecret []string `json:"env_secret,omitempty" jsonschema:"names from env to mark as secret (passwords, tokens, keys): hidden by default in the web UI"`
+	// 容器组的服务级环境变量（和 update_container 的 service_env 一样）。
+	ServiceEnv map[string]map[string]string `json:"service_env,omitempty" jsonschema:"container groups only: service name to environment variables injected only into that service, without a line in the compose file"`
+	Volumes    []string                     `json:"volumes,omitempty" jsonschema:"image-form persisted paths: paths inside the container whose data is kept in the container directory, in snapshots, backups and migrations, e.g. /var/lib/postgresql/data"`
+	Node       string                       `json:"node,omitempty" jsonschema:"node name or ID; default is the online node running most of the project's containers"`
+	Dir        string                       `json:"dir,omitempty" jsonschema:"container directory on the node; default <projects root>/<network name>/<container>"`
+	Deploy     bool                         `json:"deploy,omitempty" jsonschema:"deploy right away; default false (call deploy separately)"`
 	configArgs
 }
 
 // configArgs 是添加和修改容器共用的配置项（update_container 里省略表示不变）。
 type configArgs struct {
-	Workdir               *string  `json:"workdir,omitempty" jsonschema:"image-form containers only: mount the container's data/ at this path inside the container as its working directory; empty string stops mounting it"`
+	Workdir               *string  `json:"workdir,omitempty" jsonschema:"image-form containers only: mount the container's data/ at this path inside the container as its working directory; empty string stops mounting it. data/ is replaced on git pull, upload and rollback, so runtime data there needs preserved_paths or volumes"`
 	MemoryMB              *uint32  `json:"memory_mb,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
 	CPUs                  *float64 `json:"cpus,omitempty" jsonschema:"image-form containers only; 0 removes the limit"`
 	HealthCommand         *string  `json:"health_command,omitempty" jsonschema:"image-form containers only: command run with sh -c inside the container, exit code 0 means healthy; empty string removes the check"`
@@ -159,7 +177,7 @@ type configArgs struct {
 	GitURL                *string  `json:"git_url,omitempty" jsonschema:"git repository whose files go into the container's data/ (SSH with the container's deploy key, or public HTTPS); empty string removes the source"`
 	GitRef                *string  `json:"git_ref,omitempty" jsonschema:"branch or tag; empty means the repository's default branch"`
 	Preserve              []string `json:"preserved_paths,omitempty" jsonschema:"paths relative to data/ kept when files are updated, e.g. uploads/; replaces the list, [] clears it"`
-	Stateful              string   `json:"stateful,omitempty" jsonschema:"auto (default: named volumes or preserved paths make it stateful), yes or no. Stateful containers are paused for snapshots and get a predeploy snapshot"`
+	Stateful              string   `json:"stateful,omitempty" jsonschema:"auto (default: named volumes or preserved paths make it stateful), yes or no. Stateful containers are paused for snapshots and get a predeploy snapshot. Do not set no for databases or other containers with data"`
 	DependsOn             []string `json:"depends_on,omitempty" jsonschema:"containers deployed first when deployed together; replaces the list, [] clears it"`
 }
 
@@ -330,11 +348,26 @@ func toolAddContainer(c *call, in AddContainerArgs) (any, error) {
 			return nil, errors.New("name is required for a compose container group")
 		}
 		cfg.Compose, cfg.Env = in.Compose, envList(in.Env)
+		if cfg.Env, _, err = markSecret(cfg.Env, in.EnvSecret); err != nil {
+			return nil, err
+		}
+		for svc, vars := range in.ServiceEnv {
+			if cfg.ServiceEnv == nil {
+				cfg.ServiceEnv = map[string]*nagiv1.EnvList{}
+			}
+			cfg.ServiceEnv[svc] = &nagiv1.EnvList{Vars: envList(vars)}
+		}
 	case in.Image != "":
 		if name == "" {
 			name = imageName(in.Image)
 		}
 		cfg.Form = &nagiv1.ImageForm{Image: in.Image, Command: in.Command, Ports: portList(in.Ports), Env: envList(in.Env), Volumes: in.Volumes}
+		if cfg.Form.Env, _, err = markSecret(cfg.Form.Env, in.EnvSecret); err != nil {
+			return nil, err
+		}
+		if in.ServiceEnv != nil {
+			return nil, errors.New("service_env is for container groups; use env for an image-form container")
+		}
 	default:
 		return nil, errors.New("give an image or a compose file")
 	}
@@ -350,8 +383,10 @@ func toolAddContainer(c *call, in AddContainerArgs) (any, error) {
 	out := struct {
 		Container string    `json:"container"`
 		Node      string    `json:"node"`
+		Warnings  []string  `json:"warnings,omitempty"`
 		Deploy    *opResult `json:"deploy,omitempty"`
 	}{Container: name, Node: node.GetName()}
+	out.Warnings = configWarnings(cfg, in.Env, in.ServiceEnv)
 	if in.Deploy {
 		r, err := c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
 			return c.h.clients.projects.Deploy(ctx, connect.NewRequest(&nagiv1.DeployRequest{ProjectId: pid, Targets: []*nagiv1.DeployTarget{{Container: name}}}))
@@ -372,14 +407,14 @@ type UpdateContainerArgs struct {
 	Image            *string           `json:"image,omitempty" jsonschema:"image-form containers only"`
 	Command          *string           `json:"command,omitempty" jsonschema:"image-form containers only; empty string clears it"`
 	Ports            []portArg         `json:"ports,omitempty" jsonschema:"image-form containers only; replaces all ports"`
-	Volumes          []string          `json:"volumes,omitempty" jsonschema:"image-form containers only: paths inside the container to persist; replaces the list. Removing a path does not delete its data"`
-	Env              map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES})"`
+	Volumes          []string          `json:"volumes,omitempty" jsonschema:"image-form containers only: persisted paths, paths inside the container whose data is kept in the container directory; replaces the list. Removing a path does not delete its data"`
+	Env              map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES}). Configuration and secrets go here, not in the compose file or a .env file"`
 	EnvUnset         []string          `json:"env_unset,omitempty" jsonschema:"remove these variables"`
-	EnvSecret        []string          `json:"env_secret,omitempty" jsonschema:"mark these variables as secret (hidden by default in the web UI)"`
+	EnvSecret        []string          `json:"env_secret,omitempty" jsonschema:"mark these variables as secret (passwords, tokens, keys; hidden by default in the web UI)"`
 	// 服务级环境变量（容器组）：只注入对应服务。
 	ServiceEnv      map[string]map[string]string `json:"service_env,omitempty" jsonschema:"container groups only: service name to environment variables injected only into that service"`
 	ServiceEnvUnset map[string][]string          `json:"service_env_unset,omitempty" jsonschema:"container groups only: service name to service environment variables to remove"`
-	Compose         string                       `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file"`
+	Compose         string                       `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file. Write values as ${NAME} (set with env), keep data in relative paths or named volumes"`
 	configArgs
 }
 
@@ -422,7 +457,8 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 		return nil, errors.New("the container's configuration is not available")
 	}
 	cfg := proto.Clone(base).(*nagiv1.ContainerConfig)
-	var changed []string
+	var changed, warnings []string
+	opts := adviceOpts{deployed: m.GetDeployedVersion() > 0}
 	if f := cfg.GetForm(); f != nil {
 		if in.Compose != "" {
 			return nil, errors.New("this is an image-form container: change image, command, ports or env instead of compose")
@@ -436,8 +472,10 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 			changed = append(changed, "command")
 		}
 		if in.Ports != nil {
+			opts.oldPorts = formPorts(f)
 			f.Ports = portList(in.Ports)
 			changed = append(changed, "ports")
+			warnings = append(warnings, formPortWarnings(f, opts)...)
 		}
 		if in.Volumes != nil && !slices.Equal(in.Volumes, f.GetVolumes()) {
 			f.Volumes = in.Volumes
@@ -458,8 +496,11 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 			return nil, errors.New("this is a container group: change its compose file instead")
 		}
 		if in.Compose != "" && in.Compose != cfg.GetCompose() {
+			opts.oldPorts, opts.imported = composePorts(cfg.GetCompose()), cfg.GetProjectDir() != ""
 			cfg.Compose = in.Compose
 			changed = append(changed, "compose")
+			// 只检查这次写入的 compose：只改变量时不重复提醒原有的写法。
+			warnings = append(warnings, composeWarnings(cfg.GetCompose(), opts)...)
 		}
 		var envChanged []string
 		cfg.Env, envChanged = patchEnv(cfg.GetEnv(), in.Env, in.EnvUnset)
@@ -503,7 +544,27 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 	})); err != nil {
 		return nil, err
 	}
-	return map[string]any{"changed": changed, "note": "saved as a draft; call deploy to apply it"}, nil
+	// 地址只查这次设置的值；镜像标签和有无状态在相关的项改了时查。
+	values := envLabels("env: ", in.Env)
+	for _, svc := range slices.Sorted(maps.Keys(in.ServiceEnv)) {
+		values = append(values, envLabels(svc+": ", in.ServiceEnv[svc])...)
+	}
+	warnings = append(warnings, addressWarnings(values)...)
+	if cfg.GetForm() != nil && (in.Image != nil || in.Volumes != nil || in.Stateful != "") {
+		if w := formTagWarning(cfg); w != "" {
+			warnings = append(warnings, w)
+		}
+	}
+	if in.Stateful != "" || in.Volumes != nil || in.Preserve != nil || slices.Contains(changed, "compose") {
+		if w := statefulWarning(cfg); w != "" {
+			warnings = append(warnings, w)
+		}
+	}
+	out := map[string]any{"changed": changed, "note": "saved as a draft; call deploy to apply it"}
+	if len(warnings) > 0 {
+		out["warnings"] = warnings
+	}
+	return out, nil
 }
 
 // baseRevision 是修改基于的修订号：agent 给了就用它（面板上已经不是这个修订号时拒绝，免得覆盖别人刚做的修改），
@@ -578,10 +639,12 @@ func toolDeploy(c *call, in DeployArgs) (any, error) {
 	for _, t := range targets {
 		t.BaseRevision = in.ExpectedRevisions[t.GetContainer()]
 	}
+	pre := deployWarnings(p, targets, in)
 	res, err := c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
 		return c.h.clients.projects.Deploy(ctx, connect.NewRequest(&nagiv1.DeployRequest{ProjectId: p.GetId(), Targets: targets, PullImages: in.PullImages, Pull: in.PullGit,
 			ApplySharedEnv: in.ApplySharedEnv, SettingsRevision: projectRevision(in.ExpectedProjectRevision, p)}))
 	})
+	res.Warnings = append(pre, res.Warnings...)
 	if err != nil || !res.Success || in.WaitHealthySeconds <= 0 || len(targets) == 0 {
 		return res, err
 	}
@@ -600,7 +663,30 @@ type healthResult struct {
 	Passed   bool          `json:"passed"`
 	TimedOut bool          `json:"timed_out,omitempty"`
 	Reason   string        `json:"reason,omitempty"`
+	Note     string        `json:"note,omitempty"`
 	Services []serviceView `json:"services"`
+}
+
+// deployWarnings 是部署前就能看出的提醒：共享变量的草稿没带上，git 来源从没拉取过。
+func deployWarnings(p *nagiv1.Project, targets []*nagiv1.DeployTarget, in DeployArgs) []string {
+	var out []string
+	if p.GetHasSharedEnvDraft() && !in.ApplySharedEnv {
+		out = append(out, "The project has an undeployed shared variables draft (update_shared_env); this deploy does not apply it. Deploy with apply_shared_env to apply it.")
+	}
+	for _, t := range targets {
+		m, err := findContainer(p, t.GetContainer())
+		if err != nil {
+			continue
+		}
+		cfg := m.GetConfig()
+		if m.GetHasDraft() {
+			cfg = m.GetDraft()
+		}
+		if cfg.GetSource().GetGitUrl() != "" && m.GetLastCommit() == "" && !in.PullGit {
+			out = append(out, fmt.Sprintf("%s has a git source that has never been pulled; deploy with pull_git to fetch its files. For a private repository, the user must first add the container's deploy key (shown on its page in the web UI) to the repository.", m.GetName()))
+		}
+	}
+	return out
 }
 
 // waitHealthy 等部署的容器都在运行，有健康检查的变成 healthy。有服务 unhealthy 或者不在运行就不算通过。
@@ -638,6 +724,15 @@ func (c *call) waitHealthy(projectID string, containers []string, wait time.Dura
 		}
 		if !pending {
 			out.Reason = ""
+			var unchecked []string
+			for _, v := range out.Services {
+				if v.Health == "" {
+					unchecked = append(unchecked, v.Name)
+				}
+			}
+			if len(unchecked) > 0 {
+				out.Note = fmt.Sprintf("%s have no health check: only confirmed that they are running. Add health_command (image form) or healthcheck (compose).", strings.Join(unchecked, ", "))
+			}
 			return out, nil
 		}
 		if time.Now().After(deadline) {
@@ -973,6 +1068,9 @@ func toolNodeExec(c *call, in NodeExecArgs) (any, error) {
 		}
 		if note := inContainerNote(n); note != "" {
 			out["in_container"] = note
+		}
+		if w := nodeExecWarnings(in.Command); len(w) > 0 {
+			out["warnings"] = w
 		}
 		return out, nil
 	}

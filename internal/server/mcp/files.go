@@ -70,7 +70,7 @@ func toolListFiles(c *call, in ListFilesArgs) (any, error) {
 			out = append(out, volume{Name: v.GetName(), Kind: v.GetKind(), Mounts: mounts, Bytes: v.GetSizeBytes(), Files: v.GetFiles()})
 		}
 		return map[string]any{"volumes": out,
-			"note": "kind data (.data) is the app files directory: it is replaced on the next deploy except preserved paths. managed volumes keep their data. unmanaged volumes cannot be browsed."}, nil
+			"note": "kind data (.data) is the app files directory: it is replaced when files are pulled from git, uploaded or rolled back, except preserved paths. managed volumes keep their data. unmanaged volumes cannot be browsed."}, nil
 	}
 	res, err := c.h.clients.projects.ListVolumeFiles(c.ctx, connect.NewRequest(&nagiv1.VolumeFileRef{
 		ProjectId: ref.GetProjectId(), Container: ref.GetContainer(), Volume: in.Volume, Path: in.Path, SnapshotId: in.SnapshotID,
@@ -264,7 +264,10 @@ func toolWriteFile(c *call, in WriteFileArgs) (any, error) {
 	}
 	out := map[string]any{"path": ref.GetPath(), "created": !exists, "size_bytes": len(content), "sha256": digest(content)}
 	if ref.GetVolume() == ".data" {
-		out["note"] = "this is the app files directory; it is replaced on the next deploy except preserved paths"
+		out["note"] = "this is the app files directory; it is replaced when files are pulled from git, uploaded or rolled back, except preserved paths"
+	}
+	if w := envFileWarning(ref.GetPath()); w != "" {
+		out["warnings"] = []string{w}
 	}
 	return out, nil
 }
