@@ -184,9 +184,11 @@ func (s *settingsService) GetUpdateStatus(ctx context.Context, _ *connect.Reques
 	s.withUpdates(ctx, func(r *updateRecords) {
 		if r.Panel != nil {
 			out.Panel = updateStateProto(i18n.FromContext(ctx), r.Panel)
+			s.updates.fillProgress(r.Panel, out.Panel)
 		}
 		for id, n := range r.Nodes {
 			out.Nodes[id] = updateStateProto(i18n.FromContext(ctx), n)
+			s.updates.fillProgress(n, out.Nodes[id])
 		}
 	})
 	return connect.NewResponse(out), nil
@@ -207,6 +209,12 @@ func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 	}
 	installCtx, cancel := context.WithTimeout(ctx, updateInstallTimeout)
 	defer cancel()
+	var mine *updateState
+	a.withUpdates(ctx, func(r *updateRecords) { mine = r.Panel })
+	if mine != nil {
+		installCtx = release.WithProgress(installCtx, func(p release.Progress) { a.updates.setProgress(mine, p, time.Now()) })
+		defer a.updates.clearProgress(mine)
+	}
 	exe, src, err := release.Install(installCtx, a.Panel.DataDir, latest, a.Log)
 	if errors.Is(err, context.DeadlineExceeded) {
 		err = i18n.New("10 分钟内没有完成下载和校验，已停止更新")
@@ -273,6 +281,18 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 		if err != nil {
 			return err
 		}
+		// 等 Upgrade 返回期间每秒问一次进度（见 upgrade_progress.go）。
+		pollCtx, stopPoll := context.WithCancel(installCtx)
+		polled := make(chan struct{})
+		go func() {
+			defer close(polled)
+			a.pollUpgradeProgress(pollCtx, conn.Agent, mine)
+		}()
+		defer func() {
+			stopPoll()
+			<-polled
+			a.updates.clearProgress(mine)
+		}()
 		resp, err := conn.Agent.Upgrade(installCtx, &nagiv1.UpgradeRequest{Version: target})
 		source = resp.GetSource()
 		switch {
