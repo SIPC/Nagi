@@ -17,4 +17,4 @@ rootProject.name = "nagi"
 
 include(":app")
 include(":core:proto", ":core:network", ":core:security", ":core:data", ":core:ui")
-include(":feature:home", ":feature:pairing")
+include(":feature:home", ":feature:pairing", ":feature:settings")

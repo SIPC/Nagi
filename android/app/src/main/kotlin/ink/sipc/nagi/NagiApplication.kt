@@ -18,6 +18,8 @@ class NagiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         graph = AppGraph(this, BuildConfig.VERSION_NAME)
+        // 崩溃时把异常和调用栈记在本机（见 docs/android.md#工程「崩溃日志」）。
+        graph.crashLog.install()
         lock = AppLock(graph)
         ProcessLifecycleOwner.get().lifecycle.addObserver(lock)
     }

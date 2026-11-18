@@ -111,4 +111,36 @@ public interface PanelSettingsOrBuilder extends
    */
   com.google.protobuf.ByteString
       getMasterKeyPathBytes();
+
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   * @return The name.
+   */
+  java.lang.String getName();
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   * @return The bytes for name.
+   */
+  com.google.protobuf.ByteString
+      getNameBytes();
+
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   * @return The defaultName.
+   */
+  java.lang.String getDefaultName();
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   * @return The bytes for defaultName.
+   */
+  com.google.protobuf.ByteString
+      getDefaultNameBytes();
 }

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local">本机</string>
+    <string name="panel">面板</string>
+    <string name="appearance">外观</string>
+    <string name="appearance_system">跟随系统</string>
+    <string name="appearance_light">浅色</string>
+    <string name="appearance_dark">深色</string>
+    <string name="language">语言</string>
+    <string name="language_system">跟随系统</string>
+
+    <string name="group_account">我的账号</string>
+    <string name="profile">个人资料</string>
+    <string name="account_security">账号安全</string>
+    <string name="group_panel">面板</string>
+    <string name="panel_access">面板访问</string>
+    <string name="panel_security">安全策略</string>
+    <string name="members">成员</string>
+    <string name="alerts">告警</string>
+    <string name="standby">备用面板</string>
+    <string name="group_nodes">节点</string>
+    <string name="invite">接收节点</string>
+    <string name="mesh">节点网络</string>
+    <string name="about">关于</string>
+    <string name="soon">这一项这一版请在网页上设置。</string>
+
+    <string name="role_admin">管理员</string>
+    <string name="role_operator">操作员</string>
+    <string name="role_viewer">只读成员</string>
+
+    <string name="about_group_app">App</string>
+    <string name="about_group_panel">面板</string>
+    <string name="version">版本</string>
+    <string name="signing_cert">签名证书</string>
+    <string name="signing_cert_note">和发版说明里的证书指纹一致，说明安装包没有被改过。</string>
+    <string name="copied">已复制</string>
+    <string name="crash_logs">崩溃日志</string>
+    <string name="crash_none">没有崩溃记录</string>
+    <string name="crash_note">只存在本机，不会上报。最多保留最近 %1$d 次，已去掉地址、令牌和设备 ID。</string>
+    <string name="crash_share">分享</string>
+    <string name="crash_clear">清除</string>
+    <string name="licenses">开源许可</string>
+
+    <string name="panel_name">面板名称</string>
+    <string name="panel_name_help">所有成员在网页和 App 上看到的名称，最多 64 个字符。留空时使用主机名 %1$s。</string>
+    <string name="panel_alias">本机显示名称</string>
+    <string name="panel_alias_help">只在这台手机上显示，优先于面板名称。留空时显示面板名称。</string>
+    <string name="not_set">未设置</string>
+    <string name="save">保存</string>
+    <string name="panel_address">地址</string>
+    <string name="panel_domain">域名</string>
+    <string name="panel_member">成员</string>
+    <string name="panel_fingerprint">指纹</string>
+    <string name="panel_logout">退出这台手机</string>
+    <string name="panel_logout_confirm">退出这台手机？之后要在网页上重新扫码才能添加。</string>
+    <string name="sign_out">退出</string>
+    <string name="cancel">取消</string>
+</resources>

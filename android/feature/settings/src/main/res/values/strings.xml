@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="local">This phone</string>
+    <string name="panel">Panel</string>
+    <string name="appearance">Appearance</string>
+    <string name="appearance_system">System</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
+    <string name="language">Language</string>
+    <string name="language_system">System</string>
+
+    <string name="group_account">My account</string>
+    <string name="profile">Profile</string>
+    <string name="account_security">Account security</string>
+    <string name="group_panel">Panel</string>
+    <string name="panel_access">Panel access</string>
+    <string name="panel_security">Security policy</string>
+    <string name="members">Members</string>
+    <string name="alerts">Alerts</string>
+    <string name="standby">Standby panels</string>
+    <string name="group_nodes">Nodes</string>
+    <string name="invite">Receive nodes</string>
+    <string name="mesh">Node network</string>
+    <string name="about">About</string>
+    <string name="soon">Use the web panel for this setting in this version.</string>
+
+    <string name="role_admin">Admin</string>
+    <string name="role_operator">Operator</string>
+    <string name="role_viewer">Viewer</string>
+
+    <string name="about_group_app">App</string>
+    <string name="about_group_panel">Panel</string>
+    <string name="version">Version</string>
+    <string name="signing_cert">Signing certificate</string>
+    <string name="signing_cert_note">Matches the certificate fingerprint in the release notes if the package hasn\'t been modified.</string>
+    <string name="copied">Copied</string>
+    <string name="crash_logs">Crash logs</string>
+    <string name="crash_none">No crashes recorded</string>
+    <string name="crash_note">Stored only on this phone and never uploaded. Keeps the last %1$d, with addresses, tokens and device IDs removed.</string>
+    <string name="crash_share">Share</string>
+    <string name="crash_clear">Clear</string>
+    <string name="licenses">Open source licenses</string>
+
+    <string name="panel_name">Panel name</string>
+    <string name="panel_name_help">The name all members see on the web and in the app, up to 64 characters. Leave empty to use the host name %1$s.</string>
+    <string name="panel_alias">Name on this phone</string>
+    <string name="panel_alias_help">Shown only on this phone, instead of the panel name. Leave empty to show the panel name.</string>
+    <string name="not_set">Not set</string>
+    <string name="save">Save</string>
+    <string name="panel_address">Address</string>
+    <string name="panel_domain">Domain</string>
+    <string name="panel_member">Member</string>
+    <string name="panel_fingerprint">Fingerprint</string>
+    <string name="panel_logout">Sign out of this phone</string>
+    <string name="panel_logout_confirm">Sign out of this phone? You\'ll need to scan a new QR code on the web to add it again.</string>
+    <string name="sign_out">Sign out</string>
+    <string name="cancel">Cancel</string>
+</resources>

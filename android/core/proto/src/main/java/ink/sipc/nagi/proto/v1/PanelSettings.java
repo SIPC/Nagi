@@ -20,6 +20,8 @@ public  final class PanelSettings extends
     version_ = "";
     domain_ = "";
     masterKeyPath_ = "";
+    name_ = "";
+    defaultName_ = "";
   }
   public static final int PUBLIC_ADDRESS_FIELD_NUMBER = 1;
   private java.lang.String publicAddress_;
@@ -371,6 +373,120 @@ public  final class PanelSettings extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     masterKeyPath_ = value.toStringUtf8();
+
+  }
+
+  public static final int NAME_FIELD_NUMBER = 7;
+  private java.lang.String name_;
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   * @return The name.
+   */
+  @java.lang.Override
+  public java.lang.String getName() {
+    return name_;
+  }
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   * @return The bytes for name.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(name_);
+  }
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   * @param value The name to set.
+   */
+  private void setName(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    name_ = value;
+  }
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   */
+  private void clearName() {
+
+    name_ = getDefaultInstance().getName();
+  }
+  /**
+   * <pre>
+   * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+   * </pre>
+   *
+   * <code>string name = 7 [json_name = "name"];</code>
+   * @param value The bytes for name to set.
+   */
+  private void setNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    name_ = value.toStringUtf8();
+
+  }
+
+  public static final int DEFAULT_NAME_FIELD_NUMBER = 8;
+  private java.lang.String defaultName_;
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   * @return The defaultName.
+   */
+  @java.lang.Override
+  public java.lang.String getDefaultName() {
+    return defaultName_;
+  }
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   * @return The bytes for defaultName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDefaultNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(defaultName_);
+  }
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   * @param value The defaultName to set.
+   */
+  private void setDefaultName(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    defaultName_ = value;
+  }
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   */
+  private void clearDefaultName() {
+
+    defaultName_ = getDefaultInstance().getDefaultName();
+  }
+  /**
+   * <code>string default_name = 8 [json_name = "defaultName"];</code>
+   * @param value The bytes for defaultName to set.
+   */
+  private void setDefaultNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    defaultName_ = value.toStringUtf8();
 
   }
 
@@ -836,6 +952,124 @@ public  final class PanelSettings extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+     * </pre>
+     *
+     * <code>string name = 7 [json_name = "name"];</code>
+     * @return The name.
+     */
+    @java.lang.Override
+    public java.lang.String getName() {
+      return instance.getName();
+    }
+    /**
+     * <pre>
+     * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+     * </pre>
+     *
+     * <code>string name = 7 [json_name = "name"];</code>
+     * @return The bytes for name.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      return instance.getNameBytes();
+    }
+    /**
+     * <pre>
+     * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+     * </pre>
+     *
+     * <code>string name = 7 [json_name = "name"];</code>
+     * @param value The name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setName(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+     * </pre>
+     *
+     * <code>string name = 7 [json_name = "name"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearName() {
+      copyOnWrite();
+      instance.clearName();
+      return this;
+    }
+    /**
+     * <pre>
+     * 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+     * </pre>
+     *
+     * <code>string name = 7 [json_name = "name"];</code>
+     * @param value The bytes for name to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setNameBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string default_name = 8 [json_name = "defaultName"];</code>
+     * @return The defaultName.
+     */
+    @java.lang.Override
+    public java.lang.String getDefaultName() {
+      return instance.getDefaultName();
+    }
+    /**
+     * <code>string default_name = 8 [json_name = "defaultName"];</code>
+     * @return The bytes for defaultName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDefaultNameBytes() {
+      return instance.getDefaultNameBytes();
+    }
+    /**
+     * <code>string default_name = 8 [json_name = "defaultName"];</code>
+     * @param value The defaultName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDefaultName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDefaultName(value);
+      return this;
+    }
+    /**
+     * <code>string default_name = 8 [json_name = "defaultName"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDefaultName() {
+      copyOnWrite();
+      instance.clearDefaultName();
+      return this;
+    }
+    /**
+     * <code>string default_name = 8 [json_name = "defaultName"];</code>
+     * @param value The bytes for defaultName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDefaultNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDefaultNameBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.PanelSettings)
   }
   @java.lang.Override
@@ -858,10 +1092,12 @@ public  final class PanelSettings extends
             "version_",
             "domain_",
             "masterKeyPath_",
+            "name_",
+            "defaultName_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208";
+              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u000b\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

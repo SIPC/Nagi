@@ -59,6 +59,9 @@ object Motion {
     const val DOT_COLOR = 300        // 状态点的颜色变化
     const val SHEET_IN = 220         // 底部面板
     const val SHEET_OUT = 160
+    const val THEME = 300            // 换浅色、深色时颜色过渡
+    const val ROOT_IN = 240          // 添加、解锁后进入首页这类整页的切换
+    const val ROOT_OUT = 120
 
     // 选中指示器、胶囊里每一项的宽度用弹簧：非线性，到位时带一点回弹。朝移动方向的边快一些，另一条边慢一些跟上，
     // 中途略微拉长；网页的 200ms / 340ms 大致对应这两组参数的到位时间。
@@ -66,6 +69,8 @@ object Motion {
     fun <T> trailSpring() = spring<T>(dampingRatio = 0.72f, stiffness = 380f)
     /** 胶囊里每一项的宽度、名称的展开：和慢的那条边同一条曲线，宽度变化和底色移动是同一个动作。 */
     fun <T> itemSpring() = spring<T>(dampingRatio = 0.8f, stiffness = 380f)
+    /** 拖尾：比慢的那条边再慢一点、不回弹，跟在指示器后面，到位时缩回。 */
+    fun <T> ghostSpring() = spring<T>(dampingRatio = 1f, stiffness = 220f)
 }
 
 /** 系统是否开了「移除动画」。 */
@@ -152,6 +157,7 @@ private fun String.numberOrNull(): Double? = filter { it.isDigit() || it == '.' 
 class SlidingIndicator internal constructor(
     private val lead: Animatable<Float, *>,
     private val trail: Animatable<Float, *>,
+    private val ghost: Animatable<Float, *>,
     private val toState: State<Int>,
 ) {
     /** 这次滑动的起点：开始滑时画在哪里。中途换了目标，从当时的位置接着滑，不跳。 */
@@ -171,6 +177,26 @@ class SlidingIndicator internal constructor(
         drawn = r
         return r
     }
+
+    /**
+     * 拖尾：滑动时跟在指示器后面的一小段，由比两条边都慢的进度（ghostSpring）算出，最长 [maxLength]，
+     * 到位时缩回没有。返回拖尾的左右边（只在指示器后面那一侧）；没在滑动时返回 null。[r] 是这一帧的 [rect]。
+     */
+    fun tail(bounds: Map<Int, Rect>, r: Rect, maxLength: Float): Pair<Float, Float>? {
+        val b = bounds[toState.value] ?: return null
+        val a = start ?: return null
+        if (ghost.value >= 1f) return null
+        val movingRight = b.center.x >= a.center.x
+        return if (movingRight) {
+            val end = lerp(a.left, b.left, ghost.value)
+            val from = maxOf(end, r.left - maxLength)
+            if (from >= r.left - 0.5f) null else from to r.left + r.height / 2
+        } else {
+            val end = lerp(a.right, b.right, ghost.value)
+            val to = minOf(end, r.right + maxLength)
+            if (to <= r.right + 0.5f) null else r.right - r.height / 2 to to
+        }
+    }
 }
 
 /** [selected] 变化时让指示器滑过去。 */
@@ -180,20 +206,24 @@ fun rememberSlidingIndicator(selected: Int): SlidingIndicator {
     // lead 是快的那条边的进度，trail 是慢的；两者都从 0 到 1，弹簧到位时略微越过 1 再回来。
     val lead = remember { Animatable(1f) }
     val trail = remember { Animatable(1f) }
+    val ghost = remember { Animatable(1f) }
     val to = remember { mutableIntStateOf(selected) }
-    val indicator = remember { SlidingIndicator(lead, trail, to) }
+    val indicator = remember { SlidingIndicator(lead, trail, ghost, to) }
     LaunchedEffect(selected) {
         if (selected == to.intValue) return@LaunchedEffect
         indicator.start = indicator.drawn
         to.intValue = selected
         lead.snapTo(0f)
         trail.snapTo(0f)
+        ghost.snapTo(0f)
         if (reduced) {
             lead.snapTo(1f)
             trail.snapTo(1f)
+            ghost.snapTo(1f)
         } else coroutineScope {
             launch { lead.animateTo(1f, Motion.leadSpring()) }
             launch { trail.animateTo(1f, Motion.trailSpring()) }
+            launch { ghost.animateTo(1f, Motion.ghostSpring()) }
         }
     }
     return indicator

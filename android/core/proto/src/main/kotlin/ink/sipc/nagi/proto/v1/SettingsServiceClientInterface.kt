@@ -18,6 +18,11 @@ public interface SettingsServiceClientInterface {
    */
   public suspend fun setPanelDomain(request: SetPanelDomainApiRequest, headers: Headers = emptyMap()): ResponseMessage<UpdateSettingsResponse>
 
+  /**
+   *  修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+   */
+  public suspend fun setPanelName(request: SetPanelNameRequest, headers: Headers = emptyMap()): ResponseMessage<UpdateSettingsResponse>
+
   public suspend fun getAlertConfig(request: GetAlertConfigRequest, headers: Headers = emptyMap()): ResponseMessage<GetAlertConfigResponse>
 
   public suspend fun updateAlertConfig(request: UpdateAlertConfigRequest, headers: Headers = emptyMap()): ResponseMessage<UpdateAlertConfigResponse>

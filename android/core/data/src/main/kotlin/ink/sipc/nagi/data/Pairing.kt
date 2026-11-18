@@ -4,6 +4,7 @@ import android.os.Build
 import com.google.protobuf.ByteString
 import ink.sipc.nagi.network.PairingUri
 import ink.sipc.nagi.network.PanelClient
+import ink.sipc.nagi.network.UnreachableException
 import ink.sipc.nagi.network.orThrow
 import ink.sipc.nagi.network.toPanelException
 import ink.sipc.nagi.proto.v1.AppDeviceInfo
@@ -24,7 +25,8 @@ class Pairing(private val keys: AppKeys, private val store: PanelStore, private 
     suspend fun lookup(uri: PairingUri): Pair<GetPairingResponse, String> = try {
         val client = PanelClient(uri.address, uri.fingerprint)
         val info = client.app.getPairing(GetPairingRequest.newBuilder().setCode(uri.code).build()).orThrow()
-        info to (client.seenFingerprint ?: uri.fingerprint)
+        // 连上就一定校验过证书；万一没有记下完整指纹，不能把前 128 位当长期指纹存下来。
+        info to (client.seenFingerprint ?: throw UnreachableException("没有取到面板证书的公钥指纹", null))
     } catch (e: Throwable) {
         throw e.toPanelException()
     }

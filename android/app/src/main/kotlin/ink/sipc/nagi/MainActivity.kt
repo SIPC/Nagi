@@ -1,5 +1,14 @@
 package ink.sipc.nagi
 
+import ink.sipc.nagi.settings.AppLocales
+import ink.sipc.nagi.data.ThemeMode
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.activity.SystemBarStyle
+import android.graphics.Color
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -21,13 +30,29 @@ class MainActivity : FragmentActivity() {
     /** 从链接（系统相机扫码）打开的配对二维码。 */
     private val pendingPair = MutableStateFlow<PairingUri?>(null)
 
+    // Android 13 以前按本机设置换掉界面语言（见 AppLocales）。
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocales.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handle(intent)
         val app = application as NagiApplication
         setContent {
-            NagiTheme {
+            // 外观：跟随系统，或者本机设置里固定的浅色、深色。状态栏和导航栏的图标颜色跟着变。
+            val mode by app.graph.prefs.theme.collectAsState()
+            val dark = when (mode) {
+                ThemeMode.System -> isSystemInDarkTheme()
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+            LaunchedEffect(dark) {
+                val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
+            NagiTheme(darkTheme = dark) {
                 AppRoot(app.graph, app.lock, pendingPair)
             }
         }

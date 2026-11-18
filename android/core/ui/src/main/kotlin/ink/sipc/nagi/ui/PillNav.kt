@@ -70,8 +70,8 @@ data class PillNavItem(val icon: ImageVector, val label: String, val badge: Bool
 
 // 胶囊里的尺寸（docs/android.md 导航）：胶囊高 48、内边距 4，每一项高 40、左右各 12，图标 20，图标和名称之间 4。
 private val PillPadding = 4.dp
-private val ItemPadding = 12.dp
-private val IconSize = 20.dp
+private val ItemPadding = 13.dp
+private val IconSize = 22.dp
 private val IconLabelGap = 4.dp
 private const val PILL_LONG_PRESS_MS = 200L
 
@@ -79,8 +79,11 @@ private const val PILL_LONG_PRESS_MS = 200L
 private const val FRAME_FOLLOW = 1f
 private val FRAME_MAX = 6.dp
 
+/** 选中底色的拖尾最长多少。 */
+private val TAIL_MAX = 20.dp
+
 // PillNav：底部悬浮的胶囊导航。按内容宽度在底部居中，距手势条 8。
-// 每一项占固定的位置：没选中的宽 44（只有图标），选中的一项按最长的名称留宽度，名称在里面居中。
+// 每一项占固定的位置：没选中的宽 48（只有图标），选中的一项按最长的名称留宽度，名称在里面居中。
 // 切换时旧的一项收起、新的一项展开，用同一条弹簧，一减一加正好抵消，所以胶囊的总宽度不变，不会跳。
 // 选中的底色从旧的一项滑到新的一项（rememberSlidingIndicator：朝移动方向的边快、另一条边慢，带一点回弹）。
 // 长按胶囊后左右拖动：手指经过哪一项就切到哪一项（名称展开、页面切换，和点击一样），每切一次轻振一下；
@@ -131,7 +134,7 @@ fun PillNav(
     }
     CompositionLocalProvider(LocalViewConfiguration provides pillConfig) {
     Box(
-        modifier = modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp),
+        modifier = modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Row(
@@ -158,7 +161,20 @@ fun PillNav(
                         border, Offset(frame.left + stroke / 2, frame.top + stroke / 2), Size(frame.width - stroke, frame.height - stroke),
                         CornerRadius((frame.height - stroke) / 2), style = Stroke(stroke),
                     )
-                    if (r != null) drawRoundRect(indicator, Offset(r.left, r.top), Size(r.width, r.height), CornerRadius(r.height / 2))
+                    if (r != null) {
+                        // 拖尾：指示器后面一小段（最长 TAIL_MAX），从指示器的颜色渐变到透明，滑到位时缩回。
+                        slider.tail(bounds, r, TAIL_MAX.toPx())?.let { (from, to) ->
+                            val leftFade = from < r.left
+                            drawRoundRect(
+                                Brush.horizontalGradient(
+                                    if (leftFade) listOf(indicator.copy(alpha = 0f), indicator) else listOf(indicator, indicator.copy(alpha = 0f)),
+                                    startX = from, endX = to,
+                                ),
+                                Offset(from, r.top + r.height * 0.15f), Size(to - from, r.height * 0.7f), CornerRadius(r.height * 0.35f),
+                            )
+                        }
+                        drawRoundRect(indicator, Offset(r.left, r.top), Size(r.width, r.height), CornerRadius(r.height / 2))
+                    }
                 }
                 .pointerInput(Unit) {
                     // 胶囊内容区按项数等分，手指在第几份就是第几项。
@@ -272,15 +288,3 @@ private fun lerpColor(a: Color, b: Color, t: Float) = Color(
     blue = a.blue + (b.blue - a.blue) * t,
     alpha = a.alpha + (b.alpha - a.alpha) * t,
 )
-
-// BottomFade：胶囊后面的底部渐隐，高 96，从透明渐变到背景色，内容滚到这里变淡。放在胶囊下面一层。
-@Composable
-fun BottomFade(modifier: Modifier = Modifier) {
-    val bg = NagiTheme.colors.background
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(Dimens.bottomFade)
-            .background(Brush.verticalGradient(0f to bg.copy(alpha = 0f), 0.55f to bg, 1f to bg)),
-    )
-}

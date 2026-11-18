@@ -20,6 +20,7 @@ public  final class UpdateState extends
     phase_ = "";
     error_ = "";
     source_ = "";
+    stage_ = "";
   }
   private int bitField0_;
   public static final int TARGET_FIELD_NUMBER = 1;
@@ -341,7 +342,8 @@ public  final class UpdateState extends
   private java.lang.String source_;
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -353,7 +355,8 @@ public  final class UpdateState extends
   }
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -366,7 +369,8 @@ public  final class UpdateState extends
   }
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -380,7 +384,8 @@ public  final class UpdateState extends
   }
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -391,7 +396,8 @@ public  final class UpdateState extends
   }
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -402,6 +408,192 @@ public  final class UpdateState extends
     checkByteStringIsUtf8(value);
     source_ = value.toStringUtf8();
 
+  }
+
+  public static final int STAGE_FIELD_NUMBER = 7;
+  private java.lang.String stage_;
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   * @return The stage.
+   */
+  @java.lang.Override
+  public java.lang.String getStage() {
+    return stage_;
+  }
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   * @return The bytes for stage.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getStageBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(stage_);
+  }
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   * @param value The stage to set.
+   */
+  private void setStage(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    stage_ = value;
+  }
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   */
+  private void clearStage() {
+
+    stage_ = getDefaultInstance().getStage();
+  }
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   * @param value The bytes for stage to set.
+   */
+  private void setStageBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    stage_ = value.toStringUtf8();
+
+  }
+
+  public static final int DOWNLOADED_FIELD_NUMBER = 8;
+  private long downloaded_;
+  /**
+   * <pre>
+   * 从 source 已下载的字节数，换地址时从 0 重新算。
+   * </pre>
+   *
+   * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+   * @return The downloaded.
+   */
+  @java.lang.Override
+  public long getDownloaded() {
+    return downloaded_;
+  }
+  /**
+   * <pre>
+   * 从 source 已下载的字节数，换地址时从 0 重新算。
+   * </pre>
+   *
+   * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+   * @param value The downloaded to set.
+   */
+  private void setDownloaded(long value) {
+    
+    downloaded_ = value;
+  }
+  /**
+   * <pre>
+   * 从 source 已下载的字节数，换地址时从 0 重新算。
+   * </pre>
+   *
+   * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+   */
+  private void clearDownloaded() {
+
+    downloaded_ = 0L;
+  }
+
+  public static final int TOTAL_FIELD_NUMBER = 9;
+  private long total_;
+  /**
+   * <pre>
+   * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+   * </pre>
+   *
+   * <code>int64 total = 9 [json_name = "total"];</code>
+   * @return The total.
+   */
+  @java.lang.Override
+  public long getTotal() {
+    return total_;
+  }
+  /**
+   * <pre>
+   * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+   * </pre>
+   *
+   * <code>int64 total = 9 [json_name = "total"];</code>
+   * @param value The total to set.
+   */
+  private void setTotal(long value) {
+    
+    total_ = value;
+  }
+  /**
+   * <pre>
+   * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+   * </pre>
+   *
+   * <code>int64 total = 9 [json_name = "total"];</code>
+   */
+  private void clearTotal() {
+
+    total_ = 0L;
+  }
+
+  public static final int BYTES_PER_SECOND_FIELD_NUMBER = 10;
+  private long bytesPerSecond_;
+  /**
+   * <pre>
+   * 最近几秒的下载速度（字节/秒），算不出时为 0。
+   * </pre>
+   *
+   * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+   * @return The bytesPerSecond.
+   */
+  @java.lang.Override
+  public long getBytesPerSecond() {
+    return bytesPerSecond_;
+  }
+  /**
+   * <pre>
+   * 最近几秒的下载速度（字节/秒），算不出时为 0。
+   * </pre>
+   *
+   * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+   * @param value The bytesPerSecond to set.
+   */
+  private void setBytesPerSecond(long value) {
+    
+    bytesPerSecond_ = value;
+  }
+  /**
+   * <pre>
+   * 最近几秒的下载速度（字节/秒），算不出时为 0。
+   * </pre>
+   *
+   * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+   */
+  private void clearBytesPerSecond() {
+
+    bytesPerSecond_ = 0L;
   }
 
   public static ink.sipc.nagi.proto.v1.UpdateState parseFrom(
@@ -826,7 +1018,8 @@ public  final class UpdateState extends
 
     /**
      * <pre>
-     * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+     * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+     * 有进度时才有（见 stage）。旧版本的节点不报。
      * </pre>
      *
      * <code>string source = 6 [json_name = "source"];</code>
@@ -838,7 +1031,8 @@ public  final class UpdateState extends
     }
     /**
      * <pre>
-     * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+     * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+     * 有进度时才有（见 stage）。旧版本的节点不报。
      * </pre>
      *
      * <code>string source = 6 [json_name = "source"];</code>
@@ -851,7 +1045,8 @@ public  final class UpdateState extends
     }
     /**
      * <pre>
-     * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+     * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+     * 有进度时才有（见 stage）。旧版本的节点不报。
      * </pre>
      *
      * <code>string source = 6 [json_name = "source"];</code>
@@ -866,7 +1061,8 @@ public  final class UpdateState extends
     }
     /**
      * <pre>
-     * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+     * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+     * 有进度时才有（见 stage）。旧版本的节点不报。
      * </pre>
      *
      * <code>string source = 6 [json_name = "source"];</code>
@@ -879,7 +1075,8 @@ public  final class UpdateState extends
     }
     /**
      * <pre>
-     * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+     * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+     * 有进度时才有（见 stage）。旧版本的节点不报。
      * </pre>
      *
      * <code>string source = 6 [json_name = "source"];</code>
@@ -890,6 +1087,200 @@ public  final class UpdateState extends
         com.google.protobuf.ByteString value) {
       copyOnWrite();
       instance.setSourceBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+     * download（下载）、verify（核对）、test（试运行）。
+     * </pre>
+     *
+     * <code>string stage = 7 [json_name = "stage"];</code>
+     * @return The stage.
+     */
+    @java.lang.Override
+    public java.lang.String getStage() {
+      return instance.getStage();
+    }
+    /**
+     * <pre>
+     * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+     * download（下载）、verify（核对）、test（试运行）。
+     * </pre>
+     *
+     * <code>string stage = 7 [json_name = "stage"];</code>
+     * @return The bytes for stage.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getStageBytes() {
+      return instance.getStageBytes();
+    }
+    /**
+     * <pre>
+     * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+     * download（下载）、verify（核对）、test（试运行）。
+     * </pre>
+     *
+     * <code>string stage = 7 [json_name = "stage"];</code>
+     * @param value The stage to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStage(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setStage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+     * download（下载）、verify（核对）、test（试运行）。
+     * </pre>
+     *
+     * <code>string stage = 7 [json_name = "stage"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStage() {
+      copyOnWrite();
+      instance.clearStage();
+      return this;
+    }
+    /**
+     * <pre>
+     * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+     * download（下载）、verify（核对）、test（试运行）。
+     * </pre>
+     *
+     * <code>string stage = 7 [json_name = "stage"];</code>
+     * @param value The bytes for stage to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStageBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setStageBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 从 source 已下载的字节数，换地址时从 0 重新算。
+     * </pre>
+     *
+     * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+     * @return The downloaded.
+     */
+    @java.lang.Override
+    public long getDownloaded() {
+      return instance.getDownloaded();
+    }
+    /**
+     * <pre>
+     * 从 source 已下载的字节数，换地址时从 0 重新算。
+     * </pre>
+     *
+     * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+     * @param value The downloaded to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDownloaded(long value) {
+      copyOnWrite();
+      instance.setDownloaded(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 从 source 已下载的字节数，换地址时从 0 重新算。
+     * </pre>
+     *
+     * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDownloaded() {
+      copyOnWrite();
+      instance.clearDownloaded();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+     * </pre>
+     *
+     * <code>int64 total = 9 [json_name = "total"];</code>
+     * @return The total.
+     */
+    @java.lang.Override
+    public long getTotal() {
+      return instance.getTotal();
+    }
+    /**
+     * <pre>
+     * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+     * </pre>
+     *
+     * <code>int64 total = 9 [json_name = "total"];</code>
+     * @param value The total to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTotal(long value) {
+      copyOnWrite();
+      instance.setTotal(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+     * </pre>
+     *
+     * <code>int64 total = 9 [json_name = "total"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTotal() {
+      copyOnWrite();
+      instance.clearTotal();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 最近几秒的下载速度（字节/秒），算不出时为 0。
+     * </pre>
+     *
+     * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+     * @return The bytesPerSecond.
+     */
+    @java.lang.Override
+    public long getBytesPerSecond() {
+      return instance.getBytesPerSecond();
+    }
+    /**
+     * <pre>
+     * 最近几秒的下载速度（字节/秒），算不出时为 0。
+     * </pre>
+     *
+     * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+     * @param value The bytesPerSecond to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBytesPerSecond(long value) {
+      copyOnWrite();
+      instance.setBytesPerSecond(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 最近几秒的下载速度（字节/秒），算不出时为 0。
+     * </pre>
+     *
+     * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBytesPerSecond() {
+      copyOnWrite();
+      instance.clearBytesPerSecond();
       return this;
     }
 
@@ -916,10 +1307,14 @@ public  final class UpdateState extends
             "error_",
             "startedAt_",
             "source_",
+            "stage_",
+            "downloaded_",
+            "total_",
+            "bytesPerSecond_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u1009\u0000\u0006\u0208";
+              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u1009\u0000\u0006\u0208\u0007\u0208\b\u0002\t\u0002\n\u0002";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

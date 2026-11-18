@@ -53,7 +53,6 @@ private fun KitPreview() {
                     SkeletonRows(modifier = Modifier.padding(top = 16.dp))
                 }
             }
-            BottomFade(Modifier.align(Alignment.BottomCenter))
             PillNav(
                 listOf(
                     PillNavItem(NagiIcons.Home, "首页", badge = true),

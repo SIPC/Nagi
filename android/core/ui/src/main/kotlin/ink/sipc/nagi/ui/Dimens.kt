@@ -18,8 +18,10 @@ object Dimens {
     val attentionRow = 44.dp
     val attentionRowTwoLine = 52.dp
     val iconButton = 48.dp
-    val pillHeight = 48.dp
-    val pillItemHeight = 40.dp
-    // 胶囊后面的渐隐高度，也是页面底部要留的空白
-    val bottomFade = 96.dp
+    val pillHeight = 52.dp
+    val pillItemHeight = 44.dp
+    // 胶囊占的高度（连同离手势条的距离），页面底部要留出这么多空白，内容才不被胶囊挡住
+    val bottomFade = 104.dp
+    // 顶部栏的高度（不含状态栏）
+    val topBarHeight = 56.dp
 }

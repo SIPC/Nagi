@@ -1,5 +1,29 @@
 package ink.sipc.nagi.home
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.saveable.rememberSaveable
+import ink.sipc.nagi.ui.formatRateText
+import ink.sipc.nagi.ui.SANKEY_EXTERNAL
+import ink.sipc.nagi.ui.FlowKind
+import ink.sipc.nagi.ui.SankeyTexts
+import ink.sipc.nagi.ui.SankeyView
+import ink.sipc.nagi.ui.SankeyFlow
+import ink.sipc.nagi.ui.SankeyRow
+import ink.sipc.nagi.ui.SankeyChart
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.RowScope
+import ink.sipc.nagi.ui.Banner
+import ink.sipc.nagi.ui.UsageRow
+import ink.sipc.nagi.ui.InlineError
+import ink.sipc.nagi.ui.StatValue
+import ink.sipc.nagi.ui.RowDensity
+import ink.sipc.nagi.ui.MoreRow
+import ink.sipc.nagi.ui.ListRow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -9,10 +33,7 @@ import ink.sipc.nagi.ui.Collapse
 import ink.sipc.nagi.ui.Motion
 import ink.sipc.nagi.ui.Roll
 import ink.sipc.nagi.ui.autoHeight
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,26 +41,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ink.sipc.nagi.data.OverviewState
@@ -54,15 +66,12 @@ import ink.sipc.nagi.ui.ChartLine
 import ink.sipc.nagi.ui.Dimens
 import ink.sipc.nagi.ui.LineChart
 import ink.sipc.nagi.ui.NagiButton
-import ink.sipc.nagi.ui.NagiIcons
 import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.SectionDivider
 import ink.sipc.nagi.ui.SectionHeader
 import ink.sipc.nagi.ui.Skeleton
 import ink.sipc.nagi.ui.SkeletonRows
-import ink.sipc.nagi.ui.StatusDot
 import ink.sipc.nagi.ui.UnderlineTabs
-import ink.sipc.nagi.ui.UsageBar
 import ink.sipc.nagi.ui.formatRate
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -81,18 +90,25 @@ interface HomeActions {
 
 /**
  * 首页（s1 第 1 张、s8 状态）：需要处理、关键数字、流量趋势、流量最大的映射。数据来自 WatchOverview 订阅流。
- * 顶部栏和胶囊导航由外层（App）放。[contentPadding] 的底部留出胶囊的 96。
+ * 顶部栏和胶囊导航由外层（App）放。[contentPadding] 的底部留出胶囊的 104。
  */
 @Composable
-fun HomeContent(vm: HomeViewModel, actions: HomeActions, contentPadding: PaddingValues, showMessage: (String) -> Unit) {
+fun HomeContent(
+    vm: HomeViewModel,
+    actions: HomeActions,
+    contentPadding: PaddingValues,
+    showMessage: (String) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+) {
     val state by vm.overview.collectAsStateWithLifecycle()
     val traffic by vm.traffic.collectAsStateWithLifecycle()
     val range by vm.range.collectAsStateWithLifecycle()
     val approving by vm.approving.collectAsStateWithLifecycle()
     LaunchedEffect(vm) { vm.messages.collect(showMessage) }
     val approved = stringResource(R.string.approved)
+    var flowView by rememberSaveable { mutableStateOf(SankeyView.All) }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = contentPadding) {
         when (val s = state) {
             OverviewState.Loading, OverviewState.Locked, OverviewState.Removed -> item(key = "loading") {
                 LoadingBody(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null))
@@ -121,12 +137,20 @@ fun HomeContent(vm: HomeViewModel, actions: HomeActions, contentPadding: Padding
                             .padding(horizontal = Dimens.pageHorizontal),
                     ) {
                         Spacer(Modifier.height(Dimens.topBarToContent))
-                        AttentionSection(s.overview, approving, actions) { item ->
-                            vm.approve(item.nodeId, item.title) { approved }
+                        // 没有要处理的事项时整块隐藏：最后一项处理掉时高度和透明度一起收起（Collapse）。
+                        Collapse(s.overview.attention.itemsCount > 0) {
+                            AttentionSection(s.overview, approving, actions) { item ->
+                                vm.approve(item.nodeId, item.title) { approved }
+                            }
+                            SectionDivider()
                         }
-                        SectionDivider()
                         KeyNumbers(s.overview, actions)
                         SectionDivider()
+                        // 旧版本的面板不发桑基图的数据（没有行），这时不显示这一块。
+                        if (s.overview.flowRowsCount > 0) {
+                            FlowSection(s.overview, flowView) { flowView = it }
+                            SectionDivider()
+                        }
                         TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
                         if (s.overview.topRoutesCount > 0) {
                             SectionDivider()
@@ -143,7 +167,10 @@ fun HomeContent(vm: HomeViewModel, actions: HomeActions, contentPadding: Padding
 
 @Composable
 private fun AttentionSection(o: Overview, approving: Set<String>, actions: HomeActions, approve: (AttentionItem) -> Unit) {
-    val items = o.attention.itemsList
+    // 收起的过程中还显示最后的那些事项，不闪成空的。
+    val last = remember { arrayOf(o.attention.itemsList) }
+    if (o.attention.itemsCount > 0) last[0] = o.attention.itemsList
+    val items = last[0]
     var expanded by remember { mutableStateOf(false) }
     SectionHeader(stringResource(R.string.attention_title)) {
         if (items.isNotEmpty()) Roll(items.size.toString(), NagiTheme.type.secondary, NagiTheme.colors.mutedForeground)
@@ -161,27 +188,10 @@ private fun AttentionBody(
     actions: HomeActions,
     approve: (AttentionItem) -> Unit,
 ) {
-    if (items.isEmpty()) {
-        Row(Modifier.heightIn(min = Dimens.attentionRow), verticalAlignment = Alignment.CenterVertically) {
-            StatusDot(NagiTheme.colors.success)
-            Spacer(Modifier.width(12.dp))
-            Text(stringResource(R.string.attention_none), style = NagiTheme.type.body, color = NagiTheme.colors.foreground)
-        }
-        return
-    }
     val shown = if (expanded || items.size <= ATTENTION_LIMIT) items else items.take(ATTENTION_LIMIT - 1)
     shown.forEach { AttentionRow(it, it.nodeId in approving, actions, approve) }
     if (shown.size < items.size) {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = Dimens.attentionRow).clickable(onClick = expand),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Spacer(Modifier.width(18.dp))
-            Text(
-                stringResource(R.string.attention_more, items.size - shown.size), style = NagiTheme.type.body,
-                color = NagiTheme.colors.mutedForeground, modifier = Modifier.weight(1f),
-            )
-        }
+        MoreRow(stringResource(R.string.attention_more, items.size - shown.size), expand, density = RowDensity.Compact)
     }
 }
 
@@ -193,34 +203,19 @@ private fun AttentionRow(item: AttentionItem, busy: Boolean, actions: HomeAction
         "warning" -> colors.warning
         else -> colors.info
     }
-    val detail = attentionDetail(item)
-    Row(
-        Modifier.fillMaxWidth()
-            .heightIn(min = if (detail.isEmpty()) Dimens.attentionRow else Dimens.attentionRowTwoLine)
-            .clickable { actions.openAttention(item) }
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // 点和第一行对齐。
-        Box(Modifier.align(if (detail.isEmpty()) Alignment.CenterVertically else Alignment.Top).padding(top = if (detail.isEmpty()) 0.dp else 8.dp)) {
-            StatusDot(dot)
+    val trailing: (@Composable RowScope.() -> Unit)? = when (item.action) {
+        "approve" -> {
+            { NagiButton(stringResource(R.string.action_approve), { approve(item) }, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = busy) }
         }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(item.title, style = NagiTheme.type.body, color = colors.foreground, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (detail.isNotEmpty()) {
-                Text(detail, style = NagiTheme.type.secondary, color = colors.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+        "update" -> {
+            { NagiButton(stringResource(R.string.action_update), { actions.update(item) }, variant = ButtonVariant.Outline, size = ButtonSize.Small) }
         }
-        Spacer(Modifier.width(12.dp))
-        when (item.action) {
-            "approve" -> NagiButton(
-                stringResource(R.string.action_approve), { approve(item) }, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = busy,
-            )
-            "update" -> NagiButton(stringResource(R.string.action_update), { actions.update(item) }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
-            else -> Icon(NagiIcons.ChevronRight, contentDescription = null, tint = colors.mutedForeground, modifier = Modifier.size(16.dp))
-        }
+        else -> null
     }
+    ListRow(
+        item.title, detail = attentionDetail(item), dot = dot, density = RowDensity.Compact,
+        onClick = { actions.openAttention(item) }, trailing = trailing,
+    )
 }
 
 /** 第二行：对象和时长，例如「已离线 4 分钟」「node1 · 12 分钟」。 */
@@ -251,37 +246,78 @@ private fun durationText(epochSeconds: Long): String {
 private fun KeyNumbers(o: Overview, actions: HomeActions) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row {
-            Number(stringResource(R.string.nodes_online), o.nodesOnline.toString(), "/ ${o.nodesTotal}", Modifier.weight(1f)) {
+            StatValue(stringResource(R.string.nodes_online), o.nodesOnline.toString(), Modifier.weight(1f), "/ ${o.nodesTotal}") {
                 actions.openNodes(offlineOnly = o.nodesOnline < o.nodesTotal)
             }
-            Number(stringResource(R.string.containers_running), o.containersRunning.toString(), "/ ${o.containersTotal}", Modifier.weight(1f)) {
+            StatValue(stringResource(R.string.containers_running), o.containersRunning.toString(), Modifier.weight(1f), "/ ${o.containersTotal}") {
                 actions.openProjects(notRunningOnly = o.containersRunning < o.containersTotal)
             }
         }
         Row {
             val (inValue, inUnit) = if (o.trafficReady) formatRate(o.externalRx) else "—" to ""
             val (outValue, outUnit) = if (o.trafficReady) formatRate(o.externalTx) else "—" to ""
-            Number(stringResource(R.string.external_in), inValue, inUnit, Modifier.weight(1f), null)
-            Number(stringResource(R.string.external_out), outValue, outUnit, Modifier.weight(1f), null)
+            StatValue(stringResource(R.string.external_in), inValue, Modifier.weight(1f), inUnit)
+            StatValue(stringResource(R.string.external_out), outValue, Modifier.weight(1f), outUnit)
+        }
+    }
+}
+
+// ---- 实时流量 ----
+
+/**
+ * 实时流量的桑基图，和网页概览一样（docs/android.md#首页）：路径由面板算好放在订阅流里，约 10 秒一份。
+ * 选择项（全部、对外、节点之间）和标题在同一行、靠右；高度变化时下面的内容跟着移动。
+ */
+@Composable
+private fun FlowSection(o: Overview, view: SankeyView, setView: (SankeyView) -> Unit) {
+    val views = SankeyView.entries
+    SectionHeader(stringResource(R.string.flow_title)) {
+        UnderlineTabs(
+            listOf(stringResource(R.string.flow_view_all), stringResource(R.string.flow_view_ext), stringResource(R.string.flow_view_mesh)),
+            selected = views.indexOf(view), onSelect = { setView(views[it]) },
+        )
+    }
+    val panel = stringResource(R.string.flow_panel)
+    val rows = buildList {
+        if (view != SankeyView.Mesh) add(SankeyRow(SANKEY_EXTERNAL, stringResource(R.string.flow_external)))
+        o.flowRowsList.forEach { add(SankeyRow(it.id, if (it.id == "__panel") panel else it.name, it.offline)) }
+    }
+    val flows = o.flowsList.map { SankeyFlow(it.from, it.to, it.rate, if (it.kind == "ext") FlowKind.External else FlowKind.Mesh, it.relay) }
+    val texts = SankeyTexts(
+        send = stringResource(R.string.flow_send), receive = stringResource(R.string.flow_receive),
+        noSend = stringResource(R.string.flow_no_send), noReceive = stringResource(R.string.flow_no_receive),
+        offline = stringResource(R.string.flow_offline), other = stringResource(R.string.flow_other), relayed = stringResource(R.string.flow_relayed),
+    )
+    val top = flows.maxByOrNull { it.rate }
+    val nameOf = { id: String -> rows.firstOrNull { it.id == id }?.name ?: id }
+    val description = top?.let { stringResource(R.string.flow_description, nameOf(it.from), nameOf(it.to), formatRateText(it.rate)) }
+    val state = when {
+        o.nodesTotal > 0 && o.nodesOnline == 0 -> 1
+        !o.trafficReady -> 0
+        flows.isEmpty() -> 2
+        else -> 3
+    }
+    // 骨架、空状态和图之间淡入淡出，高度跟着过渡。
+    Column(Modifier.fillMaxWidth().autoHeight()) {
+        AnimatedContent(
+            targetState = state,
+            transitionSpec = { fadeIn(tween(Motion.FADE_IN, easing = Motion.Enter)) togetherWith fadeOut(tween(100, easing = Motion.Exit)) },
+            label = "flow",
+        ) { st ->
+            when (st) {
+                0 -> SkeletonRows(3)
+                1 -> FlowEmpty(stringResource(R.string.flow_all_offline))
+                2 -> FlowEmpty(stringResource(R.string.flow_empty))
+                else -> SankeyChart(rows, flows, view, texts, description = description)
+            }
         }
     }
 }
 
 @Composable
-private fun Number(label: String, value: String, suffix: String, modifier: Modifier, onClick: (() -> Unit)?) {
-    Column(modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)) {
-        Text(label, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
-        Spacer(Modifier.height(4.dp))
-        // 数字变了只滚动变了的那几位（Roll），后面的单位跟着让位。
-        Row(verticalAlignment = Alignment.Bottom) {
-            Roll(value, NagiTheme.type.keyNumber, NagiTheme.colors.foreground)
-            if (suffix.isNotEmpty()) {
-                Roll(
-                    " $suffix", NagiTheme.type.secondary, NagiTheme.colors.mutedForeground,
-                    Modifier.padding(bottom = 3.dp),
-                )
-            }
-        }
+private fun FlowEmpty(text: String) {
+    Box(Modifier.fillMaxWidth().heightIn(min = Dimens.rowHeight), contentAlignment = Alignment.CenterStart) {
+        Text(text, style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground)
     }
 }
 
@@ -314,10 +350,7 @@ private fun TrafficBody(state: TrafficState, range: TrafficRange, retry: () -> U
     val gray = NagiTheme.colors.mutedForeground
     when (state) {
         TrafficState.Loading -> Skeleton(Modifier.fillMaxWidth().height(112.dp))
-        is TrafficState.Failed -> Row(Modifier.fillMaxWidth().height(112.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(state.message, style = NagiTheme.type.body, color = NagiTheme.colors.destructive, modifier = Modifier.weight(1f))
-            NagiButton(stringResource(R.string.retry), retry, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-        }
+        is TrafficState.Failed -> InlineError(state.message, stringResource(R.string.retry), retry, height = 112.dp)
         is TrafficState.Ready -> {
             val h = state.history
             val ext = h.externalRxList.zip(h.externalTxList) { a, b -> (a + b).toFloat() }
@@ -348,19 +381,8 @@ private fun TopRoutes(routes: List<RouteTraffic>) {
     val max = routes.maxOf { it.rx + it.tx }.coerceAtLeast(1.0)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         routes.forEach { r ->
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        r.address, style = NagiTheme.type.mono, color = NagiTheme.colors.foreground, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    val (v, u) = formatRate(r.rx + r.tx)
-                    Roll("$v $u", NagiTheme.type.secondary, NagiTheme.colors.mutedForeground)
-                }
-                Spacer(Modifier.height(6.dp))
-                UsageBar(((r.rx + r.tx) / max).toFloat(), NagiTheme.colors.brand, Modifier.fillMaxWidth())
-            }
+            val (v, u) = formatRate(r.rx + r.tx)
+            UsageRow(r.address, "$v $u", ((r.rx + r.tx) / max).toFloat(), mono = true)
         }
     }
 }
@@ -384,25 +406,11 @@ private fun LoadingBody(modifier: Modifier = Modifier) {
 /** 连不上面板（s8 第 2 张）：有数据时写是哪个时间的，正在重试。 */
 @Composable
 private fun Unreachable(updatedAt: Long?, reason: String, retry: () -> Unit) {
-    val colors = NagiTheme.colors
-    Row(Modifier.fillMaxWidth().background(colors.muted).padding(horizontal = Dimens.pageHorizontal, vertical = 12.dp)) {
-        Box(Modifier.padding(top = 7.dp)) { StatusDot(colors.warning) }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.unreachable_title), style = NagiTheme.type.bodyMedium, color = colors.foreground)
-            val text = if (updatedAt != null) {
-                stringResource(R.string.unreachable_cached, SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(updatedAt)))
-            } else {
-                stringResource(R.string.unreachable_retrying)
-            }
-            Text(text, style = NagiTheme.type.secondary, color = colors.mutedForegroundStrong)
-            if (reason.isNotEmpty()) Text(reason, style = NagiTheme.type.secondary, color = colors.mutedForegroundStrong, maxLines = 2)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.retry), style = NagiTheme.type.bodyMedium, color = colors.foreground,
-                modifier = Modifier.clickable(onClick = retry).padding(vertical = 8.dp),
-            )
-        }
+    val time = if (updatedAt != null) {
+        stringResource(R.string.unreachable_cached, SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(updatedAt)))
+    } else {
+        stringResource(R.string.unreachable_retrying)
     }
+    Banner(stringResource(R.string.unreachable_title), lines = listOf(time, reason), action = stringResource(R.string.retry), onAction = retry)
 }
 

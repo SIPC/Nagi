@@ -15,6 +15,9 @@ import ink.sipc.nagi.proto.v1.AppLogoutRequest
 import ink.sipc.nagi.proto.v1.ApproveNodeRequest
 import ink.sipc.nagi.proto.v1.Overview
 import ink.sipc.nagi.proto.v1.QueryTrafficRequest
+import ink.sipc.nagi.proto.v1.SetPanelNameRequest
+import ink.sipc.nagi.proto.v1.GetSettingsRequest
+import ink.sipc.nagi.proto.v1.PanelSettings
 import ink.sipc.nagi.proto.v1.TrafficHistory
 import ink.sipc.nagi.proto.v1.WatchOverviewRequest
 import ink.sipc.nagi.security.AppKeys
@@ -26,6 +29,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
@@ -56,7 +61,44 @@ enum class TrafficRange(val seconds: Long, val step: Long) {
 }
 
 /** 当前面板的连接：客户端、令牌和各页面的数据。 */
-class PanelSession(val panel: Panel, private val keys: AppKeys, private val cache: SessionCache? = null) {
+class PanelSession(
+    val panel: Panel,
+    private val keys: AppKeys,
+    private val cache: SessionCache? = null,
+    private val store: PanelStore? = null,
+) {
+    private val _current = MutableStateFlow(panel)
+
+    /**
+     * 面板记录的最新内容：面板名称会被管理员改掉（订阅流和 Info 带回新的名称时更新），本机的显示名称在设置里改。
+     * 地址、指纹、设备 ID 这些不会变，仍然用 [panel]。
+     */
+    val current: StateFlow<Panel> = _current
+
+    /** 改本机的显示名称，为空时显示面板名称。 */
+    fun setAlias(alias: String) = update(_current.value.copy(alias = alias.trim()))
+
+    /** 面板说它现在叫什么（订阅流、Info）：和记下的不一样时更新。 */
+    fun panelNameIs(name: String) {
+        if (name.isNotBlank() && name != _current.value.name) update(_current.value.copy(name = name))
+    }
+
+    private fun update(p: Panel) {
+        _current.value = p
+        store?.save(p)
+    }
+
+    /** 面板设置（管理员）：名称、默认名称等。 */
+    suspend fun panelSettings(): PanelSettings =
+        tokens.call { h -> client.settings.getSettings(GetSettingsRequest.getDefaultInstance(), h).orThrow() }.settings
+
+    /** 修改面板名称（管理员），为空时恢复成主机名。返回面板现在的名称。 */
+    suspend fun setPanelName(name: String): String {
+        val res = tokens.call { h -> client.settings.setPanelName(SetPanelNameRequest.newBuilder().setName(name).build(), h).orThrow() }
+        panelNameIs(res.settings.name)
+        return res.settings.name
+    }
+
     val client = PanelClient(panel.address, panel.fingerprint)
     val tokens = TokenManager(
         client, keys, panel.id, panel.deviceId, panel.address,
@@ -68,7 +110,8 @@ class PanelSession(val panel: Panel, private val keys: AppKeys, private val cach
     /** 确认密钥的 Signature，交给系统验证框。 */
     fun confirmSignature() = keys.confirmSignature(panel.id)
 
-    suspend fun info(): AppInfoResponse = tokens.call { h -> client.app.info(AppInfoRequest.getDefaultInstance(), h).orThrow() }
+    suspend fun info(): AppInfoResponse =
+        tokens.call { h -> client.app.info(AppInfoRequest.getDefaultInstance(), h).orThrow() }.also { panelNameIs(it.panelName) }
 
     /** 立即重新连接订阅流（下拉刷新、点重试）。 */
     fun refresh() {
@@ -108,6 +151,7 @@ class PanelSession(val panel: Panel, private val keys: AppKeys, private val cach
                         }
                         val m = r.getOrThrow()
                         if (m.heartbeat) continue
+                        panelNameIs(m.panelName)
                         last = m
                         lastAt = System.currentTimeMillis()
                         attempt = 0

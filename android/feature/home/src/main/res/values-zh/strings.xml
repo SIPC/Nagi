@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="attention_title">需要处理</string>
-    <string name="attention_none">一切正常</string>
     <string name="attention_more">还有 %1$d 项</string>
     <string name="action_approve">批准</string>
     <string name="action_update">更新</string>
@@ -14,6 +13,22 @@
     <string name="containers_running">容器运行中</string>
     <string name="external_in">对外入站</string>
     <string name="external_out">对外出站</string>
+    <string name="flow_title">实时流量</string>
+    <string name="flow_view_all">全部</string>
+    <string name="flow_view_ext">对外</string>
+    <string name="flow_view_mesh">节点之间</string>
+    <string name="flow_send">发出</string>
+    <string name="flow_receive">接收</string>
+    <string name="flow_external">外部网络</string>
+    <string name="flow_panel">面板</string>
+    <string name="flow_other">其他</string>
+    <string name="flow_no_send">无发出</string>
+    <string name="flow_no_receive">无接收</string>
+    <string name="flow_offline">离线</string>
+    <string name="flow_relayed">经面板中转</string>
+    <string name="flow_empty">暂无流量</string>
+    <string name="flow_all_offline">节点均离线，无法获取流量</string>
+    <string name="flow_description">流量桑基图：左边是发出方，右边是接收方。最大的是 %1$s 发往 %2$s %3$s。</string>
     <string name="traffic_title">流量趋势</string>
     <string name="range_hour">1 小时</string>
     <string name="range_day">24 小时</string>

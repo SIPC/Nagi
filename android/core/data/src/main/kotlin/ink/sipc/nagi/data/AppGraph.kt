@@ -13,15 +13,17 @@ class AppGraph(context: Context, appVersion: String) {
     val store = PanelStore(context.applicationContext)
     val cache = SessionCache(context, CacheCipher())
     val pairing = Pairing(keys, store, appVersion)
+    val prefs = AppPrefs(context)
+    val crashLog = CrashLog(context, appVersion)
 
-    private val _session = MutableStateFlow(store.current()?.let { PanelSession(it, keys, cache) })
+    private val _session = MutableStateFlow(store.current()?.let { PanelSession(it, keys, cache, store) })
 
     /** 当前面板的连接，没有添加面板时为 null。 */
     val session: StateFlow<PanelSession?> = _session
 
     /** 添加面板以后切换到它。 */
     fun use(panel: Panel) {
-        _session.value = PanelSession(panel, keys, cache)
+        _session.value = PanelSession(panel, keys, cache, store)
     }
 
     /** 这台手机已退出（本机退出或面板说设备不在了）：删除密钥和面板，回到欢迎页。 */

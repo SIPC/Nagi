@@ -122,4 +122,56 @@ public interface OverviewOrBuilder extends
    */
   com.google.protobuf.ByteString
       getPanelNameBytes();
+
+  /**
+   * <pre>
+   * 实时流量的各条路径（首页的桑基图），和网页概览的「实时流量」同样的算法，traffic_ready 为 false 时为空。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.TrafficFlow flows = 12 [json_name = "flows"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.TrafficFlow> 
+      getFlowsList();
+  /**
+   * <pre>
+   * 实时流量的各条路径（首页的桑基图），和网页概览的「实时流量」同样的算法，traffic_ready 为 false 时为空。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.TrafficFlow flows = 12 [json_name = "flows"];</code>
+   */
+  ink.sipc.nagi.proto.v1.TrafficFlow getFlows(int index);
+  /**
+   * <pre>
+   * 实时流量的各条路径（首页的桑基图），和网页概览的「实时流量」同样的算法，traffic_ready 为 false 时为空。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.TrafficFlow flows = 12 [json_name = "flows"];</code>
+   */
+  int getFlowsCount();
+
+  /**
+   * <pre>
+   * 桑基图的行：访问范围内的节点（含离线的），面板没有自带节点时多一行面板（id 为 "__panel"）。外部网络不在里面。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.FlowRow flow_rows = 13 [json_name = "flowRows"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.FlowRow> 
+      getFlowRowsList();
+  /**
+   * <pre>
+   * 桑基图的行：访问范围内的节点（含离线的），面板没有自带节点时多一行面板（id 为 "__panel"）。外部网络不在里面。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.FlowRow flow_rows = 13 [json_name = "flowRows"];</code>
+   */
+  ink.sipc.nagi.proto.v1.FlowRow getFlowRows(int index);
+  /**
+   * <pre>
+   * 桑基图的行：访问范围内的节点（含离线的），面板没有自带节点时多一行面板（id 为 "__panel"）。外部网络不在里面。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.FlowRow flow_rows = 13 [json_name = "flowRows"];</code>
+   */
+  int getFlowRowsCount();
 }

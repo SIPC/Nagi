@@ -328,6 +328,12 @@ public interface AgentServiceClientInterface {
   public suspend fun cancelUpgrade(request: CancelUpgradeRequest, headers: Headers = emptyMap()): ResponseMessage<CancelUpgradeResponse>
 
   /**
+   *  正在进行的升级的进度：面板在等 Upgrade 返回时每秒问一次（见 docs/panel.md#更新状态）。没有在升级时返回空的。
+   *  v0.35.0 起支持，更早的节点返回 Unimplemented，面板不再问。
+   */
+  public suspend fun upgradeProgress(request: UpgradeProgressRequest, headers: Headers = emptyMap()): ResponseMessage<UpgradeProgressResponse>
+
+  /**
    *  旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
    *  新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
    */

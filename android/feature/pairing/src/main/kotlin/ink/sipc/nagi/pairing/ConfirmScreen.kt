@@ -1,17 +1,11 @@
 package ink.sipc.nagi.pairing
 
+import androidx.compose.runtime.getValue
+import ink.sipc.nagi.ui.KeyValueRow
+import ink.sipc.nagi.ui.Avatar
 import ink.sipc.nagi.ui.Motion
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.Crossfade
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.runtime.remember
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,19 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -104,34 +93,13 @@ fun ConfirmScreen(vm: PairingViewModel, onBack: () -> Unit, onDone: () -> Unit) 
 /** 账号：头像（成员在面板上传的，没有时是首字母加渐变色）、显示名称和角色。 */
 @Composable
 private fun Member(name: String, role: String, avatar: ByteArray) {
-    // 面板只接受 PNG、JPEG、WebP（不超过 256 KB），系统都能解。解不开时按没有头像处理。
-    val image = remember(avatar) {
-        if (avatar.isEmpty()) null else runCatching { BitmapFactory.decodeByteArray(avatar, 0, avatar.size)?.asImageBitmap() }.getOrNull()
-    }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (image != null) {
-            Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(40.dp).clip(CircleShape))
-        } else {
-            Box(
-                Modifier.size(40.dp).background(Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFFEC4899))), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(name.take(1).uppercase(), style = NagiTheme.type.bodyMedium, color = Color.White)
-            }
-        }
+        Avatar(name, avatar)
         Spacer(Modifier.width(12.dp))
         Column {
             Text(name, style = NagiTheme.type.body, color = NagiTheme.colors.foreground)
             Text(role, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
         }
-    }
-}
-
-@Composable
-private fun Field(label: String, value: String, mono: Boolean) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(label, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground, modifier = Modifier.width(48.dp))
-        Text(value, style = if (mono) NagiTheme.type.mono else NagiTheme.type.body, color = NagiTheme.colors.foreground)
     }
 }
 
@@ -175,10 +143,10 @@ private fun ConfirmBody(s: ConfirmState, info: ink.sipc.nagi.proto.v1.GetPairing
             Member(info.displayName.ifEmpty { info.username }, roleLabel(info.role), info.avatar.toByteArray())
             Spacer(Modifier.height(20.dp))
             val uri = s.uri!!
-            Field(stringResource(R.string.confirm_address), uri.address, mono = true)
-            if (uri.domain.isNotEmpty()) Field(stringResource(R.string.confirm_domain), uri.domain, mono = true)
-            Field(stringResource(R.string.confirm_fingerprint), shortFingerprint(s.fingerprint ?: uri.fingerprint), mono = true)
-            Field(stringResource(R.string.confirm_phone), vm.deviceLabel, mono = false)
+            KeyValueRow(stringResource(R.string.confirm_address), uri.address, mono = true)
+            if (uri.domain.isNotEmpty()) KeyValueRow(stringResource(R.string.confirm_domain), uri.domain, mono = true)
+            KeyValueRow(stringResource(R.string.confirm_fingerprint), shortFingerprint(s.fingerprint ?: uri.fingerprint), mono = true)
+            KeyValueRow(stringResource(R.string.confirm_phone), vm.deviceLabel, mono = false)
         }
     }
 }

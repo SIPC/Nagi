@@ -12,6 +12,8 @@ import ink.sipc.nagi.security.Biometric
 import ink.sipc.nagi.security.KeyGenerationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** 确认添加页的状态。 */
@@ -47,14 +49,23 @@ class PairingViewModel(private val graph: AppGraph, private val onPaired: () -> 
 
     fun retry() = lookup()
 
+    private var lookupJob: Job? = null
+
+    // 换了二维码时取消上一次查询；结果回来时也核对还是不是这个二维码，不然上一个二维码（可能是恶意链接）的面板信息和
+    // 指纹会串到这个二维码上，提交时用它的指纹连这个二维码的地址（安全审查 2026-11-18-66b7ae3#1）。
     private fun lookup() {
         val uri = _state.value.uri ?: return
         _state.value = _state.value.copy(loading = true, error = null)
-        viewModelScope.launch {
+        lookupJob?.cancel()
+        lookupJob = viewModelScope.launch {
             try {
                 val (info, fp) = graph.pairing.lookup(uri)
+                if (_state.value.uri != uri) return@launch
                 _state.value = _state.value.copy(info = info, fingerprint = fp, loading = false)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (_state.value.uri != uri) return@launch
                 _state.value = _state.value.copy(loading = false, error = e.message, unreachable = e is UnreachableException)
             }
         }

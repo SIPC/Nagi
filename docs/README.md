@@ -11,7 +11,8 @@
 | [exposure.md](exposure.md) | 对外访问：Caddy 统一出口 |
 | [node-access.md](node-access.md) | 节点访问：在面板上打开节点的终端、管理节点上的文件 |
 | [mcp.md](mcp.md) | MCP 接入：agent 用访问令牌或 OAuth 授权查看和管理集群 |
-| [android.md](android.md) | 安卓 App：硬件密钥会话、添加手机、短期令牌、告警推送（未开始） |
+| [android.md](android.md) | 安卓 App：硬件密钥会话、添加手机、短期令牌、告警推送 |
+| [android-ui.md](android-ui.md) | 安卓 App 的组件库：`core/ui` 里有哪些组件、什么时候用哪个 |
 | [control-plane.md](control-plane.md) | 控制面：连接、信任列表、移交、节点加入、接口设计 |
 | [standby.md](standby.md) | 主备面板：配对、同步、任期、提升 |
 | [mesh.md](mesh.md) | WireGuard mesh 与地址规划 |

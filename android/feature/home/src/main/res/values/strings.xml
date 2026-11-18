@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="attention_title">Needs attention</string>
-    <string name="attention_none">All good</string>
     <string name="attention_more">%1$d more</string>
     <string name="action_approve">Approve</string>
     <string name="action_update">Update</string>
@@ -14,6 +13,22 @@
     <string name="containers_running">Containers running</string>
     <string name="external_in">External in</string>
     <string name="external_out">External out</string>
+    <string name="flow_title">Live traffic</string>
+    <string name="flow_view_all">All</string>
+    <string name="flow_view_ext">External</string>
+    <string name="flow_view_mesh">Between nodes</string>
+    <string name="flow_send">Sent</string>
+    <string name="flow_receive">Received</string>
+    <string name="flow_external">Internet</string>
+    <string name="flow_panel">Panel</string>
+    <string name="flow_other">Other</string>
+    <string name="flow_no_send">Nothing sent</string>
+    <string name="flow_no_receive">Nothing received</string>
+    <string name="flow_offline">Offline</string>
+    <string name="flow_relayed">Relayed via panel</string>
+    <string name="flow_empty">No traffic</string>
+    <string name="flow_all_offline">All nodes are offline. Traffic is unavailable</string>
+    <string name="flow_description">Traffic Sankey diagram: senders on the left, receivers on the right. The largest flow is %1$s to %2$s at %3$s.</string>
     <string name="traffic_title">Traffic</string>
     <string name="range_hour">1 hour</string>
     <string name="range_day">24 hours</string>

@@ -103,7 +103,8 @@ public interface UpdateStateOrBuilder extends
 
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -112,7 +113,8 @@ public interface UpdateStateOrBuilder extends
   java.lang.String getSource();
   /**
    * <pre>
-   * 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
+   * 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+   * 有进度时才有（见 stage）。旧版本的节点不报。
    * </pre>
    *
    * <code>string source = 6 [json_name = "source"];</code>
@@ -120,4 +122,56 @@ public interface UpdateStateOrBuilder extends
    */
   com.google.protobuf.ByteString
       getSourceBytes();
+
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   * @return The stage.
+   */
+  java.lang.String getStage();
+  /**
+   * <pre>
+   * 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+   * download（下载）、verify（核对）、test（试运行）。
+   * </pre>
+   *
+   * <code>string stage = 7 [json_name = "stage"];</code>
+   * @return The bytes for stage.
+   */
+  com.google.protobuf.ByteString
+      getStageBytes();
+
+  /**
+   * <pre>
+   * 从 source 已下载的字节数，换地址时从 0 重新算。
+   * </pre>
+   *
+   * <code>int64 downloaded = 8 [json_name = "downloaded"];</code>
+   * @return The downloaded.
+   */
+  long getDownloaded();
+
+  /**
+   * <pre>
+   * 文件大小（字节），不知道时为 -1；没有进度时为 0。
+   * </pre>
+   *
+   * <code>int64 total = 9 [json_name = "total"];</code>
+   * @return The total.
+   */
+  long getTotal();
+
+  /**
+   * <pre>
+   * 最近几秒的下载速度（字节/秒），算不出时为 0。
+   * </pre>
+   *
+   * <code>int64 bytes_per_second = 10 [json_name = "bytesPerSecond"];</code>
+   * @return The bytesPerSecond.
+   */
+  long getBytesPerSecond();
 }

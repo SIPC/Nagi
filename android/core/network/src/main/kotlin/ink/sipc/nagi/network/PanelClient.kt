@@ -11,6 +11,7 @@ import com.connectrpc.protocols.NetworkProtocol
 import ink.sipc.nagi.proto.v1.AppServiceClient
 import ink.sipc.nagi.proto.v1.NodeServiceClient
 import ink.sipc.nagi.proto.v1.ProjectServiceClient
+import ink.sipc.nagi.proto.v1.SettingsServiceClient
 import java.io.IOException
 import javax.net.ssl.SSLException
 
@@ -32,6 +33,7 @@ class PanelClient(val address: String, fingerprint: String) {
     val app = AppServiceClient(protocol)
     val projects = ProjectServiceClient(protocol)
     val nodes = NodeServiceClient(protocol)
+    val settings = SettingsServiceClient(protocol)
 }
 
 /** 面板返回的错误。message 是面板给的说明（已按界面语言），可以直接显示。 */

@@ -53,6 +53,21 @@ public class SettingsServiceClient(
   )
 
 
+  /**
+   *  修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+   */
+  override suspend fun setPanelName(request: SetPanelNameRequest, headers: Headers): ResponseMessage<UpdateSettingsResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/SetPanelName",
+      ink.sipc.nagi.proto.v1.SetPanelNameRequest::class,
+      ink.sipc.nagi.proto.v1.UpdateSettingsResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
   override suspend fun getAlertConfig(request: GetAlertConfigRequest, headers: Headers): ResponseMessage<GetAlertConfigResponse> = client.unary(
     request,
     headers,

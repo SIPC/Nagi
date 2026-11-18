@@ -1,5 +1,10 @@
 package ink.sipc.nagi.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
@@ -19,9 +24,10 @@ private val LocalNagiType = staticCompositionLocalOf { DefaultType }
 internal val LocalNagiDark = staticCompositionLocalOf { false }
 
 // NagiTheme：颜色和字体。外面包一层 MaterialTheme，偶尔用到的 M3 组件也是黑白灰和 MiSans。
+// 换浅色、深色时每个颜色在 300ms 内过渡过去，不是一下子跳变；「移除动画」时直接换。
 @Composable
 fun NagiTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val colors = if (darkTheme) DarkColors else LightColors
+    val colors = animated(if (darkTheme) DarkColors else LightColors)
     val type = DefaultType
     MaterialTheme(colorScheme = colors.toMaterial(darkTheme), typography = materialTypography()) {
         CompositionLocalProvider(
@@ -33,6 +39,19 @@ fun NagiTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable (
             content = content,
         )
     }
+}
+
+@Composable
+private fun animated(target: NagiColors): NagiColors {
+    val spec: AnimationSpec<Color> = if (reducedMotion()) snap() else tween(Motion.THEME, easing = Motion.Enter)
+    @Composable
+    fun c(color: Color) = animateColorAsState(color, spec, label = "theme").value
+    return NagiColors(
+        background = c(target.background), card = c(target.card), muted = c(target.muted), border = c(target.border),
+        foreground = c(target.foreground), mutedForeground = c(target.mutedForeground), mutedForegroundStrong = c(target.mutedForegroundStrong),
+        primary = c(target.primary), primaryForeground = c(target.primaryForeground), destructive = c(target.destructive),
+        success = c(target.success), warning = c(target.warning), warningText = c(target.warningText), info = c(target.info), brand = c(target.brand),
+    )
 }
 
 object NagiTheme {

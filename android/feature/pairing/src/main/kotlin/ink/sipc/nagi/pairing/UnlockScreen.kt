@@ -1,24 +1,21 @@
 package ink.sipc.nagi.pairing
 
-import androidx.compose.foundation.background
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import ink.sipc.nagi.ui.IconCircle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -46,7 +43,7 @@ fun UnlockScreen(session: PanelSession, idleMinutes: Int?, onUnlocked: () -> Uni
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val title = stringResource(R.string.prompt_unlock_title, session.panel.name)
+    val title = stringResource(R.string.prompt_unlock_title, session.panel.title)
     val cancel = stringResource(R.string.cancel)
     fun unlock() {
         if (busy) return
@@ -74,11 +71,9 @@ fun UnlockScreen(session: PanelSession, idleMinutes: Int?, onUnlocked: () -> Uni
     LaunchedEffect(Unit) { unlock() }
     Box(Modifier.fillMaxSize().padding(horizontal = Dimens.pageHorizontal), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(40.dp).background(NagiTheme.colors.muted, CircleShape), contentAlignment = Alignment.Center) {
-                Icon(NagiIcons.Lock, contentDescription = null, tint = NagiTheme.colors.foreground, modifier = Modifier.size(18.dp))
-            }
+            IconCircle(NagiIcons.Lock)
             Spacer(Modifier.height(16.dp))
-            Text(session.panel.name, style = NagiTheme.type.topBar, color = NagiTheme.colors.foreground)
+            Text(session.panel.title, style = NagiTheme.type.topBar, color = NagiTheme.colors.foreground)
             Spacer(Modifier.height(4.dp))
             Text(
                 if (idleMinutes != null) stringResource(R.string.unlock_idle, idleMinutes) else stringResource(R.string.unlock_locked),

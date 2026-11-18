@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 // 图标：Lucide 的描边图标（24 × 24，线宽 2，圆头圆角），路径取自 lucide-react，和网页同一套。
 // 圆和圆角矩形换成路径命令。颜色由 Icon 的 tint 决定。
 object NagiIcons {
+    // 主导航四项和网页的主导航同一套（web/src/components/nav-icons.tsx）。
     val Home: ImageVector by lazy {
         icon(
             "house",
@@ -42,6 +43,8 @@ object NagiIcons {
     val ArrowLeft: ImageVector by lazy { icon("arrow-left", "m12 19-7-7 7-7", "M19 12H5") }
     val Lock: ImageVector by lazy { icon("lock", rect(3f, 11f, 18f, 11f, 2f), "M7 11V7a5 5 0 0 1 10 0v4") }
     val Plus: ImageVector by lazy { icon("plus", "M5 12h14", "M12 5v14") }
+    val Check: ImageVector by lazy { icon("check", "M20 6 9 17l-5-5") }
+    val Share: ImageVector by lazy { icon("share-2", circle(18f, 5f, 3f), circle(6f, 12f, 3f), circle(18f, 19f, 3f), "m8.59 13.51 6.83 3.98", "m15.41 6.51-6.82 3.98") }
 
     // 扫码：lucide scan-line
     val ScanQr: ImageVector by lazy {
