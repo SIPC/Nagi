@@ -319,7 +319,7 @@ function AddPhoneDialog({ initial, onClose }: { initial: Pairing; onClose: () =>
     <Dialog open onClose={onClose} title={a.add} description={a.scan} className="max-w-[440px]">
       <div className="grid justify-items-center gap-4">
         {expired ? (
-          <div className="grid size-44 place-content-center justify-items-center gap-3 rounded-md border text-muted-foreground">
+          <div className="grid size-56 place-content-center justify-items-center gap-3 rounded-md border text-muted-foreground">
             {a.expired}
             <Button variant="outline" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
               {regenerate.isPending && <Spinner />}
@@ -329,7 +329,7 @@ function AddPhoneDialog({ initial, onClose }: { initial: Pairing; onClose: () =>
         ) : (
           // 二维码固定白底黑块，深色模式下也能扫。
           <div
-            className="size-44 rounded-md bg-white p-2 [&_svg]:size-full [&_svg]:[shape-rendering:crispEdges]"
+            className="size-56 rounded-md bg-white p-2 [&_svg]:size-full [&_svg]:[shape-rendering:crispEdges]"
             role="img"
             aria-label={a.qrCode}
             dangerouslySetInnerHTML={{ __html: renderSVG(pairing.uri, { border: 2 }) }}

@@ -145,10 +145,12 @@ func (s *Service) CreateAppPairing(ctx context.Context, u User) (string, time.Ti
 	} else if n >= MaxAppDevices {
 		return "", time.Time{}, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("每个成员最多添加 %d 台手机，请先退出不用的手机", MaxAppDevices))
 	}
-	code, err := RandomToken()
-	if err != nil {
+	// 配对码 128 位：一次性、10 分钟有效，足够猜不到；比 RandomToken 短一半，二维码的格子少、好扫。
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
 		return "", time.Time{}, err
 	}
+	code := base64.RawURLEncoding.EncodeToString(b)
 	exp := time.Now().Add(AppPairingTTL)
 	s.app.mu.Lock()
 	defer s.app.mu.Unlock()

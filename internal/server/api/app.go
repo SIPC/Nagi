@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -54,15 +57,11 @@ func (s *authService) CreateAppPairing(ctx context.Context, _ *connect.Request[n
 	if err != nil {
 		return nil, err
 	}
-	q := url.Values{}
-	q.Set("v", "1")
-	q.Set("a", s.Panel.PublicHostPort(ctx))
-	if d := s.Panel.Domain(ctx); d != "" {
-		q.Set("d", d)
+	uri, err := appPairingURI(s.Panel.PublicHostPort(ctx), s.Panel.Domain(ctx), s.Panel.Fingerprint, code)
+	if err != nil {
+		return nil, err
 	}
-	q.Set("fp", s.Panel.Fingerprint)
-	q.Set("c", code)
-	return connect.NewResponse(&nagiv1.CreateAppPairingResponse{Code: code, Uri: "nagi-app://pair?" + q.Encode(), ExpiresAt: timestamppb.New(exp)}), nil
+	return connect.NewResponse(&nagiv1.CreateAppPairingResponse{Code: code, Uri: uri, ExpiresAt: timestamppb.New(exp)}), nil
 }
 
 func (s *authService) GetAppPairing(ctx context.Context, req *connect.Request[nagiv1.GetAppPairingRequest]) (*connect.Response[nagiv1.GetAppPairingResponse], error) {
@@ -191,4 +190,22 @@ func (s *settingsService) appSessions(ctx context.Context, userID int64, current
 func (s *settingsService) revokeAppSession(ctx context.Context, id string) (bool, error) {
 	u := auth.CurrentUser(ctx)
 	return s.Auth.RemoveAppDevice(ctx, u.ID, u.Name, strings.TrimPrefix(id, appSessionPrefix), "revoked:"+strconv.FormatInt(u.ID, 10))
+}
+
+// appPairingURI 是「添加手机」二维码的内容（见 docs/android.md#扫码）：
+// nagi-app://pair?v=2&a=<对外地址:端口>&d=<域名>&k=<公钥指纹的前 128 位，base64url>&c=<配对码>。
+// 内容越短二维码的格子越少、越好扫：指纹只放前 128 位（App 连上后记下完整指纹），「:」不转义（查询参数里本来就允许）。
+func appPairingURI(hostPort, domain, fingerprint, code string) (string, error) {
+	sum, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(fingerprint, "sha256//"))
+	if err != nil || len(sum) != sha256.Size {
+		return "", fmt.Errorf("面板的公钥指纹格式不对：%q", fingerprint)
+	}
+	esc := func(v string) string { return strings.ReplaceAll(url.QueryEscape(v), "%3A", ":") }
+	var b strings.Builder
+	b.WriteString("nagi-app://pair?v=2&a=" + esc(hostPort))
+	if domain != "" {
+		b.WriteString("&d=" + esc(domain))
+	}
+	b.WriteString("&k=" + base64.RawURLEncoding.EncodeToString(sum[:16]) + "&c=" + esc(code))
+	return b.String(), nil
 }
