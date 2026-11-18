@@ -1,6 +1,6 @@
 # 安卓 App
 
-状态：未开始。下面是设计，实现时按实际情况修改正文。
+状态：进行中。首版做了添加手机（扫码）、解锁 App 和首页概览，见[进度](#进度)。下面是设计，已实现的部分写的是现状。
 
 用手机管理集群：收告警推送，看项目、容器和节点的状态与监控，部署、重启、回滚，看日志，打开终端，管理文件和设置。功能和网页一致，权限和成员在网页上的一样。
 
@@ -216,10 +216,11 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 **密钥证明**：添加手机时，App 提交三把密钥的证明证书链（Key Attestation），证明的挑战是配对码的 SHA-256。面板核对：
 
-- 证书链能追溯到 Google 的硬件证明根证书。根证书内置在面板里，随面板版本更新。吊销列表在面板能访问 Google 时每天获取一次，访问不了时跳过这项检查，在设备列表里标明「未检查吊销」。
+- 证书链能追溯到 Google 的硬件证明根证书（`internal/server/auth/attestation/roots.pem`，取自 `https://android.googleapis.com/attestation/root`）。按根证书的公钥比较：同一把根密钥签发过不止一张证书，旧手机的链可能以旧证书结尾。根证书随面板版本更新。吊销列表还没有做，所有手机都标明「未检查吊销」（`revocation_checked` 为 0）；以后在面板能访问 Google 时每天获取一次。
 - 密钥在硬件里（`attestationSecurityLevel` 是 TrustedEnvironment 或 StrongBox），不能导出。
-- 每把密钥的使用条件和上表一致（`unlockedDeviceRequired`、`userAuthType`、`authTimeout`、`noAuthRequired`）。
-- 证明里的应用包名是 Nagi 的包名。
+- 每把密钥的使用条件和上表一致（`unlockedDeviceRequired`、`userAuthType`、`authTimeout`、`noAuthRequired`），密钥是在硬件里生成的（`origin` 为 GENERATED）。`unlockedDeviceRequired` 在有的手机上由 Keystore 软件实现、记在 softwareEnforced 里，所以两组都认；其余几项只认 hardwareEnforced。
+- 证明里的应用包名是 Nagi 的包名 `io.github.sipc.nagi`（`auth.AppPackage`）。
+- 证明里的公钥和提交的公钥一致。
 
 任何一项不符合时拒绝添加，提示原因。证明里的 bootloader 状态（`verifiedBootState`）和系统安全补丁日期记在设备上：bootloader 没有锁定时照样允许添加（有人会在自己 root 过的手机上用），但在设备列表和添加通知里标明。
 
@@ -232,13 +233,14 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 1. 在网页的「设置 → 账号安全 → 手机 App」点「添加手机」，先做高权限确认。
 2. 页面显示二维码，内容是 `nagi-app://pair?v=1&a=<对外地址:面板端口>&d=<面板域名>&fp=<公钥指纹>&c=<配对码>`。没有绑定域名时没有 `d`。
 3. 在 App 里扫码。App 用二维码里的公钥指纹校验面板的证书，然后向面板查询配对码，显示「添加到 <面板名称>，成员 <显示名称>」。
-4. 在 App 里点「添加」，验证指纹、面容或锁屏密码。App 生成三把密钥，提交公钥和证明。
+4. 在 App 里点「添加」。App 生成三把密钥，弹出系统验证框（用确认密钥签一次，确认是机主在操作），然后提交公钥和证明。
 5. 网页显示「已添加 <手机名称>」。
 
 规则：
 
 - 配对码是 32 字节随机数，5 分钟内有效，只能用一次，绑定生成它的成员和网页会话；这个会话退出时配对码作废。每个成员同时只有一个有效的配对码，重新生成时旧的作废。
 - 配对的地址 `/api/app/pair` 和备用面板配对一样，不受安全入口限制，对不认识的配对码返回 404。按 IP 限速，和登录共用计数。
+- 二维码里没有面板名称：App 查询配对码时面板返回名称。面板名称取 settings 表的 `panel_name`，没有设置时是面板机器的主机名（界面上还不能改）。
 - 「添加手机」只能在网页上做，App 里不能再添加别的手机：手机被人拿走、锁屏密码也被看到时，不能借它给另一台手机留下登录。
 
 ### 用密码登录
@@ -252,7 +254,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 ### 添加以后
 
-- 面板记下设备：`app_devices (id, user_id, name, model, android_version, app_version, device_key, confirm_key, push_key, security_level, boot_locked, patch_level, revocation_checked, created_at, last_used_at, last_ip, last_unlock_at)`。设备 ID 是 16 字节随机数。删除成员时级联删除，备用面板复制数据库时一起带过去。
+- 面板记下设备：`app_devices (id, user_id, name, model, android_version, app_version, device_key, confirm_key, push_key, security_level, boot_locked, patch_level, revocation_checked, dev_keys, created_at, last_used_at, last_ip, last_unlock_at, sig_failures)`（迁移 `0025_app_devices.sql`，查询手写在 `store/app_devices.go`，和通行密钥、会话一样不放进 queries.sql）。设备 ID 是 16 字节随机数（base64url）。安全级别取三把密钥里最低的。删除成员时级联删除，备用面板复制数据库时一起带过去。
 - 每个成员最多 10 台手机。
 - 添加手机是一次性通知，不能关（和添加通行密钥一样，见 [audit.md](audit.md#安全告警)）：账号、手机名称、系统版本、是否锁定 bootloader、来源。
 
@@ -260,9 +262,9 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 ### 换取令牌
 
-1. App 调用 `AppService.Challenge`（带设备 ID），面板返回挑战。挑战和通行密钥登录的一样不占面板的存储：编号里带随机数和过期时间，用进程内存里的密钥做 HMAC，1 分钟内有效，只能用一次。设备 ID 不认识时返回 404。
+1. App 调用 `AppService.Challenge`（带设备 ID），面板返回挑战。挑战和通行密钥登录的一样不占面板的存储：随机数、过期时间和设备 ID 用进程内存里的密钥做 HMAC，只能用一次，也只能由这台手机用。`Challenge` 发的 1 分钟内有效；`Token` 一起返回的下一次用的挑战 15 分钟内有效（App 每 4 分钟换一次，令牌 10 分钟过期）。设备 ID 不认识时返回 404。
 2. App 用设备密钥签名 `nagi-app-token\n<连接的主机>\n<设备 ID>\n<挑战>`，调用 `AppService.Token`。
-3. 面板核对签名，返回令牌 `nagi_app_<43 位 base64url>` 和下一次用的挑战。之后每次换取只要一次请求。
+3. 面板核对签名，返回令牌 `nagi_app_<43 位 base64url>`、过期时间、下一次用的挑战和解锁时长。之后每次换取只要一次请求。请求里带上签名用的主机（`host`），面板只认自己的对外地址:端口和域名；开发模式下不检查主机（模拟器用 `10.0.2.2` 连面板）。
 
 - 令牌 10 分钟过期，App 在前台时每 4 分钟换新的。令牌只在面板进程的内存里（存哈希），面板重启后 App 自动重新换取，不用操作。
 - 签名的内容里有连接的主机：面板只认自己的地址和域名，别的服务器骗 App 签的挑战拿到这里用不了。
@@ -271,6 +273,8 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 - 不带 cookie，所以不检查 `Sec-Fetch-Site` 和 `Origin`（见 [panel.md](panel.md#会话) 的请求来源）。
 - 设置了[管理员登录地址](panel.md#管理员登录地址)时，管理员的手机只能从这些地址换取和使用令牌，否则拒绝、记审计（`admin_network_denied`）并告警。
 - 签名不对时记审计（`app_signature_invalid`），连续 5 次后这台手机要先解锁 App（见下一节）才能继续换取。
+- 令牌过期、换了网段、面板重启过时，接口返回 `unauthenticated` 和响应头 `Nagi-App-Retoken`（`expired`、`network`），App 重新换取后再试一次。需要解锁时 `Token` 返回 `failed_precondition` 和 `Nagi-App-Retoken: unlock`。
+- 开了安全入口时，`/nagi.v1.AppService/` 不受限制；其他请求带着面板发过的 App 令牌（过期的也算）时放行，交给接口检查。
 
 ### 解锁 App
 
@@ -278,6 +282,9 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 - 距离这台手机上次解锁（`last_unlock_at`）超过这个时长时，`AppService.Token` 只认确认密钥的签名，设备密钥的签名返回 `failed_precondition`。
 - App 在前台时每 4 分钟用设备密钥换一次令牌，同时把解锁时间往后延，连续使用时不会反复要求验证。App 在后台不换取令牌，推送用的是另一把密钥。
+- 用确认密钥换取成功时记审计（`app_unlocked`）；需要解锁时记 `app_unlock_required`。
+- App 一侧：冷启动时总是先显示解锁页；离开前台超过解锁时长后回来时也显示。解锁页进入时自动弹出系统验证框。
+- 解锁时长在「设置 → 安全 → 会话」里的设置项还没有做，现在只能直接改 settings 表的 `app_unlock_minutes`（5–60，超出时按 15）。
 - 确认密钥每次使用都要用户验证，由硬件保证，App 被篡改也绕不过去。
 
 ### 高权限确认和重新验证
@@ -288,15 +295,15 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 ## 管理和撤销
 
-- 「设置 → 账号安全 → 已登录的设备」里列出手机：名称（默认是手机型号，可以改）、App 版本、Android 版本、安全级别、最近的 IP 和活动时间，bootloader 没有锁定或者没检查吊销的标明。点「退出」后删除设备记录，内存里的令牌立即作废，推送连接立即断开。
-- 管理员在「设置 → 成员」的成员菜单里也能看到、退出这个成员的手机。
+- 「设置 → 账号安全 → 已登录的设备」里列出手机（`ListSessions` 里 `kind` 是 `app`，ID 是 `app-<设备 ID>`，`RevokeSession` 用它退出手机）：名称（默认是手机型号，可以改）、App 版本、Android 版本、安全级别、最近的 IP 和活动时间，bootloader 没有锁定或者没检查吊销的标明。点「退出」后删除设备记录，内存里的令牌立即作废，推送连接立即断开。
+- 管理员在「设置 → 成员」的成员菜单里也能看到、退出这个成员的手机（还没有做）。
 - 改自己的密码时，其他手机和其他网页登录一起退出。管理员重置成员的密码、删除成员、在面板机器上执行 `nagi reset password` 时，这个成员的手机全部退出。
 - 30 天没有换取过令牌的手机自动退出，可以在「设置 → 安全 → 会话」改短。没有从添加起算的最长期限：每次换取都要硬件密钥，长期不退出不会增加被盗用的风险。
 - 卸载 App 或清除数据后密钥随之删除，设备记录留到 30 天后自动退出，也可以手动退出。
 
 ## 审计
 
-- App 的操作照常记审计，来源 `via` 是 `app`，审计页显示「App（手机名称）」。`session` 字段是设备 ID 的哈希前 12 位，同一台手机的操作串在一起。
+- App 的操作照常记审计，来源 `via` 是 `app`，`client` 是手机名称，审计页显示「App（手机名称）」。`session` 字段是 `app:<设备 ID>` 的哈希前 12 位，同一台手机的操作串在一起。配对、换取令牌、退出不按接口记，按下面的安全事件记。
 - 安全事件记为 `security` 类：`app_paired`、`app_removed`、`app_attestation_failed`、`app_signature_invalid`、`app_unlock_required`。添加手机和证明不通过发通知，其余只记审计。
 
 ## 告警推送
@@ -366,7 +373,7 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
 
   | 方法 | 页面 | 消息 |
   | --- | --- | --- |
-  | `WatchOverview()` | 首页 | 需要处理、关键数字、流量最大的映射 |
+  | `ProjectService.WatchOverview()` | 首页 | 需要处理、关键数字、对外入站和出站、流量最大的映射、面板名称（`Overview`） |
   | `WatchProjects()` | 项目列表 | 和 `ListProjects` 的回复相同 |
   | `WatchProject(project_id)` | 项目页 | 项目和它的容器、服务的状态和占用 |
   | `WatchContainer(project_id, container)` | 容器页、服务页 | 容器的状态、草稿、最近事件、当前占用 |
@@ -374,10 +381,11 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
   | `WatchNode(node_id)` | 节点页 | 节点的状态、用量、上面的容器 |
 
 - **内容**：打开时先发一份完整的当前状态，之后每次变化发一份完整的新状态，不发增量，App 直接替换。消息类型尽量用现有查询接口的回复，App 和网页共用解析代码。同一条流 1 秒内的多次变化合并成一次。每 30 秒没有变化时发一次心跳。
-- **变化从哪来**：节点上报（`Report`，状态变化时立即上报，平时每 15 秒）、部署和操作的结果、配置的修改。面板内部按项目、节点发出「有变化」的通知，打开着的流收到后重新查询并发送。占用这类一直在变的数值随节点上报更新，最多每 15 秒一次。
+- **变化从哪来**：节点上报（`Report`，状态变化时立即上报，平时每 15 秒）、节点连上和断开、节点发来的告警、接口的修改（部署、操作、配置、退出登录）。面板内部发出「有变化」的通知（`nodes.Registry.Changes`，现在不按项目、节点区分），打开着的流收到后重新算一份，和上一次发的不同才发。占用这类一直在变的数值随节点上报更新。首页的对外流量要问每个节点，结果缓存 10 秒，几条流共用。
+- 每次重新算之前检查调用者还登录着（手机的设备记录、网页的会话），退出后流立即结束。
 - **监控图表**：历史曲线仍然用 `QueryMetrics`，打开图表和切换时间范围时查一次；之后由流里的当前值补到曲线末尾。
 - **权限**：流和查询接口经过同样的拦截器，角色、访问范围、备用面板只读都照常检查；访问范围在每次发送时重新计算，成员被移出范围后流里不再出现那个项目或节点，被移出单个项目时那条流结束（`permission_denied`）。会话退出、手机被退出时流立即结束。
-- **断开**：网络中断后 App 退避重连（1、2、5、10 秒，之后每 30 秒），重连后先到的完整状态覆盖旧数据。下拉刷新会立即重连一次。
+- **断开**：网络中断后 App 退避重连（1、2、5、10 秒，之后每 30 秒），重连后先到的完整状态覆盖旧数据；150 秒收不到任何消息当作断开。点「重试」立即重连一次（下拉刷新还没有做）。
 - **网页**：以后网页也可以改用这些流，这里不要求。
 
 ### 现有接口的改动
@@ -388,8 +396,9 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
 - **高权限确认的方式**：会话记下这次确认用的是密码或验证码，还是确认密钥（`sessions.elevated_by`）。`CreateAccessToken`、`BeginPasskeyRegistration`、`BeginTOTP`、`CreateAppPairing` 只认密码或验证码的确认，在 `elevationRequired` 旁边另登记一张表，`auth.User.ElevatedFor` 一并判断，测试逐个检查这张表。
 - **身份**：`auth.User` 加 `DeviceID`，`Via` 是 `app`；审计的 `session` 字段用设备 ID 的哈希。
 - **告警**：`Alert` 加 `container`（容器 ID，节点知道是哪个容器），通知和深链接能直接打开容器页。是否严重由面板按告警的 `key` 判断，一张表写清哪些算严重。
-- **未恢复的告警**：面板要知道当前有哪些告警还没恢复，「需要处理」和推送的摘要都用它。节点在 `Report` 里带上本节点当前未恢复的告警（只有 key 和开始时间），面板重启、节点重连后都能对上，不依赖 `ReportAlert` 有没有送到。
-- **需要处理**：网页上「需要处理」的判断搬到面板（`ProjectService.GetAttention` 之类，名称实现时定），网页、App 和推送的摘要用同一份结果，按成员的访问范围算。
+- **未恢复的告警**：面板要知道当前有哪些告警还没恢复，「需要处理」和推送的摘要都用它。现在面板按收到的 `ReportAlert`（触发、恢复）在内存里记着（`nodes.Registry.ActiveAlerts`），面板重启后要等节点再发一次才知道。以后节点在 `Report` 里带上本节点当前未恢复的告警（只有 key 和开始时间），面板重启、节点重连后都能对上，不依赖 `ReportAlert` 有没有送到。
+- **需要处理**：`ProjectService.GetAttention`，按成员的访问范围算，严重的在前（同级按开始时间）。现在包括：节点离线（严重）、容器健康检查失败或异常（严重）、节点发来的未恢复告警（节点失联、顶替、安全类的严重，其余警告；已有容器异常的一行时不重复）、待批准的节点（警告，管理员行尾有「批准」）、可更新的镜像（提示，按容器一行，只读成员没有「更新」）。还没有：待确认的顶替、备用面板未连接、面板和 App 的新版本。网页的「需要处理」还是自己算，以后改用它。
+- **流量趋势**：`NodeService.QueryTraffic(from, step)` 返回访问范围内在线节点合计的对外入站、出站（网卡减去节点网络，和网页全局概览的算法一样）和节点之间（按发送方合计）。App 打开首页和切换时间范围时查一次。
 
 ### 版本兼容
 
@@ -409,10 +418,11 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
   | `core:security` | Keystore 密钥、生物识别验证框、缓存加密 |
   | `core:data` | 各类数据的仓库、内存状态、加密缓存 |
   | `core:ui` | 主题（颜色、字体、间距）、通用组件、图表、编辑器和终端的封装 |
-  | `feature:home`、`feature:projects`、`feature:nodes`、`feature:settings`、`feature:pairing` | 各部分的页面和 ViewModel |
+  | `feature:home`、`feature:projects`、`feature:nodes`、`feature:settings`、`feature:pairing` | 各部分的页面和 ViewModel（首版只有 `feature:home` 和 `feature:pairing`，其余三个标签是 `app` 里的占位页） |
   | `push` | 前台服务、推送连接、通知、小组件 |
 
-- **生成代码**：`buf.gen.yaml` 加 Java（lite）和 connect-kotlin 两个插件，输出到 `android/core/proto`。改了 proto 以后和 Go、网页的代码一起重新生成。
+- **生成代码**：`buf.gen.yaml` 加 Java（lite，`protoc_builtin: java`）和 connect-kotlin 两个插件，输出到 `android/core/proto/src/main/{java,kotlin}`。需要 `protoc`（36.x，和 protobuf-javalite 4.36 对应）和 `protoc-gen-connect-kotlin`（0.10，和 connect-kotlin 运行库版本一致）在 PATH 里。proto 文件都加了 `java_multiple_files` 和 `java_package = io.github.sipc.nagi.proto.v1`。改了 proto 以后和 Go、网页的代码一起重新生成。
+- **版本**：AGP 8.13、Kotlin 2.4（connect-kotlin 0.10 用 Kotlin 2.4 编译，要求 2.3 以上）、Compose BOM 2026.03（Compose 1.10；更新的 BOM 要求 AGP 9.1 和 compileSdk 37）、compileSdk 和 targetSdk 36、Gradle 8.14。字体是 MiSans 的子集（`core/ui/fonts/subset.py`：拉丁、标点和 GB2312 汉字，每种字重约 1.4 MB），缺的字由系统字体补上。
 - **主要依赖**：Jetpack Compose、Navigation Compose、Material 3 的自适应布局（只用窗口尺寸和导航栏，不用它的视觉风格）、OkHttp、connect-kotlin、protobuf-javalite、Vico、Termux 的终端库、Sora Editor、Jetpack Glance、AndroidX Biometric。依赖注入手写，不用 Hilt。
 - **系统版本**：`minSdk` 28，`targetSdk` 跟随当年 Google 要求的版本。
 - **测试**：
@@ -421,3 +431,20 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
   - App：令牌管理、重连、缓存加密写单元测试；主要页面用 Compose 的界面测试在模拟器上跑。每个阶段完成后在真机上实际操作一遍，脚本测试只是补充。
 - **崩溃日志**：只存在本机，不上报任何地方（自托管、不依赖外部服务）。最多保留最近 10 次，去掉地址、令牌、设备 ID 和集群数据；「本机 → 关于」里可以查看和分享。
 - **构建和发布**：GitHub Actions 构建 APK，发版时用签名密钥签名，和面板的二进制一起上传到 Release。签名密钥只放在 CI 的密钥里。
+
+## 进度
+
+首版（`android-v1` 分支）：
+
+- **面板**：`AppService` 的 `GetPairing`、`Pair`、`Challenge`、`Token`、`Info`、`Logout`；密钥证明的校验（`auth/attestation`）；App 令牌、网段绑定、解锁规则、开发模式；`AuthService.CreateAppPairing`、`GetAppPairing`；已登录的设备里的手机；`GetAttention`、`WatchOverview`、`QueryTraffic`。测试在 `auth/app_test.go`、`api/app_test.go`。
+- **网页**：「设置 → 账号安全 → 手机 App」和「添加手机」对话框；已登录的设备里的手机；审计来源「App」。
+- **App**：欢迎、扫码（CameraX 和 ZXing）、确认添加、系统验证、解锁 App；首页概览（需要处理、关键数字、流量趋势、流量最大的映射）、加载、出错和连不上面板的状态；胶囊导航（项目、节点、设置是占位页）；点顶部栏的面板名称可以退出这台手机。
+
+和上面的设计不同、还没有做的：
+
+- 只连对外地址（按公钥指纹校验），绑定了域名时还不优先用域名。
+- 没有加密的状态缓存：连不上面板时显示的是这次打开 App 以来最后收到的数据。
+- 没有用密码登录、多个面板、推送、终端、文件、搜索、引导、宽屏、下拉刷新。
+- 流量趋势用 Canvas 画，按住看数值还没有做；以后换成 Vico。
+- 「需要处理」里的「更新」只打开一个占位的容器页。
+- 吊销列表、成员页里管理员退出别人的手机、解锁时长的设置界面。
