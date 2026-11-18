@@ -24,11 +24,16 @@ import (
 // SettingPanelName 是面板名称在 settings 表里的键。没有设置时用面板机器的主机名。
 const SettingPanelName = "panel_name"
 
-// Name 返回面板名称：App 的顶部栏和「添加到 <面板名称>」用它。
+// Name 返回面板名称：App 的顶部栏和「添加到 <面板名称>」用它。管理员可以在设置里改（SetPanelName），没有设置时是 DefaultName。
 func (p *PanelInfo) Name(ctx context.Context) string {
 	if v, err := p.Q.GetSetting(ctx, SettingPanelName); err == nil && strings.TrimSpace(v) != "" {
 		return strings.TrimSpace(v)
 	}
+	return DefaultPanelName()
+}
+
+// DefaultPanelName 是没有设置名称时的面板名称：面板机器的主机名。
+func DefaultPanelName() string {
 	if h, err := os.Hostname(); err == nil && h != "" {
 		return h
 	}

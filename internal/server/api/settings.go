@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/alert"
@@ -74,7 +76,31 @@ func (p *PanelInfo) settings(ctx context.Context) *nagiv1.PanelSettings {
 		Version:       p.Version,
 		Domain:        p.Domain(ctx),
 		MasterKeyPath: masterKeyPath(p.DataDir),
+		Name:          p.Name(ctx),
+		DefaultName:   DefaultPanelName(),
 	}
+}
+
+// maxPanelName 是面板名称最多几个字符。
+const maxPanelName = 64
+
+// SetPanelName 修改面板名称，为空时恢复默认。改完通知订阅流：App 的顶部栏跟着变。
+func (s *settingsService) SetPanelName(ctx context.Context, req *connect.Request[nagiv1.SetPanelNameRequest]) (*connect.Response[nagiv1.UpdateSettingsResponse], error) {
+	name := strings.TrimSpace(req.Msg.GetName())
+	if utf8.RuneCountInString(name) > maxPanelName || strings.ContainsFunc(name, unicode.IsControl) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("面板名称最多 %d 个字符，不能有换行", maxPanelName))
+	}
+	var err error
+	if name == "" || name == DefaultPanelName() {
+		err = s.Q.DeleteSetting(ctx, SettingPanelName)
+	} else {
+		err = s.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingPanelName, Value: name})
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.Nodes.Changes.Bump()
+	return connect.NewResponse(&nagiv1.UpdateSettingsResponse{Settings: s.Panel.settings(ctx)}), nil
 }
 
 var hostnameRe = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)

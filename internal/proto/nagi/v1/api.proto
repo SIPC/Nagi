@@ -454,6 +454,8 @@ service SettingsService {
   rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
   // 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
   rpc SetPanelDomain(SetPanelDomainApiRequest) returns (UpdateSettingsResponse);
+  // 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+  rpc SetPanelName(SetPanelNameRequest) returns (UpdateSettingsResponse);
   rpc GetAlertConfig(GetAlertConfigRequest) returns (GetAlertConfigResponse);
   rpc UpdateAlertConfig(UpdateAlertConfigRequest) returns (UpdateAlertConfigResponse);
   // 用面板发一条测试消息到某个渠道。
@@ -685,6 +687,13 @@ message PanelSettings {
   string domain = 5;
   // 面板主密钥文件的路径。数据库里的密钥都用它加密，要单独备份。
   string master_key_path = 6;
+  // 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
+  string name = 7;
+  string default_name = 8;
+}
+
+message SetPanelNameRequest {
+  string name = 1;
 }
 
 message GetSettingsRequest {}
@@ -1870,6 +1879,29 @@ message Overview {
   repeated RouteTraffic top_routes = 10;
   // 面板名称（顶部栏）。
   string panel_name = 11;
+  // 实时流量的各条路径（首页的桑基图），和网页概览的「实时流量」同样的算法，traffic_ready 为 false 时为空。
+  repeated TrafficFlow flows = 12;
+  // 桑基图的行：访问范围内的节点（含离线的），面板没有自带节点时多一行面板（id 为 "__panel"）。外部网络不在里面。
+  repeated FlowRow flow_rows = 13;
+}
+
+// TrafficFlow 是实时流量的一条路径。from、to 是节点 ID，外部网络是 "__external"，面板（没有自带节点时）是 "__panel"。
+message TrafficFlow {
+  string from = 1;
+  string to = 2;
+  // 字节/秒。
+  double rate = 3;
+  // ext：和外部网络之间（估算值）；mesh：节点之间（按发送方的数）。
+  string kind = 4;
+  // 经面板中转，画成虚线。
+  bool relay = 5;
+}
+
+message FlowRow {
+  string id = 1;
+  // 面板那一行为空，由界面写「面板」。
+  string name = 2;
+  bool offline = 3;
 }
 
 message QueryTrafficRequest {

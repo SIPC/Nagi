@@ -3074,6 +3074,7 @@ const (
 	SettingsService_GetSettings_FullMethodName              = "/nagi.v1.SettingsService/GetSettings"
 	SettingsService_UpdateSettings_FullMethodName           = "/nagi.v1.SettingsService/UpdateSettings"
 	SettingsService_SetPanelDomain_FullMethodName           = "/nagi.v1.SettingsService/SetPanelDomain"
+	SettingsService_SetPanelName_FullMethodName             = "/nagi.v1.SettingsService/SetPanelName"
 	SettingsService_GetAlertConfig_FullMethodName           = "/nagi.v1.SettingsService/GetAlertConfig"
 	SettingsService_UpdateAlertConfig_FullMethodName        = "/nagi.v1.SettingsService/UpdateAlertConfig"
 	SettingsService_TestAlertChannel_FullMethodName         = "/nagi.v1.SettingsService/TestAlertChannel"
@@ -3128,6 +3129,8 @@ type SettingsServiceClient interface {
 	UpdateSettings(ctx context.Context, in *UpdateSettingsRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	// 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
 	SetPanelDomain(ctx context.Context, in *SetPanelDomainApiRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
+	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+	SetPanelName(ctx context.Context, in *SetPanelNameRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	GetAlertConfig(ctx context.Context, in *GetAlertConfigRequest, opts ...grpc.CallOption) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3237,6 +3240,16 @@ func (c *settingsServiceClient) SetPanelDomain(ctx context.Context, in *SetPanel
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateSettingsResponse)
 	err := c.cc.Invoke(ctx, SettingsService_SetPanelDomain_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetPanelName(ctx context.Context, in *SetPanelNameRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSettingsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_SetPanelName_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3709,6 +3722,8 @@ type SettingsServiceServer interface {
 	UpdateSettings(context.Context, *UpdateSettingsRequest) (*UpdateSettingsResponse, error)
 	// 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
 	SetPanelDomain(context.Context, *SetPanelDomainApiRequest) (*UpdateSettingsResponse, error)
+	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+	SetPanelName(context.Context, *SetPanelNameRequest) (*UpdateSettingsResponse, error)
 	GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3802,6 +3817,9 @@ func (UnimplementedSettingsServiceServer) UpdateSettings(context.Context, *Updat
 }
 func (UnimplementedSettingsServiceServer) SetPanelDomain(context.Context, *SetPanelDomainApiRequest) (*UpdateSettingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetPanelDomain not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetPanelName(context.Context, *SetPanelNameRequest) (*UpdateSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPanelName not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAlertConfig not implemented")
@@ -4006,6 +4024,24 @@ func _SettingsService_SetPanelDomain_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SettingsServiceServer).SetPanelDomain(ctx, req.(*SetPanelDomainApiRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetPanelName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPanelNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetPanelName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetPanelName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetPanelName(ctx, req.(*SetPanelNameRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4806,6 +4842,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetPanelDomain",
 			Handler:    _SettingsService_SetPanelDomain_Handler,
+		},
+		{
+			MethodName: "SetPanelName",
+			Handler:    _SettingsService_SetPanelName_Handler,
 		},
 		{
 			MethodName: "GetAlertConfig",

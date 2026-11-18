@@ -196,6 +196,47 @@ type trafficNow struct {
 	extRx  map[string]float64
 	extTx  map[string]float64
 	routes map[string]float64
+	// pairs 是 "发送节点|接收节点" → 字节/秒（节点之间只取发送方的数），面板没有自带节点时面板是 flowPanel。
+	pairs map[string]float64
+	// relayed 是经面板中转的 "节点|节点"（两个方向都有）。
+	relayed map[string]bool
+	// panelAlone：面板有节点网络、但没有自带节点，桑基图里面板单独一行。
+	panelAlone bool
+}
+
+// 桑基图里外部网络和单独一行的面板的 ID（和网页概览一样）。
+const (
+	flowExternal = "__external"
+	flowPanel    = "__panel"
+)
+
+func newTrafficNow() *trafficNow {
+	return &trafficNow{extRx: map[string]float64{}, extTx: map[string]float64{}, routes: map[string]float64{}, pairs: map[string]float64{}, relayed: map[string]bool{}}
+}
+
+// addPair 把节点 node 上的一条 m:<公钥>:rx|tx 记进 pairs（和网页概览的 addRate 一样）：节点之间只取发送方的数；
+// 面板自己不存指标，面板发出的用节点这一端的接收量算；自带节点和面板之间走本机回环，不算。
+func addPair(pairs map[string]float64, node, name string, v float64, peers map[string]string, panelKey string) {
+	m := meshSeries.FindStringSubmatch(name)
+	if m == nil {
+		return
+	}
+	key, dir := m[1], m[2]
+	peer := peers[key]
+	if peer == "" || peer == node {
+		return
+	}
+	if key == panelKey {
+		if dir == "tx" {
+			pairs[node+"|"+peer] += v
+		} else {
+			pairs[peer+"|"+node] += v
+		}
+		return
+	}
+	if dir == "tx" {
+		pairs[node+"|"+peer] += v
+	}
 }
 
 type trafficCacheState struct {
@@ -264,7 +305,7 @@ func (a *API) liveTraffic(ctx context.Context) *trafficNow {
 		go a.refreshTraffic()
 	}
 	if c == nil {
-		return &trafficNow{extRx: map[string]float64{}, extTx: map[string]float64{}, routes: map[string]float64{}}
+		return newTrafficNow()
 	}
 	return c
 }
@@ -281,11 +322,27 @@ func (a *API) refreshTraffic() {
 	a.Nodes.Changes.Bump()
 }
 
-// queryTraffic 问每个在线节点最近 1 分钟的网卡、节点网络和端口映射速率，各节点同时问，每个最多等 5 秒。
+// queryTraffic 问每个在线节点最近 1 分钟的网卡、节点网络和端口映射速率，以及节点网络的连接方式（看哪些经面板中转），
+// 各节点同时问，每个最多等 5 秒。
 func (a *API) queryTraffic(ctx context.Context) *trafficNow {
-	out := &trafficNow{at: time.Now(), extRx: map[string]float64{}, extTx: map[string]float64{}, routes: map[string]float64{}}
+	out := newTrafficNow()
+	out.at = time.Now()
 	conns := a.Nodes.Conns()
 	panelKey := a.panelMeshKey()
+	// 公钥 → 节点 ID；面板的公钥对应到自带节点（同一台机器），没有自带节点时对应到 flowPanel。
+	peers := a.meshNodes(ctx)
+	if peers == nil {
+		peers = map[string]string{}
+	}
+	if panelKey != "" {
+		peers[panelKey] = flowPanel
+		for _, c := range conns {
+			if !c.Pending() && c.OwnEmbedded() {
+				peers[panelKey] = c.NodeID
+			}
+		}
+		out.panelAlone = peers[panelKey] == flowPanel
+	}
 	from := timestamppb.New(time.Now().Add(-time.Minute))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -327,8 +384,22 @@ func (a *API) queryTraffic(ctx context.Context) *trafficNow {
 				}
 			}
 			mrx, mtx := meshDeduct(res[1].GetSeries(), panelKey, c.OwnEmbedded())
+			// 连接方式只用来把经面板中转的路径画成虚线，问不到也不影响别的。
+			status, _ := c.Agent.GetMeshStatus(qctx, &nagiv1.MeshStatusRequest{})
 			mu.Lock()
 			defer mu.Unlock()
+			for _, s := range res[1].GetSeries() {
+				if v, ok := latest(s); ok {
+					addPair(out.pairs, c.NodeID, s.GetName(), v, peers, panelKey)
+				}
+			}
+			for _, p := range status.GetPeers() {
+				to := peers[hex.EncodeToString(p.GetPublicKey())]
+				if to != "" && (p.GetPath() == "udp-relay" || p.GetPath() == "tls-relay") {
+					out.relayed[c.NodeID+"|"+to] = true
+					out.relayed[to+"|"+c.NodeID] = true
+				}
+			}
 			out.ready = true
 			out.extRx[c.NodeID] = max(0, rx-mrx)
 			out.extTx[c.NodeID] = max(0, tx-mtx)
@@ -440,7 +511,49 @@ func (a *API) overview(ctx context.Context) (*nagiv1.Overview, error) {
 		routes = routes[:topRoutes]
 	}
 	out.TopRoutes = routes
+	out.Flows, out.FlowRows = trafficFlows(t, rows, x, a.Nodes.Online)
 	return out, nil
+}
+
+// trafficFlows 是首页桑基图的路径和行，只含访问范围内的节点（和网页概览的「实时流量」一样）。不到 1 B/s 的路径不画。
+func trafficFlows(t *trafficNow, rows []store.Node, x *access, online func(string) bool) ([]*nagiv1.TrafficFlow, []*nagiv1.FlowRow) {
+	visible := func(id string) bool { return id == flowPanel || x.node(id) }
+	var flowRows []*nagiv1.FlowRow
+	for _, n := range rows {
+		if n.Pending != 0 || !x.node(n.ID) {
+			continue
+		}
+		flowRows = append(flowRows, &nagiv1.FlowRow{Id: n.ID, Name: n.Name, Offline: !online(n.ID)})
+	}
+	if t.panelAlone {
+		flowRows = append(flowRows, &nagiv1.FlowRow{Id: flowPanel})
+	}
+	if !t.ready {
+		return nil, flowRows
+	}
+	var flows []*nagiv1.TrafficFlow
+	for _, r := range flowRows {
+		if v := t.extRx[r.Id]; v >= 1 {
+			flows = append(flows, &nagiv1.TrafficFlow{From: flowExternal, To: r.Id, Rate: v, Kind: "ext"})
+		}
+		if v := t.extTx[r.Id]; v >= 1 {
+			flows = append(flows, &nagiv1.TrafficFlow{From: r.Id, To: flowExternal, Rate: v, Kind: "ext"})
+		}
+	}
+	keys := make([]string, 0, len(t.pairs))
+	for k := range t.pairs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := t.pairs[k]
+		from, to, _ := strings.Cut(k, "|")
+		if v < 1 || !visible(from) || !visible(to) {
+			continue
+		}
+		flows = append(flows, &nagiv1.TrafficFlow{From: from, To: to, Rate: v, Kind: "mesh", Relay: t.relayed[k]})
+	}
+	return flows, flowRows
 }
 
 // WatchOverview 是首页的订阅流：先发一份完整的当前状态，之后有变化（节点上报、上下线、告警、修改）时重新算，

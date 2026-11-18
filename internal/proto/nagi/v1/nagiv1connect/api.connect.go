@@ -252,6 +252,9 @@ const (
 	// SettingsServiceSetPanelDomainProcedure is the fully-qualified name of the SettingsService's
 	// SetPanelDomain RPC.
 	SettingsServiceSetPanelDomainProcedure = "/nagi.v1.SettingsService/SetPanelDomain"
+	// SettingsServiceSetPanelNameProcedure is the fully-qualified name of the SettingsService's
+	// SetPanelName RPC.
+	SettingsServiceSetPanelNameProcedure = "/nagi.v1.SettingsService/SetPanelName"
 	// SettingsServiceGetAlertConfigProcedure is the fully-qualified name of the SettingsService's
 	// GetAlertConfig RPC.
 	SettingsServiceGetAlertConfigProcedure = "/nagi.v1.SettingsService/GetAlertConfig"
@@ -2709,6 +2712,8 @@ type SettingsServiceClient interface {
 	UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	// 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainApiRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+	SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
@@ -2813,6 +2818,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+SettingsServiceSetPanelDomainProcedure,
 			connect.WithSchema(settingsServiceMethods.ByName("SetPanelDomain")),
+			connect.WithClientOptions(opts...),
+		),
+		setPanelName: connect.NewClient[v1.SetPanelNameRequest, v1.UpdateSettingsResponse](
+			httpClient,
+			baseURL+SettingsServiceSetPanelNameProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetPanelName")),
 			connect.WithClientOptions(opts...),
 		),
 		getAlertConfig: connect.NewClient[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse](
@@ -3087,6 +3098,7 @@ type settingsServiceClient struct {
 	getSettings              *connect.Client[v1.GetSettingsRequest, v1.GetSettingsResponse]
 	updateSettings           *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
 	setPanelDomain           *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
+	setPanelName             *connect.Client[v1.SetPanelNameRequest, v1.UpdateSettingsResponse]
 	getAlertConfig           *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
 	updateAlertConfig        *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
 	testAlertChannel         *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
@@ -3146,6 +3158,11 @@ func (c *settingsServiceClient) UpdateSettings(ctx context.Context, req *connect
 // SetPanelDomain calls nagi.v1.SettingsService.SetPanelDomain.
 func (c *settingsServiceClient) SetPanelDomain(ctx context.Context, req *connect.Request[v1.SetPanelDomainApiRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return c.setPanelDomain.CallUnary(ctx, req)
+}
+
+// SetPanelName calls nagi.v1.SettingsService.SetPanelName.
+func (c *settingsServiceClient) SetPanelName(ctx context.Context, req *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return c.setPanelName.CallUnary(ctx, req)
 }
 
 // GetAlertConfig calls nagi.v1.SettingsService.GetAlertConfig.
@@ -3374,6 +3391,8 @@ type SettingsServiceHandler interface {
 	UpdateSettings(context.Context, *connect.Request[v1.UpdateSettingsRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	// 绑定面板域名（为空表示取消），自动申请正式证书。节点的控制连接和安装命令仍然用 IP:端口 + 公钥指纹。
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainApiRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
+	SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3474,6 +3493,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		SettingsServiceSetPanelDomainProcedure,
 		svc.SetPanelDomain,
 		connect.WithSchema(settingsServiceMethods.ByName("SetPanelDomain")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetPanelNameHandler := connect.NewUnaryHandler(
+		SettingsServiceSetPanelNameProcedure,
+		svc.SetPanelName,
+		connect.WithSchema(settingsServiceMethods.ByName("SetPanelName")),
 		connect.WithHandlerOptions(opts...),
 	)
 	settingsServiceGetAlertConfigHandler := connect.NewUnaryHandler(
@@ -3748,6 +3773,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceUpdateSettingsHandler.ServeHTTP(w, r)
 		case SettingsServiceSetPanelDomainProcedure:
 			settingsServiceSetPanelDomainHandler.ServeHTTP(w, r)
+		case SettingsServiceSetPanelNameProcedure:
+			settingsServiceSetPanelNameHandler.ServeHTTP(w, r)
 		case SettingsServiceGetAlertConfigProcedure:
 			settingsServiceGetAlertConfigHandler.ServeHTTP(w, r)
 		case SettingsServiceUpdateAlertConfigProcedure:
@@ -3855,6 +3882,10 @@ func (UnimplementedSettingsServiceHandler) UpdateSettings(context.Context, *conn
 
 func (UnimplementedSettingsServiceHandler) SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainApiRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetPanelDomain is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetPanelName is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error) {
