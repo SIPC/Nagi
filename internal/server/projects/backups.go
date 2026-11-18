@@ -301,13 +301,42 @@ func (s *Service) syncBackup(ctx context.Context, projectID, name string, nodeID
 		}
 		return errors.Join(errs...)
 	}
+	return s.waitOldSync(ctx, projectID, name, list, func(ctx context.Context, id string) error {
+		_, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id})
+		return err
+	})
+}
+
+// waitOldSync 在后台依次调用 call 同步到 list 里的备份节点（旧版本的源节点同步完才返回），最多等 oldNodeSyncWait。
+// 每个（容器，备份节点）同时只有一个在等：已经在等的备份节点跳过（旧节点会让它结束后再同步一次，没有必要），
+// 操作员连续点「立即同步」不会让面板积累协程、旧节点也不会一次接一次地做完整同步。都在等时返回「已在同步」。
+func (s *Service) waitOldSync(ctx context.Context, projectID, name string, list []string, call func(ctx context.Context, id string) error) error {
+	var claimed []string
+	s.mu.Lock()
+	if s.oldSyncs == nil {
+		s.oldSyncs = map[string]bool{}
+	}
+	for _, id := range list {
+		key := projectID + "/" + name + "/" + id
+		if !s.oldSyncs[key] {
+			s.oldSyncs[key] = true
+			claimed = append(claimed, id)
+		}
+	}
+	s.mu.Unlock()
+	if len(claimed) == 0 {
+		return invalid("已在同步")
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), oldNodeSyncWait)
 		defer cancel()
-		for _, id := range list {
-			if _, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id}); err != nil {
+		for _, id := range claimed {
+			if err := call(ctx, id); err != nil {
 				s.Log.Warn("同步到备份节点失败", "project", projectID, "container", name, "node", id, "err", err)
 			}
+			s.mu.Lock()
+			delete(s.oldSyncs, projectID+"/"+name+"/"+id)
+			s.mu.Unlock()
 		}
 	}()
 	return nil

@@ -85,6 +85,8 @@ type Service struct {
 	// backupReports：容器所在节点最近一次上报的、同步到各个备份节点的状态（"项目 ID/容器名" → 状态）。
 	// 节点离线以后还留着：从备份节点恢复时要知道哪个备份节点的数据最新。只在内存里，面板重启后等节点重新上报。
 	backupReports map[string]backupReport
+	// oldSyncs：面板在后台等旧版本的源节点同步完的（容器，备份节点），"项目 ID/容器名/节点 ID"，见 waitOldSync。
+	oldSyncs map[string]bool
 }
 
 type backupReport struct {
