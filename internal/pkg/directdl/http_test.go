@@ -91,11 +91,16 @@ func TestKeys(t *testing.T) {
 	secret := bytes.Repeat([]byte{7}, 32)
 	c := Claims{Node: "n1", Kind: KindVolume, Project: "p", Container: "web", Volume: "data", Path: "a.bin", ID: "1", Expires: 1}
 	a := FileKey(secret, c, `"10-20"`)
-	// 同一个文件、同一个版本：换了链接（编号、到期时间）也是同一个密钥，可以接着续传。
+	// 同一个链接（到期时间不参与）：同一个密钥，链接内可以续传。换了链接（重新获取的命令）就换一个密钥。
+	c1 := c
+	c1.Expires = 9
+	if FileKey(secret, c1, `"10-20"`) != a {
+		t.Error("同一个链接的密钥应该相同")
+	}
 	c2 := c
 	c2.ID, c2.Expires = "2", 2
-	if FileKey(secret, c2, `"10-20"`) != a {
-		t.Error("同一个文件的密钥应该相同")
+	if k := FileKey(secret, c2, `"10-20"`); k.Key == a.Key || k.IV == a.IV || k.Tag == a.Tag {
+		t.Error("不同链接的密钥应该不同")
 	}
 	for name, other := range map[string]ContentKey{
 		"文件变了": FileKey(secret, c, `"10-21"`),

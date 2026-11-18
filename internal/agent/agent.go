@@ -289,6 +289,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if !cfg.DisableProxy {
 		a.proxy = proxy.New(filepath.Join(cfg.DataDir, "caddy"), log.With("component", "proxy"))
 		proxy.SetDirectHandler(a.direct)
+		a.direct.reload = a.applyProxy
 		a.proxyKick = make(chan struct{}, 1)
 		defer a.proxy.Stop()
 		go a.proxyLoop(ctx)
@@ -311,6 +312,8 @@ type agent struct {
 
 	proxy     *proxy.Proxy
 	proxyKick chan struct{}
+	// proxyMu：applyProxy 同时只有一个在做。
+	proxyMu   sync.Mutex
 	certFails certFailures
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
@@ -443,27 +446,7 @@ func (a *agent) proxyLoop(ctx context.Context) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
-		routes, err := a.allRoutes(ctx)
-		routes = append(routes, a.panelRoutes()...)
-		https := a.direct.wanted(a.proxy)
-		a.proxy.SetDirect(https)
-		a.proxy.SetDirectHTTP(a.direct.wantedHTTP(a.proxy, https))
-		if err == nil {
-			err = a.proxy.Apply(routes)
-		}
-		if err == nil {
-			// 已经不用的域名，"申请证书失败"的告警标为已恢复。
-			domains := map[string]bool{}
-			for _, r := range routes {
-				for _, d := range r.Domains {
-					domains[d] = true
-				}
-			}
-			a.alerts.ResolveUnless(ctx, "cert_failed:", func(d string) bool { return domains[d] })
-		}
-		if err != nil && ctx.Err() == nil {
-			a.log.Warn("更新对外访问规则失败", "err", err)
-		}
+		a.applyProxy(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -472,6 +455,34 @@ func (a *agent) proxyLoop(ctx context.Context) {
 			// 合并短时间内连续的变化。
 			time.Sleep(300 * time.Millisecond)
 		}
+	}
+}
+
+// applyProxy 重新生成并加载 Caddy 配置。proxyLoop 定时调用；加密 HTTP 下载签发命令时也立即调用一次，
+// 好在回答面板之前知道端口开没开好（见 directDL.startHTTP）。同时只有一个在做。
+func (a *agent) applyProxy(ctx context.Context) {
+	a.proxyMu.Lock()
+	defer a.proxyMu.Unlock()
+	routes, err := a.allRoutes(ctx)
+	routes = append(routes, a.panelRoutes()...)
+	https := a.direct.wanted(a.proxy)
+	a.proxy.SetDirect(https)
+	a.proxy.SetDirectHTTP(a.direct.wantedHTTP(a.proxy, https))
+	if err == nil {
+		err = a.proxy.Apply(routes)
+	}
+	if err == nil {
+		// 已经不用的域名，"申请证书失败"的告警标为已恢复。
+		domains := map[string]bool{}
+		for _, r := range routes {
+			for _, d := range r.Domains {
+				domains[d] = true
+			}
+		}
+		a.alerts.ResolveUnless(ctx, "cert_failed:", func(d string) bool { return domains[d] })
+	}
+	if err != nil && ctx.Err() == nil {
+		a.log.Warn("更新对外访问规则失败", "err", err)
 	}
 }
 

@@ -3075,9 +3075,9 @@ type DirectDownload struct {
 	HttpSupported bool `protobuf:"varint,6,opt,name=http_supported,json=httpSupported,proto3" json:"http_supported,omitempty"`
 	// 加密 HTTP 下载的端口（默认 80）。关了直连下载时为 0。
 	HttpPort uint32 `protobuf:"varint,7,opt,name=http_port,json=httpPort,proto3" json:"http_port,omitempty"`
-	// HTTPS 不能用，已经在这个端口上为 address 开好了加密 HTTP 下载，可以签发下载命令。
+	// HTTPS 不能用，可以为 address 签发加密 HTTP 下载的命令。端口按需打开（签发时开、空闲后关），这一项不表示正在监听。
 	HttpReady bool `protobuf:"varint,8,opt,name=http_ready,json=httpReady,proto3" json:"http_ready,omitempty"`
-	// 需要加密 HTTP 下载但开不了的原因（端口被占用等）。
+	// 最近一次打开加密 HTTP 下载的端口失败的原因（端口被占用等），下次打开成功时清掉。
 	HttpError     string `protobuf:"bytes,9,opt,name=http_error,json=httpError,proto3" json:"http_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

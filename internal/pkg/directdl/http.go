@@ -75,10 +75,11 @@ type ContentKey struct {
 	Tag string
 }
 
-// FileKey 派生普通文件的内容密钥：同一个面板密钥下，同一个文件（同一个 ETag）总是同一个密钥，
-// 重新签发的命令可以接着之前下载到一半的部分续传；文件变了（ETag 变了）就换一个，不会用同一段密钥流加密不同的内容。
+// FileKey 派生普通文件的内容密钥：每个链接一个（链接编号参与派生），同一个链接内续传、分段请求用同一段密钥流；
+// 不同链接（重新获取的命令）的密钥流不同，即使文件在两次下载之间变了，也不会用同一段密钥流加密两份不同的内容。
+// 文件和 ETag 也参与派生。重新获取的命令不能接着之前下载到一半的部分续传（文件名里的标识跟着变，不会拼错）。
 func FileKey(secret []byte, c Claims, etag string) ContentKey {
-	return derive(secret, "file", c.Node, c.Kind, c.Project, c.Container, c.Volume, c.Snapshot, c.Path, etag)
+	return derive(secret, "file", c.Node, c.ID, c.Kind, c.Project, c.Container, c.Volume, c.Snapshot, c.Path, etag)
 }
 
 // ArchiveKey 派生目录打包的内容密钥：每个链接一个（打包的内容每次可能不同，链接也只能用一次）。

@@ -232,3 +232,32 @@ func TestBuildDirectHTTP(t *testing.T) {
 		t.Error("portTaken")
 	}
 }
+
+// 加密 HTTP 下载按需开关时，80 上域名访问的规则照原样不动：开着时只在最前面多一条只匹配节点 IP 和下载路径的规则，
+// 其余规则（转发、跳转到 HTTPS、404）和关着时完全一样，HTTPS 的服务也一样。
+func TestDirectHTTPKeepsDomainRoutes(t *testing.T) {
+	routes := []Route{
+		{Project: "p1", Service: "web", Protocol: "http", Domains: []string{"example.com"}, Upstreams: []string{"10.200.0.2:80"}},
+		{Project: "p1", Service: "api", Protocol: "http", Domains: []string{"api.example.com"}, HTTPOnly: true, Upstreams: []string{"10.200.0.3:80"}},
+	}
+	hasCert := func(d string) bool { return d == "example.com" }
+	servers := func(hd httpDirect) obj {
+		return buildFull(routes, "/x", hasCert, "", hd)["apps"].(obj)["http"].(obj)["servers"].(obj)
+	}
+	off, on := servers(httpDirect{}), servers(httpDirect{"203.0.113.5", 80})
+	offRoutes, onRoutes := off["http"].(obj)["routes"].([]obj), on["http"].(obj)["routes"].([]obj)
+	a, _ := json.Marshal(offRoutes)
+	b, _ := json.Marshal(onRoutes[1:])
+	if len(onRoutes) != len(offRoutes)+1 || string(a) != string(b) {
+		t.Fatalf("80 上的域名规则变了：\n%s\n%s", a, b)
+	}
+	first, _ := json.Marshal(onRoutes[0])
+	if !strings.Contains(string(first), `"path":["/.nagi/dl/*"]`) || !strings.Contains(string(first), `"host":["203.0.113.5"]`) {
+		t.Errorf("第一条应只匹配节点 IP 和下载路径：%s", first)
+	}
+	h1, _ := json.Marshal(off["https"])
+	h2, _ := json.Marshal(on["https"])
+	if string(h1) != string(h2) {
+		t.Error("HTTPS 的服务不该变")
+	}
+}

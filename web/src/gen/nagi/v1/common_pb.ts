@@ -1887,14 +1887,14 @@ export type DirectDownload = Message<"nagi.v1.DirectDownload"> & {
   httpPort: number;
 
   /**
-   * HTTPS 不能用，已经在这个端口上为 address 开好了加密 HTTP 下载，可以签发下载命令。
+   * HTTPS 不能用，可以为 address 签发加密 HTTP 下载的命令。端口按需打开（签发时开、空闲后关），这一项不表示正在监听。
    *
    * @generated from field: bool http_ready = 8;
    */
   httpReady: boolean;
 
   /**
-   * 需要加密 HTTP 下载但开不了的原因（端口被占用等）。
+   * 最近一次打开加密 HTTP 下载的端口失败的原因（端口被占用等），下次打开成功时清掉。
    *
    * @generated from field: string http_error = 9;
    */

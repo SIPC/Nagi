@@ -108,7 +108,7 @@ function CommandBody({ data }: { data: DirectCommand }) {
   const notes = [m.encrypted, m.tools];
   if (data.archive) notes.push(m.archive);
   else {
-    notes.push(m.resume);
+    notes.push(m.resume, m.changing);
     if (data.sha256) notes.push(m.verified);
     else if (data.hash_skipped === "too_large") notes.push(m.tooLarge);
     else if (data.hash_skipped === "timeout") notes.push(m.timeout);

@@ -26,7 +26,7 @@ type DirectAccess struct {
 
 const (
 	linkNote    = "anyone with this link can download the file within 5 minutes (downloads already started finish); share it only with the intended recipient"
-	commandNote = "this node has no IP certificate, so the file is served over plain HTTP, encrypted. The command contains the decryption key, which is now part of this conversation and ends up in the shell history where it runs: treat it like a password. It needs curl and openssl (Linux, macOS, or WSL/Git Bash on Windows) and is valid for 5 minutes"
+	commandNote = "this node has no IP certificate, so the file is served over plain HTTP, encrypted. The command contains the decryption key, which is now part of this conversation and ends up in the shell history where it runs: treat it like a password. It needs curl and openssl (Linux, macOS, or WSL/Git Bash on Windows), is valid for 5 minutes, and works only from the first machine (source address) that uses it. If the file changes during the download, the download stops; get a new command"
 )
 
 func init() {

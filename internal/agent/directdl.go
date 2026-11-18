@@ -50,6 +50,12 @@ type directDL struct {
 	httpPortErr string
 	prepared    map[string]*preparedLink
 	hashSlots   chan struct{}
+	// 按需监听（startHTTP）：httpUntil 之前、或者有正在进行的下载（httpActive）时开着端口；
+	// reload 立即重新生成 Caddy 配置（agent.applyProxy，没有 Caddy 时为空）。
+	httpUntil   time.Time
+	httpActive  int
+	reload      func(ctx context.Context)
+	badVersions map[string]time.Time // 下载中途发现变了的文件版本（见 invalidate）
 }
 
 // 直连下载记进本地审计的限额：每 10 分钟最多 directAuditLimit 条。拿着有效链接的人反复请求，不能把本地审计刷满、
@@ -61,7 +67,8 @@ const (
 )
 
 func newDirectDL(a *agent) *directDL {
-	return &directDL{a: a, keys: map[string][]byte{}, prepared: map[string]*preparedLink{}, hashSlots: make(chan struct{}, 2)}
+	return &directDL{a: a, keys: map[string][]byte{}, prepared: map[string]*preparedLink{}, hashSlots: make(chan struct{}, 2),
+		badVersions: map[string]time.Time{}}
 }
 
 func directOffFile(dataDir string) string {

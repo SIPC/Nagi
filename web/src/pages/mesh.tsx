@@ -473,6 +473,8 @@ export function NodeDirectDownload({ node }: { node: Node }) {
   );
   if (!d) status = m.unsupported;
   else if (d.ready) status = m.ready(d.address);
+  // 加密 HTTP 的端口按需打开：最近一次打开失败（端口被占用）时写原因。
+  else if (d.httpReady && d.httpError) status = warn(m.failed(d.httpError), [d.error, d.httpError].filter(Boolean).join("\n"));
   else if (d.httpReady) status = <span title={d.error || undefined}>{m.httpFallback(d.httpPort)}</span>;
   else if (d.error || d.httpError) status = warn(m.failed(d.error || d.httpError), [d.error, d.httpError].filter(Boolean).join("\n"));
   else if (!d.address) status = m.noAddress;

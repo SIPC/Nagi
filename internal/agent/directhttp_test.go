@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -73,9 +74,48 @@ func TestDirectHTTPPort(t *testing.T) {
 	}
 	storage := t.TempDir()
 	p := proxy.New(storage, slog.Default())
-	if addr, port := d.wantedHTTP(p, "203.0.113.5"); addr != "203.0.113.5" || port != free {
-		t.Errorf("还没有证书时应开加密 HTTP：%q %d", addr, port)
+	// 按需监听：没有登记过链接、没有正在进行的下载时不开。
+	if addr, _ := d.wantedHTTP(p, "203.0.113.5"); addr != "" {
+		t.Error("没有链接时不该占着端口")
 	}
+	if st := d.status(p); !st.GetHttpReady() || st.GetHttpPort() != uint32(free) {
+		t.Errorf("没在监听时也应上报可以用加密 HTTP：%v", st)
+	}
+	if err := d.startHTTP(context.Background(), time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err) // 没有 reload（没有 Caddy）时不检查
+	}
+	if addr, port := d.wantedHTTP(p, "203.0.113.5"); addr != "203.0.113.5" || port != free {
+		t.Errorf("登记了链接、还没有证书时应开加密 HTTP：%q %d", addr, port)
+	}
+	// 端口被别的程序占着：不开，记下原因，上报。
+	busy, err := net.Listen("tcp", ":"+strconv.Itoa(free))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if addr, _ := d.wantedHTTP(p, "203.0.113.5"); addr != "" {
+		t.Error("端口被占用时不该开")
+	}
+	if st := d.status(p); !strings.Contains(st.GetHttpError(), strconv.Itoa(free)) {
+		t.Errorf("端口被占用的原因：%v", st)
+	}
+	busy.Close()
+	// 最后一个链接过期 httpIdle 以后、没有正在进行的下载：不再开。
+	d.mu.Lock()
+	d.httpUntil = time.Now().Add(-time.Second)
+	d.httpActive = 1
+	d.mu.Unlock()
+	if addr, _ := d.wantedHTTP(p, "203.0.113.5"); addr == "" {
+		t.Error("有正在进行的下载时应开着")
+	}
+	d.mu.Lock()
+	d.httpActive = 0
+	d.mu.Unlock()
+	if addr, _ := d.wantedHTTP(p, "203.0.113.5"); addr != "" {
+		t.Error("空闲以后不该再开")
+	}
+	d.mu.Lock()
+	d.httpUntil = time.Now().Add(time.Minute)
+	d.mu.Unlock()
 	cert := filepath.Join(storage, "certificates", "acme", "203.0.113.5", "203.0.113.5.crt")
 	if err := os.MkdirAll(filepath.Dir(cert), 0o700); err != nil || os.WriteFile(cert, []byte("x"), 0o600) != nil {
 		t.Fatal(err)
@@ -201,12 +241,50 @@ func TestDirectHTTPDownload(t *testing.T) {
 	if w.Code != http.StatusPartialContent || !bytes.Equal(part, body[100001:]) {
 		t.Fatalf("续传：%d %d 字节", w.Code, len(part))
 	}
-	// 换一个链接（同一个文件、同一个版本）是同一个密钥，可以接着之前的续传。
+	// 换一个链接（同一个文件、同一个版本）是另一个密钥：不同链接的密钥流不同。
 	c2 := c
 	c2.ID = "00000000000000cc"
 	res2, err := s.PrepareDirectHttp(context.Background(), &nagiv1.PrepareDirectHttpRequest{Token: directdl.SignHTTP(key, c2)})
-	if err != nil || directdl.FileKey(key, c2, res2.GetEtag()) != ck {
-		t.Fatalf("同一个文件应该同一个密钥：%v", err)
+	if err != nil || directdl.FileKey(key, c2, res2.GetEtag()) == ck {
+		t.Fatalf("不同链接的密钥应该不同：%v", err)
+	}
+	// 链接只认第一次下载的来源地址：别的地址 404。
+	other := httptest.NewRequest(http.MethodGet, "http://203.0.113.5"+directdl.HTTPPathPrefix+tok, nil)
+	other.RemoteAddr = "192.0.2.99:1234"
+	ow := httptest.NewRecorder()
+	a.direct.ServeHTTP(ow, other)
+	if ow.Code != http.StatusNotFound {
+		t.Errorf("别的来源地址：%d", ow.Code)
+	}
+	// HTTPS 上不认 HTTP 的链接。
+	tw := httptest.NewRecorder()
+	a.direct.ServeHTTP(tw, httptest.NewRequest(http.MethodGet, "https://203.0.113.5"+directdl.HTTPPathPrefix+tok, nil))
+	if tw.Code != http.StatusNotFound {
+		t.Errorf("HTTPS 上的 HTTP 链接：%d", tw.Code)
+	}
+	// 发出的内容有上限：文件大小的 2 倍加 linkAllowance。在上限之内照常下载，超出的那次中断，之后 404。
+	tok3c := c
+	tok3c.ID = "00000000000000ee"
+	tok3 := directdl.SignHTTP(key, tok3c)
+	if _, err := s.PrepareDirectHttp(context.Background(), &nagiv1.PrepareDirectHttpRequest{Token: tok3}); err != nil {
+		t.Fatal(err)
+	}
+	full := (2*int64(len(content)) + linkAllowance) / int64(len(content))
+	for i := range full {
+		if w := httpDLRequest(a, http.MethodGet, directdl.HTTPPathPrefix+tok3, ""); w.Code != http.StatusOK || w.Body.Len() != len(content) {
+			t.Fatalf("第 %d 次：%d %d", i+1, w.Code, w.Body.Len())
+		}
+	}
+	func() {
+		defer func() {
+			if r := recover(); r != http.ErrAbortHandler {
+				t.Errorf("超出上限时应中断：%v", r)
+			}
+		}()
+		httpDLRequest(a, http.MethodGet, directdl.HTTPPathPrefix+tok3, "")
+	}()
+	if w := httpDLRequest(a, http.MethodGet, directdl.HTTPPathPrefix+tok3, "bytes=0-9"); w.Code != http.StatusNotFound {
+		t.Errorf("到了上限以后：%d", w.Code)
 	}
 	// 文件变了：拒绝，提示重新获取。
 	later := time.Now().Add(time.Hour)
@@ -271,7 +349,7 @@ func TestDirectHTTPDownload(t *testing.T) {
 		if !strings.Contains(e.Detail, "transport=http") {
 			t.Errorf("没有标明 HTTP：%+v", e)
 		}
-		if e.Result == "ok" {
+		if e.Result == "ok" && (strings.Contains(e.Detail, "link=00000000000000bb") || strings.Contains(e.Detail, "link=00000000000000dd")) {
 			ok++
 		}
 	}
