@@ -1,4 +1,4 @@
-# 推送 v* 标签时发布：编译 linux/amd64、linux/arm64 的 nagi（前端打包在内），
+# 推送 v* 标签时发布：编译 linux/amd64、linux/arm64 的 nagi（前端打包在内）和签名的安卓 App，
 # 连同面板安装脚本、卸载脚本和 SHA256SUMS 上传到 GitHub Release。
 # 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
 #
@@ -96,8 +96,59 @@ jobs:
           path: dist/nagi-linux-${{ matrix.arch }}
           retention-days: 1
 
+  # 安卓 App（docs/android.md）：和面板同一个版本号，用仓库 Secrets 里的签名密钥签名，产出 nagi-android.apk。
+  # App 的自动更新从 releases/latest/download/nagi-android.apk 下载，文件名不要改。
+  # 没配签名密钥时跳过（不发未签名的包）；这一步失败也不影响面板发布（见下面 release 的 if）。
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 只读缓存：标签上存的缓存别的标签用不到，缓存由 main 上的 android.yml 预热。
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Build APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NAGI_KEYSTORE_BASE64 }}
+          NAGI_KEYSTORE_PASSWORD: ${{ secrets.NAGI_KEYSTORE_PASSWORD }}
+          NAGI_KEY_ALIAS: ${{ secrets.NAGI_KEY_ALIAS }}
+          NAGI_KEY_PASSWORD: ${{ secrets.NAGI_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::仓库没有配置签名密钥（NAGI_KEYSTORE_BASE64），这次发布不带安卓 App"
+            exit 0
+          fi
+          export NAGI_KEYSTORE_FILE="$RUNNER_TEMP/nagi-release.jks"
+          trap 'rm -f "$NAGI_KEYSTORE_FILE"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 -d > "$NAGI_KEYSTORE_FILE"
+          (cd android && bash ./gradlew --no-daemon :app:assembleRelease -PnagiVersion="$GITHUB_REF_NAME")
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk dist/nagi-android.apk
+          # 签名证书的 SHA-256 写进发布正文，方便用户核对。
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$apksigner" verify --print-certs dist/nagi-android.apk | sed -n 's/.*SHA-256 digest: //p' | head -1 > dist/android-cert.txt
+          test -s dist/android-cert.txt
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ hashFiles('dist/nagi-android.apk') != '' }}
+        with:
+          name: nagi-android
+          path: |
+            dist/nagi-android.apk
+            dist/android-cert.txt
+          retention-days: 1
+
+  # 面板的测试和编译都通过才发布；安卓 App 成功了就带上，失败或跳过也照常发布面板。
   release:
-    needs: [test, build]
+    needs: [test, build, android]
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,13 +156,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
-          pattern: nagi-linux-*
+          pattern: nagi-*
           merge-multiple: true
 
       - name: Checksums
         run: |
+          mv dist/android-cert.txt . 2>/dev/null || true
           cp scripts/install.sh scripts/uninstall.sh CHANGELOG.md CHANGELOG.en.md dist/
-          cd dist && sha256sum nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh > SHA256SUMS
+          files="nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh"
+          [ -f dist/nagi-android.apk ] && files="$files nagi-android.apk"
+          cd dist && sha256sum $files > SHA256SUMS
 
       # 正文取自 CHANGELOG.md 里这个版本的说明，没写的话发布失败（先补上更新日志再打标签）。
       # 两份更新日志也作为发布文件上传，面板的「关于」按界面语言取，英文的也要写。
@@ -119,6 +173,9 @@ jobs:
         run: |
           sh scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
           grep -qx "## $GITHUB_REF_NAME" CHANGELOG.en.md || { echo "CHANGELOG.en.md 中没有 $GITHUB_REF_NAME" >&2; exit 1; }
+          if [ -s android-cert.txt ]; then
+            printf '\n\n安卓 App 签名证书 SHA-256：`%s`\n' "$(cat android-cert.txt)" >> notes.md
+          fi
 
       - uses: softprops/action-gh-release@v2
         with:

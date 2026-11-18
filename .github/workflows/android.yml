@@ -1,0 +1,31 @@
+# 安卓 App 有改动时编译 debug 包、跑单元测试。除了提前发现问题，也在 main 上存下 Gradle 缓存：
+# 打标签发布时（release.yml 的 android 任务）只能读默认分支的缓存。
+# 和 ci.yml 分开：ci.yml 只看 Go 和网页，安卓只在 android/ 或 proto 改动时才跑。
+name: android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "internal/proto/**/*.proto"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 顺带校验 gradle-wrapper.jar 是官方发布的。
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        working-directory: android
+        run: bash ./gradlew --no-daemon :app:assembleDebug testDebugUnitTest
