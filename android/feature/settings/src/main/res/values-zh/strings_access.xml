@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 面板访问（和网页 web/src/i18n/zh/access.ts、security.ts 的 entrance、masterKey 一致）。 -->
+<resources>
+    <string name="public_address">对外地址</string>
+    <string name="public_address_usage">节点和备用面板用它连接本面板</string>
+    <string name="public_address_help">IP 地址或域名，不含端口。节点通过「对外地址:面板端口」连接面板，安装命令同样使用该地址，须可从所有节点访问。更改后，在线节点接收新地址并在下次重连时使用；更改时离线的节点须在节点上执行 nagi panel add 更新。</string>
+    <string name="domain">绑定域名</string>
+    <string name="domain_bound">通过 https://%1$s 访问面板</string>
+    <string name="domain_unbound">未绑定，通过 https://&lt;对外地址&gt;:&lt;端口&gt; 访问</string>
+    <string name="domain_bind">绑定</string>
+    <string name="domain_unbind">解除绑定</string>
+    <string name="domain_unbind_confirm">解除绑定 %1$s？面板不再通过此域名访问，正在通过此域名打开的页面会断开。</string>
+    <string name="domain_help">域名须预先解析到本机。绑定后由本机 Caddy 经 80/443 端口反向代理面板并自动申请证书；节点仍通过对外地址和面板端口连接。</string>
+    <string name="master_key">面板主密钥</string>
+    <string name="master_key_backup">须单独备份</string>
+    <string name="entrance">安全入口</string>
+    <string name="entrance_on">已开启，须记录入口地址</string>
+    <string name="entrance_off">未开启。开启后只有带入口路径的地址能打开登录页</string>
+    <string name="entrance_disable">关闭安全入口</string>
+    <string name="entrance_disable_confirm">关闭安全入口？任何人都能打开登录页。</string>
+    <string name="entrance_enabled_title">已开启安全入口</string>
+    <string name="entrance_enabled_text">之后只能从这个地址打开登录页，保存好这个地址。忘记时在面板所在机器上执行 nagi reset entrance。</string>
+    <string name="done">完成</string>
+</resources>

@@ -1,7 +1,7 @@
 package ink.sipc.nagi.data
 
 import com.connectrpc.Code
-import com.google.protobuf.Timestamp
+import com.connectrpc.ResponseMessage
 import ink.sipc.nagi.network.DeviceRemovedException
 import ink.sipc.nagi.network.PanelClient
 import ink.sipc.nagi.network.PanelException
@@ -12,18 +12,14 @@ import ink.sipc.nagi.network.toPanelException
 import ink.sipc.nagi.proto.v1.AppInfoRequest
 import ink.sipc.nagi.proto.v1.AppInfoResponse
 import ink.sipc.nagi.proto.v1.AppLogoutRequest
+import ink.sipc.nagi.proto.v1.MeRequest
 import ink.sipc.nagi.proto.v1.ApproveNodeRequest
-import ink.sipc.nagi.proto.v1.Overview
-import ink.sipc.nagi.proto.v1.QueryTrafficRequest
 import ink.sipc.nagi.proto.v1.SetPanelNameRequest
 import ink.sipc.nagi.proto.v1.GetSettingsRequest
 import ink.sipc.nagi.proto.v1.PanelSettings
-import ink.sipc.nagi.proto.v1.TrafficHistory
-import ink.sipc.nagi.proto.v1.WatchOverviewRequest
 import ink.sipc.nagi.security.AppKeys
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -34,14 +30,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.selects.onTimeout
 import kotlinx.coroutines.selects.select
-import kotlinx.coroutines.withTimeoutOrNull
 
 /** 首页的状态（见 docs/android.md#订阅流、s8 状态）。 */
 sealed interface OverviewState {
     data object Loading : OverviewState
 
     /** live 为 false 时连不上面板，显示的是 updatedAt 时的数据，error 是原因。 */
-    data class Ready(val overview: Overview, val live: Boolean, val updatedAt: Long, val error: String? = null) : OverviewState
+    data class Ready(val overview: HomeOverview, val live: Boolean, val updatedAt: Long, val error: String? = null) : OverviewState
 
     /** 还没有数据就出错了。unreachable 表示连不上面板（不是面板返回的错误）。 */
     data class Failed(val message: String, val unreachable: Boolean) : OverviewState
@@ -88,6 +83,13 @@ class PanelSession(
         store?.save(p)
     }
 
+    /**
+     * 带上令牌调用一个接口：`session.rpc { c, h -> c.settings.getSecurity(req, h) }`。面板返回的错误抛 PanelException，
+     * message 已按界面语言，可以直接显示。设置页的各个子页都用它。
+     */
+    suspend fun <T> rpc(block: suspend (PanelClient, Map<String, List<String>>) -> ResponseMessage<T>): T =
+        tokens.call { h -> block(client, h).orThrow() }
+
     /** 面板设置（管理员）：名称、默认名称等。 */
     suspend fun panelSettings(): PanelSettings =
         tokens.call { h -> client.settings.getSettings(GetSettingsRequest.getDefaultInstance(), h).orThrow() }.settings
@@ -113,21 +115,26 @@ class PanelSession(
     suspend fun info(): AppInfoResponse =
         tokens.call { h -> client.app.info(AppInfoRequest.getDefaultInstance(), h).orThrow() }.also { panelNameIs(it.panelName) }
 
-    /** 立即重新连接订阅流（下拉刷新、点重试）。 */
+    /** 马上再查一次首页（下拉刷新、点重试）。 */
     fun refresh() {
         reconnect.trySend(Unit)
     }
 
+    private val home = HomeLoader(this)
+
+    /** 自己的角色（决定「需要处理」行尾有没有按钮），查一次记下。 */
+    private var role: String? = null
+
     /**
-     * 首页的订阅流：打开时先收到完整状态，之后每次变化一份。断开后退避重连（1、2、5、10 秒，之后每 30 秒），
-     * 重连后先到的完整状态覆盖旧数据。150 秒收不到任何消息（面板每 30 秒发心跳）当作断开。
+     * 首页的数据：和网页的全局概览一样用网页的接口查、在手机上算（见 HomeData.kt），每 [POLL_MS] 查一次，
+     * 收集的人走了就停（HomeViewModel 在页面离开 5 秒后停止收集）。先显示上次的数据（本机加密缓存）。
+     * 查不到时退避重试（1、2、5、10 秒，之后每 30 秒）；有数据时先静默重试，连续失败超过 [OFFLINE_GRACE_MS] 才显示「连不上面板」。
      */
     fun overview(): Flow<OverviewState> = channelFlow {
-        var last: Overview? = null
+        var last: HomeOverview? = null
         var lastAt = 0L
         var attempt = 0
-        var offline: Job? = null
-        // 先显示上次的数据（本机加密缓存），同时连接面板；连上以后由订阅流覆盖。连不上时按缓存的时间显示「连不上面板」。
+        var failingSince = 0L
         val cached = withContext(Dispatchers.IO) { runCatching { cache?.overview(panel.id) }.getOrNull() }
         if (cached != null) {
             last = cached.first
@@ -136,69 +143,44 @@ class PanelSession(
         } else {
             send(OverviewState.Loading)
         }
+        // 面板名称可能被管理员改过：打开首页时查一次（info 里会更新记下的名称），不影响首页的数据。
+        launch { runCatching { info() } }
         while (true) {
             var error: PanelException? = null
             try {
-                val stream = tokens.call { h -> client.projects.watchOverview(h) }
-                stream.sendAndClose(WatchOverviewRequest.getDefaultInstance())
-                val ch = stream.responseChannel()
-                try {
-                    while (true) {
-                        val r = withTimeoutOrNull(STREAM_IDLE_MS) { ch.receiveCatching() } ?: break
-                        if (r.isClosed) {
-                            r.exceptionOrNull()?.let { throw it }
-                            break
-                        }
-                        val m = r.getOrThrow()
-                        if (m.heartbeat) continue
-                        panelNameIs(m.panelName)
-                        last = m
-                        lastAt = System.currentTimeMillis()
-                        attempt = 0
-                        offline?.cancel()
-                        offline = null
-                        send(OverviewState.Ready(m, true, lastAt))
-                        val at = lastAt
-                        launch(Dispatchers.IO) { runCatching { cache?.saveOverview(panel.id, m, at) } }
-                    }
-                } finally {
-                    stream.receiveClose()
-                }
+                val r = role ?: rpc { c, h -> c.auth.me(MeRequest.getDefaultInstance(), h) }.role.also { role = it }
+                val o = home.load(r)
+                last = o
+                lastAt = System.currentTimeMillis()
+                attempt = 0
+                failingSince = 0L
+                send(OverviewState.Ready(o, true, lastAt))
+                val at = lastAt
+                launch(Dispatchers.IO) { runCatching { cache?.saveOverview(panel.id, o, at) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 error = e.toPanelException()
             }
-            when {
-                error is DeviceRemovedException -> {
+            when (error) {
+                is DeviceRemovedException -> {
                     send(OverviewState.Removed)
                     return@channelFlow
                 }
-                error is UnlockRequiredException -> {
+                is UnlockRequiredException -> {
                     send(OverviewState.Locked)
                     return@channelFlow
                 }
-                // 令牌在流里过期或换了网段：重新换取后马上重连。
-                error != null && error.code == Code.UNAUTHENTICATED && error.retoken != null -> {
-                    tokens.invalidate()
-                    continue
+                null -> {}
+                else -> {
+                    val l = last
+                    val unreachable = error.code == Code.UNAVAILABLE
+                    if (failingSince == 0L) failingSince = System.currentTimeMillis()
+                    if (l == null) send(OverviewState.Failed(error.message.orEmpty(), unreachable))
+                    else if (System.currentTimeMillis() - failingSince >= OFFLINE_GRACE_MS) send(OverviewState.Ready(l, false, lastAt, error.message))
                 }
             }
-            val msg = error?.message ?: ""
-            val unreachable = error == null || error.code == Code.UNAVAILABLE
-            val l = last
-            if (l == null) {
-                send(OverviewState.Failed(msg, unreachable))
-            } else if (offline == null) {
-                // 有数据时先静默重连：网络切换、连接被回收这类短暂的断开很常见，重连一次就好。
-                // 断开超过 OFFLINE_GRACE_MS 还没连上，才显示「连不上面板」。
-                offline = launch {
-                    delay(OFFLINE_GRACE_MS)
-                    send(OverviewState.Ready(l, false, lastAt, msg))
-                }
-            }
-            // 面板正常关闭了流（error 为 null）：马上重连，不算一次失败。
-            val wait = if (error == null && attempt == 0) 0L else BACKOFF_MS.getOrElse(attempt) { BACKOFF_MS.last() }
+            val wait = if (error == null) POLL_MS else BACKOFF_MS.getOrElse(attempt) { BACKOFF_MS.last() }
             if (error != null) attempt++
             select {
                 reconnect.onReceive { attempt = 0 }
@@ -207,11 +189,8 @@ class PanelSession(
         }
     }
 
-    /** 流量趋势（QueryTraffic）。 */
-    suspend fun traffic(range: TrafficRange): TrafficHistory = tokens.call { h ->
-        val from = Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 - range.seconds).build()
-        client.nodes.queryTraffic(QueryTrafficRequest.newBuilder().setFrom(from).setStep(range.step).build(), h).orThrow()
-    }
+    /** 流量趋势：和网页概览一样按节点查监控、在手机上合计。 */
+    suspend fun traffic(range: TrafficRange): TrafficSeries = home.traffic(range.seconds, range.step)
 
     /** 批准节点（首页「需要处理」行尾的「批准」）。 */
     suspend fun approveNode(nodeId: String) {
@@ -224,7 +203,8 @@ class PanelSession(
     }
 
     private companion object {
-        const val STREAM_IDLE_MS = 150_000L
+        /** 首页多久查一次（和网页的概览一样）。 */
+        const val POLL_MS = 10_000L
         const val OFFLINE_GRACE_MS = 5_000L
         val BACKOFF_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
     }

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Security policy (same as web/src/i18n/en/panelSecurity.ts). -->
+<resources>
+    <string name="n_minutes">%1$d min</string>
+    <string name="n_hours">%1$d h</string>
+    <string name="n_days">%1$d days</string>
+    <string name="recording">Terminal recording</string>
+    <string name="recording_desc">Records the output of node terminals, container terminals and commands. Admins can replay them on the audit page</string>
+    <string name="retention">Audit retention</string>
+    <string name="retention_normal">Keep regular records</string>
+    <string name="retention_long">Keep security records</string>
+    <string name="retention_long_desc">Security events, terminals, sign-ins and MCP calls</string>
+    <string name="retention_normal_kind">regular records</string>
+    <string name="retention_long_kind">security records</string>
+    <string name="retention_shorten">Shorten retention</string>
+    <string name="retention_shorten_confirm">Shorten the retention of %1$s to %2$d days? %1$s older than %2$d days will be deleted and cannot be recovered. Records already sent elsewhere are not affected.</string>
+    <string name="sinks">Log forwarding</string>
+    <string name="sinks_empty">No destinations</string>
+    <string name="sinks_edit_on_web">Add and edit destinations in the web panel.</string>
+    <string name="sink_failing">Failing</string>
+    <string name="sink_waiting">Waiting</string>
+    <string name="sink_sent">Sent %1$s</string>
+    <string name="sink_s3">S3-compatible storage</string>
+    <string name="chain">Hash chain</string>
+    <string name="chain_verify">Last verification</string>
+    <string name="chain_never">Not verified yet</string>
+    <string name="chain_ok">Intact, %1$d records · %2$s</string>
+    <string name="chain_verify_now">Verify now</string>
+    <string name="chain_anchor">Last anchor</string>
+    <string name="chain_no_anchor">Not sent yet (needs a forwarding destination)</string>
+    <string name="chain_anchor_at">Record %1$d · %2$s · %3$s</string>
+    <string name="session_policy">Sessions</string>
+    <string name="idle">Idle timeout</string>
+    <string name="idle_desc">Sign out after this long without activity</string>
+    <string name="max_age">Session lifetime</string>
+    <string name="max_age_desc">The longest a sign-in lasts</string>
+    <string name="bind">Admin network binding</string>
+    <string name="bind_desc">Require admins to verify again when their network changes</string>
+    <string name="bind_subnet">When the subnet changes</string>
+    <string name="bind_ip">When the IP changes</string>
+    <string name="bind_off">Off</string>
+    <string name="bind_all">Apply to all members</string>
+    <string name="bind_all_desc">Operators and viewers are bound to their network the same way</string>
+    <string name="bind_all_unavailable">Unavailable while admin network binding is off</string>
+    <string name="admin_networks">Admin sign-in addresses</string>
+    <string name="admin_networks_off">Unrestricted</string>
+    <string name="admin_networks_edit_on_web">Changing requires verifying your identity. Use the web panel</string>
+</resources>

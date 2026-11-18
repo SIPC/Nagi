@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Panel update (same as web/src/i18n/en/update.ts). -->
+<resources>
+    <string name="update">Update</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_checked">Checked %1$s</string>
+    <string name="update_up_to_date">Up to date</string>
+    <string name="update_available">Update available</string>
+    <string name="update_query_source">Queried from %1$s</string>
+    <string name="update_action">Update</string>
+    <string name="update_panel">Update panel</string>
+    <string name="update_confirm">Update the panel to %1$s? The panel downloads and verifies the new version, then restarts in place. Running operations such as deployments are interrupted. You cannot roll back from the panel afterwards.</string>
+    <string name="update_retry">Retry</string>
+    <string name="update_installing">Updating to %1$s</string>
+    <string name="update_installing_text">The panel is downloading and verifying the new version and restarts when done. You can leave this page; progress is kept on the panel.</string>
+    <string name="update_restarting">Replaced with %1$s, the panel is restarting</string>
+    <string name="update_failed">Updating the panel to %1$s failed</string>
+    <string name="update_from">Downloaded from %1$s</string>
+    <string name="update_download">Downloading %1$s</string>
+    <string name="update_verify">Verifying</string>
+    <string name="update_test">Test run</string>
+</resources>

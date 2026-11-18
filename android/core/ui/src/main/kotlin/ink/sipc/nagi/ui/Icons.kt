@@ -43,6 +43,29 @@ object NagiIcons {
     val ArrowLeft: ImageVector by lazy { icon("arrow-left", "m12 19-7-7 7-7", "M19 12H5") }
     val Lock: ImageVector by lazy { icon("lock", rect(3f, 11f, 18f, 11f, 2f), "M7 11V7a5 5 0 0 1 10 0v4") }
     val Plus: ImageVector by lazy { icon("plus", "M5 12h14", "M12 5v14") }
+    // 节点的占用环中间的图标（CPU、内存、磁盘）。
+    val Cpu: ImageVector by lazy {
+        icon(
+            "cpu",
+            "M12 20v2", "M12 2v2", "M17 20v2", "M17 2v2", "M2 12h2", "M2 17h2", "M2 7h2", "M20 12h2", "M20 17h2", "M20 7h2", "M7 20v2", "M7 2v2",
+            rect(4f, 4f, 16f, 16f, 2f), rect(8f, 8f, 8f, 8f, 1f),
+        )
+    }
+    val MemoryStick: ImageVector by lazy {
+        icon(
+            "memory-stick",
+            "M12 12v-2", "M12 18v-2", "M16 12v-2", "M16 18v-2", "M2 11h1.5", "M20 18v-2", "M20.5 11H22", "M4 18v-2", "M8 12v-2", "M8 18v-2",
+            rect(2f, 6f, 20f, 10f, 2f),
+        )
+    }
+    val HardDrive: ImageVector by lazy {
+        icon(
+            "hard-drive",
+            "M10 16h.01",
+            "M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",
+            "M21.946 12.013H2.054", "M6 16h.01",
+        )
+    }
     val Check: ImageVector by lazy { icon("check", "M20 6 9 17l-5-5") }
     val Share: ImageVector by lazy { icon("share-2", circle(18f, 5f, 3f), circle(6f, 12f, 3f), circle(18f, 19f, 3f), "m8.59 13.51 6.83 3.98", "m15.41 6.51-6.82 3.98") }
 

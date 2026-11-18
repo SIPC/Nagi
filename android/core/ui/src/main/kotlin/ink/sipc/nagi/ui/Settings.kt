@@ -1,5 +1,7 @@
 package ink.sipc.nagi.ui
 
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -41,9 +43,9 @@ fun SettingsGroup(title: String?, modifier: Modifier = Modifier, content: @Compo
 
 /** SettingsRow：一行设置，左边名称，右边当前值（灰色）和「›」，点了进下一级。 */
 @Composable
-fun SettingsRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, value: String? = null) {
+fun SettingsRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, value: String? = null, selected: Boolean = false) {
     Row(
-        modifier.fillMaxWidth().rowClickable(onClick).heightIn(min = Dimens.rowHeight),
+        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) NagiTheme.colors.muted else null).heightIn(min = Dimens.rowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, style = NagiTheme.type.body, color = NagiTheme.colors.foreground, modifier = Modifier.weight(1f))
@@ -74,3 +76,43 @@ fun ChoiceRow(title: String, selected: Boolean, onClick: () -> Unit, modifier: M
         if (selected) Icon(NagiIcons.Check, contentDescription = null, tint = NagiTheme.colors.foreground, modifier = Modifier.size(18.dp))
     }
 }
+
+/**
+ * ActionRow：和网页的 SettingRow 一样，左边名称和灰色说明，右边最多两个按钮（有框的小按钮）。不整行可点。
+ * 手机上说明长时换行，按钮靠右和名称那一行对齐。
+ */
+@Composable
+fun ActionRow(title: String, modifier: Modifier = Modifier, description: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    Row(modifier.fillMaxWidth().heightIn(min = Dimens.rowHeight).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = NagiTheme.type.body, color = NagiTheme.colors.foreground)
+            if (!description.isNullOrEmpty()) Text(description, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+        }
+        Spacer(Modifier.width(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+    }
+}
+
+/**
+ * SwitchRow：开关写成设置行（docs/android.md 视觉「开关」）：第二行开头写「已开启」或「已关闭」，后面可以跟说明；
+ * 右边一个有框的小按钮「关闭」或「开启」，不用安卓的开关控件。
+ */
+@Composable
+fun SwitchRow(
+    title: String,
+    on: Boolean,
+    onToggle: () -> Unit,
+    labels: SwitchLabels,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+    busy: Boolean = false,
+    enabled: Boolean = true,
+) {
+    val status = if (on) labels.onStatus else labels.offStatus
+    ActionRow(title, modifier, listOfNotNull(status, description?.takeIf { it.isNotEmpty() }).joinToString(" · ")) {
+        NagiButton(if (on) labels.turnOff else labels.turnOn, onToggle, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = busy, enabled = enabled)
+    }
+}
+
+/** SwitchRow 的四段文字（从各页面的字符串资源取）。 */
+class SwitchLabels(val onStatus: String, val offStatus: String, val turnOn: String, val turnOff: String)

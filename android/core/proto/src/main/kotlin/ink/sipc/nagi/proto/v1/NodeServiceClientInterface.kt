@@ -134,11 +134,6 @@ public interface NodeServiceClientInterface {
   public suspend fun queryNodeMetrics(request: QueryNodeMetricsRequest, headers: Headers = emptyMap()): ResponseMessage<QueryMetricsResponse>
 
   /**
-   *  流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
-   */
-  public suspend fun queryTraffic(request: QueryTrafficRequest, headers: Headers = emptyMap()): ResponseMessage<TrafficHistory>
-
-  /**
    *  节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
    */
   public suspend fun getNodeStorage(request: NodeRef, headers: Headers = emptyMap()): ResponseMessage<NodeStorage>

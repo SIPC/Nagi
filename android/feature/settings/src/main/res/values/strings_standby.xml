@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Standby panels and receiving nodes (same as web/src/i18n/en/standby.ts, invite.tsx). -->
+<resources>
+    <string name="remove">Remove</string>
+    <string name="standby_add">Add standby panel</string>
+    <string name="standby_empty">No standby panels</string>
+    <string name="standby_list_help">Standby panels connect to this panel on the panel port and share its CA and master key. They are read-only; all edits happen on the primary panel.</string>
+    <string name="standby_status_help">This is a standby panel that syncs the primary panel in real time. After it is promoted, other standby panels sync from it instead; the old primary becomes a standby when it recovers, and changes it made in its last seconds may be lost.</string>
+    <string name="standby_primary">Primary panel</string>
+    <string name="standby_connection">Connection</string>
+    <string name="standby_connected">Connected</string>
+    <string name="standby_disconnected">Disconnected</string>
+    <string name="standby_last_sync">Last synced %1$s</string>
+    <string name="standby_never_synced">Not synced yet</string>
+    <string name="standby_promote">Promote to primary</string>
+    <string name="standby_promote_confirm">Promote this panel to primary? Nodes will only accept changes from this panel. Do not promote while the primary is still running, or the two panels will diverge.</string>
+    <string name="standby_promoted">Promoted to primary. The panel is restarting.</string>
+    <string name="standby_remove">Remove standby panel</string>
+    <string name="standby_remove_confirm">Remove standby panel %1$s? It can no longer sync this panel, and its data directory must be deleted manually.</string>
+    <string name="standby_dialog_desc">Run this command on the standby machine.</string>
+    <string name="standby_dialog_notice">The data directory must be empty. The pairing code is valid for 1 hour and can be used once. The standby connects and starts syncing once it starts, and appears in the list.</string>
+    <string name="invite_desc">Used when another panel hands over nodes. To add a new machine, add a node on the Nodes page.</string>
+    <string name="invite_help">Join codes are valid for 1 hour and can be used by several nodes. Nodes that join with a code must be approved on the Nodes page before use.</string>
+    <string name="invite_generate">Generate join code</string>
+    <string name="invite_paste_hint">Paste this code when handing over nodes on the other panel, or run nagi panel add &lt;code&gt; on the node.</string>
+    <string name="invite_revoke">Revoke</string>
+    <string name="invite_revoke_title">Revoke join code</string>
+    <string name="invite_revoke_confirm">Revoke join code %1$s? It can no longer be used to add nodes.</string>
+    <string name="invite_used">Used %1$d times</string>
+    <string name="invite_expires">Expires %1$s</string>
+    <string name="invite_empty">No active join codes</string>
+</resources>

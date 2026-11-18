@@ -21,17 +21,16 @@ func TestPasswordElevationListed(t *testing.T) {
 	}
 }
 
-// 首页的订阅流和查询所有角色都能用；App 的接口所有角色都能调用（换取令牌另有规则）；备用面板上放行换取令牌和查询。
+// App 的接口所有角色都能调用（换取令牌另有规则）；备用面板上放行换取令牌和查询。
 func TestAppProcedureRoles(t *testing.T) {
-	for _, p := range []string{nagiv1connect.ProjectServiceWatchOverviewProcedure, nagiv1connect.ProjectServiceGetAttentionProcedure,
-		nagiv1connect.NodeServiceQueryTrafficProcedure, nagiv1connect.AppServiceInfoProcedure, nagiv1connect.AppServiceLogoutProcedure} {
+	for _, p := range []string{nagiv1connect.AppServiceInfoProcedure, nagiv1connect.AppServiceLogoutProcedure} {
 		for _, role := range []string{auth.RoleAdmin, auth.RoleOperator, auth.RoleViewer} {
 			if !auth.Allowed(role, p) {
 				t.Errorf("%s 不能调用 %s", role, p)
 			}
 		}
 	}
-	for _, p := range []string{nagiv1connect.ProjectServiceWatchOverviewProcedure, nagiv1connect.AppServiceTokenProcedure,
+	for _, p := range []string{nagiv1connect.AppServiceTokenProcedure,
 		nagiv1connect.AppServiceChallengeProcedure, nagiv1connect.AppServiceInfoProcedure} {
 		if !readOnlyProcedure(p) {
 			t.Errorf("备用面板上应放行 %s", p)

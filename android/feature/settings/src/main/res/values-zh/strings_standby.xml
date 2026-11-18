@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 备用面板、接收节点（和网页 web/src/i18n/zh/standby.ts、invite.tsx 一致）。 -->
+<resources>
+    <string name="remove">移除</string>
+    <string name="standby_add">添加备用面板</string>
+    <string name="standby_empty">暂无备用面板</string>
+    <string name="standby_list_help">备用面板经面板端口连接本面板，与本面板共用 CA 和主密钥。备用面板为只读，所有编辑在主面板上进行。</string>
+    <string name="standby_status_help">本面板是备用面板，实时同步主面板的数据。提升为主面板后，其他备用面板改为从本面板同步；原主面板恢复后自动降为备用面板，它最后数秒内未同步的改动会丢失。</string>
+    <string name="standby_primary">主面板</string>
+    <string name="standby_connection">连接</string>
+    <string name="standby_connected">已连接</string>
+    <string name="standby_disconnected">未连接</string>
+    <string name="standby_last_sync">最近同步 %1$s</string>
+    <string name="standby_never_synced">尚未同步</string>
+    <string name="standby_promote">提升为主面板</string>
+    <string name="standby_promote_confirm">将本面板提升为主面板？节点将只接受本面板的改动，主面板仍在运行时不要提升，否则两个面板的改动会不一致。</string>
+    <string name="standby_promoted">已提升为主面板。面板正在重启。</string>
+    <string name="standby_remove">移除备用面板</string>
+    <string name="standby_remove_confirm">移除备用面板 %1$s？该备用面板将无法再同步本面板数据，其数据目录须手动删除。</string>
+    <string name="standby_dialog_desc">在备用面板所在的机器上执行以下命令。</string>
+    <string name="standby_dialog_notice">数据目录须为空。配对码 1 小时内有效，仅可使用一次。备用面板启动后自动连接本面板并开始同步，同时显示在列表中。</string>
+    <string name="invite_desc">其他面板移交节点时使用；添加新机器请在节点页添加节点。</string>
+    <string name="invite_help">接入码 1 小时内有效，可供多个节点使用。通过接入码加入的节点须在节点页批准后方可使用。</string>
+    <string name="invite_generate">生成接入码</string>
+    <string name="invite_paste_hint">在原面板移交节点时粘贴此接入码，或在节点上执行 nagi panel add &lt;接入码&gt;。</string>
+    <string name="invite_revoke">撤销</string>
+    <string name="invite_revoke_title">撤销接入码</string>
+    <string name="invite_revoke_confirm">撤销接入码 %1$s？撤销后不能再用它接入节点。</string>
+    <string name="invite_used">已用 %1$d 次</string>
+    <string name="invite_expires">%1$s 到期</string>
+    <string name="invite_empty">暂无有效的接入码</string>
+</resources>

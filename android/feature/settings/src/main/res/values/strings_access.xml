@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Panel access (same as web/src/i18n/en/access.ts and the entrance, masterKey entries in security.ts). -->
+<resources>
+    <string name="public_address">Public address</string>
+    <string name="public_address_usage">Nodes and standby panels use it to connect to this panel</string>
+    <string name="public_address_help">An IP address or domain, without the port. Nodes connect to the panel at public address:panel port, and install commands use the same address, so it must be reachable from all nodes. Online nodes receive a new address and use it when they next reconnect. Nodes that are offline during the change must be updated by running nagi panel add on the node.</string>
+    <string name="domain">Domain</string>
+    <string name="domain_bound">The panel is available at https://%1$s</string>
+    <string name="domain_unbound">Not bound. Available at https://&lt;public address&gt;:&lt;port&gt;</string>
+    <string name="domain_bind">Bind</string>
+    <string name="domain_unbind">Unbind</string>
+    <string name="domain_unbind_confirm">Unbind %1$s? The panel will no longer be available at this domain, and pages open on it will disconnect.</string>
+    <string name="domain_help">The domain must already resolve to this machine. Caddy on this machine then proxies the panel on ports 80 and 443 and obtains a certificate automatically. Nodes still connect through the public address and panel port.</string>
+    <string name="master_key">Panel master key</string>
+    <string name="master_key_backup">Back it up separately</string>
+    <string name="entrance">Secure entrance</string>
+    <string name="entrance_on">On. Keep a record of the entrance address</string>
+    <string name="entrance_off">Off. When on, only the address with the entrance path opens the sign-in page</string>
+    <string name="entrance_disable">Turn off secure entrance</string>
+    <string name="entrance_disable_confirm">Turn off the secure entrance? Anyone will be able to open the sign-in page.</string>
+    <string name="entrance_enabled_title">Secure entrance is on</string>
+    <string name="entrance_enabled_text">From now on, the sign-in page opens only at this address. Keep it safe. If you forget it, run nagi reset entrance on the panel machine.</string>
+    <string name="done">Done</string>
+</resources>

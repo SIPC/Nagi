@@ -41,4 +41,14 @@
     <string name="unreachable_title">连不上面板</string>
     <string name="unreachable_cached">显示的是 %1$s 的数据，正在重试。</string>
     <string name="unreachable_retrying">正在重试。</string>
+    <string name="att_node_pending">节点 %1$s 等待批准</string>
+    <string name="att_node_offline">节点 %1$s 离线</string>
+    <string name="att_container_unhealthy">%1$s / %2$s 健康检查失败</string>
+    <string name="att_container_dead">%1$s / %2$s 异常</string>
+    <string name="att_image_update">%1$s / %2$s 镜像可更新</string>
+    <string name="nodes_title">节点</string>
+    <string name="node_offline">离线</string>
+    <string name="node_pending">待批准</string>
+    <string name="node_memory">内存</string>
+    <string name="node_disk">磁盘</string>
 </resources>

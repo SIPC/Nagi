@@ -194,9 +194,6 @@ const (
 	// NodeServiceQueryNodeMetricsProcedure is the fully-qualified name of the NodeService's
 	// QueryNodeMetrics RPC.
 	NodeServiceQueryNodeMetricsProcedure = "/nagi.v1.NodeService/QueryNodeMetrics"
-	// NodeServiceQueryTrafficProcedure is the fully-qualified name of the NodeService's QueryTraffic
-	// RPC.
-	NodeServiceQueryTrafficProcedure = "/nagi.v1.NodeService/QueryTraffic"
 	// NodeServiceGetNodeStorageProcedure is the fully-qualified name of the NodeService's
 	// GetNodeStorage RPC.
 	NodeServiceGetNodeStorageProcedure = "/nagi.v1.NodeService/GetNodeStorage"
@@ -390,12 +387,6 @@ const (
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
-	// ProjectServiceGetAttentionProcedure is the fully-qualified name of the ProjectService's
-	// GetAttention RPC.
-	ProjectServiceGetAttentionProcedure = "/nagi.v1.ProjectService/GetAttention"
-	// ProjectServiceWatchOverviewProcedure is the fully-qualified name of the ProjectService's
-	// WatchOverview RPC.
-	ProjectServiceWatchOverviewProcedure = "/nagi.v1.ProjectService/WatchOverview"
 	// ProjectServiceCreateProjectProcedure is the fully-qualified name of the ProjectService's
 	// CreateProject RPC.
 	ProjectServiceCreateProjectProcedure = "/nagi.v1.ProjectService/CreateProject"
@@ -1292,8 +1283,6 @@ type NodeServiceClient interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
-	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
-	QueryTraffic(context.Context, *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -1544,12 +1533,6 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
 			connect.WithClientOptions(opts...),
 		),
-		queryTraffic: connect.NewClient[v1.QueryTrafficRequest, v1.TrafficHistory](
-			httpClient,
-			baseURL+NodeServiceQueryTrafficProcedure,
-			connect.WithSchema(nodeServiceMethods.ByName("QueryTraffic")),
-			connect.WithClientOptions(opts...),
-		),
 		getNodeStorage: connect.NewClient[v1.NodeRef, v1.NodeStorage](
 			httpClient,
 			baseURL+NodeServiceGetNodeStorageProcedure,
@@ -1691,7 +1674,6 @@ type nodeServiceClient struct {
 	setNodeReplicaDir     *connect.Client[v1.SetNodeReplicaDirRequest, v1.DeployEvent]
 	createEnrollCommand   *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics      *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
-	queryTraffic          *connect.Client[v1.QueryTrafficRequest, v1.TrafficHistory]
 	getNodeStorage        *connect.Client[v1.NodeRef, v1.NodeStorage]
 	removeNode            *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 	approveNode           *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
@@ -1881,11 +1863,6 @@ func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, req *connect.R
 	return c.queryNodeMetrics.CallUnary(ctx, req)
 }
 
-// QueryTraffic calls nagi.v1.NodeService.QueryTraffic.
-func (c *nodeServiceClient) QueryTraffic(ctx context.Context, req *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error) {
-	return c.queryTraffic.CallUnary(ctx, req)
-}
-
 // GetNodeStorage calls nagi.v1.NodeService.GetNodeStorage.
 func (c *nodeServiceClient) GetNodeStorage(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error) {
 	return c.getNodeStorage.CallUnary(ctx, req)
@@ -2027,8 +2004,6 @@ type NodeServiceHandler interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
-	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
-	QueryTraffic(context.Context, *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -2275,12 +2250,6 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
 		connect.WithHandlerOptions(opts...),
 	)
-	nodeServiceQueryTrafficHandler := connect.NewUnaryHandler(
-		NodeServiceQueryTrafficProcedure,
-		svc.QueryTraffic,
-		connect.WithSchema(nodeServiceMethods.ByName("QueryTraffic")),
-		connect.WithHandlerOptions(opts...),
-	)
 	nodeServiceGetNodeStorageHandler := connect.NewUnaryHandler(
 		NodeServiceGetNodeStorageProcedure,
 		svc.GetNodeStorage,
@@ -2453,8 +2422,6 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
 			nodeServiceQueryNodeMetricsHandler.ServeHTTP(w, r)
-		case NodeServiceQueryTrafficProcedure:
-			nodeServiceQueryTrafficHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeStorageProcedure:
 			nodeServiceGetNodeStorageHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodeProcedure:
@@ -2632,10 +2599,6 @@ func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *con
 
 func (UnimplementedNodeServiceHandler) QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.QueryNodeMetrics is not implemented"))
-}
-
-func (UnimplementedNodeServiceHandler) QueryTraffic(context.Context, *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.QueryTraffic is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error) {
@@ -4067,10 +4030,6 @@ func (UnimplementedSettingsServiceHandler) SetAdminNetworks(context.Context, *co
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.
 type ProjectServiceClient interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
-	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
-	GetAttention(context.Context, *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error)
-	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
-	WatchOverview(context.Context, *connect.Request[v1.WatchOverviewRequest]) (*connect.ServerStreamForClient[v1.Overview], error)
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.Project], error)
 	GetProject(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ProjectSummary], error)
@@ -4199,18 +4158,6 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceListProjectsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListProjects")),
-			connect.WithClientOptions(opts...),
-		),
-		getAttention: connect.NewClient[v1.GetAttentionRequest, v1.Attention](
-			httpClient,
-			baseURL+ProjectServiceGetAttentionProcedure,
-			connect.WithSchema(projectServiceMethods.ByName("GetAttention")),
-			connect.WithClientOptions(opts...),
-		),
-		watchOverview: connect.NewClient[v1.WatchOverviewRequest, v1.Overview](
-			httpClient,
-			baseURL+ProjectServiceWatchOverviewProcedure,
-			connect.WithSchema(projectServiceMethods.ByName("WatchOverview")),
 			connect.WithClientOptions(opts...),
 		),
 		createProject: connect.NewClient[v1.CreateProjectRequest, v1.Project](
@@ -4603,8 +4550,6 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
 	listProjects                 *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
-	getAttention                 *connect.Client[v1.GetAttentionRequest, v1.Attention]
-	watchOverview                *connect.Client[v1.WatchOverviewRequest, v1.Overview]
 	createProject                *connect.Client[v1.CreateProjectRequest, v1.Project]
 	getProject                   *connect.Client[v1.ProjectRef, v1.ProjectSummary]
 	updateProjectSettings        *connect.Client[v1.UpdateProjectSettingsRequest, v1.Project]
@@ -4674,16 +4619,6 @@ type projectServiceClient struct {
 // ListProjects calls nagi.v1.ProjectService.ListProjects.
 func (c *projectServiceClient) ListProjects(ctx context.Context, req *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {
 	return c.listProjects.CallUnary(ctx, req)
-}
-
-// GetAttention calls nagi.v1.ProjectService.GetAttention.
-func (c *projectServiceClient) GetAttention(ctx context.Context, req *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error) {
-	return c.getAttention.CallUnary(ctx, req)
-}
-
-// WatchOverview calls nagi.v1.ProjectService.WatchOverview.
-func (c *projectServiceClient) WatchOverview(ctx context.Context, req *connect.Request[v1.WatchOverviewRequest]) (*connect.ServerStreamForClient[v1.Overview], error) {
-	return c.watchOverview.CallServerStream(ctx, req)
 }
 
 // CreateProject calls nagi.v1.ProjectService.CreateProject.
@@ -5009,10 +4944,6 @@ func (c *projectServiceClient) CheckImages(ctx context.Context, req *connect.Req
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
-	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
-	GetAttention(context.Context, *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error)
-	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
-	WatchOverview(context.Context, *connect.Request[v1.WatchOverviewRequest], *connect.ServerStream[v1.Overview]) error
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.Project], error)
 	GetProject(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ProjectSummary], error)
@@ -5137,18 +5068,6 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceListProjectsProcedure,
 		svc.ListProjects,
 		connect.WithSchema(projectServiceMethods.ByName("ListProjects")),
-		connect.WithHandlerOptions(opts...),
-	)
-	projectServiceGetAttentionHandler := connect.NewUnaryHandler(
-		ProjectServiceGetAttentionProcedure,
-		svc.GetAttention,
-		connect.WithSchema(projectServiceMethods.ByName("GetAttention")),
-		connect.WithHandlerOptions(opts...),
-	)
-	projectServiceWatchOverviewHandler := connect.NewServerStreamHandler(
-		ProjectServiceWatchOverviewProcedure,
-		svc.WatchOverview,
-		connect.WithSchema(projectServiceMethods.ByName("WatchOverview")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceCreateProjectHandler := connect.NewUnaryHandler(
@@ -5539,10 +5458,6 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		switch r.URL.Path {
 		case ProjectServiceListProjectsProcedure:
 			projectServiceListProjectsHandler.ServeHTTP(w, r)
-		case ProjectServiceGetAttentionProcedure:
-			projectServiceGetAttentionHandler.ServeHTTP(w, r)
-		case ProjectServiceWatchOverviewProcedure:
-			projectServiceWatchOverviewHandler.ServeHTTP(w, r)
 		case ProjectServiceCreateProjectProcedure:
 			projectServiceCreateProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceGetProjectProcedure:
@@ -5682,14 +5597,6 @@ type UnimplementedProjectServiceHandler struct{}
 
 func (UnimplementedProjectServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListProjects is not implemented"))
-}
-
-func (UnimplementedProjectServiceHandler) GetAttention(context.Context, *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetAttention is not implemented"))
-}
-
-func (UnimplementedProjectServiceHandler) WatchOverview(context.Context, *connect.Request[v1.WatchOverviewRequest], *connect.ServerStream[v1.Overview]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.WatchOverview is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.Project], error) {

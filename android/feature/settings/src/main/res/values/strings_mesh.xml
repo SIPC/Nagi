@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Node network (same as web/src/i18n/en/mesh.ts). -->
+<resources>
+    <string name="mesh_path_direct">UDP direct</string>
+    <string name="mesh_path_link">Control connection</string>
+    <string name="mesh_path_node_relay">UDP via node</string>
+    <string name="mesh_path_udp_relay">UDP via panel</string>
+    <string name="mesh_path_tls_relay">TLS via panel</string>
+    <string name="mesh_path_none">Unreachable</string>
+    <string name="mesh_endpoints">Direct addresses</string>
+    <string name="mesh_peers">Connections</string>
+    <string name="mesh_no_peers">No connections</string>
+    <string name="mesh_handshake">Last handshake %1$s</string>
+    <string name="mesh_no_handshake">No handshake yet</string>
+    <string name="mesh_fec">FEC %1$d/10</string>
+    <string name="mesh_loss">Loss %1$s</string>
+</resources>

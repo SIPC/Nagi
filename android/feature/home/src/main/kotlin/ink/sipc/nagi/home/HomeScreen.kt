@@ -1,5 +1,28 @@
 package ink.sipc.nagi.home
 
+import androidx.compose.foundation.layout.ColumnScope
+import ink.sipc.nagi.ui.NagiIcons
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
+import ink.sipc.nagi.ui.barSpec
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
+import ink.sipc.nagi.ui.StatusDot
+import androidx.compose.ui.text.style.TextOverflow
+import ink.sipc.nagi.ui.rowClickable
+import ink.sipc.nagi.ui.formatBytesText
+import ink.sipc.nagi.data.NodeStat
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.Alignment
@@ -56,9 +79,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ink.sipc.nagi.data.OverviewState
 import ink.sipc.nagi.data.TrafficRange
-import ink.sipc.nagi.proto.v1.AttentionItem
-import ink.sipc.nagi.proto.v1.Overview
-import ink.sipc.nagi.proto.v1.RouteTraffic
+import ink.sipc.nagi.data.Attention
+import ink.sipc.nagi.data.HomeOverview
+import ink.sipc.nagi.data.RouteRate
 import ink.sipc.nagi.ui.ButtonSize
 import ink.sipc.nagi.ui.ButtonVariant
 import ink.sipc.nagi.ui.ChartLegend
@@ -82,14 +105,14 @@ private const val ATTENTION_LIMIT = 5
 
 /** 点「需要处理」的一行或行尾按钮时要做的事，交给 App 的导航。 */
 interface HomeActions {
-    fun openAttention(item: AttentionItem)
+    fun openAttention(item: Attention)
     fun openNodes(offlineOnly: Boolean)
     fun openProjects(notRunningOnly: Boolean)
-    fun update(item: AttentionItem)
+    fun update(item: Attention)
 }
 
 /**
- * 首页（s1 第 1 张、s8 状态）：需要处理、关键数字、流量趋势、流量最大的映射。数据来自 WatchOverview 订阅流。
+ * 首页（s1 第 1 张、s8 状态）：需要处理、关键数字、实时流量、流量趋势、流量最大的映射。数据和网页的全局概览一样用网页的接口查（见 HomeData.kt）。
  * 顶部栏和胶囊导航由外层（App）放。[contentPadding] 的底部留出胶囊的 104。
  */
 @Composable
@@ -138,23 +161,68 @@ fun HomeContent(
                     ) {
                         Spacer(Modifier.height(Dimens.topBarToContent))
                         // 没有要处理的事项时整块隐藏：最后一项处理掉时高度和透明度一起收起（Collapse）。
-                        Collapse(s.overview.attention.itemsCount > 0) {
-                            AttentionSection(s.overview, approving, actions) { item ->
-                                vm.approve(item.nodeId, item.title) { approved }
+                        val attention: @Composable () -> Unit = {
+                            Collapse(s.overview.attention.isNotEmpty()) {
+                                AttentionSection(s.overview, approving, actions) { item ->
+                                    vm.approve(item.nodeId, item.nodeName) { approved }
+                                }
+                                SectionDivider()
                             }
-                            SectionDivider()
                         }
-                        KeyNumbers(s.overview, actions)
-                        SectionDivider()
-                        // 旧版本的面板不发桑基图的数据（没有行），这时不显示这一块。
-                        if (s.overview.flowRowsCount > 0) {
-                            FlowSection(s.overview, flowView) { flowView = it }
-                            SectionDivider()
+                        var wideHome by remember { mutableStateOf(false) }
+                        BoxWithConstraints {
+                            wideHome = maxWidth >= 720.dp && s.overview.flowRows.isNotEmpty()
+                            // 宽屏（内容区 720 以上）：需要处理整行在上面；下面左边一栏是关键数字（两行两列）和流量趋势，
+                            // 右边是实时流量的桑基图（约 60%）。窄的时候从上到下：需要处理、关键数字、实时流量、流量趋势。
+                            if (maxWidth >= 720.dp && s.overview.flowRows.isNotEmpty()) {
+                                // 左边一栏的高度：右边的桑基图铺满这个高度（行距放宽或收紧），两边一样高。
+                                val density = LocalDensity.current
+                                var leftHeight by remember { mutableStateOf(0.dp) }
+                                Column {
+                                    attention()
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Column(Modifier.weight(1f).onSizeChanged { leftHeight = with(density) { it.height.toDp() } }) {
+                                            // 和桑基图的标题行对齐：第一个数字的名称和「实时流量」在同一高度。
+                                            Spacer(Modifier.height(8.dp))
+                                            KeyNumbers(s.overview, actions)
+                                            SectionDivider()
+                                            TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
+                                            if (s.overview.nodes.isNotEmpty()) {
+                                                SectionDivider()
+                                                NodesSection(s.overview.nodes, actions, columns = 2)
+                                            }
+                                            if (s.overview.topRoutes.isNotEmpty()) {
+                                                SectionDivider()
+                                                TopRoutes(s.overview.topRoutes)
+                                            }
+                                        }
+                                        Spacer(Modifier.width(40.dp))
+                                        // 右边一栏和左边一样高，桑基图铺满标题行以下的空间，底部和左边对齐。
+                                        Column(Modifier.weight(1.6f).then(if (leftHeight > 200.dp) Modifier.height(leftHeight) else Modifier)) {
+                                            FlowSection(s.overview, flowView, fill = leftHeight > 200.dp) { flowView = it }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Column {
+                                    attention()
+                                    KeyNumbers(s.overview, actions)
+                                    if (s.overview.flowRows.isNotEmpty()) {
+                                        SectionDivider()
+                                        FlowSection(s.overview, flowView) { flowView = it }
+                                    }
+                                    SectionDivider()
+                                    TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
+                                    if (s.overview.nodes.isNotEmpty()) {
+                                        SectionDivider()
+                                        NodesSection(s.overview.nodes, actions)
+                                    }
+                                }
+                            }
                         }
-                        TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
-                        if (s.overview.topRoutesCount > 0) {
+                        if (s.overview.topRoutes.isNotEmpty() && !wideHome) {
                             SectionDivider()
-                            TopRoutes(s.overview.topRoutesList)
+                            TopRoutes(s.overview.topRoutes)
                         }
                     }
                 }
@@ -166,10 +234,10 @@ fun HomeContent(
 // ---- 需要处理 ----
 
 @Composable
-private fun AttentionSection(o: Overview, approving: Set<String>, actions: HomeActions, approve: (AttentionItem) -> Unit) {
+private fun AttentionSection(o: HomeOverview, approving: Set<String>, actions: HomeActions, approve: (Attention) -> Unit) {
     // 收起的过程中还显示最后的那些事项，不闪成空的。
-    val last = remember { arrayOf(o.attention.itemsList) }
-    if (o.attention.itemsCount > 0) last[0] = o.attention.itemsList
+    val last = remember { arrayOf(o.attention) }
+    if (o.attention.isNotEmpty()) last[0] = o.attention
     val items = last[0]
     var expanded by remember { mutableStateOf(false) }
     SectionHeader(stringResource(R.string.attention_title)) {
@@ -181,12 +249,12 @@ private fun AttentionSection(o: Overview, approving: Set<String>, actions: HomeA
 
 @Composable
 private fun AttentionBody(
-    items: List<AttentionItem>,
+    items: List<Attention>,
     expanded: Boolean,
     expand: () -> Unit,
     approving: Set<String>,
     actions: HomeActions,
-    approve: (AttentionItem) -> Unit,
+    approve: (Attention) -> Unit,
 ) {
     val shown = if (expanded || items.size <= ATTENTION_LIMIT) items else items.take(ATTENTION_LIMIT - 1)
     shown.forEach { AttentionRow(it, it.nodeId in approving, actions, approve) }
@@ -196,7 +264,7 @@ private fun AttentionBody(
 }
 
 @Composable
-private fun AttentionRow(item: AttentionItem, busy: Boolean, actions: HomeActions, approve: (AttentionItem) -> Unit) {
+private fun AttentionRow(item: Attention, busy: Boolean, actions: HomeActions, approve: (Attention) -> Unit) {
     val colors = NagiTheme.colors
     val dot = when (item.severity) {
         "critical" -> colors.destructive
@@ -213,15 +281,26 @@ private fun AttentionRow(item: AttentionItem, busy: Boolean, actions: HomeAction
         else -> null
     }
     ListRow(
-        item.title, detail = attentionDetail(item), dot = dot, density = RowDensity.Compact,
+        attentionTitle(item), detail = attentionDetail(item), dot = dot, density = RowDensity.Compact,
         onClick = { actions.openAttention(item) }, trailing = trailing,
     )
 }
 
+/** 标题：节点 node7 等待批准、web / api 健康检查失败……（和网页的说法一样）。 */
+@Composable
+private fun attentionTitle(item: Attention): String = when (item.kind) {
+    "node_pending" -> stringResource(R.string.att_node_pending, item.nodeName)
+    "node_offline" -> stringResource(R.string.att_node_offline, item.nodeName)
+    "container_unhealthy" -> stringResource(R.string.att_container_unhealthy, item.projectName, item.container)
+    "container_dead" -> stringResource(R.string.att_container_dead, item.projectName, item.container)
+    "image_update" -> stringResource(R.string.att_image_update, item.projectName, item.container)
+    else -> item.detail
+}
+
 /** 第二行：对象和时长，例如「已离线 4 分钟」「node1 · 12 分钟」。 */
 @Composable
-private fun attentionDetail(item: AttentionItem): String {
-    val since = if (item.hasSince() && item.since.seconds > 0) durationText(item.since.seconds) else ""
+private fun attentionDetail(item: Attention): String {
+    val since = if (item.since > 0) durationText(item.since) else ""
     return when (item.kind) {
         "node_offline" -> if (since.isNotEmpty()) stringResource(R.string.offline_for, since) else ""
         "node_pending" -> ""
@@ -242,22 +321,31 @@ private fun durationText(epochSeconds: Long): String {
 
 // ---- 关键数字 ----
 
+/** 关键数字：手机上两行两列；[vertical] 时（宽屏，放在桑基图左边）四个竖着排。 */
 @Composable
-private fun KeyNumbers(o: Overview, actions: HomeActions) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row {
-            StatValue(stringResource(R.string.nodes_online), o.nodesOnline.toString(), Modifier.weight(1f), "/ ${o.nodesTotal}") {
-                actions.openNodes(offlineOnly = o.nodesOnline < o.nodesTotal)
-            }
-            StatValue(stringResource(R.string.containers_running), o.containersRunning.toString(), Modifier.weight(1f), "/ ${o.containersTotal}") {
-                actions.openProjects(notRunningOnly = o.containersRunning < o.containersTotal)
-            }
+private fun KeyNumbers(o: HomeOverview, actions: HomeActions, vertical: Boolean = false) {
+    val (inValue, inUnit) = if (o.trafficReady) formatRate(o.externalRx) else "—" to ""
+    val (outValue, outUnit) = if (o.trafficReady) formatRate(o.externalTx) else "—" to ""
+    val nodes: @Composable (Modifier) -> Unit = { m ->
+        StatValue(stringResource(R.string.nodes_online), o.nodesOnline.toString(), m, "/ ${o.nodesTotal}") {
+            actions.openNodes(offlineOnly = o.nodesOnline < o.nodesTotal)
         }
-        Row {
-            val (inValue, inUnit) = if (o.trafficReady) formatRate(o.externalRx) else "—" to ""
-            val (outValue, outUnit) = if (o.trafficReady) formatRate(o.externalTx) else "—" to ""
-            StatValue(stringResource(R.string.external_in), inValue, Modifier.weight(1f), inUnit)
-            StatValue(stringResource(R.string.external_out), outValue, Modifier.weight(1f), outUnit)
+    }
+    val containers: @Composable (Modifier) -> Unit = { m ->
+        StatValue(stringResource(R.string.containers_running), o.containersRunning.toString(), m, "/ ${o.containersTotal}") {
+            actions.openProjects(notRunningOnly = o.containersRunning < o.containersTotal)
+        }
+    }
+    val rx: @Composable (Modifier) -> Unit = { m -> StatValue(stringResource(R.string.external_in), inValue, m, inUnit) }
+    val tx: @Composable (Modifier) -> Unit = { m -> StatValue(stringResource(R.string.external_out), outValue, m, outUnit) }
+    if (vertical) {
+        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            listOf(nodes, containers, rx, tx).forEach { it(Modifier.fillMaxWidth()) }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row { nodes(Modifier.weight(1f)); containers(Modifier.weight(1f)) }
+            Row { rx(Modifier.weight(1f)); tx(Modifier.weight(1f)) }
         }
     }
 }
@@ -265,11 +353,11 @@ private fun KeyNumbers(o: Overview, actions: HomeActions) {
 // ---- 实时流量 ----
 
 /**
- * 实时流量的桑基图，和网页概览一样（docs/android.md#首页）：路径由面板算好放在订阅流里，约 10 秒一份。
+ * 实时流量的桑基图，和网页概览一样（docs/android.md#首页）：路径在手机上按网页的算法算，约 10 秒一份。
  * 选择项（全部、对外、节点之间）和标题在同一行、靠右；高度变化时下面的内容跟着移动。
  */
 @Composable
-private fun FlowSection(o: Overview, view: SankeyView, setView: (SankeyView) -> Unit) {
+private fun ColumnScope.FlowSection(o: HomeOverview, view: SankeyView, maxHeight: Dp? = null, fill: Boolean = false, setView: (SankeyView) -> Unit) {
     val views = SankeyView.entries
     SectionHeader(stringResource(R.string.flow_title)) {
         UnderlineTabs(
@@ -280,9 +368,9 @@ private fun FlowSection(o: Overview, view: SankeyView, setView: (SankeyView) -> 
     val panel = stringResource(R.string.flow_panel)
     val rows = buildList {
         if (view != SankeyView.Mesh) add(SankeyRow(SANKEY_EXTERNAL, stringResource(R.string.flow_external)))
-        o.flowRowsList.forEach { add(SankeyRow(it.id, if (it.id == "__panel") panel else it.name, it.offline)) }
+        o.flowRows.forEach { add(SankeyRow(it.id, if (it.id == "__panel") panel else it.name, it.offline)) }
     }
-    val flows = o.flowsList.map { SankeyFlow(it.from, it.to, it.rate, if (it.kind == "ext") FlowKind.External else FlowKind.Mesh, it.relay) }
+    val flows = o.flows.map { SankeyFlow(it.from, it.to, it.rate, if (it.kind == "ext") FlowKind.External else FlowKind.Mesh, it.relay) }
     val texts = SankeyTexts(
         send = stringResource(R.string.flow_send), receive = stringResource(R.string.flow_receive),
         noSend = stringResource(R.string.flow_no_send), noReceive = stringResource(R.string.flow_no_receive),
@@ -297,7 +385,12 @@ private fun FlowSection(o: Overview, view: SankeyView, setView: (SankeyView) -> 
         flows.isEmpty() -> 2
         else -> 3
     }
-    // 骨架、空状态和图之间淡入淡出，高度跟着过渡。
+    // 骨架、空状态和图之间淡入淡出，高度跟着过渡。[fill] 时（宽屏右边一栏）铺满标题以下的高度：量出剩下的高度交给桑基图。
+    val limit = maxHeight
+    BoxWithConstraints(Modifier.fillMaxWidth().then(if (fill) Modifier.weight(1f) else Modifier)) {
+    // 铺满时用这一块实际剩下的高度；否则用传进来的上限（可以没有）。
+    // 注意：这里的 maxHeight 会解析成上面函数的参数，要用 this.maxHeight 取这一块的高度。
+    val room = if (fill && constraints.hasBoundedHeight) this.maxHeight else limit
     Column(Modifier.fillMaxWidth().autoHeight()) {
         AnimatedContent(
             targetState = state,
@@ -308,9 +401,10 @@ private fun FlowSection(o: Overview, view: SankeyView, setView: (SankeyView) -> 
                 0 -> SkeletonRows(3)
                 1 -> FlowEmpty(stringResource(R.string.flow_all_offline))
                 2 -> FlowEmpty(stringResource(R.string.flow_empty))
-                else -> SankeyChart(rows, flows, view, texts, description = description)
+                else -> SankeyChart(rows, flows, view, texts, description = description, maxHeight = room, fillHeight = fill)
             }
         }
+    }
     }
 }
 
@@ -353,9 +447,15 @@ private fun TrafficBody(state: TrafficState, range: TrafficRange, retry: () -> U
         is TrafficState.Failed -> InlineError(state.message, stringResource(R.string.retry), retry, height = 112.dp)
         is TrafficState.Ready -> {
             val h = state.history
-            val ext = h.externalRxList.zip(h.externalTxList) { a, b -> (a + b).toFloat() }
-            val mesh = h.meshList.map { it.toFloat() }
-            LineChart(listOf(ChartLine(mesh, gray), ChartLine(ext, brand)), Modifier.fillMaxWidth(), xLabels = timeLabels(h.timesList, range))
+            val ext = h.externalRx.zip(h.externalTx) { a, b -> (a + b).toFloat() }
+            val mesh = h.mesh.map { it.toFloat() }
+            val tipFmt = remember(range) { SimpleDateFormat(if (range == TrafficRange.WEEK) "M/d HH:mm" else "HH:mm", Locale.getDefault()) }
+            LineChart(
+                listOf(ChartLine(mesh, gray, stringResource(R.string.traffic_mesh)), ChartLine(ext, brand, stringResource(R.string.traffic_external))),
+                Modifier.fillMaxWidth(), xLabels = timeLabels(h.times, range),
+                tipTime = { i -> h.times.getOrNull(i)?.let { tipFmt.format(Date(it * 1000)) } ?: "" },
+                tipFormat = { formatRateText(it.toDouble()) },
+            )
         }
     }
 }
@@ -373,16 +473,103 @@ private fun timeLabels(times: List<Long>, range: TrafficRange): List<String> {
     }
 }
 
+// ---- 节点状态 ----
+
+/**
+ * 节点状态（和网页概览的节点表一样，精简成一行）：状态点、名称，右边是 CPU、内存、磁盘三个占用环（中间是图标，CPU 按核数折成 100%）。
+ * 离线、待批准的在名称下面写出来，没有占用环。
+ * 点一格去节点页。[columns] 为 2 时（宽屏左边一栏）两个一行。
+ */
+@Composable
+private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: Int = 1) {
+    SectionHeader(stringResource(R.string.nodes_title))
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        nodes.chunked(columns).forEach { group ->
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                group.forEach { n -> NodeCell(n, Modifier.weight(1f)) { actions.openNodes(offlineOnly = false) } }
+                // 最后一行只有一个时，空出另一半，宽度和上面的对齐。
+                repeat(columns - group.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NodeCell(n: NodeStat, modifier: Modifier, onClick: () -> Unit) {
+    val c = NagiTheme.colors
+    val dot = when (n.status) {
+        "online" -> c.success
+        "pending" -> c.warning
+        else -> c.mutedForeground
+    }
+    Row(modifier.rowClickable(onClick).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        StatusDot(dot)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(n.name, style = NagiTheme.type.body, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (n.status != "online") {
+                Text(
+                    stringResource(if (n.status == "pending") R.string.node_pending else R.string.node_offline),
+                    style = NagiTheme.type.secondary, color = c.mutedForeground,
+                )
+            }
+        }
+        if (n.status == "online") {
+            Spacer(Modifier.width(8.dp))
+            val cpu = if (n.cpus > 0) n.cpu / (n.cpus * 100) else n.cpu / 100
+            Ring("CPU", NagiIcons.Cpu, cpu)
+            Spacer(Modifier.width(8.dp))
+            Ring(stringResource(R.string.node_memory), NagiIcons.MemoryStick, n.memory / 100)
+            Spacer(Modifier.width(8.dp))
+            Ring(stringResource(R.string.node_disk), NagiIcons.HardDrive, if (n.diskTotal > 0) n.diskUsed / n.diskTotal else null)
+        }
+    }
+}
+
+/**
+ * 一个占用环：26 的圆环，中间是这一项的图标（CPU、内存、磁盘），不写数字。到 80% 变警告色、90% 变红；
+ * 不知道总量时（[fraction] 为 null）只有灰色的底环。弧的长度变化有过渡。读屏读「CPU 16%」。
+ */
+@Composable
+private fun Ring(label: String, icon: ImageVector, fraction: Double?) {
+    val c = NagiTheme.colors
+    val f = fraction?.coerceIn(0.0, 1.0)
+    val color = when {
+        f == null -> c.mutedForeground
+        f >= 0.9 -> c.destructive
+        f >= 0.8 -> c.warning
+        else -> c.brand
+    }
+    val sweep by animateFloatAsState(((f ?: 0.0) * 360).toFloat(), barSpec(), label = "ring")
+    Box(
+        Modifier.size(26.dp).semantics(mergeDescendants = true) { contentDescription = "$label ${f?.let { "%.0f%%".format(it * 100) } ?: "—"}" },
+        contentAlignment = Alignment.Center,
+    ) {
+        val track = c.muted
+        Canvas(Modifier.size(26.dp)) {
+            val stroke = 2.5.dp.toPx()
+            val inset = stroke / 2
+            val arc = Size(size.width - stroke, size.height - stroke)
+            drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
+            if (sweep > 0f) drawArc(color, -90f, sweep, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
+        }
+        Icon(icon, contentDescription = null, tint = c.mutedForeground, modifier = Modifier.size(12.dp))
+    }
+}
+
+
 // ---- 流量最大的映射 ----
 
 @Composable
-private fun TopRoutes(routes: List<RouteTraffic>) {
-    SectionHeader(stringResource(R.string.top_routes))
+/** 流量最大的映射：最近 24 小时流量合计最多的 3 条（和网页概览一样），一行是地址和合计，下面一条按最大的一条算长度的条。 */
+private fun TopRoutes(routes: List<RouteRate>) {
+    SectionHeader(stringResource(R.string.top_routes)) {
+        Text(stringResource(R.string.range_day), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+    }
     val max = routes.maxOf { it.rx + it.tx }.coerceAtLeast(1.0)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         routes.forEach { r ->
-            val (v, u) = formatRate(r.rx + r.tx)
-            UsageRow(r.address, "$v $u", ((r.rx + r.tx) / max).toFloat(), mono = true)
+            UsageRow(r.address, formatBytesText(r.rx + r.tx), ((r.rx + r.tx) / max).toFloat(), mono = true)
         }
     }
 }

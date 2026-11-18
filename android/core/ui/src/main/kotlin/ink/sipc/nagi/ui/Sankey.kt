@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -83,8 +84,45 @@ private const val MAX_NODES = 8
 /** 路径断流后留一会儿（显示 0 B/s）再收起：流量小的路径时有时无，否则整张图隔几秒就换一次布局。 */
 private const val HOLD_MS = 30_000L
 
+/**
+ * 尺寸（dp）：网页的取值，和手机上收紧的一套。手机的内容区只有 320 左右，照搬网页的行距和线宽显得松、线太粗；
+ * 宽度达到 600（平板、横屏）时用网页的。
+ */
+/**
+ * 一行的高度取线叠起来的高度和名称、速率两行字的高度（[minRow]）中较大的，行和行之间再留 [groupGap]：
+ * 节点多时一行有很多条细线，只按线算会比名称高出一截，行距就显得很大。线和线之间留 [lineGap]。
+ */
+private class SankeySpec(
+    val compact: Boolean,
+    val strokeScale: Double,
+    val strokeMax: Double,
+    val groupGap: Float,
+    val lineGap: Float,
+    val minRow: Float,
+    val top: Float,
+    val labelRatio: Float,
+    val nameTop: Float,
+) {
+    /** 收紧一档：行和行之间少 [step]（最少 6），一行的最小高度跟着少（最少 34，刚好放下名称和速率两行字）。 */
+    fun tighter(step: Float) = SankeySpec(
+        compact, strokeScale, strokeMax, groupGap = maxOf(6f, groupGap - step), lineGap = lineGap, minRow = maxOf(34f, minRow - step),
+        top = top, labelRatio = labelRatio, nameTop = nameTop,
+    )
+
+    val tightest: Boolean get() = groupGap <= 6f && minRow <= 34f
+
+    /** 放宽：行和行之间多 [add]。 */
+    fun looser(add: Float) = SankeySpec(
+        compact, strokeScale, strokeMax, groupGap = groupGap + maxOf(0f, add), lineGap = lineGap, minRow = minRow,
+        top = top, labelRatio = labelRatio, nameTop = nameTop,
+    )
+}
+
+private val WideSpec = SankeySpec(compact = false, strokeScale = 0.24, strokeMax = Double.MAX_VALUE, groupGap = 24f, lineGap = 2f, minRow = 40f, top = 50f, labelRatio = 0.24f, nameTop = 24f)
+private val CompactSpec = SankeySpec(compact = true, strokeScale = 0.18, strokeMax = 20.0, groupGap = 12f, lineGap = 2f, minRow = 36f, top = 40f, labelRatio = 0.28f, nameTop = 22f)
+
 /** 线宽只表示大致大小，准确数字点线看。 */
-private fun strokeOf(rate: Double): Float = max(2.0, sqrt(rate / 1024) * 0.24).toFloat()
+private fun SankeySpec.strokeOf(rate: Double): Float = max(2.0, min(strokeMax, sqrt(rate / 1024) * strokeScale)).toFloat()
 
 private fun flowKey(f: SankeyFlow) = "${f.from}|${f.to}|${f.kind}"
 
@@ -104,11 +142,14 @@ fun SankeyChart(
     texts: SankeyTexts,
     modifier: Modifier = Modifier,
     description: String? = null,
+    maxHeight: androidx.compose.ui.unit.Dp? = null,
+    fillHeight: Boolean = false,
 ) {
     val reduced = reducedMotion()
     val colors = NagiTheme.colors
     val density = LocalDensity.current
     val st = remember { SankeyState() }
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
     // 淡出的路径和行走完以后加一，让图重新组合、不再画它们。
     var settled by remember { mutableIntStateOf(0) }
     check(settled >= 0)
@@ -121,8 +162,32 @@ fun SankeyChart(
     val all = flows + st.held.entries.filter { it.key !in live }.map { it.value.first.copy(rate = 0.0) }
     val ids = rows.mapTo(HashSet()) { it.id }
     val visible = all.filter { (view == SankeyView.All || it.kind == if (view == SankeyView.External) FlowKind.External else FlowKind.Mesh) && it.from in ids && it.to in ids }
-    val (mRows, mFlows) = mergeSmall(rows, visible, texts.other)
-    val geo = layout(mRows, mFlows)
+    // 高度自适应：节点少时照常；超过 [maxHeight] 时一档一档收紧行距（每次 2），刚好放下就停；
+    // 收到最紧还放不下，才少列几个节点，流量小的合并成「其他」（至少留 2 个）。
+    val base = if (LocalConfiguration.current.screenWidthDp < 600) CompactSpec else WideSpec
+    var spec = base
+    var maxNodes = MAX_NODES
+    var merged = mergeSmall(rows, visible, texts.other, maxNodes)
+    var geo = spec.layout(merged.first, merged.second)
+    val cap = maxHeight?.value
+    if (cap != null && geo.height > cap) {
+        while (geo.height > cap && !spec.tightest) {
+            spec = spec.tighter(2f)
+            geo = spec.layout(merged.first, merged.second)
+        }
+        while (geo.height > cap && maxNodes > 2) {
+            maxNodes--
+            merged = mergeSmall(rows, visible, texts.other, maxNodes)
+            geo = spec.layout(merged.first, merged.second)
+        }
+    }
+    // [fillHeight]：比 [maxHeight] 矮时把行距加大，铺满这个高度（行和行之间最多 72，节点少时不拉得太散）。
+    if (fillHeight && cap != null && geo.height < cap && merged.first.size > 1) {
+        val more = (cap - geo.height) / (merged.first.size - 1)
+        spec = spec.looser(minOf(more, 72f - spec.groupGap))
+        geo = spec.layout(merged.first, merged.second)
+    }
+    val (mRows, mFlows) = merged
 
     // 正在显示的和正在淡出的路径、行。
     val next = geo.flows
@@ -140,7 +205,7 @@ fun SankeyChart(
     for ((k, v) in nextRows) { goal["row:$k"] = v.center; goal["row:$k:op"] = 1f }
     for ((k, v) in st.leavingRows) { goal["row:$k"] = v.center; goal["row:$k:op"] = 0f }
     for ((k, v) in next) {
-        goal["$k:y1"] = v.y1; goal["$k:y2"] = v.y2; goal["$k:w"] = strokeOf(v.flow.rate); goal["$k:op"] = 1f
+        goal["$k:y1"] = v.y1; goal["$k:y2"] = v.y2; goal["$k:w"] = spec.strokeOf(v.flow.rate); goal["$k:op"] = 1f
         lastNow["row:${v.flow.from}"]?.let { seeds["$k:y1"] = it }
         lastNow["row:${v.flow.to}"]?.let { seeds["$k:y2"] = it }
     }
@@ -198,13 +263,23 @@ fun SankeyChart(
         modifier.fillMaxWidth().then(if (description != null) Modifier.semantics { contentDescription = description } else Modifier),
     ) {
         val width = maxWidth.value
-        val label = min(128f, (width * 0.24f).roundToInt().toFloat())
-        val x0 = label
-        val x3 = width - label
+        // 两边留给名称和速率的宽度按实际的文字量：最宽的那一项再加 12，线从这里开始，最多占宽度的 labelRatio。
+        // 速率一直在变，留的宽度只增不减，免得整张图跟着数字左右抖。
+        val cap = (width * spec.labelRatio).roundToInt().toFloat()
+        fun widest(texts: List<String>, style: androidx.compose.ui.text.TextStyle) =
+            texts.maxOfOrNull { with(density) { measurer.measure(it, style, maxLines = 1).size.width.toDp().value } } ?: 0f
+        val nameStyle = if (spec.compact) NagiTheme.type.secondary else NagiTheme.type.body
+        val names = drawnRows.map { it.name }
+        val leftNeed = max(widest(names, nameStyle), widest(drawnRows.map { if (it.offline) texts.offline else if (it.send > 0) formatRateText(it.send) else texts.noSend }, NagiTheme.type.small)) + 12
+        val rightNeed = max(widest(names, nameStyle), widest(drawnRows.map { if (it.offline) texts.offline else if (it.receive > 0) formatRateText(it.receive) else texts.noReceive }, NagiTheme.type.small)) + 12
+        st.leftLabel = max(st.leftLabel, min(cap, leftNeed))
+        st.rightLabel = max(st.rightLabel, min(cap, rightNeed))
+        val x0 = st.leftLabel
+        val x3 = width - st.rightLabel
         val x1 = x0 + min(176f, (x3 - x0) * 0.3f)
         val x2 = x3 - min(120f, (x3 - x0) * 0.2f)
         val cx = (x1 + x2) / 2
-        val nameMax = max(label - 8, 40f)
+        val nameMax = max(min(st.leftLabel, st.rightLabel) - 8, 40f)
         val height = v["h"] ?: geo.height
 
         val hit by rememberUpdatedState { at: Offset ->
@@ -223,9 +298,12 @@ fun SankeyChart(
         }
 
         Canvas(
-            Modifier.fillMaxWidth().height(height.dp).pointerInput(Unit) {
-                detectTapGestures { pos -> hit(Offset(pos.x / density.density, pos.y / density.density)) }
-            },
+            // 手指点一下看那条线；接鼠标时悬浮就看，移出收起。
+            Modifier.fillMaxWidth().height(height.dp)
+                .mouseHover(onMove = { pos -> hit(Offset(pos.x / density.density, pos.y / density.density)) }, onExit = { selected = null })
+                .pointerInput(Unit) {
+                    detectTapGestures { pos -> hit(Offset(pos.x / density.density, pos.y / density.density)) }
+                },
         ) {
             val s = density.density
             for ((k, d) in drawn) {
@@ -262,12 +340,12 @@ fun SankeyChart(
             for (end in listOf(false, true)) {
                 Column(
                     Modifier.align(if (end) Alignment.TopEnd else Alignment.TopStart)
-                        .offset { IntOffset(0, ((center - 24f) * density.density).roundToInt()) }
+                        .offset { IntOffset(0, ((center - spec.nameTop) * density.density).roundToInt()) }
                         .graphicsLayer { alpha = op },
                     horizontalAlignment = if (end) Alignment.End else Alignment.Start,
                 ) {
                     Text(
-                        r.name, style = NagiTheme.type.body, color = nameColor, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        r.name, style = if (spec.compact) NagiTheme.type.secondary else NagiTheme.type.body, color = nameColor, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.widthIn(max = nameMax.dp),
                     )
                     Roll(if (end) receiveText else sendText, NagiTheme.type.small, colors.mutedForeground)
@@ -311,18 +389,21 @@ private class SankeyState {
     val leavingRows = LinkedHashMap<String, DrawnRow>()
     var values by mutableStateOf<Map<String, Float>>(emptyMap())
     val held = HashMap<String, Pair<SankeyFlow, Long>>()
+    /** 两边留给文字的宽度（dp），只增不减。 */
+    var leftLabel = 0f
+    var rightLabel = 0f
 }
 
 /** 节点太多时，流量小的节点合并成「其他」。 */
-private fun mergeSmall(rows: List<SankeyRow>, flows: List<SankeyFlow>, otherName: String): Pair<List<SankeyRow>, List<SankeyFlow>> {
+private fun mergeSmall(rows: List<SankeyRow>, flows: List<SankeyFlow>, otherName: String, maxNodes: Int): Pair<List<SankeyRow>, List<SankeyFlow>> {
     val nodes = rows.filter { it.id != SANKEY_EXTERNAL }
-    if (nodes.size <= MAX_NODES) return rows to flows
+    if (nodes.size <= maxNodes) return rows to flows
     val total = HashMap<String, Double>()
     for (f in flows) {
         total[f.from] = (total[f.from] ?: 0.0) + f.rate
         total[f.to] = (total[f.to] ?: 0.0) + f.rate
     }
-    val keep = nodes.sortedByDescending { total[it.id] ?: 0.0 }.take(MAX_NODES - 1).mapTo(HashSet()) { it.id }
+    val keep = nodes.sortedByDescending { total[it.id] ?: 0.0 }.take(maxNodes - 1).mapTo(HashSet()) { it.id }
     fun pick(id: String) = if (id == SANKEY_EXTERNAL || id in keep) id else OTHER
     val merged = LinkedHashMap<String, SankeyFlow>()
     for (f in flows) {
@@ -334,12 +415,11 @@ private fun mergeSmall(rows: List<SankeyRow>, flows: List<SankeyFlow>, otherName
 }
 
 /** 先排每一行，再按行算每条线两端的位置。一行的高度取两边较高的一边。两边的线都靠近名称那一行，比中心高 7。 */
-private fun layout(rows: List<SankeyRow>, flows: List<SankeyFlow>): Geometry {
+private fun SankeySpec.layout(rows: List<SankeyRow>, flows: List<SankeyFlow>): Geometry {
     val order = rows.withIndex().associate { it.value.id to it.index }
-    val gap = 4f
-    val groupGap = 42f
+    val gap = lineGap
     fun stack(list: List<SankeyFlow>) = if (list.isEmpty()) 2f else list.sumOf { strokeOf(it.rate).toDouble() }.toFloat() + (list.size - 1) * gap
-    var y = 50f
+    var y = top
     val outRows = LinkedHashMap<String, DrawnRow>()
     val starts = HashMap<String, Float>()
     val ends = HashMap<String, Float>()
@@ -348,7 +428,7 @@ private fun layout(rows: List<SankeyRow>, flows: List<SankeyFlow>): Geometry {
         val into = flows.filter { it.to == r.id }.sortedBy { order[it.from] ?: 0 }
         val left = stack(out)
         val right = stack(into)
-        val rowHeight = max(left, right)
+        val rowHeight = maxOf(left, right, minRow)
         val center = y + rowHeight / 2
         y += rowHeight + groupGap
         var py = center - 7 - left / 2
@@ -369,7 +449,8 @@ private fun layout(rows: List<SankeyRow>, flows: List<SankeyFlow>): Geometry {
         outFlows[k] = DrawnFlow(f, starts[k] ?: continue, ends[k] ?: continue)
     }
     // 最后一行可能有多条线，比名称那两行更低，取较低的一边，否则最下面的速率会被裁掉。
-    val height = max((outRows.values.lastOrNull()?.center ?: 0f) + 13, y - groupGap + 2) + 12
+    // 最后一行的速率在 center + 12 处结束（名称和速率两行字），图到这里为止，底部和旁边的内容对齐。
+    val height = max((outRows.values.lastOrNull()?.center ?: 0f) + 13, y - groupGap + 2)
     return Geometry(outRows, outFlows, height)
 }
 

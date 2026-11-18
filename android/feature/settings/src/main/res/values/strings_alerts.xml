@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Alerts (same as web/src/i18n/en/alerts.ts). -->
+<resources>
+    <string name="alerts_channels_help">Alerts about nodes and containers are sent to these channels.</string>
+    <string name="alerts_rules_where">Alert rules are edited in each node and project settings.</string>
+    <string name="alerts_lost">The panel master key was regenerated, so the alert configuration cannot be decrypted. Enter it again and save.</string>
+    <string name="channels_empty">No channels</string>
+    <string name="channel_add">Add channel</string>
+    <string name="channel_edit">Edit channel</string>
+    <string name="channel_delete">Delete channel</string>
+    <string name="channel_delete_confirm">Delete channel %1$s? Alerts are no longer sent to it.</string>
+    <string name="channel_test">Send test message</string>
+    <string name="channel_test_sent">Test message sent to %1$s</string>
+    <string name="channel_name">Name</string>
+    <string name="channel_type">Type</string>
+    <string name="channel_url">URL</string>
+    <string name="channel_bot_token">Bot token</string>
+    <string name="channel_chat_id">Chat ID</string>
+    <string name="channel_allow_private">Allow private addresses</string>
+    <string name="channel_allow_private_help">Allows sending to addresses on the local network, such as a self-hosted notification service. Loopback and cloud metadata addresses are never allowed.</string>
+    <string name="security_alerts">Security alerts</string>
+    <string name="security_alert_totp">Repeated wrong codes</string>
+    <string name="security_alert_totp_desc">The password was right but the 2FA code was wrong 5 times in a row; the password may have leaked</string>
+    <string name="security_alert_ratelimit">Sign-in rate limited</string>
+    <string name="security_alert_ratelimit_desc">An IP was rate limited after too many failed sign-ins, summarized hourly</string>
+    <string name="security_alert_network">Admin sign-in from a new network</string>
+    <string name="security_alert_network_desc">An admin signed in from a network not seen in the last 90 days</string>
+    <string name="security_alerts_always">Important changes to accounts, credentials and the cluster are always notified and cannot be turned off.</string>
+</resources>

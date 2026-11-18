@@ -22,6 +22,7 @@
 - `NagiBackTopBar(title, onBack, subtitle, actions)`：二级页面的顶栏，返回、标题，后面可以跟一段等宽的副标题。
 - `PillNav(items, selected, onSelect)`：底部悬浮的胶囊导航，宽度不跳变，可以长按拖动切换；`PillNavItem(icon, label, badge)`，`badge` 是红点。页面底部要留 `Dimens.bottomFade` 的空白，胶囊后面不加渐隐。
 - `NagiTopBar(fade = true)`：内容从顶部栏下面滚过时用，顶部栏自己画背景，最下面 20 渐变成透明。内容铺满整页，上内边距是状态栏加 `Dimens.topBarHeight`。
+- `PillRail(items, selected, onSelect)`：宽屏（600 dp 以上）时代替 `PillNav`，竖在左侧 88 宽一栏的左下角：最上面是 logo，下面四个图标，选中的一项在图标下面写名称，底色从上一项滑过去。长按拖动和 `PillNav` 共用 `PillGestures.kt`（`rememberPillDrag`、`PillLongPress`、`Modifier.pillDrag`）。
 - `UnderlineTabs(options, selected, onSelect)`：下划线样式的选择项（时间范围、视图），放在 `SectionHeader` 的右边。只换数据，不滑动下面的内容。网页对应的是 `Tabs` 的下划线样式。
 
 ## 按钮
@@ -59,8 +60,9 @@
 
 ## 图表
 
-- `LineChart(series, height, xLabels)`：监控折线图，平滑曲线，不画网格和纵轴；`ChartLine(values, color)`。对外流量用 `brand`，节点之间用 `mutedForeground`。默认高 112。
-- `SankeyChart(rows, flows, view, texts)`：流量桑基图，和网页概览的「实时流量」同一套布局和动效。`SankeyRow` 是一行（节点、`SANKEY_EXTERNAL` 外部网络、面板），`SankeyFlow` 是一条路径（`FlowKind.External` 品牌色、`FlowKind.Mesh` 灰色，`relay` 画成虚线）；`view`（`SankeyView`）只决定显示哪些，`flows` 传全部，切换时图不重建、平滑换位。点一下线显示速率。
+- `LineChart(series, height, xLabels, tipTime, tipFormat)`：监控折线图，平滑曲线，不画网格和纵轴；`ChartLine(values, color, label)`。对外流量用 `brand`，节点之间用 `mutedForeground`。默认高 112。给了 `tipTime` 时可以看某一刻的数值：点一下看、再点收起，长按后左右拖动逐个看，接鼠标时悬浮就看；对准的时刻画竖的虚线，提示写时间和每条线的数值（靠右对齐），过了一半放到左边。
+- `SankeyChart(rows, flows, view, texts)`：流量桑基图，和网页概览的「实时流量」同一套布局和动效。`SankeyRow` 是一行（节点、`SANKEY_EXTERNAL` 外部网络、面板），`SankeyFlow` 是一条路径（`FlowKind.External` 品牌色、`FlowKind.Mesh` 灰色，`relay` 画成虚线）；`view`（`SankeyView`）只决定显示哪些，`flows` 传全部，切换时图不重建、平滑换位。点一下线显示速率，接鼠标时悬浮就显示。
+- `Modifier.mouseHover(onMove, onExit)`：只认鼠标（含触控板）的悬浮，手指照常点按、长按。图表的悬浮提示都用它。
 - `ChartLegend(items)`：图例，放在图上面。
 - `UsageBar(fraction, color, height)`：用量条，长度变化有过渡。
 - `StatusDot(color, size)`：状态点，默认 6，颜色变化有过渡。
@@ -69,6 +71,15 @@
 
 - `Avatar(name, image, size)`：成员头像，`image` 是面板给的图片字节；没有或解不开时是首字母加渐变底，和网页的默认头像一样。默认 40。
 - `IconCircle(icon, size, iconSize)`：圆形 muted 底上的一个图标（解锁页、空状态的头图）。默认 40，图标 18。
+
+- `ActionRow(title, description, actions)`：和网页的 `SettingRow` 一样，左边名称和灰色说明，右边最多两个小按钮，不整行可点。
+- `SwitchRow(title, on, onToggle, labels, description, busy)`：开关写成设置行，第二行开头写「已开启」或「已关闭」，右边是「关闭」或「开启」按钮，不用安卓的开关控件。`labels` 是 `SwitchLabels`。
+- 设置子页里的「选择一项」（网页的 `Select`）用 `feature/settings` 的 `SelectRow`：一行写当前的值，点了从底部弹出选项。
+
+## 输入和对话框
+
+- `NagiTextField(value, onValueChange, label, placeholder, error, maxLength, password)`：单行输入框，和网页的 Input 一样（高 40、圆角 6、1px 边框，获得焦点变深，出错变红）。`password` 时不显示内容、弹出密码键盘。
+- `NagiDialog(title, confirm, cancel, onConfirm, onDismiss, text, danger, busy)`：确认框，「取消」和操作按钮并排各占一半；删除、退出、吊销用 `danger`（红色按钮）。`content` 放在说明下面（输入框、错误）。
 
 ## 提示和状态
 
