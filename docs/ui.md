@@ -81,6 +81,7 @@
 | `border`、`input` | `#e5e5e5` | 白 10%、15% | 边框 |
 | `foreground` | `#0a0a0a` | `#ededed` | 主文字 |
 | `muted-foreground` | `#737373` | `#a1a1a1` | 说明 |
+| `muted-foreground-strong` | `#666666` | `#a1a1a1` | 放在 `muted` 底上的说明文字。`#737373` 在 `#f5f5f5` 上只有 4.35:1，不到小字要求的 4.5:1；这个是 5.3:1。目前只有安卓 App 用 |
 | `primary` | `#171717` | `#e5e5e5` | 主按钮、进度条 |
 | `destructive` | `#e7000b` | `#ff6467` | 错误、危险操作 |
 | 成功 | `#16a34a` | `#4ade80` | |

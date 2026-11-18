@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Nagi App 设计稿</title>
+<link rel="stylesheet" href="../../web/src/fonts/misans.css">
+
+<style>
+/* 取值见 docs/ui.md 和 docs/android.md#界面和交互。1 px = 1 dp。 */
+:root, [data-theme="light"] {
+  --background:#ffffff; --card:#ffffff; --muted:#f5f5f5; --border:#e5e5e5;
+  --fg:#0a0a0a; --muted-fg:#737373; --muted-fg-strong:#666666; --primary:#171717; --primary-fg:#fafafa;
+  --destructive:#e7000b; --success:#16a34a; --warning:#f59e0b; --warning-text:#b45309;
+  --info:#2563eb; --brand:#3f9cc6; --overlay:rgba(0,0,0,.32); --sys:#0a0a0a;
+  --term-bg:#ffffff; --term-fg:#0a0a0a; --term-green:#15803d; --term-blue:#1d4ed8;
+}
+[data-theme="dark"] {
+  --background:#0a0a0a; --card:#171717; --muted:#262626; --border:rgba(255,255,255,.10);
+  --fg:#ededed; --muted-fg:#a1a1a1; --muted-fg-strong:#a1a1a1; --primary:#e5e5e5; --primary-fg:#171717;
+  --destructive:#ff6467; --success:#4ade80; --warning:#fbbf24; --warning-text:#fbbf24;
+  --info:#60a5fa; --brand:#6db9dc; --overlay:rgba(0,0,0,.6); --sys:#ededed;
+  --term-bg:#000000; --term-fg:#e5e5e5; --term-green:#4ade80; --term-blue:#60a5fa;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:MiSans, system-ui, sans-serif; background:#d4d4d4; color:#0a0a0a; font-size:14px; -webkit-font-smoothing:antialiased; }
+.mono { font-family:ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.num { font-variant-numeric:tabular-nums; }
+section.frame { padding:48px; display:inline-block; background:#e5e5e5; }
+section.frame > h1 { font-size:24px; font-weight:600; margin-bottom:8px; letter-spacing:-.01em; }
+section.frame > p.lead { font-size:14px; color:#525252; margin-bottom:32px; }
+.row-of { display:flex; gap:48px; align-items:flex-start; }
+figure { display:flex; flex-direction:column; gap:12px; }
+figcaption { font-size:14px; color:#404040; }
+figcaption b { font-weight:500; color:#0a0a0a; }
+
+/* 手机外框 */
+.phone { width:360px; height:760px; border-radius:28px; overflow:hidden; position:relative; background:var(--background); color:var(--fg);
+  display:flex; flex-direction:column; box-shadow:0 0 0 8px #171717, 0 12px 32px rgba(0,0,0,.18); }
+.status { height:28px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 20px 0 24px; font-size:12px; color:var(--sys); font-weight:500; }
+.status .r { display:flex; gap:6px; align-items:center; }
+.gesture { height:20px; flex:none; display:flex; align-items:center; justify-content:center; }
+.gesture::after { content:""; width:108px; height:4px; border-radius:2px; background:var(--fg); opacity:.4; }
+
+/* 顶部栏 */
+.topbar { height:56px; flex:none; display:flex; align-items:center; padding:0 6px 0 20px; gap:0; margin-bottom:4px; }
+.topbar.sub { padding-left:6px; }
+.topbar .title { font-size:16px; font-weight:600; flex:1; min-width:0; display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.icon-btn { width:48px; height:48px; display:flex; align-items:center; justify-content:center; color:var(--fg); flex:none; }
+.icon-btn svg { width:20px; height:20px; }
+svg.i { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+
+.content { flex:1; overflow:hidden; padding:0 20px; }
+.h-section { display:flex; align-items:center; justify-content:space-between; height:36px; margin-top:4px; }
+.divider + .h-section, .divider + .list { margin-top:0; }
+.h-section h2 { font-size:15px; font-weight:600; }
+.h-section .act { font-size:14px; color:var(--muted-fg); display:flex; align-items:center; gap:4px; }
+.divider { height:1px; background:var(--border); margin:16px 0; }
+.muted { color:var(--muted-fg); }
+.sm { font-size:13px; }
+.xs { font-size:12px; }
+
+/* 列表行：单行 56，两行 64（docs/android.md#视觉） */
+.list { margin:0 -20px; }
+.li { display:flex; align-items:center; gap:12px; min-height:48px; padding:0 20px; }
+.li.two { min-height:56px; }
+/* 首页「需要处理」：每项上下更紧 */
+.list.tight .li { min-height:44px; }
+.list.tight .li.two { min-height:52px; }
+.list.tight .li.dot-top { padding-top:8px; padding-bottom:8px; }
+.li .main { flex:1; min-width:0; }
+.li .t { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.li .s { font-size:13px; color:var(--muted-fg); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.li .end { font-size:14px; color:var(--muted-fg); display:flex; align-items:center; gap:4px; flex:none; }
+.li .end svg { color:var(--muted-fg); }
+.li.dot-top { align-items:flex-start; padding-top:12px; padding-bottom:12px; }
+.li.dot-top .dot { margin-top:7px; }
+
+.dot { width:6px; height:6px; border-radius:50%; background:var(--muted-fg); flex:none; }
+.dot.ok { background:var(--success); } .dot.err { background:var(--destructive); } .dot.warn { background:var(--warning); } .dot.info { background:var(--info); }
+.st { display:inline-flex; align-items:center; gap:6px; }
+
+/* 数值块 */
+.stats { display:grid; grid-template-columns:1fr 1fr; gap:16px 32px; }
+.stat .k { font-size:13px; color:var(--muted-fg); }
+.stat .v { font-size:22px; font-weight:500; margin-top:4px; font-variant-numeric:tabular-nums; }
+.stat .v small { font-size:14px; font-weight:400; color:var(--muted-fg); margin-left:2px; }
+.stat.sm .v { font-size:18px; }
+.spark { display:block; margin-top:8px; width:100%; height:24px; }
+
+/* 按钮：手机上高 40（ui.md 控件 · 手机） */
+.btn { height:36px; padding:0 14px; border-radius:6px; font-size:14px; display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--border); background:var(--background); color:var(--fg); white-space:nowrap; }
+.btn.primary { background:var(--primary); color:var(--primary-fg); border-color:var(--primary); font-weight:500; }
+.btn.ghost { border-color:transparent; }
+.btn.block { width:100%; }
+.btns { display:flex; gap:12px; }
+.li > .btn { height:32px; padding:0 12px; }
+.btns .btn { flex:1; }
+
+/* 标签（line） */
+.tabs { display:flex; gap:24px; height:40px; border-bottom:1px solid var(--border); margin:0 -20px; padding:0 20px; flex:none; }
+.tabs span { display:flex; align-items:center; font-size:14px; color:var(--muted-fg); position:relative; }
+.tabs span.on { color:var(--fg); }
+.tabs span.on::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px; background:var(--fg); }
+
+/* 底部导航：悬浮胶囊（只在手机上；宽屏用左侧导航栏） */
+.nav { position:absolute; left:50%; transform:translateX(-50%); bottom:28px; height:48px; border-radius:24px; display:flex; gap:4px; padding:4px;
+  background:var(--card); border:1px solid var(--border); box-shadow:0 4px 16px rgba(0,0,0,.08); z-index:2; }
+[data-theme="dark"] .nav { box-shadow:0 4px 16px rgba(0,0,0,.5); }
+/* 只显示图标；选中的一项在图标右边写出名称 */
+.nav > span { width:44px; display:flex; align-items:center; justify-content:center; gap:4px; font-size:0; color:var(--muted-fg); border-radius:20px; white-space:nowrap; }
+.nav > span svg { width:20px; height:20px; }
+.nav > span.on { width:auto; padding:0 14px 0 12px; font-size:14px; color:var(--fg); font-weight:500; background:var(--muted); }
+.nav span.pill { display:flex; width:auto !important; padding:0 !important; background:none !important; color:inherit; }
+.phone .content.has-nav, .phone .content { padding-bottom:96px; }
+/* 胶囊后面的底部渐隐，内容滚到这里变淡 */
+.phone:has(> .nav)::after { content:""; position:absolute; left:0; right:0; bottom:0; height:96px; z-index:1; pointer-events:none;
+  background:linear-gradient(to bottom, color-mix(in srgb, var(--background) 0%, transparent), var(--background) 55%); }
+.phone > .gesture { position:relative; z-index:3; }
+/* 有严重告警时首页图标右上角一个红点 */
+.nav > span:first-child .pill { position:relative; }
+.nav > span:first-child .pill::after { content:""; position:absolute; top:-1px; right:-2px; width:7px; height:7px; border-radius:50%; background:var(--destructive); box-shadow:0 0 0 2px var(--card); }
+.badge-n { min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--destructive); color:#fff; font-size:11px; display:inline-flex; align-items:center; justify-content:center; font-weight:500; }
+
+/* 卡片 */
+.card { border:1px solid var(--border); border-radius:8px; padding:16px; }
+.card + .card { margin-top:12px; }
+.card .ct { display:flex; align-items:center; justify-content:space-between; }
+.card .ct b { font-size:14px; font-weight:500; }
+.card .crow { display:flex; align-items:center; gap:8px; font-size:13px; margin-top:6px; }
+.card .crow .n { margin-left:auto; color:var(--muted-fg); }
+.card .foot { display:flex; gap:16px; font-size:12px; color:var(--muted-fg); margin-top:12px; }
+.ring { width:16px; height:16px; flex:none; }
+.group-h { font-size:14px; font-weight:500; margin:16px 0 8px; display:flex; align-items:center; gap:4px; }
+
+.input { height:36px; border:1px solid var(--border); border-radius:6px; display:flex; align-items:center; gap:8px; padding:0 12px; color:var(--muted-fg); font-size:14px; }
+.kv { display:grid; grid-template-columns:72px 1fr; row-gap:8px; font-size:14px; }
+.kv dt { color:var(--muted-fg); }
+.kv dd { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* 日志、终端、编辑器 */
+.logbox { background:var(--muted); border-radius:8px; padding:12px; font-size:12px; line-height:18px; height:520px; overflow:hidden; position:relative; }
+.logbox .ts { color:var(--muted-fg-strong); }
+.logbox .e { color:var(--destructive); }
+.logbox .w { color:var(--warning-text); }
+.follow { position:absolute; right:12px; bottom:12px; height:32px; padding:0 12px; border-radius:16px; background:var(--primary); color:var(--primary-fg); font-size:13px; display:flex; align-items:center; gap:4px; font-family:MiSans, sans-serif; }
+.term { background:var(--term-bg); color:var(--term-fg); font-size:12px; line-height:17px; padding:8px 12px; flex:1; overflow:hidden; }
+.term .p { color:var(--term-green); } .term .d { color:var(--term-blue); }
+.keys { height:52px; flex:none; display:flex; gap:4px; padding:4px; background:var(--muted); border-top:1px solid var(--border); overflow:hidden; }
+.keys span { flex:none; width:44px; display:flex; align-items:center; justify-content:center; border-radius:6px; background:var(--background); font-size:13px; color:var(--fg); font-family:ui-monospace, Consolas, monospace; }
+.keys span.on { background:var(--primary); color:var(--primary-fg); }
+.kbd { height:220px; flex:none; background:var(--muted); display:grid; grid-template-rows:repeat(4,1fr); gap:8px; padding:8px 4px 12px; }
+.kbd div { display:flex; gap:5px; justify-content:center; }
+.kbd i { flex:1; max-width:31px; background:var(--background); border-radius:5px; opacity:.9; }
+.kbd div.last i:nth-child(2) { max-width:none; flex:5; }
+.editor { flex:1; overflow:hidden; display:flex; font-size:12.5px; line-height:20px; }
+.gutter { width:40px; flex:none; text-align:right; padding:8px 8px 0 0; color:var(--muted-fg); background:var(--muted); }
+.code { padding:8px 0 0 10px; white-space:pre; flex:1; overflow:hidden; }
+.code .k { color:#2563eb; } [data-theme="dark"] .code .k { color:#60a5fa; }
+.code .s { color:#16a34a; } [data-theme="dark"] .code .s { color:#4ade80; }
+.code .c { color:var(--muted-fg); }
+.code .cursor { display:inline-block; width:2px; height:15px; background:var(--fg); vertical-align:-3px; }
+.code .hl { background:var(--muted); display:block; margin-left:-10px; padding-left:10px; }
+
+/* 底部弹出面板 */
+.scrim { position:absolute; inset:0; background:var(--overlay); }
+.sheet { position:absolute; left:0; right:0; bottom:0; background:var(--card); border-radius:16px 16px 0 0; padding:0 20px 20px; }
+.sheet .handle { width:32px; height:4px; border-radius:2px; background:var(--muted-fg); opacity:.4; margin:12px auto 8px; }
+.sheet h3 { font-size:16px; font-weight:600; height:40px; display:flex; align-items:center; }
+.avatar { width:32px; height:32px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:500; color:#fff; }
+
+/* 系统界面（示意） */
+.sysui { font-family:system-ui, "Segoe UI", sans-serif; }
+.notif { background:var(--card); border-radius:20px; padding:14px 16px; margin:0 8px 8px; }
+.notif .hd { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted-fg); }
+.notif .ttl { font-size:14px; font-weight:500; margin-top:6px; color:var(--fg); }
+.notif .bd { font-size:13px; color:var(--muted-fg); margin-top:2px; }
+.notif .acts { display:flex; gap:16px; margin-top:10px; font-size:13px; font-weight:500; color:var(--info); }
+.applogo { width:16px; height:16px; border-radius:50%; background:var(--brand); display:flex; align-items:center; justify-content:center; }
+
+/* 平板 */
+.tablet { width:1280px; height:800px; border-radius:24px; overflow:hidden; background:var(--background); color:var(--fg); display:flex; flex-direction:column; box-shadow:0 0 0 10px #171717, 0 12px 32px rgba(0,0,0,.18); }
+.rail { width:80px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding-top:12px; gap:12px; }
+.rail .logo { width:40px; height:40px; display:flex; align-items:center; justify-content:center; margin-bottom:12px; }
+.rail span { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:12px; color:var(--muted-fg); }
+.rail span .pill { width:56px; height:32px; border-radius:16px; display:flex; align-items:center; justify-content:center; }
+.rail span.on { color:var(--fg); font-weight:500; } .rail span.on .pill { background:var(--muted); }
+.rail svg { width:20px; height:20px; }
+.vnav-wrap { width:88px; flex:none; display:flex; align-items:center; justify-content:center; }
+.vnav { display:flex; flex-direction:column; gap:4px; padding:4px; border-radius:26px; background:var(--card); border:1px solid var(--border); box-shadow:0 4px 16px rgba(0,0,0,.08); }
+.vnav span { width:44px; height:44px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:0; color:var(--muted-fg); border-radius:22px; }
+.vnav span svg { width:20px; height:20px; }
+.vnav span.on { height:58px; font-size:12px; color:var(--fg); font-weight:500; background:var(--muted); }
+.vnav .vlogo { width:44px; height:52px; display:flex; align-items:center; justify-content:center; }
+.vnav .vlogo svg { width:24px; height:13px; }
+.pcol { width:280px; flex:none; border-right:1px solid var(--border); padding:16px 12px; overflow:hidden; }
+.pcol .lbl { font-size:13px; color:var(--muted-fg); padding:0 8px; }
+.pcol .pn { font-size:16px; font-weight:600; padding:4px 8px 0; }
+.pcol .ps { font-size:13px; color:var(--muted-fg); padding:4px 8px 0; }
+.pcol .it { display:flex; align-items:center; gap:8px; height:40px; padding:0 8px; border-radius:6px; font-size:14px; }
+.pcol .it.on { background:var(--muted); font-weight:500; }
+.pcol .ci { padding:8px; border-radius:6px; }
+.pcol .ci.on { background:var(--muted); }
+.pcol .ci .a { display:flex; align-items:center; gap:8px; font-size:14px; }
+.pcol .ci .a .n { margin-left:auto; color:var(--muted-fg); font-size:13px; }
+.pcol .ci .b { display:flex; gap:12px; font-size:12px; color:var(--muted-fg); margin:4px 0 0 14px; align-items:center; }
+.pcol .ci .b span { display:flex; align-items:center; gap:4px; }
+.pcol .sec { font-size:13px; color:var(--muted-fg); padding:16px 8px 4px; display:flex; justify-content:space-between; align-items:center; }
+.tmain { flex:1; overflow:hidden; padding:0 32px; }
+.tmain .inner { max-width:760px; margin:0 auto; }
+.chart-legend { display:flex; gap:12px; font-size:12px; color:var(--muted-fg); align-items:center; }
+.chart-legend i { width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:4px; vertical-align:-1px; }
+.axis { display:flex; justify-content:space-between; font-size:12px; color:var(--muted-fg); margin-top:4px; }
+.sk { background:var(--muted); border-radius:6px; }
+/* 分段控件：时间范围、日志级别 */
+.seg { display:flex; gap:20px; height:32px; }
+.seg span { flex:none; display:flex; align-items:center; font-size:14px; color:var(--muted-fg); position:relative; }
+.seg span.on { color:var(--fg); font-weight:500; }
+.seg span.on::after { content:""; position:absolute; left:0; right:0; bottom:3px; height:2px; border-radius:1px; background:var(--fg); }
+/* 节点用量：三条细占用条 */
+.ubars { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:8px; }
+.ubars .ul { display:flex; justify-content:space-between; font-size:12px; color:var(--muted-fg); font-variant-numeric:tabular-nums; }
+.ubars .ub { height:3px; border-radius:2px; background:var(--muted); margin-top:4px; overflow:hidden; }
+.ubars .ub i { display:block; height:3px; border-radius:2px; }
+/* 按天分组，日期吸顶 */
+.day { position:sticky; top:0; background:var(--background); font-size:13px; color:var(--muted-fg); height:32px; display:flex; align-items:center; margin:0 -20px; padding:0 20px; }
+.day.stuck { box-shadow:0 1px 0 var(--border); }
+/* 横向条形排行 */
+.rank { display:grid; grid-template-columns:1fr auto; gap:4px 12px; align-items:center; font-size:13px; }
+.rank .bar { grid-column:1 / -1; height:4px; border-radius:2px; background:var(--muted); margin-bottom:8px; }
+.rank .bar i { display:block; height:4px; border-radius:2px; background:var(--brand); }
+.cb { width:18px; height:18px; border-radius:4px; border:1.5px solid var(--muted-fg); flex:none; }
+.cb.on { background:var(--primary-fg); border:5px solid var(--primary); }
+</style>
+</head>
+<body>
+
+<!-- ============ 1 主要页面（浅色） ============ -->
+<section class="frame" id="s1">
+  <h1>主要页面</h1>
+  <p class="lead">手机 360 × 760 dp。悬浮胶囊导航只在四个一级页面显示，选中的一项写出名称；进入二级页面隐藏。浅色，深色版见下一张。</p>
+  <div class="row-of" id="main-phones">
+
+    <!-- 首页 -->
+    <figure><figcaption><b>首页</b> · 需要处理、关键数字、流量趋势、最近告警</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title">家里的集群 <i data-i="down"></i></div><span class="icon-btn"><i data-i="search"></i></span></div>
+      <div class="content">
+        <div class="h-section" style="margin-top:0"><h2>需要处理</h2><span class="act num">4</span></div>
+        <div class="list tight">
+          <div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">节点 node3 失联</div><div class="s">已离线 4 分钟</div></div><span class="end"><i data-i="right"></i></span></div>
+          <div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">orders / web 健康检查失败</div><div class="s">node1 · 12 分钟</div></div><span class="end"><i data-i="right"></i></span></div>
+          <div class="li"><span class="dot warn"></span><div class="main"><div class="t">节点 node7 等待批准</div></div><span class="btn">批准</span></div>
+          <div class="li"><span class="dot info"></span><div class="main"><div class="t">3 个镜像可更新</div></div><span class="btn">更新</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="stats">
+          <div class="stat"><div class="k">节点在线</div><div class="v">5<small>/ 6</small></div></div>
+          <div class="stat"><div class="k">容器运行中</div><div class="v">23<small>/ 24</small></div></div>
+          <div class="stat"><div class="k">对外入站</div><div class="v">12.4<small>MB/s</small></div></div>
+          <div class="stat"><div class="k">对外出站</div><div class="v">3.1<small>MB/s</small></div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="h-section" style="margin-top:0"><h2>流量趋势</h2><div class="seg" style="gap:16px"><span>1 小时</span><span class="on">24 小时</span><span>7 天</span></div></div>
+        <div class="chart-legend" style="margin-top:4px"><span><i style="background:var(--brand)"></i>对外</span><span><i style="background:var(--muted-fg)"></i>节点之间</span></div>
+        <svg viewBox="0 0 328 80" style="width:100%;height:80px;margin-top:8px" fill="none" stroke-width="1.5" stroke-linecap="round">
+          <path d="M0 58 C30 52 40 40 70 44 S120 30 150 36 S200 20 230 28 S290 16 328 22" stroke="var(--brand)"/>
+          <path d="M0 66 C30 64 50 60 80 62 S130 52 160 56 S210 48 240 54 S300 46 328 50" stroke="var(--muted-fg)"/>
+        </svg>
+        <div class="axis num"><span>12:00</span><span>18:00</span><span>00:00</span><span>06:00</span><span>现在</span></div>
+        <div class="divider"></div>
+        <div class="h-section" style="margin-top:0"><h2>流量最大的映射</h2></div>
+        <div class="rank"><span>shop.example.com</span><span class="num muted">6.2 MB/s</span><div class="bar"><i style="width:100%"></i></div><span>api.example.com</span><span class="num muted">3.4 MB/s</span><div class="bar"><i style="width:55%"></i></div><span>tcp 25565 · mc</span><span class="num muted">1.1 MB/s</span><div class="bar"><i style="width:18%"></i></div></div>
+      </div>
+      <div class="nav"><span class="on"><span class="pill"><i data-i="home"></i></span>首页</span><span><span class="pill"><i data-i="folder"></i></span>项目</span><span><span class="pill"><i data-i="server"></i></span>节点</span><span><span class="pill"><i data-i="gear"></i></span>设置</span></div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <!-- 项目列表 -->
+    <figure><figcaption><b>项目</b> · 按分组分段，长按拖动排序</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title">家里的集群 <i data-i="down"></i></div><span class="icon-btn"><i data-i="plus"></i></span><span class="icon-btn"><i data-i="search"></i></span></div>
+      <div class="content">
+        <div style="display:flex;gap:8px"><div class="input" style="flex:1"><i data-i="search"></i>筛选项目</div><span class="btn" style="width:40px;padding:0"><i data-i="sort"></i></span></div>
+        <div class="group-h" style="margin-top:16px">生产 <span class="muted" style="font-weight:400">· 2</span></div>
+        <div class="card">
+          <div class="ct"><b>orders</b><span class="st sm muted"><span class="dot err"></span>1 个异常</span></div>
+          <div class="sm muted mono" style="margin-top:4px">orders-net</div>
+          <div class="crow" style="margin-top:12px"><span class="dot ok"></span>web<span class="n">node1</span></div>
+          <div class="crow"><span class="dot err"></span>api <span style="color:var(--destructive)">异常</span><span class="n">node1</span></div>
+          <div class="crow"><span class="dot ok"></span>db<span class="n">node2</span></div>
+          <div class="foot num"><span>CPU 18%</span><span>内存 1.4 GB</span><span>3 个容器</span></div>
+        </div>
+        <div class="card">
+          <div class="ct"><b>blog</b><span class="st sm muted"><span class="dot ok"></span>运行中</span></div>
+          <div class="sm muted mono" style="margin-top:4px">blog-net</div>
+          <div class="crow" style="margin-top:12px"><span class="dot ok"></span>ghost<span class="n">node2</span></div>
+          <div class="crow"><span class="dot ok"></span>mysql<span class="n">node2</span></div>
+          <div class="foot num"><span>CPU 3%</span><span>内存 620 MB</span><span>2 个容器</span></div>
+        </div>
+        <div class="group-h">测试 <span class="muted" style="font-weight:400">· 1</span></div>
+        <div class="card">
+          <div class="ct"><b>staging</b><span class="st sm muted"><span class="dot"></span>已停止</span></div>
+          <div class="sm muted mono" style="margin-top:4px">staging-net</div>
+        </div>
+      </div>
+      <div class="nav"><span><span class="pill"><i data-i="home"></i></span>首页</span><span class="on"><span class="pill"><i data-i="folder"></i></span>项目</span><span><span class="pill"><i data-i="server"></i></span>节点</span><span><span class="pill"><i data-i="gear"></i></span>设置</span></div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <!-- 项目页 -->
+    <figure><figcaption><b>项目页</b> · 监控数字、容器列表、网络和设置入口</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">orders</div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="sm muted st"><span class="dot err"></span>1 个异常 · <span class="mono">orders-net</span></div>
+        <div class="h-section"><h2>监控</h2><div class="seg" style="gap:16px"><span class="on">1 小时</span><span>24 小时</span><span>7 天</span></div></div><div style="height:8px"></div>
+        <div class="stats">
+          <div class="stat sm"><div class="k">请求</div><div class="v">1.2k<small>/分钟</small></div></div>
+          <div class="stat sm"><div class="k">错误率</div><div class="v" style="color:var(--destructive)">4.8%</div></div>
+          <div class="stat sm"><div class="k">CPU</div><div class="v">18%</div></div>
+          <div class="stat sm"><div class="k">内存</div><div class="v">1.4<small>GB</small></div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="h-section" style="margin-top:0"><h2>容器</h2><span class="act"><i data-i="plus"></i></span></div>
+        <div class="list">
+          <div class="li two dot-top"><span class="dot ok"></span><div class="main"><div class="t">web</div><div class="s num" style="display:flex;gap:12px;align-items:center"><span style="display:flex;gap:4px;align-items:center"><span data-ring="12"></span>12%</span><span style="display:flex;gap:4px;align-items:center"><span data-ring="41"></span>210 MB</span></div></div><span class="end sm">node1</span></div>
+          <div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">api</div><div class="s" style="color:var(--destructive)">健康检查失败</div></div><span class="end sm">node1</span></div>
+          <div class="li two dot-top"><span class="dot ok"></span><div class="main"><div class="t">db <span class="sm muted">· 有状态</span></div><div class="s num" style="display:flex;gap:12px;align-items:center"><span style="display:flex;gap:4px;align-items:center"><span data-ring="4"></span>4%</span><span style="display:flex;gap:4px;align-items:center"><span data-ring="78"></span>980 MB</span></div></div><span class="end sm">node2</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="list">
+          <div class="li"><div class="main"><div class="t">网络</div></div><span class="end">2 个映射 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">设置</div></div><span class="end"><i data-i="right"></i></span></div>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <!-- 容器页 -->
+    <figure><figcaption><b>容器页</b> · 四个标签，其余在概览底部</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">web <span class="mono sm muted" style="font-weight:400">orders-web</span></div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="sm muted st"><span class="dot ok"></span>运行中 · node1 · 已运行 3 天</div>
+        <div class="btns" style="margin:16px 0"><span class="btn">重启</span><span class="btn">重新部署</span></div>
+        <div class="tabs"><span class="on">概览</span><span>日志</span><span>终端</span><span>配置</span></div>
+        <dl class="kv" style="margin-top:16px">
+          <dt>镜像</dt><dd class="mono sm">nginx:1.27-alpine</dd>
+          <dt>版本</dt><dd>v12</dd>
+          <dt>目录</dt><dd class="mono sm">/srv/nagi/orders/web</dd>
+        </dl>
+        <div class="divider"></div>
+        <div class="stats" style="gap:12px 32px">
+          <div class="stat sm"><div class="k">CPU</div><div class="v">12%</div><svg class="spark" viewBox="0 0 140 24" fill="none" stroke="var(--muted-fg)" stroke-width="1.5"><path d="M0 18 C20 16 30 8 50 12 S80 20 100 10 S130 6 140 9"/></svg></div>
+          <div class="stat sm"><div class="k">内存</div><div class="v">210<small>MB</small></div><svg class="spark" viewBox="0 0 140 24" fill="none" stroke="var(--muted-fg)" stroke-width="1.5"><path d="M0 14 C30 13 50 12 70 12 S110 11 140 10"/></svg></div>
+        </div>
+        <div class="divider"></div>
+        <div class="list">
+          <div class="li"><div class="main"><div class="t">版本</div></div><span class="end">v12 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">网络</div></div><span class="end">2 个映射 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">存储</div></div><span class="end">3 个卷 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">高可用</div></div><span class="end">已设置顶替 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">告警</div></div><span class="end">沿用项目 <i data-i="right"></i></span></div>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <!-- 设置 -->
+    <figure><figcaption><b>设置</b> · 最上面是「本机」，下面是面板的设置</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title">家里的集群 <i data-i="down"></i></div><span class="icon-btn"><i data-i="search"></i></span></div>
+      <div class="content">
+        <div class="list">
+          <div class="li two"><span class="avatar" style="background:linear-gradient(135deg,#6366f1,#ec4899)">i</span><div class="main"><div class="t" style="font-weight:500">ink</div><div class="s">管理员</div></div><span class="end"><i data-i="right"></i></span></div>
+        </div>
+        <div class="group-h muted" style="font-weight:400;font-size:13px;margin:24px 0 4px">本机</div>
+        <div class="list">
+          <div class="li"><div class="main"><div class="t">面板</div></div><span class="end">2 个 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">告警推送</div></div><span class="end">已开启 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">外观</div></div><span class="end">跟随系统 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">语言</div></div><span class="end">跟随系统 <i data-i="right"></i></span></div>
+        </div>
+        <div class="group-h muted" style="font-weight:400;font-size:13px;margin:24px 0 4px">面板</div>
+        <div class="list">
+          <div class="li"><div class="main"><div class="t">面板访问</div></div><span class="end"><i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">安全策略</div></div><span class="end"><i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">成员</div></div><span class="end">4 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">告警</div></div><span class="end"><i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">审计</div></div><span class="end"><i data-i="right"></i></span></div>
+        </div>
+      </div>
+      <div class="nav"><span><span class="pill"><i data-i="home"></i></span>首页</span><span><span class="pill"><i data-i="folder"></i></span>项目</span><span><span class="pill"><i data-i="server"></i></span>节点</span><span class="on"><span class="pill"><i data-i="gear"></i></span>设置</span></div>
+      <div class="gesture"></div>
+    </div></figure>
+  </div>
+</section>
+
+<!-- ============ 2 深色 ============ -->
+<section class="frame" id="s2">
+  <h1>主要页面 · 深色</h1>
+  <p class="lead">同样的页面，深色取 ui.md 的深色变量。</p>
+  <div class="row-of" id="dark-phones"></div>
+</section>
+
+<!-- ============ 3 日志、终端、编辑器 ============ -->
+<section class="frame" id="s3">
+  <h1>日志、终端、编辑器</h1>
+  <p class="lead">键盘上方一行按键。离开前台后终端和日志保持 5 分钟。</p>
+  <div class="row-of">
+
+    <figure><figcaption><b>日志</b> · 跟随最新，可暂停、搜索、选服务</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">api <span class="mono sm muted" style="font-weight:400">orders-api</span></div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="tabs"><span>概览</span><span class="on">日志</span><span>终端</span><span>配置</span></div>
+        <div style="display:flex;gap:8px;margin:12px 0"><span class="btn" style="flex:1;justify-content:space-between">全部服务 <i data-i="down"></i></span><span class="btn" style="width:40px;padding:0"><i data-i="search"></i></span><span class="btn" style="width:40px;padding:0"><i data-i="pause"></i></span></div>
+        <div class="logbox mono"><div><span class="ts">09:40:02</span> GET /api/orders 200 12ms</div><div><span class="ts">09:40:02</span> GET /api/orders/381 200 8ms</div><div><span class="ts">09:40:03</span> POST /api/cart 201 31ms</div><div><span class="ts">09:40:05</span> <span class="w">WARN slow query 1.2s</span></div><div><span class="ts">09:40:05</span>   SELECT * FROM orders WHERE …</div><div><span class="ts">09:40:06</span> GET /healthz 200 1ms</div><div><span class="ts">09:40:09</span> GET /api/orders 200 10ms</div><div><span class="ts">09:40:11</span> <span class="e">ERROR dial tcp db:5432:</span></div><div><span class="ts">09:40:11</span> <span class="e">  connection refused</span></div><div><span class="ts">09:40:11</span> GET /healthz 503 2ms</div><div><span class="ts">09:40:14</span> retry 1/5 in 2s</div><div><span class="ts">09:40:16</span> <span class="e">ERROR dial tcp db:5432:</span></div><div><span class="ts">09:40:16</span> <span class="e">  connection refused</span></div><div><span class="ts">09:40:16</span> retry 2/5 in 4s</div><div><span class="ts">09:40:20</span> connected to db</div><div><span class="ts">09:40:20</span> GET /healthz 200 1ms</div><div><span class="ts">09:40:21</span> GET /api/orders 200 14ms</div><div><span class="ts">09:40:22</span> GET /api/orders/382 200 9ms</div><div><span class="ts">09:40:24</span> POST /api/pay 200 88ms</div><div><span class="ts">09:40:26</span> GET /healthz 200 1ms</div><div><span class="ts">09:40:28</span> GET /api/orders 200 11ms</div><div><span class="ts">09:40:29</span> GET /api/orders/383 200 7ms</div><div><span class="ts">09:40:31</span> GET /api/cart 200 6ms</div><div><span class="ts">09:40:33</span> GET /healthz 200 1ms</div><div><span class="ts">09:40:35</span> GET /api/orders 200 9ms</div><div><span class="ts">09:40:36</span> POST /api/cart 201 27ms</div><div><span class="ts">09:40:38</span> GET /healthz 200 1ms</div>
+          <span class="follow">跟随最新</span></div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>终端</b> · 跟随深浅色，等宽按键行</figcaption>
+    <div class="phone" data-theme="light">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">api <span class="mono sm muted" style="font-weight:400">orders-api</span></div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div style="padding:0 20px"><div class="tabs"><span>概览</span><span>日志</span><span class="on">终端</span><span>配置</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;height:44px"><span class="sm st"><span class="dot ok"></span><span class="mono">sh · orders-api</span></span><span class="sm muted">重新连接</span></div></div>
+      <div class="term mono" style="border-top:1px solid var(--border)"><div><span class="p">/app #</span> ls</div><div><span class="d">bin</span>  <span class="d">config</span>  <span class="d">migrations</span>  server</div><div><span class="p">/app #</span> ./server migrate --dry-run</div><div>checking 14 migrations…</div><div>  0013_add_order_index   pending</div><div>  0014_cart_expiry       pending</div><div>2 pending, 12 applied</div><div><span class="p">/app #</span> ./server migrate<span style="background:var(--term-fg);color:var(--term-bg)"> </span></div></div>
+      <div class="keys"><span>Esc</span><span>Tab</span><span class="on">Ctrl</span><span>Alt</span><span>←</span><span>↓</span><span>↑</span><span>→</span><span>|</span><span>~</span></div>
+      <div class="kbd"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="last"><i></i><i></i><i></i></div></div>
+      <div class="gesture" style="background:var(--muted)"></div>
+    </div></figure>
+
+    <figure><figcaption><b>编辑配置</b> · Sora Editor，YAML 高亮，保存前对比</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="x"></i></span><div class="title">编辑配置</div><span class="btn primary" style="margin-right:16px">保存</span></div>
+      <div class="editor mono" style="border-top:1px solid var(--border)">
+        <div class="gutter num">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13</div>
+        <div class="code"><span class="k">services</span>:
+  <span class="k">api</span>:
+    <span class="k">image</span>: <span class="s">ghcr.io/acme/orders-api:2.4.1</span>
+    <span class="k">environment</span>:
+      <span class="k">DB_HOST</span>: <span class="s">db</span>
+      <span class="k">LOG_LEVEL</span>: <span class="s">info</span>
+<span class="hl">    <span class="k">healthcheck</span>:<span class="cursor"></span></span>      <span class="k">test</span>: [<span class="s">"CMD"</span>, <span class="s">"wget"</span>, <span class="s">"-qO-"</span>,
+             <span class="s">"localhost:8080/healthz"</span>]
+      <span class="k">interval</span>: <span class="s">10s</span>
+    <span class="c"># 数据库启动慢，等 db 健康再启动</span>
+    <span class="k">depends_on</span>:
+      <span class="k">db</span>: { <span class="k">condition</span>: <span class="s">service_healthy</span> }</div>
+      </div>
+      <div class="keys"><span>⇥</span><span>⇤</span><span>:</span><span>-</span><span>"</span><span>#</span><span>{}</span><span>[]</span><span>↶</span><span>↷</span></div>
+      <div class="kbd"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="last"><i></i><i></i><i></i></div></div>
+      <div class="gesture" style="background:var(--muted)"></div>
+    </div></figure>
+
+    <figure><figcaption><b>保存前对比</b> · 底部弹出面板</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="x"></i></span><div class="title">编辑配置</div></div>
+      <div class="scrim" style="top:0"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <h3>保存为草稿</h3>
+        <p class="sm muted">和当前版本 v12 相比，改了 4 行。保存后在容器页部署才生效。</p>
+        <div class="mono" style="font-size:12px;line-height:18px;background:var(--muted);border-radius:8px;padding:8px 0;margin:16px 0">
+          <div style="padding:0 12px" class="muted">@@ 6,4 @@</div>
+          <div style="padding:0 12px">      LOG_LEVEL: info</div>
+          <div style="padding:0 12px;background:rgba(22,163,74,.12)">+    healthcheck:</div>
+          <div style="padding:0 12px;background:rgba(22,163,74,.12)">+      test: ["CMD", "wget", …]</div>
+          <div style="padding:0 12px;background:rgba(22,163,74,.12)">+      interval: 10s</div>
+          <div style="padding:0 12px;background:rgba(231,0,11,.10)">-    restart: always</div>
+          <div style="padding:0 12px">    depends_on:</div>
+        </div>
+        <div class="btns"><span class="btn">取消</span><span class="btn primary">保存草稿</span></div>
+        <div class="gesture" style="margin:12px -20px -20px"></div>
+      </div>
+    </div></figure>
+
+  </div>
+</section>
+
+<!-- ============ 4 多面板、通知、小组件 ============ -->
+<section class="frame" id="s4">
+  <h1>多个面板、通知、小组件</h1>
+  <p class="lead">系统通知栏和桌面是示意，实际样式由手机系统决定。</p>
+  <div class="row-of">
+
+    <figure><figcaption><b>切换面板</b> · 点顶部栏的面板名称</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title">家里的集群 <i data-i="down"></i></div><span class="icon-btn"><i data-i="search"></i></span></div>
+      <div class="content"><div class="h-section" style="margin-top:0"><h2>需要处理</h2></div></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <h3>面板</h3>
+        <div class="list tight">
+          <div class="li two"><span style="width:20px;display:flex;justify-content:center"><i data-i="check"></i></span><div class="main"><div class="t" style="font-weight:500">家里的集群</div><div class="s">ink · 管理员</div></div><span class="end num" style="color:var(--destructive)">4</span></div>
+          <div class="li two"><span style="width:20px"></span><div class="main"><div class="t">公司生产</div><div class="s">ink · 操作员</div></div><span class="end num" style="color:var(--destructive)">2</span></div>
+          <div class="li two"><span style="width:20px"></span><div class="main"><div class="t">测试环境</div><div class="s">ink · 管理员 · 连不上</div></div><span class="end"></span></div>
+        </div>
+        <div class="divider" style="margin:8px 0"></div>
+        <div class="list">
+          <div class="li"><span style="width:20px;display:flex;justify-content:center"><i data-i="plus"></i></span><div class="main"><div class="t">添加面板</div></div></div>
+          <div class="li"><span style="width:20px"></span><div class="main"><div class="t">管理面板</div></div></div>
+        </div>
+        <div class="gesture" style="margin:4px -20px -20px"></div>
+      </div>
+    </div></figure>
+
+    <figure><figcaption><b>通知</b> · 每个面板一组渠道，可静音 1 小时</figcaption>
+    <div class="phone sysui" style="background:var(--muted)">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div style="padding:16px 16px 20px;font-size:28px;font-weight:300;color:var(--fg)">9:41 <span style="font-size:14px;color:var(--muted-fg);font-weight:400">11月18日 周三</span></div>
+      <div class="notif">
+        <div class="hd"><span class="applogo"></span>Nagi · 家里的集群 · 现在</div>
+        <div class="ttl">节点 node3 失联</div>
+        <div class="bd">已离线 60 秒，上面有 4 个容器</div>
+        <div class="acts"><span>静音 1 小时</span></div>
+      </div>
+      <div class="notif">
+        <div class="hd"><span class="applogo"></span>Nagi · 公司生产 · 3 分钟前</div>
+        <div class="ttl">磁盘使用 93%，超过 90%</div>
+        <div class="bd">node-db-1 · /var/lib/docker</div>
+        <div class="acts"><span>静音 1 小时</span></div>
+      </div>
+      <div class="notif">
+        <div class="hd"><span class="applogo" style="background:var(--success)"></span>Nagi · 家里的集群 · 10 分钟前</div>
+        <div class="ttl">已恢复：orders / api 健康检查失败</div>
+        <div class="bd">持续 12 分钟</div>
+      </div>
+      <div class="notif" style="opacity:.85">
+        <div class="hd"><span class="applogo" style="background:var(--muted-fg)"></span>Nagi</div>
+        <div class="ttl" style="font-weight:400">正在接收告警 · 2 个面板</div>
+      </div>
+    </div></figure>
+
+    <figure><figcaption><b>小组件</b> · 只显示数量，不显示名称</figcaption>
+    <div class="phone sysui" style="background:linear-gradient(160deg,#cbd5e1,#94a3b8)">
+      <div class="status" style="color:#0a0a0a"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div style="padding:24px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div data-theme="light" style="grid-column:span 2;background:var(--background);color:var(--fg);border-radius:20px;padding:16px;font-family:MiSans,sans-serif">
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;color:var(--muted-fg)">家里的集群</span><span style="font-size:12px;color:var(--muted-fg)">9:40</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px"><span class="num" style="font-size:32px;font-weight:500;color:var(--destructive)">4</span><span style="font-size:14px">需要处理</span></div>
+          <div class="num" style="display:flex;gap:24px;margin-top:8px;font-size:13px;color:var(--muted-fg)"><span>节点 <b style="color:var(--fg);font-weight:500">5 / 6</b></span><span>容器 <b style="color:var(--fg);font-weight:500">23 / 24</b></span></div>
+        </div>
+        <div data-theme="dark" style="background:var(--card);color:var(--fg);border-radius:20px;padding:16px;font-family:MiSans,sans-serif">
+          <div style="font-size:13px;color:var(--muted-fg)">公司生产</div>
+          <div class="num" style="font-size:32px;font-weight:500;margin-top:8px;color:var(--destructive)">2</div>
+          <div style="font-size:13px;color:var(--muted-fg)">需要处理</div>
+        </div>
+        <div data-theme="light" style="background:var(--background);color:var(--fg);border-radius:20px;padding:16px;font-family:MiSans,sans-serif">
+          <div style="font-size:13px;color:var(--muted-fg)">测试环境</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:16px;font-size:14px"><span class="dot ok"></span>一切正常</div>
+          <div class="num" style="font-size:13px;color:var(--muted-fg);margin-top:4px">节点 2 / 2</div>
+        </div>
+      </div>
+    </div></figure>
+
+    <figure><figcaption><b>告警推送设置</b> · 本机，按类别和项目</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">告警推送</div></div>
+      <div class="content">
+        <div class="list">
+          <div class="li two"><div class="main"><div class="t">接收告警推送</div><div class="s">已开启 · 后台保持连接，常驻一条通知</div></div><span class="btn">关闭</span></div>
+          <div class="li two"><div class="main"><div class="t">后台运行</div><div class="s" style="color:var(--warning-text)">电池优化未关闭，休眠后可能收不到</div></div><span class="end"><i data-i="right"></i></span></div>
+        </div>
+        <div class="group-h muted" style="font-weight:400;font-size:13px;margin:24px 0 4px">家里的集群</div>
+        <div class="list">
+          <div class="li two"><div class="main"><div class="t">节点</div><div class="s">已开启</div></div><span class="btn">关闭</span></div>
+          <div class="li two"><div class="main"><div class="t">容器</div><div class="s">已开启</div></div><span class="btn">关闭</span></div>
+          <div class="li two"><div class="main"><div class="t">安全</div><div class="s">已开启</div></div><span class="btn">关闭</span></div>
+          <div class="li two"><div class="main"><div class="t">已恢复的消息</div><div class="s">已开启</div></div><span class="btn">关闭</span></div>
+          <div class="li"><div class="main"><div class="t">项目</div></div><span class="end">关闭了 1 个 <i data-i="right"></i></span></div>
+        </div>
+        <div class="group-h muted" style="font-weight:400;font-size:13px;margin:24px 0 4px">所有面板</div>
+        <div class="list">
+          <div class="li two"><div class="main"><div class="t">严重告警在勿扰模式下也提醒</div><div class="s">已关闭 · 节点失联、顶替、安全告警</div></div><span class="btn">开启</span></div>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+  </div>
+</section>
+
+<!-- ============ 5 添加手机和解锁 ============ -->
+<section class="frame" id="s5">
+  <h1>添加手机、解锁</h1>
+  <p class="lead">在网页「设置 → 账号安全 → 手机 App」显示二维码，App 扫码添加；也可以用密码登录。</p>
+  <div class="row-of">
+
+    <figure><figcaption><b>1 欢迎</b> · 第一次打开</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="content" style="display:flex;flex-direction:column;padding:0 20px">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+          <svg viewBox="4 9 24 13" style="width:54px;height:30px" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="var(--brand)"/><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="var(--fg)" opacity=".35"/></svg>
+          <div style="font-size:24px;font-weight:600;margin-top:24px;letter-spacing:-.01em">管理你的 Nagi 集群</div>
+          <div class="muted" style="margin-top:8px;line-height:22px">在网页的「设置 → 账号安全 → 手机 App」点「添加手机」，然后扫描页面上的二维码。</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-bottom:24px">
+          <span class="btn primary block">扫描二维码</span>
+          <span class="btn ghost block">用密码登录</span>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>2 确认</b> · 已按二维码里的指纹校验证书</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title"></div></div>
+      <div class="content" style="display:flex;flex-direction:column;padding:0 20px">
+        <div style="flex:1">
+          <div style="font-size:24px;font-weight:600;letter-spacing:-.01em">添加到 家里的集群</div>
+          <div class="muted" style="margin-top:8px">添加后这台手机可以用你的账号管理面板。</div>
+          <div class="list" style="margin:24px -20px 0">
+            <div class="li two"><span class="avatar" style="background:linear-gradient(135deg,#6366f1,#ec4899)">i</span><div class="main"><div class="t" style="font-weight:500">ink</div><div class="s">管理员</div></div></div>
+          </div>
+          <dl class="kv" style="margin-top:16px;grid-template-columns:64px 1fr">
+            <dt>地址</dt><dd class="mono sm">203.0.113.10:9443</dd>
+            <dt>域名</dt><dd class="mono sm">nagi.example.com</dd>
+            <dt>指纹</dt><dd class="mono sm" style="white-space:normal;word-break:break-all">SHA256:3f9c 6a1e … 82d4</dd>
+            <dt>手机</dt><dd>Xiaomi 15 · Android 16</dd>
+          </dl>
+        </div>
+        <div style="padding-bottom:24px">
+          <div class="sm muted" style="margin-bottom:12px">添加时需要验证指纹、面容或锁屏密码。</div>
+          <span class="btn primary block">添加</span>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>3 系统验证</b> · BiometricPrompt（系统样式）</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title"></div></div>
+      <div class="scrim"></div>
+      <div class="sheet sysui" style="text-align:center;padding-bottom:28px">
+        <div class="handle" style="opacity:0"></div>
+        <div style="font-size:18px;font-weight:500;margin-top:8px">添加到 家里的集群</div>
+        <div class="sm muted" style="margin-top:6px">在硬件里生成这台手机的密钥</div>
+        <div style="width:64px;height:64px;margin:28px auto;color:var(--info)"><i data-i="finger" style="width:64px;height:64px;stroke-width:1.5"></i></div>
+        <div class="sm muted">触摸指纹传感器</div>
+        <div style="margin-top:24px;font-size:14px;color:var(--info);font-weight:500">使用锁屏密码</div>
+      </div>
+    </div></figure>
+
+    <figure><figcaption><b>解锁 App</b> · 超过设定时长后打开</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+        <div style="width:48px;height:48px;border-radius:50%;background:var(--muted);display:flex;align-items:center;justify-content:center"><i data-i="lock" style="width:20px;height:20px"></i></div>
+        <div style="font-size:16px;font-weight:600;margin-top:16px">家里的集群</div>
+        <div class="sm muted" style="margin-top:4px">已锁定 · 15 分钟未使用</div>
+        <span class="btn primary" style="margin-top:24px;width:160px">解锁</span>
+        <span class="sm muted" style="margin-top:16px">切换面板</span>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>引导</b> · 第一次添加面板后，三页，可以跳过</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title"></div><span class="sm muted" style="padding:0 14px">跳过</span></div>
+      <div class="content" style="display:flex;flex-direction:column;padding:0 20px">
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center">
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px 16px;width:220px">
+            <div style="display:flex;align-items:center;gap:4px;font-weight:600">家里的集群 <i data-i="down"></i></div>
+            <div class="sm muted" style="margin-top:12px;display:flex;align-items:center;gap:8px"><i data-i="check"></i>家里的集群</div>
+            <div class="sm muted" style="margin-top:8px;padding-left:24px">公司生产</div>
+          </div>
+          <div style="font-size:24px;font-weight:600;margin-top:32px;letter-spacing:-.01em">切换面板</div>
+          <div class="muted" style="margin-top:8px;line-height:22px">点顶部栏的面板名称，在添加过的面板之间切换。告警推送同时接收所有面板的。</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:24px">
+          <span style="display:flex;gap:6px"><span class="dot" style="background:var(--fg)"></span><span class="dot" style="opacity:.4"></span><span class="dot" style="opacity:.4"></span></span>
+          <span class="btn primary" style="width:120px">下一步</span>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>网页 · 添加手机</b> · 对话框（宽 440）</figcaption>
+    <div style="width:440px;background:#fff;border-radius:8px;padding:24px;box-shadow:0 0 0 1px #e5e5e5, 0 8px 24px rgba(0,0,0,.08)" data-theme="light">
+      <div style="font-size:16px;font-weight:600">添加手机</div>
+      <div class="sm muted" style="margin-top:4px;color:var(--muted-fg)">在手机上打开 Nagi App，扫描二维码。</div>
+      <div style="display:flex;justify-content:center;margin:24px 0"><svg id="qr" viewBox="0 0 29 29" style="width:200px;height:200px" shape-rendering="crispEdges"></svg></div>
+      <div class="sm" style="color:var(--muted-fg);text-align:center">4 分 32 秒后失效 · 只能使用一次</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
+        <span class="sm" style="color:var(--muted-fg)">还没有 App？<u>下载</u></span>
+        <span class="btn" style="height:32px">完成</span>
+      </div>
+    </div></figure>
+
+  </div>
+</section>
+
+<!-- ============ 6 平板 ============ -->
+<section class="frame" id="s6">
+  <h1>平板 · 宽屏双栏</h1>
+  <p class="lead">1280 × 800 dp。导航是竖向的悬浮胶囊，选中的一项在图标下写名称；项目栏和网页一致；840 dp 以上容器页显示全部标签。</p>
+  <div class="tablet" data-theme="light">
+    <div class="status" style="height:28px"><span>9:41</span><span class="r">▾ ▮</span></div>
+    <div style="flex:1;display:flex;min-height:0">
+      <div class="vnav-wrap"><div class="vnav"><b class="vlogo"><svg viewBox="4 9 24 13" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M6 19c3-3 6-3 10 0s7 3 10 0" stroke="var(--brand)"/><path d="M6 13c3-3 6-3 10 0s7 3 10 0" stroke="var(--fg)" opacity=".35"/></svg></b><span><i data-i="home"></i>首页</span><span class="on"><i data-i="folder"></i>项目</span><span><i data-i="server"></i>节点</span><span><i data-i="gear"></i>设置</span></div></div>
+      <div class="pcol">
+        <div class="lbl">项目</div>
+        <div class="pn">orders</div>
+        <div class="ps st"><span class="dot err"></span>1 个异常 · <span class="mono">orders-net</span></div>
+        <div style="height:12px"></div>
+        <div class="it">概览</div>
+        <div class="sec"><span>容器</span><i data-i="plus"></i></div>
+        <div class="ci on"><div class="a"><span class="dot ok"></span>web<span class="n">node1</span></div><div class="b num"><span><span data-ring="12"></span>12%</span><span><span data-ring="41"></span>210 MB</span></div></div>
+        <div class="ci"><div class="a"><span class="dot err"></span>api<span class="n">node1</span></div><div class="b" style="color:var(--destructive)">健康检查失败</div></div>
+        <div class="ci"><div class="a"><span class="dot ok"></span>db<span class="n">node2</span></div><div class="b num"><span><span data-ring="4"></span>4%</span><span><span data-ring="78"></span>980 MB</span></div></div>
+        <div style="height:8px"></div>
+        <div class="it">网络</div>
+        <div class="it">设置</div>
+      </div>
+      <div class="tmain"><div class="inner">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;padding-top:24px">
+          <div><div style="font-size:24px;font-weight:600;letter-spacing:-.01em">web <span class="mono" style="font-size:14px;font-weight:400;color:var(--muted-fg)">orders-web</span></div>
+          <div class="sm muted st" style="margin-top:4px"><span class="dot ok"></span>运行中 · node1 · 已运行 3 天</div></div>
+          <div class="btns"><span class="btn">重启</span><span class="btn">重新部署</span><span class="btn" style="width:40px;padding:0"><i data-i="more"></i></span></div>
+        </div>
+        <div class="tabs" style="margin:24px 0 0;padding:0"><span class="on">概览</span><span>日志</span><span>终端</span><span>配置</span><span>版本</span><span>网络</span><span>存储</span><span>高可用</span><span>告警</span></div>
+        <dl class="kv" style="margin-top:24px;grid-template-columns:96px 1fr">
+          <dt>镜像</dt><dd class="mono sm">nginx:1.27-alpine</dd><dt>节点</dt><dd>node1</dd><dt>版本</dt><dd>v12</dd><dt>目录</dt><dd class="mono sm">/srv/nagi/orders/web</dd>
+        </dl>
+        <div class="divider" style="margin:24px 0"></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:32px">
+          <div class="stat sm"><div class="k">CPU</div><div class="v">12%</div><svg class="spark" viewBox="0 0 140 24" fill="none" stroke="var(--muted-fg)" stroke-width="1.5"><path d="M0 18 C20 16 30 8 50 12 S80 20 100 10 S130 6 140 9"/></svg></div>
+          <div class="stat sm"><div class="k">内存</div><div class="v">210<small>MB</small></div><svg class="spark" viewBox="0 0 140 24" fill="none" stroke="var(--muted-fg)" stroke-width="1.5"><path d="M0 14 C30 13 50 12 70 12 S110 11 140 10"/></svg></div>
+          <div class="stat sm"><div class="k">下行</div><div class="v">1.8<small>MB/s</small></div><svg class="spark" viewBox="0 0 140 24" fill="none" stroke="var(--muted-fg)" stroke-width="1.5"><path d="M0 20 C20 18 40 6 60 10 S100 18 140 12"/></svg></div>
+          <div class="stat sm"><div class="k">上行</div><div class="v">420<small>KB/s</small></div><svg class="spark" viewBox="0 0 140 24" fill="none" stroke="var(--muted-fg)" stroke-width="1.5"><path d="M0 16 C30 14 50 18 80 12 S120 14 140 13"/></svg></div>
+        </div>
+        <div class="divider" style="margin:24px 0"></div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">最近事件</div>
+        <div class="list" style="margin:0 -8px">
+          <div class="li" style="min-height:40px;padding:0 8px"><div class="main"><div class="t">部署 v12</div></div><span class="end sm">ink · 2 小时前</span></div>
+          <div class="li" style="min-height:40px;padding:0 8px"><div class="main"><div class="t">保存草稿 4 次</div></div><span class="end sm">ink · 2 小时前</span></div>
+          <div class="li" style="min-height:40px;padding:0 8px"><div class="main"><div class="t">重启</div></div><span class="end sm">App · Xiaomi 15 · 昨天</span></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 7 节点、添加容器、文件、危险操作 ============ -->
+<section class="frame" id="s7">
+  <h1>节点、添加容器、文件、危险操作</h1>
+  <p class="lead">节点页和容器页同一种写法：常用四个标签，其余在第一个标签底部。危险操作在底部弹出面板里确认。</p>
+  <div class="row-of">
+
+    <figure><figcaption><b>节点</b> · 有问题的在前，用量是三条占用条</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title">家里的集群 <i data-i="down"></i></div><span class="icon-btn"><i data-i="plus"></i></span><span class="icon-btn"><i data-i="search"></i></span></div>
+      <div class="content">
+        <div class="list">
+          <div class="li dot-top" style="min-height:64px"><span class="dot err"></span><div class="main"><div class="t">node3 <span class="sm" style="color:var(--destructive)">离线 4 分钟</span></div><div class="s mono">198.51.100.7</div></div><span class="end sm">4 个容器</span></div>
+          <div class="li dot-top" style="min-height:64px"><span class="dot warn"></span><div class="main"><div class="t">node7 <span class="sm muted">等待批准</span></div><div class="s mono">192.0.2.40</div></div><span class="btn" style="align-self:center">批准</span></div>
+          <div class="li dot-top" style="min-height:92px"><span class="dot ok"></span><div class="main"><div class="t">node2</div><div class="s mono">203.0.113.12</div><div class="ubars"><div class="u"><div class="ul"><span>CPU</span><span style="color:var(--muted-fg)">12%</span></div><div class="ub"><i style="width:12%;background:var(--muted-fg)"></i></div></div><div class="u"><div class="ul"><span>内存</span><span style="color:var(--muted-fg)">64%</span></div><div class="ub"><i style="width:64%;background:var(--muted-fg)"></i></div></div><div class="u"><div class="ul"><span>磁盘</span><span style="color:var(--destructive)">93%</span></div><div class="ub"><i style="width:93%;background:var(--destructive)"></i></div></div></div></div><span class="end sm">6 个容器</span></div>
+          <div class="li dot-top" style="min-height:92px"><span class="dot ok"></span><div class="main"><div class="t">node1</div><div class="s mono">203.0.113.11</div><div class="ubars"><div class="u"><div class="ul"><span>CPU</span><span style="color:var(--muted-fg)">61%</span></div><div class="ub"><i style="width:61%;background:var(--muted-fg)"></i></div></div><div class="u"><div class="ul"><span>内存</span><span style="color:var(--muted-fg)">48%</span></div><div class="ub"><i style="width:48%;background:var(--muted-fg)"></i></div></div><div class="u"><div class="ul"><span>磁盘</span><span style="color:var(--muted-fg)">72%</span></div><div class="ub"><i style="width:72%;background:var(--muted-fg)"></i></div></div></div></div><span class="end sm">9 个容器</span></div>
+        </div>
+      </div>
+      <div class="nav"><span><span class="pill"><i data-i="home"></i></span>首页</span><span><span class="pill"><i data-i="folder"></i></span>项目</span><span class="on"><span class="pill"><i data-i="server"></i></span>节点</span><span><span class="pill"><i data-i="gear"></i></span>设置</span></div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>节点详情</b> · 监控、容器、终端、文件</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">node2</div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="sm muted st"><span class="dot ok"></span>在线 · <span class="mono">203.0.113.12</span> · 已运行 41 天</div>
+        <div class="tabs" style="margin-top:12px"><span class="on">监控</span><span>容器</span><span>终端</span><span>文件</span></div>
+        <div style="height:16px"></div><div class="seg"><span class="on">1 小时</span><span>24 小时</span><span>7 天</span></div><div style="height:16px"></div>
+        <div class="stats" style="gap:12px 32px">
+          <div class="stat sm"><div class="k">CPU</div><div class="v">12%</div></div>
+          <div class="stat sm"><div class="k">内存</div><div class="v">5.1<small>/ 8.0 GB</small></div></div>
+          <div class="stat sm"><div class="k">磁盘</div><div class="v" style="color:var(--destructive)">93%</div></div>
+          <div class="stat sm"><div class="k">网络</div><div class="v">2.4<small>MB/s</small></div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="list">
+          <div class="li"><div class="main"><div class="t">镜像</div></div><span class="end">31 个 · 12 GB <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">节点网络</div></div><span class="end">直连 5 个 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">副本</div></div><span class="end">4 个 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">面板</div></div><span class="end">1 个 <i data-i="right"></i></span></div>
+          <div class="li"><div class="main"><div class="t">设置</div></div><span class="end"><i data-i="right"></i></span></div>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>添加容器</b> · 整页表单，单列，按钮撑满</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="x"></i></span><div class="title">添加容器</div></div>
+      <div class="content" style="padding-bottom:0">
+        <div style="display:flex;background:var(--muted);border-radius:8px;padding:3px;height:40px"><span style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--background);border-radius:6px;box-shadow:0 0 0 1px var(--border)">容器</span><span style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted-fg)">容器组</span><span style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted-fg)">现有目录</span></div>
+        <div style="font-weight:500;margin:16px 0 8px">镜像</div>
+        <div class="input mono" style="color:var(--fg);font-size:15px">redis:7-alpine</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">
+          <div><div style="font-weight:500;margin-bottom:8px">名称</div><div class="input" style="font-size:15px">redis</div></div>
+          <div><div style="font-weight:500;margin-bottom:8px">节点</div><div class="input" style="font-size:15px;color:var(--fg);justify-content:space-between">node1 <i data-i="down"></i></div></div>
+        </div>
+        <div style="font-weight:500;margin:16px 0 8px">端口映射</div>
+        <div class="btn block" style="justify-content:flex-start;color:var(--muted-fg)"><i data-i="plus"></i>添加映射</div>
+        <div style="font-weight:500;margin:16px 0 8px">持久化目录</div>
+        <div class="input mono" style="color:var(--fg);font-size:15px">/data</div>
+        <div class="li" style="margin:8px -20px 0"><div class="main"><div class="t">环境变量</div></div><span class="end">0 个 <i data-i="right"></i></span></div>
+        <div class="li" style="margin:0 -20px"><div class="main"><div class="t">更多设置</div></div><span class="end"><i data-i="down"></i></span></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+          <span class="btn primary block">添加并部署</span>
+          <span class="btn block">仅添加</span>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>文件 · 多选</b> · 长按一项进入，顶部栏变成选择栏</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub" style="background:var(--muted)"><span class="icon-btn"><i data-i="x"></i></span><div class="title" style="font-weight:500">已选择 2 项</div><span class="icon-btn"><i data-i="copy"></i></span><span class="icon-btn"><i data-i="trash"></i></span><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="sm muted" style="margin-top:8px">存储 / <span class="mono">/data</span> / backups</div>
+        <div class="list">
+          <div class="li two"><span class="cb"></span><i data-i="folder" style="color:var(--muted-fg)"></i><div class="main"><div class="t">2026-11</div><div class="s num">2026-11-18 03:00</div></div><span class="end sm num">1.2 GB</span></div>
+          <div class="li two"><span class="cb on"></span><i data-i="file" style="color:var(--muted-fg)"></i><div class="main"><div class="t">dump-1117.rdb</div><div class="s num">2026-11-17 03:00</div></div><span class="end sm num">84 MB</span></div>
+          <div class="li two"><span class="cb on"></span><i data-i="file" style="color:var(--muted-fg)"></i><div class="main"><div class="t">dump-1116.rdb</div><div class="s num">2026-11-16 03:00</div></div><span class="end sm num">83 MB</span></div>
+          <div class="li two"><span class="cb"></span><i data-i="file" style="color:var(--muted-fg)"></i><div class="main"><div class="t">redis.conf</div><div class="s num">2026-10-02 14:21</div></div><span class="end sm num">2.1 KB</span></div>
+        </div>
+        <div class="divider"></div>
+        <div style="font-weight:500">上传</div>
+        <div style="margin-top:12px"><div style="display:flex;justify-content:space-between"><span>backup-1118.tar.gz</span><span class="sm muted">暂停</span></div>
+          <div style="height:4px;border-radius:2px;background:var(--muted);margin-top:8px"><div style="width:62%;height:4px;border-radius:2px;background:var(--primary)"></div></div>
+          <div class="sm muted num" style="margin-top:6px">310 MB / 500 MB · 4.2 MB/s · 剩余 45 秒</div></div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>删除容器</b> · 填名称确认，按钮变红</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">redis</div></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <h3>删除容器 redis</h3>
+        <p class="muted" style="line-height:22px">停止并删除容器和它的版本记录。容器目录默认保留在 node1 的 <span class="mono sm">/srv/nagi/orders/redis</span>。</p>
+        <div class="li" style="margin:8px -20px 0;min-height:48px"><span class="cb"></span><div class="main"><div class="t">同时删除容器目录和快照</div></div></div>
+        <div style="font-weight:500;margin:8px 0">输入 <span class="mono">redis</span> 确认</div>
+        <div class="input mono" style="color:var(--fg);font-size:15px;border-color:var(--fg)">redis</div>
+        <div class="btns" style="margin-top:24px"><span class="btn">取消</span><span class="btn" style="background:var(--destructive);border-color:var(--destructive);color:#fff;font-weight:500">删除</span></div>
+        <div class="gesture" style="margin:12px -20px -20px"></div>
+      </div>
+    </div></figure>
+
+  </div>
+</section>
+
+<!-- ============ 8 状态 ============ -->
+<section class="frame" id="s8">
+  <h1>状态</h1>
+  <p class="lead">加载用骨架，失败写红字加重试；连不上面板时显示缓存；备用面板只读；高权限确认用确认密钥。</p>
+  <div class="row-of">
+
+    <figure><figcaption><b>加载</b> · 区块内骨架</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">orders</div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="sk" style="width:140px;height:14px"></div>
+        <div class="h-section"><h2>监控</h2></div>
+        <div class="sk" style="height:36px"></div><div class="sk" style="height:36px;margin-top:8px;width:70%"></div>
+        <div class="divider"></div>
+        <div class="h-section" style="margin-top:0"><h2>容器</h2></div>
+        <div class="sk" style="height:36px"></div><div class="sk" style="height:36px;margin-top:8px"></div><div class="sk" style="height:36px;margin-top:8px;width:60%"></div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>连不上面板</b> · 显示缓存，写明时间</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar"><div class="title">家里的集群 <i data-i="down"></i></div><span class="icon-btn"><i data-i="search"></i></span></div>
+      <div class="content">
+        <div style="margin:0 -20px;padding:12px 20px;background:var(--muted);display:flex;gap:12px;align-items:flex-start">
+          <span class="dot warn" style="margin-top:7px"></span>
+          <div style="flex:1"><div>连不上面板</div><div class="sm muted" style="margin-top:2px">显示的是 09:37 的数据，正在重试。</div>
+          <div style="display:flex;gap:16px;margin-top:8px;font-weight:500"><span>重试</span><span>切换到备用面板</span></div></div>
+        </div>
+        <div style="opacity:.6">
+          <div class="h-section"><h2>需要处理</h2><span class="act num">2</span></div>
+          <div class="list tight">
+            <div class="li"><span class="dot err"></span><div class="main"><div class="t">orders / web 健康检查失败</div></div></div>
+            <div class="li"><span class="dot info"></span><div class="main"><div class="t">3 个镜像可更新</div></div></div>
+          </div>
+          <div class="divider"></div>
+          <div class="stats">
+            <div class="stat"><div class="k">节点在线</div><div class="v">6<small>/ 6</small></div></div>
+            <div class="stat"><div class="k">容器运行中</div><div class="v">24<small>/ 24</small></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="nav"><span class="on"><span class="pill"><i data-i="home"></i></span>首页</span><span><span class="pill"><i data-i="folder"></i></span>项目</span><span><span class="pill"><i data-i="server"></i></span>节点</span><span><span class="pill"><i data-i="gear"></i></span>设置</span></div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>查询失败、空项目</b> · 红字加重试</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">staging</div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div class="sm muted st"><span class="dot"></span>暂无容器 · <span class="mono">staging-net</span></div>
+        <div class="h-section"><h2>监控</h2></div>
+        <div style="color:var(--destructive);display:flex;justify-content:space-between;align-items:center;min-height:40px;gap:16px"><span>监控数据读取失败：节点 node3 离线</span><span style="font-weight:500;color:var(--fg);flex:none">重试</span></div>
+        <div class="divider"></div>
+        <div style="position:relative;height:300px">
+          <div style="filter:blur(4px);opacity:.5">
+            <div class="h-section" style="margin-top:0"><h2>容器</h2></div>
+            <div class="sk" style="height:36px"></div><div class="sk" style="height:36px;margin-top:8px"></div><div class="sk" style="height:36px;margin-top:8px"></div>
+          </div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+            <div>暂无容器</div><span class="btn primary"><i data-i="plus"></i>添加容器</span>
+          </div>
+        </div>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>备用面板</b> · 只能查看</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">web <span class="mono sm muted" style="font-weight:400">orders-web</span></div><span class="icon-btn"><i data-i="more"></i></span></div>
+      <div class="content">
+        <div style="margin:0 -20px 12px;padding:12px 20px;background:var(--muted)" class="sm">正在使用备用面板 standby-1，只能查看。<span style="font-weight:500">回到主面板</span></div>
+        <div class="sm muted st"><span class="dot ok"></span>运行中 · node1 · 已运行 3 天</div>
+        <div class="tabs" style="margin-top:16px"><span class="on">概览</span><span>日志</span><span>终端</span><span>配置</span></div>
+        <dl class="kv" style="margin-top:16px">
+          <dt>镜像</dt><dd class="mono sm">nginx:1.27-alpine</dd><dt>版本</dt><dd>v12</dd>
+        </dl>
+      </div>
+      <div class="gesture"></div>
+    </div></figure>
+
+    <figure><figcaption><b>高权限确认</b> · 打开节点终端前</figcaption>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+      <div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">node2</div></div>
+      <div class="scrim"></div>
+      <div class="sheet sysui" style="text-align:center;padding-bottom:28px">
+        <div class="handle" style="opacity:0"></div>
+        <div style="font-size:18px;font-weight:500;margin-top:8px">打开节点 node2 的终端</div>
+        <div class="sm muted" style="margin-top:6px">以 root 身份 · 15 分钟内不再询问</div>
+        <div style="width:64px;height:64px;margin:28px auto;color:var(--info)"><i data-i="finger" style="width:64px;height:64px;stroke-width:1.5"></i></div>
+        <div class="sm muted">触摸指纹传感器</div>
+        <div style="margin-top:24px;font-size:14px;color:var(--info);font-weight:500">改用密码或验证码</div>
+      </div>
+    </div></figure>
+
+  </div>
+</section>
+
+<!-- ============ 9 手机上的展示方式 ============ -->
+<section class="frame" id="s9">
+  <h1>手机上的展示方式</h1>
+  <p class="lead">不照搬网页：拓扑图改成列表，按天分组，日志按级别筛选，长按出快捷操作，数值块点开展开图表。</p>
+  <div class="row-of">
+<figure><figcaption><b>节点网络</b> · 有问题的连接在前</figcaption>
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+<div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">节点网络</div></div>
+  <div class="content"><div class="sm muted" style="margin-bottom:8px">6 个节点 · 15 条连接，2 条有问题</div><div class="h-section" style="margin-top:0"><h2>有问题的连接</h2></div><div class="list"><div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">node3 ↔ node1、node2 等 5 个</div><div class="s" style="color:var(--destructive)">不可达 · node3 离线</div></div></div><div class="li two dot-top"><span class="dot warn"></span><div class="main"><div class="t">node2 ↔ node5</div><div class="s">经面板中转 · 186 ms</div></div><span class="end"><i data-i="right"></i></span></div></div><div class="divider"></div><div class="h-section" style="margin-top:0"><h2>直连</h2><span class="act">13 条</span></div><div class="list"><div class="li"><div class="main"><div class="t">node1 ↔ node2</div></div><span class="end num">3 ms <i data-i="right"></i></span></div><div class="li"><div class="main"><div class="t">node1 ↔ node4</div></div><span class="end num">28 ms <i data-i="right"></i></span></div><div class="li"><div class="main"><div class="t">node2 ↔ node4</div></div><span class="end num">31 ms <i data-i="right"></i></span></div><div class="li"><div class="main"><div class="t">node1 ↔ node5</div></div><span class="end num">162 ms <i data-i="right"></i></span></div></div></div>
+  <div class="gesture"></div>
+</div></figure>
+<figure><figcaption><b>高可用</b> · 选一个节点，看它故障时会怎样</figcaption>
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+<div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">高可用</div></div>
+  <div class="content"><div class="seg"><span>node1</span><span class="on">node2</span><span>node3</span><span>node4</span></div><div class="sm muted" style="margin:12px 0 0">node2 故障时，它上面的 6 个容器：</div><div class="group-h" style="margin-top:16px">自动顶替 <span class="muted" style="font-weight:400">· 2</span></div><div class="list"><div class="li"><span class="dot ok"></span><div class="main"><div class="t">orders / web</div></div><span class="end sm">→ node1</span></div><div class="li"><span class="dot ok"></span><div class="main"><div class="t">blog / ghost</div></div><span class="end sm">→ node4</span></div></div><div class="group-h">确认后顶替 <span class="muted" style="font-weight:400">· 1</span></div><div class="list"><div class="li"><span class="dot warn"></span><div class="main"><div class="t">orders / db</div></div><span class="end sm">→ node1</span></div></div><div class="group-h">可从备份恢复 <span class="muted" style="font-weight:400">· 1</span></div><div class="list"><div class="li"><span class="dot warn"></span><div class="main"><div class="t">blog / mysql</div></div><span class="end sm">node4 · 1 小时前</span></div></div><div class="group-h" style="color:var(--destructive)">数据无法恢复 <span style="font-weight:400">· 1</span></div><div class="list"><div class="li"><span class="dot err"></span><div class="main"><div class="t">tools / redis</div></div><span class="end sm">没有副本</span></div></div></div>
+  <div class="gesture"></div>
+</div></figure>
+<figure><figcaption><b>日志</b> · 按级别筛选</figcaption>
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+<div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">api <span class="mono sm muted" style="font-weight:400">orders-api</span></div><span class="icon-btn"><i data-i="more"></i></span></div>
+  <div class="content"><div class="tabs"><span>概览</span><span class="on">日志</span><span>终端</span><span>配置</span></div><div style="display:flex;gap:8px;margin:12px 0"><div class="seg" style="flex:1"><span>全部</span><span>警告</span><span class="on">错误</span></div><span class="btn" style="width:40px;padding:0"><i data-i="search"></i></span></div><div class="logbox mono" style="height:auto"><div class="sm muted" style="font-family:MiSans,sans-serif;margin-bottom:8px;color:var(--muted-fg-strong)">只看错误 · 4 条，共 1,284 条</div><div><span class="ts">09:40:11</span> <span class="e">ERROR dial tcp db:5432:</span></div><div><span class="ts">09:40:11</span> <span class="e">  connection refused</span></div><div><span class="ts">09:40:16</span> <span class="e">ERROR dial tcp db:5432:</span></div><div><span class="ts">09:40:16</span> <span class="e">  connection refused</span></div><div><span class="ts">09:52:03</span> <span class="e">ERROR payment timeout 30s</span></div><div><span class="ts">10:14:47</span> <span class="e">ERROR upstream 502</span></div></div><div class="sm muted" style="margin-top:16px">选「全部」时，工具栏多一个「下一个错误」，跳到下一条错误并高亮。</div></div>
+  <div class="gesture"></div>
+</div></figure>
+<figure><figcaption><b>告警历史</b> · 按天分组，日期吸顶</figcaption>
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+<div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">告警历史</div></div>
+  <div class="content"><div class="seg" style="margin-bottom:8px"><span class="on">全部</span><span>未恢复</span><span>严重</span></div><div class="day stuck">今天</div><div class="list"><div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">节点 node3 失联</div><div class="s">node3 · 4 分钟前</div></div></div><div class="li two dot-top"><span class="dot ok"></span><div class="main"><div class="t">已恢复：磁盘使用 91%</div><div class="s">node2 · 10:02</div></div></div><div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">orders / web 健康检查失败</div><div class="s">node1 · 09:28</div></div></div></div><div class="day">昨天</div><div class="list"><div class="li two dot-top"><span class="dot ok"></span><div class="main"><div class="t">已恢复：证书 7 天内过期</div><div class="s">shop.example.com · 22:41</div></div></div><div class="li two dot-top"><span class="dot warn"></span><div class="main"><div class="t">5xx 错误率 7.2%</div><div class="s">orders / api · 14:05</div></div></div></div><div class="day">11 月 16 日</div></div>
+  <div class="gesture"></div>
+</div></figure>
+<figure><figcaption><b>长按容器</b> · 快捷操作</figcaption>
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+<div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">orders</div><span class="icon-btn"><i data-i="more"></i></span></div>
+  <div class="content"><div class="sm muted st"><span class="dot err"></span>1 个异常 · <span class="mono">orders-net</span></div><div class="h-section"><h2>容器</h2></div><div class="list"><div class="li two dot-top"><span class="dot err"></span><div class="main"><div class="t">api <span class="sm" style="color:var(--destructive)">异常</span></div><div class="s">健康检查失败</div></div><span class="end sm">node1</span></div><div class="li two dot-top" style="background:var(--muted)"><span class="dot ok"></span><div class="main"><div class="t">web</div><div class="s num">CPU 12% · 210 MB</div></div><span class="end sm">node1</span></div></div></div><div class="scrim"></div><div class="sheet"><div class="handle"></div><h3 style="gap:6px">web <span class="mono sm muted" style="font-weight:400">orders-web</span></h3><div class="list"><div class="li"><i data-i="restart"></i><div class="main"><div class="t">重启</div></div></div><div class="li"><i data-i="logs"></i><div class="main"><div class="t">日志</div></div></div><div class="li"><i data-i="term"></i><div class="main"><div class="t">终端</div></div></div><div class="li"><i data-i="more"></i><div class="main"><div class="t">更多</div></div><span class="end"><i data-i="right"></i></span></div></div><div class="gesture" style="margin:4px -20px -20px"></div></div>
+  <div class="gesture"></div>
+</div></figure>
+<figure><figcaption><b>数值块展开</b> · 点开在下方展开图表</figcaption>
+<div class="phone">
+  <div class="status"><span>9:41</span><span class="r">▾ ▮</span></div>
+<div class="topbar sub"><span class="icon-btn"><i data-i="back"></i></span><div class="title">web <span class="mono sm muted" style="font-weight:400">orders-web</span></div><span class="icon-btn"><i data-i="more"></i></span></div>
+  <div class="content"><div class="sm muted st"><span class="dot ok"></span>运行中 · node1 · 已运行 3 天</div><div class="tabs" style="margin-top:16px"><span class="on">概览</span><span>日志</span><span>终端</span><span>配置</span></div><div style="height:16px"></div><div class="seg"><span>1 小时</span><span class="on">24 小时</span><span>7 天</span></div><div style="height:16px"></div><div class="stats" style="gap:12px 32px"><div class="stat sm" style="background:var(--muted);margin:-8px;padding:8px;border-radius:8px"><div class="k" style="color:var(--muted-fg-strong)">CPU</div><div class="v">12%</div></div><div class="stat sm"><div class="k">内存</div><div class="v">210<small>MB</small></div></div></div><div style="margin-top:20px"><div class="chart-legend"><span><i style="background:var(--muted-fg)"></i>CPU</span></div><svg viewBox="0 0 328 112" style="width:100%;height:112px;margin-top:8px" fill="none" stroke-width="1.5" stroke-linecap="round"><path d="M0 90 C20 86 30 70 50 74 S80 92 100 80 S140 40 160 52 S200 84 220 78 S270 60 290 66 S320 72 328 70" stroke="var(--muted-fg)"/><line x1="160" y1="0" x2="160" y2="112" stroke="var(--border)" stroke-dasharray="3 3"/></svg><div class="axis num"><span>昨天 12:00</span><span>18:00</span><span>00:00</span><span>06:00</span><span>现在</span></div><div style="position:relative;margin-top:-128px;margin-left:168px;width:110px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,.08)"><div class="muted">02:40</div><div class="num" style="display:flex;justify-content:space-between"><span>CPU</span><span>41%</span></div></div><div style="height:120px"></div></div><div class="sm muted">点数值块在下方展开完整图表，再点收起；按住图表看各时间点的数值。</div></div>
+  <div class="gesture"></div>
+</div></figure>
+  </div>
+</section>
+
+<script>
+// 图标：lucide 的路径，线宽 2。
+const P = {
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  down:'<path d="m6 9 6 6 6-6"/>', right:'<path d="m9 18 6-6-6-6"/>',
+  back:'<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  server:'<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/>',
+  gear:'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  pause:'<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>', x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  sort:'<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
+  lock:'<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  finger:'<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>',
+  restart:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  logs:'<path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>',
+  term:'<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+  bell:'<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  globe:'<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  tri:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  chl:'<path d="m15 18-6-6 6-6"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  up:'<circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/>',
+  wifioff:'<path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/>',
+  pulse:'<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  ellc:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r=".6"/><circle cx="16.5" cy="12" r=".6"/><circle cx="7.5" cy="12" r=".6"/>',
+  upload:'<path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+};
+// 深色那一张由浅色复制。
+const dark = document.getElementById('dark-phones');
+document.querySelectorAll('#main-phones > figure').forEach(f => { const c = f.cloneNode(true); c.querySelector('.phone').setAttribute('data-theme','dark'); dark.appendChild(c); });
+document.querySelectorAll('i[data-i]').forEach(el => {
+  const s = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  s.setAttribute('viewBox','0 0 24 24'); s.setAttribute('class','i'); s.innerHTML = P[el.dataset.i] || '';
+  if (el.getAttribute('style')) s.setAttribute('style', el.getAttribute('style'));
+  el.replaceWith(s);
+});
+// 占用圆环：16px，75% 起琥珀，90% 起红（ui.md 监控图表）。
+document.querySelectorAll('[data-ring]').forEach(el => {
+  const v = +el.dataset.ring, r = 6, c = 2*Math.PI*r;
+  const col = v >= 90 ? 'var(--destructive)' : v >= 75 ? 'var(--warning)' : 'var(--primary)';
+  el.outerHTML = `<svg class="ring" viewBox="0 0 16 16"><circle cx="8" cy="8" r="${r}" fill="none" stroke="var(--border)" stroke-width="2.5"/><circle cx="8" cy="8" r="${r}" fill="none" stroke="${col}" stroke-width="2.5" stroke-dasharray="${c*v/100} ${c}" transform="rotate(-90 8 8)" stroke-linecap="round"/></svg>`;
+});
+// 开关：Material 尺寸 52 × 32，颜色用 primary。
+document.querySelectorAll('[data-switch]').forEach(el => {
+  const on = el.dataset.switch === '1';
+  el.outerHTML = `<span style="width:52px;height:32px;border-radius:16px;flex:none;display:flex;align-items:center;padding:0 4px;justify-content:${on?'flex-end':'flex-start'};background:${on?'var(--primary)':'var(--muted)'};border:${on?'none':'2px solid var(--muted-fg)'}"><span style="width:${on?24:16}px;height:${on?24:16}px;border-radius:50%;background:${on?'var(--primary-fg)':'var(--muted-fg)'};margin:0 ${on?0:4}px"></span></span>`;
+});
+// 示意二维码（不是真的码）。
+(() => { const q = document.getElementById('qr'); let h = '<rect width="29" height="29" fill="#fff"/>'; let x = 7;
+  const fin = (a,b) => `<rect x="${a}" y="${b}" width="7" height="7" fill="#0a0a0a"/><rect x="${a+1}" y="${b+1}" width="5" height="5" fill="#fff"/><rect x="${a+2}" y="${b+2}" width="3" height="3" fill="#0a0a0a"/>`;
+  for (let i=0;i<29;i++) for (let j=0;j<29;j++) { x = (x*1103515245+12345) & 0x7fffffff; const inF = (i<8&&j<8)||(i<8&&j>20)||(i>20&&j<8); if (!inF && (x>>16)%2) h += `<rect x="${j}" y="${i}" width="1" height="1" fill="#0a0a0a"/>`; }
+  q.innerHTML = h + fin(0,0) + fin(22,0) + fin(0,22); })();
+// ?s=s3 只显示一张，便于截图。
+const only = new URLSearchParams(location.search).get('s');
+if (only) document.querySelectorAll('section.frame').forEach(s => { if (s.id !== only) s.remove(); });
+</script>
+</body>
+</html>

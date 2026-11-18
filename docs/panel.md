@@ -113,6 +113,8 @@
 
 会话 cookie 是 `__Host-nagi_session`（`HttpOnly`、`Secure`、`SameSite=Strict`），安全入口的 cookie 是 `__Host-nagi_entrance`：浏览器保证带这个前缀的 cookie 只能由面板自己的域名、通过 HTTPS 设置，同一主域名下兄弟子域名上的网站覆盖不了。v0.29.0 以前的会话 cookie `nagi_session` 从 v0.29.1 起不再接受（收到时只让浏览器删掉）：它没有前缀，同一主域名下的其他子域名可以给它种一个自己的会话，受害者打开面板就进了别人的账号（登录 CSRF）；只有这个旧 cookie 的人要重新登录一次。安全入口的旧 cookie `nagi_entrance` 仍然接受、收到时换发新名字：它的值由入口路径算出，别的网站种不了，忘了入口路径的人也不会因此被挡在外面。数据库里只存令牌的哈希。
 
+本节讲网页的会话。安卓 App 不用 cookie，用硬件密钥换取短期令牌，见 [android.md](android.md)。
+
 每个会话有一个固定的 ID（`sessions.id`），令牌只用来找到会话。终端和日志流每 30 秒按会话 ID 重查，审计记录的 `session` 字段是会话 ID 的哈希前 12 位。
 
 **处置分两级**：信号明确时直接退出会话；信号可能来自正常使用时，要求重新验证。要求重新验证时，这个会话的所有请求返回 `unauthenticated`，响应头 `Nagi-Reverify` 写原因、`Nagi-Reverify-Method` 写验证方式，界面弹出「验证身份」（开了两步验证的输验证码，没开的输密码，`AuthService.Reverify`）。验证成功后会话继续；失败计入账号的失败次数，连续 3 次失败退出这个会话。
