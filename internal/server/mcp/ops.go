@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -459,6 +460,9 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 	cfg := proto.Clone(base).(*nagiv1.ContainerConfig)
 	var changed, warnings []string
 	opts := adviceOpts{deployed: m.GetDeployedVersion() > 0}
+	// compose 的提醒在保存成功以后再查，新旧 compose 各最多解析一遍（advise）。
+	var oldCompose string
+	composeChanged := false
 	if f := cfg.GetForm(); f != nil {
 		if in.Compose != "" {
 			return nil, errors.New("this is an image-form container: change image, command, ports or env instead of compose")
@@ -496,11 +500,10 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 			return nil, errors.New("this is a container group: change its compose file instead")
 		}
 		if in.Compose != "" && in.Compose != cfg.GetCompose() {
-			opts.oldPorts, opts.imported = composePorts(cfg.GetCompose()), cfg.GetProjectDir() != ""
+			oldCompose, composeChanged = cfg.GetCompose(), true
+			opts.imported = cfg.GetProjectDir() != ""
 			cfg.Compose = in.Compose
 			changed = append(changed, "compose")
-			// 只检查这次写入的 compose：只改变量时不重复提醒原有的写法。
-			warnings = append(warnings, composeWarnings(cfg.GetCompose(), opts)...)
 		}
 		var envChanged []string
 		cfg.Env, envChanged = patchEnv(cfg.GetEnv(), in.Env, in.EnvUnset)
@@ -544,6 +547,18 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 	})); err != nil {
 		return nil, err
 	}
+	// 只检查这次写入的 compose：只改变量时不重复提醒原有的写法。部署过的容器才比较改没改端口，才要读旧的 compose。
+	checkStateful := in.Stateful != "" || in.Volumes != nil || in.Preserve != nil || composeChanged
+	var advice *spec.ComposeAdvice
+	if cfg.GetForm() == nil && (composeChanged || checkStateful && cfg.GetStateful() == nagiv1.Stateful_STATEFUL_NO) {
+		advice = advise(cfg.GetCompose())
+	}
+	if composeChanged {
+		if opts.deployed {
+			opts.oldPorts = composePorts(advise(oldCompose))
+		}
+		warnings = append(warnings, composeWarnings(advice, opts)...)
+	}
 	// 地址只查这次设置的值；镜像标签和有无状态在相关的项改了时查。
 	values := envLabels("env: ", in.Env)
 	for _, svc := range slices.Sorted(maps.Keys(in.ServiceEnv)) {
@@ -555,8 +570,8 @@ func toolUpdateContainer(c *call, in UpdateContainerArgs) (any, error) {
 			warnings = append(warnings, w)
 		}
 	}
-	if in.Stateful != "" || in.Volumes != nil || in.Preserve != nil || slices.Contains(changed, "compose") {
-		if w := statefulWarning(cfg); w != "" {
+	if checkStateful {
+		if w := statefulWarning(cfg, advice); w != "" {
 			warnings = append(warnings, w)
 		}
 	}

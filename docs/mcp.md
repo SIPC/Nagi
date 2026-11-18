@@ -356,7 +356,7 @@ agent 常见的乱部署：单个服务也写 compose，密码这类值写死在
 
   两份都写在 `internal/server/mcp/resources.go` 里随程序编进去，改了这些文档里相应的规则时要跟着改。
 - **工具说明**：`add_container`、`update_container`、`deploy`、`save_route`、`connect_project`、`write_file`、`import_compose_dir`、`node_exec`、`write_node_file`、`set_snapshot_schedule` 的说明和相关参数（`image`、`compose`、`env`、`env_secret`、`volumes`、`ports`、`stateful`、`workdir`、`internal_ports`）用一两句话重复关键规则。
-- **结果里的提醒**（`internal/server/mcp/advice.go`，compose 用 `spec.AdviseCompose` 读，和权限检查一样经 compose-go 的 `composeModel`，不做变量替换）：照常保存，只在结果里加 `warnings`（英文，每条说明问题和怎么改，只列变量名、不列值）。管理员可以合法地这样写，所以不拒绝，措辞留余地。
+- **结果里的提醒**（`internal/server/mcp/advice.go`，compose 用 `spec.AdviseCompose` 读，和权限检查一样经 compose-go 的 `composeModel`，不做变量替换；端口展开后超过上限的不读，见 [agent.md](agent.md#compose-的限制)。一次调用里同一份 compose 只读一遍，各项提醒共用结果；`update_container` 在草稿保存成功后才读，旧的 compose 只在容器部署过、要比较端口时读）：照常保存，只在结果里加 `warnings`（英文，每条说明问题和怎么改，只列变量名、不列值）。管理员可以合法地这样写，所以不拒绝，措辞留余地。
 
   | 提醒 | 触发条件 | 工具 |
   | --- | --- | --- |

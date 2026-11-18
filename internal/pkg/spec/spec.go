@@ -251,6 +251,9 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 		}
 	}
 	proj, err := LoadCompose(ctx, text, MergeEnv(shared, cfg.GetEnv()), dataDir, composeProject)
+	if errors.Is(err, ErrInvalid) {
+		return nil, err // 端口过多（CheckComposePorts），原样报出
+	}
 	if err != nil {
 		return nil, Invalid("compose 无法解析：%v", err)
 	}
@@ -373,10 +376,14 @@ func CheckEnv(vars []*nagiv1.EnvVar) error {
 }
 
 // LoadCompose 用 compose 官方的解析库在内存中解析 compose，不需要写文件。
+// 先用 CheckComposePorts 限制端口数（替换变量以后），超过时返回参数错误，不交给解析库。
 func LoadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, dataDir, composeProject string) (*types.Project, error) {
 	mapping := types.Mapping{}
 	for _, v := range env {
 		mapping[v.GetKey()] = v.GetValue()
+	}
+	if err := CheckComposePorts(text, mapping); err != nil {
+		return nil, err
 	}
 	return loader.LoadWithContext(ctx, types.ConfigDetails{
 		WorkingDir:  dataDir,

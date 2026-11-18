@@ -131,7 +131,11 @@ func checkDoc(doc map[string]any, add func(bool, string, ...any)) {
 
 // composeModel 用 compose 的解析库（和节点上部署时同一套规则）把 compose 读成 map：合并多个文档、展开锚点和合并键、
 // 按 !reset / !override 处理。不做变量替换、不补默认值、不解析相对路径，保持和原文一样的写法，交给 checkDoc。
+// 5 秒的超时只管加载，管不住解析库展开端口范围，所以先用 CheckComposePorts 限制端口数。
 func composeModel(text string) (map[string]any, error) {
+	if err := CheckComposePorts(text, nil); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return loader.LoadModelWithContext(ctx, types.ConfigDetails{

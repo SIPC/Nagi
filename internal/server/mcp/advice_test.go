@@ -3,11 +3,13 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -79,7 +81,7 @@ func TestComposeWarnings(t *testing.T) {
 		{name: "指南的正确例子", compose: "services:\n  app:\n    image: ghcr.io/umami-software/umami:postgresql-v2.18\n    environment:\n      DATABASE_URL: postgresql://umami:${DB_PASSWORD}@db:5432/umami\n      APP_SECRET: ${APP_SECRET}\n    depends_on: [db]\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_DB: umami\n      POSTGRES_USER: umami\n      POSTGRES_PASSWORD: ${DB_PASSWORD}\n    volumes:\n      - db-data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U $${POSTGRES_USER}\"]\nvolumes:\n  db-data:\n"},
 	}
 	for _, c := range cases {
-		got := composeWarnings(c.compose, c.opts)
+		got := composeWarnings(advise(c.compose), c.opts)
 		for _, w := range c.want {
 			if !hasWarning(got, w) {
 				t.Errorf("%s：应该提醒 %q，得到 %q", c.name, w, got)
@@ -386,6 +388,35 @@ func TestUpdateContainerWarnings(t *testing.T) {
 	}
 	if w := warningsOf(t, out); !hasWarning(w, "env: DB contain private IP") {
 		t.Errorf("变量值里的局域网地址应该提醒：%q", w)
+	}
+}
+
+// 端口展开后超过上限的 compose（审查报告 2026-11-18-dddb82a#1）：提醒检查很快放弃，不展开端口。
+// 库里已经存着这样的 compose 时，改成正常的 compose 也照常提醒。
+func TestComposeWarningsPortBomb(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("services:\n  web:\n    image: nginx\n    ports:\n")
+	for i := 1; i <= 20; i++ {
+		fmt.Fprintf(&b, "      - \"10.0.0.%d:1-65535:1-65535\"\n", i)
+	}
+	bomb := b.String()
+	group := &nagiv1.Container{Name: "app", Revision: 2, DeployedVersion: 1, Config: &nagiv1.ContainerConfig{Compose: bomb}}
+	c, _ := deployTestCall(t, &nagiv1.Project{Id: "p1", Name: "shop", NetworkName: "shop", Containers: []*nagiv1.Container{group}})
+	start := time.Now()
+	if _, err := toolAddContainer(c, AddContainerArgs{ProjectArg: ProjectArg{Project: "shop"}, Name: "web", Compose: bomb, configArgs: configArgs{Stateful: "no"}}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := toolUpdateContainer(c, UpdateContainerArgs{ContainerArg: ContainerArg{Project: "shop", Container: "app"},
+		Compose: "services:\n  web:\n    image: web:1\n    environment:\n      API_TOKEN: abc\n  db:\n    image: postgres:16\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := warningsOf(t, out); !hasWarning(w, "web: API_TOKEN") {
+		t.Errorf("新的 compose 照常提醒：%q", w)
+	}
+	// 阈值放得很宽：不检查前每次解析要十几秒。
+	if d := time.Since(start); d > 5*time.Second {
+		t.Errorf("用了 %v，应该很快放弃", d)
 	}
 }
 
