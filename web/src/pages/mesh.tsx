@@ -6,7 +6,7 @@ import { errorMessage, nodeClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import { fmtBytes, fmtMs, fmtRate } from "@/components/metrics";
-import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
@@ -358,6 +358,11 @@ export function NodeMesh({ nodeId }: { nodeId: string }) {
   return <MeshSection q={q} nodeId={nodeId} title={t.mesh.title} />;
 }
 
+// meshOptions：接口每次提交全部设置，这里取出当前的（MeshStatus 或 MeshOptions）。
+function meshOptions(s: { quicOff: boolean; relayOff: boolean; directDownloadOff: boolean; directHttpPort: number }) {
+  return { quicOff: s.quicOff, relayOff: s.relayOff, directDownloadOff: s.directDownloadOff, directHttpPort: s.directHttpPort };
+}
+
 // MeshOption：节点设置里的一项组网开关（保存在节点上）。一行设置：状态加一个按钮。
 // 接口每次提交全部开关，其他几项照原样带上。onStatus 是开着时的状态说明（不给时写「已开启」）。
 function MeshOption({
@@ -390,9 +395,9 @@ function MeshOption({
     try {
       const r = await nodeClient.setNodeMeshOptions({
         nodeId,
-        options: { quicOff: q.data.quicOff, relayOff: q.data.relayOff, directDownloadOff: q.data.directDownloadOff, [field]: !off },
+        options: { ...meshOptions(q.data), [field]: !off },
       });
-      queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, quicOff: r.quicOff, relayOff: r.relayOff, directDownloadOff: r.directDownloadOff });
+      queryClient.setQueryData(["node-mesh", nodeId], (s: MeshStatus | undefined) => s && { ...s, ...meshOptions(r) });
       queryClient.invalidateQueries({ queryKey: ["node-mesh", nodeId] });
       queryClient.invalidateQueries({ queryKey: ["nodes"] });
     } catch (err) {
@@ -461,6 +466,108 @@ export function NodeDirectDownload({ node }: { node: Node }) {
     );
   else if (!d.address) status = m.noAddress;
   return <MeshOption nodeId={node.id} online={node.online} field="directDownloadOff" title={m.title} help={m.help} confirm={m.confirm} onStatus={status} />;
+}
+
+// NodeDirectHTTP：加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。默认关闭；开启时选端口（默认 80）。
+// 状态写现在能不能用、不能用的原因。旧版本的节点不支持，只写升级后可用。
+export function NodeDirectHTTP({ node }: { node: Node }) {
+  const m = t.mesh.directHttp;
+  const { isAdmin } = useRole();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const d = node.info?.directDownload;
+  const supported = !!d?.httpSupported;
+  const q = useQuery({ queryKey: ["node-mesh", node.id], queryFn: () => nodeClient.getNodeMesh({ nodeId: node.id }), enabled: node.online && supported });
+  const port = q.data?.directHttpPort ?? d?.httpPort ?? 0;
+  const save = async (next: number) => {
+    if (!q.data) return;
+    setBusy(true);
+    try {
+      const r = await nodeClient.setNodeMeshOptions({ nodeId: node.id, options: { ...meshOptions(q.data), directHttpPort: next } });
+      queryClient.setQueryData(["node-mesh", node.id], (s: MeshStatus | undefined) => s && { ...s, ...meshOptions(r) });
+      queryClient.invalidateQueries({ queryKey: ["node-mesh", node.id] });
+      queryClient.invalidateQueries({ queryKey: ["nodes"] });
+      return true;
+    } catch (err) {
+      await notify(errorMessage(err));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  let status: React.ReactNode = t.mesh.quicOff;
+  if (!supported) status = m.unsupported;
+  else if (port > 0) {
+    if (d?.httpReady && d.httpPort === port) status = m.ready(port);
+    else if (d?.httpError)
+      status = (
+        <span className="text-warning" title={d.httpError}>
+          {m.failed(d.httpError)}
+        </span>
+      );
+    else if (!d?.address) status = m.noAddress(port);
+    else status = m.on(port);
+  }
+  return (
+    <SettingRow label={m.title} help={m.help} description={status}>
+      {isAdmin && supported && q.data && (
+        <>
+          {port > 0 && (
+            <Button variant="outline" disabled={busy || !node.online} onClick={() => setEditing(true)}>
+              {t.common.actions.edit}
+            </Button>
+          )}
+          <Button variant="outline" disabled={busy || !node.online} onClick={() => (port > 0 ? void save(0) : setEditing(true))}>
+            {busy && <Spinner />}
+            {port > 0 ? t.mesh.optionDisable : t.mesh.quicEnable}
+          </Button>
+        </>
+      )}
+      <Dialog open={editing} onClose={() => setEditing(false)} title={m.dialogTitle} description={m.help}>
+        <DirectHTTPForm
+          port={port || 80}
+          action={port > 0 ? t.common.actions.save : t.mesh.quicEnable}
+          busy={busy}
+          onCancel={() => setEditing(false)}
+          onSave={async (p) => {
+            if (await save(p)) setEditing(false);
+          }}
+        />
+      </Dialog>
+    </SettingRow>
+  );
+}
+
+function DirectHTTPForm({ port, action, busy, onCancel, onSave }: { port: number; action: string; busy: boolean; onCancel: () => void; onSave: (port: number) => void }) {
+  const m = t.mesh.directHttp;
+  const [value, setValue] = useState(String(port));
+  const [checked, setChecked] = useState(false);
+  const n = Number(value);
+  const valid = /^\d+$/.test(value.trim()) && n >= 1 && n <= 65535 && n !== 443;
+  return (
+    <form
+      className="grid grid-cols-[minmax(0,1fr)] gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setChecked(true);
+        if (valid) onSave(n);
+      }}
+    >
+      <Field label={m.port} hint={m.portHelp} htmlFor="direct-http-port" error={checked && !valid ? m.portInvalid : undefined}>
+        <Input id="direct-http-port" inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} autoComplete="off" className="w-32" />
+      </Field>
+      <DialogActions>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={busy}>
+          {busy && <Spinner />}
+          {action}
+        </Button>
+      </DialogActions>
+    </form>
+  );
 }
 
 // PanelMeshCard：设置页上面板自己的 mesh 状态。

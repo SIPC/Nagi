@@ -247,6 +247,7 @@ function BrowseVolume({ project, container, volume, onClose }: { project: Projec
         onClose={onClose}
         unmount={mount && { disabled: v.busy, onSelect: () => v.remove(mount.target) }}
         fileOps={nodes.list.find((n) => n.id === container.nodeId)?.info?.fileOps ?? false}
+        direct={nodes.list.find((n) => n.id === container.nodeId)?.info?.directDownload}
       />
     </div>
   );

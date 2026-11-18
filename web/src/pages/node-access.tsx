@@ -2,6 +2,7 @@
 // 文件页和卷的文件管理共用 components/file-manager 的多选、剪贴板、改名、压缩解压、分块上传和目录大小。
 import { Code, ConnectError } from "@connectrpc/connect";
 import { directEndpoint, directLink, saveFrom } from "@/lib/direct-download";
+import { useDownloadLinks } from "@/components/download-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -213,12 +214,17 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     return new Error((await res.json().catch(() => null))?.message || t.common.errors.http(String(res.status)));
   };
   // 确认后交给浏览器下载，大文件可以断点续传；节点能直连时直接从节点下载（见 lib/direct-download.ts）。
+  const checkDownload = async (p: string) => {
+    const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
+    if (!res.ok) throw await failure(res);
+  };
   const download = (p: string) =>
     run(`download:${p}`, async () => {
-      const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
-      if (!res.ok) throw await failure(res);
+      await checkDownload(p);
       saveFrom((await directLink(directEndpoint(fileURL(p)))) ?? fileURL(p));
     });
+  // 复制下载链接、下载命令（节点支持时才有）。
+  const links = useDownloadLinks({ direct: node.info?.directDownload, url: (p) => fileURL(p), check: checkDownload, fail: failure, onError: setError });
 
   // withSensitive：动到敏感路径时先确认。看得出来的（当前目录或选中的项是敏感的）先问；看不出来的由节点拒绝，问过再重试。
   const confirmedRef = useRef(false);
@@ -375,7 +381,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     { label: m.goto, onSelect: () => setGoto(real) },
     ...(readonly ? [] : [{ label: m.newDir, onSelect: () => setCreating("dir" as const) }, { label: m.newFile, onSelect: () => setCreating("file" as const) }]),
     { label: m.openTerminal, onSelect: () => onTerminal(real) },
-    ...(real === "/" ? [] : [{ label: m.downloadDir, onSelect: () => download(real) }]),
+    ...(real === "/" ? [] : [{ label: m.downloadDir, onSelect: () => download(real) }, ...links.items(real)]),
   ];
   const selectedEntries = entries.filter((e) => sel.selected.has(e.name));
   const selected = selectedEntries.map((e) => e.name);
@@ -559,6 +565,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
                       title={e.name}
                       items={[
                         { label: m.download, onSelect: () => download(join(real, e.name)) },
+                        ...links.items(join(real, e.name)),
                         ...(!e.isDir && Number(e.size) <= maxEditBytes ? [{ label: locked ? m.view : t.common.actions.edit, disabled: working, onSelect: () => edit(e) }] : []),
                         ...(ops
                           ? [
@@ -587,6 +594,7 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
         </div>
       )}
       {q.data?.truncated && <Notice tone="warning" title={m.truncated} />}
+      {links.dialogs}
     </section>
   );
 }

@@ -67,4 +67,22 @@ export default {
     leave: "离开此页？正在进行的上传将暂停，回来后重新选择文件可接着上传。",
   },
   noLinks: "符号链接不复制、不打包",
+  // 复制直连下载的链接、加密 HTTP 下载的命令（见 docs/agent.md#直连下载）。
+  link: {
+    copyLink: "复制下载链接",
+    copyCommand: "复制下载命令",
+    copied: "已复制下载链接，5 分钟内有效",
+    linkTitle: "下载链接",
+    linkHelp: "5 分钟内有效，可用于 wget、下载工具或其他设备。",
+    unavailable: "节点暂时不能直连下载",
+    commandTitle: "下载命令",
+    loading: "正在生成命令",
+    encrypted: "经 HTTP 传输，内容已加密。命令含有密钥，请勿外传，运行后会留在 shell 历史中。",
+    tools: "需要 curl 和 OpenSSL。Windows 请在 WSL 或 Git Bash 中运行。",
+    resume: "5 分钟内有效，期间重复运行可续传。",
+    verified: "下载完成后自动校验 SHA-256。",
+    tooLarge: "文件超过 4 GiB，不校验内容。",
+    timeout: "计算校验值超时，不校验内容。",
+    archive: "目录打包的命令只能运行一次，不能续传，也不校验内容。",
+  },
 };

@@ -7,6 +7,7 @@ import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
+import { useDownloadLinks } from "@/components/download-links";
 import { ClipboardBar, DirSizeText, formatModified, useDirSizes, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
 import type { UploadTarget } from "@/lib/chunked-upload";
 import { Alert, Button, Collapse, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Select, Spinner, Textarea } from "@/components/ui";
@@ -14,7 +15,7 @@ import { MobileBar, mobileBarText } from "@/pages/layout";
 import { fmtBytes } from "@/components/metrics";
 import { useUnsaved } from "@/components/unsaved";
 import type { VolumeFileEntry } from "@/gen/nagi/v1/agent_pb";
-import type { Container, Project } from "@/gen/nagi/v1/common_pb";
+import type { Container, DirectDownload, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
 import { errorMessage, projectClient, toDate } from "@/lib/api";
 import { cn, eachLimit, formatClock, formatMonthDay, uploadConcurrency } from "@/lib/utils";
@@ -67,9 +68,11 @@ type Props = {
   unmount?: { onSelect: () => void; disabled?: boolean };
   // fileOps：容器所在的节点支持改名、复制、压缩解压、目录大小和断点续传（旧版本的节点不支持）。
   fileOps?: boolean;
+  // direct：容器所在节点的直连下载状态，决定菜单里有没有复制下载链接、下载命令。
+  direct?: DirectDownload;
 };
 
-export function VolumeFiles({ project, container, volume, label, onClose, unmount, fileOps = false }: Props) {
+export function VolumeFiles({ project, container, volume, label, onClose, unmount, fileOps = false, direct }: Props) {
   const m = t.projectData.files;
   const fm = t.fileManager;
   const queryClient = useQueryClient();
@@ -134,13 +137,18 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   };
   // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。确认后交给浏览器下载（大文件可以断点续传），
   // 节点能直连时直接从节点下载（见 lib/direct-download.ts）。
+  const checkDownload = async (p: string) => {
+    const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
+  };
   const download = (p: string) => {
     run(`download:${p}`, async () => {
-      const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
-      if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
+      await checkDownload(p);
       saveFrom((await directLink(directEndpoint(fileURL(p)))) ?? fileURL(p));
     });
   };
+  // 复制下载链接、下载命令（节点支持时才有）。
+  const links = useDownloadLinks({ direct, url: fileURL, check: checkDownload, onError: setError });
 
   // 操作前可选先做一份快照，改错了能找回来。
   const snapshotFirst = async () => {
@@ -325,6 +333,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
   const moreItems = [
     { label: m.newDir, onSelect: () => setCreating(true) },
     { label: m.downloadDir, onSelect: () => download(path) },
+    ...links.items(path),
     ...(unmount ? [{ label: t.projectData.volumes.remove, danger: true, disabled: unmount.disabled, onSelect: unmount.onSelect }] : []),
   ];
   const selected = names.filter((n) => sel.selected.has(n));
@@ -514,7 +523,8 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
                   { content: <span className="tabular-nums">{formatModified(toDate(e.modified))}</span> },
                 ]}
                 // 快照里一行两个按钮（下载、恢复），英文要 140 左右，操作列放宽；同一列表的各行同宽。
-                actionsWidth={snapshot ? "w-40" : "w-28"}
+                // 能复制下载链接、命令时后面再加一个更多。
+                actionsWidth={snapshot ? (links.available ? "w-48" : "w-40") : "w-28"}
                 actions={
                   snapshot ? (
                     e.isSymlink ? null : (
@@ -525,13 +535,14 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
                         <Button variant="ghost" size="row" disabled={!!busy} onClick={() => restore(e.name)}>
                           {m.restore}
                         </Button>
+                        {links.available && <RowMenu title={e.name} items={links.items(join(e.name))} />}
                       </>
                     )
                   ) : (
                     <RowMenu
                       title={e.name}
                       items={[
-                        ...(e.isSymlink ? [] : [{ label: m.download, onSelect: () => download(join(e.name)) }]),
+                        ...(e.isSymlink ? [] : [{ label: m.download, onSelect: () => download(join(e.name)) }, ...links.items(join(e.name))]),
                         ...(!e.isDir && !e.isSymlink && Number(e.size) <= maxEditBytes ? [{ label: t.common.actions.edit, disabled: working, onSelect: () => edit(e) }] : []),
                         ...(ops
                           ? [
@@ -560,6 +571,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
         </div>
       )}
       {files.data?.truncated && <Notice tone="warning" title={m.truncated} />}
+      {links.dialogs}
     </section>
   );
 }
