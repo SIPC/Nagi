@@ -478,6 +478,87 @@ func TestAttestationParse(t *testing.T) {
 	}
 }
 
+// 链延长：用一把「真」的叶子密钥 K1（没有任何条件）给伪造的叶子（软件密钥 K2，证明扩展自己填）签名，
+// 得到 [伪造, 真叶子, 根]。真叶子不是 CA，要拒绝；证明扩展出现在第二张、链太长、证书太大也拒绝。
+func TestAttestationChainExtension(t *testing.T) {
+	k1, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	k2, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	real := fakeChain(t, k1, attestation.Software, []byte("other app"), nil, nil)
+	k1Cert, _ := x509.ParseCertificate(real[0])
+
+	// 伪造的证明扩展：StrongBox、挑战、包名、userAuthType=3、bootloader 已锁定。
+	null := asn1.RawValue{Tag: asn1.TagNull}
+	rot := struct {
+		Key    []byte
+		Locked bool
+		State  asn1.Enumerated
+		Hash   []byte
+	}{[]byte{1}, true, 0, []byte{2}}
+	hw := []asn1.RawValue{tagged(t, 504, 3), tagged(t, 704, rot)}
+	sw := []asn1.RawValue{tagged(t, 509, null), tagged(t, 709, appID(t, AppPackage))}
+	forgedExt, _ := x509.ParseCertificate(fakeChain(t, k2, attestation.StrongBox, []byte("challenge"), sw, hw)[0])
+	var ext []pkix.Extension
+	for _, e := range forgedExt.Extensions {
+		if e.Id.Equal(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 1, 17}) {
+			ext = append(ext, e)
+		}
+	}
+	tmpl := &x509.Certificate{SerialNumber: big.NewInt(3), Subject: pkix.Name{CommonName: "Android Keystore Key"},
+		NotBefore: time.Unix(0, 0), NotAfter: time.Now().Add(time.Hour), ExtraExtensions: ext}
+	forged, err := x509.CreateCertificate(rand.Reader, tmpl, k1Cert, &k2.PublicKey, k1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := attestation.Parse([][]byte{forged, real[0], real[1]}, time.Now()); err == nil || !strings.Contains(err.Error(), "CA") {
+		t.Fatalf("链延长（叶子密钥给伪造的叶子签名）应该因为签发证书不是 CA 被拒绝：%v", err)
+	}
+
+	// 即使签发证书是 CA，证明扩展也只能在第一张。
+	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	selfRootKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	rootTmpl := &x509.Certificate{SerialNumber: big.NewInt(10), Subject: pkix.Name{CommonName: "root"}, NotBefore: time.Now().Add(-time.Hour),
+		NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	rootDER, _ := x509.CreateCertificate(rand.Reader, rootTmpl, rootTmpl, &selfRootKey.PublicKey, selfRootKey)
+	rootParsed, _ := x509.ParseCertificate(rootDER)
+	interTmpl := &x509.Certificate{SerialNumber: big.NewInt(11), Subject: pkix.Name{CommonName: "inter"}, NotBefore: time.Now().Add(-time.Hour),
+		NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign, ExtraExtensions: ext}
+	interDER, err := x509.CreateCertificate(rand.Reader, interTmpl, rootParsed, &caKey.PublicKey, selfRootKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	interParsed, _ := x509.ParseCertificate(interDER)
+	leafTmpl := &x509.Certificate{SerialNumber: big.NewInt(12), Subject: pkix.Name{CommonName: "Android Keystore Key"},
+		NotBefore: time.Unix(0, 0), NotAfter: time.Now().Add(time.Hour), ExtraExtensions: ext}
+	leafDER, err := x509.CreateCertificate(rand.Reader, leafTmpl, interParsed, &k2.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := attestation.Parse([][]byte{leafDER, interDER, rootDER}, time.Now()); err == nil {
+		t.Error("证明扩展出现在中间证书里应该拒绝")
+	}
+	// 对照：中间证书不带证明扩展时这条链是好的。
+	interTmpl.ExtraExtensions = nil
+	interDER, _ = x509.CreateCertificate(rand.Reader, interTmpl, rootParsed, &caKey.PublicKey, selfRootKey)
+	interParsed, _ = x509.ParseCertificate(interDER)
+	leafDER, _ = x509.CreateCertificate(rand.Reader, leafTmpl, interParsed, &k2.PublicKey, caKey)
+	if _, err := attestation.Parse([][]byte{leafDER, interDER, rootDER}, time.Now()); err != nil {
+		t.Errorf("叶子、中间证书、根的正常链应该通过：%v", err)
+	}
+
+	// 链太长、证书太大。
+	long := make([][]byte, attestation.MaxChain+1)
+	for i := range long {
+		long[i] = real[1]
+	}
+	if _, err := attestation.Parse(long, time.Now()); err == nil {
+		t.Error("太长的链应该拒绝")
+	}
+	huge := append(append([]byte{}, real[0]...), make([]byte, attestation.MaxCertBytes)...)
+	if _, err := attestation.Parse([][]byte{huge, real[1]}, time.Now()); err == nil {
+		t.Error("太大的证书应该拒绝")
+	}
+}
+
 // 模拟器、自己签的证明（软件级别、根证书不是 Google 的）：正式模式拒绝，开发模式接受。
 func TestAppAttestationRejectsEmulator(t *testing.T) {
 	h := newSessionHarness(t)

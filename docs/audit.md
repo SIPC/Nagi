@@ -149,7 +149,7 @@
 - **存储**：`<数据目录>/audit/audit.jsonl`，JSON Lines，每行一条：`seq`（递增的序号）、`time`、`panel`（发起的面板指纹，控制连接确认过的）、`actor`（面板说的成员和令牌）、`ip`（成员的来源地址，面板说的）、`action`、`target`、`detail`、`result`（`ok`、`failed`、`denied`）、`error`。单个字段最长 2000 字节。满 10 MB 改名为 `audit.<最后的序号>.jsonl`，连当前文件保留 10 个。
 - **记录范围**：
   - 节点终端的打开和关闭（`node_shell_open`、`node_shell_close`，带时长），`node_exec` 的命令、工作目录和退出码。成员和来源地址由面板随请求带来（`NodeShellStart.actor`、`ip`，`NodeExecRequest.actor`、`ip`）。
-  - 面板下发的修改类指令：控制连接上 AgentService 的方法，除了名字以 Get、List、Query、Read、Check、Stream 开头的查询和心跳类的（`MeshPing`、`MeshSpeedTest`）。部署、删除、升级、信任列表、告警配置、节点文件、代理计划、外送配置都在里面；对象从请求里的项目、容器、路径等字段取（`agent/audit.go` 的拦截器）。被拒绝的（不是主面板、节点访问关着）也记，`result` 是 `denied`。
+  - 面板下发的修改类指令：控制连接上 AgentService 的方法，除了名字以 Get、List、Query、Read、Check、Stream 开头的查询、心跳类的（`MeshPing`、`MeshSpeedTest`）和轮询类的（升级期间面板每秒问一次的 `UpgradeProgress`）。部署、删除、升级、信任列表、告警配置、节点文件、代理计划、外送配置都在里面；对象从请求里的项目、容器、路径等字段取（`agent/audit.go` 的拦截器）。被拒绝的（不是主面板、节点访问关着）也记，`result` 是 `denied`。
   - 被本节点拒绝的越权请求（见 [mesh.md](mesh.md#越权识别)），`actor` 是 `mesh:<调用方公钥>`。和上报一样每 10 分钟最多 200 条。
   - 浏览器直接从节点下载文件（`direct_download`，见 [agent.md](agent.md#直连下载)）：`panel` 是签发链接的面板，`actor` 是链接里写的签发成员，`ip` 是下载的来源地址，`target` 是 `项目/容器/卷:路径` 或节点上的路径，`detail` 写种类、链接编号（`link=`，和面板活动记录参数里的 `direct_link` 一样）、`Range`、快照。整个文件的下载每次都记，同一个链接同一个地址的分段请求 10 分钟内只记第一次；过期链接和节点访问关着时被拒绝的也记（`denied`），签名对不上的和探测不记。每 10 分钟最多 500 条，超出的只计数，写进下一条的 `dropped=`。[加密 HTTP 下载](agent.md#加密-http-下载)记在同一个 `direct_download` 里，`detail` 多一个 `transport=http`；目录打包的链接第二次使用时记 `denied`（「下载链接已使用」）。内容密钥不记。
 - **外送**：由面板代发，节点不持有外送凭据。面板对「设置 → 安全 → 日志外送」的每个目标，按游标用 `AgentService.ReadAuditLog` 读走每个节点的新记录（每 5 秒一次，S3 同面板每小时一次；每次最多 500 条、2 MB），发到同一个目标。

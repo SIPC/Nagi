@@ -480,6 +480,7 @@ func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 	}
 	s.Projects.ForgetEntryNode(ctx, id)
 	s.Nodes.Disconnect(id)
+	s.Nodes.Forget(id) // 还没恢复的告警不再出现在「需要处理」里
 	s.Log.Info("节点已移除", "node", id)
 	return nil
 }

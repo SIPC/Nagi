@@ -478,12 +478,8 @@ func (i *interceptor) check(ctx context.Context, procedure, addr string, h http.
 	// 安卓 App：不带 cookie，带 Authorization: Bearer nagi_app_…（见 docs/android.md#换取令牌）。
 	if app := AppBearer(h); token == "" && app != "" {
 		u, err := i.s.AppTokenUser(ctx, app, m.IP)
-		if rt := new(ErrAppRetoken); errors.As(err, &rt) {
-			e := connect.NewError(connect.CodeUnauthenticated, err)
-			e.Meta().Set(RetokenHeader, rt.Reason)
-			return nil, checked{}, e
-		} else if err != nil {
-			return nil, checked{}, connect.NewError(connect.CodeUnauthenticated, err)
+		if err != nil {
+			return nil, checked{}, appAuthError(err)
 		}
 		return context.WithValue(ctx, userKey{}, u), checked{}, nil
 	}

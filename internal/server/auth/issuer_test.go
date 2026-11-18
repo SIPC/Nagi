@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -72,6 +73,36 @@ func TestEntranceHidesPanel(t *testing.T) {
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://panel.example.com"+path, nil))
 		if got := w.Code != http.StatusNotFound; got != open {
 			t.Errorf("%s：状态 %d，应该%s", path, w.Code, map[bool]string{true: "放行", false: "返回 404"}[open])
+		}
+	}
+
+	// L2：App 的接口只放行拿到令牌之前的四个，只认 POST 加 application/proto（App 发的格式）；其余和别处一样 404。
+	for _, c := range []struct {
+		method, path, contentType string
+		open                      bool
+	}{
+		{http.MethodPost, "/nagi.v1.AppService/GetPairing", "application/proto", true},
+		{http.MethodPost, "/nagi.v1.AppService/Pair", "application/proto", true},
+		{http.MethodPost, "/nagi.v1.AppService/Challenge", "application/proto", true},
+		{http.MethodPost, "/nagi.v1.AppService/Token", "application/proto", true},
+		{http.MethodPost, "/nagi.v1.AppService/Token", "application/proto; charset=utf-8", true},
+		{http.MethodGet, "/nagi.v1.AppService/Challenge", "", false},
+		{http.MethodPost, "/nagi.v1.AppService/Challenge", "application/json", false},
+		{http.MethodPost, "/nagi.v1.AppService/Challenge", "application/connect+proto", false},
+		{http.MethodPost, "/nagi.v1.AppService/Challenge", "", false},
+		{http.MethodPost, "/nagi.v1.AppService/Info", "application/proto", false},
+		{http.MethodPost, "/nagi.v1.AppService/Logout", "application/proto", false},
+		{http.MethodPost, "/nagi.v1.AppService/Nope", "application/proto", false},
+		{http.MethodPost, "/nagi.v1.ProjectService/WatchOverview", "application/connect+proto", false},
+	} {
+		r := httptest.NewRequest(c.method, "https://panel.example.com"+c.path, strings.NewReader(""))
+		if c.contentType != "" {
+			r.Header.Set("Content-Type", c.contentType)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if got := w.Code != http.StatusNotFound; got != c.open {
+			t.Errorf("%s %s（%s）：状态 %d，应该%s", c.method, c.path, c.contentType, w.Code, map[bool]string{true: "放行", false: "返回 404"}[c.open])
 		}
 	}
 }
