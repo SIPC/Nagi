@@ -19,7 +19,12 @@ import ink.sipc.nagi.proto.v1.TrafficHistory
 import ink.sipc.nagi.proto.v1.WatchOverviewRequest
 import ink.sipc.nagi.security.AppKeys
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.selects.onTimeout
@@ -51,9 +56,13 @@ enum class TrafficRange(val seconds: Long, val step: Long) {
 }
 
 /** 当前面板的连接：客户端、令牌和各页面的数据。 */
-class PanelSession(val panel: Panel, private val keys: AppKeys) {
+class PanelSession(val panel: Panel, private val keys: AppKeys, private val cache: SessionCache? = null) {
     val client = PanelClient(panel.address, panel.fingerprint)
-    val tokens = TokenManager(client, keys, panel.id, panel.deviceId, panel.address)
+    val tokens = TokenManager(
+        client, keys, panel.id, panel.deviceId, panel.address,
+        loadChallenge = { cache?.challenge(panel.id) },
+        saveChallenge = { c, at -> cache?.saveChallenge(panel.id, c, at) },
+    )
     private val reconnect = Channel<Unit>(Channel.CONFLATED)
 
     /** 确认密钥的 Signature，交给系统验证框。 */
@@ -74,7 +83,16 @@ class PanelSession(val panel: Panel, private val keys: AppKeys) {
         var last: Overview? = null
         var lastAt = 0L
         var attempt = 0
-        send(OverviewState.Loading)
+        var offline: Job? = null
+        // 先显示上次的数据（本机加密缓存），同时连接面板；连上以后由订阅流覆盖。连不上时按缓存的时间显示「连不上面板」。
+        val cached = withContext(Dispatchers.IO) { runCatching { cache?.overview(panel.id) }.getOrNull() }
+        if (cached != null) {
+            last = cached.first
+            lastAt = cached.second
+            send(OverviewState.Ready(cached.first, true, cached.second))
+        } else {
+            send(OverviewState.Loading)
+        }
         while (true) {
             var error: PanelException? = null
             try {
@@ -93,7 +111,11 @@ class PanelSession(val panel: Panel, private val keys: AppKeys) {
                         last = m
                         lastAt = System.currentTimeMillis()
                         attempt = 0
+                        offline?.cancel()
+                        offline = null
                         send(OverviewState.Ready(m, true, lastAt))
+                        val at = lastAt
+                        launch(Dispatchers.IO) { runCatching { cache?.saveOverview(panel.id, m, at) } }
                     }
                 } finally {
                     stream.receiveClose()
@@ -121,9 +143,19 @@ class PanelSession(val panel: Panel, private val keys: AppKeys) {
             val msg = error?.message ?: ""
             val unreachable = error == null || error.code == Code.UNAVAILABLE
             val l = last
-            send(if (l != null) OverviewState.Ready(l, false, lastAt, msg) else OverviewState.Failed(msg, unreachable))
-            val wait = BACKOFF_MS.getOrElse(attempt) { BACKOFF_MS.last() }
-            attempt++
+            if (l == null) {
+                send(OverviewState.Failed(msg, unreachable))
+            } else if (offline == null) {
+                // 有数据时先静默重连：网络切换、连接被回收这类短暂的断开很常见，重连一次就好。
+                // 断开超过 OFFLINE_GRACE_MS 还没连上，才显示「连不上面板」。
+                offline = launch {
+                    delay(OFFLINE_GRACE_MS)
+                    send(OverviewState.Ready(l, false, lastAt, msg))
+                }
+            }
+            // 面板正常关闭了流（error 为 null）：马上重连，不算一次失败。
+            val wait = if (error == null && attempt == 0) 0L else BACKOFF_MS.getOrElse(attempt) { BACKOFF_MS.last() }
+            if (error != null) attempt++
             select {
                 reconnect.onReceive { attempt = 0 }
                 onTimeout(wait) {}
@@ -149,6 +181,7 @@ class PanelSession(val panel: Panel, private val keys: AppKeys) {
 
     private companion object {
         const val STREAM_IDLE_MS = 150_000L
+        const val OFFLINE_GRACE_MS = 5_000L
         val BACKOFF_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
     }
 }

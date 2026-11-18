@@ -19,6 +19,9 @@ class TokenManager(
     /** 签名里写的主机：连接的 对外地址:端口。 */
     private val host: String,
     private val now: () -> Long = System::currentTimeMillis,
+    /** 记下的下一次换取用的挑战（App 重新打开时少一次往返）：读出和存入。 */
+    private val loadChallenge: () -> Pair<String, Long>? = { null },
+    private val saveChallenge: (String?, Long) -> Unit = { _, _ -> },
 ) {
     private val mutex = Mutex()
     private var token: String? = null
@@ -54,6 +57,7 @@ class TokenManager(
 
     /** 面板给的下一次用的挑战 15 分钟有效，留些余量。 */
     private suspend fun challengeLocked(): String {
+        if (challenge == null) loadChallenge()?.let { (c, at) -> challenge = c; challengeAt = at }
         val c = challenge
         if (c != null && now() - challengeAt < 13 * 60_000) return c
         return client.app.challenge(AppChallengeRequest.newBuilder().setDeviceId(deviceId).build()).orThrow().challenge
@@ -64,6 +68,7 @@ class TokenManager(
         while (true) {
             val ch = challengeLocked()
             challenge = null
+            saveChallenge(null, 0)
             val msg = "nagi-app-token\n$host\n$deviceId\n$ch".toByteArray()
             val req = AppTokenRequest.newBuilder().setDeviceId(deviceId).setChallenge(ch).setKey(kind.id).setHost(host)
                 .setSignature(com.google.protobuf.ByteString.copyFrom(sign(msg))).build()
@@ -74,6 +79,7 @@ class TokenManager(
                 expiresAt = now() + (res.expiresAt.seconds * 1000 - System.currentTimeMillis()).coerceIn(60_000, 10 * 60_000)
                 challenge = res.nextChallenge
                 challengeAt = now()
+                saveChallenge(res.nextChallenge, challengeAt)
                 if (res.unlockMinutes > 0) unlockMinutes = res.unlockMinutes
                 return res.token
             } catch (e: PanelException) {

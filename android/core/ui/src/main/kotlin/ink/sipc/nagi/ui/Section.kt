@@ -65,7 +65,7 @@ fun SectionDivider(modifier: Modifier = Modifier) {
 // StatusDot：状态点，默认 6。颜色变化过渡 300ms。
 @Composable
 fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = 6.dp) {
-    val animated by animateColorAsState(color, tween(300), label = "dot")
+    val animated by animatedDotColor(color)
     Box(modifier.size(size).clip(CircleShape).background(animated))
 }
 

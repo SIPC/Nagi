@@ -1,5 +1,14 @@
 package ink.sipc.nagi.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import ink.sipc.nagi.ui.Collapse
+import ink.sipc.nagi.ui.Motion
+import ink.sipc.nagi.ui.Roll
+import ink.sipc.nagi.ui.autoHeight
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -85,8 +94,10 @@ fun HomeContent(vm: HomeViewModel, actions: HomeActions, contentPadding: Padding
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         when (val s = state) {
-            OverviewState.Loading, OverviewState.Locked, OverviewState.Removed -> item { LoadingBody() }
-            is OverviewState.Failed -> item {
+            OverviewState.Loading, OverviewState.Locked, OverviewState.Removed -> item(key = "loading") {
+                LoadingBody(Modifier.animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = null))
+            }
+            is OverviewState.Failed -> item(key = "failed") {
                 if (s.unreachable) {
                     Unreachable(null, s.message, vm::refresh)
                 } else {
@@ -98,9 +109,17 @@ fun HomeContent(vm: HomeViewModel, actions: HomeActions, contentPadding: Padding
                 }
             }
             is OverviewState.Ready -> {
-                if (!s.live) item { Unreachable(s.updatedAt, s.error.orEmpty(), vm::refresh) }
-                item {
-                    Column(Modifier.padding(horizontal = Dimens.pageHorizontal)) {
+                // 一直占一个位置，出现和消失时高度和透明度一起过渡（Collapse），下面的内容跟着移动。
+                item(key = "unreachable") {
+                    Collapse(!s.live) { Unreachable(s.updatedAt, s.error.orEmpty(), vm::refresh) }
+                }
+                item(key = "content") {
+                    // 骨架换成内容：淡入 160ms。
+                    Column(
+                        Modifier
+                            .animateItem(fadeInSpec = tween(Motion.FADE_IN, easing = Motion.Enter), placementSpec = null, fadeOutSpec = null)
+                            .padding(horizontal = Dimens.pageHorizontal),
+                    ) {
                         Spacer(Modifier.height(Dimens.topBarToContent))
                         AttentionSection(s.overview, approving, actions) { item ->
                             vm.approve(item.nodeId, item.title) { approved }
@@ -127,8 +146,21 @@ private fun AttentionSection(o: Overview, approving: Set<String>, actions: HomeA
     val items = o.attention.itemsList
     var expanded by remember { mutableStateOf(false) }
     SectionHeader(stringResource(R.string.attention_title)) {
-        if (items.isNotEmpty()) Text(items.size.toString(), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+        if (items.isNotEmpty()) Roll(items.size.toString(), NagiTheme.type.secondary, NagiTheme.colors.mutedForeground)
     }
+    // 条目增减时过渡到新高度（AutoHeight），下面的内容跟着移动。
+    Column(Modifier.fillMaxWidth().autoHeight()) { AttentionBody(items, expanded, { expanded = true }, approving, actions, approve) }
+}
+
+@Composable
+private fun AttentionBody(
+    items: List<AttentionItem>,
+    expanded: Boolean,
+    expand: () -> Unit,
+    approving: Set<String>,
+    actions: HomeActions,
+    approve: (AttentionItem) -> Unit,
+) {
     if (items.isEmpty()) {
         Row(Modifier.heightIn(min = Dimens.attentionRow), verticalAlignment = Alignment.CenterVertically) {
             StatusDot(NagiTheme.colors.success)
@@ -141,7 +173,7 @@ private fun AttentionSection(o: Overview, approving: Set<String>, actions: HomeA
     shown.forEach { AttentionRow(it, it.nodeId in approving, actions, approve) }
     if (shown.size < items.size) {
         Row(
-            Modifier.fillMaxWidth().heightIn(min = Dimens.attentionRow).clickable { expanded = true },
+            Modifier.fillMaxWidth().heightIn(min = Dimens.attentionRow).clickable(onClick = expand),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Spacer(Modifier.width(18.dp))
@@ -240,15 +272,16 @@ private fun Number(label: String, value: String, suffix: String, modifier: Modif
     Column(modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)) {
         Text(label, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
         Spacer(Modifier.height(4.dp))
-        Text(
-            buildAnnotatedString {
-                append(value)
-                if (suffix.isNotEmpty()) {
-                    withStyle(SpanStyle(fontSize = NagiTheme.type.secondary.fontSize, color = NagiTheme.colors.mutedForeground)) { append(" $suffix") }
-                }
-            },
-            style = NagiTheme.type.keyNumber, color = NagiTheme.colors.foreground,
-        )
+        // 数字变了只滚动变了的那几位（Roll），后面的单位跟着让位。
+        Row(verticalAlignment = Alignment.Bottom) {
+            Roll(value, NagiTheme.type.keyNumber, NagiTheme.colors.foreground)
+            if (suffix.isNotEmpty()) {
+                Roll(
+                    " $suffix", NagiTheme.type.secondary, NagiTheme.colors.mutedForeground,
+                    Modifier.padding(bottom = 3.dp),
+                )
+            }
+        }
     }
 }
 
@@ -267,6 +300,18 @@ private fun TrafficSection(state: TrafficState, range: TrafficRange, setRange: (
     val gray = NagiTheme.colors.mutedForeground
     ChartLegend(listOf(stringResource(R.string.traffic_external) to brand, stringResource(R.string.traffic_mesh) to gray))
     Spacer(Modifier.height(12.dp))
+    AnimatedContent(
+        targetState = state,
+        contentKey = { it::class },
+        transitionSpec = { fadeIn(tween(Motion.FADE_IN, easing = Motion.Enter)) togetherWith fadeOut(tween(100, easing = Motion.Exit)) },
+        label = "traffic",
+    ) { state -> TrafficBody(state, range, retry) }
+}
+
+@Composable
+private fun TrafficBody(state: TrafficState, range: TrafficRange, retry: () -> Unit) {
+    val brand = NagiTheme.colors.brand
+    val gray = NagiTheme.colors.mutedForeground
     when (state) {
         TrafficState.Loading -> Skeleton(Modifier.fillMaxWidth().height(112.dp))
         is TrafficState.Failed -> Row(Modifier.fillMaxWidth().height(112.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -311,7 +356,7 @@ private fun TopRoutes(routes: List<RouteTraffic>) {
                     )
                     Spacer(Modifier.width(12.dp))
                     val (v, u) = formatRate(r.rx + r.tx)
-                    Text("$v $u", style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+                    Roll("$v $u", NagiTheme.type.secondary, NagiTheme.colors.mutedForeground)
                 }
                 Spacer(Modifier.height(6.dp))
                 UsageBar(((r.rx + r.tx) / max).toFloat(), NagiTheme.colors.brand, Modifier.fillMaxWidth())
@@ -323,8 +368,8 @@ private fun TopRoutes(routes: List<RouteTraffic>) {
 // ---- 状态 ----
 
 @Composable
-private fun LoadingBody() {
-    Column(Modifier.padding(horizontal = Dimens.pageHorizontal)) {
+private fun LoadingBody(modifier: Modifier = Modifier) {
+    Column(modifier.padding(horizontal = Dimens.pageHorizontal)) {
         Spacer(Modifier.height(Dimens.topBarToContent))
         Skeleton(Modifier.width(96.dp).height(16.dp))
         Spacer(Modifier.height(16.dp))

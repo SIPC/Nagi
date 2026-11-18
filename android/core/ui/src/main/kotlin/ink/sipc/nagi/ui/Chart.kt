@@ -119,7 +119,7 @@ fun ChartLegend(items: List<Pair<String, Color>>, modifier: Modifier = Modifier)
 // UsageBar：细的横向条，muted 底。用在流量最大的映射（品牌色）和占用。长度变化过渡 220ms。
 @Composable
 fun UsageBar(fraction: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 3.dp) {
-    val f by animateFloatAsState(fraction.coerceIn(0f, 1f), tween(220), label = "usage")
+    val f by animateFloatAsState(fraction.coerceIn(0f, 1f), barSpec(), label = "usage")
     val shape = RoundedCornerShape(2.dp)
     Box(modifier.fillMaxWidth().height(height).clip(shape).background(NagiTheme.colors.muted)) {
         if (f > 0f) Box(Modifier.fillMaxWidth(f).fillMaxHeight().clip(shape).background(color))

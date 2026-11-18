@@ -1,5 +1,18 @@
 package ink.sipc.nagi
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import ink.sipc.nagi.ui.Motion
+import ink.sipc.nagi.ui.isReducedMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,7 +84,7 @@ fun AppRoot(graph: AppGraph, lock: AppLock, pendingPair: MutableStateFlow<Pairin
     Box(Modifier.fillMaxSize().background(NagiTheme.colors.background)) {
         val s = session
         when {
-            s == null -> PairingFlow(graph, pendingPair, removed) {
+            s == null -> PairingFlow(graph, pendingPair, removed, onPaired = lock::unlocked) {
                 removed = false
                 lock.unlocked()
             }
@@ -95,9 +108,9 @@ private class Factory(private val create: () -> ViewModel) : ViewModelProvider.F
 }
 
 @Composable
-private fun PairingFlow(graph: AppGraph, pendingPair: MutableStateFlow<PairingUri?>, removed: Boolean, onDone: () -> Unit) {
+private fun PairingFlow(graph: AppGraph, pendingPair: MutableStateFlow<PairingUri?>, removed: Boolean, onPaired: () -> Unit, onDone: () -> Unit) {
     val nav = rememberNavController()
-    val vm: PairingViewModel = viewModel(factory = Factory { PairingViewModel(graph) })
+    val vm: PairingViewModel = viewModel(factory = Factory { PairingViewModel(graph, onPaired) })
     val pending by pendingPair.collectAsState()
     LaunchedEffect(pending) {
         val uri = pending ?: return@LaunchedEffect
@@ -105,17 +118,44 @@ private fun PairingFlow(graph: AppGraph, pendingPair: MutableStateFlow<PairingUr
         vm.open(uri)
         nav.navigate("confirm") { launchSingleTop = true }
     }
-    NavHost(nav, startDestination = "welcome") {
+    val reduced = isReducedMotion()
+    val rise = with(LocalDensity.current) { 8.dp.roundToPx() }
+    NavHost(
+        nav, startDestination = "welcome",
+        enterTransition = { pushIn(reduced) },
+        exitTransition = { pushOut(reduced) },
+        popEnterTransition = { popIn(reduced) },
+        popExitTransition = { popOut(reduced) },
+    ) {
         composable("welcome") {
             WelcomeScreen(onScan = { nav.navigate("scan") }, notice = if (removed) stringResource(R.string.removed) else null)
         }
-        composable("scan") {
-            ScanScreen(onBack = { nav.popBackStack() }, onScanned = { uri ->
-                vm.open(uri)
-                nav.navigate("confirm") { popUpTo("welcome") }
-            })
+        // 扫码成功时取景框已经展开成整页底色，确认页直接淡入接上，不再从右边滑入；扫码页同时淡出。
+        composable(
+            "scan",
+            // 去确认页时扫码页不淡出：它这时已经铺满页面底色，确认页叠在上面淡入的这段时间（240ms）一直完整地垫在下面，
+            // 确认页完全显示后才移除。两页同时半透明会透出窗口的背景。
+            exitTransition = { if (targetState.destination.route == "confirm") fadeOut(tween(1, delayMillis = 260)) else pushOut(reduced) },
+        ) {
+            ScanScreen(
+                onBack = { nav.popBackStack() },
+                // 锁定二维码时就开始查配对信息，展开动画期间数据就到了。
+                onLocked = { uri -> vm.open(uri) },
+                onScanned = { nav.navigate("confirm") { popUpTo("welcome") } },
+            )
         }
-        composable("confirm") {
+        composable(
+            "confirm",
+            enterTransition = {
+                // 从扫码页来：扫码页已经展开成同样的底色，确认页的内容在上面淡入、轻轻上移 8dp。
+                if (initialState.destination.route == "scan") {
+                    if (reduced) fadeIn(tween(Motion.FADE_IN))
+                    else fadeIn(tween(240, easing = Motion.Enter)) + slideInVertically(tween(320, easing = Motion.ContentIn)) { rise }
+                } else {
+                    pushIn(reduced)
+                }
+            },
+        ) {
             ConfirmScreen(vm, onBack = { nav.popBackStack("welcome", inclusive = false) }, onDone = onDone)
         }
     }
@@ -165,17 +205,45 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
         }
     }
 
-    NavHost(nav, startDestination = "tabs") {
+    val reduced = isReducedMotion()
+    NavHost(
+        nav, startDestination = "tabs",
+        enterTransition = { pushIn(reduced) },
+        exitTransition = { pushOut(reduced) },
+        popEnterTransition = { popIn(reduced) },
+        popExitTransition = { popOut(reduced) },
+    ) {
         composable("tabs") {
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize()) {
                     NagiTopBar(session.panel.name, onTitleClick = { sheet = true }, showChevron = true)
                     val bottom = PaddingValues(bottom = Dimens.bottomFade + 24.dp)
-                    when (tab) {
-                        Tab.HOME -> HomeContent(home, actions, bottom, showMessage)
-                        Tab.PROJECTS -> Placeholder()
-                        Tab.NODES -> Placeholder()
-                        Tab.SETTINGS -> Placeholder()
+                    // 主导航切换：跟导航同方向左右滑入并淡入（选右边的标签，新页面从右边进来，旧页面往左让开），
+                    // 和网页「点导航后的内容」一样：进来 32dp、透明度先到（120ms），共 300ms；旧的同方向移开 16dp、100ms 淡出。
+                    // 「移除动画」时只淡入淡出。
+                    val reducedTabs = isReducedMotion()
+                    val density = LocalDensity.current
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = {
+                            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                            val inPx = with(density) { 32.dp.roundToPx() }
+                            val outPx = with(density) { 16.dp.roundToPx() }
+                            if (reducedTabs) {
+                                fadeIn(tween(Motion.FADE_IN)) togetherWith fadeOut(tween(100))
+                            } else {
+                                (slideInHorizontally(tween(300, easing = Motion.ContentIn)) { dir * inPx } + fadeIn(tween(120, easing = Motion.Enter))) togetherWith
+                                    (slideOutHorizontally(tween(100, easing = Motion.Exit)) { -dir * outPx } + fadeOut(tween(100, easing = Motion.Exit)))
+                            }
+                        },
+                        label = "tab",
+                    ) { t ->
+                        when (t) {
+                            Tab.HOME -> HomeContent(home, actions, bottom, showMessage)
+                            Tab.PROJECTS -> Placeholder()
+                            Tab.NODES -> Placeholder()
+                            Tab.SETTINGS -> Placeholder()
+                        }
                     }
                 }
                 BottomFade(Modifier.align(Alignment.BottomCenter))
@@ -248,3 +316,17 @@ private fun Placeholder() {
         Text(stringResource(R.string.placeholder), style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground)
     }
 }
+
+// 进下一级：新页面从右边滑入，旧页面往左让一点并淡出；返回反过来（docs/android.md 交互「动画」）。
+// 「移除动画」时只淡入淡出。
+private fun pushIn(reduced: Boolean): EnterTransition =
+    if (reduced) fadeIn(tween(Motion.FADE_IN)) else slideInHorizontally(tween(300, easing = Motion.ContentIn)) { it } + fadeIn(tween(120))
+
+private fun pushOut(reduced: Boolean): ExitTransition =
+    if (reduced) fadeOut(tween(100)) else slideOutHorizontally(tween(300, easing = Motion.ContentIn)) { -it / 4 } + fadeOut(tween(300))
+
+private fun popIn(reduced: Boolean): EnterTransition =
+    if (reduced) fadeIn(tween(Motion.FADE_IN)) else slideInHorizontally(tween(300, easing = Motion.ContentIn)) { -it / 4 } + fadeIn(tween(300))
+
+private fun popOut(reduced: Boolean): ExitTransition =
+    if (reduced) fadeOut(tween(100)) else slideOutHorizontally(tween(300, easing = Motion.ContentIn)) { it } + fadeOut(tween(100, 200))

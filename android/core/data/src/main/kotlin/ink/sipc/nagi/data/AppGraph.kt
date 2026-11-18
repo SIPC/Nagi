@@ -2,6 +2,7 @@ package ink.sipc.nagi.data
 
 import android.content.Context
 import ink.sipc.nagi.security.AppKeys
+import ink.sipc.nagi.security.CacheCipher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -10,21 +11,25 @@ import kotlinx.coroutines.flow.StateFlow
 class AppGraph(context: Context, appVersion: String) {
     val keys = AppKeys()
     val store = PanelStore(context.applicationContext)
+    val cache = SessionCache(context, CacheCipher())
     val pairing = Pairing(keys, store, appVersion)
 
-    private val _session = MutableStateFlow(store.current()?.let { PanelSession(it, keys) })
+    private val _session = MutableStateFlow(store.current()?.let { PanelSession(it, keys, cache) })
 
     /** 当前面板的连接，没有添加面板时为 null。 */
     val session: StateFlow<PanelSession?> = _session
 
     /** 添加面板以后切换到它。 */
     fun use(panel: Panel) {
-        _session.value = PanelSession(panel, keys)
+        _session.value = PanelSession(panel, keys, cache)
     }
 
     /** 这台手机已退出（本机退出或面板说设备不在了）：删除密钥和面板，回到欢迎页。 */
     fun forget() {
-        _session.value?.let { keys.delete(it.panel.id) }
+        _session.value?.let {
+            keys.delete(it.panel.id)
+            cache.clear(it.panel.id)
+        }
         store.clear()
         _session.value = null
     }

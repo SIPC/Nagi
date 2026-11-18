@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 data class ConfirmState(
     val uri: PairingUri? = null,
     val info: GetPairingResponse? = null,
+    /** 连上的面板证书的完整公钥指纹（二维码里只有前 128 位）。 */
+    val fingerprint: String? = null,
     val loading: Boolean = false,
     val submitting: Boolean = false,
     val error: String? = null,
@@ -26,7 +28,11 @@ data class ConfirmState(
     val done: Boolean = false,
 )
 
-class PairingViewModel(private val graph: AppGraph) : ViewModel() {
+/**
+ * [onPaired] 在添加成功、切换到新面板之前调用：添加时已经用确认密钥验证过一次身份（面板也把这次算作解锁），
+ * 由它解除 App 的锁定，不然会先显示解锁页、再弹一次验证框。
+ */
+class PairingViewModel(private val graph: AppGraph, private val onPaired: () -> Unit = {}) : ViewModel() {
     private val _state = MutableStateFlow(ConfirmState())
     val state: StateFlow<ConfirmState> = _state
 
@@ -46,8 +52,8 @@ class PairingViewModel(private val graph: AppGraph) : ViewModel() {
         _state.value = _state.value.copy(loading = true, error = null)
         viewModelScope.launch {
             try {
-                val info = graph.pairing.lookup(uri)
-                _state.value = _state.value.copy(info = info, loading = false)
+                val (info, fp) = graph.pairing.lookup(uri)
+                _state.value = _state.value.copy(info = info, fingerprint = fp, loading = false)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(loading = false, error = e.message, unreachable = e is UnreachableException)
             }
@@ -59,6 +65,7 @@ class PairingViewModel(private val graph: AppGraph) : ViewModel() {
         val s = _state.value
         val uri = s.uri ?: return
         val info = s.info ?: return
+        val fp = s.fingerprint ?: return
         if (s.submitting) return
         if (!Biometric.available(activity)) {
             _state.value = s.copy(error = texts.noLock)
@@ -67,7 +74,7 @@ class PairingViewModel(private val graph: AppGraph) : ViewModel() {
         _state.value = s.copy(submitting = true, error = null)
         viewModelScope.launch {
             try {
-                val panel = graph.pairing.pair(uri, info) { panelId ->
+                val panel = graph.pairing.pair(uri, info, fp) { panelId ->
                     // 用确认密钥签一次：确认是机主在操作，也确认确认密钥能用。
                     val sig = Biometric.authenticate(
                         activity, graph.keys.confirmSignature(panelId), texts.promptTitle(info.panelName), texts.promptSubtitle, texts.cancel,
@@ -75,6 +82,7 @@ class PairingViewModel(private val graph: AppGraph) : ViewModel() {
                     sig.update(uri.code.toByteArray())
                     sig.sign()
                 }
+                onPaired()
                 graph.use(panel)
                 _state.value = _state.value.copy(submitting = false, done = true)
             } catch (e: AuthCancelledException) {

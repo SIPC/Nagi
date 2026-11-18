@@ -16,7 +16,11 @@ import javax.net.ssl.SSLException
 
 /** 连接一个面板的客户端：地址是 对外地址:端口（按公钥指纹校验）。 */
 class PanelClient(val address: String, fingerprint: String) {
-    val http = pinnedClient(fingerprint)
+    private val trust = PinnedTrustManager(fingerprint)
+    val http = pinnedClient(fingerprint, trust)
+
+    /** 连上以后面板证书的完整公钥指纹（扫码时二维码里只有前 128 位）。 */
+    val seenFingerprint: String? get() = trust.seen
     private val protocol = ProtocolClient(
         ConnectOkHttpClient(http),
         ProtocolClientConfig(

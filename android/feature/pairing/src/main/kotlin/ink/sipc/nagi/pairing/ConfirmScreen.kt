@@ -1,5 +1,14 @@
 package ink.sipc.nagi.pairing
 
+import ink.sipc.nagi.ui.Motion
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,24 +70,19 @@ fun ConfirmScreen(vm: PairingViewModel, onBack: () -> Unit, onDone: () -> Unit) 
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.confirm_text), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
             Spacer(Modifier.height(24.dp))
-            when {
-                s.loading -> SkeletonRows(3)
-                info == null && s.error != null -> {
-                    Text(
-                        if (s.unreachable) stringResource(R.string.confirm_unreachable, s.error.orEmpty()) else s.error.orEmpty(),
-                        style = NagiTheme.type.body, color = NagiTheme.colors.destructive,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    NagiButton(stringResource(R.string.retry), vm::retry, variant = ButtonVariant.Outline)
-                }
-                info != null -> {
-                    Member(info.displayName.ifEmpty { info.username }, roleLabel(info.role))
-                    Spacer(Modifier.height(20.dp))
-                    val uri = s.uri!!
-                    Field(stringResource(R.string.confirm_address), uri.address, mono = true)
-                    if (uri.domain.isNotEmpty()) Field(stringResource(R.string.confirm_domain), uri.domain, mono = true)
-                    Field(stringResource(R.string.confirm_fingerprint), shortFingerprint(uri.fingerprint), mono = true)
-                    Field(stringResource(R.string.confirm_phone), vm.deviceLabel, mono = false)
+            // 骨架换成内容时淡入（160ms），不突然冒出来。
+            val phase = when {
+                s.loading -> 0
+                info == null && s.error != null -> 1
+                info != null -> 2
+                else -> 3
+            }
+            Crossfade(targetState = phase, animationSpec = tween(Motion.FADE_IN, easing = Motion.Enter), label = "confirm") { ph ->
+                Column {
+                    when (ph) {
+                        0 -> SkeletonRows(3)
+                        else -> ConfirmBody(s, info, vm)
+                    }
                 }
             }
         }
@@ -97,14 +101,23 @@ fun ConfirmScreen(vm: PairingViewModel, onBack: () -> Unit, onDone: () -> Unit) 
     }
 }
 
+/** 账号：头像（成员在面板上传的，没有时是首字母加渐变色）、显示名称和角色。 */
 @Composable
-private fun Member(name: String, role: String) {
+private fun Member(name: String, role: String, avatar: ByteArray) {
+    // 面板只接受 PNG、JPEG、WebP（不超过 256 KB），系统都能解。解不开时按没有头像处理。
+    val image = remember(avatar) {
+        if (avatar.isEmpty()) null else runCatching { BitmapFactory.decodeByteArray(avatar, 0, avatar.size)?.asImageBitmap() }.getOrNull()
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier.size(32.dp).background(Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFFEC4899))), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(name.take(1).uppercase(), style = NagiTheme.type.bodyMedium, color = Color.White)
+        if (image != null) {
+            Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(40.dp).clip(CircleShape))
+        } else {
+            Box(
+                Modifier.size(40.dp).background(Brush.linearGradient(listOf(Color(0xFF8B5CF6), Color(0xFFEC4899))), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(name.take(1).uppercase(), style = NagiTheme.type.bodyMedium, color = Color.White)
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column {
@@ -144,4 +157,28 @@ internal fun pairingTexts(): PairingTexts {
     val noLock = stringResource(R.string.error_no_lock)
     val keyFailed = stringResource(R.string.error_key_failed)
     return PairingTexts({ title.format(it) }, subtitle, cancel, noLock, { keyFailed.format(it) })
+}
+
+/** 确认页的内容：查询失败的提示，或成员和面板的信息。 */
+@Composable
+private fun ConfirmBody(s: ConfirmState, info: ink.sipc.nagi.proto.v1.GetPairingResponse?, vm: PairingViewModel) {
+    when {
+        info == null && s.error != null -> {
+            Text(
+                if (s.unreachable) stringResource(R.string.confirm_unreachable, s.error.orEmpty()) else s.error.orEmpty(),
+                style = NagiTheme.type.body, color = NagiTheme.colors.destructive,
+            )
+            Spacer(Modifier.height(12.dp))
+            NagiButton(stringResource(R.string.retry), vm::retry, variant = ButtonVariant.Outline)
+        }
+        info != null -> {
+            Member(info.displayName.ifEmpty { info.username }, roleLabel(info.role), info.avatar.toByteArray())
+            Spacer(Modifier.height(20.dp))
+            val uri = s.uri!!
+            Field(stringResource(R.string.confirm_address), uri.address, mono = true)
+            if (uri.domain.isNotEmpty()) Field(stringResource(R.string.confirm_domain), uri.domain, mono = true)
+            Field(stringResource(R.string.confirm_fingerprint), shortFingerprint(s.fingerprint ?: uri.fingerprint), mono = true)
+            Field(stringResource(R.string.confirm_phone), vm.deviceLabel, mono = false)
+        }
+    }
 }

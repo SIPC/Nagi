@@ -20,9 +20,11 @@ import java.util.UUID
 // 扫码添加（见 docs/android.md#扫码）：用二维码里的公钥指纹连面板，查询配对码，生成三把密钥并提交证明。
 
 class Pairing(private val keys: AppKeys, private val store: PanelStore, private val appVersion: String) {
-    /** 查询配对码：面板名称和成员。 */
-    suspend fun lookup(uri: PairingUri): GetPairingResponse = try {
-        PanelClient(uri.address, uri.fingerprint).app.getPairing(GetPairingRequest.newBuilder().setCode(uri.code).build()).orThrow()
+    /** 查询配对码：面板名称和成员，和连上的面板证书的完整公钥指纹（之后都用完整的校验）。 */
+    suspend fun lookup(uri: PairingUri): Pair<GetPairingResponse, String> = try {
+        val client = PanelClient(uri.address, uri.fingerprint)
+        val info = client.app.getPairing(GetPairingRequest.newBuilder().setCode(uri.code).build()).orThrow()
+        info to (client.seenFingerprint ?: uri.fingerprint)
     } catch (e: Throwable) {
         throw e.toPanelException()
     }
@@ -33,7 +35,7 @@ class Pairing(private val keys: AppKeys, private val store: PanelStore, private 
     /**
      * 生成三把密钥，提交公钥和证明，保存面板。[beforeSubmit] 在生成密钥后、提交前调用（弹出系统验证框，确认是机主在操作）。
      */
-    suspend fun pair(uri: PairingUri, info: GetPairingResponse, beforeSubmit: suspend (panelId: String) -> Unit): Panel {
+    suspend fun pair(uri: PairingUri, info: GetPairingResponse, fingerprint: String, beforeSubmit: suspend (panelId: String) -> Unit): Panel {
         val panelId = UUID.randomUUID().toString().replace("-", "").take(12)
         val challenge = MessageDigest.getInstance("SHA-256").digest(uri.code.toByteArray())
         val generated = keys.generate(panelId, challenge)
@@ -52,13 +54,13 @@ class Pairing(private val keys: AppKeys, private val store: PanelStore, private 
                 )
                 .build()
             val res = try {
-                PanelClient(uri.address, uri.fingerprint).app.pair(req).orThrow()
+                PanelClient(uri.address, fingerprint).app.pair(req).orThrow()
             } catch (e: Throwable) {
                 throw e.toPanelException()
             }
             val panel = Panel(
                 id = panelId, name = res.panelName.ifEmpty { info.panelName }, address = uri.address, domain = uri.domain,
-                fingerprint = uri.fingerprint, deviceId = res.deviceId, username = info.username, displayName = info.displayName,
+                fingerprint = fingerprint, deviceId = res.deviceId, username = info.username, displayName = info.displayName,
             )
             store.save(panel)
             return panel
