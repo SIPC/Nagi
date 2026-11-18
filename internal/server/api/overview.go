@@ -199,8 +199,9 @@ type trafficNow struct {
 }
 
 type trafficCacheState struct {
-	mu  sync.Mutex
-	cur *trafficNow
+	mu         sync.Mutex
+	cur        *trafficNow
+	refreshing bool
 }
 
 var (
@@ -251,13 +252,37 @@ func (a *API) panelMeshKey() string {
 	return ""
 }
 
-// liveTraffic 问每个在线节点最近 1 分钟的网卡、节点网络和端口映射速率，缓存 trafficCache。
+// liveTraffic 返回缓存的各节点当前速率，不等节点：缓存超过 trafficCache 时在后台重新问（同一时间只问一次），
+// 问完通知订阅流再算一次。还没有结果时返回空的（ready 为 false），首页先发别的内容，流量随下一份到达。
+// 以前在这里同步问每个节点，最慢的节点（最多 5 秒）会拖住首页的第一份数据，等待时还锁着别的流。
 func (a *API) liveTraffic(ctx context.Context) *trafficNow {
 	a.traffic.mu.Lock()
 	defer a.traffic.mu.Unlock()
-	if c := a.traffic.cur; c != nil && time.Since(c.at) < trafficCache {
-		return c
+	c := a.traffic.cur
+	if (c == nil || time.Since(c.at) >= trafficCache) && !a.traffic.refreshing {
+		a.traffic.refreshing = true
+		go a.refreshTraffic()
 	}
+	if c == nil {
+		return &trafficNow{extRx: map[string]float64{}, extTx: map[string]float64{}, routes: map[string]float64{}}
+	}
+	return c
+}
+
+// refreshTraffic 问一遍节点，存进缓存，通知订阅流。
+func (a *API) refreshTraffic() {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	out := a.queryTraffic(ctx)
+	a.traffic.mu.Lock()
+	a.traffic.cur = out
+	a.traffic.refreshing = false
+	a.traffic.mu.Unlock()
+	a.Nodes.Changes.Bump()
+}
+
+// queryTraffic 问每个在线节点最近 1 分钟的网卡、节点网络和端口映射速率，各节点同时问，每个最多等 5 秒。
+func (a *API) queryTraffic(ctx context.Context) *trafficNow {
 	out := &trafficNow{at: time.Now(), extRx: map[string]float64{}, extTx: map[string]float64{}, routes: map[string]float64{}}
 	conns := a.Nodes.Conns()
 	panelKey := a.panelMeshKey()
@@ -273,13 +298,22 @@ func (a *API) liveTraffic(ctx context.Context) *trafficNow {
 			defer wg.Done()
 			qctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
+			// 三类数据同时问。
 			var res [3]*nagiv1.QueryMetricsResponse
+			var errs [3]error
+			var qwg sync.WaitGroup
 			for i, prefix := range []string{"node:net_", "m:", "r:"} {
-				r, err := c.Agent.QueryMetrics(qctx, &nagiv1.QueryMetricsRequest{Prefix: prefix, From: from})
+				qwg.Add(1)
+				go func() {
+					defer qwg.Done()
+					res[i], errs[i] = c.Agent.QueryMetrics(qctx, &nagiv1.QueryMetricsRequest{Prefix: prefix, From: from})
+				}()
+			}
+			qwg.Wait()
+			for _, err := range errs {
 				if err != nil {
 					return
 				}
-				res[i] = r
 			}
 			var rx, tx float64
 			for _, s := range res[0].GetSeries() {
@@ -306,7 +340,6 @@ func (a *API) liveTraffic(ctx context.Context) *trafficNow {
 		}(c)
 	}
 	wg.Wait()
-	a.traffic.cur = out
 	return out
 }
 
@@ -498,7 +531,7 @@ func (s *nodeService) QueryTraffic(ctx context.Context, req *connect.Request[nag
 		wg.Add(1)
 		go func(c *nodes.Conn) {
 			defer wg.Done()
-			qctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			qctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 			defer cancel()
 			netRes, err := c.Agent.QueryMetrics(qctx, &nagiv1.QueryMetricsRequest{Prefix: "node:net_", From: from, Step: step})
 			if err != nil {
