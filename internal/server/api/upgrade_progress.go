@@ -118,9 +118,19 @@ func (a *API) pollUpgradeProgress(ctx context.Context, agent nagiv1.AgentService
 		switch {
 		case status.Code(err) == codes.Unimplemented:
 			return
-		case err != nil || p.GetStage() == "":
+		case err != nil:
 			continue
 		}
-		a.updates.setProgress(rec, release.Progress{Stage: release.Stage(p.GetStage()), Source: p.GetSource(), Downloaded: p.GetDownloaded(), Total: p.GetTotal()}, time.Now())
+		// 值来自节点，原样显示给界面和 MCP：只认已知的阶段，地址（主机名）限长，字节数不能是负的（总大小未知时为 -1）。
+		stage := release.Stage(p.GetStage())
+		if stage != release.StageDownload && stage != release.StageVerify && stage != release.StageTest {
+			continue
+		}
+		total := max(p.GetTotal(), -1)
+		if total == 0 {
+			total = -1
+		}
+		a.updates.setProgress(rec, release.Progress{Stage: stage, Source: clipBytes(p.GetSource(), 255),
+			Downloaded: max(p.GetDownloaded(), 0), Total: total}, time.Now())
 	}
 }
