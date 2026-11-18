@@ -482,9 +482,9 @@ func (s *Service) PairApp(ctx context.Context, ip, code string, keys [3]AppKeyPr
 		s.app.mu.Unlock()
 		return PairResult{}, err
 	}
-	// 检查以后、写入之前换了列表时，这台手机不在那次复查里：按新的列表再复查一遍。
+	// 检查以后、写入之前换了列表时，这台手机可能不在那次复查里：让 RevocationLoop 按新的列表再复查一遍。
 	if s.Revocations() != rev {
-		_ = s.RecheckAppDevices(context.WithoutCancel(ctx))
+		s.requestRecheck()
 	}
 	at, aid, an := userActor(user.ID, user.Username)
 	b, _ := json.Marshal(map[string]any{"device": name, "android": info.AndroidVersion, "app": info.AppVersion, "level": level,
