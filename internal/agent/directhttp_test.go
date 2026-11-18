@@ -8,6 +8,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/pkg/directdl"
 	"github.com/SIPC/nagi/internal/pkg/filehttp"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -32,12 +35,12 @@ func httpDLRequest(a *agent, method, path, rangeHeader string) *httptest.Respons
 	return w
 }
 
-// 端口的开关：存在节点上，0 关闭；443 和超出范围的端口不接受。
+// 端口：存在节点上，默认 80（0 也是默认）；443 和超出范围的端口不接受。没有单独的开关，关了直连下载就不上报。
 func TestDirectHTTPPort(t *testing.T) {
 	a, _ := directAuditAgent(t)
 	d := a.direct
-	if d.httpPort() != 0 {
-		t.Fatal("默认应该关闭")
+	if d.httpPort() != 80 {
+		t.Fatal("默认应该是 80")
 	}
 	for _, bad := range []int{443, -1, 65536} {
 		if err := d.setHTTPPort(bad); err == nil {
@@ -45,14 +48,50 @@ func TestDirectHTTPPort(t *testing.T) {
 		}
 	}
 	if err := d.setHTTPPort(8080); err != nil || d.httpPort() != 8080 {
-		t.Fatalf("开启：%v %d", err, d.httpPort())
+		t.Fatalf("改端口：%v %d", err, d.httpPort())
 	}
 	st := d.status(nil)
 	if !st.GetHttpSupported() || st.GetHttpPort() != 8080 || st.GetHttpReady() {
 		t.Errorf("状态：%v", st)
 	}
-	if err := d.setHTTPPort(0); err != nil || d.httpPort() != 0 {
-		t.Fatalf("关闭：%v %d", err, d.httpPort())
+	if err := d.setHTTPPort(0); err != nil || d.httpPort() != 80 {
+		t.Fatalf("改回默认：%v %d", err, d.httpPort())
+	}
+	// 文件内容不对时按默认。
+	if err := os.WriteFile(directHTTPFile(a.cfg.DataDir), []byte("443"), 0o600); err != nil || d.httpPort() != 80 {
+		t.Fatalf("内容不对：%v %d", err, d.httpPort())
+	}
+	// HTTPS 能用（已经有这个 IP 的证书）时不开加密 HTTP；没有证书时作为备用开着（端口要空闲，这里用一个空闲的端口）。
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	free := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	if err := d.setHTTPPort(free); err != nil {
+		t.Fatal(err)
+	}
+	storage := t.TempDir()
+	p := proxy.New(storage, slog.Default())
+	if addr, port := d.wantedHTTP(p, "203.0.113.5"); addr != "203.0.113.5" || port != free {
+		t.Errorf("还没有证书时应开加密 HTTP：%q %d", addr, port)
+	}
+	cert := filepath.Join(storage, "certificates", "acme", "203.0.113.5", "203.0.113.5.crt")
+	if err := os.MkdirAll(filepath.Dir(cert), 0o700); err != nil || os.WriteFile(cert, []byte("x"), 0o600) != nil {
+		t.Fatal(err)
+	}
+	if addr, _ := d.wantedHTTP(p, "203.0.113.5"); addr != "" {
+		t.Error("HTTPS 能用时不该开加密 HTTP")
+	}
+	// 关了直连下载：加密 HTTP 也不开，不上报端口。
+	if err := os.WriteFile(directOffFile(a.cfg.DataDir), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if st := d.status(nil); st.GetHttpPort() != 0 || st.GetHttpReady() {
+		t.Errorf("关了直连下载的状态：%v", st)
+	}
+	if addr, _ := d.wantedHTTP(nil, ""); addr != "" {
+		t.Error("关了直连下载时不该开")
 	}
 }
 
@@ -64,10 +103,19 @@ func TestDirectHTTPAuth(t *testing.T) {
 		ID: "00000000000000aa", Expires: time.Now().Add(time.Minute).Unix()}
 	httpTok := directdl.SignHTTP(key, c)
 	httpsTok := directdl.Sign(key, c)
-	if w := httpDLRequest(a, http.MethodGet, directdl.HTTPPathPrefix+httpTok, ""); w.Code != http.StatusNotFound {
-		t.Errorf("没开启：%d", w.Code)
+	// 关了直连下载：不能登记，请求一律 404。
+	off := directOffFile(a.cfg.DataDir)
+	if err := os.WriteFile(off, nil, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if err := a.direct.setHTTPPort(80); err != nil {
+	s0 := &agentService{node: a, panel: "fp-a"}
+	if _, err := s0.PrepareDirectHttp(context.Background(), &nagiv1.PrepareDirectHttpRequest{Token: httpTok}); err == nil {
+		t.Error("关了直连下载时不该能登记")
+	}
+	if w := httpDLRequest(a, http.MethodGet, directdl.HTTPPathPrefix+httpTok, ""); w.Code != http.StatusNotFound {
+		t.Errorf("关了直连下载：%d", w.Code)
+	}
+	if err := os.Remove(off); err != nil {
 		t.Fatal(err)
 	}
 	expired := c
@@ -114,9 +162,6 @@ func TestDirectHTTPDownload(t *testing.T) {
 		t.Skip("这个系统不支持节点访问")
 	}
 	a, key := directAuditAgent(t)
-	if err := a.direct.setHTTPPort(80); err != nil {
-		t.Fatal(err)
-	}
 	filehttp.ResetRanges()
 	s := &agentService{node: a, panel: "fp-a"}
 	dir := t.TempDir()

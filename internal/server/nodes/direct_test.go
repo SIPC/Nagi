@@ -152,7 +152,8 @@ func TestDirectHTTPCommand(t *testing.T) {
 		ok   bool
 	}{
 		{"可以", key, "203.0.113.5", ready, true},
-		{"HTTPS 关了也可以", key, "203.0.113.5", &nagiv1.DirectDownload{Supported: true, Off: true, Address: "203.0.113.5", HttpPort: 8080, HttpReady: true}, true},
+		// 「直连下载」是唯一的开关：关了就都经面板。
+		{"关了直连下载", key, "203.0.113.5", &nagiv1.DirectDownload{Supported: true, Off: true, Address: "203.0.113.5", HttpPort: 8080, HttpReady: true}, false},
 		{"还没告诉节点密钥", nil, "203.0.113.5", ready, false},
 		{"没有公网地址", key, "", ready, false},
 		{"没开启", key, "203.0.113.5", &nagiv1.DirectDownload{Supported: true, Address: "203.0.113.5", HttpSupported: true}, false},

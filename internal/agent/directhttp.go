@@ -27,7 +27,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）：节点申请不到 IP 证书时的备用方式，默认关闭，在节点设置里开启。
+// 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）：直连下载开着、HTTPS 不能用（申请不到 IP 证书、443 被占用等）时的
+// 备用方式，没有单独的开关，只能设置端口（默认 80）。HTTPS 能用时不开这个端口。
 // 面板签一个 HTTP 种类的链接，先经控制连接交给节点（PrepareDirectHttp）：节点核对后记下文件的版本（ETag），
 // 文件不大时算出 SHA-256；面板据此生成一条 curl + openssl 的命令。之后 curl 经明文 HTTP 来下载，
 // 节点用 AES-256-CTR 加密内容，密钥由节点和面板各自从直连下载的密钥派生（directdl.FileKey、ArchiveKey），
@@ -38,18 +39,21 @@ func directHTTPFile(dataDir string) string {
 	return filepath.Join(dataDir, "identity", "direct-http")
 }
 
-// httpPort 返回加密 HTTP 下载的端口，没有开启时为 0。开关存成文件，内容是端口号。
+// defaultHTTPPort 是加密 HTTP 下载默认的端口。
+const defaultHTTPPort = 80
+
+// httpPort 返回加密 HTTP 下载的端口：存在 identity/direct-http 里，没有这个文件、内容为空或者不对时用 80。
 func (d *directDL) httpPort() int {
 	if d == nil {
-		return 0
+		return defaultHTTPPort
 	}
 	b, err := os.ReadFile(directHTTPFile(d.a.cfg.DataDir))
 	if err != nil {
-		return 0
+		return defaultHTTPPort
 	}
 	port, err := strconv.Atoi(strings.TrimSpace(string(b)))
 	if err != nil || validHTTPPort(port) != nil {
-		return 0
+		return defaultHTTPPort
 	}
 	return port
 }
@@ -65,10 +69,10 @@ func validHTTPPort(port int) error {
 	return nil
 }
 
-// setHTTPPort 修改加密 HTTP 下载的端口，0 表示关闭。
+// setHTTPPort 修改加密 HTTP 下载的端口，0 和 80 表示默认（删掉文件）。
 func (d *directDL) setHTTPPort(port int) error {
 	file := directHTTPFile(d.a.cfg.DataDir)
-	if port == 0 {
+	if port == 0 || port == defaultHTTPPort {
 		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return status.Error(codes.Internal, err.Error())
 		}
@@ -83,10 +87,11 @@ func (d *directDL) setHTTPPort(port int) error {
 	return nil
 }
 
-// wantedHTTP 返回要开加密 HTTP 下载的 IP 和端口：开启了、有公网地址、有面板给的密钥，而且端口能用。
+// wantedHTTP 返回要开加密 HTTP 下载的 IP 和端口：直连下载开着、有公网地址、有面板给的密钥，HTTPS 不能用，而且端口能用。
+// https 是这次要为 HTTPS 开的 IP（wanted 的结果）：已经有它的证书时 HTTPS 能用，不开 HTTP。
 // 在 80 上、Caddy 已经监听着 80（有绑了域名的映射，或者已经开着）时直接用；别的端口已经由这里开着时也直接用；
 // 否则先试着占一下，被别的程序占着就不开。被映射占着的由 proxy.Apply 判断。
-func (d *directDL) wantedHTTP(p *proxy.Proxy) (string, int) {
+func (d *directDL) wantedHTTP(p *proxy.Proxy, https string) (string, int) {
 	if d == nil {
 		return "", 0
 	}
@@ -94,7 +99,7 @@ func (d *directDL) wantedHTTP(p *proxy.Proxy) (string, int) {
 	d.mu.Lock()
 	addr, haveKey := d.address, len(d.keys) > 0
 	d.mu.Unlock()
-	if port == 0 || addr == "" || !haveKey || p == nil {
+	if d.off() || addr == "" || !haveKey || p == nil || (https != "" && p.HasCert(https)) {
 		d.setHTTPPortErr("")
 		return "", 0
 	}
@@ -127,10 +132,13 @@ func (d *directDL) setHTTPPortErr(e string) {
 	d.mu.Unlock()
 }
 
-// httpStatus 把加密 HTTP 下载的状态填进上报的 st（调用时持有 d.mu）。
+// httpStatus 把加密 HTTP 下载的状态填进上报的 st（调用时持有 d.mu）。关了直连下载时什么都不填。
 func (d *directDL) httpStatus(p *proxy.Proxy, st *nagiv1.DirectDownload) {
+	if d.off() {
+		return
+	}
 	st.HttpPort = uint32(d.httpPort())
-	if st.HttpPort == 0 || p == nil {
+	if p == nil {
 		return
 	}
 	addr, port, perr := p.DirectHTTP()
@@ -194,6 +202,9 @@ var errFileChanged = i18n.New("文件已变化，请重新获取下载命令")
 
 func (s *agentService) PrepareDirectHttp(ctx context.Context, req *nagiv1.PrepareDirectHttpRequest) (*nagiv1.PrepareDirectHttpResponse, error) {
 	d := s.node.direct
+	if d.off() {
+		return nil, status.Error(codes.FailedPrecondition, "节点关闭了直连下载")
+	}
 	c, panel, _, err := d.verifyWith(directdl.VerifyHTTP, req.GetToken(), time.Now())
 	if err != nil || panel != s.panel || c.ID == "" {
 		return nil, status.Error(codes.InvalidArgument, directdl.ErrInvalid.Error())
@@ -263,7 +274,7 @@ func (d *directDL) hash(ctx context.Context, stream filehttp.ChunkStream) (strin
 // serveHTTPDL 处理加密 HTTP 下载的请求。链接无效（签名不对、过期、没登记、目录打包用过了、没开启）时一律 404，
 // 不说原因；过期的和用过的记进本地审计。
 func (d *directDL) serveHTTPDL(w http.ResponseWriter, r *http.Request, token string) {
-	if r.Method != http.MethodGet || d.httpPort() == 0 {
+	if r.Method != http.MethodGet || d.off() {
 		http.NotFound(w, r)
 		return
 	}

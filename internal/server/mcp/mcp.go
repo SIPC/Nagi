@@ -36,6 +36,8 @@ type Options struct {
 	Version  string
 	// Files 读写卷里的文件。
 	Files FileAccess
+	// Direct 签发直连下载的链接或命令（get_download_link、get_node_download_link）。
+	Direct DirectAccess
 	// Record 把被拒绝的工具调用记进活动记录（api.API.RecordMCPDenied）。
 	Record func(ctx context.Context, u auth.User, tool, reason string)
 	// Audit 记一次工具调用和它触发的接口调用（api.API.RecordMCPCall）。project 是参数里的项目（名称或 ID）。

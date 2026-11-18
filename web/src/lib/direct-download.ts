@@ -52,10 +52,11 @@ export function directEndpoint(panelURL: string): string {
   return `${path}/direct${query ? `?${query}` : ""}`;
 }
 
-// directActions：节点现在能复制哪种下载方式。link：HTTPS 直连链接（节点拿到了 IP 证书）；command：加密 HTTP 下载的命令
-// （节点开启了，有公网地址，见 docs/agent.md#加密-http-下载）。旧版本的节点不上报，两种都没有。
+// directActions：节点现在能复制哪种下载方式，最多一种。关了直连下载时都没有。link：HTTPS 直连链接（节点拿到了 IP 证书）；
+// command：加密 HTTP 下载的命令，只在 HTTPS 不能用时作为备用（见 docs/agent.md#加密-http-下载）。旧版本的节点不上报，两种都没有。
 export function directActions(d: DirectDownload | undefined): { link: boolean; command: boolean } {
-  return { link: !!d?.ready && !d.off && !!d.address, command: !!d?.httpReady && !!d.address };
+  if (!d || d.off || !d.address) return { link: false, command: false };
+  return { link: d.ready, command: !d.ready && d.httpReady };
 }
 
 async function failure(res: Response): Promise<Error> {

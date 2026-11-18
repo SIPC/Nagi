@@ -115,13 +115,14 @@ type DirectHTTPCommand struct {
 }
 
 // DirectHTTP 签一个加密 HTTP 下载的链接，交给节点核对、登记（节点同时算出文件的 SHA-256），
-// 再用同一个密钥派生内容密钥，生成命令。节点不能用（没开、端口不能用、旧版本、还没告诉过它密钥）时返回 nil, nil。
+// 再用同一个密钥派生内容密钥，生成命令。节点不能用（关了直连下载、HTTPS 能用所以没开、端口不能用、旧版本、
+// 还没告诉过它密钥）时返回 nil, nil。
 func (c *Conn) DirectHTTP(ctx context.Context, claims directdl.Claims) (*DirectHTTPCommand, error) {
 	c.mu.RLock()
 	key, addr := c.directKey, c.directAddr
 	st := c.report.GetNode().GetDirectDownload()
 	c.mu.RUnlock()
-	if len(key) == 0 || addr == "" || !st.GetHttpReady() || st.GetHttpPort() == 0 || st.GetAddress() != addr {
+	if len(key) == 0 || addr == "" || st.GetOff() || !st.GetHttpReady() || st.GetHttpPort() == 0 || st.GetAddress() != addr {
 		return nil, nil
 	}
 	expires := time.Now().Add(directdl.TTL)

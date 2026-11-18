@@ -3071,13 +3071,13 @@ type DirectDownload struct {
 	Ready bool `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
 	// 不能直连的原因（端口被占用、证书申请失败等），可以直连时为空。
 	Error string `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
-	// 节点支持加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。旧版本的节点没有这一项。
+	// 节点支持加密 HTTP 下载：直连下载开着、HTTPS 不能用时的备用方式（见 docs/agent.md#加密-http-下载）。旧版本的节点没有这一项。
 	HttpSupported bool `protobuf:"varint,6,opt,name=http_supported,json=httpSupported,proto3" json:"http_supported,omitempty"`
-	// 加密 HTTP 下载的端口，0 表示没有开启。
+	// 加密 HTTP 下载的端口（默认 80）。关了直连下载时为 0。
 	HttpPort uint32 `protobuf:"varint,7,opt,name=http_port,json=httpPort,proto3" json:"http_port,omitempty"`
-	// 已经在这个端口上为 address 开好了规则，可以签发下载命令。
+	// HTTPS 不能用，已经在这个端口上为 address 开好了加密 HTTP 下载，可以签发下载命令。
 	HttpReady bool `protobuf:"varint,8,opt,name=http_ready,json=httpReady,proto3" json:"http_ready,omitempty"`
-	// 开启了但不能用的原因（端口被占用等）。
+	// 需要加密 HTTP 下载但开不了的原因（端口被占用等）。
 	HttpError     string `protobuf:"bytes,9,opt,name=http_error,json=httpError,proto3" json:"http_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -4354,7 +4354,7 @@ type MeshStatus struct {
 	RelayOff bool `protobuf:"varint,8,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
 	// 关闭了直连下载（节点的网络设置，见 docs/agent.md#直连下载）。
 	DirectDownloadOff bool `protobuf:"varint,9,opt,name=direct_download_off,json=directDownloadOff,proto3" json:"direct_download_off,omitempty"`
-	// 加密 HTTP 下载的端口，0 表示没有开启（节点的网络设置，见 docs/agent.md#加密-http-下载）。
+	// 加密 HTTP 下载的端口（节点的网络设置，默认 80，见 docs/agent.md#加密-http-下载）。
 	DirectHttpPort uint32 `protobuf:"varint,10,opt,name=direct_http_port,json=directHttpPort,proto3" json:"direct_http_port,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -4675,7 +4675,7 @@ type MeshOptions struct {
 	// 请求里带了 direct_download_off：节点只在为 true 时按它修改直连下载的开关。
 	// v0.32.0 以前的面板不知道直连下载，请求里没有这一项，节点不能把它当作「打开」。面板转发修改时总是填上。
 	SetDirectDownload bool `protobuf:"varint,4,opt,name=set_direct_download,json=setDirectDownload,proto3" json:"set_direct_download,omitempty"`
-	// 加密 HTTP 下载的端口，0 表示关闭（见 docs/agent.md#加密-http-下载）。
+	// 加密 HTTP 下载的端口（直连下载开着、HTTPS 不能用时的备用方式，见 docs/agent.md#加密-http-下载），0 表示默认的 80。
 	DirectHttpPort uint32 `protobuf:"varint,5,opt,name=direct_http_port,json=directHttpPort,proto3" json:"direct_http_port,omitempty"`
 	// 请求里带了 direct_http_port：节点只在为 true 时按它修改（和 set_direct_download 一样，旧面板不知道这一项）。
 	SetDirectHttp bool `protobuf:"varint,6,opt,name=set_direct_http,json=setDirectHttp,proto3" json:"set_direct_http,omitempty"`

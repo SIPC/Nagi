@@ -364,7 +364,8 @@ function meshOptions(s: { quicOff: boolean; relayOff: boolean; directDownloadOff
 }
 
 // MeshOption：节点设置里的一项组网开关（保存在节点上）。一行设置：状态加一个按钮。
-// 接口每次提交全部开关，其他几项照原样带上。onStatus 是开着时的状态说明（不给时写「已开启」）。
+// 接口每次提交全部开关，其他几项照原样带上。onStatus 是开着时的状态说明（不给时写「已开启」）；
+// extra 是开着时开关前面的另一个按钮（管理员才有）。
 function MeshOption({
   nodeId,
   online,
@@ -373,6 +374,7 @@ function MeshOption({
   help,
   confirm,
   onStatus,
+  extra,
 }: {
   nodeId: string;
   online: boolean;
@@ -381,6 +383,7 @@ function MeshOption({
   help: string;
   confirm: string;
   onStatus?: React.ReactNode;
+  extra?: (data: MeshStatus) => React.ReactNode;
 }) {
   const { isAdmin } = useRole();
   const queryClient = useQueryClient();
@@ -431,10 +434,13 @@ function MeshOption({
       ) : (
         isAdmin &&
         q.data && (
-          <Button variant="outline" disabled={busy || !online} onClick={toggle}>
-            {busy && <Spinner />}
-            {off ? t.mesh.quicEnable : t.mesh.optionDisable}
-          </Button>
+          <>
+            {!off && extra?.(q.data)}
+            <Button variant="outline" disabled={busy || !online} onClick={toggle}>
+              {busy && <Spinner />}
+              {off ? t.mesh.quicEnable : t.mesh.optionDisable}
+            </Button>
+          </>
         )
       )}
     </SettingRow>
@@ -451,96 +457,66 @@ export function NodeRelay({ nodeId, online }: { nodeId: string; online: boolean 
   return <MeshOption nodeId={nodeId} online={online} field="relayOff" title={t.mesh.relayTitle} help={t.mesh.relayHelp} confirm={t.mesh.relayConfirm} />;
 }
 
-// NodeDirectDownload：直连下载（见 docs/agent.md#直连下载）。开着时写现在能不能直连、不能的原因。
+// NodeDirectDownload：直连下载（见 docs/agent.md#直连下载），唯一的开关。开着时写现在用 HTTPS 还是加密 HTTP、不能直连的原因；
+// 开着时多一个「HTTP 端口」，设置 HTTPS 不能用时加密 HTTP 下载用的端口（见 docs/agent.md#加密-http-下载）。
 export function NodeDirectDownload({ node }: { node: Node }) {
   const m = t.mesh.direct;
   const d = node.info?.directDownload;
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<MeshStatus | null>(null);
+  const [busy, setBusy] = useState(false);
   let status: React.ReactNode = m.pending;
+  const warn = (text: string, title: string) => (
+    <span className="text-warning" title={title}>
+      {text}
+    </span>
+  );
   if (!d) status = m.unsupported;
   else if (d.ready) status = m.ready(d.address);
-  else if (d.error)
-    status = (
-      <span className="text-warning" title={d.error}>
-        {m.failed(d.error)}
-      </span>
-    );
+  else if (d.httpReady) status = <span title={d.error || undefined}>{m.httpFallback(d.httpPort)}</span>;
+  else if (d.error || d.httpError) status = warn(m.failed(d.error || d.httpError), [d.error, d.httpError].filter(Boolean).join("\n"));
   else if (!d.address) status = m.noAddress;
-  return <MeshOption nodeId={node.id} online={node.online} field="directDownloadOff" title={m.title} help={m.help} confirm={m.confirm} onStatus={status} />;
-}
-
-// NodeDirectHTTP：加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。默认关闭；开启时选端口（默认 80）。
-// 状态写现在能不能用、不能用的原因。旧版本的节点不支持，只写升级后可用。
-export function NodeDirectHTTP({ node }: { node: Node }) {
-  const m = t.mesh.directHttp;
-  const { isAdmin } = useRole();
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const d = node.info?.directDownload;
-  const supported = !!d?.httpSupported;
-  const q = useQuery({ queryKey: ["node-mesh", node.id], queryFn: () => nodeClient.getNodeMesh({ nodeId: node.id }), enabled: node.online && supported });
-  const port = q.data?.directHttpPort ?? d?.httpPort ?? 0;
-  const save = async (next: number) => {
-    if (!q.data) return;
+  const save = async (data: MeshStatus, port: number) => {
     setBusy(true);
     try {
-      const r = await nodeClient.setNodeMeshOptions({ nodeId: node.id, options: { ...meshOptions(q.data), directHttpPort: next } });
+      const r = await nodeClient.setNodeMeshOptions({ nodeId: node.id, options: { ...meshOptions(data), directHttpPort: port } });
       queryClient.setQueryData(["node-mesh", node.id], (s: MeshStatus | undefined) => s && { ...s, ...meshOptions(r) });
       queryClient.invalidateQueries({ queryKey: ["node-mesh", node.id] });
       queryClient.invalidateQueries({ queryKey: ["nodes"] });
-      return true;
+      setEditing(null);
     } catch (err) {
       await notify(errorMessage(err));
-      return false;
     } finally {
       setBusy(false);
     }
   };
-  let status: React.ReactNode = t.mesh.quicOff;
-  if (!supported) status = m.unsupported;
-  else if (port > 0) {
-    if (d?.httpReady && d.httpPort === port) status = m.ready(port);
-    else if (d?.httpError)
-      status = (
-        <span className="text-warning" title={d.httpError}>
-          {m.failed(d.httpError)}
-        </span>
-      );
-    else if (!d?.address) status = m.noAddress(port);
-    else status = m.on(port);
-  }
   return (
-    <SettingRow label={m.title} help={m.help} description={status}>
-      {isAdmin && supported && q.data && (
-        <>
-          {port > 0 && (
-            <Button variant="outline" disabled={busy || !node.online} onClick={() => setEditing(true)}>
-              {t.common.actions.edit}
+    <>
+      <MeshOption
+        nodeId={node.id}
+        online={node.online}
+        field="directDownloadOff"
+        title={m.title}
+        help={m.help}
+        confirm={m.confirm}
+        onStatus={status}
+        extra={(data) =>
+          d?.httpSupported && (
+            <Button variant="outline" disabled={busy || !node.online} onClick={() => setEditing(data)}>
+              {m.httpPort}
             </Button>
-          )}
-          <Button variant="outline" disabled={busy || !node.online} onClick={() => (port > 0 ? void save(0) : setEditing(true))}>
-            {busy && <Spinner />}
-            {port > 0 ? t.mesh.optionDisable : t.mesh.quicEnable}
-          </Button>
-        </>
-      )}
-      <Dialog open={editing} onClose={() => setEditing(false)} title={m.dialogTitle} description={m.help}>
-        <DirectHTTPForm
-          port={port || 80}
-          action={port > 0 ? t.common.actions.save : t.mesh.quicEnable}
-          busy={busy}
-          onCancel={() => setEditing(false)}
-          onSave={async (p) => {
-            if (await save(p)) setEditing(false);
-          }}
-        />
+          )
+        }
+      />
+      <Dialog open={editing !== null} onClose={() => setEditing(null)} title={m.portTitle} description={m.portDescription}>
+        {editing && <DirectHTTPForm port={editing.directHttpPort || 80} busy={busy} onCancel={() => setEditing(null)} onSave={(p) => void save(editing, p)} />}
       </Dialog>
-    </SettingRow>
+    </>
   );
 }
 
-function DirectHTTPForm({ port, action, busy, onCancel, onSave }: { port: number; action: string; busy: boolean; onCancel: () => void; onSave: (port: number) => void }) {
-  const m = t.mesh.directHttp;
+function DirectHTTPForm({ port, busy, onCancel, onSave }: { port: number; busy: boolean; onCancel: () => void; onSave: (port: number) => void }) {
+  const m = t.mesh.direct;
   const [value, setValue] = useState(String(port));
   const [checked, setChecked] = useState(false);
   const n = Number(value);
@@ -563,7 +539,7 @@ function DirectHTTPForm({ port, action, busy, onCancel, onSave }: { port: number
         </Button>
         <Button type="submit" disabled={busy}>
           {busy && <Spinner />}
-          {action}
+          {t.common.actions.save}
         </Button>
       </DialogActions>
     </form>

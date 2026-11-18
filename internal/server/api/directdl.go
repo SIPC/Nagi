@@ -10,6 +10,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/directdl"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
@@ -93,6 +94,100 @@ func jsonFail(w http.ResponseWriter, r *http.Request, code int, err error) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": errorText(requestLang(r), err)})
 }
 
+// 直连下载的方式：HTTPS 链接、加密 HTTP 下载的命令，或者能用哪种给哪种（MCP，HTTPS 优先）。
+type directMode int
+
+const (
+	directLinkMode directMode = iota
+	directCommandMode
+	directAutoMode
+)
+
+func modeOf(r *http.Request) directMode {
+	if commandMode(r) {
+		return directCommandMode
+	}
+	return directLinkMode
+}
+
+// DirectResult 是一次签发的结果：URL（HTTPS 链接）和 Command（加密 HTTP 下载的命令）最多有一个，都没有表示节点现在不能直连。
+type DirectResult struct {
+	URL     string
+	Command *nodes.DirectHTTPCommand
+}
+
+// ErrNoDirect：节点现在不能直连下载（关了、没有公网地址、HTTPS 和加密 HTTP 都不能用、旧版本）。
+var ErrNoDirect = i18n.New("该节点现在不能直连下载，请经面板下载")
+
+// issueDirect 按 mode 签发，成功时记一次活动记录（record，参数里带链接编号，命令另带 direct_http）。
+func issueDirect(ctx context.Context, conn *nodes.Conn, claims directdl.Claims, mode directMode, record func(extra map[string]any)) (DirectResult, error) {
+	if mode != directCommandMode {
+		if url := conn.DirectLink(claims); url != "" {
+			record(nil)
+			return DirectResult{URL: url}, nil
+		}
+		if mode == directLinkMode {
+			return DirectResult{}, nil
+		}
+	}
+	cmd, err := conn.DirectHTTP(ctx, claims)
+	if err != nil || cmd == nil {
+		return DirectResult{}, err
+	}
+	record(map[string]any{"direct_http": true})
+	return DirectResult{Command: cmd}, nil
+}
+
+// volumeDirect 签发卷文件的直连下载。调用前已经检查过权限。
+func (a *API) volumeDirect(ctx context.Context, u auth.User, ref *nagiv1.VolumeFileRef, mode directMode) (DirectResult, error) {
+	nodeID, err := a.Projects.Locate(ctx, ref.GetProjectId(), ref.GetContainer())
+	if err != nil {
+		return DirectResult{}, err
+	}
+	conn, err := a.Nodes.Get(nodeID)
+	if err != nil {
+		return DirectResult{}, nil
+	}
+	id := directdl.NewID()
+	claims := directdl.Claims{Kind: directdl.KindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
+		Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath(), ID: id, User: u.Name}
+	return issueDirect(ctx, conn, claims, mode, func(extra map[string]any) {
+		params := map[string]any{"direct_link": id}
+		maps.Copy(params, extra)
+		a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, params)
+	})
+}
+
+// nodeDirect 签发节点文件的直连下载。调用前已经检查过权限。
+func (a *API) nodeDirect(ctx context.Context, u auth.User, nodeID, path string, mode directMode) (DirectResult, error) {
+	conn, err := a.Nodes.Get(nodeID)
+	if err != nil {
+		return DirectResult{}, nil
+	}
+	id := directdl.NewID()
+	claims := directdl.Claims{Kind: directdl.KindNode, Path: path, ID: id, User: u.Name}
+	return issueDirect(ctx, conn, claims, mode, func(extra map[string]any) {
+		params := map[string]any{"detail": path, "direct_link": id}
+		maps.Copy(params, extra)
+		b, _ := json.Marshal(params)
+		a.Record(context.WithoutCancel(ctx), audit.Event{Action: "DownloadNodeFile", TargetType: "node", TargetID: nodeID,
+			TargetName: a.nodeName(ctx, nodeID), Params: string(b)})
+	})
+}
+
+// writeResult 按请求的方式回答浏览器：链接不能用时回 204（浏览器经面板下载），命令不能用时回 409。
+func writeResult(w http.ResponseWriter, r *http.Request, res DirectResult, err error) {
+	if err != nil {
+		jsonFail(w, r, http.StatusBadGateway, err)
+		return
+	}
+	if commandMode(r) {
+		writeCommand(w, r, res.Command)
+		return
+	}
+	writeDirect(w, res.URL)
+}
+
 // VolumeDirectHandler：GET /api/volume-file/direct?project=&container=&volume=&path=&snapshot=，参数同 /api/volume-file。
 // 带 mode=command 时回答加密 HTTP 下载的命令（writeCommand）。
 func (a *API) VolumeDirectHandler() http.Handler {
@@ -113,40 +208,12 @@ func (a *API) VolumeDirectHandler() http.Handler {
 		}
 		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
 		ref := &nagiv1.VolumeFileRef{ProjectId: q.Get("project"), Container: q.Get("container"), Volume: q.Get("volume"), Path: q.Get("path"), SnapshotId: q.Get("snapshot")}
-		nodeID, err := a.Projects.Locate(ctx, ref.GetProjectId(), ref.GetContainer())
-		if err != nil {
+		if _, err := a.Projects.Locate(ctx, ref.GetProjectId(), ref.GetContainer()); err != nil {
 			jsonFail(w, r, http.StatusNotFound, err)
 			return
 		}
-		conn, err := a.Nodes.Get(nodeID)
-		if err != nil {
-			if commandMode(r) {
-				writeCommand(w, r, nil)
-				return
-			}
-			writeDirect(w, "")
-			return
-		}
-		id := directdl.NewID()
-		claims := directdl.Claims{Kind: directdl.KindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
-			Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath(), ID: id, User: u.Name}
-		if commandMode(r) {
-			cmd, err := conn.DirectHTTP(ctx, claims)
-			if err != nil {
-				jsonFail(w, r, http.StatusBadGateway, err)
-				return
-			}
-			if cmd != nil {
-				a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, map[string]any{"direct_link": id, "direct_http": true})
-			}
-			writeCommand(w, r, cmd)
-			return
-		}
-		url := conn.DirectLink(claims)
-		if url != "" {
-			a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, map[string]any{"direct_link": id})
-		}
-		writeDirect(w, url)
+		res, err := a.volumeDirect(ctx, u, ref, modeOf(r))
+		writeResult(w, r, res, err)
 	})
 }
 
@@ -172,40 +239,35 @@ func (a *API) NodeDirectHandler() http.Handler {
 			jsonFail(w, r, http.StatusForbidden, i18n.New("请先验证身份"))
 			return
 		}
-		conn, err := a.Nodes.Get(nodeID)
-		if err != nil {
-			if commandMode(r) {
-				writeCommand(w, r, nil)
-				return
-			}
-			writeDirect(w, "")
-			return
-		}
-		id := directdl.NewID()
-		record := func(extra map[string]any) {
-			params := map[string]any{"detail": path, "direct_link": id}
-			maps.Copy(params, extra)
-			b, _ := json.Marshal(params)
-			a.Record(context.WithoutCancel(ctx), audit.Event{Action: "DownloadNodeFile", TargetType: "node", TargetID: nodeID,
-				TargetName: a.nodeName(ctx, nodeID), Params: string(b)})
-		}
-		claims := directdl.Claims{Kind: directdl.KindNode, Path: path, ID: id, User: u.Name}
-		if commandMode(r) {
-			cmd, err := conn.DirectHTTP(ctx, claims)
-			if err != nil {
-				jsonFail(w, r, http.StatusBadGateway, err)
-				return
-			}
-			if cmd != nil {
-				record(map[string]any{"direct_http": true})
-			}
-			writeCommand(w, r, cmd)
-			return
-		}
-		url := conn.DirectLink(claims)
-		if url != "" {
-			record(nil)
-		}
-		writeDirect(w, url)
+		res, err := a.nodeDirect(ctx, u, nodeID, path, modeOf(r))
+		writeResult(w, r, res, err)
 	})
+}
+
+// VolumeDirectLink 是 MCP 的 get_download_link（见 docs/mcp.md#文件）：权限和 read_file 一样（checkAgentFiles：能操作容器、
+// 访问范围内的项目，令牌要允许执行命令）。HTTPS 能用时给链接，否则给加密 HTTP 下载的命令，都不能用时返回 ErrNoDirect。
+func (a *API) VolumeDirectLink(ctx context.Context, ref *nagiv1.VolumeFileRef) (DirectResult, error) {
+	if err := a.checkAgentFiles(ctx, ref.GetProjectId(), false); err != nil {
+		return DirectResult{}, err
+	}
+	res, err := a.volumeDirect(ctx, auth.CurrentUser(ctx), ref, directAutoMode)
+	if err == nil && res.URL == "" && res.Command == nil {
+		err = ErrNoDirect
+	}
+	return res, err
+}
+
+// NodeDirectLink 是 MCP 的 get_node_download_link：和 read_node_file 一样只给管理员，令牌要勾「节点终端」
+// （网页的会话要做过高权限确认）。规则同 VolumeDirectLink。
+func (a *API) NodeDirectLink(ctx context.Context, nodeID, path string) (DirectResult, error) {
+	u := auth.CurrentUser(ctx)
+	if u.Role != auth.RoleAdmin || !u.ElevatedFor(nagiv1connect.NodeServiceReadNodeFileProcedure) {
+		a.recordNodeAccess(ctx, "DownloadNodeFile", nodeID, path+": 当前账号没有权限执行这个操作", true)
+		return DirectResult{}, i18n.New("当前账号没有权限执行这个操作")
+	}
+	res, err := a.nodeDirect(ctx, u, nodeID, path, directAutoMode)
+	if err == nil && res.URL == "" && res.Command == nil {
+		err = ErrNoDirect
+	}
+	return res, err
 }

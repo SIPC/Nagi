@@ -60,7 +60,8 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 	p := proxy.New(filepath.Join(dataDir, "caddy"), slog.Default())
 	defer p.Stop()
 	proxy.SetDirectHandler(a.direct)
-	p.SetDirectHTTP(a.direct.wantedHTTP(p))
+	// 没有开 HTTPS（测试里不申请证书）：加密 HTTP 作为备用开着。
+	p.SetDirectHTTP(a.direct.wantedHTTP(p, ""))
 	if err := p.Apply(nil); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 		t.Fatalf("没有开好：%v", st)
 	}
 	// 开着以后再生成配置，端口是自己占着的，不算被占用。
-	p.SetDirectHTTP(a.direct.wantedHTTP(p))
+	p.SetDirectHTTP(a.direct.wantedHTTP(p, ""))
 	if st := a.direct.status(p); !st.GetHttpReady() || st.GetHttpError() != "" {
 		t.Fatalf("重新生成配置以后：%v", st)
 	}
@@ -143,7 +144,7 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 	defer busy.Close()
 	p2 := proxy.New(filepath.Join(dataDir, "caddy2"), slog.Default())
 	defer p2.Stop()
-	if addr, _ := a.direct.wantedHTTP(p2); addr != "" {
+	if addr, _ := a.direct.wantedHTTP(p2, ""); addr != "" {
 		t.Error("端口被占用时不该开")
 	}
 	if st := a.direct.status(p2); st.GetHttpReady() || !strings.Contains(st.GetHttpError(), strconv.Itoa(port)) {

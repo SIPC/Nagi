@@ -492,9 +492,9 @@ type MeshOptionsArgs struct {
 	QuicOff  *bool  `json:"quic_off,omitempty" jsonschema:"true sends all TCP over WireGuard instead of QUIC"`
 	RelayOff *bool  `json:"relay_off,omitempty" jsonschema:"true stops the node from relaying for other nodes"`
 	// 直连下载（见 docs/agent.md#直连下载）。
-	DirectDownloadOff *bool `json:"direct_download_off,omitempty" jsonschema:"true makes browsers always download this node's files through the panel instead of directly from the node"`
+	DirectDownloadOff *bool `json:"direct_download_off,omitempty" jsonschema:"true makes every download of this node's files (browser, copied links and commands, get_download_link) go through the panel instead of directly from the node"`
 	// 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。
-	DirectHTTPPort *int `json:"direct_http_port,omitempty" jsonschema:"port for encrypted HTTP downloads (copy-only download commands for nodes without an IP certificate); 0 turns it off; 443 is not allowed"`
+	DirectHTTPPort *int `json:"direct_http_port,omitempty" jsonschema:"port for the encrypted HTTP fallback, used for download commands while direct download is on but HTTPS is unavailable; 0 means the default 80; 443 is not allowed"`
 }
 
 func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
@@ -519,7 +519,7 @@ func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
 	}
 	if in.DirectHTTPPort != nil {
 		if *in.DirectHTTPPort < 0 || *in.DirectHTTPPort > 65535 || *in.DirectHTTPPort == 443 {
-			return nil, errors.New("direct_http_port must be 0 (off) or 1-65535, not 443")
+			return nil, errors.New("direct_http_port must be 0 (default 80) or 1-65535, not 443")
 		}
 		opts.DirectHttpPort = uint32(*in.DirectHTTPPort)
 	}

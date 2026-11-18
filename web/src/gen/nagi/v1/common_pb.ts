@@ -1873,28 +1873,28 @@ export type DirectDownload = Message<"nagi.v1.DirectDownload"> & {
   error: string;
 
   /**
-   * 节点支持加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。旧版本的节点没有这一项。
+   * 节点支持加密 HTTP 下载：直连下载开着、HTTPS 不能用时的备用方式（见 docs/agent.md#加密-http-下载）。旧版本的节点没有这一项。
    *
    * @generated from field: bool http_supported = 6;
    */
   httpSupported: boolean;
 
   /**
-   * 加密 HTTP 下载的端口，0 表示没有开启。
+   * 加密 HTTP 下载的端口（默认 80）。关了直连下载时为 0。
    *
    * @generated from field: uint32 http_port = 7;
    */
   httpPort: number;
 
   /**
-   * 已经在这个端口上为 address 开好了规则，可以签发下载命令。
+   * HTTPS 不能用，已经在这个端口上为 address 开好了加密 HTTP 下载，可以签发下载命令。
    *
    * @generated from field: bool http_ready = 8;
    */
   httpReady: boolean;
 
   /**
-   * 开启了但不能用的原因（端口被占用等）。
+   * 需要加密 HTTP 下载但开不了的原因（端口被占用等）。
    *
    * @generated from field: string http_error = 9;
    */
@@ -2623,7 +2623,7 @@ export type MeshStatus = Message<"nagi.v1.MeshStatus"> & {
   directDownloadOff: boolean;
 
   /**
-   * 加密 HTTP 下载的端口，0 表示没有开启（节点的网络设置，见 docs/agent.md#加密-http-下载）。
+   * 加密 HTTP 下载的端口（节点的网络设置，默认 80，见 docs/agent.md#加密-http-下载）。
    *
    * @generated from field: uint32 direct_http_port = 10;
    */
@@ -2778,7 +2778,7 @@ export type MeshOptions = Message<"nagi.v1.MeshOptions"> & {
   setDirectDownload: boolean;
 
   /**
-   * 加密 HTTP 下载的端口，0 表示关闭（见 docs/agent.md#加密-http-下载）。
+   * 加密 HTTP 下载的端口（直连下载开着、HTTPS 不能用时的备用方式，见 docs/agent.md#加密-http-下载），0 表示默认的 80。
    *
    * @generated from field: uint32 direct_http_port = 5;
    */

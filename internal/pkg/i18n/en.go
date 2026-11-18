@@ -401,6 +401,8 @@ var en = map[string]string{
 	"文件已变化，请重新获取下载命令":                     "The file has changed. Get a new download command",
 	"下载链接已使用":                             "The download link has already been used",
 	"该节点现在不能生成下载命令":                       "This node can't create download commands right now",
+	"节点关闭了直连下载":                           "Direct download is turned off on this node",
+	"该节点现在不能直连下载，请经面板下载":                  "Direct download from this node isn't available right now. Download through the panel",
 	"节点没有启动 Caddy（--no-proxy）":            "The node doesn't run Caddy (--no-proxy)",
 	"该节点不是这个容器的备份节点":                      "This node isn't a backup node of this container",
 	"节点 %s 版本过低，只能设置一个备份节点，请先升级节点":        "Node %s is too old to have more than one backup node. Upgrade it first",

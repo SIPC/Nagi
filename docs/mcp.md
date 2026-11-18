@@ -42,6 +42,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
   - **节点终端**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以），要同时勾「执行命令」。勾了才能用 `node_exec`（见下面的[节点命令](#节点命令)）和节点文件、导入现有目录、隔离节点、副本的存放位置这些网页上要先做高权限确认的操作（见[高权限确认](#高权限确认)），OAuth 范围是 `nagi:node`。成员降为操作员后，令牌上的这一项随之失效。
   - **管理面板**：默认不勾，只有管理员能勾（个人访问令牌和 OAuth 授权都可以）。勾了才有[管理面板](#管理面板)的工具：面板设置、告警渠道、活动和审计、面板更新、备用面板状态、成员（只读）；修改的还要勾「可修改」。每次使用都发告警。OAuth 范围是 `nagi:admin`。成员降为操作员后随之失效。
 - 节点镜像（见下面的[节点镜像](#节点镜像)）只给管理员的令牌：查看不用额外权限，删除、清理、拉取要勾「可修改」。
+- 直连下载的链接和命令（`get_download_link`、`get_node_download_link`，见下面的[文件](#文件)）只给管理员的令牌：卷文件要勾「执行命令」（和 `read_file` 一样），节点文件要勾「节点终端」（和 `read_node_file` 一样）。
 - 令牌只在 `/mcp` 有效：Connect 接口、终端、上传这些入口不接受令牌，令牌泄露时影响面只有下面列出的工具。
 
 ### 个人访问令牌
@@ -217,6 +218,9 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `create_dir` | 在卷里新建目录（连同上级目录） | `CreateVolumeDir` |
 | `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
 | `delete_file` | 删除卷里的一个文件或目录（连同里面的内容）。不带 `confirm` 只返回预览，`confirm` 原样填路径才删除 | `DeleteVolumeFile` |
+| `get_download_link` | 只给管理员。给一个文件或目录（打包成 .tar.gz，`snapshot_id` 时是快照里的）的直连下载，交给别的机器或下载工具：HTTPS 能用时是 5 分钟有效的链接（`method: https`）；HTTPS 不能用、节点改用[加密 HTTP](agent.md#加密-http-下载) 时是一条 curl + openssl 的命令（`method: encrypted_http`，带 SHA-256 或不校验的原因）；关了直连下载或都不能用时报错，改用网页下载。规则和网页的菜单一样 | 面板签发，节点的 `PrepareDirectHttp` |
+
+`get_download_link` 的命令里有解密的密钥：它出现在对话里（工具说明写明了），运行后留在 shell 历史中，只交给用户。和网页一样每次签发记一次 `DownloadVolumeFile`（参数里有链接编号 `direct_link`，命令另有 `direct_http`），工具调用的记录不含返回的结果，密钥不进活动记录。
 
 读写都记进活动记录（`DownloadVolumeFile`、`UploadVolumeFile`、`CreateVolumeDir`、`RestoreVolumeFile`、`DeleteVolumeFile`、`RenameVolumeFile`、`MoveVolumeFiles`、`CopyVolumeFiles`、`CompressVolumeFiles`、`ExtractVolumeFile`），带着卷和路径。`create_dir`、`restore_file`、`delete_file`、`move_files`、`compress_files`、`extract_file` 会修改卷，令牌还要勾「可修改」。移动、复制、打包、解压在节点本地进行，过程中用进度通知推送已处理的文件数和字节数；和部署一样用不跟着客户端取消的 ctx，超过 10 分钟返回「仍在进行」。文件内容和日志一样当作不可信数据。
 
@@ -235,7 +239,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `remove_node` | 让面板忘记节点；节点上还有容器时接口拒绝 | 节点名 | `RemoveNode` |
 | `set_node_mirrors` | 替换节点的镜像加速地址（写 `/etc/docker/daemon.json`，再让 Docker 重新加载配置，不重启容器；重新加载不了时要重启 Docker 才用） | — | `SetNodeMirrors` |
 | `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器 | — | `SetNodeProjectsRoot` |
-| `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转、关闭直连下载、设置加密 HTTP 下载的端口（`direct_http_port`，0 关闭，见 [agent.md](agent.md#加密-http-下载)），只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
+| `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转、关闭直连下载、设置 HTTPS 不能用时加密 HTTP 下载的端口（`direct_http_port`，0 是默认的 80，见 [agent.md](agent.md#加密-http-下载)），只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
 | `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
 | `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
 | `reclaim_node_snapshots` | 立即清理节点上每个容器的快照仓库，回收没用到的数据，快照本身不删 | — | `ReclaimNodeSnapshots` |
@@ -256,6 +260,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | --- | --- | --- |
 | `list_node_files` | 列出节点上的一个目录：类型、大小、权限、属主、访问规则（`normal`、`confirm`、`readonly`、`denied`），`sizes` 时统计子目录大小 | `ListNodeDir`、`ListNodeDirSizes` |
 | `read_node_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256；二进制文件只返回属性 | `ReadNodeFile` |
+| `get_node_download_link` | 节点上一个文件或目录的直连下载链接或命令，规则同 `get_download_link`，记 `DownloadNodeFile` | 面板签发，节点的 `PrepareDirectHttp` |
 | `write_node_file` | 新建或覆盖一个文本文件，最多 1 MB。覆盖时要带 `read_node_file` 返回的 `expected_sha256`，旧内容按网页的规则保留备份 | `ListNodeDir`、`WriteNodeFile` |
 | `create_node_dir` | 新建目录（连同上级目录），不用确认 | `CreateNodeDir` |
 | `delete_node_file` | 删除文件或目录（连同里面的内容），符号链接只删链接，不备份 | `ListNodeDir`、`DeleteNodeFile` |

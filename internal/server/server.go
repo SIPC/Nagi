@@ -482,6 +482,7 @@ func (s *Server) Run(ctx context.Context) error {
 		Handler: mux, Auth: s.auth, OAuth: oauthServer, Exec: a.RunCommand, NodeExec: a.RunNodeCommand, Record: a.RecordMCPDenied, Audit: a.RecordMCPCall,
 		PanelAlert: a.AlertPanelTool,
 		Files:      mcp.FileAccess{Read: a.ReadVolumeFile, Write: a.WriteVolumeFile},
+		Direct:     mcp.DirectAccess{Volume: a.VolumeDirectLink, Node: a.NodeDirectLink},
 		Version:    s.cfg.Version, Standby: s.standby != nil, Log: s.log,
 	})
 	if s.primary != nil {

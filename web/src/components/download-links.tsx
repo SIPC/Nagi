@@ -1,5 +1,5 @@
 // 复制下载链接、下载命令（见 docs/agent.md#直连下载、#加密-http-下载）：文件菜单里的两项和它们的对话框，卷文件和节点文件共用。
-// 下载链接是 HTTPS 的直连链接，给下载工具或别的设备用；节点拿不到 IP 证书时，开启了加密 HTTP 下载的节点给一条命令：
+// 下载链接是 HTTPS 的直连链接，给下载工具或别的设备用；HTTPS 不能用（节点拿不到 IP 证书等）时，改用加密 HTTP 下载，给一条命令：
 // curl 经 HTTP 下载密文，openssl 在本地解密。浏览器拦截 HTTPS 页面上的 HTTP 下载，所以命令只能复制。
 import { useRef, useState } from "react";
 import { toast } from "sonner";

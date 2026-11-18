@@ -565,7 +565,7 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 		}
 		s.node.changed() // 直连下载开关：重新生成 Caddy 配置
 	}
-	// 加密 HTTP 下载同样只在请求带了它（set_direct_http）时改。
+	// 加密 HTTP 下载的端口同样只在请求带了它（set_direct_http）时改，0 表示默认的 80。
 	if req.GetSetDirectHttp() {
 		if err := s.node.direct.setHTTPPort(int(req.GetDirectHttpPort())); err != nil {
 			return nil, err
