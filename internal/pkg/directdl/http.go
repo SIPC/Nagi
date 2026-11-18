@@ -135,7 +135,7 @@ type Command struct {
 	URL  string
 	Name string // 文件名（来自节点，这里清理后再用）
 	Key  ContentKey
-	// SHA256 是文件内容的 SHA-256（十六进制），为空时不核对。
+	// SHA256 是文件内容的 SHA-256（64 位十六进制），为空或格式不对时不核对（见 ValidSHA256）。
 	SHA256 string
 	// Resume：普通文件，可以续传、分段下载；目录打包是现生成的流，都不能。
 	Resume bool
@@ -194,7 +194,7 @@ func (c Command) String() string {
 
 // posixCheck 是最后核对 SHA-256 的部分。openssl dgst 各版本输出的格式不同（OpenSSL 1.1、3、LibreSSL），哈希总在最后一个字段。
 func (c Command) posixCheck(name string) string {
-	if c.SHA256 == "" {
+	if !ValidSHA256(c.SHA256) {
 		return ""
 	}
 	return ` && [ "$(openssl dgst -sha256 < ` + name + ` | awk '{print $NF}')" = ` + shellQuote(c.SHA256) + ` ]` +
@@ -287,4 +287,17 @@ func SafeName(name string) string {
 // shellQuote 用单引号括起来：单引号里只有 ' 本身需要处理（结束引号、转义的 '、再开始引号）。
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// ValidSHA256 判断 s 是不是 64 位十六进制（大小写都行）。拼进命令之前一律先检查：值来自节点。
+func ValidSHA256(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
 }

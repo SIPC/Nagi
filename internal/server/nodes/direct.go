@@ -3,6 +3,7 @@ package nodes
 import (
 	"context"
 	"crypto/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,8 +148,14 @@ func (c *Conn) DirectHTTP(ctx context.Context, claims directdl.Claims) (*DirectH
 	if !res.GetArchive() {
 		ck = directdl.FileKey(key, claims, res.GetEtag())
 	}
+	// 节点给的值拼进要在用户电脑上运行的命令：只认 64 位十六进制的 SHA-256，别的一律不用（不核对），被攻破的节点
+	// 借不了它往命令里塞东西。文件名由 Command 自己清理、加引号。
+	sha := strings.ToLower(res.GetSha256())
+	if !directdl.ValidSHA256(sha) {
+		sha = ""
+	}
 	cmd := directdl.Command{URL: directdl.HTTPURL(addr, int(st.GetHttpPort()), token), Name: res.GetName(), Key: ck,
-		SHA256: res.GetSha256(), Resume: !res.GetArchive(), Size: res.GetSize()}
+		SHA256: sha, Resume: !res.GetArchive(), Size: res.GetSize()}
 	return &DirectHTTPCommand{Command: cmd.String(), CommandWindows: cmd.Windows(), Segmented: cmd.Segmented(), ID: claims.ID, Name: directdl.SafeName(res.GetName()), Size: res.GetSize(),
-		Archive: res.GetArchive(), SHA256: res.GetSha256(), HashSkipped: res.GetHashSkipped(), Expires: expires}, nil
+		Archive: res.GetArchive(), SHA256: sha, HashSkipped: res.GetHashSkipped(), Expires: expires}, nil
 }
