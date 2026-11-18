@@ -46,6 +46,8 @@ export default {
   deleteMany: (n) => `Delete ${n} items? The selected files and directories are deleted.`,
   deleteType: (n) => `Enter ${n} to confirm`,
   sizePending: "Calculating",
+  computeSize: "Calculate",
+  sizeTooLarge: "This directory is large. Click to calculate its size.",
   sizeIncomplete: "The directory is too large to calculate its size.",
   upload: {
     title: "Uploads",

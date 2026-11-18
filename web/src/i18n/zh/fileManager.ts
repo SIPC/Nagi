@@ -45,6 +45,8 @@ export default {
   deleteMany: (n: number) => `删除 ${n} 项？选中的文件和目录将被删除。`,
   deleteType: (n: number) => `输入 ${n} 以确认`,
   sizePending: "正在统计",
+  computeSize: "计算",
+  sizeTooLarge: "目录较大，点击计算大小",
   sizeIncomplete: "目录过大，无法统计大小",
   upload: {
     title: "上传",

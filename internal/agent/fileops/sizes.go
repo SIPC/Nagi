@@ -28,6 +28,8 @@ type DirSize struct {
 	Size     int64
 	Files    int64
 	Complete bool
+	// TooLarge：统计到的大小超过了 maxBytes，停下了（Complete 为 false）。
+	TooLarge bool
 	// Dir：确实是目录。符号链接和文件不统计（不跟随链接），调用方不返回它们。
 	Dir bool
 }
@@ -57,8 +59,9 @@ func DirSizeLimits(ctx context.Context, full bool) (timeout time.Duration, maxEn
 }
 
 // DirSizes 并行统计 fsys 里 dir 下各个子目录 names 的大小（普通文件的字节数之和，不跟随符号链接）。
-// 共用一份限额：timeout 到了、或者合计看过 maxEntries 项就停下。skip 对路径（fsys 里的，/ 分隔）返回 true 时跳过。
-func DirSizes(ctx context.Context, fsys fs.FS, dir string, names []string, timeout time.Duration, maxEntries int64, skip func(p string) bool) []DirSize {
+// 共用一份限额：timeout 到了、或者合计看过 maxEntries 项就停下。maxBytes 大于 0 时，单个目录统计到的大小超过它就停下，
+// 标为 TooLarge。skip 对路径（fsys 里的，/ 分隔）返回 true 时跳过。
+func DirSizes(ctx context.Context, fsys fs.FS, dir string, names []string, timeout time.Duration, maxEntries, maxBytes int64, skip func(p string) bool) []DirSize {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	out := make([]DirSize, len(names))
@@ -70,7 +73,7 @@ func DirSizes(ctx context.Context, fsys fs.FS, dir string, names []string, timeo
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
-				out[i] = dirSize(ctx, fsys, path.Join(dir, names[i]), names[i], &seen, maxEntries, skip)
+				out[i] = dirSize(ctx, fsys, path.Join(dir, names[i]), names[i], &seen, maxEntries, maxBytes, skip)
 			}
 		}()
 	}
@@ -82,7 +85,7 @@ func DirSizes(ctx context.Context, fsys fs.FS, dir string, names []string, timeo
 	return out
 }
 
-func dirSize(ctx context.Context, fsys fs.FS, root, name string, seen *atomic.Int64, maxEntries int64, skip func(string) bool) DirSize {
+func dirSize(ctx context.Context, fsys fs.FS, root, name string, seen *atomic.Int64, maxEntries, maxBytes int64, skip func(string) bool) DirSize {
 	res := DirSize{Name: name}
 	if info, err := fs.Lstat(fsys, root); err != nil || !info.IsDir() {
 		return res
@@ -107,6 +110,11 @@ func dirSize(ctx context.Context, fsys fs.FS, root, name string, seen *atomic.In
 			if info, err := d.Info(); err == nil {
 				res.Size += info.Size()
 				res.Files++
+				if maxBytes > 0 && res.Size > maxBytes {
+					res.TooLarge = true
+					stopped = true
+					return fs.SkipAll
+				}
 			}
 		}
 		return nil

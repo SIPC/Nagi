@@ -451,23 +451,28 @@ func TestDirSizes(t *testing.T) {
 		write(t, dir, "many/"+strings.Repeat("x", i+1), "1")
 	}
 	fsys := os.DirFS(dir)
-	got := DirSizes(context.Background(), fsys, ".", []string{"a", "b"}, time.Second, 1000, nil)
+	got := DirSizes(context.Background(), fsys, ".", []string{"a", "b"}, time.Second, 1000, 0, nil)
 	if got[0].Size != 8 || got[0].Files != 2 || !got[0].Complete || got[1].Size != 1 {
 		t.Fatalf("大小不对：%+v", got)
 	}
 	// 文件数的限额用完时标记为不完整。
-	got = DirSizes(context.Background(), fsys, ".", []string{"many"}, time.Second, 10, nil)
+	got = DirSizes(context.Background(), fsys, ".", []string{"many"}, time.Second, 10, 0, nil)
 	if got[0].Complete || got[0].Files >= 50 {
 		t.Fatalf("超出限额应该不完整：%+v", got[0])
 	}
 	// 时间到了也一样。
-	got = DirSizes(context.Background(), fsys, ".", []string{"many"}, 0, 1000, nil)
+	got = DirSizes(context.Background(), fsys, ".", []string{"many"}, 0, 1000, 0, nil)
 	if got[0].Complete {
 		t.Fatalf("超时应该不完整：%+v", got[0])
 	}
-	got = DirSizes(context.Background(), fsys, ".", []string{"a"}, time.Second, 1000, func(p string) bool { return p == "a/sub" })
+	got = DirSizes(context.Background(), fsys, ".", []string{"a"}, time.Second, 1000, 0, func(p string) bool { return p == "a/sub" })
 	if got[0].Size != 5 {
 		t.Fatalf("跳过的路径不计入：%+v", got[0])
+	}
+	// 超过 maxBytes 停下，标为太大；没超过的照常统计完。
+	got = DirSizes(context.Background(), fsys, ".", []string{"a", "b"}, time.Second, 1000, 4, nil)
+	if !got[0].TooLarge || got[0].Complete || got[1].TooLarge || !got[1].Complete {
+		t.Fatalf("超过上限的应标为太大：%+v", got)
 	}
 }
 

@@ -176,8 +176,8 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
   const names = useMemo(() => entries.map((e) => e.name), [entries]);
   const dirNames = entries.filter((e) => e.isDir && !e.isSymlink && e.access !== "denied").map((e) => e.name);
   // 目录大小在列表出来以后再统计，不拖慢列表。
-  const dirSize = useDirSizes(["node-dir-sizes", node.id, real], dirNames, ops && !!q.data, (names, full, signal) =>
-    nodeClient.listNodeDirSizes({ nodeId: node.id, path: real, names, full }, { signal }),
+  const dirSize = useDirSizes(["node-dir-sizes", node.id, real], dirNames, ops && !!q.data, (names, full, maxBytes, signal) =>
+    nodeClient.listNodeDirSizes({ nodeId: node.id, path: real, names, full, maxBytes: BigInt(maxBytes) }, { signal }),
   );
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["node-dir", node.id] });
