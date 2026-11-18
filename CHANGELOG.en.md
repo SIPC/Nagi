@@ -8,6 +8,26 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.33.0
+
+### New features
+
+- The file menu adds "Copy download link" for use in download tools or on other machines.
+- When a node can't use HTTPS for direct download, the file menu offers "Copy download command", which downloads over encrypted HTTP and decrypts and verifies the file locally.
+- MCP can get a download link or download command for a file.
+
+### Improvements
+
+- Directories larger than 5 GB are no longer sized automatically. Click "Calculate" to calculate their size.
+
+### Behavior changes
+
+- With direct download on, nodes that can't use HTTPS open an HTTP port (80 by default) when needed for encrypted downloads. You can change the port in the node's settings.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.33.0 to use download links and download commands.
+
 ## v0.32.0
 
 ### New features
