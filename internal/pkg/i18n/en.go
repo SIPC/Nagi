@@ -272,6 +272,7 @@ var en = map[string]string{
 	"git 仓库地址不能指向节点本机":                                                    "Git repository URLs can't point to the node itself",
 	"容器不能依赖自身":                                                            "A container can't depend on itself",
 	"依赖的容器名称 %s 只能用小写字母、数字和 -":                                            "Dependency %s may only contain lowercase letters, digits, and -",
+	"服务名 %s 不能以 - 开头":                                                     "Service name %s can't start with -",
 	"变量名 %s 只能包含字母、数字和下划线，且不能以数字开头":                                       "Variable name %s may only contain letters, digits, and underscores, and can't start with a digit",
 	"变量 %s 重复":                                                            "Duplicate variable %s",
 	"快照包含的子目录须为现有目录下的一级目录名（如 postgres），不能是 %s":                            "Snapshot subdirectories must be top-level directory names in the existing directory, such as postgres, not %s",

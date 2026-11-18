@@ -71,11 +71,19 @@ func TestValidate(t *testing.T) {
 		"git password":  {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "http://u:p@git.example.com/a/b.git"}},
 		"git loopback":  {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "http://127.0.0.1:8080/a.git"}},
 		"git localhost": {Compose: ok.Compose, Source: &nagiv1.Source{GitUrl: "git@localhost:a.git"}},
+		"dash service":  {Compose: "services:\n  -pother:\n    image: nginx\n"},
 	}
 	for name, cfg := range cases {
 		if _, err := Validate(ctx, cfg, "web", nil, dir, "nagi-test"); err == nil {
 			t.Errorf("%s: expected error", name)
 		}
+	}
+	// compose 自己接受以 - 开头的服务名（Load 读取已保存的配置时照常），只是 Validate 不让保存。
+	if _, err := LoadCompose(ctx, cases["dash service"].GetCompose(), nil, dir, "nagi-test"); err != nil {
+		t.Errorf("LoadCompose: %v", err)
+	}
+	if _, err := Validate(ctx, &nagiv1.ContainerConfig{Compose: "services:\n  web-1:\n    image: nginx\n"}, "web", nil, dir, "nagi-test"); err != nil {
+		t.Errorf("服务名中间的 - 照常: %v", err)
 	}
 }
 
