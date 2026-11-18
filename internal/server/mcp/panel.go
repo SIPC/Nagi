@@ -63,7 +63,7 @@ func init() {
 			procedures:  []string{nagiv1connect.SettingsServiceVerifyAuditProcedure}}),
 			toolVerifyAudit),
 		def(panel(tool{name: "check_panel_update", title: "Check panel update", idempotent: true,
-			description: "Administrators with the panel administration permission only. Whether a newer panel release exists, its release notes, and the progress of panel and node updates.",
+			description: "Administrators with the panel administration permission only. Whether a newer panel release exists, its release notes, and the progress of panel and node updates: phase, and while downloading the source, bytes downloaded, total and speed (nodes older than v0.35.0 report no download progress).",
 			procedures: []string{nagiv1connect.SettingsServiceCheckPanelUpdateProcedure, nagiv1connect.SettingsServiceGetPanelReleaseNotesProcedure,
 				nagiv1connect.SettingsServiceGetUpdateStatusProcedure}}),
 			toolCheckPanelUpdate),
@@ -578,6 +578,21 @@ func toolCheckPanelUpdate(c *call, _ empty) (any, error) {
 			v := map[string]any{"target": u.GetTarget(), "from": u.GetFrom(), "phase": u.GetPhase(), "started_at": ts(u.GetStartedAt())}
 			if u.GetError() != "" {
 				v["error"] = u.GetError()
+			}
+			if u.GetSource() != "" {
+				v["source"] = u.GetSource()
+			}
+			// 下载进度（installing 时才有，旧版本的节点不报），见 docs/panel.md#更新状态。
+			if u.GetStage() != "" {
+				p := map[string]any{"stage": u.GetStage(), "downloaded_bytes": u.GetDownloaded()}
+				if u.GetTotal() > 0 {
+					p["total_bytes"] = u.GetTotal()
+					p["percent"] = u.GetDownloaded() * 100 / u.GetTotal()
+				}
+				if u.GetBytesPerSecond() > 0 {
+					p["bytes_per_second"] = u.GetBytesPerSecond()
+				}
+				v["progress"] = p
 			}
 			return v
 		}

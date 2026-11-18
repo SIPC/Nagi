@@ -192,16 +192,17 @@ func (p *Prepared) Discard() { os.Remove(p.tmp) }
 func Download(ctx context.Context, base, dst string) error {
 	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
-	_, err := download(ctx, base, dst, "")
+	_, err := download(ctx, base, dst, "", nil)
 	return err
 }
 
 // download 从 base 下载 nagi-linux-<架构> 到 dst，并按同一地址下的 SHA256SUMS 核对；pinned 不为空时
 // SHA256SUMS 里的值还必须等于它（直接从 GitHub 拿到的值，见 fetchFirst）。返回 SHA256SUMS 里的值，下载文件失败时也返回。
-func download(ctx context.Context, base, dst, pinned string) (string, error) {
+// report 不为空时报告下载文件和核对的进度（见 Progress），SHA256SUMS 不报。
+func download(ctx context.Context, base, dst, pinned string, report func(stage Stage, got, total int64)) (string, error) {
 	name := binaryName()
 
-	sums, err := fetch(ctx, base+"/SHA256SUMS", 64<<10, nil)
+	sums, err := fetch(ctx, base+"/SHA256SUMS", 64<<10, nil, nil)
 	if err != nil {
 		return "", err
 	}
@@ -218,12 +219,24 @@ func download(ctx context.Context, base, dst, pinned string) (string, error) {
 		return want, err
 	}
 	h := sha256.New()
-	_, err = fetch(ctx, base+"/"+name, 0, io.MultiWriter(f, h))
+	var onRead func(got, total int64)
+	var got, total int64
+	if report != nil {
+		onRead = func(n, size int64) {
+			got, total = n, size
+			report(StageDownload, n, size)
+		}
+	}
+	_, err = fetch(ctx, base+"/"+name, 0, io.MultiWriter(f, h), onRead)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		return want, err
+	}
+	if report != nil {
+		// 校验值是边下载边算的，这里只是比较，很快；之后的试运行才要等一会儿。
+		report(StageVerify, got, total)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != want {
 		return want, i18n.Errorf("下载的文件校验不一致（%s，应为 %s），请重试或检查镜像地址", got[:12], want[:min(12, len(want))])
@@ -274,7 +287,9 @@ var transport http.RoundTripper = func() http.RoundTripper {
 }()
 
 // fetch 下载 url：w 不为空时写进 w，否则读进内存返回（最多 limit 字节）。速度太慢时放弃（见 watchSpeed）。
-func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, error) {
+// report 不为空时报告进度：收到响应头时报一次 0，之后最多每 progressInterval 报一次，下载完再报一次。
+// total 是响应的 Content-Length，不知道时为 -1。
+func fetch(ctx context.Context, url string, limit int64, w io.Writer, report func(got, total int64)) ([]byte, error) {
 	name := path.Base(url)
 	wctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
@@ -309,9 +324,18 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer) ([]byte, e
 	}
 	total.Store(resp.ContentLength)
 	body := &countingReader{r: resp.Body, n: &got}
+	if report != nil {
+		size := resp.ContentLength
+		report(0, size)
+		body.last = time.Now()
+		body.report = func(n int64) { report(n, size) }
+	}
 	if w != nil {
 		if _, err := io.Copy(w, body); err != nil {
 			return nil, unreachable(err)
+		}
+		if report != nil {
+			report(got.Load(), resp.ContentLength)
 		}
 		return nil, nil
 	}
@@ -359,11 +383,20 @@ func watchSpeed(got, total *atomic.Int64, deadline time.Time, lowSpeedTime time.
 type countingReader struct {
 	r io.Reader
 	n *atomic.Int64
+	// report 不为空时最多每 progressInterval 调用一次，传入读到的字节数；last 是上一次调用的时间。
+	report func(int64)
+	last   time.Time
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
-	c.n.Add(int64(n))
+	got := c.n.Add(int64(n))
+	if c.report != nil && n > 0 {
+		if now := time.Now(); now.Sub(c.last) >= progressInterval {
+			c.last = now
+			c.report(got)
+		}
+	}
 	return n, err
 }
 

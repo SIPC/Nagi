@@ -8315,10 +8315,20 @@ type UpdateState struct {
 	// 失败的原因。
 	Error     string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 	StartedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	// 下载用上的地址（主机名，例如 github.com、ghfast.top），替换后（restarting）才有；旧版本的节点不报。
-	Source        string `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 下载用的地址（主机名，例如 github.com、ghfast.top）。替换后（restarting）是用上的地址；installing 时是正在下载的地址，
+	// 有进度时才有（见 stage）。旧版本的节点不报。
+	Source string `protobuf:"bytes,6,opt,name=source,proto3" json:"source,omitempty"`
+	// 以下是 installing 时的进度，只在面板内存里（见 docs/panel.md#更新状态）。旧版本的节点不报，这时 stage 为空。
+	// download（下载）、verify（核对）、test（试运行）。
+	Stage string `protobuf:"bytes,7,opt,name=stage,proto3" json:"stage,omitempty"`
+	// 从 source 已下载的字节数，换地址时从 0 重新算。
+	Downloaded int64 `protobuf:"varint,8,opt,name=downloaded,proto3" json:"downloaded,omitempty"`
+	// 文件大小（字节），不知道时为 -1；没有进度时为 0。
+	Total int64 `protobuf:"varint,9,opt,name=total,proto3" json:"total,omitempty"`
+	// 最近几秒的下载速度（字节/秒），算不出时为 0。
+	BytesPerSecond int64 `protobuf:"varint,10,opt,name=bytes_per_second,json=bytesPerSecond,proto3" json:"bytes_per_second,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *UpdateState) Reset() {
@@ -8391,6 +8401,34 @@ func (x *UpdateState) GetSource() string {
 		return x.Source
 	}
 	return ""
+}
+
+func (x *UpdateState) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *UpdateState) GetDownloaded() int64 {
+	if x != nil {
+		return x.Downloaded
+	}
+	return 0
+}
+
+func (x *UpdateState) GetTotal() int64 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *UpdateState) GetBytesPerSecond() int64 {
+	if x != nil {
+		return x.BytesPerSecond
+	}
+	return 0
 }
 
 type GetUpdateStatusResponse struct {
@@ -15343,7 +15381,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x12UpdatePanelRequest\"/\n" +
 	"\x13UpdatePanelResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\"\x18\n" +
-	"\x16GetUpdateStatusRequest\"\xb8\x01\n" +
+	"\x16GetUpdateStatusRequest\"\xae\x02\n" +
 	"\vUpdateState\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12\x12\n" +
 	"\x04from\x18\x02 \x01(\tR\x04from\x12\x14\n" +
@@ -15351,7 +15389,14 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x129\n" +
 	"\n" +
 	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x16\n" +
-	"\x06source\x18\x06 \x01(\tR\x06source\"\xf2\x01\n" +
+	"\x06source\x18\x06 \x01(\tR\x06source\x12\x14\n" +
+	"\x05stage\x18\a \x01(\tR\x05stage\x12\x1e\n" +
+	"\n" +
+	"downloaded\x18\b \x01(\x03R\n" +
+	"downloaded\x12\x14\n" +
+	"\x05total\x18\t \x01(\x03R\x05total\x12(\n" +
+	"\x10bytes_per_second\x18\n" +
+	" \x01(\x03R\x0ebytesPerSecond\"\xf2\x01\n" +
 	"\x17GetUpdateStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12*\n" +
 	"\x05panel\x18\x02 \x01(\v2\x14.nagi.v1.UpdateStateR\x05panel\x12A\n" +

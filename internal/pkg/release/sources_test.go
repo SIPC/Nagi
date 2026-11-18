@@ -265,7 +265,7 @@ func TestFetchFirst(t *testing.T) {
 		pinned := sum(goodBin)
 		s := sourcesOf(direct, evil)[1]
 		before := evil.hits.Load()
-		if _, err := download(context.Background(), s.Base, filepath.Join(t.TempDir(), "x"), pinned); err == nil || !strings.Contains(err.Error(), "和 GitHub 上的不一致") {
+		if _, err := download(context.Background(), s.Base, filepath.Join(t.TempDir(), "x"), pinned, nil); err == nil || !strings.Contains(err.Error(), "和 GitHub 上的不一致") {
 			t.Fatalf("应报 SHA256SUMS 不一致，实际 %v", err)
 		}
 		if n := evil.hits.Load() - before; n != 1 {

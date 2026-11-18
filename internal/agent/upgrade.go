@@ -67,6 +67,16 @@ func (s *agentService) Upgrade(ctx context.Context, req *nagiv1.UpgradeRequest) 
 	return &nagiv1.UpgradeResponse{Version: want, Source: p.Source.Name()}, nil
 }
 
+// UpgradeProgress 返回正在进行的升级的进度（下载、核对、试运行），面板在等 Upgrade 返回时每秒问一次。
+// 没有在升级、还没有进度、已经开始替换时返回空的。
+func (s *agentService) UpgradeProgress(context.Context, *nagiv1.UpgradeProgressRequest) (*nagiv1.UpgradeProgressResponse, error) {
+	p, ok := s.node.upgrade.current()
+	if !ok {
+		return &nagiv1.UpgradeProgressResponse{}, nil
+	}
+	return &nagiv1.UpgradeProgressResponse{Stage: string(p.Stage), Source: p.Source, Downloaded: p.Downloaded, Total: p.Total}, nil
+}
+
 // CancelUpgrade 取消正在下载、校验的升级。已经开始替换的不能取消。
 func (s *agentService) CancelUpgrade(context.Context, *nagiv1.CancelUpgradeRequest) (*nagiv1.CancelUpgradeResponse, error) {
 	if err := s.node.upgrade.abort(); err != nil {
@@ -83,6 +93,9 @@ type upgradeState struct {
 	canceled  bool
 	replacing bool // 已经开始替换（直到重启），不能取消
 	cancel    context.CancelFunc
+	// progress 是这次升级最新的进度（release.WithProgress），hasProgress 表示收到过。
+	progress    release.Progress
+	hasProgress bool
 }
 
 func (u *upgradeState) begin(ctx context.Context) (context.Context, context.CancelFunc, error) {
@@ -93,7 +106,26 @@ func (u *upgradeState) begin(ctx context.Context) (context.Context, context.Canc
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	u.active, u.canceled, u.replacing, u.cancel = true, false, false, cancel
-	return ctx, cancel, nil
+	u.progress, u.hasProgress = release.Progress{}, false
+	return release.WithProgress(ctx, u.setProgress), cancel, nil
+}
+
+func (u *upgradeState) setProgress(p release.Progress) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.active && !u.replacing {
+		u.progress, u.hasProgress = p, true
+	}
+}
+
+// current 返回正在下载、核对、试运行的升级的最新进度。
+func (u *upgradeState) current() (release.Progress, bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if !u.active || u.replacing || !u.hasProgress {
+		return release.Progress{}, false
+	}
+	return u.progress, true
 }
 
 // commit 在替换之前调用：已经取消时返回 false。

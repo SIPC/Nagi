@@ -73,7 +73,7 @@ func init() {
 			procedures:  []string{ln, nagiv1connect.NodeServiceGetNodeMeshProcedure, nagiv1connect.NodeServiceGetPanelMeshProcedure, nagiv1connect.NodeServiceTestNodeMeshSpeedProcedure}},
 			toolTestMeshSpeed),
 		def(tool{name: "upgrade_nodes", title: "Upgrade nodes", write: true, adminOnly: true, destructive: true,
-			description: "Administrators only. Upgrade a node, or every node behind the panel one after another, to the panel's version; runs in the background and nodes restart (containers keep running). Check progress with list_nodes. cancel stops queued and downloading upgrades. Starting previews first; then call again with confirm set to the node name, or all.",
+			description: "Administrators only. Upgrade a node, or every node behind the panel one after another, to the panel's version; runs in the background and nodes restart (containers keep running). Check versions with list_nodes; check_panel_update shows each upgrade's phase and download progress (needs the panel administration permission). cancel stops queued and downloading upgrades. Starting previews first; then call again with confirm set to the node name, or all.",
 			procedures:  []string{ln, nagiv1connect.NodeServiceUpgradeNodeProcedure, nagiv1connect.NodeServiceUpgradeAllNodesProcedure, nagiv1connect.NodeServiceCancelNodeUpgradeProcedure}},
 			toolUpgradeNodes),
 		def(tool{name: "reclaim_node_snapshots", title: "Reclaim snapshot space", write: true, adminOnly: true,
