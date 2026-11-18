@@ -252,7 +252,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 规则：
 
 - 配对码是 32 字节随机数，5 分钟内有效，只能用一次，绑定生成它的成员和网页会话；这个会话退出时配对码作废。每个成员同时只有一个有效的配对码，重新生成时旧的作废。
-- 配对的地址 `/api/app/pair` 和备用面板配对一样，不受安全入口限制，对不认识的配对码返回 404。按 IP 限速，和登录共用计数。
+- 配对的接口（`AppService.GetPairing`、`Pair`）和备用面板配对一样，不受安全入口限制（只认 App 发的格式，见[换取令牌](#换取令牌)），对不认识的配对码返回 `not_found`。按 IP 限速，和登录共用计数。
 - 二维码里没有面板名称：App 查询配对码时面板返回名称。面板名称取 settings 表的 `panel_name`，没有设置时是面板机器的主机名（界面上还不能改）。
 - 「添加手机」只能在网页上做，App 里不能再添加别的手机：手机被人拿走、锁屏密码也被看到时，不能借它给另一台手机留下登录。
 
@@ -288,7 +288,8 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 - 设置了[管理员登录地址](panel.md#管理员登录地址)时，管理员的手机只能从这些地址换取和使用令牌，否则拒绝、记审计（`admin_network_denied`）并告警。
 - 签名不对时记审计（`app_signature_invalid`），连续 5 次后这台手机要先解锁 App（见下一节）才能继续换取。
 - 令牌过期、换了网段、面板重启过时，接口返回 `unauthenticated` 和响应头 `Nagi-App-Retoken`（`expired`、`network`），App 重新换取后再试一次。需要解锁时 `Token` 返回 `failed_precondition` 和 `Nagi-App-Retoken: unlock`。
-- 开了安全入口时，`/nagi.v1.AppService/` 不受限制；其他请求带着面板发过的 App 令牌（过期的也算）时放行，交给接口检查。
+- 开了安全入口时，只放行 App 拿到令牌之前要调用的四个方法：`AppService.GetPairing`、`Pair`、`Challenge`、`Token`，而且只认 App 发的格式——`POST` 加 `Content-Type: application/proto`（Connect 协议的一元调用、protobuf 编码、请求不压缩，connect-kotlin 的默认做法）。别的请求方法、JSON 编码、`AppService` 的其他方法和不认识的路径，和别处一样返回 404。其他请求带着面板发过的 App 令牌（过期的也算）时放行，交给接口检查（`Info`、`Logout`、订阅流等）。
+  - 残余：这四个方法对不认识的配对码、设备 ID 仍然返回 Connect 的 `not_found`（带中文提示），不是 HTTP 层的 404，所以知道 Nagi 接口格式的扫描者发一个格式正确的请求，仍能认出这是 Nagi 面板（进不了接口，这些接口按 IP 限速，和登录共用计数）。没有改成 HTTP 404 的原因：App 靠 `Challenge` 返回的 `not_found` 判断「这台手机已退出」（回到欢迎页），靠 `GetPairing`、`Pair` 的提示告诉用户二维码已失效；connect-kotlin 把 HTTP 404 当作 `unimplemented`，App 会一直重试、显示不出原因。以后 App 能把 HTTP 404 当作「已退出」时再改。
 
 ### 解锁 App
 

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -241,10 +242,8 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-		// 安卓 App 的配对和换取令牌（见 docs/android.md#appservice）：和备用面板配对一样不受安全入口限制，
-		// 不认识的配对码、设备 ID 返回 404。
 		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || p == "/api/standby/pair" || p == "/api/standby/status" ||
-			strings.HasPrefix(p, "/nagi.v1.AppService/") {
+			appEntranceRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -269,6 +268,27 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 		}
 		http.NotFound(w, r)
 	})
+}
+
+// appEntranceProcedures 是开了安全入口也放行的 App 接口：App 拿到令牌之前要调用、又没有别的凭据的四个
+// （查询配对码、添加、取挑战、换取令牌，见 docs/android.md#换取令牌）。Info、Logout 和其他接口带着 App 令牌，
+// 走下面「带着面板发过的 App 令牌」那一条。
+var appEntranceProcedures = map[string]bool{
+	"/nagi.v1.AppService/GetPairing": true,
+	"/nagi.v1.AppService/Pair":       true,
+	"/nagi.v1.AppService/Challenge":  true,
+	"/nagi.v1.AppService/Token":      true,
+}
+
+// appEntranceRequest 判断是不是 App 发的这四个请求：只认 App 的格式，Connect 协议的一元调用，
+// POST 加 application/proto（connect-kotlin 用 protobuf 编码时就是这样，不压缩请求）。
+// 其余（GET、JSON、别的方法、不认识的路径）和别处一样返回 404，看不出这里有面板。
+func appEntranceRequest(r *http.Request) bool {
+	if r.Method != http.MethodPost || !appEntranceProcedures[r.URL.Path] {
+		return false
+	}
+	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	return err == nil && mt == "application/proto"
 }
 
 func setEntranceCookie(w http.ResponseWriter, path string) {
