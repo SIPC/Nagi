@@ -640,3 +640,12 @@ func (s *Service) LinkUser(ctx context.Context, sessionID string, userID int64, 
 	}
 	return userOf(st), nil
 }
+
+// LinkAddressDenied 记下签名下载链接从它绑定的地址（第一次使用的地址）以外使用、已被拒绝：安全事件
+// download_link_other_ip，和网段变化（session_network_changed）一样只记入审计、不告警。ctx 里是这次请求的来源（WithRequest）。
+func (s *Service) LinkAddressDenied(ctx context.Context, u User, linkID, bound, issued string) {
+	m := RequestMeta(ctx)
+	st := store.SessionState{ID: u.SessionID, UserID: u.ID, Username: u.Name}
+	s.securityEvent(ctx, st, RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint, CDN: m.CDN},
+		"download_link_other_ip", "", map[string]string{"download_link": linkID, "bound_ip": bound, "issued_ip": issued})
+}

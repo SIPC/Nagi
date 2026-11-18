@@ -131,6 +131,7 @@ export default {
     session_device_changed: "Browser or system changed",
     session_network_flip: "Network switched back and forth",
     session_network_changed: "Network changed",
+    download_link_other_ip: "Download link used from another address",
     cross_origin_request: "Cross-site request rejected",
     cross_origin_summary: "Cross-site requests rejected",
     RegisterSessionKey: "Register session key",

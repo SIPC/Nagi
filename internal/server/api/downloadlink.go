@@ -26,8 +26,8 @@ import (
 // 上带 check=1&sign=1 请求（照常带 cookie、做同样的检查），面板签一个 5 分钟有效的链接 /api/download/<token>，浏览器再去下载它。
 //
 // 链接只凭签名和有效期，不看 cookie，不做会话的设备和指纹检查，不会让人退出登录。每次使用都按链接里的会话重查：用户和会话还在、
-// 没退出、没过期，角色和访问范围仍然允许（LinkUser 和下面的 linkAllowed）。有效期内可以多次使用（续传、多线程下载）；
-// 已经开始的传输过期后照常传完。
+// 没退出、没过期，角色和访问范围仍然允许（LinkUser 和下面的 linkAllowed）。有效期内可以从第一次使用的地址多次使用
+// （续传、多线程下载），别的地址 403（linkBinds）；已经开始的传输过期后照常传完。
 //
 // token 是 AES-256-GCM 加密的链接内容：防篡改，也不让路径、会话 ID 出现在下载工具或代理的日志里。密钥每个进程随机生成，
 // 面板重启后之前的链接失效。
@@ -54,7 +54,7 @@ type downloadClaims struct {
 	Path      string `json:"f"`
 	User      int64  `json:"u"`
 	Session   string `json:"sid"`
-	// IP 是签发时浏览器的地址：从别的地址使用时多记一条活动记录（不算错误）。
+	// IP 是签发时浏览器的地址：第一次使用的地址不是它时多记一条活动记录（不算错误）。
 	IP string `json:"ip,omitempty"`
 	// ID 是链接的编号，签发和使用的活动记录都带上它（download_link）。
 	ID      string `json:"id"`
@@ -223,28 +223,62 @@ func (a *API) linkAllowed(ctx context.Context, u auth.User, c downloadClaims) bo
 	return false
 }
 
-// otherIPs 记下从签发地址以外使用过的链接（编号和地址），每个只记一次活动记录。
-var otherIPs = struct {
+// linkBinds 记下每个链接第一次使用时的来源地址（见 docs/panel.md#会话）：之后只接受这个地址，下载工具和浏览器
+// 在同一台电脑上，地址相同，续传和多线程下载照常；拿到链接的人从别的地址来会被拒绝。按确切的地址比较：
+// 同一台电脑先后经 IPv4 和 IPv6 来、换了网络或 NAT 出口时，要在界面上重新下载。
+var linkBinds = struct {
 	sync.Mutex
-	m map[string]time.Time
-}{m: map[string]time.Time{}}
+	m map[string]*linkBind
+}{m: map[string]*linkBind{}}
 
-func firstOtherIP(id, ip string) bool {
-	otherIPs.Lock()
-	defer otherIPs.Unlock()
+type linkBind struct {
+	ip string
+	at time.Time
+	// otherIP：第一次使用的地址不是签发的地址，已经记过活动记录。
+	otherIP bool
+	// denied 是被拒绝过的地址，每个只记一次安全事件，最多记 maxLinkDenied 个。
+	denied map[string]bool
+}
+
+const maxLinkDenied = 20
+
+// bindLink 返回链接 id 绑定的地址（第一次使用时绑定到 ip）。ip 不是绑定的地址时，report 表示要为它记一条安全事件。
+func bindLink(id, ip string) (bound string, report bool) {
+	linkBinds.Lock()
+	defer linkBinds.Unlock()
 	now := time.Now()
-	if len(otherIPs.m) > 10000 {
-		for k, at := range otherIPs.m {
-			if now.Sub(at) > 2*downloadLinkTTL {
-				delete(otherIPs.m, k)
+	if len(linkBinds.m) > 10000 {
+		// 链接签发后 5 分钟过期，绑定 10 分钟以后的记录已经用不上了。
+		for k, b := range linkBinds.m {
+			if now.Sub(b.at) > 2*downloadLinkTTL {
+				delete(linkBinds.m, k)
 			}
 		}
 	}
-	k := id + "|" + ip
-	if _, ok := otherIPs.m[k]; ok {
+	b := linkBinds.m[id]
+	if b == nil {
+		linkBinds.m[id] = &linkBind{ip: ip, at: now}
+		return ip, false
+	}
+	if b.ip == ip || b.denied[ip] || len(b.denied) >= maxLinkDenied {
+		return b.ip, false
+	}
+	if b.denied == nil {
+		b.denied = map[string]bool{}
+	}
+	b.denied[ip] = true
+	return b.ip, true
+}
+
+// firstOtherIP 报告链接是不是第一次从签发以外的地址（也就是它绑定的地址）下载完成，每个链接只报一次。
+func firstOtherIP(id string) bool {
+	linkBinds.Lock()
+	defer linkBinds.Unlock()
+	b := linkBinds.m[id]
+	if b == nil || b.otherIP {
 		return false
 	}
-	otherIPs.m[k] = now
+	b.otherIP = true
 	return true
 }
 
@@ -271,6 +305,14 @@ func (a *API) DownloadLinkHandler() http.Handler {
 			return
 		}
 		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
+		// 第一次使用时绑定来源地址，之后别的地址 403，记一条安全事件（每个链接每个地址一次）。
+		if bound, report := bindLink(c.ID, ip); bound != ip {
+			if report {
+				a.Auth.LinkAddressDenied(ctx, u, c.ID, bound, c.IP)
+			}
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
 		lang := requestLang(r)
 		fail := func(code int, err error) {
 			h.Set("Content-Type", "application/json")
@@ -310,12 +352,12 @@ func (a *API) DownloadLinkHandler() http.Handler {
 			return
 		}
 		defer src.close()
-		// 签发时已经记过这次下载；从签发地址以外使用时（换了网络、下载工具走代理，或链接被转给了别人）多记一条，带上两个地址，
-		// 每个链接、每个地址只记一次。
+		// 签发时已经记过这次下载；第一次使用的地址不是签发的地址时（下载工具走代理、浏览器换了 IPv4 和 IPv6）多记一条，
+		// 带上两个地址，每个链接只记一次。
 		fileDownload{
 			open: src.open,
 			record: func(failure string) {
-				if failure == "" && ip != c.IP && firstOtherIP(c.ID, ip) {
+				if failure == "" && ip != c.IP && firstOtherIP(c.ID) {
 					record("")
 				}
 			},
