@@ -113,7 +113,7 @@ func richProject() *nagiv1.Project {
 				B: &nagiv1.FailoverParticipant{NodeId: "n1", Name: "a", Key: []byte{1}, Dir: "/srv/web"}},
 			FailoverHolder: &nagiv1.FailoverStatus{HolderName: "b", HolderKey: []byte{2}},
 			AlertRules:     &nagiv1.AlertRules{}, SnapshotSchedule: &nagiv1.SnapshotSchedule{IntervalMinutes: 60},
-			PendingHa:      &nagiv1.PendingHA{BackupNodeIds: []string{"n2"}, Failover: &nagiv1.FailoverConfig{}},
+			PendingHa: &nagiv1.PendingHA{BackupNodeIds: []string{"n2"}, Failover: &nagiv1.FailoverConfig{}},
 		}},
 	}
 }

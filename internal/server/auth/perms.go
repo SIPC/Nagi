@@ -142,6 +142,9 @@ var permRequires = map[Perm]Perms{
 	PermPrivileged: PermsOf(PermConfig, PermDeploy),
 	PermFilesWrite: PermsOf(PermFilesRead),
 	PermAddresses:  PermsOf(PermNetwork),
+	// 节点管理要看版本（升级）、路径（项目根目录、副本目录），节点终端和文件本来就看得到整台机器。
+	PermNodeManage: PermsOf(PermNodeDetails),
+	PermNodeRoot:   PermsOf(PermNodeDetails),
 }
 
 // Normalize 补上前提的权限（见 permRequires），去掉只给管理员的。
