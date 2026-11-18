@@ -1,5 +1,8 @@
 package ink.sipc.nagi.ui
 
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -41,6 +44,8 @@ fun NagiTextField(
     error: Boolean = false,
     enabled: Boolean = true,
     maxLength: Int? = null,
+    password: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction = ImeAction.Done,
     onDone: () -> Unit = {},
 ) {
@@ -67,7 +72,8 @@ fun NagiTextField(
         singleLine = true,
         textStyle = NagiTheme.type.body.copy(color = c.foreground),
         cursorBrush = SolidColor(c.foreground),
-        keyboardOptions = KeyboardOptions(imeAction = imeAction),
+        keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboardType, imeAction = imeAction),
+        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardActions = KeyboardActions(onDone = { onDone() }, onGo = { onDone() }),
         interactionSource = interaction,
         decorationBox = { inner ->

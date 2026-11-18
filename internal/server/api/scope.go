@@ -99,10 +99,6 @@ var scopeFiltered = map[string]bool{
 	nagiv1connect.ProjectServiceCreateProjectProcedure: true, // 目标节点按 node_id 核对，新项目加进范围
 	nagiv1connect.NodeServiceListNodesProcedure:        true,
 	nagiv1connect.NodeServiceGetPanelMeshProcedure:     true,
-	// 首页（见 overview.go）：处理函数自己按访问范围算。
-	nagiv1connect.ProjectServiceGetAttentionProcedure:  true,
-	nagiv1connect.ProjectServiceWatchOverviewProcedure: true,
-	nagiv1connect.NodeServiceQueryTrafficProcedure:     true,
 }
 
 func scopedService(procedure string) bool {

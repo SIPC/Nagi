@@ -293,7 +293,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if revoked {
 			s.revokeDirectLinks()
 		}
-		// 角色、访问范围变了：打开着的订阅流马上按新的重新计算（见 WatchOverview）。中途出错时已经改了的部分也算。
+		// 角色、访问范围变了：打开着的订阅流马上按新的重新计算。中途出错时已经改了的部分也算。
 		if changed && s.Nodes != nil {
 			s.Nodes.Changes.Bump()
 		}

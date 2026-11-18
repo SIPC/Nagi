@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 告警（和网页 web/src/i18n/zh/alerts.ts 一致）。 -->
+<resources>
+    <string name="alerts_channels_help">节点和容器异常时，告警发送到以下通知渠道。</string>
+    <string name="alerts_rules_where">告警规则在各节点和项目的设置中编辑。</string>
+    <string name="alerts_lost">面板主密钥已重新生成，原告警配置无法解密，重新填写并保存。</string>
+    <string name="channels_empty">暂无通知渠道</string>
+    <string name="channel_add">添加渠道</string>
+    <string name="channel_edit">编辑渠道</string>
+    <string name="channel_delete">删除渠道</string>
+    <string name="channel_delete_confirm">删除渠道 %1$s？告警不再发送到这个渠道。</string>
+    <string name="channel_test">发送测试消息</string>
+    <string name="channel_test_sent">已发送测试消息至 %1$s</string>
+    <string name="channel_name">名称</string>
+    <string name="channel_type">类型</string>
+    <string name="channel_url">地址</string>
+    <string name="channel_bot_token">机器人令牌</string>
+    <string name="channel_chat_id">聊天 ID</string>
+    <string name="channel_allow_private">允许内网地址</string>
+    <string name="channel_allow_private_help">允许发到局域网内的地址，例如自建的通知服务。本机地址和云服务器的元数据地址始终不允许。</string>
+    <string name="security_alerts">安全告警</string>
+    <string name="security_alert_totp">验证码连续错误</string>
+    <string name="security_alert_totp_desc">密码正确，但两步验证码连续错误 5 次，密码可能已泄露</string>
+    <string name="security_alert_ratelimit">登录被限速</string>
+    <string name="security_alert_ratelimit_desc">有 IP 因登录失败次数过多被限速，每小时汇总一条</string>
+    <string name="security_alert_network">管理员新网段登录</string>
+    <string name="security_alert_network_desc">管理员从最近 90 天没有登录过的网段登录</string>
+    <string name="security_alerts_always">账号、凭据和集群的重要变更总是会通知，不能关闭。</string>
+</resources>

@@ -2,10 +2,8 @@ package ink.sipc.nagi.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -24,14 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.ViewConfiguration
-import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,12 +42,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -73,7 +63,6 @@ private val PillPadding = 4.dp
 private val ItemPadding = 13.dp
 private val IconSize = 22.dp
 private val IconLabelGap = 4.dp
-private const val PILL_LONG_PRESS_MS = 200L
 
 /** 底色回弹越出两端时，外框撑开的距离是越出距离的几倍，以及最多撑开多少。 */
 private const val FRAME_FOLLOW = 1f
@@ -99,7 +88,6 @@ fun PillNav(
     val c = NagiTheme.colors
     val dark = LocalNagiDark.current
     val reduced = reducedMotion()
-    val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
 
     // 最长的名称宽度：选中的一项按它留位置，换到哪一项胶囊都一样宽。
@@ -109,30 +97,15 @@ fun PillNav(
         with(density) { items.maxOf { measurer.measure(it.label, labelStyle, maxLines = 1).size.width }.toDp() }
     }
 
-    // 是否正在长按拖动。
-    var dragging by remember { mutableStateOf(false) }
+    val drag = rememberPillDrag()
+    val scale = drag.scale()
     val bounds = remember { mutableStateMapOf<Int, Rect>() }
     val slider = rememberSlidingIndicator(selected)
-    val currentSelected by rememberUpdatedState(selected)
     val indicator = c.muted
     val card = c.card
     val border = c.border
-    val currentSelect by rememberUpdatedState(onSelect)
-    val currentItems by rememberUpdatedState(items)
-    val scale by animateFloatAsState(
-        if (dragging && !reduced) 1.04f else 1f,
-        if (reduced) snap() else spring(dampingRatio = 0.55f, stiffness = 500f),
-        label = "press",
-    )
-
-    // 胶囊的长按判断比系统默认（约 400ms）短，按住一下就能开始拖动；只影响胶囊。
-    val systemConfig = LocalViewConfiguration.current
-    val pillConfig = remember(systemConfig) {
-        object : ViewConfiguration by systemConfig {
-            override val longPressTimeoutMillis: Long = PILL_LONG_PRESS_MS
-        }
-    }
-    CompositionLocalProvider(LocalViewConfiguration provides pillConfig) {
+    // 长按拖动见 PillGestures.kt（和宽屏左侧的 PillRail 共用）。
+    PillLongPress {
     Box(
         modifier = modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp),
         contentAlignment = Alignment.BottomCenter,
@@ -176,30 +149,7 @@ fun PillNav(
                         drawRoundRect(indicator, Offset(r.left, r.top), Size(r.width, r.height), CornerRadius(r.height / 2))
                     }
                 }
-                .pointerInput(Unit) {
-                    // 胶囊内容区按项数等分，手指在第几份就是第几项。
-                    fun indexAt(x: Float): Int {
-                        val n = currentItems.size
-                        return (x / (size.width.toFloat() / n)).toInt().coerceIn(0, n - 1)
-                    }
-                    fun pick(x: Float) {
-                        val i = indexAt(x)
-                        if (i != currentSelected) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            currentSelect(i)
-                        }
-                    }
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { p ->
-                            dragging = true
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            pick(p.x)
-                        },
-                        onDrag = { change, _ -> pick(change.position.x) },
-                        onDragEnd = { dragging = false },
-                        onDragCancel = { dragging = false },
-                    )
-                }
+                .pillDrag(drag, items.size, selected, onSelect)
                 .selectableGroup(),
             verticalAlignment = Alignment.CenterVertically,
         ) {

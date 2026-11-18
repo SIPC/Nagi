@@ -1,5 +1,23 @@
 package ink.sipc.nagi.ui
 
+import androidx.compose.foundation.layout.IntrinsicSize
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -31,20 +49,55 @@ import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sign
 
-data class ChartLine(val values: List<Float>, val color: Color)
+/** 一条线。[label] 写在提示里。 */
+data class ChartLine(val values: List<Float>, val color: Color, val label: String = "")
 
 // LineChart：监控折线图（ui.md 监控图表）。平滑曲线（monotone），线宽 1.5，不画网格、纵轴和填充。
 // 所有线共用一个纵向比例，从 0 到最大值。下面是横轴的时间（通常 5 个），第一个靠左，最后一个靠右。
 // 少于两个点的线不画。
+// 给了 [tipTime] 时可以看某个时刻的数值（同网页）：点一下看点的那一刻，再点一下收起；长按后左右拖动逐个看；
+// 接鼠标时悬浮就看，移出收起。对准的时刻画一条竖的虚线，提示写时间和每条线的数值（[tipFormat]），
+// 在虚线右边，过了一半放到左边。
 @Composable
 fun LineChart(
     series: List<ChartLine>,
     modifier: Modifier = Modifier,
     height: Dp = 112.dp,
     xLabels: List<String> = emptyList(),
+    tipTime: ((Int) -> String)? = null,
+    tipFormat: (Float) -> String = { it.toString() },
 ) {
+    val count = series.maxOfOrNull { it.values.size } ?: 0
+    var hover by remember { mutableStateOf<Int?>(null) }
+    if (hover != null && hover!! >= count) hover = null
+    val density = LocalDensity.current
+    val colors = NagiTheme.colors
     Column(modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(height)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().height(height)) {
+        val widthPx = constraints.maxWidth.toFloat()
+        val nearest = { x: Float -> if (count < 2) null else ((x / widthPx) * (count - 1)).roundToInt().coerceIn(0, count - 1) }
+        val input = if (tipTime == null || count < 2) Modifier else Modifier
+            .mouseHover(onMove = { hover = nearest(it.x) }, onExit = { hover = null })
+            .pointerInput(count, widthPx) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    // 1：松手（点一下）；2：被页面滚动拿走；null：按住超过长按时间。
+                    val r = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { if (waitForUpOrCancellation() != null) 1 else 2 }
+                    when (r) {
+                        1 -> { val i = nearest(down.position.x); hover = if (hover == i) null else i }
+                        null -> {
+                            hover = nearest(down.position.x)
+                            while (true) {
+                                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                if (!c.pressed) break
+                                c.consume()
+                                hover = nearest(c.position.x)
+                            }
+                        }
+                    }
+                }
+            }
+        Canvas(Modifier.fillMaxWidth().height(height).then(input)) {
             val max = series.maxOfOrNull { it.values.maxOrNull() ?: 0f } ?: 0f
             val stroke = 1.5.dp.toPx()
             // 上下各留半个线宽，线贴边时不被裁掉
@@ -62,6 +115,44 @@ fun LineChart(
                     style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
+            hover?.let { i ->
+                val x = size.width * i / (count - 1)
+                drawLine(
+                    colors.mutedForeground, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())),
+                )
+            }
+        }
+        val i = hover
+        if (i != null && tipTime != null) {
+            val x = widthPx * i / (count - 1)
+            val toLeft = x > widthPx / 2
+            val gap = with(density) { 8.dp.toPx() }
+            Column(
+                Modifier
+                    .layout { m, c ->
+                        val p = m.measure(c.copy(minWidth = 0, maxWidth = Constraints.Infinity))
+                        layout(c.maxWidth, p.height) { p.place((if (toLeft) x - gap - p.width else x + gap).roundToInt(), 0) }
+                    }
+                    .shadow(8.dp, RoundedCornerShape(8.dp))
+                    .background(colors.card, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .width(IntrinsicSize.Max),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(tipTime(i), style = NagiTheme.type.small, color = colors.mutedForeground, maxLines = 1)
+                for (line in series.reversed()) {
+                    // 数值靠右对齐，和名称至少隔 12。
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(10.dp).background(line.color, RoundedCornerShape(2.dp)))
+                        Text(line.label, style = NagiTheme.type.small, color = colors.mutedForeground, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.weight(1f))
+                        Text(line.values.getOrNull(i)?.let(tipFormat) ?: "—", style = NagiTheme.type.small, color = colors.foreground, maxLines = 1)
+                    }
+                }
+            }
+        }
         }
         if (xLabels.isNotEmpty()) {
             Row(

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Members (same as web/src/i18n/en/members.ts). -->
+<resources>
+    <string name="members_empty">No members</string>
+    <string name="member_add">Add member</string>
+    <string name="member_you">You</string>
+    <string name="member_totp_on">2FA on</string>
+    <string name="member_gone">This member no longer exists</string>
+    <string name="member_role">Role</string>
+    <string name="role_admin_hint">Full access, including members and panel settings</string>
+    <string name="role_operator_hint">Can operate projects and containers, cannot manage nodes or the panel</string>
+    <string name="role_viewer_hint">View only, cannot see configuration or secrets, or open terminals</string>
+    <string name="member_username">Username</string>
+    <string name="member_password">Initial password</string>
+    <string name="member_reset_password">Reset password</string>
+    <string name="member_reset_clears_passkeys">The account\'s passkeys are cleared too. The account is signed out on all devices.</string>
+    <string name="member_clear_totp">Clear 2FA</string>
+    <string name="member_clear_totp_confirm">Clear 2FA for %1$s? The account can then sign in with only a password.</string>
+    <string name="member_clear_totp_passkeys_confirm">Clear 2FA and passkeys for %1$s? The account can then sign in with only a password.</string>
+    <string name="member_clear_passkeys">Clear passkeys</string>
+    <string name="member_clear_passkeys_confirm">Clear the passkeys of %1$s (%2$s)? The account can no longer sign in with a passkey.</string>
+    <string name="member_passkey_count">%1$d passkeys</string>
+    <string name="member_clear">Clear</string>
+    <string name="member_delete">Delete member</string>
+    <string name="member_delete_confirm">Delete member %1$s? The account can no longer sign in and is signed out on all devices.</string>
+    <string name="member_demote_self">Change role</string>
+    <string name="member_demote_self_confirm">Change your own role to %1$s? You lose admin access immediately, and another admin has to change it back.</string>
+    <string name="scope_everything">All projects and nodes</string>
+    <string name="scope_all_projects">All projects</string>
+    <string name="scope_all_nodes">All nodes</string>
+    <string name="scope_project_count">%1$d projects</string>
+    <string name="scope_node_count">%1$d nodes</string>
+    <string name="scope_group">Group %1$s</string>
+    <string name="scope_tag">Tag %1$s</string>
+    <string name="scope_projects">Projects</string>
+    <string name="scope_nodes">Nodes</string>
+    <string name="scope_all">All</string>
+    <string name="scope_some">Selected</string>
+    <string name="scope_projects_hint">Projects this member creates are added automatically.</string>
+    <string name="scope_nodes_hint">Containers can only be placed on these nodes.</string>
+    <string name="scope_no_projects">No projects</string>
+    <string name="scope_no_nodes">No nodes</string>
+    <string name="scope_kept">Also includes: %1$s (change in the web panel)</string>
+</resources>

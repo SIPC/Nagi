@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 面板更新（和网页 web/src/i18n/zh/update.ts 一致）。 -->
+<resources>
+    <string name="update">更新</string>
+    <string name="update_check">检查更新</string>
+    <string name="update_checked">%1$s检查</string>
+    <string name="update_up_to_date">已是最新版本</string>
+    <string name="update_available">有可用更新</string>
+    <string name="update_query_source">查询自 %1$s</string>
+    <string name="update_action">更新</string>
+    <string name="update_panel">更新面板</string>
+    <string name="update_confirm">将面板更新到 %1$s？面板下载并校验新版本后原地重启，进行中的部署等操作会中断。更新后不能在面板上退回旧版本。</string>
+    <string name="update_retry">重试</string>
+    <string name="update_installing">正在更新到 %1$s</string>
+    <string name="update_installing_text">面板正在下载并校验新版本，完成后原地重启。可离开此页，进度保存在面板上。</string>
+    <string name="update_restarting">已替换为 %1$s，面板正在重启</string>
+    <string name="update_failed">面板更新到 %1$s 失败</string>
+    <string name="update_from">下载自 %1$s</string>
+    <string name="update_download">下载中 %1$s</string>
+    <string name="update_verify">核对中</string>
+    <string name="update_test">试运行中</string>
+</resources>

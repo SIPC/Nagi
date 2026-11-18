@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 
 /**
@@ -28,11 +30,15 @@ object NagiTransitions {
     fun popOut(reduced: Boolean): ExitTransition =
         if (reduced) fadeOut(tween(100)) else slideOutHorizontally(tween(300, easing = Motion.ContentIn)) { it } + fadeOut(tween(100, 200))
 
-    /** 主导航切换。[forward] 为 true 时选的是右边的标签；[inPx]、[outPx] 是 32dp、16dp 换成的像素。 */
-    fun tab(forward: Boolean, inPx: Int, outPx: Int, reduced: Boolean): ContentTransform {
+    /**
+     * 主导航切换。[forward] 为 true 时选的是右边（宽屏时是下面）的标签；[inPx]、[outPx] 是 32dp、16dp 换成的像素。
+     * [vertical]：宽屏的导航竖在左边，页面跟着上下滑（选下面的标签，新页面从下面进来，旧页面往上让开）。
+     */
+    fun tab(forward: Boolean, inPx: Int, outPx: Int, reduced: Boolean, vertical: Boolean = false): ContentTransform {
         if (reduced) return fadeIn(tween(Motion.FADE_IN)) togetherWith fadeOut(tween(100))
         val dir = if (forward) 1 else -1
-        return (slideInHorizontally(tween(300, easing = Motion.ContentIn)) { dir * inPx } + fadeIn(tween(120, easing = Motion.Enter))) togetherWith
-            (slideOutHorizontally(tween(100, easing = Motion.Exit)) { -dir * outPx } + fadeOut(tween(100, easing = Motion.Exit)))
+        val enter = if (vertical) slideInVertically(tween(300, easing = Motion.ContentIn)) { dir * inPx } else slideInHorizontally(tween(300, easing = Motion.ContentIn)) { dir * inPx }
+        val exit = if (vertical) slideOutVertically(tween(100, easing = Motion.Exit)) { -dir * outPx } else slideOutHorizontally(tween(100, easing = Motion.Exit)) { -dir * outPx }
+        return (enter + fadeIn(tween(120, easing = Motion.Enter))) togetherWith (exit + fadeOut(tween(100, easing = Motion.Exit)))
     }
 }

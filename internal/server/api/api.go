@@ -73,8 +73,6 @@ type API struct {
 	origins originDenials
 	// directRot：正在给节点换直连下载的密钥（见 revokeDirectLinks）。
 	directRot directRotation
-	// traffic：首页流量的缓存（见 overview.go）。
-	traffic trafficCacheState
 }
 
 // Mount 把所有接口挂到 mux 上。

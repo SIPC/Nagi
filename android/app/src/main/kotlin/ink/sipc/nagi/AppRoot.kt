@@ -1,5 +1,42 @@
 package ink.sipc.nagi
 
+import ink.sipc.nagi.ui.Avatar
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
+import ink.sipc.nagi.ui.PillRail
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.NavController
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
+import ink.sipc.nagi.settings.MeshScreen
+import ink.sipc.nagi.settings.InviteScreen
+import ink.sipc.nagi.settings.StandbyScreen
+import ink.sipc.nagi.settings.ChannelScreen
+import ink.sipc.nagi.settings.AlertsScreen
+import ink.sipc.nagi.settings.MemberScreen
+import ink.sipc.nagi.settings.MemberAddScreen
+import ink.sipc.nagi.settings.MembersScreen
+import ink.sipc.nagi.settings.PanelSecurityScreen
+import ink.sipc.nagi.settings.AccessDomainScreen
+import ink.sipc.nagi.settings.AccessAddressScreen
+import ink.sipc.nagi.settings.AccessScreen
+import ink.sipc.nagi.settings.PasswordScreen
+import ink.sipc.nagi.settings.SecurityScreen
+import ink.sipc.nagi.settings.ProfileScreen
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.togetherWith
@@ -27,7 +64,6 @@ import ink.sipc.nagi.settings.PanelNameScreen
 import ink.sipc.nagi.settings.SettingsContent
 import ink.sipc.nagi.settings.SettingsRoutes
 import ink.sipc.nagi.settings.SettingsViewModel
-import ink.sipc.nagi.settings.SoonScreen
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import ink.sipc.nagi.ui.EmptyState
@@ -83,7 +119,7 @@ import ink.sipc.nagi.pairing.PairingViewModel
 import ink.sipc.nagi.pairing.ScanScreen
 import ink.sipc.nagi.pairing.UnlockScreen
 import ink.sipc.nagi.pairing.WelcomeScreen
-import ink.sipc.nagi.proto.v1.AttentionItem
+import ink.sipc.nagi.data.Attention
 import ink.sipc.nagi.ui.Dimens
 import ink.sipc.nagi.ui.NagiBackTopBar
 import ink.sipc.nagi.ui.NagiIcons
@@ -259,10 +295,10 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
             else -> {}
         }
     }
-    val critical = (overview as? OverviewState.Ready)?.overview?.attention?.itemsList?.any { it.severity == "critical" } == true
+    val critical = (overview as? OverviewState.Ready)?.overview?.attention?.any { it.severity == "critical" } == true
     val showMessage: (String) -> Unit = { msg -> scope.launch { snackbar.showSnackbar(msg) } }
     val actions = object : HomeActions {
-        override fun openAttention(item: AttentionItem) {
+        override fun openAttention(item: Attention) {
             when {
                 item.container.isNotEmpty() -> nav.navigate("container/${item.projectId}/${item.container}")
                 item.nodeId.isNotEmpty() -> tab = Tab.NODES
@@ -277,29 +313,116 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
             tab = Tab.PROJECTS
         }
 
-        override fun update(item: AttentionItem) {
+        override fun update(item: Attention) {
             nav.navigate("container/${item.projectId}/${item.container}")
         }
     }
 
     val reduced = isReducedMotion()
-    NavHost(
-        nav, startDestination = "tabs",
-        enterTransition = { NagiTransitions.pushIn(reduced) },
-        exitTransition = { NagiTransitions.pushOut(reduced) },
-        popEnterTransition = { NagiTransitions.popIn(reduced) },
-        popExitTransition = { NagiTransitions.popOut(reduced) },
-    ) {
-        page("tabs") {
-            Box(Modifier.fillMaxSize()) {
+    // 宽屏（600 dp 以上，平板、横屏、折叠屏展开）：左边竖着的胶囊代替底部的胶囊，一级和二级页面都显示；
+    // 设置页左边是菜单，右边是选中的一项（见 docs/android.md#宽屏）。只按窗口宽度判断。
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val navItems = listOf(
+        PillNavItem(NagiIcons.Home, stringResource(R.string.tab_home), badge = critical),
+        PillNavItem(NagiIcons.Folder, stringResource(R.string.tab_projects)),
+        PillNavItem(NagiIcons.Server, stringResource(R.string.tab_nodes)),
+        PillNavItem(NagiIcons.Settings, stringResource(R.string.tab_settings)),
+    )
+    val current by nav.currentBackStackEntryAsState()
+    val selectTab: (Int) -> Unit = { i ->
+        // 在二级页面点左边的胶囊：先回到一级页面再切换。
+        val onTabs = current?.destination?.route == "tabs"
+        if (!onTabs) nav.popBackStack("tabs", inclusive = false)
+        if (i == tab.ordinal && onTabs) {
+            // 再点一次当前的标签：回到顶部。
+            scope.launch {
+                when (tab) {
+                    Tab.HOME -> if (reduced) homeList.scrollToItem(0) else homeList.animateScrollToItem(0)
+                    Tab.SETTINGS -> if (reduced) settingsScroll.scrollTo(0) else settingsScroll.animateScrollTo(0)
+                    else -> {}
+                }
+            }
+        } else {
+            tab = Tab.entries[i]
+        }
+    }
+
+    // 设置的各个子页。窄屏时在主导航里一页一页推进去；宽屏时在设置页右边的那一栏里（[n] 是那一栏自己的导航）。
+    fun NavGraphBuilder.settingsPages(n: NavController) {
+        val back: () -> Unit = { n.popBackStack() }
+        val go: (String) -> Unit = { n.navigate(it) }
+        page(SettingsRoutes.PANEL) {
+            val info by settings.info.collectAsStateWithLifecycle()
+            PanelScreen(session, info?.role == "admin", onBack = back, onLogout = logout, open = go)
+        }
+        page(SettingsRoutes.PANEL_ALIAS) { PanelAliasScreen(session, onBack = back) }
+        page(SettingsRoutes.PANEL_NAME) {
+            val defaultName by settings.defaultName.collectAsStateWithLifecycle()
+            PanelNameScreen(session, defaultName, onBack = back)
+        }
+        page(SettingsRoutes.APPEARANCE) { AppearanceScreen(graph.prefs, onBack = back) }
+        page(SettingsRoutes.LANGUAGE) { LanguageScreen(graph.prefs, onBack = back) }
+        page(SettingsRoutes.ABOUT) {
+            val info by settings.info.collectAsStateWithLifecycle()
+            AboutScreen(BuildConfig.VERSION_NAME, info?.version, session, info?.role == "admin", onBack = back, open = go)
+        }
+        page(SettingsRoutes.PROFILE) { ProfileScreen(session, onBack = back, onSaved = settings::refresh) }
+        page(SettingsRoutes.SECURITY) { SecurityScreen(session, onBack = back, open = go, onSignedOut = onRemoved) }
+        page(SettingsRoutes.PASSWORD) { PasswordScreen(session, onBack = back, onSignedOut = onRemoved) }
+        page(SettingsRoutes.ACCESS) { AccessScreen(session, onBack = back, open = go) }
+        page(SettingsRoutes.ACCESS_ADDRESS) { AccessAddressScreen(session, onBack = back) }
+        page(SettingsRoutes.ACCESS_DOMAIN) { AccessDomainScreen(session, onBack = back) }
+        page(SettingsRoutes.PANEL_SECURITY) { PanelSecurityScreen(session, onBack = back) }
+        page(SettingsRoutes.MEMBERS) { MembersScreen(session, onBack = back, open = go) }
+        page(SettingsRoutes.MEMBER_ADD) { MemberAddScreen(session, onBack = back) }
+        page(SettingsRoutes.MEMBER) { entry -> MemberScreen(session, entry.arguments?.getString("id")?.toLongOrNull() ?: 0L, onBack = back) }
+        page(SettingsRoutes.ALERTS) { AlertsScreen(session, onBack = back, open = go) }
+        page(SettingsRoutes.CHANNEL) { entry -> ChannelScreen(session, entry.arguments?.getString("id").orEmpty(), onBack = back) }
+        page(SettingsRoutes.STANDBY) { StandbyScreen(session, onBack = back) }
+        page(SettingsRoutes.INVITE) { InviteScreen(session, onBack = back) }
+        page(SettingsRoutes.MESH) { MeshScreen(session, onBack = back) }
+        page(SettingsRoutes.CRASHES) { CrashLogsScreen(graph.crashLog, onBack = back, open = go) }
+        page(SettingsRoutes.CRASH) { entry ->
+            CrashLogScreen(graph.crashLog, entry.arguments?.getString("at")?.toLongOrNull() ?: 0L, onBack = back)
+        }
+        page(SettingsRoutes.LICENSES) { LicensesScreen(onBack = back) }
+    }
+
+    val panel by session.current.collectAsStateWithLifecycle()
+    Row(Modifier.fillMaxSize()) {
+        if (wide) {
+            // 左栏：上面是自己的头像（点开面板列表，代替顶部栏），左下角是竖着的胶囊，离底部手势条 12（和底部的胶囊一样）。
+            // 右边整块都给内容，没有顶部栏。胶囊选中的一项会横着浮出到右边，所以左栏在内容的上面一层。
+            val info by settings.info.collectAsStateWithLifecycle()
+            Column(
+                Modifier.zIndex(1f).width(88.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(top = 12.dp, bottom = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val me = info?.displayName?.ifEmpty { null } ?: info?.username ?: session.panel.displayName.ifEmpty { session.panel.username }
+                PanelBadge(panel.title, me, info?.avatar?.toByteArray()) { sheet = true }
+                Spacer(Modifier.weight(1f))
+                PillRail(navItems, tab.ordinal, selectTab)
+            }
+        }
+        NavHost(
+            nav, startDestination = "tabs",
+            modifier = Modifier.weight(1f),
+            enterTransition = { NagiTransitions.pushIn(reduced) },
+            exitTransition = { NagiTransitions.pushOut(reduced) },
+            popEnterTransition = { NagiTransitions.popIn(reduced) },
+            popExitTransition = { NagiTransitions.popOut(reduced) },
+        ) {
+            page("tabs") {
+                Box(Modifier.fillMaxSize()) {
                     // 内容铺满整页，从顶部栏下面开始（上内边距是状态栏加顶部栏的高度），往上滚时从顶部栏下面经过；
-                    // 顶部栏自己的下边缘渐变成透明（fade），内容滚到那里变淡。底部留出胶囊的高度。
-                    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Dimens.topBarHeight
-                    val contentPadding = PaddingValues(top = top, bottom = Dimens.bottomFade + 24.dp)
+                    // 顶部栏自己的下边缘渐变成透明（fade），内容滚到那里变淡。窄屏时底部留出胶囊的高度。
+                    // 宽屏没有顶部栏，内容从状态栏下面 12 开始。
+                    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                    val top = statusTop + if (wide) 12.dp else Dimens.topBarHeight
+                    val contentPadding = PaddingValues(top = top, bottom = if (wide) 24.dp else Dimens.bottomFade + 24.dp)
                     // 主导航切换：跟导航同方向左右滑入并淡入（选右边的标签，新页面从右边进来，旧页面往左让开），
                     // 和网页「点导航后的内容」一样：进来 32dp、透明度先到（120ms），共 300ms；旧的同方向移开 16dp、100ms 淡出。
                     // 「移除动画」时只淡入淡出。
-                    val reducedTabs = isReducedMotion()
                     val density = LocalDensity.current
                     AnimatedContent(
                         targetState = tab,
@@ -307,7 +430,7 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                         transitionSpec = {
                             val inPx = with(density) { 32.dp.roundToPx() }
                             val outPx = with(density) { 16.dp.roundToPx() }
-                            NagiTransitions.tab(targetState.ordinal > initialState.ordinal, inPx, outPx, reducedTabs)
+                            NagiTransitions.tab(targetState.ordinal > initialState.ordinal, inPx, outPx, reduced, vertical = wide)
                         },
                         label = "tab",
                     ) { t ->
@@ -315,68 +438,38 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                             Tab.HOME -> HomeContent(home, actions, contentPadding, showMessage, homeList)
                             Tab.PROJECTS -> Placeholder()
                             Tab.NODES -> Placeholder()
-                            Tab.SETTINGS -> SettingsContent(settings, session, graph.prefs, BuildConfig.VERSION_NAME, contentPadding, settingsScroll) { nav.navigate(it) }
-                        }
-                    }
-                val panel by session.current.collectAsStateWithLifecycle()
-                NagiTopBar(panel.title, onTitleClick = { sheet = true }, showChevron = true, fade = true)
-                Column(Modifier.align(Alignment.BottomCenter)) {
-                    SnackbarHost(snackbar) { Snackbar(it, containerColor = NagiTheme.colors.primary, contentColor = NagiTheme.colors.primaryForeground) }
-                    PillNav(
-                        listOf(
-                            PillNavItem(NagiIcons.Home, stringResource(R.string.tab_home), badge = critical),
-                            PillNavItem(NagiIcons.Folder, stringResource(R.string.tab_projects)),
-                            PillNavItem(NagiIcons.Server, stringResource(R.string.tab_nodes)),
-                            PillNavItem(NagiIcons.Settings, stringResource(R.string.tab_settings)),
-                        ),
-                        selected = tab.ordinal,
-                        onSelect = { i ->
-                            // 再点一次当前的标签：回到顶部。
-                            if (i == tab.ordinal) {
-                                scope.launch {
-                                    when (tab) {
-                                        Tab.HOME -> if (reduced) homeList.scrollToItem(0) else homeList.animateScrollToItem(0)
-                                        Tab.SETTINGS -> if (reduced) settingsScroll.scrollTo(0) else settingsScroll.animateScrollTo(0)
-                                        else -> {}
-                                    }
+                            Tab.SETTINGS -> if (wide) {
+                                SettingsPanes(contentPadding, pages = { n -> settingsPages(n) }) { detail, open ->
+                                    SettingsContent(settings, session, graph.prefs, BuildConfig.VERSION_NAME, contentPadding, settingsScroll, selected = detail, open = open)
                                 }
                             } else {
-                                tab = Tab.entries[i]
+                                SettingsContent(settings, session, graph.prefs, BuildConfig.VERSION_NAME, contentPadding, settingsScroll) { nav.navigate(it) }
                             }
-                        },
-                    )
+                        }
+                    }
+                    if (wide) {
+                        // 状态栏那一条：背景色往下渐变成透明，内容滚到那里变淡。
+                        val bg = NagiTheme.colors.background
+                        Box(Modifier.fillMaxWidth().height(statusTop + 12.dp).background(Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to bg.copy(alpha = 0f))))
+                    } else {
+                        NagiTopBar(panel.title, onTitleClick = { sheet = true }, showChevron = true, fade = true)
+                    }
+                    Column(Modifier.align(Alignment.BottomCenter)) {
+                        SnackbarHost(snackbar) { Snackbar(it, containerColor = NagiTheme.colors.primary, contentColor = NagiTheme.colors.primaryForeground) }
+                        if (!wide) PillNav(navItems, selected = tab.ordinal, onSelect = selectTab)
+                    }
                 }
             }
-        }
-        page(SettingsRoutes.PANEL) {
-            val info by settings.info.collectAsStateWithLifecycle()
-            PanelScreen(session, info?.role == "admin", onBack = { nav.popBackStack() }, onLogout = logout) { nav.navigate(it) }
-        }
-        page(SettingsRoutes.PANEL_ALIAS) { PanelAliasScreen(session, onBack = { nav.popBackStack() }) }
-        page(SettingsRoutes.PANEL_NAME) {
-            val defaultName by settings.defaultName.collectAsStateWithLifecycle()
-            PanelNameScreen(session, defaultName, onBack = { nav.popBackStack() })
-        }
-        page(SettingsRoutes.APPEARANCE) { AppearanceScreen(graph.prefs, onBack = { nav.popBackStack() }) }
-        page(SettingsRoutes.LANGUAGE) { LanguageScreen(graph.prefs, onBack = { nav.popBackStack() }) }
-        page(SettingsRoutes.ABOUT) {
-            val info by settings.info.collectAsStateWithLifecycle()
-            AboutScreen(BuildConfig.VERSION_NAME, info?.version, onBack = { nav.popBackStack() }) { nav.navigate(it) }
-        }
-        page(SettingsRoutes.CRASHES) { CrashLogsScreen(graph.crashLog, onBack = { nav.popBackStack() }) { nav.navigate(it) } }
-        page(SettingsRoutes.CRASH) { entry ->
-            CrashLogScreen(graph.crashLog, entry.arguments?.getString("at")?.toLongOrNull() ?: 0L, onBack = { nav.popBackStack() })
-        }
-        page(SettingsRoutes.LICENSES) { LicensesScreen(onBack = { nav.popBackStack() }) }
-        page(SettingsRoutes.SOON) { entry -> SoonScreen(entry.arguments?.getString("key").orEmpty(), onBack = { nav.popBackStack() }) }
-        page("container/{project}/{name}") { entry ->
-            val name = entry.arguments?.getString("name").orEmpty()
-            Column(Modifier.fillMaxSize().navigationBarsPadding()) {
-                NagiBackTopBar(name, onBack = { nav.popBackStack() })
-                Text(
-                    stringResource(R.string.placeholder_update), style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground,
-                    modifier = Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp),
-                )
+            settingsPages(nav)
+            page("container/{project}/{name}") { entry ->
+                val name = entry.arguments?.getString("name").orEmpty()
+                Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+                    NagiBackTopBar(name, onBack = { nav.popBackStack() })
+                    Text(
+                        stringResource(R.string.placeholder_update), style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground,
+                        modifier = Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp),
+                    )
+                }
             }
         }
     }
@@ -386,6 +479,53 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
             // 点顶部栏的面板名称：当前面板和退出（多个面板以后再做）。
             PanelDetails(session, logout, Modifier.padding(horizontal = Dimens.pageHorizontal).navigationBarsPadding().padding(bottom = 16.dp))
         }
+    }
+}
+
+/**
+ * 宽屏的设置页：左边是设置的菜单（宽 360），右边是选中的一项，有自己的导航（子页里再点进去也在右边）。
+ * 默认显示第一项个人资料，和网页一样。左边选中的一项有底色。
+ */
+@Composable
+private fun SettingsPanes(
+    contentPadding: PaddingValues,
+    pages: NavGraphBuilder.(NavController) -> Unit,
+    menu: @Composable (selected: String?, open: (String) -> Unit) -> Unit,
+) {
+    val detail = rememberNavController()
+    val entry by detail.currentBackStackEntryAsState()
+    Row(Modifier.fillMaxSize()) {
+        Box(Modifier.width(360.dp).fillMaxHeight()) {
+            menu(entry?.destination?.route) { route ->
+                // 换一项时清掉右边原来的页面栈，不叠在一起。
+                detail.navigate(route) {
+                    popUpTo(detail.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+        Box(Modifier.width(1.dp).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).background(NagiTheme.colors.border))
+        // 右边一栏在主顶部栏下面，子页自己的顶部栏（返回、标题）不再留状态栏的高度。
+        Box(Modifier.weight(1f).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).consumeWindowInsets(WindowInsets.statusBars)) {
+            NavHost(
+                detail, startDestination = SettingsRoutes.PROFILE,
+                enterTransition = { fadeIn(tween(Motion.FADE_IN)) }, exitTransition = { fadeOut(tween(100)) },
+                popEnterTransition = { fadeIn(tween(Motion.FADE_IN)) }, popExitTransition = { fadeOut(tween(100)) },
+            ) { pages(detail) }
+        }
+    }
+}
+
+/** 宽屏左栏顶上：自己的头像（没有时是首字母加渐变底），点开面板列表。读屏读出当前面板的名称。 */
+@Composable
+private fun PanelBadge(title: String, name: String, avatar: ByteArray?, onClick: () -> Unit) {
+    Box(
+        Modifier.size(48.dp).clip(CircleShape)
+            .clickable(onClickLabel = title, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = title },
+        contentAlignment = Alignment.Center,
+    ) {
+        Avatar(name, avatar, size = 44.dp)
     }
 }
 

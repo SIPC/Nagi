@@ -12,16 +12,6 @@ public interface ProjectServiceClientInterface {
   public suspend fun listProjects(request: ListProjectsRequest, headers: Headers = emptyMap()): ResponseMessage<ListProjectsResponse>
 
   /**
-   *  需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
-   */
-  public suspend fun getAttention(request: GetAttentionRequest, headers: Headers = emptyMap()): ResponseMessage<Attention>
-
-  /**
-   *  首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
-   */
-  public suspend fun watchOverview(headers: Headers = emptyMap()): ServerOnlyStreamInterface<WatchOverviewRequest, Overview>
-
-  /**
    *  新建项目，可以同时带上第一个容器（只保存，不部署）。
    */
   public suspend fun createProject(request: CreateProjectRequest, headers: Headers = emptyMap()): ResponseMessage<Project>

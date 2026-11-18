@@ -27,35 +27,6 @@ public class ProjectServiceClient(
 
 
   /**
-   *  需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
-   */
-  override suspend fun getAttention(request: GetAttentionRequest, headers: Headers): ResponseMessage<Attention> = client.unary(
-    request,
-    headers,
-    MethodSpec(
-    "nagi.v1.ProjectService/GetAttention",
-      ink.sipc.nagi.proto.v1.GetAttentionRequest::class,
-      ink.sipc.nagi.proto.v1.Attention::class,
-      StreamType.UNARY,
-    ),
-  )
-
-
-  /**
-   *  首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
-   */
-  override suspend fun watchOverview(headers: Headers): ServerOnlyStreamInterface<WatchOverviewRequest, Overview> = client.serverStream(
-    headers,
-    MethodSpec(
-    "nagi.v1.ProjectService/WatchOverview",
-      ink.sipc.nagi.proto.v1.WatchOverviewRequest::class,
-      ink.sipc.nagi.proto.v1.Overview::class,
-      StreamType.SERVER,
-    ),
-  )
-
-
-  /**
    *  新建项目，可以同时带上第一个容器（只保存，不部署）。
    */
   override suspend fun createProject(request: CreateProjectRequest, headers: Headers): ResponseMessage<Project> = client.unary(

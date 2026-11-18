@@ -74,6 +74,23 @@ import java.util.Locale
 /** 设置的二级页面（AppRoot 的导航路由）。 */
 object SettingsRoutes {
     const val PANEL = "settings/panel"
+    const val PROFILE = "settings/profile"
+    const val SECURITY = "settings/security"
+    const val PASSWORD = "settings/security/password"
+    const val ACCESS = "settings/access"
+    const val ACCESS_ADDRESS = "settings/access/address"
+    const val ACCESS_DOMAIN = "settings/access/domain"
+    const val PANEL_SECURITY = "settings/panel-security"
+    const val MEMBERS = "settings/members"
+    const val MEMBER = "settings/members/{id}"
+    const val MEMBER_ADD = "settings/member-add"
+    fun member(id: Long) = "settings/members/$id"
+    const val ALERTS = "settings/alerts"
+    const val CHANNEL = "settings/alerts/channel/{id}"
+    fun channel(id: String) = "settings/alerts/channel/$id"
+    const val STANDBY = "settings/standby"
+    const val INVITE = "settings/invite"
+    const val MESH = "settings/mesh"
     const val PANEL_NAME = "settings/panel/name"
     const val PANEL_ALIAS = "settings/panel/alias"
     const val APPEARANCE = "settings/appearance"
@@ -82,10 +99,22 @@ object SettingsRoutes {
     const val CRASHES = "settings/crashes"
     const val CRASH = "settings/crash/{at}"
     const val LICENSES = "settings/licenses"
-    const val SOON = "settings/soon/{key}"
 
     fun crash(at: Long) = "settings/crash/$at"
-    fun soon(key: String) = "settings/soon/$key"
+
+    /** 面板设置的一项（和网页设置页 tab 参数同名）对应的子页。 */
+    fun of(key: String) = when (key) {
+        "profile" -> PROFILE
+        "security" -> SECURITY
+        "access" -> ACCESS
+        "panel-security" -> PANEL_SECURITY
+        "members" -> MEMBERS
+        "alerts" -> ALERTS
+        "standby" -> STANDBY
+        "invite" -> INVITE
+        "mesh" -> MESH
+        else -> ABOUT
+    }
 }
 
 /** 面板设置的各项，和网页设置的二级菜单同样的分组和顺序。不是管理员时只有我的账号和关于。 */
@@ -146,8 +175,11 @@ fun SettingsContent(
     appVersion: String,
     contentPadding: PaddingValues,
     scroll: ScrollState = rememberScrollState(),
+    selected: String? = null,
     open: (String) -> Unit,
 ) {
+    // 宽屏时右边正在显示的子页，左边对应的一行有底色。
+    fun on(route: String) = selected == route || selected?.startsWith("$route/") == true
     val info by vm.info.collectAsStateWithLifecycle()
     val theme by prefs.theme.collectAsStateWithLifecycle()
     val panel by session.current.collectAsStateWithLifecycle()
@@ -158,7 +190,7 @@ fun SettingsContent(
         Spacer(Modifier.height(Dimens.topBarToContent))
         // 账号：头像、名称、角色。点了去个人资料。
         Row(
-            Modifier.fillMaxWidth().rowClickable({ open(SettingsRoutes.soon("profile")) }).heightIn(min = 64.dp),
+            Modifier.fillMaxWidth().rowClickable({ open(SettingsRoutes.PROFILE) }, highlight = if (on(SettingsRoutes.PROFILE)) NagiTheme.colors.muted else null).heightIn(min = 64.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(name, i?.avatar?.toByteArray(), size = 48.dp)
@@ -174,31 +206,31 @@ fun SettingsContent(
             }
         }
         SettingsGroup(stringResource(R.string.local)) {
-            SettingsRow(stringResource(R.string.panel), { open(SettingsRoutes.PANEL) }, value = panel.title)
-            SettingsRow(stringResource(R.string.appearance), { open(SettingsRoutes.APPEARANCE) }, value = themeLabel(theme))
-            SettingsRow(stringResource(R.string.language), { open(SettingsRoutes.LANGUAGE) }, value = languageLabel(AppLocales.current(context, prefs)))
+            SettingsRow(stringResource(R.string.panel), { open(SettingsRoutes.PANEL) }, value = panel.title, selected = on(SettingsRoutes.PANEL))
+            SettingsRow(stringResource(R.string.appearance), { open(SettingsRoutes.APPEARANCE) }, value = themeLabel(theme), selected = on(SettingsRoutes.APPEARANCE))
+            SettingsRow(stringResource(R.string.language), { open(SettingsRoutes.LANGUAGE) }, value = languageLabel(AppLocales.current(context, prefs)), selected = on(SettingsRoutes.LANGUAGE))
         }
         SettingsGroup(stringResource(R.string.group_account)) {
-            accountKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.soon(it)) }) }
+            accountKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
         }
         Collapse(i?.role == "admin") {
             SettingsGroup(stringResource(R.string.group_panel)) {
-                panelKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.soon(it)) }) }
+                panelKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
             }
             SettingsGroup(stringResource(R.string.group_nodes)) {
-                nodeKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.soon(it)) }) }
+                nodeKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
             }
         }
         // 关于只有一项，放在最下面，不写组标题（和网页一样）：App 和面板的版本都在里面。
         SettingsGroup(null) {
-            SettingsRow(stringResource(R.string.about), { open(SettingsRoutes.ABOUT) })
+            SettingsRow(stringResource(R.string.about), { open(SettingsRoutes.ABOUT) }, selected = on(SettingsRoutes.ABOUT))
         }
     }
 }
 
 /** 二级页面：返回、标题，下面是可以滚动的内容，左右 20。 */
 @Composable
-private fun SubPage(title: String, onBack: () -> Unit, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
+internal fun SubPage(title: String, onBack: () -> Unit, actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         NagiBackTopBar(title, onBack = onBack, actions = actions)
         Column(
@@ -296,40 +328,20 @@ fun PanelNameScreen(session: PanelSession, defaultName: String?, onBack: () -> U
     ) { session.setPanelName(it) }
 }
 
-/** 改一个名称：输入框、说明和「保存」。保存失败时在输入框下面写原因，成功后返回。 */
+/** 改一项文字（名称、地址、域名）的整页：顶部栏和 [EditField]。 */
 @Composable
-private fun EditNameScreen(title: String, initial: String, placeholder: String, help: String, onBack: () -> Unit, save: suspend (String) -> Unit) {
-    var value by remember { mutableStateOf(initial) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    val submit = {
-        if (!busy) {
-            busy = true
-            error = null
-            scope.launch {
-                try {
-                    save(value.trim())
-                    onBack()
-                } catch (e: Exception) {
-                    error = e.message
-                } finally {
-                    busy = false
-                }
-            }
-        }
-    }
+internal fun EditNameScreen(
+    title: String,
+    initial: String,
+    placeholder: String,
+    help: String,
+    onBack: () -> Unit,
+    maxLength: Int = 64,
+    saveLabel: String? = null,
+    save: suspend (String) -> Unit,
+) {
     SubPage(title, onBack) {
-        Spacer(Modifier.height(Dimens.topBarToContent + 8.dp))
-        NagiTextField(value, { value = it; error = null }, label = title, placeholder = placeholder, error = error != null, maxLength = 64, onDone = { submit() })
-        Spacer(Modifier.height(8.dp))
-        if (error != null) {
-            Text(error.orEmpty(), style = NagiTheme.type.body, color = NagiTheme.colors.destructive)
-            Spacer(Modifier.height(4.dp))
-        }
-        Text(help, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
-        Spacer(Modifier.height(20.dp))
-        NagiButton(stringResource(R.string.save), { submit() }, Modifier.fillMaxWidth(), loading = busy)
+        EditField(initial, placeholder, help, onDone = onBack, label = title, maxLength = maxLength, saveLabel = saveLabel, save = save)
     }
 }
 
@@ -338,7 +350,7 @@ private fun EditNameScreen(title: String, initial: String, placeholder: String, 
  * [panelVersion] 来自 AppService.Info，还没拿到时不写。
  */
 @Composable
-fun AboutScreen(appVersion: String, panelVersion: String?, onBack: () -> Unit, open: (String) -> Unit) {
+fun AboutScreen(appVersion: String, panelVersion: String?, session: PanelSession, isAdmin: Boolean, onBack: () -> Unit, open: (String) -> Unit) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val cert = remember { signingCertSha256(context) }
@@ -371,6 +383,8 @@ fun AboutScreen(appVersion: String, panelVersion: String?, onBack: () -> Unit, o
         }
         SettingsGroup(stringResource(R.string.about_group_panel)) {
             KeyValueRow(stringResource(R.string.version), panelVersion?.ifEmpty { null } ?: "—", labelWidth = 72.dp)
+            // 检查更新、更新面板只有管理员能做。
+            if (isAdmin) PanelUpdateSection(session)
         }
     }
 }
@@ -447,14 +461,6 @@ private fun signingCertSha256(context: Context): String? = runCatching {
     MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString("") { "%02x".format(it) }
 }.getOrNull()
 
-private fun copy(context: Context, text: String) {
+internal fun copy(context: Context, text: String) {
     context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(null, text))
-}
-
-/** 面板设置这一版还没做的项：提示在网页上设置。 */
-@Composable
-fun SoonScreen(key: String, onBack: () -> Unit) {
-    SubPage(keyTitle(key), onBack) {
-        EmptyState(stringResource(R.string.soon), Modifier.heightIn(min = 240.dp))
-    }
 }

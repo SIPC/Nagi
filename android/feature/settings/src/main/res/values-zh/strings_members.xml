@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 成员（和网页 web/src/i18n/zh/members.ts 一致）。 -->
+<resources>
+    <string name="members_empty">暂无成员</string>
+    <string name="member_add">添加成员</string>
+    <string name="member_you">当前账号</string>
+    <string name="member_totp_on">已开两步验证</string>
+    <string name="member_gone">这个成员已不存在</string>
+    <string name="member_role">角色</string>
+    <string name="role_admin_hint">全部权限，包括成员和面板设置</string>
+    <string name="role_operator_hint">可以操作项目和容器，不能管理节点和面板</string>
+    <string name="role_viewer_hint">只能查看，看不到配置和密钥，不能打开终端</string>
+    <string name="member_username">用户名</string>
+    <string name="member_password">初始密码</string>
+    <string name="member_reset_password">重置密码</string>
+    <string name="member_reset_clears_passkeys">该账号的通行密钥将一并清除。重置后该账号在所有设备退出登录。</string>
+    <string name="member_clear_totp">清除两步验证</string>
+    <string name="member_clear_totp_confirm">清除 %1$s 的两步验证？此后该账号只用密码即可登录。</string>
+    <string name="member_clear_totp_passkeys_confirm">清除 %1$s 的两步验证和通行密钥？此后该账号只用密码即可登录。</string>
+    <string name="member_clear_passkeys">清除通行密钥</string>
+    <string name="member_clear_passkeys_confirm">清除 %1$s 的通行密钥（%2$s）？此后该账号不能用通行密钥登录。</string>
+    <string name="member_passkey_count">%1$d 个通行密钥</string>
+    <string name="member_clear">清除</string>
+    <string name="member_delete">删除成员</string>
+    <string name="member_delete_confirm">删除成员 %1$s？该账号将无法登录，并在所有设备退出登录。</string>
+    <string name="member_demote_self">更改角色</string>
+    <string name="member_demote_self_confirm">将自己的角色改为%1$s？保存后立即失去管理员权限，需要其他管理员才能改回。</string>
+    <string name="scope_everything">全部项目和节点</string>
+    <string name="scope_all_projects">全部项目</string>
+    <string name="scope_all_nodes">全部节点</string>
+    <string name="scope_project_count">%1$d 个项目</string>
+    <string name="scope_node_count">%1$d 个节点</string>
+    <string name="scope_group">分组 %1$s</string>
+    <string name="scope_tag">标签 %1$s</string>
+    <string name="scope_projects">可访问的项目</string>
+    <string name="scope_nodes">可访问的节点</string>
+    <string name="scope_all">全部</string>
+    <string name="scope_some">指定</string>
+    <string name="scope_projects_hint">该成员新建的项目自动加入。</string>
+    <string name="scope_nodes_hint">容器只能放在这些节点上。</string>
+    <string name="scope_no_projects">暂无项目</string>
+    <string name="scope_no_nodes">暂无节点</string>
+    <string name="scope_kept">另外包含：%1$s（在网页上修改）</string>
+</resources>

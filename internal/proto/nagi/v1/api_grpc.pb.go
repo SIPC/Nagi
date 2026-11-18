@@ -969,7 +969,6 @@ const (
 	NodeService_SetNodeReplicaDir_FullMethodName     = "/nagi.v1.NodeService/SetNodeReplicaDir"
 	NodeService_CreateEnrollCommand_FullMethodName   = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName      = "/nagi.v1.NodeService/QueryNodeMetrics"
-	NodeService_QueryTraffic_FullMethodName          = "/nagi.v1.NodeService/QueryTraffic"
 	NodeService_GetNodeStorage_FullMethodName        = "/nagi.v1.NodeService/GetNodeStorage"
 	NodeService_RemoveNode_FullMethodName            = "/nagi.v1.NodeService/RemoveNode"
 	NodeService_ApproveNode_FullMethodName           = "/nagi.v1.NodeService/ApproveNode"
@@ -1047,8 +1046,6 @@ type NodeServiceClient interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
-	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
-	QueryTraffic(ctx context.Context, in *QueryTrafficRequest, opts ...grpc.CallOption) (*TrafficHistory, error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeStorage, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -1486,16 +1483,6 @@ func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, in *QueryNodeM
 	return out, nil
 }
 
-func (c *nodeServiceClient) QueryTraffic(ctx context.Context, in *QueryTrafficRequest, opts ...grpc.CallOption) (*TrafficHistory, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TrafficHistory)
-	err := c.cc.Invoke(ctx, NodeService_QueryTraffic_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *nodeServiceClient) GetNodeStorage(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeStorage, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NodeStorage)
@@ -1733,8 +1720,6 @@ type NodeServiceServer interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
-	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
-	QueryTraffic(context.Context, *QueryTrafficRequest) (*TrafficHistory, error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(context.Context, *NodeRef) (*NodeStorage, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -1879,9 +1864,6 @@ func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *Crea
 }
 func (UnimplementedNodeServiceServer) QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryNodeMetrics not implemented")
-}
-func (UnimplementedNodeServiceServer) QueryTraffic(context.Context, *QueryTrafficRequest) (*TrafficHistory, error) {
-	return nil, status.Error(codes.Unimplemented, "method QueryTraffic not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeStorage(context.Context, *NodeRef) (*NodeStorage, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeStorage not implemented")
@@ -2525,24 +2507,6 @@ func _NodeService_QueryNodeMetrics_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NodeService_QueryTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryTrafficRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).QueryTraffic(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NodeService_QueryTraffic_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).QueryTraffic(ctx, req.(*QueryTrafficRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _NodeService_GetNodeStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeRef)
 	if err := dec(in); err != nil {
@@ -2960,10 +2924,6 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryNodeMetrics",
 			Handler:    _NodeService_QueryNodeMetrics_Handler,
-		},
-		{
-			MethodName: "QueryTraffic",
-			Handler:    _NodeService_QueryTraffic_Handler,
 		},
 		{
 			MethodName: "GetNodeStorage",
@@ -5033,8 +4993,6 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	ProjectService_ListProjects_FullMethodName                 = "/nagi.v1.ProjectService/ListProjects"
-	ProjectService_GetAttention_FullMethodName                 = "/nagi.v1.ProjectService/GetAttention"
-	ProjectService_WatchOverview_FullMethodName                = "/nagi.v1.ProjectService/WatchOverview"
 	ProjectService_CreateProject_FullMethodName                = "/nagi.v1.ProjectService/CreateProject"
 	ProjectService_GetProject_FullMethodName                   = "/nagi.v1.ProjectService/GetProject"
 	ProjectService_UpdateProjectSettings_FullMethodName        = "/nagi.v1.ProjectService/UpdateProjectSettings"
@@ -5106,10 +5064,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProjectServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
-	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
-	GetAttention(ctx context.Context, in *GetAttentionRequest, opts ...grpc.CallOption) (*Attention, error)
-	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
-	WatchOverview(ctx context.Context, in *WatchOverviewRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Overview], error)
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	GetProject(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ProjectSummary, error)
@@ -5241,35 +5195,6 @@ func (c *projectServiceClient) ListProjects(ctx context.Context, in *ListProject
 	return out, nil
 }
 
-func (c *projectServiceClient) GetAttention(ctx context.Context, in *GetAttentionRequest, opts ...grpc.CallOption) (*Attention, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Attention)
-	err := c.cc.Invoke(ctx, ProjectService_GetAttention_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *projectServiceClient) WatchOverview(ctx context.Context, in *WatchOverviewRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Overview], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_WatchOverview_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[WatchOverviewRequest, Overview]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_WatchOverviewClient = grpc.ServerStreamingClient[Overview]
-
 func (c *projectServiceClient) CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
@@ -5382,7 +5307,7 @@ func (c *projectServiceClient) DeleteContainer(ctx context.Context, in *DeleteCo
 
 func (c *projectServiceClient) ControlContainer(ctx context.Context, in *ControlContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_ControlContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_ControlContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5401,7 +5326,7 @@ type ProjectService_ControlContainerClient = grpc.ServerStreamingClient[DeployEv
 
 func (c *projectServiceClient) ControlService(ctx context.Context, in *ControlServiceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_ControlService_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_ControlService_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5440,7 +5365,7 @@ func (c *projectServiceClient) DiscardDraft(ctx context.Context, in *ContainerRe
 
 func (c *projectServiceClient) Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_Deploy_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_Deploy_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5489,7 +5414,7 @@ func (c *projectServiceClient) ListProjectEvents(ctx context.Context, in *ListPr
 
 func (c *projectServiceClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_Rollback_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_Rollback_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5518,7 +5443,7 @@ func (c *projectServiceClient) ListDeployments(ctx context.Context, in *ProjectR
 
 func (c *projectServiceClient) RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5537,7 +5462,7 @@ type ProjectService_RestoreDeploymentClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) StreamLogs(ctx context.Context, in *StreamLogsApiRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5666,7 +5591,7 @@ func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *Back
 
 func (c *projectServiceClient) SetBackupReplicaDir(ctx context.Context, in *SetBackupReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_SetBackupReplicaDir_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_SetBackupReplicaDir_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5685,7 +5610,7 @@ type ProjectService_SetBackupReplicaDirClient = grpc.ServerStreamingClient[Deplo
 
 func (c *projectServiceClient) RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5704,7 +5629,7 @@ type ProjectService_RestoreFromBackupClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_MigrateContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_MigrateContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5723,7 +5648,7 @@ type ProjectService_MigrateContainerClient = grpc.ServerStreamingClient[DeployEv
 
 func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5862,7 +5787,7 @@ func (c *projectServiceClient) RenameVolumeFile(ctx context.Context, in *VolumeT
 
 func (c *projectServiceClient) MoveVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5881,7 +5806,7 @@ type ProjectService_MoveVolumeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *projectServiceClient) CopyVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5900,7 +5825,7 @@ type ProjectService_CopyVolumeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *projectServiceClient) CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5919,7 +5844,7 @@ type ProjectService_CompressVolumeFilesClient = grpc.ServerStreamingClient[FileO
 
 func (c *projectServiceClient) ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[14], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5958,7 +5883,7 @@ func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerR
 
 func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[15], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[14], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5977,7 +5902,7 @@ type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEven
 
 func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[16], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[15], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6059,10 +5984,6 @@ func (c *projectServiceClient) CheckImages(ctx context.Context, in *ProjectRef, 
 // for forward compatibility.
 type ProjectServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
-	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
-	GetAttention(context.Context, *GetAttentionRequest) (*Attention, error)
-	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
-	WatchOverview(*WatchOverviewRequest, grpc.ServerStreamingServer[Overview]) error
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(context.Context, *CreateProjectRequest) (*Project, error)
 	GetProject(context.Context, *ProjectRef) (*ProjectSummary, error)
@@ -6186,12 +6107,6 @@ type UnimplementedProjectServiceServer struct{}
 
 func (UnimplementedProjectServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
-}
-func (UnimplementedProjectServiceServer) GetAttention(context.Context, *GetAttentionRequest) (*Attention, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetAttention not implemented")
-}
-func (UnimplementedProjectServiceServer) WatchOverview(*WatchOverviewRequest, grpc.ServerStreamingServer[Overview]) error {
-	return status.Error(codes.Unimplemented, "method WatchOverview not implemented")
 }
 func (UnimplementedProjectServiceServer) CreateProject(context.Context, *CreateProjectRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateProject not implemented")
@@ -6423,35 +6338,6 @@ func _ProjectService_ListProjects_Handler(srv interface{}, ctx context.Context, 
 	}
 	return interceptor(ctx, in, info, handler)
 }
-
-func _ProjectService_GetAttention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetAttentionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ProjectServiceServer).GetAttention(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ProjectService_GetAttention_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ProjectServiceServer).GetAttention(ctx, req.(*GetAttentionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ProjectService_WatchOverview_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WatchOverviewRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ProjectServiceServer).WatchOverview(m, &grpc.GenericServerStream[WatchOverviewRequest, Overview]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ProjectService_WatchOverviewServer = grpc.ServerStreamingServer[Overview]
 
 func _ProjectService_CreateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateProjectRequest)
@@ -7505,10 +7391,6 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_ListProjects_Handler,
 		},
 		{
-			MethodName: "GetAttention",
-			Handler:    _ProjectService_GetAttention_Handler,
-		},
-		{
 			MethodName: "CreateProject",
 			Handler:    _ProjectService_CreateProject_Handler,
 		},
@@ -7702,11 +7584,6 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "WatchOverview",
-			Handler:       _ProjectService_WatchOverview_Handler,
-			ServerStreams: true,
-		},
 		{
 			StreamName:    "ControlContainer",
 			Handler:       _ProjectService_ControlContainer_Handler,

@@ -473,21 +473,6 @@ public class NodeServiceClient(
 
 
   /**
-   *  流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
-   */
-  override suspend fun queryTraffic(request: QueryTrafficRequest, headers: Headers): ResponseMessage<TrafficHistory> = client.unary(
-    request,
-    headers,
-    MethodSpec(
-    "nagi.v1.NodeService/QueryTraffic",
-      ink.sipc.nagi.proto.v1.QueryTrafficRequest::class,
-      ink.sipc.nagi.proto.v1.TrafficHistory::class,
-      StreamType.UNARY,
-    ),
-  )
-
-
-  /**
    *  节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
    */
   override suspend fun getNodeStorage(request: NodeRef, headers: Headers): ResponseMessage<NodeStorage> = client.unary(

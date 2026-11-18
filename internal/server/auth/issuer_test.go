@@ -93,7 +93,7 @@ func TestEntranceHidesPanel(t *testing.T) {
 		{http.MethodPost, "/nagi.v1.AppService/Info", "application/proto", false},
 		{http.MethodPost, "/nagi.v1.AppService/Logout", "application/proto", false},
 		{http.MethodPost, "/nagi.v1.AppService/Nope", "application/proto", false},
-		{http.MethodPost, "/nagi.v1.ProjectService/WatchOverview", "application/connect+proto", false},
+		{http.MethodPost, "/nagi.v1.ProjectService/ListProjects", "application/connect+proto", false},
 	} {
 		r := httptest.NewRequest(c.method, "https://panel.example.com"+c.path, strings.NewReader(""))
 		if c.contentType != "" {

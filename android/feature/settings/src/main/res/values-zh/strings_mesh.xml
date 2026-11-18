@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 节点网络（和网页 web/src/i18n/zh/mesh.ts 一致）。 -->
+<resources>
+    <string name="mesh_path_direct">UDP 直连</string>
+    <string name="mesh_path_link">控制连接</string>
+    <string name="mesh_path_node_relay">UDP 经节点中转</string>
+    <string name="mesh_path_udp_relay">UDP 经面板中转</string>
+    <string name="mesh_path_tls_relay">TLS 经面板中转</string>
+    <string name="mesh_path_none">不可达</string>
+    <string name="mesh_endpoints">直连地址</string>
+    <string name="mesh_peers">连接</string>
+    <string name="mesh_no_peers">暂无连接</string>
+    <string name="mesh_handshake">最近握手 %1$s</string>
+    <string name="mesh_no_handshake">尚未握手</string>
+    <string name="mesh_fec">纠错 %1$d/10</string>
+    <string name="mesh_loss">丢包 %1$s</string>
+</resources>

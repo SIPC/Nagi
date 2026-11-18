@@ -41,4 +41,14 @@
     <string name="unreachable_title">Can\'t reach the panel</string>
     <string name="unreachable_cached">Showing data from %1$s. Retrying.</string>
     <string name="unreachable_retrying">Retrying.</string>
+    <string name="att_node_pending">Node %1$s is waiting for approval</string>
+    <string name="att_node_offline">Node %1$s is offline</string>
+    <string name="att_container_unhealthy">%1$s / %2$s health check failed</string>
+    <string name="att_container_dead">%1$s / %2$s is abnormal</string>
+    <string name="att_image_update">%1$s / %2$s has an image update</string>
+    <string name="nodes_title">Nodes</string>
+    <string name="node_offline">Offline</string>
+    <string name="node_pending">Pending approval</string>
+    <string name="node_memory">Memory</string>
+    <string name="node_disk">Disk</string>
 </resources>
