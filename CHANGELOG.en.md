@@ -8,6 +8,34 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.34.0
+
+### New features
+
+- The first version of the Android app adds phones by QR code, unlocks the app, and shows the home overview. Add a phone in "Account security".
+- Each service in a container group has its own page with overview, logs, terminal, and monitoring, and can be restarted, stopped, or started on its own.
+- Container groups in the project bar can be expanded to show each service's status, CPU, and memory.
+
+### Improvements
+
+- Download actions in the file menu are combined into "Download".
+- Download commands come in Linux/macOS and Windows versions, and large files are downloaded in parallel segments.
+- Backup sync now runs on the source node without a time limit, shows progress, speed, and time remaining, and can be stopped. Interrupted syncs continue from where they left off.
+- Tunnel connections between nodes are established faster and transfer data faster.
+
+### Fixes
+
+- Fixed an issue where download tools taking over a download through the panel signed you out.
+
+### Behavior changes
+
+- Download links through the panel only work from the network address they were first used from.
+- Service names can no longer start with "-".
+
+### Upgrade notes
+
+- Upgrade nodes to v0.34.0 to control services individually, sync backups in the background, and see sync progress.
+
 ## v0.33.0
 
 ### New features
