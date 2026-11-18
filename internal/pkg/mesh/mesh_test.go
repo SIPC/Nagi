@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -18,7 +20,51 @@ type testNode struct {
 }
 
 // testNoQUIC 为 true 时 newNode 建的成员不用 QUIC（测 WireGuard 里的 TCP、FEC 时用）。
+// 只在不并行的测试里改（见 dropFor）。
 var testNoQUIC bool
+
+// 测试并行运行（t.Parallel），丢包规则按测试登记：任何一条规则要丢就丢，测试结束时去掉自己的规则。
+// 规则只按端口匹配，各测试的成员端口不同，互不影响；丢掉所有包的规则（TestTLSRelay）和改 testNoQUIC 的测试
+// 不调用 t.Parallel：Go 先跑完不并行的测试，再一起跑并行的，所以它们不会和并行的测试同时运行。
+var (
+	dropMu    sync.Mutex
+	dropRules = map[*testing.T]func(uint16, netip.AddrPort) bool{}
+	// dropNow 是 dropRules 的快照，收发包时只读它，不加锁（测速时包很多）。
+	dropNow  atomic.Pointer[[]func(uint16, netip.AddrPort) bool]
+	dropOnce sync.Once
+)
+
+func dropFor(t *testing.T, f func(fromPort uint16, to netip.AddrPort) bool) {
+	dropOnce.Do(func() {
+		setDropUDP(func(from uint16, to netip.AddrPort) bool {
+			if rules := dropNow.Load(); rules != nil {
+				for _, r := range *rules {
+					if r(from, to) {
+						return true
+					}
+				}
+			}
+			return false
+		})
+	})
+	update := func() {
+		rules := make([]func(uint16, netip.AddrPort) bool, 0, len(dropRules))
+		for _, r := range dropRules {
+			rules = append(rules, r)
+		}
+		dropNow.Store(&rules)
+	}
+	dropMu.Lock()
+	dropRules[t] = f
+	update()
+	dropMu.Unlock()
+	t.Cleanup(func() {
+		dropMu.Lock()
+		delete(dropRules, t)
+		update()
+		dropMu.Unlock()
+	})
+}
 
 func newNode(t *testing.T, relay bool) testNode {
 	t.Helper()
@@ -122,16 +168,16 @@ func waitPath(t *testing.T, m *Mesh, k Key, want string) {
 }
 
 func TestDirect(t *testing.T) {
-	setDropUDP(nil)
+	t.Parallel()
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	echo(t, a, b)
 }
 
 func TestUDPRelay(t *testing.T) {
-	defer setDropUDP(nil)
+	t.Parallel()
 	_, a, b := setupWith(t, func(_, a, b testNode) {
-		setDropUDP(func(from uint16, to netip.AddrPort) bool {
+		dropFor(t, func(from uint16, to netip.AddrPort) bool {
 			return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
 		})
 	})
@@ -140,9 +186,8 @@ func TestUDPRelay(t *testing.T) {
 }
 
 func TestTLSRelay(t *testing.T) {
-	defer setDropUDP(nil)
 	_, a, b := setupWith(t, func(_, _, _ testNode) {
-		setDropUDP(func(uint16, netip.AddrPort) bool { return true })
+		dropFor(t, func(uint16, netip.AddrPort) bool { return true })
 	})
 	waitPath(t, a.m, b.m.PublicKey(), "tls-relay")
 	echo(t, a, b)
@@ -150,7 +195,7 @@ func TestTLSRelay(t *testing.T) {
 
 // TestUDP 经 mesh 收发 UDP：B 从随机端口连 A 开的端口。超过 MTU 的数据报靠 IPv6 分片。
 func TestUDP(t *testing.T) {
-	setDropUDP(nil)
+	t.Parallel()
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	pc, err := a.m.ListenUDP(0)
@@ -201,7 +246,6 @@ func TestUDP(t *testing.T) {
 // 重启的一方加上成员时就发起握手，这时直连还没确认；要是这个握手包被丢掉，对方会一直用旧会话发包，
 // 等 WireGuard 自己重新握手要十几秒。
 func TestPeerRestart(t *testing.T) {
-	setDropUDP(nil)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var privB Key
 	_, _ = rand.Read(privB[:])
@@ -352,7 +396,7 @@ func TestNATKind(t *testing.T) {
 // 线路按源端口负载均衡、其中一条链路坏了：A 的主端口发往 B 的包全丢（反方向正常）。
 // A 有备用端口时，换一个能通的源端口直连 B；没有备用端口时只能走中转。
 func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
-	defer setDropUDP(nil)
+	t.Parallel()
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mk := func(extra int, relay bool) testNode {
 		var priv Key
@@ -365,7 +409,7 @@ func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
 		return testNode{m: m, port: m.Port()}
 	}
 	p, a, b := mk(0, true), mk(4, false), mk(0, false)
-	setDropUDP(func(from uint16, to netip.AddrPort) bool { return from == a.port && to.Port() == b.port })
+	dropFor(t, func(from uint16, to netip.AddrPort) bool { return from == a.port && to.Port() == b.port })
 	pk, ak, bk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey()
 	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}})
 	_ = a.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
@@ -383,7 +427,7 @@ func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
 // A、B 之间直连不通、都和 R 直连：经 R 中转（node-relay），不绕到面板。
 // R 关掉中转以后，A 发过去的包被丢，过一会儿 A 不再用 R，改走面板。
 func TestNodeRelay(t *testing.T) {
-	defer setDropUDP(nil)
+	t.Parallel()
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mk := func(relay, nodeRelay bool) testNode {
 		var priv Key
@@ -396,7 +440,7 @@ func TestNodeRelay(t *testing.T) {
 		return testNode{m: m, port: m.Port()}
 	}
 	p, a, b, r := mk(true, false), mk(false, true), mk(false, true), mk(false, true)
-	setDropUDP(func(from uint16, to netip.AddrPort) bool {
+	dropFor(t, func(from uint16, to netip.AddrPort) bool {
 		return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
 	})
 	pk, ak, bk, rk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey(), r.m.PublicKey()

@@ -33,7 +33,7 @@ func waitQUIC(t *testing.T, m *Mesh, k Key) {
 // TestQUIC：两端都支持、直连时，mesh 上的 TCP 连接走 QUIC；对方照常按 mesh 地址认出调用方，
 // 半关闭（CloseWrite）以后还能收到回复。
 func TestQUIC(t *testing.T) {
-	setDropUDP(nil)
+	t.Parallel()
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	ln, err := b.m.Listen(7100)
@@ -84,7 +84,7 @@ func TestQUIC(t *testing.T) {
 
 // TestQUICOldPeer：对端不支持 QUIC（旧版本）时走 WireGuard 里的 TCP。
 func TestQUICOldPeer(t *testing.T) {
-	setDropUDP(nil)
+	t.Parallel()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var pa, pb Key
 	_, _ = rand.Read(pa[:])
@@ -133,7 +133,7 @@ func TestQUICOldPeer(t *testing.T) {
 
 // TestQUICBadProof：拿不出和对方的共享密钥（冒充别人）时，QUIC 连接建不起来。
 func TestQUICBadProof(t *testing.T) {
-	setDropUDP(nil)
+	t.Parallel()
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	addr, _, ok := a.m.quic.peerFor(b.m.PublicKey())
