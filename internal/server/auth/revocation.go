@@ -64,25 +64,32 @@ func (s *Service) RevocationLoop(ctx context.Context, dataDir string, log *slog.
 	} else if !errors.Is(err, os.ErrNotExist) {
 		log.Warn("读取保存的吊销列表失败", "err", err)
 	}
-	s.RecheckAppDevices(ctx)
+	// recheck：要复查一遍已添加的手机（启动时、换上新列表时、上次复查失败时）。
+	recheck := true
 	for {
 		wait := revocationEvery
 		b, updated, err := fetch(ctx)
-		if err == nil {
-			var r *attestation.Revocations
-			if r, err = attestation.ParseRevocations(b, updated); err == nil {
-				if s.SetRevocations(r) {
-					if err := saveRevocations(dir, b, updated); err != nil {
-						log.Warn("保存吊销列表失败", "err", err)
-					}
-					s.RecheckAppDevices(ctx)
-				}
-			}
-		}
 		if err != nil {
 			// 中国大陆的面板通常连不上 Google，这时一直用随面板发布的列表，不当作错误。
 			log.Debug("获取吊销列表失败", "err", err)
 			wait = revocationRetry
+		} else if r, err := attestation.ParseRevocations(b, updated); err != nil {
+			// 取到了却读不了：Google 改了格式，面板会一直用旧的列表。
+			log.Warn("吊销列表无法解析，继续用当前的列表", "err", err)
+			wait = revocationRetry
+		} else if s.SetRevocations(r) {
+			if err := saveRevocations(dir, b, updated); err != nil {
+				log.Warn("保存吊销列表失败", "err", err)
+			}
+			recheck = true
+		}
+		if recheck {
+			if err := s.RecheckAppDevices(ctx); err != nil {
+				log.Warn("按吊销列表复查手机失败", "err", err)
+				wait = revocationRetry
+			} else {
+				recheck = false
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -129,6 +136,10 @@ func loadRevocations(dir string) (*attestation.Revocations, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 日期不晚于现在：写成将来的日期会让之后取到的、随新版本发布的列表都换不上。
+	if now := time.Now(); updated.After(now) {
+		updated = now
+	}
 	b, err := os.ReadFile(filepath.Join(dir, "status.json"))
 	if err != nil {
 		return nil, err
@@ -156,18 +167,22 @@ func writeFileAtomic(path string, b []byte) error {
 }
 
 // RecheckAppDevices 按当前的吊销列表复查已经添加的手机：新查到被吊销的记下原因、记审计、告警一次（不退出，由成员或管理员决定）；
-// 不再在列表里的清掉标记。
-func (s *Service) RecheckAppDevices(ctx context.Context) {
+// 不再在列表里的清掉标记。查询或写入失败时返回错误（其余的照常复查），调用方稍后重试。
+func (s *Service) RecheckAppDevices(ctx context.Context) error {
+	s.recheckMu.Lock()
+	defer s.recheckMu.Unlock()
 	list, err := s.q.AppDevicesWithSerials(ctx)
 	if err != nil {
-		return
+		return err
 	}
 	rev := s.Revocations()
+	var failed error
 	for _, d := range list {
 		serial, reason, revoked := rev.Check(strings.Fields(d.AttestationSerials))
 		switch {
 		case revoked && d.RevokedReason == "":
 			if err := s.q.SetAppDeviceRevoked(ctx, d.ID, reason); err != nil {
+				failed = err
 				continue
 			}
 			at, aid, an := userActor(d.UserID, d.Username)
@@ -179,7 +194,10 @@ func (s *Service) RecheckAppDevices(ctx context.Context) {
 					i18n.Errorf("账号 %s 的手机 %s 的证明证书已被 Google 吊销（%s），它的密钥可能不在可信的硬件里。请确认后在「已登录的设备」里退出这台手机。", d.Username, d.Name, reason).Error())
 			}
 		case !revoked && d.RevokedReason != "":
-			_ = s.q.SetAppDeviceRevoked(ctx, d.ID, "")
+			if err := s.q.SetAppDeviceRevoked(ctx, d.ID, ""); err != nil {
+				failed = err
+			}
 		}
 	}
+	return failed
 }

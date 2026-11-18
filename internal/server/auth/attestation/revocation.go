@@ -4,11 +4,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"strings"
 	"time"
 )
 
-// 证明证书的吊销列表（见 docs/android.md#吊销列表）：Google 公布的被吊销的证明证书，按序列号列出。
+// 证明证书的吊销列表（见 docs/android.md#吊销列表）：Google 公布的被吊销的证明证书，按序列号列出（十六进制或十进制，见 Check）。
 // 发布时 CI 把当时的列表放进 status.json（release.yml），面板运行时每天再从 StatusURL 取一次。
 
 //go:embed status.json
@@ -83,11 +84,21 @@ var embedded = func() *Revocations {
 // Len 是列表里的序列号个数。
 func (r *Revocations) Len() int { return len(r.entries) }
 
-// Check 返回 serials 里第一个被吊销的序列号和原因。
+// Check 返回 serials（十六进制）里第一个被吊销的序列号和原因。
+//
+// Google 的列表里两种写法都有：128 位的序列号写成十六进制，64 位的（多数出厂写入的 keybox）写成十进制，
+// 例如 14223735860583184979（即 c564dc67950bba53）。所以每个序列号按十六进制和十进制各查一次。
+// 一张证书的十六进制写法恰好是另一张被吊销证书的十进制写法的概率可以忽略。
 func (r *Revocations) Check(serials []string) (serial, reason string, revoked bool) {
 	for _, s := range serials {
-		if reason, ok := r.entries[normalSerial(s)]; ok {
+		hex := normalSerial(s)
+		if reason, ok := r.entries[hex]; ok {
 			return s, reason, true
+		}
+		if n, ok := new(big.Int).SetString(hex, 16); ok {
+			if reason, ok := r.entries[n.Text(10)]; ok {
+				return s, reason, true
+			}
 		}
 	}
 	return "", "", false

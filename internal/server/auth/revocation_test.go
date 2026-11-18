@@ -83,7 +83,8 @@ func TestAppRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	d, _ := h.q.AppDeviceByID(ctx, res.DeviceID)
-	if d.AttestationSerials != "1" || !d.RevocationChecked || d.RevokedReason != "" {
+	// 开发模式下链追溯到自己的根证书，不算检查过吊销，但照样记下序列号、复查。
+	if d.AttestationSerials != "1" || d.RevocationChecked || d.RevokedReason != "" {
 		t.Fatalf("设备记录：序列号 %q，检查过 %v，吊销 %q", d.AttestationSerials, d.RevocationChecked, d.RevokedReason)
 	}
 
@@ -124,11 +125,12 @@ func TestAppRevocation(t *testing.T) {
 	}
 }
 
-// RevocationLoop 取到新列表后存进数据目录，下次启动先读它；取到的不比当前的新时不存。
+// RevocationLoop 取到新列表后存进数据目录，下次启动先读它。
 func TestRevocationLoop(t *testing.T) {
 	h := newSessionHarness(t)
 	dir := t.TempDir()
-	updated := attestation.Embedded().Updated.Add(24 * time.Hour)
+	// 比随面板发布的新、又不晚于现在（读回时晚于现在的日期按现在算）。
+	updated := time.Now().Add(-time.Second).UTC().Truncate(time.Second)
 	body := []byte(`{"entries": {"abc": {"status": "REVOKED", "reason": "KEY_COMPROMISE"}}}`)
 	fetched := make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -186,3 +188,18 @@ func TestRevocationLoop(t *testing.T) {
 }
 
 func discardLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
+
+// 数据目录里的日期写成将来时按现在算，免得之后的列表都换不上。
+func TestLoadRevocationsFutureDate(t *testing.T) {
+	dir := t.TempDir()
+	if err := saveRevocations(dir, []byte(`{"entries": {}}`), time.Now().Add(365*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	r, err := loadRevocations(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Updated.After(time.Now()) {
+		t.Errorf("读回的日期 %v 晚于现在", r.Updated)
+	}
+}

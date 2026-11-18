@@ -64,6 +64,8 @@ type Service struct {
 	app appState
 	// revocations 是取到的证明证书吊销列表，没有时用随面板发布的（见 revocation.go）。
 	revocations atomic.Pointer[attestation.Revocations]
+	// recheckMu：按吊销列表复查（RecheckAppDevices）同时只有一个。
+	recheckMu sync.Mutex
 	streaks     totpStreaks
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
