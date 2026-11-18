@@ -43,6 +43,12 @@ export default {
   thisDevice: "This device",
   lastActive: (ago) => `Active ${ago}`,
   signOutDevice: "Sign out",
+  appVersion: (v) => `App ${v}`,
+  androidVersion: (v) => `Android ${v}`,
+  bootUnlocked: "Bootloader unlocked",
+  revocationUnchecked: "Revocation not checked",
+  softwareKeys: "Software keys",
+  devKeys: "Developer mode",
   scope: {
     projects: "Project access",
     nodes: "Node access",

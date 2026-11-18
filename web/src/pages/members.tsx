@@ -486,14 +486,29 @@ export function SessionList() {
             key={s.id}
             title={
               <>
-                <span className="truncate">{s.agent || s.lastIp || s.ip || t.members.unknownAddress}</span>
+                <span className="truncate">{s.kind === "app" ? s.deviceName || s.model : s.agent || s.lastIp || s.ip || t.members.unknownAddress}</span>
                 {s.current && <span className="shrink-0 text-muted-foreground">{t.members.thisDevice}</span>}
               </>
             }
             // 第二行：最近的 IP · 最近活动 · 登录时间（见 docs/panel.md#会话）。
+            // 手机：App 版本 · Android 版本 · 最近的 IP · 最近活动，再标出不够安全的地方（见 docs/android.md#管理和撤销）。
             sub={
               <span title={formatDateTime(toDate(s.createdAt))}>
-                {[s.agent && (s.lastIp || s.ip), s.lastSeen && t.members.lastActive(timeAgo(toDate(s.lastSeen))), t.members.signedInAt(shortDate(toDate(s.createdAt)))].filter(Boolean).join(" · ")}
+                {(s.kind === "app"
+                  ? [
+                      s.appVersion && t.members.appVersion(s.appVersion),
+                      s.androidVersion && t.members.androidVersion(s.androidVersion),
+                      s.lastIp || s.ip,
+                      s.lastSeen && t.members.lastActive(timeAgo(toDate(s.lastSeen))),
+                      !s.bootLocked && t.members.bootUnlocked,
+                      !s.revocationChecked && t.members.revocationUnchecked,
+                      s.securityLevel === "software" && t.members.softwareKeys,
+                      s.devKeys && t.members.devKeys,
+                    ]
+                  : [s.agent && (s.lastIp || s.ip), s.lastSeen && t.members.lastActive(timeAgo(toDate(s.lastSeen))), t.members.signedInAt(shortDate(toDate(s.createdAt)))]
+                )
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
             }
             actions={

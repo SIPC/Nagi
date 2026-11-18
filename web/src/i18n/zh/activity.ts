@@ -77,6 +77,7 @@ export default {
     NodeExec: "在节点上执行命令",
     MCPToolDenied: "MCP 调用被拒绝",
     CreateAccessToken: "生成访问令牌",
+    CreateAppPairing: "生成手机配对码",
     RevokeAccessToken: "吊销访问令牌",
     ApproveOAuth: "OAuth 授权",
     SetBackupNode: "设置备份节点",

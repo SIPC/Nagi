@@ -42,6 +42,12 @@ export default {
   thisDevice: "当前设备",
   lastActive: (ago: string) => `最近活动 ${ago}`,
   signOutDevice: "退出",
+  appVersion: (v: string) => `App ${v}`,
+  androidVersion: (v: string) => `Android ${v}`,
+  bootUnlocked: "bootloader 未锁定",
+  revocationUnchecked: "未检查吊销",
+  softwareKeys: "软件密钥",
+  devKeys: "开发模式",
   scope: {
     projects: "可访问的项目",
     nodes: "可访问的节点",

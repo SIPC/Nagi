@@ -5,7 +5,7 @@ import { PanelVersion } from "@/pages/update";
 import { t } from "@/i18n";
 
 const a = t.about;
-const repo = "https://github.com/SIPC/Nagi";
+export const repo = "https://github.com/SIPC/Nagi";
 
 // 致谢的名单和 README 一致。MiSans 的署名是字体许可的要求，不能省。
 const credits = [

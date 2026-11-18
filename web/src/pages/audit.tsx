@@ -22,7 +22,7 @@ const pageSize = 50;
 export const auditRanges = ["1h", "24h", "7d", "30d"] as const;
 export type AuditRange = (typeof auditRanges)[number];
 export const auditCategories = ["operation", "read", "mcp", "session", "login", "alert", "security"] as const;
-export const auditVias = ["web", "mcp", "cli", "system", "node"] as const;
+export const auditVias = ["web", "app", "mcp", "cli", "system", "node"] as const;
 
 // 地址里的筛选条件（见 main.tsx 的 auditRoute）。
 export type AuditSearch = {
@@ -83,6 +83,8 @@ function actorName(e: AuditEvent) {
 function viaLabel(e: AuditEvent) {
   const v = (t.audit.via as Record<string, string>)[e.via] ?? e.via;
   if (e.via === "mcp" && e.tokenName) return t.audit.viaToken(v, e.tokenName);
+  // App 的操作带上手机名称（client），见 docs/android.md#审计。
+  if (e.via === "app" && e.client) return t.audit.viaToken(v, e.client);
   return v;
 }
 

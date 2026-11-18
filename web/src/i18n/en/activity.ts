@@ -77,6 +77,7 @@ export default {
     NodeExec: "Run command on node",
     MCPToolDenied: "MCP call denied",
     CreateAccessToken: "Generate access token",
+    CreateAppPairing: "Generate phone pairing code",
     RevokeAccessToken: "Revoke access token",
     ApproveOAuth: "OAuth authorization",
     SetBackupNode: "Set backup node",

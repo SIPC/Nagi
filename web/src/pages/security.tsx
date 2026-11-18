@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderSVG } from "uqr";
@@ -6,14 +6,15 @@ import { toast } from "sonner";
 import { authClient, errorMessage, settingsClient, toDate } from "@/lib/api";
 import { addPasskey, cancelled, defaultPasskeyName, passkeySupported } from "@/lib/passkey";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
-import type { Passkey, Security } from "@/gen/nagi/v1/api_pb";
+import type { CreateAppPairingResponse, Passkey, Security } from "@/gen/nagi/v1/api_pb";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, CodeBlock, textLink } from "@/components/ui";
 import { t } from "@/i18n";
 import { SessionList } from "@/pages/members";
 import { AccessTokenSection } from "@/pages/tokens";
 import { useRole } from "@/components/role";
+import { repo } from "@/pages/about";
 
 function PasswordDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [cur, setCur] = useState("");
@@ -256,6 +257,122 @@ function PasskeySection({ sec, onChange }: { sec: Security; onChange: (sec: Secu
   );
 }
 
+// ---- 手机 App（见 docs/android.md#扫码） ----
+
+// 配对码 5 分钟有效。本机时钟和面板不一致时，按收到时算 5 分钟。
+const pairingTtlMs = 5 * 60_000;
+
+type Pairing = { code: string; uri: string; deadline: number };
+
+async function createPairing(): Promise<Pairing> {
+  let res: CreateAppPairingResponse;
+  try {
+    res = await authClient.createAppPairing({});
+  } catch (err) {
+    // 生成配对码前要先再验证一次身份，只认密码或验证码。
+    if (!isElevationRequired(err) || !(await requireElevation(t.security.app.elevate, { suggestTotp: false }))) throw err;
+    res = await authClient.createAppPairing({});
+  }
+  const now = Date.now();
+  const left = (toDate(res.expiresAt)?.getTime() ?? 0) - now;
+  return { code: res.code, uri: res.uri, deadline: now + (left > 0 && left <= pairingTtlMs + 30_000 ? left : pairingTtlMs) };
+}
+
+function AddPhoneDialog({ initial, onClose }: { initial: Pairing; onClose: () => void }) {
+  const a = t.security.app;
+  const queryClient = useQueryClient();
+  const [pairing, setPairing] = useState(initial);
+  const [now, setNow] = useState(Date.now);
+  const left = Math.max(0, Math.ceil((pairing.deadline - now) / 1000));
+  const status = useQuery({
+    queryKey: ["app-pairing", pairing.code],
+    queryFn: () => authClient.getAppPairing({ code: pairing.code }),
+    refetchInterval: 2000,
+    enabled: left > 0,
+    gcTime: 0,
+  });
+  const expired = left === 0 || !!status.data?.expired;
+  const used = status.data?.used ? status.data.deviceName : undefined;
+
+  useEffect(() => {
+    if (expired) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expired]);
+
+  useEffect(() => {
+    if (used === undefined) return;
+    toast.success(a.added(used));
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    onClose();
+  }, [used]);
+
+  const regenerate = useMutation({
+    mutationFn: createPairing,
+    onSuccess: (next) => {
+      setPairing(next);
+      setNow(Date.now());
+    },
+  });
+
+  return (
+    <Dialog open onClose={onClose} title={a.add} description={a.scan} className="max-w-[440px]">
+      <div className="grid justify-items-center gap-4">
+        {expired ? (
+          <div className="grid size-44 place-content-center justify-items-center gap-3 rounded-md border text-muted-foreground">
+            {a.expired}
+            <Button variant="outline" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
+              {regenerate.isPending && <Spinner />}
+              {a.regenerate}
+            </Button>
+          </div>
+        ) : (
+          // 二维码固定白底黑块，深色模式下也能扫。
+          <div
+            className="size-44 rounded-md bg-white p-2 [&_svg]:size-full [&_svg]:[shape-rendering:crispEdges]"
+            role="img"
+            aria-label={a.qrCode}
+            dangerouslySetInnerHTML={{ __html: renderSVG(pairing.uri, { border: 2 }) }}
+          />
+        )}
+        {!expired && <p className="text-muted-foreground">{`${a.expiresIn(left)} · ${a.singleUse}`}</p>}
+      </div>
+      {regenerate.error && <Alert>{errorMessage(regenerate.error)}</Alert>}
+      <DialogActions className="justify-between">
+        <span className="text-muted-foreground max-md:hidden">
+          {a.noApp}{" "}
+          <a className={textLink} href={`${repo}/releases`} target="_blank" rel="noreferrer">
+            {a.download}
+          </a>
+        </span>
+        <Button onClick={onClose}>{t.common.actions.done}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function AppSection() {
+  const a = t.security.app;
+  const [pairing, setPairing] = useState<Pairing | null>(null);
+  const create = useMutation({ mutationFn: createPairing, onSuccess: setPairing });
+  return (
+    <Section
+      title={a.label}
+      help={a.help}
+      description={a.description}
+      actions={
+        <Button variant="outline" onClick={() => create.mutate()} disabled={create.isPending}>
+          {create.isPending ? <Spinner /> : <Plus />}
+          {a.add}
+        </Button>
+      }
+    >
+      {create.error && <Alert>{errorMessage(create.error)}</Alert>}
+      {pairing && <AddPhoneDialog initial={pairing} onClose={() => setPairing(null)} />}
+    </Section>
+  );
+}
+
 // 账号安全：登录密码、两步验证、通行密钥、登录设备和访问令牌。一项一行，表单放进对话框。
 // 主密钥和安全入口是面板的设置，在「面板访问」（ui.md 设置页）。
 export function SecurityCard() {
@@ -327,6 +444,7 @@ export function SecurityCard() {
         )}
       </Section>
       {s && <PasskeySection sec={s} onChange={(next) => queryClient.setQueryData(["security"], next)} />}
+      <AppSection />
       <Section title={t.security.sessions.label} help={t.security.sessions.help}>
         <SessionList />
       </Section>
