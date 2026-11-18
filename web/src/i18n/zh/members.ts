@@ -46,6 +46,7 @@ export default {
   androidVersion: (v: string) => `Android ${v}`,
   bootUnlocked: "bootloader 未锁定",
   revocationUnchecked: "未检查吊销",
+  attestationRevoked: "证明证书已被吊销",
   softwareKeys: "软件密钥",
   devKeys: "开发模式",
   scope: {

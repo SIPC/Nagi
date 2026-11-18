@@ -7269,7 +7269,9 @@ type LoginSession struct {
 	// 检查过证书吊销列表。
 	RevocationChecked bool `protobuf:"varint,16,opt,name=revocation_checked,json=revocationChecked,proto3" json:"revocation_checked,omitempty"`
 	// 用 --dev-app-keys 添加的（接受软件密钥）。
-	DevKeys       bool `protobuf:"varint,17,opt,name=dev_keys,json=devKeys,proto3" json:"dev_keys,omitempty"`
+	DevKeys bool `protobuf:"varint,17,opt,name=dev_keys,json=devKeys,proto3" json:"dev_keys,omitempty"`
+	// 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+	RevokedReason string `protobuf:"bytes,18,opt,name=revoked_reason,json=revokedReason,proto3" json:"revoked_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7421,6 +7423,13 @@ func (x *LoginSession) GetDevKeys() bool {
 		return x.DevKeys
 	}
 	return false
+}
+
+func (x *LoginSession) GetRevokedReason() string {
+	if x != nil {
+		return x.RevokedReason
+	}
+	return ""
 }
 
 type ListSessionsRequest struct {
@@ -14803,7 +14812,7 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\x12UpdateUserResponse\"#\n" +
 	"\x11DeleteUserRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x14\n" +
-	"\x12DeleteUserResponse\"\xcd\x04\n" +
+	"\x12DeleteUserResponse\"\xf4\x04\n" +
 	"\fLoginSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x0e\n" +
 	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x18\n" +
@@ -14827,7 +14836,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\vboot_locked\x18\x0f \x01(\bR\n" +
 	"bootLocked\x12-\n" +
 	"\x12revocation_checked\x18\x10 \x01(\bR\x11revocationChecked\x12\x19\n" +
-	"\bdev_keys\x18\x11 \x01(\bR\adevKeys\"\x15\n" +
+	"\bdev_keys\x18\x11 \x01(\bR\adevKeys\x12%\n" +
+	"\x0erevoked_reason\x18\x12 \x01(\tR\rrevokedReason\"\x15\n" +
 	"\x13ListSessionsRequest\"I\n" +
 	"\x14ListSessionsResponse\x121\n" +
 	"\bsessions\x18\x01 \x03(\v2\x15.nagi.v1.LoginSessionR\bsessions\"&\n" +

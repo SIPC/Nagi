@@ -25,6 +25,7 @@ public  final class LoginSession extends
     androidVersion_ = "";
     appVersion_ = "";
     securityLevel_ = "";
+    revokedReason_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -888,6 +889,73 @@ public  final class LoginSession extends
   private void clearDevKeys() {
 
     devKeys_ = false;
+  }
+
+  public static final int REVOKED_REASON_FIELD_NUMBER = 18;
+  private java.lang.String revokedReason_;
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   * @return The revokedReason.
+   */
+  @java.lang.Override
+  public java.lang.String getRevokedReason() {
+    return revokedReason_;
+  }
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   * @return The bytes for revokedReason.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRevokedReasonBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(revokedReason_);
+  }
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   * @param value The revokedReason to set.
+   */
+  private void setRevokedReason(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    revokedReason_ = value;
+  }
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   */
+  private void clearRevokedReason() {
+
+    revokedReason_ = getDefaultInstance().getRevokedReason();
+  }
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   * @param value The bytes for revokedReason to set.
+   */
+  private void setRevokedReasonBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    revokedReason_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.LoginSession parseFrom(
@@ -1878,6 +1946,75 @@ public  final class LoginSession extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+     * </pre>
+     *
+     * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+     * @return The revokedReason.
+     */
+    @java.lang.Override
+    public java.lang.String getRevokedReason() {
+      return instance.getRevokedReason();
+    }
+    /**
+     * <pre>
+     * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+     * </pre>
+     *
+     * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+     * @return The bytes for revokedReason.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRevokedReasonBytes() {
+      return instance.getRevokedReasonBytes();
+    }
+    /**
+     * <pre>
+     * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+     * </pre>
+     *
+     * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+     * @param value The revokedReason to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRevokedReason(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRevokedReason(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+     * </pre>
+     *
+     * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRevokedReason() {
+      copyOnWrite();
+      instance.clearRevokedReason();
+      return this;
+    }
+    /**
+     * <pre>
+     * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+     * </pre>
+     *
+     * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+     * @param value The bytes for revokedReason to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRevokedReasonBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRevokedReasonBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LoginSession)
   }
   @java.lang.Override
@@ -1912,12 +2049,13 @@ public  final class LoginSession extends
             "bootLocked_",
             "revocationChecked_",
             "devKeys_",
+            "revokedReason_",
           };
           java.lang.String info =
-              "\u0000\u0011\u0000\u0001\u0001\u0011\u0011\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0012\u0000\u0001\u0001\u0012\u0012\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0007\u0004\u1009\u0000\u0005\u1009\u0001\u0006\u0208\u0007\u0208\b\u1009" +
               "\u0002\t\u0208\n\u0208\u000b\u0208\f\u0208\r\u0208\u000e\u0208\u000f\u0007\u0010" +
-              "\u0007\u0011\u0007";
+              "\u0007\u0011\u0007\u0012\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

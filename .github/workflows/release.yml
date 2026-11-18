@@ -122,6 +122,10 @@ jobs:
           pnpm -C web install --frozen-lockfile
           pnpm -C web build
 
+      # 证明证书的吊销列表放进面板，连不上 Google 的面板也有一份（见 docs/android.md#吊销列表）。
+      - name: Attestation revocation list
+        run: sh scripts/attestation-status.sh
+
       - name: Build binary
         run: |
           mkdir -p dist

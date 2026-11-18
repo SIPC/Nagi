@@ -1121,6 +1121,8 @@ message LoginSession {
   bool revocation_checked = 16;
   // 用 --dev-app-keys 添加的（接受软件密钥）。
   bool dev_keys = 17;
+  // 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+  string revoked_reason = 18;
 }
 
 message ListSessionsRequest {}

@@ -262,15 +262,28 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 **密钥证明**：添加手机时，App 提交三把密钥的证明证书链（Key Attestation），证明的挑战是配对码的 SHA-256。面板核对：
 
-- 证书链能追溯到 Google 的硬件证明根证书（`internal/server/auth/attestation/roots.pem`，取自 `https://android.googleapis.com/attestation/root`）。按根证书的公钥比较：同一把根密钥签发过不止一张证书，旧手机的链可能以旧证书结尾。根证书随面板版本更新。吊销列表还没有做，所有手机都标明「未检查吊销」（`revocation_checked` 为 0）；以后在面板能访问 Google 时每天获取一次。
+- 证书链能追溯到 Google 的硬件证明根证书（`internal/server/auth/attestation/roots.pem`，取自 `https://android.googleapis.com/attestation/root`）。按根证书的公钥比较：同一把根密钥签发过不止一张证书，旧手机的链可能以旧证书结尾。根证书随面板版本更新。
 - 链里每张证书由下一张签发；除第一张（叶子）外每张都必须是 CA（`BasicConstraints` 的 `cA` 为真），证明扩展只能出现在第一张。否则任何一把 Keystore 密钥（不是 CA，但私钥能对任意数据签名）都能给一张伪造的叶子签名，把链延长一张，冒充硬件密钥（「链延长」）。链最多 10 张，每张最多 16 KiB（`attestation.MaxChain`、`MaxCertBytes`）。
 - 布尔值按 BER 读：有的手机（例如部分小米机型）把扩展的 `critical`、证明里的 `deviceLocked` 写成 0x01，DER 只允许 0xFF，Go 的解析会拒绝。解析前把这类值改成 0xFF（只改这一个字节，意思不变），签名仍按手机发来的原样字节校验，所以不会让改过的证书通过。
 - 密钥在硬件里（`attestationSecurityLevel` 是 TrustedEnvironment 或 StrongBox），不能导出。
 - 每把密钥的使用条件和上表一致（`unlockedDeviceRequired`、`userAuthType`、`authTimeout`、`noAuthRequired`），密钥是在硬件里生成的（`origin` 为 GENERATED）。`unlockedDeviceRequired` 在有的手机上由 Keystore 软件实现、记在 softwareEnforced 里，所以两组都认；其余几项只认 hardwareEnforced。
 - 证明里的应用包名是 Nagi 的包名 `ink.sipc.nagi`（`auth.AppPackage`）。
 - 证明里的公钥和提交的公钥一致。
+- 链里叶子以外的证书都不在 Google 的吊销列表里（见[吊销列表](#吊销列表)）。开发模式下也检查。
 
 任何一项不符合时拒绝添加，提示原因。证明里的 bootloader 状态（`verifiedBootState`）和系统安全补丁日期记在设备上：bootloader 没有锁定时照样允许添加（有人会在自己 root 过的手机上用），但在设备列表和添加通知里标明。
+
+### 吊销列表
+
+证明私钥（出厂写入的 keybox）泄露后，拿到它的人能给任意密钥签出有效的证明，冒充「密钥在硬件里」。Google 把泄露的证书列进吊销列表（`https://android.googleapis.com/attestation/status`，按证书序列号列出，约 180 KiB），面板按它检查：
+
+- **查哪几张**：链里叶子以外的每一张。被吊销的是证明密钥的证书，有时是更上面的中间证书；叶子证书由证明密钥随意签发，不会列进去。序列号按小写十六进制、去掉前导 0 比较。列在里面的都算吊销（`REVOKED`、`SUSPENDED`）。
+- **列表从哪来**：
+  - 发布时 CI 取当时的列表放进面板（`scripts/attestation-status.sh`，在 `release.yml` 编译之前运行，取不到或面板读不了时用仓库里的那份）。中国大陆的面板通常连不上 Google，靠这一份，随面板升级更新。
+  - 主面板运行时每天从 Google 取一次（取不到时 6 小时后再试），取到的比当前的新（按 `Last-Modified`）就换上，存进数据目录的 `attestation/status.json` 和 `status.updated`，重启后先读它。备用面板不取。
+- **添加时**：链里有被吊销的证书就拒绝添加，提示序列号和原因，和其他证明不通过一样记审计、发通知。通过后记下这些证书的序列号（`attestation_serials`），三把密钥都有证明时 `revocation_checked` 为 1。
+- **添加以后**：每次换上新的列表（包括面板升级后启动时），把记了序列号的手机复查一遍。新查到被吊销的，记下原因（`revoked_reason`），在已登录的设备里标明「证明证书已被吊销」，记审计（`app_attestation_revoked`）并告警一次；不自动退出：整批 keybox 被吊销时同一批的真手机也在里面，由成员或管理员确认后退出。之后不再在列表里的清掉标明。
+- 这个功能之前添加的手机没有记序列号，不能复查，仍标明「未检查吊销」，重新添加后才会检查。
 
 ## 添加手机
 
@@ -302,7 +315,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 ### 添加以后
 
-- 面板记下设备：`app_devices (id, user_id, name, model, android_version, app_version, device_key, confirm_key, push_key, security_level, boot_locked, patch_level, revocation_checked, dev_keys, created_at, last_used_at, last_ip, last_unlock_at, sig_failures)`（迁移 `0025_app_devices.sql`，查询手写在 `store/app_devices.go`，和通行密钥、会话一样不放进 queries.sql）。设备 ID 是 16 字节随机数（base64url）。安全级别取三把密钥里最低的。删除成员时级联删除，备用面板复制数据库时一起带过去。
+- 面板记下设备：`app_devices (id, user_id, name, model, android_version, app_version, device_key, confirm_key, push_key, security_level, boot_locked, patch_level, revocation_checked, dev_keys, created_at, last_used_at, last_ip, last_unlock_at, sig_failures, attestation_serials, revoked_reason)`（迁移 `0025_app_devices.sql`、`0026_app_device_revocation.sql`，查询手写在 `store/app_devices.go`，和通行密钥、会话一样不放进 queries.sql）。设备 ID 是 16 字节随机数（base64url）。安全级别取三把密钥里最低的。删除成员时级联删除，备用面板复制数据库时一起带过去。
 - 每个成员最多 10 台手机。
 - 添加时已经用确认密钥验证过一次身份，面板把这次算作解锁（`last_unlock_at` 记为添加时间）；App 添加成功后直接进首页，不再显示解锁页、不再弹第二次验证框。
 - 添加手机是一次性通知，不能关（和添加通行密钥一样，见 [audit.md](audit.md#安全告警)）：账号、手机名称、系统版本、是否锁定 bootloader、来源。
@@ -345,7 +358,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 
 ## 管理和撤销
 
-- 「设置 → 账号安全 → 已登录的设备」里列出手机（`ListSessions` 里 `kind` 是 `app`，ID 是 `app-<设备 ID>`，`RevokeSession` 用它退出手机）：名称（默认是手机型号，可以改）、App 版本、Android 版本、安全级别、最近的 IP 和活动时间，bootloader 没有锁定或者没检查吊销的标明。点「退出」后删除设备记录，内存里的令牌立即作废，推送连接立即断开。
+- 「设置 → 账号安全 → 已登录的设备」里列出手机（`ListSessions` 里 `kind` 是 `app`，ID 是 `app-<设备 ID>`，`RevokeSession` 用它退出手机）：名称（默认是手机型号，可以改）、App 版本、Android 版本、安全级别、最近的 IP 和活动时间，bootloader 没有锁定、证明证书已被吊销、没检查吊销的标明。点「退出」后删除设备记录，内存里的令牌立即作废，推送连接立即断开。
 - 管理员在「设置 → 成员」的成员菜单里也能看到、退出这个成员的手机（还没有做）。
 - 改自己的密码时，其他手机和其他网页登录一起退出。管理员重置成员的密码、删除成员、在面板机器上执行 `nagi reset password` 时，这个成员的手机全部退出。
 - 30 天没有换取过令牌的手机自动退出，可以在「设置 → 安全 → 会话」改短。没有从添加起算的最长期限：每次换取都要硬件密钥，长期不退出不会增加被盗用的风险。
@@ -354,7 +367,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 ## 审计
 
 - App 的操作照常记审计，来源 `via` 是 `app`，`client` 是手机名称，审计页显示「App（手机名称）」。`session` 字段是 `app:<设备 ID>` 的哈希前 12 位，同一台手机的操作串在一起。配对、换取令牌、退出不按接口记，按下面的安全事件记。
-- 安全事件记为 `security` 类：`app_paired`、`app_removed`、`app_attestation_failed`、`app_signature_invalid`、`app_unlock_required`。添加手机和证明不通过发通知，其余只记审计。
+- 安全事件记为 `security` 类：`app_paired`、`app_removed`、`app_attestation_failed`、`app_attestation_revoked`、`app_signature_invalid`、`app_unlock_required`。添加手机、证明不通过和证明证书被吊销发通知，其余只记审计。
 
 ## 告警推送
 

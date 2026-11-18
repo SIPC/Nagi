@@ -113,6 +113,7 @@ export default {
     app_paired: "Add phone",
     app_removed: "Sign out phone",
     app_attestation_failed: "Phone key attestation failed",
+    app_attestation_revoked: "Phone attestation certificate revoked",
     app_signature_invalid: "Phone signature mismatch",
     app_unlock_required: "Phone app unlock required",
     session_expired: "Session expired",

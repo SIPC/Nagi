@@ -125,7 +125,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 用「支持」「新增」「修复」「移至」等动词开头，例如「支持删除快照。」「修复面板重启后 MCP 客户端无法获取工具列表的问题。」
 - 升级说明只写用户需要做的事，例如「需将节点升级到 v0.14.1。」
 
-提交更新日志后，main 和标签一起推送（`git push origin main v<版本>`），不用等 main 上的 CI：推送 `v*` 标签时，`.github/workflows/release.yml` 自己运行 `go test ./...` 和 govulncheck，构建前端，编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh`、`scripts/uninstall.sh`、`SHA256SUMS` 和两份更新日志上传到 GitHub Release。
+提交更新日志后，main 和标签一起推送（`git push origin main v<版本>`），不用等 main 上的 CI：推送 `v*` 标签时，`.github/workflows/release.yml` 自己运行 `go test ./...` 和 govulncheck，构建前端，取最新的证明证书吊销列表放进面板（`scripts/attestation-status.sh`，见 [android.md](android.md#吊销列表)），编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh`、`scripts/uninstall.sh`、`SHA256SUMS` 和两份更新日志上传到 GitHub Release。
 
 同一个流程里的 `android` 任务编译安卓 App（见 [android.md](android.md)），和面板同一个版本号，产出 `nagi-android.apk`，加进 `SHA256SUMS` 一起上传，签名证书的 SHA-256 写在发布正文末尾。App 的自动更新从 `releases/latest/download/nagi-android.apk` 下载，文件名不要改。
 

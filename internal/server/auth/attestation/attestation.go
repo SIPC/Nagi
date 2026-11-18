@@ -98,7 +98,10 @@ type Result struct {
 	PublicKey []byte
 	// Packages 是证明里的应用包名。
 	Packages []string
-	SW, HW   AuthList
+	// Serials 是叶子以外每张证书的序列号（小写十六进制），用来查吊销列表：被吊销的是证明密钥的证书和更上面的中间证书，
+	// 叶子证书由证明密钥随意签发，不会列进去。
+	Serials []string
+	SW, HW  AuthList
 }
 
 // Either 返回两组授权里任一组有的值（有的条件在部分手机上由 Keystore 软件实现，记在 softwareEnforced）。
@@ -175,6 +178,9 @@ func Parse(chain [][]byte, now time.Time) (*Result, error) {
 	}
 	last := certs[len(certs)-1]
 	res := &Result{PublicKey: certs[0].RawSubjectPublicKeyInfo}
+	for _, c := range certs[1:] {
+		res.Serials = append(res.Serials, c.SerialNumber.Text(16))
+	}
 	for _, k := range rootKeys {
 		if bytes.Equal(last.RawSubjectPublicKeyInfo, k) {
 			res.HardwareRoot = true
