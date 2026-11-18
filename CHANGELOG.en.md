@@ -8,6 +8,38 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.35.0
+
+### New features
+
+- Upgrading nodes and updating the panel show download progress, speed, and the download address.
+- The panel name can be changed in "Settings → Panel access".
+- The Android app's home adds a live traffic chart and node status, and its settings can manage your account, members, alerts, standby panels, and more. Tablets use a two-column layout.
+- Adding a phone checks whether its attestation certificate has been revoked by Google. If the certificate of an added phone is revoked, it is marked in the member's signed-in devices in "Members" and an alert is sent.
+- MCP adds a deployment guide and warns about discouraged practices when saving and deploying containers.
+
+### Improvements
+
+- The home overview no longer waits for slow nodes, and traffic data appears shortly after.
+- The QR code for adding a phone is simpler and larger, and the app scans it faster.
+- The Android app shows the last data first when opened, with smoother animations and adding flow.
+- Sync status appears immediately after clicking "Sync now" or "Stop sync".
+
+### Fixes
+
+- Fixed an issue where some Xiaomi phones could not be added.
+- Fixed several security issues involving phone attestation certificates, the security entrance, permission scope on the home page, node alerts, and compose ports.
+
+### Behavior changes
+
+- Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
+- Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
+
+### Upgrade notes
+
+- After updating the panel, update the Android app to v0.35.0.
+- Upgrade nodes to v0.35.0 to see download progress in later node upgrades.
+
 ## v0.34.0
 
 ### New features
