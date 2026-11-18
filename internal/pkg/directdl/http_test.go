@@ -215,11 +215,13 @@ func TestCommandQuoting(t *testing.T) {
 		t.Skip("没有 sh")
 	}
 	bin := t.TempDir()
+	// SHA-256 只认 64 位十六进制（见 ValidSHA256），假的 openssl dgst 输出同一个值。
+	sum := strings.Repeat("ab", 32)
 	for _, tool := range []string{"curl", "openssl", "rm"} {
 		script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done >> \"$LOG\"\necho -- >> \"$LOG\"\n"
 		if tool == "openssl" {
 			// dgst 要输出哈希给后面比较。
-			script += "if [ \"$1\" = dgst ]; then echo '(stdin)= ok'; fi\n"
+			script += "if [ \"$1\" = dgst ]; then echo '(stdin)= " + sum + "'; fi\n"
 		}
 		if err := os.WriteFile(filepath.Join(bin, tool), []byte(script), 0o755); err != nil {
 			t.Fatal(err)
@@ -232,7 +234,7 @@ func TestCommandQuoting(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, SafeName(name)), nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		c := Command{URL: "http://203.0.113.5/.nagi/dl/x.y", Name: name, Key: ArchiveKey([]byte("k"), Claims{}), SHA256: "ok", Resume: true}
+		c := Command{URL: "http://203.0.113.5/.nagi/dl/x.y", Name: name, Key: ArchiveKey([]byte("k"), Claims{}), SHA256: sum, Resume: true}
 		cmd := exec.Command(sh, "-c", c.String())
 		cmd.Dir = dir
 		cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "LOG=" + log, "HOME=/nonexistent"}
