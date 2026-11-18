@@ -33,7 +33,7 @@ func init() {
 			procedures:  []string{ln, nagiv1connect.NodeServiceReadNodeFileProcedure}}),
 			toolReadNodeFile),
 		def(node(tool{name: "write_node_file", title: "Write node file", write: true, destructive: true,
-			description: "Administrators with the node terminal permission only. Create or overwrite a text file (at most 1 MB) on a node as root. To overwrite, pass the sha256 from read_node_file; the old content is kept as a file backup (restore_node_file). Every write previews first: show it to the user, then call again with the same arguments and confirm set to the code from the preview.",
+			description: "Administrators with the node terminal permission only. Create or overwrite a text file (at most 1 MB) on a node as root. To overwrite, pass the sha256 from read_node_file; the old content is kept as a file backup (restore_node_file). Every write previews first: show it to the user, then call again with the same arguments and confirm set to the code from the preview. Do not edit compose.yml, override.yml or .env in container directories: every deploy rewrites them; the preview warns about paths under the projects root.",
 			procedures:  []string{ln, nagiv1connect.NodeServiceListNodeDirProcedure, nagiv1connect.NodeServiceWriteNodeFileProcedure}}),
 			toolWriteNodeFile),
 		def(node(tool{name: "create_node_dir", title: "Create node directory", write: true, idempotent: true,
@@ -62,7 +62,7 @@ func init() {
 			procedures:  []string{ln, nagiv1connect.NodeServiceListNodeFileBackupsProcedure, nagiv1connect.NodeServiceRestoreNodeFileBackupProcedure}}),
 			toolRestoreNodeFile),
 		def(node(tool{name: "import_compose_dir", title: "Import existing compose directory", write: true, destructive: true,
-			description: "Administrators with the node terminal permission only. Turn an existing docker compose directory on a node into a container group of a project, keeping the data in place. Without confirm it reads the directory and returns the resulting compose, imported variable names and notes; show them to the user, then call again with the same arguments and confirm set to the code from the preview. It is not deployed; deploying replaces the running compose project.",
+			description: "Administrators with the node terminal permission only. Turn an existing docker compose directory on a node into a container group of a project, keeping the data in place. Without confirm it reads the directory and returns the resulting compose, imported variable names and notes; show them to the user, then call again with the same arguments and confirm set to the code from the preview. The preview and result also list warnings for hard-coded environment values and host paths outside the directory, which snapshots do not include. It is not deployed; deploying replaces the running compose project.",
 			procedures: []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, ln,
 				nagiv1connect.NodeServiceInspectComposeDirProcedure, nagiv1connect.ProjectServiceImportComposeDirProcedure}}),
 			toolImportComposeDir),
@@ -289,6 +289,9 @@ func toolWriteNodeFile(c *call, in WriteNodeFileArgs) (any, error) {
 	extra := map[string]any{"path": p, "size_bytes": len(content), "sha256": digest(content)}
 	if note := accessNote(access); note != "" {
 		extra["warning"] = note
+	}
+	if w := nodeFileWarning(p, n.GetInfo().GetProjectsRoot()); w != "" {
+		extra["warnings"] = []string{w}
 	}
 	if pv := c.nodeConfirm("write_node_file", in.Confirm, n, fmt.Sprintf("%s on node %s is %s.", p, n.GetName(), verb), extra, p, digest(content), in.ExpectedSHA256); pv != nil {
 		return pv, nil
@@ -616,6 +619,9 @@ func toolImportComposeDir(c *call, in ImportComposeDirArgs) (any, error) {
 			pr.GetPath(), n.GetName(), name, s.GetProject().GetName()),
 			map[string]any{"compose_file": pr.GetComposeFile(), "compose": pr.GetCompose(), "variables": pr.GetVariables(), "secret_variables": pr.GetSecretVariables(),
 				"running_project": pr.GetProject(), "running_containers": pr.GetContainers(), "notes": pr.GetNotes(), "backup_paths": backup, "untrusted": nodeUntrusted})
+		if w := composeWarnings(pr.GetCompose(), adviceOpts{imported: true}); len(w) > 0 {
+			out["warnings"] = w
+		}
 		if in.Confirm != "" {
 			out["note"] = mismatchNote
 		}
@@ -626,7 +632,11 @@ func toolImportComposeDir(c *call, in ImportComposeDirArgs) (any, error) {
 	})); err != nil {
 		return nil, err
 	}
-	return map[string]string{"container": name, "note": "added to the project, not deployed; check it with get_container, then deploy when ready"}, nil
+	out := map[string]any{"container": name, "note": "added to the project, not deployed; check it with get_container, then deploy when ready"}
+	if w := composeWarnings(pr.GetCompose(), adviceOpts{imported: true}); len(w) > 0 {
+		out["warnings"] = w
+	}
+	return out, nil
 }
 
 type IsolateArgs struct {

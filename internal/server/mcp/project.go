@@ -30,7 +30,7 @@ type UpdateProjectArgs struct {
 	NetworkName      *string `json:"network_name,omitempty" jsonschema:"unique network name (lowercase letters, digits and -). Linked projects reach this project's containers at container.network-name and must update those addresses"`
 	ScheduleArgs
 	SnapshotLimit *uint32  `json:"snapshot_limit,omitempty" jsonschema:"scheduled, manual and predeploy snapshots kept per container, 3 to 1000; 0 means the default (10). The oldest beyond it are deleted after the next snapshot"`
-	InternalPorts []string `json:"internal_ports,omitempty" jsonschema:"replaces the internal ports: ports that containers on other nodes reach although the compose file does not publish them, as service:port"`
+	InternalPorts []string `json:"internal_ports,omitempty" jsonschema:"replaces the internal ports: ports that containers on other nodes must reach although the image or compose file does not declare them (EXPOSE, ports, expose), as <container>:<port> or <service>.<group>:<port>, with /udp for UDP, e.g. db:5432, db.umami:5432, dns:53/udp"`
 	// 出站限制（见 docs/agent.md#出站限制）：放行等于扩大权限，只有管理员能改，接口检查。
 	EgressMode  *string  `json:"egress_mode,omitempty" jsonschema:"administrators only: outbound access of the containers to private networks: block, log (allow but log) or off"`
 	EgressAllow []string `json:"egress_allow,omitempty" jsonschema:"administrators only: replaces the private addresses the containers may still reach, as address-or-CIDR:port, e.g. 192.168.1.20:5432"`

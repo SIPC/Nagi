@@ -286,3 +286,31 @@ func TestComposePorts(t *testing.T) {
 		t.Fatal("route name")
 	}
 }
+
+// 只绑定在本机地址的端口不导入（Caddy 不认 host_ip，导入就会对外开放），其他地址照常导入。
+func TestComposePortsLoopback(t *testing.T) {
+	cp, err := LoadCompose(context.Background(),
+		"services:\n  db:\n    image: y\n    ports: [\"127.0.0.1:5432:5432\", \"[::1]:6379:6379\", \"0.0.0.0:8080:80\"]\n  cache:\n    image: z\n    ports:\n      - target: 11211\n        published: \"11211\"\n        host_ip: 127.0.0.2\n",
+		nil, t.TempDir(), "nagi-p-db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]ComposePort{}
+	for _, p := range ComposePorts("db", cp) {
+		got[p.Key] = p
+	}
+	for _, k := range []string{"db/5432/tcp", "db/6379/tcp", "cache/11211/tcp"} {
+		if p, ok := got[k]; !ok || p.Skip == nil || p.Route != nil {
+			t.Errorf("%s 只绑定在本机地址，不应导入：%+v", k, p)
+		}
+	}
+	if p := got["db/80/tcp"]; p.Skip != nil || p.Route.GetPublished() != 8080 {
+		t.Errorf("0.0.0.0 的端口应照常导入：%+v", p)
+	}
+	for host, want := range map[string]bool{"127.0.0.1": true, "127.1.2.3": true, "::1": true, "[::1]": true, "localhost": true,
+		"0.0.0.0": false, "": false, "192.168.1.2": false, "::ffff:127.0.0.1": true} {
+		if LoopbackHost(host) != want {
+			t.Errorf("LoopbackHost(%q) 应为 %v", host, want)
+		}
+	}
+}

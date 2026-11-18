@@ -3,6 +3,8 @@ package mcp
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -437,6 +439,90 @@ func TestPanelToolsAllowedFor(t *testing.T) {
 		}
 		if tl.panel && (tl.scope() != "nagi:admin" || !tl.adminOnly) {
 			t.Errorf("工具 %s 要只给管理员，OAuth 范围是 nagi:admin", tl.name)
+		}
+	}
+}
+
+func regexpAll(expr, text string) []string {
+	return regexp.MustCompile(expr).FindAllString(text, -1)
+}
+
+// 服务说明里的部署规则：提到的资源都存在，提到的工具参数和实际的一致。
+func TestInstructionsDeploymentRules(t *testing.T) {
+	text := instructions(auth.User{Name: "ink", Role: auth.RoleAdmin, AllowWrite: true}, false)
+	for _, want := range []string{"Deployment rules", "image form", "env_secret", "volumes", "host_ip", "save_route", "connect_project", "node_exec", "warnings"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("服务说明里应该有 %q", want)
+		}
+	}
+	uris := map[string]bool{}
+	for _, d := range docs {
+		uris[d.uri] = true
+	}
+	for _, u := range regexpAll(`nagi://[a-z/]+[a-z]`, text) {
+		if !uris[u] {
+			t.Errorf("服务说明提到的资源 %s 不存在", u)
+		}
+	}
+	for _, d := range docs {
+		for _, u := range regexpAll(`nagi://[a-z/]+[a-z]`, d.text) {
+			if !uris[u] {
+				t.Errorf("资源 %s 提到的资源 %s 不存在", d.uri, u)
+			}
+		}
+	}
+	if !uris["nagi://docs/deploy"] {
+		t.Fatal("缺少部署指南资源")
+	}
+	// 说明里、指南里写的参数名要和工具的参数一致。
+	params := func(v any) map[string]bool {
+		out := map[string]bool{}
+		var walk func(reflect.Type)
+		walk = func(t reflect.Type) {
+			for i := range t.NumField() {
+				f := t.Field(i)
+				if f.Anonymous {
+					walk(f.Type)
+					continue
+				}
+				name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+				out[name] = true
+			}
+		}
+		walk(reflect.TypeOf(v))
+		return out
+	}
+	add, update, deploy := params(AddContainerArgs{}), params(UpdateContainerArgs{}), params(DeployArgs{})
+	for _, p := range []string{"image", "compose", "env", "env_secret", "service_env", "volumes", "health_command", "depends_on", "stateful", "preserved_paths", "workdir", "memory_mb", "git_url"} {
+		if !add[p] {
+			t.Errorf("add_container 没有参数 %s", p)
+		}
+	}
+	for _, p := range []string{"env", "env_secret", "service_env", "volumes", "ports", "expected_revision"} {
+		if !update[p] {
+			t.Errorf("update_container 没有参数 %s", p)
+		}
+	}
+	for _, p := range []string{"apply_shared_env", "pull_git", "wait_healthy_seconds", "expected_revisions"} {
+		if !deploy[p] {
+			t.Errorf("deploy 没有参数 %s", p)
+		}
+	}
+	if !params(UpdateProjectArgs{})["internal_ports"] {
+		t.Error("update_project 没有参数 internal_ports")
+	}
+	names := map[string]bool{}
+	for _, tl := range allTools {
+		names[tl.name] = true
+	}
+	for _, d := range docs {
+		for _, n := range regexpAll(`\b[a-z]+(_[a-z]+)+\b`, d.text) {
+			if strings.HasSuffix(n, "_container") || strings.HasPrefix(n, "save_") || strings.HasPrefix(n, "update_") || strings.HasPrefix(n, "check_") ||
+				strings.HasSuffix(n, "_project") || strings.HasSuffix(n, "_registry") || strings.HasSuffix(n, "_cert") || strings.HasSuffix(n, "_exec") {
+				if !names[n] {
+					t.Errorf("资源 %s 提到的工具 %s 不存在", d.uri, n)
+				}
+			}
 		}
 	}
 }
