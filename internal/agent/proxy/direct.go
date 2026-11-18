@@ -69,6 +69,47 @@ func directTLS(address string) obj {
 	}}}}
 }
 
+// httpDirect 是加密 HTTP 下载在 Caddy 里的规则：节点的 IP 和端口，Address 为空表示不开。
+type httpDirect struct {
+	Address string
+	Port    int
+}
+
+// SetDirectHTTP 设置加密 HTTP 下载（见 docs/agent.md#加密-http-下载）的 IP 和端口，address 为空表示不开，下次 Apply 时生效。
+// 请求和 HTTPS 的直连下载交给同一个 handler，由它按路径区分。
+func (p *Proxy) SetDirectHTTP(address string, port int) {
+	p.mu.Lock()
+	p.httpDirect = httpDirect{Address: address, Port: port}
+	if address == "" {
+		p.httpDirect = httpDirect{}
+	}
+	p.mu.Unlock()
+}
+
+// DirectHTTP 返回加载成功的配置里加密 HTTP 下载的 IP 和端口（没有开时 IP 为空），
+// 以及这次没有开的原因（端口被映射占用时）。
+func (p *Proxy) DirectHTTP() (address string, port int, err string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.httpLoaded.Address, p.httpLoaded.Port, p.httpErr
+}
+
+// httpDirectRoute 是加密 HTTP 下载的规则：只匹配节点的 IP 和下载路径。
+func httpDirectRoute(address string) obj {
+	return obj{"match": []obj{{"host": []string{address}, "path": []string{"/.nagi/dl/*"}}}, "handle": []obj{{"handler": "nagi_direct"}}, "terminal": true}
+}
+
+// portTaken 判断 TCP 端口 port 是不是已经有映射在用（没绑域名的 http、tcp）。
+func portTaken(routes []Route, port int) bool {
+	for _, r := range routes {
+		if int(r.Published) != port || r.Protocol == "udp" || (r.Protocol == "http" && len(r.Domains) > 0) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // DirectIssuer 是直连下载的 IP 证书的签发方。测试时换成 Caddy 的内部 CA（不用联网）。
 var DirectIssuer = obj{"module": "acme", "profile": "shortlived"}
 

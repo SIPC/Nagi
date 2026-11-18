@@ -192,3 +192,43 @@ func TestBuildDirect(t *testing.T) {
 		t.Errorf("没开直连时不该有直连的规则：%s", data)
 	}
 }
+
+// 加密 HTTP 下载：在 80 上和域名访问共用一个服务，只匹配节点 IP 和下载路径；别的端口单独开一个服务，其他请求 404。
+// 生成的配置要能被 Caddy 校验通过。
+func TestBuildDirectHTTP(t *testing.T) {
+	domain := []Route{{Project: "p1", Service: "web", Protocol: "http", Domains: []string{"example.com"}, Upstreams: []string{"10.200.0.2:80"}}}
+	for _, c := range []struct {
+		name   string
+		routes []Route
+		hd     httpDirect
+		want   []string
+	}{
+		{"80，没有域名", nil, httpDirect{"203.0.113.5", 80}, []string{`"listen":[":80"]`, `"path":["/.nagi/dl/*"]`}},
+		{"80，有域名", domain, httpDirect{"203.0.113.5", 80}, []string{`"listen":[":80"]`, `"path":["/.nagi/dl/*"]`, `"example.com"`}},
+		{"别的端口", domain, httpDirect{"203.0.113.5", 8080}, []string{`"nagi_dl"`, `"listen":[":8080"]`, `"path":["/.nagi/dl/*"]`}},
+	} {
+		cfg := buildFull(c.routes, t.TempDir(), func(string) bool { return false }, "", c.hd)
+		data, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := caddy.Validate(mustConfig(t, data)); err != nil {
+			t.Fatalf("%s：invalid caddy config: %v\n%s", c.name, err, data)
+		}
+		s := string(data)
+		for _, want := range append(c.want, `"host":["203.0.113.5"]`, `"handler":"nagi_direct"`) {
+			if !strings.Contains(s, want) {
+				t.Errorf("%s：配置里没有 %s：%s", c.name, want, s)
+			}
+		}
+		// 不申请 IP 证书（那是 HTTPS 直连的事）。
+		if strings.Contains(s, "shortlived") {
+			t.Errorf("%s：不该申请证书：%s", c.name, s)
+		}
+	}
+	// 端口被映射占着时不开。
+	if !portTaken([]Route{{Protocol: "tcp", Published: 8080}}, 8080) || !portTaken([]Route{{Protocol: "http", Published: 8080}}, 8080) ||
+		portTaken([]Route{{Protocol: "udp", Published: 8080}}, 8080) || portTaken(domain, 80) {
+		t.Error("portTaken")
+	}
+}

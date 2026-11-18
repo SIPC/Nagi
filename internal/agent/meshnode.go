@@ -464,6 +464,7 @@ func (s *agentService) GetMeshStatus(context.Context, *nagiv1.MeshStatusRequest)
 	}
 	st := mesh.StatusProto(n.m, n.name)
 	st.DirectDownloadOff = s.node.direct.off()
+	st.DirectHttpPort = uint32(s.node.direct.httpPort())
 	return st, nil
 }
 
@@ -535,6 +536,11 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 	if n == nil {
 		return nil, status.Error(codes.Unavailable, "节点网络没有启动")
 	}
+	if req.GetSetDirectHttp() && req.GetDirectHttpPort() != 0 {
+		if err := validHTTPPort(int(req.GetDirectHttpPort())); err != nil {
+			return nil, err
+		}
+	}
 	// 开关都存成文件：存在表示关闭。
 	set := func(file string, off bool) error {
 		if off {
@@ -559,10 +565,18 @@ func (s *agentService) SetMeshOptions(_ context.Context, req *nagiv1.MeshOptions
 		}
 		s.node.changed() // 直连下载开关：重新生成 Caddy 配置
 	}
+	// 加密 HTTP 下载同样只在请求带了它（set_direct_http）时改。
+	if req.GetSetDirectHttp() {
+		if err := s.node.direct.setHTTPPort(int(req.GetDirectHttpPort())); err != nil {
+			return nil, err
+		}
+		s.node.changed()
+	}
 	n.m.SetQUIC(!req.GetQuicOff())
 	n.m.SetNodeRelay(!req.GetRelayOff())
 	s.node.log.Info("组网设置已修改", "quic", n.m.QUIC(), "relay", n.m.NodeRelay())
-	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC(), RelayOff: !n.m.NodeRelay(), DirectDownloadOff: s.node.direct.off()}, nil
+	return &nagiv1.MeshOptions{QuicOff: !n.m.QUIC(), RelayOff: !n.m.NodeRelay(), DirectDownloadOff: s.node.direct.off(),
+		DirectHttpPort: uint32(s.node.direct.httpPort())}, nil
 }
 
 // meshMetrics 是节点之间流量的指标来源：把每个 mesh 成员的累计字节换算成速率，存成 m:<成员公钥>:rx、:tx。

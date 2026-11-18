@@ -3070,7 +3070,15 @@ type DirectDownload struct {
 	// 已经拿到这个地址的证书，可以直连下载。
 	Ready bool `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`
 	// 不能直连的原因（端口被占用、证书申请失败等），可以直连时为空。
-	Error         string `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	Error string `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	// 节点支持加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。旧版本的节点没有这一项。
+	HttpSupported bool `protobuf:"varint,6,opt,name=http_supported,json=httpSupported,proto3" json:"http_supported,omitempty"`
+	// 加密 HTTP 下载的端口，0 表示没有开启。
+	HttpPort uint32 `protobuf:"varint,7,opt,name=http_port,json=httpPort,proto3" json:"http_port,omitempty"`
+	// 已经在这个端口上为 address 开好了规则，可以签发下载命令。
+	HttpReady bool `protobuf:"varint,8,opt,name=http_ready,json=httpReady,proto3" json:"http_ready,omitempty"`
+	// 开启了但不能用的原因（端口被占用等）。
+	HttpError     string `protobuf:"bytes,9,opt,name=http_error,json=httpError,proto3" json:"http_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3136,6 +3144,34 @@ func (x *DirectDownload) GetReady() bool {
 func (x *DirectDownload) GetError() string {
 	if x != nil {
 		return x.Error
+	}
+	return ""
+}
+
+func (x *DirectDownload) GetHttpSupported() bool {
+	if x != nil {
+		return x.HttpSupported
+	}
+	return false
+}
+
+func (x *DirectDownload) GetHttpPort() uint32 {
+	if x != nil {
+		return x.HttpPort
+	}
+	return 0
+}
+
+func (x *DirectDownload) GetHttpReady() bool {
+	if x != nil {
+		return x.HttpReady
+	}
+	return false
+}
+
+func (x *DirectDownload) GetHttpError() string {
+	if x != nil {
+		return x.HttpError
 	}
 	return ""
 }
@@ -4318,8 +4354,10 @@ type MeshStatus struct {
 	RelayOff bool `protobuf:"varint,8,opt,name=relay_off,json=relayOff,proto3" json:"relay_off,omitempty"`
 	// 关闭了直连下载（节点的网络设置，见 docs/agent.md#直连下载）。
 	DirectDownloadOff bool `protobuf:"varint,9,opt,name=direct_download_off,json=directDownloadOff,proto3" json:"direct_download_off,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 加密 HTTP 下载的端口，0 表示没有开启（节点的网络设置，见 docs/agent.md#加密-http-下载）。
+	DirectHttpPort uint32 `protobuf:"varint,10,opt,name=direct_http_port,json=directHttpPort,proto3" json:"direct_http_port,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *MeshStatus) Reset() {
@@ -4413,6 +4451,13 @@ func (x *MeshStatus) GetDirectDownloadOff() bool {
 		return x.DirectDownloadOff
 	}
 	return false
+}
+
+func (x *MeshStatus) GetDirectHttpPort() uint32 {
+	if x != nil {
+		return x.DirectHttpPort
+	}
+	return 0
 }
 
 type MeshPingRequest struct {
@@ -4630,8 +4675,12 @@ type MeshOptions struct {
 	// 请求里带了 direct_download_off：节点只在为 true 时按它修改直连下载的开关。
 	// v0.32.0 以前的面板不知道直连下载，请求里没有这一项，节点不能把它当作「打开」。面板转发修改时总是填上。
 	SetDirectDownload bool `protobuf:"varint,4,opt,name=set_direct_download,json=setDirectDownload,proto3" json:"set_direct_download,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 加密 HTTP 下载的端口，0 表示关闭（见 docs/agent.md#加密-http-下载）。
+	DirectHttpPort uint32 `protobuf:"varint,5,opt,name=direct_http_port,json=directHttpPort,proto3" json:"direct_http_port,omitempty"`
+	// 请求里带了 direct_http_port：节点只在为 true 时按它修改（和 set_direct_download 一样，旧面板不知道这一项）。
+	SetDirectHttp bool `protobuf:"varint,6,opt,name=set_direct_http,json=setDirectHttp,proto3" json:"set_direct_http,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MeshOptions) Reset() {
@@ -4688,6 +4737,20 @@ func (x *MeshOptions) GetDirectDownloadOff() bool {
 func (x *MeshOptions) GetSetDirectDownload() bool {
 	if x != nil {
 		return x.SetDirectDownload
+	}
+	return false
+}
+
+func (x *MeshOptions) GetDirectHttpPort() uint32 {
+	if x != nil {
+		return x.DirectHttpPort
+	}
+	return 0
+}
+
+func (x *MeshOptions) GetSetDirectHttp() bool {
+	if x != nil {
+		return x.SetDirectHttp
 	}
 	return false
 }
@@ -6071,13 +6134,19 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\freplica_dirs\x18\x19 \x01(\bR\vreplicaDirs\x12\x1f\n" +
 	"\vreplica_dir\x18\x1a \x01(\tR\n" +
 	"replicaDir\x12@\n" +
-	"\x0fdirect_download\x18\x1e \x01(\v2\x17.nagi.v1.DirectDownloadR\x0edirectDownload\"\x86\x01\n" +
+	"\x0fdirect_download\x18\x1e \x01(\v2\x17.nagi.v1.DirectDownloadR\x0edirectDownload\"\x88\x02\n" +
 	"\x0eDirectDownload\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\x10\n" +
 	"\x03off\x18\x02 \x01(\bR\x03off\x12\x18\n" +
 	"\aaddress\x18\x03 \x01(\tR\aaddress\x12\x14\n" +
 	"\x05ready\x18\x04 \x01(\bR\x05ready\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"\x89\x01\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12%\n" +
+	"\x0ehttp_supported\x18\x06 \x01(\bR\rhttpSupported\x12\x1b\n" +
+	"\thttp_port\x18\a \x01(\rR\bhttpPort\x12\x1d\n" +
+	"\n" +
+	"http_ready\x18\b \x01(\bR\thttpReady\x12\x1d\n" +
+	"\n" +
+	"http_error\x18\t \x01(\tR\thttpError\"\x89\x01\n" +
 	"\n" +
 	"DomainCert\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x14\n" +
@@ -6187,7 +6256,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05tried\x18\x14 \x01(\rR\x05tried\x12\x14\n" +
 	"\x05heard\x18\x15 \x01(\bR\x05heard\x12\x1d\n" +
 	"\n" +
-	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xa0\x02\n" +
+	"local_port\x18\x16 \x01(\rR\tlocalPort\"\xca\x02\n" +
 	"\n" +
 	"MeshStatus\x12\x1d\n" +
 	"\n" +
@@ -6199,7 +6268,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bquic_off\x18\x06 \x01(\bR\aquicOff\x12\x10\n" +
 	"\x03nat\x18\a \x01(\tR\x03nat\x12\x1b\n" +
 	"\trelay_off\x18\b \x01(\bR\brelayOff\x12.\n" +
-	"\x13direct_download_off\x18\t \x01(\bR\x11directDownloadOff\"M\n" +
+	"\x13direct_download_off\x18\t \x01(\bR\x11directDownloadOff\x12(\n" +
+	"\x10direct_http_port\x18\n" +
+	" \x01(\rR\x0edirectHttpPort\"M\n" +
 	"\x0fMeshPingRequest\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1b\n" +
@@ -6214,12 +6285,14 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x10wireguard_upload\x18\x05 \x01(\x01R\x0fwireguardUpload\x12-\n" +
 	"\x12wireguard_download\x18\x06 \x01(\x01R\x11wireguardDownload\x12\"\n" +
 	"\rquic_off_here\x18\a \x01(\bR\vquicOffHere\x12\"\n" +
-	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"\xa5\x01\n" +
+	"\rquic_off_peer\x18\b \x01(\bR\vquicOffPeer\"\xf7\x01\n" +
 	"\vMeshOptions\x12\x19\n" +
 	"\bquic_off\x18\x01 \x01(\bR\aquicOff\x12\x1b\n" +
 	"\trelay_off\x18\x02 \x01(\bR\brelayOff\x12.\n" +
 	"\x13direct_download_off\x18\x03 \x01(\bR\x11directDownloadOff\x12.\n" +
-	"\x13set_direct_download\x18\x04 \x01(\bR\x11setDirectDownload\"\xc7\x01\n" +
+	"\x13set_direct_download\x18\x04 \x01(\bR\x11setDirectDownload\x12(\n" +
+	"\x10direct_http_port\x18\x05 \x01(\rR\x0edirectHttpPort\x12&\n" +
+	"\x0fset_direct_http\x18\x06 \x01(\bR\rsetDirectHttp\"\xc7\x01\n" +
 	"\fBackupStatus\x12$\n" +
 	"\x0etarget_node_id\x18\x01 \x01(\tR\ftargetNodeId\x12\x1f\n" +
 	"\vtarget_name\x18\x02 \x01(\tR\n" +

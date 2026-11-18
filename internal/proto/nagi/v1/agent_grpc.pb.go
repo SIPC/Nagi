@@ -88,6 +88,7 @@ const (
 	AgentService_SetMirrors_FullMethodName            = "/nagi.v1.AgentService/SetMirrors"
 	AgentService_SetPanelDomain_FullMethodName        = "/nagi.v1.AgentService/SetPanelDomain"
 	AgentService_SetDirectDownload_FullMethodName     = "/nagi.v1.AgentService/SetDirectDownload"
+	AgentService_PrepareDirectHttp_FullMethodName     = "/nagi.v1.AgentService/PrepareDirectHttp"
 	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
 	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
 	AgentService_SetAuditSink_FullMethodName          = "/nagi.v1.AgentService/SetAuditSink"
@@ -231,6 +232,9 @@ type AgentServiceClient interface {
 	// 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
 	// 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
 	SetDirectDownload(ctx context.Context, in *SetDirectDownloadRequest, opts ...grpc.CallOption) (*SetDirectDownloadResponse, error)
+	// 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）：面板签好下载链接后交给节点核对，节点记下文件的版本
+	// （目录打包的链接只能用一次），文件不太大时算出 SHA-256，面板据此生成下载命令。旧版本的节点返回 Unimplemented。
+	PrepareDirectHttp(ctx context.Context, in *PrepareDirectHttpRequest, opts ...grpc.CallOption) (*PrepareDirectHttpResponse, error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error)
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -1118,6 +1122,16 @@ func (c *agentServiceClient) SetDirectDownload(ctx context.Context, in *SetDirec
 	return out, nil
 }
 
+func (c *agentServiceClient) PrepareDirectHttp(ctx context.Context, in *PrepareDirectHttpRequest, opts ...grpc.CallOption) (*PrepareDirectHttpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareDirectHttpResponse)
+	err := c.cc.Invoke(ctx, AgentService_PrepareDirectHttp_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) Upgrade(ctx context.Context, in *UpgradeRequest, opts ...grpc.CallOption) (*UpgradeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpgradeResponse)
@@ -1340,6 +1354,9 @@ type AgentServiceServer interface {
 	// 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
 	// 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
 	SetDirectDownload(context.Context, *SetDirectDownloadRequest) (*SetDirectDownloadResponse, error)
+	// 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）：面板签好下载链接后交给节点核对，节点记下文件的版本
+	// （目录打包的链接只能用一次），文件不太大时算出 SHA-256，面板据此生成下载命令。旧版本的节点返回 Unimplemented。
+	PrepareDirectHttp(context.Context, *PrepareDirectHttpRequest) (*PrepareDirectHttpResponse, error)
 	// 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
 	Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error)
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -1575,6 +1592,9 @@ func (UnimplementedAgentServiceServer) SetPanelDomain(context.Context, *SetPanel
 }
 func (UnimplementedAgentServiceServer) SetDirectDownload(context.Context, *SetDirectDownloadRequest) (*SetDirectDownloadResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetDirectDownload not implemented")
+}
+func (UnimplementedAgentServiceServer) PrepareDirectHttp(context.Context, *PrepareDirectHttpRequest) (*PrepareDirectHttpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareDirectHttp not implemented")
 }
 func (UnimplementedAgentServiceServer) Upgrade(context.Context, *UpgradeRequest) (*UpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Upgrade not implemented")
@@ -2715,6 +2735,24 @@ func _AgentService_SetDirectDownload_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_PrepareDirectHttp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareDirectHttpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).PrepareDirectHttp(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_PrepareDirectHttp_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).PrepareDirectHttp(ctx, req.(*PrepareDirectHttpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_Upgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpgradeRequest)
 	if err := dec(in); err != nil {
@@ -3054,6 +3092,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetDirectDownload",
 			Handler:    _AgentService_SetDirectDownload_Handler,
+		},
+		{
+			MethodName: "PrepareDirectHttp",
+			Handler:    _AgentService_PrepareDirectHttp_Handler,
 		},
 		{
 			MethodName: "Upgrade",

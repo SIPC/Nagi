@@ -94,9 +94,8 @@ func (d Download) Serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	etag, modified := "", time.Time{}
-	if !head.GetArchive() && head.GetModifiedUnixNano() != 0 {
-		etag = fmt.Sprintf(`"%x-%x"`, head.GetSize(), head.GetModifiedUnixNano())
+	etag, modified := ETag(head), time.Time{}
+	if etag != "" {
 		modified = time.Unix(0, head.GetModifiedUnixNano()).UTC()
 	}
 	// If-Range 和现在的文件对不上（文件变了）：续传接不上，改发整个文件。
@@ -160,6 +159,14 @@ func (d Download) Serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// ETag 是文件的版本（大小和修改时间），续传时用 If-Range 核对。目录打包、不知道修改时间的没有。
+func ETag(head *nagiv1.VolumeFileChunk) string {
+	if head.GetArchive() || head.GetModifiedUnixNano() == 0 {
+		return ""
+	}
+	return fmt.Sprintf(`"%x-%x"`, head.GetSize(), head.GetModifiedUnixNano())
 }
 
 // start 打开文件流，取第一条（文件名、大小）。出错时已经回答了浏览器。

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"sync"
 
@@ -68,6 +69,24 @@ func writeDirect(w http.ResponseWriter, url string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"url": url})
 }
 
+// writeCommand 回答加密 HTTP 下载的命令（mode=command，见 docs/agent.md#加密-http-下载）。
+// 节点不能用时回 409。命令里有内容密钥：不缓存，也不写进活动记录。
+func writeCommand(w http.ResponseWriter, r *http.Request, cmd *nodes.DirectHTTPCommand) {
+	if cmd == nil {
+		jsonFail(w, r, http.StatusConflict, i18n.New("该节点现在不能生成下载命令"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"command": cmd.Command, "name": cmd.Name, "size": cmd.Size, "archive": cmd.Archive,
+		"sha256": cmd.SHA256, "hash_skipped": cmd.HashSkipped, "expires": cmd.Expires.Unix(),
+	})
+}
+
+// commandMode：请求要的是加密 HTTP 下载的命令（mode=command），不是 HTTPS 的直连链接。
+func commandMode(r *http.Request) bool { return r.URL.Query().Get("mode") == "command" }
+
 func jsonFail(w http.ResponseWriter, r *http.Request, code int, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -75,6 +94,7 @@ func jsonFail(w http.ResponseWriter, r *http.Request, code int, err error) {
 }
 
 // VolumeDirectHandler：GET /api/volume-file/direct?project=&container=&volume=&path=&snapshot=，参数同 /api/volume-file。
+// 带 mode=command 时回答加密 HTTP 下载的命令（writeCommand）。
 func (a *API) VolumeDirectHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, err := a.Auth.RequestUser(r)
@@ -100,12 +120,29 @@ func (a *API) VolumeDirectHandler() http.Handler {
 		}
 		conn, err := a.Nodes.Get(nodeID)
 		if err != nil {
+			if commandMode(r) {
+				writeCommand(w, r, nil)
+				return
+			}
 			writeDirect(w, "")
 			return
 		}
 		id := directdl.NewID()
-		url := conn.DirectLink(directdl.Claims{Kind: directdl.KindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
-			Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath(), ID: id, User: u.Name})
+		claims := directdl.Claims{Kind: directdl.KindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
+			Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath(), ID: id, User: u.Name}
+		if commandMode(r) {
+			cmd, err := conn.DirectHTTP(ctx, claims)
+			if err != nil {
+				jsonFail(w, r, http.StatusBadGateway, err)
+				return
+			}
+			if cmd != nil {
+				a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, map[string]any{"direct_link": id, "direct_http": true})
+			}
+			writeCommand(w, r, cmd)
+			return
+		}
+		url := conn.DirectLink(claims)
 		if url != "" {
 			a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, map[string]any{"direct_link": id})
 		}
@@ -114,6 +151,7 @@ func (a *API) VolumeDirectHandler() http.Handler {
 }
 
 // NodeDirectHandler：GET /api/node-file/direct?node=&path=，参数和权限同 /api/node-file 的下载（管理员，要先确认身份）。
+// 带 mode=command 时回答加密 HTTP 下载的命令（writeCommand）。
 func (a *API) NodeDirectHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, err := a.Auth.RequestUser(r)
@@ -136,15 +174,37 @@ func (a *API) NodeDirectHandler() http.Handler {
 		}
 		conn, err := a.Nodes.Get(nodeID)
 		if err != nil {
+			if commandMode(r) {
+				writeCommand(w, r, nil)
+				return
+			}
 			writeDirect(w, "")
 			return
 		}
 		id := directdl.NewID()
-		url := conn.DirectLink(directdl.Claims{Kind: directdl.KindNode, Path: path, ID: id, User: u.Name})
-		if url != "" {
-			b, _ := json.Marshal(map[string]string{"detail": path, "direct_link": id})
+		record := func(extra map[string]any) {
+			params := map[string]any{"detail": path, "direct_link": id}
+			maps.Copy(params, extra)
+			b, _ := json.Marshal(params)
 			a.Record(context.WithoutCancel(ctx), audit.Event{Action: "DownloadNodeFile", TargetType: "node", TargetID: nodeID,
 				TargetName: a.nodeName(ctx, nodeID), Params: string(b)})
+		}
+		claims := directdl.Claims{Kind: directdl.KindNode, Path: path, ID: id, User: u.Name}
+		if commandMode(r) {
+			cmd, err := conn.DirectHTTP(ctx, claims)
+			if err != nil {
+				jsonFail(w, r, http.StatusBadGateway, err)
+				return
+			}
+			if cmd != nil {
+				record(map[string]any{"direct_http": true})
+			}
+			writeCommand(w, r, cmd)
+			return
+		}
+		url := conn.DirectLink(claims)
+		if url != "" {
+			record(nil)
 		}
 		writeDirect(w, url)
 	})

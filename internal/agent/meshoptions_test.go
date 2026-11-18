@@ -49,4 +49,18 @@ func TestSetMeshOptionsKeepsDirectDownload(t *testing.T) {
 	if out := set(&nagiv1.MeshOptions{SetDirectDownload: true}); out.GetDirectDownloadOff() || a.direct.off() {
 		t.Fatalf("新面板应能打开直连下载：%v", out)
 	}
+
+	// 加密 HTTP 下载：带了 set_direct_http 才改；不认识这一项的面板改别的不影响它；端口不对时什么都不改。
+	if out := set(&nagiv1.MeshOptions{SetDirectHttp: true, DirectHttpPort: 8080, SetDirectDownload: true}); out.GetDirectHttpPort() != 8080 || a.direct.httpPort() != 8080 {
+		t.Fatalf("应能开启加密 HTTP 下载：%v", out)
+	}
+	if out := set(&nagiv1.MeshOptions{RelayOff: true, SetDirectDownload: true}); out.GetDirectHttpPort() != 8080 {
+		t.Fatalf("没带 set_direct_http 时不该改：%v", out)
+	}
+	if _, err := s.SetMeshOptions(context.Background(), &nagiv1.MeshOptions{QuicOff: true, SetDirectHttp: true, DirectHttpPort: 443}); err == nil || !m.QUIC() {
+		t.Fatalf("443 不该接受，也不该改别的：%v", err)
+	}
+	if out := set(&nagiv1.MeshOptions{SetDirectHttp: true}); out.GetDirectHttpPort() != 0 || a.direct.httpPort() != 0 {
+		t.Fatalf("应能关闭：%v", out)
+	}
 }

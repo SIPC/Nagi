@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/netip"
 	"strings"
 	"time"
@@ -44,6 +45,8 @@ type Claims struct {
 	ID string `json:"i,omitempty"`
 	// User 是签发时的成员（面板说的），节点的本地审计记它。
 	User string `json:"u,omitempty"`
+	// Transport 是加密 HTTP 下载的链接写的 TransportHTTP（见 http.go），HTTPS 的链接为空。
+	Transport string `json:"t,omitempty"`
 }
 
 // NewID 返回一个新的链接编号（16 位十六进制）。
@@ -58,23 +61,42 @@ var (
 	ErrExpired = i18n.New("下载链接已过期，请重新下载")
 )
 
-func mac(key []byte, payload string) []byte {
+// 签名的上下文：HTTPS 和加密 HTTP 的链接分开，一种链接不能当另一种用。
+const (
+	macHTTPS = "nagi-direct-download\x00"
+	macHTTP  = "nagi-direct-download-http\x00"
+)
+
+func mac(key []byte, context, payload string) []byte {
 	h := hmac.New(sha256.New, key)
-	h.Write([]byte("nagi-direct-download\x00"))
+	h.Write([]byte(context))
 	h.Write([]byte(payload))
 	return h.Sum(nil)
 }
 
 // Sign 签一个链接：base64url(内容).base64url(HMAC-SHA256)。
 func Sign(key []byte, c Claims) string {
+	c.Transport = ""
+	return sign(key, macHTTPS, c)
+}
+
+func sign(key []byte, context string, c Claims) string {
 	b, _ := json.Marshal(c)
 	payload := base64.RawURLEncoding.EncodeToString(b)
-	return payload + "." + base64.RawURLEncoding.EncodeToString(mac(key, payload))
+	return payload + "." + base64.RawURLEncoding.EncodeToString(mac(key, context, payload))
 }
 
 // Verify 核对签名（任一密钥对得上即可）和有效期，返回链接里的内容。签名对得上、只是过期时返回 ErrExpired，
-// 同时返回链接里的内容（节点记进本地审计）。
+// 同时返回链接里的内容（节点记进本地审计）。只认 HTTPS 的链接（加密 HTTP 的见 VerifyHTTP）。
 func Verify(keys [][]byte, token string, now time.Time) (Claims, error) {
+	c, err := verify(keys, macHTTPS, token, now)
+	if c.Transport != "" && (err == nil || errors.Is(err, ErrExpired)) {
+		return Claims{}, ErrInvalid
+	}
+	return c, err
+}
+
+func verify(keys [][]byte, context, token string, now time.Time) (Claims, error) {
 	payload, sig, ok := strings.Cut(token, ".")
 	if !ok || len(token) > 4096 {
 		return Claims{}, ErrInvalid
@@ -85,7 +107,7 @@ func Verify(keys [][]byte, token string, now time.Time) (Claims, error) {
 	}
 	valid := false
 	for _, k := range keys {
-		if len(k) > 0 && hmac.Equal(got, mac(k, payload)) {
+		if len(k) > 0 && hmac.Equal(got, mac(k, context, payload)) {
 			valid = true
 		}
 	}

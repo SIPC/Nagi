@@ -44,6 +44,12 @@ type directDL struct {
 	// 本地审计的限额（见 audit）：这一段时间从 auditStart 开始，记了 audited 条，超出的 dropped 条只计数。
 	auditStart       time.Time
 	audited, dropped int
+
+	// 加密 HTTP 下载（见 directhttp.go）：httpPortErr 是开不了的原因（端口被占用）；
+	// prepared 是签发命令时记下的链接（链接编号 → 文件的版本、目录打包用过没有）；hashSlots 限制同时算 SHA-256 的数量。
+	httpPortErr string
+	prepared    map[string]*preparedLink
+	hashSlots   chan struct{}
 }
 
 // 直连下载记进本地审计的限额：每 10 分钟最多 directAuditLimit 条。拿着有效链接的人反复请求，不能把本地审计刷满、
@@ -55,7 +61,7 @@ const (
 )
 
 func newDirectDL(a *agent) *directDL {
-	return &directDL{a: a, keys: map[string][]byte{}}
+	return &directDL{a: a, keys: map[string][]byte{}, prepared: map[string]*preparedLink{}, hashSlots: make(chan struct{}, 2)}
 }
 
 func directOffFile(dataDir string) string {
@@ -165,7 +171,8 @@ func (d *directDL) status(p *proxy.Proxy) *nagiv1.DirectDownload {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	st := &nagiv1.DirectDownload{Supported: true, Off: d.off(), Address: d.address}
+	st := &nagiv1.DirectDownload{Supported: true, Off: d.off(), Address: d.address, HttpSupported: true}
+	d.httpStatus(p, st)
 	if st.Off {
 		return st
 	}
@@ -210,24 +217,30 @@ func (d *directDL) keysFor(method string) []panelKey {
 // verify 核对链接：签名对得上某个能用的面板的密钥、种类对、写的是本节点在这个面板上的 ID、没过期。
 // 返回链接的内容和签发的面板；签名对得上、只是过期时也返回它们（记进本地审计），错误是 ErrExpired。
 func (d *directDL) verify(token string, now time.Time) (directdl.Claims, string, error) {
+	c, fp, _, err := d.verifyWith(directdl.Verify, token, now)
+	return c, fp, err
+}
+
+// verifyWith 和 verify 一样，用 check 核对（directdl.Verify 或 VerifyHTTP），另外返回对上的面板密钥。
+func (d *directDL) verifyWith(check func([][]byte, string, time.Time) (directdl.Claims, error), token string, now time.Time) (directdl.Claims, string, []byte, error) {
 	err := directdl.ErrInvalid
 	var expired directdl.Claims
 	var expiredBy string
 	for _, kind := range []string{directdl.KindVolume, directdl.KindNode} {
 		for _, k := range d.keysFor(directMethod(kind)) {
-			got, verr := directdl.Verify([][]byte{k.key}, token, now)
+			got, verr := check([][]byte{k.key}, token, now)
 			if got.Kind != kind || got.Node != k.node {
 				continue
 			}
 			if verr == nil {
-				return got, k.fp, nil
+				return got, k.fp, k.key, nil
 			}
 			if errors.Is(verr, directdl.ErrExpired) {
 				err, expired, expiredBy = verr, got, k.fp
 			}
 		}
 	}
-	return expired, expiredBy, err
+	return expired, expiredBy, nil, err
 }
 
 // audit 把一次直连下载记进节点的本地审计（见 docs/audit.md#节点本地审计），有限额（见 directAuditLimit）。
@@ -252,6 +265,9 @@ func (d *directDL) audit(panel string, c directdl.Claims, token string, r *http.
 	d.mu.Unlock()
 
 	detail := []string{"kind=" + c.Kind, "link=" + linkID(c, token)}
+	if c.Transport == directdl.TransportHTTP {
+		detail = append(detail, "transport=http")
+	}
 	if rg := r.Header.Get("Range"); rg != "" {
 		detail = append(detail, "range="+rg)
 	}
@@ -298,6 +314,16 @@ func remoteIP(r *http.Request) string {
 
 // ServeHTTP 处理 Caddy 交过来的直连下载请求（只有节点公网 IP 上的请求）。
 func (d *directDL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 加密 HTTP 下载走自己的路径（见 directhttp.go），不允许跨域。
+	if token, ok := strings.CutPrefix(r.URL.Path, directdl.HTTPPathPrefix); ok {
+		d.serveHTTPDL(w, r, token)
+		return
+	}
+	// 明文 HTTP 上不发未加密的内容（HTTPS 的规则只在 443 上，这里再挡一下）。
+	if r.TLS == nil {
+		http.NotFound(w, r)
+		return
+	}
 	lang := i18n.Parse(r.Header.Get("Accept-Language"))
 	fail := func(code int, err error) {
 		w.Header().Set("Content-Type", "application/json")
@@ -356,19 +382,24 @@ func (d *directDL) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			d.audit(panel, c, token, r, err, result)
 		},
 		Open: func(ctx context.Context, offset, length int64) (filehttp.ChunkStream, error) {
-			if c.Kind == directdl.KindNode {
-				return filehttp.Pipe(ctx, func(send func(*nagiv1.VolumeFileChunk) error) error {
-					return d.a.files.Download(ctx, c.Path, offset, length, send)
-				}), nil
-			}
-			ref := &nagiv1.VolumeFileRef{ProjectId: c.Project, Container: c.Container, Volume: c.Volume, Path: c.Path,
-				SnapshotId: c.Snapshot, Offset: offset, Length: length}
-			return filehttp.Pipe(ctx, func(send func(*nagiv1.VolumeFileChunk) error) error {
-				return d.a.projects.ReadVolumeFile(ctx, ref, send)
-			}), nil
+			return d.open(ctx, c, offset, length), nil
 		},
 		Fail: func(code int, err error) { fail(code, errors.New(status.Convert(err).Message())) },
 	}.Serve(w, r)
+}
+
+// open 读链接里写的文件（offset、length 见 filehttp.Download.Open）。
+func (d *directDL) open(ctx context.Context, c directdl.Claims, offset, length int64) filehttp.ChunkStream {
+	if c.Kind == directdl.KindNode {
+		return filehttp.Pipe(ctx, func(send func(*nagiv1.VolumeFileChunk) error) error {
+			return d.a.files.Download(ctx, c.Path, offset, length, send)
+		})
+	}
+	ref := &nagiv1.VolumeFileRef{ProjectId: c.Project, Container: c.Container, Volume: c.Volume, Path: c.Path,
+		SnapshotId: c.Snapshot, Offset: offset, Length: length}
+	return filehttp.Pipe(ctx, func(send func(*nagiv1.VolumeFileChunk) error) error {
+		return d.a.projects.ReadVolumeFile(ctx, ref, send)
+	})
 }
 
 // directMethod 是和这种下载对应的、经 mesh 下载的方法：谁能用直连下载，按它的规则判断（checkPrimary）。

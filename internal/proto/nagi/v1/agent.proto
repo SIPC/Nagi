@@ -143,6 +143,9 @@ service AgentService {
   // 直连下载（见 docs/agent.md#直连下载）：面板每次连上时告诉节点验证下载链接用的密钥和节点的公网地址。
   // 旧版本的节点返回 Unimplemented，面板不给它发直连链接。
   rpc SetDirectDownload(SetDirectDownloadRequest) returns (SetDirectDownloadResponse);
+  // 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）：面板签好下载链接后交给节点核对，节点记下文件的版本
+  // （目录打包的链接只能用一次），文件不太大时算出 SHA-256，面板据此生成下载命令。旧版本的节点返回 Unimplemented。
+  rpc PrepareDirectHttp(PrepareDirectHttpRequest) returns (PrepareDirectHttpResponse);
   // 升级节点：从 GitHub Release（或安装时指定的镜像）下载 UpgradeRequest.version 指定的 nagi，校验后替换自己并原地重启（容器不受影响）。
   rpc Upgrade(UpgradeRequest) returns (UpgradeResponse);
   // 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
@@ -696,6 +699,24 @@ message SetDirectDownloadRequest {
 }
 
 message SetDirectDownloadResponse {}
+
+message PrepareDirectHttpRequest {
+  // 面板签的加密 HTTP 下载链接（directdl.SignHTTP）。
+  string token = 1;
+}
+
+message PrepareDirectHttpResponse {
+  // 下载的文件名（目录是打包后的名字）。
+  string name = 1;
+  int64 size = 2;
+  // 目录打包：没有大小、不能续传，链接只能用一次。
+  bool archive = 3;
+  // 文件的版本（大小和修改时间，和下载响应的 ETag 一样），参与内容密钥的派生。目录打包为空。
+  string etag = 4;
+  // 文件内容的 SHA-256（十六进制）。没有算时为空，原因在 hash_skipped：too_large、timeout、archive。
+  string sha256 = 5;
+  string hash_skipped = 6;
+}
 
 message UpgradeRequest {
   // 不再使用：面板以前自己提供二进制时发的 SHA-256。

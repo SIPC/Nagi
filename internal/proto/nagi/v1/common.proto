@@ -521,6 +521,14 @@ message DirectDownload {
   bool ready = 4;
   // 不能直连的原因（端口被占用、证书申请失败等），可以直连时为空。
   string error = 5;
+  // 节点支持加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。旧版本的节点没有这一项。
+  bool http_supported = 6;
+  // 加密 HTTP 下载的端口，0 表示没有开启。
+  uint32 http_port = 7;
+  // 已经在这个端口上为 address 开好了规则，可以签发下载命令。
+  bool http_ready = 8;
+  // 开启了但不能用的原因（端口被占用等）。
+  string http_error = 9;
 }
 
 // DomainCert 是节点上一个域名的证书状态（见 docs/exposure.md#域名检查）。
@@ -708,6 +716,8 @@ message MeshStatus {
   bool relay_off = 8;
   // 关闭了直连下载（节点的网络设置，见 docs/agent.md#直连下载）。
   bool direct_download_off = 9;
+  // 加密 HTTP 下载的端口，0 表示没有开启（节点的网络设置，见 docs/agent.md#加密-http-下载）。
+  uint32 direct_http_port = 10;
 }
 
 message MeshPingRequest {
@@ -748,6 +758,10 @@ message MeshOptions {
   // 请求里带了 direct_download_off：节点只在为 true 时按它修改直连下载的开关。
   // v0.32.0 以前的面板不知道直连下载，请求里没有这一项，节点不能把它当作「打开」。面板转发修改时总是填上。
   bool set_direct_download = 4;
+  // 加密 HTTP 下载的端口，0 表示关闭（见 docs/agent.md#加密-http-下载）。
+  uint32 direct_http_port = 5;
+  // 请求里带了 direct_http_port：节点只在为 true 时按它修改（和 set_direct_download 一样，旧面板不知道这一项）。
+  bool set_direct_http = 6;
 }
 
 // BackupStatus 是容器同步到备份节点的状态（在源节点上）。

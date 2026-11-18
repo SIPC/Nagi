@@ -254,7 +254,7 @@ func meshView(st *nagiv1.MeshStatus) map[string]any {
 		peers = append(peers, peerView(p))
 	}
 	return map[string]any{"address": st.GetAddress(), "port": st.GetPort(), "endpoints": st.GetEndpoints(), "nat": st.GetNat(),
-		"quic_off": st.GetQuicOff(), "relay_off": st.GetRelayOff(), "direct_download_off": st.GetDirectDownloadOff(), "peers": peers}
+		"quic_off": st.GetQuicOff(), "relay_off": st.GetRelayOff(), "direct_download_off": st.GetDirectDownloadOff(), "direct_http_port": st.GetDirectHttpPort(), "peers": peers}
 }
 
 // findPeer 在节点的 mesh 状态里按名称找成员。panel 表示本面板：按面板自己的公钥找（成员名里面板写的是「面板 <地址>」）。
@@ -493,6 +493,8 @@ type MeshOptionsArgs struct {
 	RelayOff *bool  `json:"relay_off,omitempty" jsonschema:"true stops the node from relaying for other nodes"`
 	// 直连下载（见 docs/agent.md#直连下载）。
 	DirectDownloadOff *bool `json:"direct_download_off,omitempty" jsonschema:"true makes browsers always download this node's files through the panel instead of directly from the node"`
+	// 加密 HTTP 下载（见 docs/agent.md#加密-http-下载）。
+	DirectHTTPPort *int `json:"direct_http_port,omitempty" jsonschema:"port for encrypted HTTP downloads (copy-only download commands for nodes without an IP certificate); 0 turns it off; 443 is not allowed"`
 }
 
 func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
@@ -504,7 +506,8 @@ func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts := &nagiv1.MeshOptions{QuicOff: st.Msg.GetQuicOff(), RelayOff: st.Msg.GetRelayOff(), DirectDownloadOff: st.Msg.GetDirectDownloadOff()}
+	opts := &nagiv1.MeshOptions{QuicOff: st.Msg.GetQuicOff(), RelayOff: st.Msg.GetRelayOff(), DirectDownloadOff: st.Msg.GetDirectDownloadOff(),
+		DirectHttpPort: st.Msg.GetDirectHttpPort()}
 	if in.QuicOff != nil {
 		opts.QuicOff = *in.QuicOff
 	}
@@ -514,11 +517,18 @@ func toolSetMeshOptions(c *call, in MeshOptionsArgs) (any, error) {
 	if in.DirectDownloadOff != nil {
 		opts.DirectDownloadOff = *in.DirectDownloadOff
 	}
+	if in.DirectHTTPPort != nil {
+		if *in.DirectHTTPPort < 0 || *in.DirectHTTPPort > 65535 || *in.DirectHTTPPort == 443 {
+			return nil, errors.New("direct_http_port must be 0 (off) or 1-65535, not 443")
+		}
+		opts.DirectHttpPort = uint32(*in.DirectHTTPPort)
+	}
 	res, err := c.h.clients.nodes.SetNodeMeshOptions(c.ctx, connect.NewRequest(&nagiv1.SetNodeMeshOptionsRequest{NodeId: n.GetId(), Options: opts}))
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"node": n.GetName(), "quic_off": res.Msg.GetQuicOff(), "relay_off": res.Msg.GetRelayOff(), "direct_download_off": res.Msg.GetDirectDownloadOff()}, nil
+	return map[string]any{"node": n.GetName(), "quic_off": res.Msg.GetQuicOff(), "relay_off": res.Msg.GetRelayOff(), "direct_download_off": res.Msg.GetDirectDownloadOff(),
+		"direct_http_port": res.Msg.GetDirectHttpPort()}, nil
 }
 
 type SpeedArgs struct {

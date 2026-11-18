@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/caddyserver/caddy/v2"
 	// 只引入生成的配置用到的模块（见 build），不用 modules/standard：后者还会带进让 Caddy 充当证书机构的
@@ -72,6 +73,10 @@ type Proxy struct {
 	public []spec.PortKey
 	// direct 是直连下载用的公网 IP（见 direct.go），directLoaded 是加载成功的配置里的。
 	direct, directLoaded string
+	// httpDirect 是加密 HTTP 下载的 IP 和端口（见 direct.go），httpLoaded 是加载成功的配置里的；
+	// httpErr 是这次没有开的原因（端口被映射占用）。
+	httpDirect, httpLoaded httpDirect
+	httpErr                string
 }
 
 // New 创建代理。storage 是证书等数据的存放目录。
@@ -82,14 +87,20 @@ func New(storage string, log *slog.Logger) *Proxy {
 // Apply 按给定的规则重新加载 Caddy。配置没变时什么都不做。
 func (p *Proxy) Apply(routes []Route) error {
 	p.mu.Lock()
-	direct := p.direct
+	direct, hd := p.direct, p.httpDirect
 	p.mu.Unlock()
-	cfg, err := json.Marshal(buildWith(routes, p.storage, p.HasCert, direct))
+	// 加密 HTTP 下载的端口被映射占着时不开（同一个端口两个监听，Caddy 的配置整个加载不了）。
+	httpErr := ""
+	if hd.Address != "" && hd.Port != 80 && portTaken(routes, hd.Port) {
+		hd, httpErr = httpDirect{}, i18n.Errorf("端口 %d 已被映射占用", hd.Port).Error()
+	}
+	cfg, err := json.Marshal(buildFull(routes, p.storage, p.HasCert, direct, hd))
 	if err != nil {
 		return err
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.httpErr = httpErr
 	if bytes.Equal(cfg, p.last) {
 		return nil
 	}
@@ -108,6 +119,17 @@ func (p *Proxy) Apply(routes []Route) error {
 			}
 		}
 		if k := (spec.PortKey{Proto: spec.ProtoTCP, Port: 443}); !slices.Contains(p.ports, k) {
+			p.ports = append(p.ports, k)
+		}
+	}
+	p.httpLoaded = hd
+	if hd.Address != "" {
+		k := spec.PortKey{Proto: spec.ProtoTCP, Port: uint32(hd.Port)}
+		if !slices.Contains(p.public, k) {
+			p.public = append(p.public, k)
+		}
+		// 80 和域名访问共用，算 Caddy 自己占着（绑域名时不当作被别的程序占用）。
+		if hd.Port == 80 && !slices.Contains(p.ports, k) {
 			p.ports = append(p.ports, k)
 		}
 	}
@@ -133,7 +155,7 @@ func (p *Proxy) Reload() error {
 func (p *Proxy) Stop() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.last, p.ports, p.directLoaded = nil, nil, ""
+	p.last, p.ports, p.directLoaded, p.httpLoaded = nil, nil, "", httpDirect{}
 	return caddy.Stop()
 }
 
@@ -205,6 +227,11 @@ func build(routes []Route, storage string, hasCert func(string) bool) obj {
 
 // buildWith 和 build 一样，direct 不为空时在 443 上为这个 IP 开直连下载（见 direct.go）。
 func buildWith(routes []Route, storage string, hasCert func(string) bool, direct string) obj {
+	return buildFull(routes, storage, hasCert, direct, httpDirect{})
+}
+
+// buildFull 和 buildWith 一样，hd 不为空时再开加密 HTTP 下载（见 direct.go）。
+func buildFull(routes []Route, storage string, hasCert func(string) bool, direct string, hd httpDirect) obj {
 	sort.SliceStable(routes, func(i, j int) bool {
 		if routes[i].Project != routes[j].Project {
 			return routes[i].Project < routes[j].Project
@@ -295,6 +322,20 @@ func buildWith(routes []Route, storage string, hasCert func(string) bool, direct
 			"automatic_https":         obj{"disable_redirects": true},
 			"logs":                    obj{},
 			"tls_connection_policies": []obj{policy},
+		}
+	}
+	// 加密 HTTP 下载：在 80 上时和域名访问共用一个服务，加一条只匹配节点 IP 和下载路径的规则；
+	// 别的端口单独开一个服务，其他请求一律 404。
+	if hd.Address != "" {
+		if hd.Port == 80 {
+			port80Routes = append([]obj{httpDirectRoute(hd.Address)}, port80Routes...)
+		} else {
+			httpServers["nagi_dl"] = obj{
+				"listen":          []string{":" + strconv.Itoa(hd.Port)},
+				"routes":          []obj{httpDirectRoute(hd.Address), {"handle": []obj{{"handler": "static_response", "status_code": 404}}}},
+				"automatic_https": obj{"disable": true},
+				"logs":            obj{},
+			}
 		}
 	}
 	// 80 端口：只开 HTTP 的域名、还没拿到证书的域名直接转发；已有证书的域名跳转到 HTTPS；

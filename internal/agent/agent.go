@@ -446,6 +446,7 @@ func (a *agent) proxyLoop(ctx context.Context) {
 		routes, err := a.allRoutes(ctx)
 		routes = append(routes, a.panelRoutes()...)
 		a.proxy.SetDirect(a.direct.wanted(a.proxy))
+		a.proxy.SetDirectHTTP(a.direct.wantedHTTP(a.proxy))
 		if err == nil {
 			err = a.proxy.Apply(routes)
 		}

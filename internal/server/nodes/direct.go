@@ -98,3 +98,52 @@ func (c *Conn) DirectLink(claims directdl.Claims) string {
 	}
 	return directdl.URL(addr, directdl.Sign(key, claims))
 }
+
+// DirectHTTPCommand 是一条加密 HTTP 下载的命令（见 docs/agent.md#加密-http-下载），连同界面要显示的信息。
+// Command 里有内容密钥，只交给签发它的成员，不记进活动记录和日志。
+type DirectHTTPCommand struct {
+	Command string
+	// ID 是链接编号（活动记录的 direct_link）。
+	ID      string
+	Name    string
+	Size    int64
+	Archive bool
+	// SHA256 为空时命令不核对内容，原因在 HashSkipped（directdl.HashSkipped*）。
+	SHA256      string
+	HashSkipped string
+	Expires     time.Time
+}
+
+// DirectHTTP 签一个加密 HTTP 下载的链接，交给节点核对、登记（节点同时算出文件的 SHA-256），
+// 再用同一个密钥派生内容密钥，生成命令。节点不能用（没开、端口不能用、旧版本、还没告诉过它密钥）时返回 nil, nil。
+func (c *Conn) DirectHTTP(ctx context.Context, claims directdl.Claims) (*DirectHTTPCommand, error) {
+	c.mu.RLock()
+	key, addr := c.directKey, c.directAddr
+	st := c.report.GetNode().GetDirectDownload()
+	c.mu.RUnlock()
+	if len(key) == 0 || addr == "" || !st.GetHttpReady() || st.GetHttpPort() == 0 || st.GetAddress() != addr {
+		return nil, nil
+	}
+	expires := time.Now().Add(directdl.TTL)
+	claims.Node = c.NodeID
+	claims.Expires = expires.Unix()
+	if claims.ID == "" {
+		claims.ID = directdl.NewID()
+	}
+	token := directdl.SignHTTP(key, claims)
+	// 节点算 SHA-256 最多 directdl.HTTPHashTimeout，再留些余量。
+	ctx, cancel := context.WithTimeout(ctx, directdl.HTTPHashTimeout+15*time.Second)
+	defer cancel()
+	res, err := c.Agent.PrepareDirectHttp(ctx, &nagiv1.PrepareDirectHttpRequest{Token: token})
+	if err != nil {
+		return nil, err
+	}
+	ck := directdl.ArchiveKey(key, claims)
+	if !res.GetArchive() {
+		ck = directdl.FileKey(key, claims, res.GetEtag())
+	}
+	cmd := directdl.Command{URL: directdl.HTTPURL(addr, int(st.GetHttpPort()), token), Name: res.GetName(), Key: ck,
+		SHA256: res.GetSha256(), Resume: !res.GetArchive()}
+	return &DirectHTTPCommand{Command: cmd.String(), ID: claims.ID, Name: directdl.SafeName(res.GetName()), Size: res.GetSize(),
+		Archive: res.GetArchive(), SHA256: res.GetSha256(), HashSkipped: res.GetHashSkipped(), Expires: expires}, nil
+}
