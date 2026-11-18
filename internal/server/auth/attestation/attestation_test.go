@@ -193,6 +193,44 @@ func TestEmbeddedRevocations(t *testing.T) {
 	}
 }
 
+// Google 的列表里 64 位序列号写成十进制、128 位的写成十六进制，证书的序列号（十六进制）两种都要查得到。
+func TestRevocationSerialForms(t *testing.T) {
+	r := Embedded()
+	for _, hex := range []string{
+		"c564dc67950bba53",                 // 列表里写成 14223735860583184979
+		"c35747a084470c3135aeefe2b8d40cd6", // 列表里就是十六进制
+	} {
+		if _, _, ok := r.Check([]string{hex}); !ok {
+			t.Errorf("%s 应该查到吊销", hex)
+		}
+	}
+	// 列表里每一项，按证书的十六进制序列号都查得到。
+	missed := 0
+	for k := range r.entries {
+		hex := k
+		if isDigits(k) && len(k) <= 20 {
+			// 十进制写的 64 位序列号：换成证书上的十六进制。
+			d, _ := new(big.Int).SetString(k, 10)
+			hex = d.Text(16)
+		}
+		if _, _, ok := r.Check([]string{hex}); !ok {
+			missed++
+		}
+	}
+	if missed > 0 {
+		t.Errorf("%d 项按十六进制序列号查不到", missed)
+	}
+}
+
+func isDigits(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 // Parse 记下叶子以外各张证书的序列号。
 func TestParseSerials(t *testing.T) {
 	r, err := Parse(berChain(t, nil), time.Now())

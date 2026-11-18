@@ -327,6 +327,8 @@ type keyCheck struct {
 	patch      int64
 	// serials 是证明链里叶子以外各张证书的序列号，没有证明时为空。
 	serials []string
+	// hardwareRoot：证明链追溯到 Google 的硬件证明根证书（开发模式下可以不是）。
+	hardwareRoot bool
 }
 
 // checkAppKey 校验一把密钥：公钥是 P-256，证明链、吊销列表、挑战、包名、硬件、使用条件。开发模式下没有证明时当作软件密钥。
@@ -378,7 +380,7 @@ func checkAppKey(k AppKeyProof, rule keyRule, challenge []byte, sdk int, dev boo
 			return keyCheck{}, errors.New(msg)
 		}
 	}
-	return keyCheck{level: level, bootLocked: r.BootLocked(), patch: r.PatchLevel(), serials: r.Serials}, nil
+	return keyCheck{level: level, bootLocked: r.BootLocked(), patch: r.PatchLevel(), serials: r.Serials, hardwareRoot: r.HardwareRoot}, nil
 }
 
 // PairApp 用配对码添加手机：校验三把密钥的证明，记下设备。证明的挑战是配对码的 SHA-256。
@@ -457,12 +459,13 @@ func (s *Service) PairApp(ctx context.Context, ip, code string, keys [3]AppKeyPr
 	if level == "software" {
 		d.BootLocked = false
 	}
-	// 三把密钥都有证明时才算检查过吊销；记下各条链的序列号（去重），拿到新的吊销列表时复查。
+	// 三把密钥都有追溯到 Google 根证书的证明时才算检查过吊销（开发模式下自己的根证书不算）；
+	// 记下各条链的序列号（去重），拿到新的吊销列表时复查。
 	d.RevocationChecked = true
 	seen := map[string]bool{}
 	var serials []string
 	for _, c := range checks {
-		if len(c.serials) == 0 {
+		if len(c.serials) == 0 || !c.hardwareRoot {
 			d.RevocationChecked = false
 		}
 		for _, sn := range c.serials {
@@ -478,6 +481,10 @@ func (s *Service) PairApp(ctx context.Context, ip, code string, keys [3]AppKeyPr
 		cur.used, cur.device = false, ""
 		s.app.mu.Unlock()
 		return PairResult{}, err
+	}
+	// 检查以后、写入之前换了列表时，这台手机不在那次复查里：按新的列表再复查一遍。
+	if s.Revocations() != rev {
+		_ = s.RecheckAppDevices(context.WithoutCancel(ctx))
 	}
 	at, aid, an := userActor(user.ID, user.Username)
 	b, _ := json.Marshal(map[string]any{"device": name, "android": info.AndroidVersion, "app": info.AppVersion, "level": level,
