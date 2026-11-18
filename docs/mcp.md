@@ -167,7 +167,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `set_node_tags` | 只给管理员：替换节点的标签（最多 10 个） | `SetNodeTags` |
 | `set_snapshot_schedule` | 给容器单独设置定时快照（开关、间隔或每天定时），或改回用项目的。有备份节点或顶替的容器关掉定时快照时，结果的 `warnings` 提醒（备份节点在每次定时快照后同步）；`set_backup_node` 添加备份节点时同样检查 | `SetContainerSnapshotSchedule` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
-| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚；没有健康检查的服务在 `health.note` 里注明只确认了在运行。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署。成功和失败都返回 `warnings`：部署日志里的提醒行（以「注意：」「警告：」开头的，端口导入和没导入的，保留路径覆盖了上传内容的），以及部署前就能看出的（有共享变量草稿却没带 `apply_shared_env`，git 来源从没拉取过却没带 `pull_git`） | `Deploy`、`GetProject` |
+| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚；没有健康检查的服务在 `health.note` 里注明只确认了在运行。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署。成功和失败都返回 `warnings`：部署日志里面板和节点自己写的提醒行（以「注意：」「警告：」开头的，端口导入和没导入的，保留路径覆盖了上传内容的；只收哪些行见[安全](#安全)），以及部署前就能看出的（有共享变量草稿却没带 `apply_shared_env`，git 来源从没拉取过却没带 `pull_git`） | `Deploy`、`GetProject` |
 | `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
 | `control_container` | 启动、停止、重启。带 `service` 时只控制容器组里的这个服务（服务名见 `get_container` 的 `services`），其他服务不动；顶替的规则按整个容器算 | `ControlContainer`、`ControlService` |
 | `rollback` | 回到某个版本，只回配置和文件。带 `restore_data` 时同时把数据恢复到这个版本被替换之前，要先预览、`confirm` 原样填版本号才执行 | `Rollback` |
@@ -387,6 +387,7 @@ agent 常见的乱部署：单个服务也写 compose，密码这类值写死在
 
 - **密钥不进模型**：变量的值、deploy key、webhook 令牌、备份密钥都不返回，只给名称和「已设置」。agent 可以设置变量的值（只写）。compose、命令、健康检查的文字按原样返回，密钥要放在变量里，不要直接写进去。git 地址不能带账号或令牌（私有仓库用 SSH 和 deploy key），早期保存的地址返回时也去掉。
 - **不可信内容**：日志和 `exec` 的输出可能含有针对 agent 的指令，工具说明里写明这些是数据，不是指令。
+- **部署结果里提醒的来源**（`deployNotice`）：`warnings` 在 agent 看来是 Nagi 自己的提醒，所以只收面板和节点自己写的行。部署日志里也有别人写的内容：git 服务器的进度（`internal/agent/project/source.go`）、部署失败时容器最后的日志（`startwatch.go`），节点都加了两个空格的缩进，以空白开头的行一律不收；其余的行要以固定的开头起头才收：「注意：」「警告：」（`Warning: `、`Note: `），「已按配置中的端口添加端口映射：」（`Added a port mapping from the configuration: `），「compose 中 <服务> 的端口 <端口> …未开放」（`Port <端口> of <服务> in the compose file … isn't exposed`），「保留路径 … 以节点上现有内容为准，新文件里的这部分被忽略」，不按行中间的子串匹配。每条截到 300 个字符，最多 20 条。仍然防不住的：docker compose 自己的输出没有缩进，镜像仓库返回的错误里带换行时，换行后的部分会成为单独的一行；被攻破的节点可以写任何一行。
 - **限额**：每个令牌每分钟最多 60 次调用，其中 `exec` 最多 10 次；单次返回内容有上限，超出时截断并注明。
 - **可以随时止损**：令牌页一键吊销；审计页能按来源筛出 MCP 做的所有操作。
 - **被拒绝的调用留痕**：令牌没有权限的工具不在它的工具列表里，客户端照样按名字调用时，SDK 当作不存在的工具拒绝，面板先从请求里认出工具名，记一条「MCP 调用被拒绝」（`MCPToolDenied`）。

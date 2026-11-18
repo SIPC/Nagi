@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -35,13 +37,43 @@ type opResult struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// deployNotices 是部署日志里要放进 warnings 的行：节点和面板写的「注意：」「警告：」，端口导入和跳过的提示，
-// 保留路径覆盖了上传的内容。面板写的行按请求的语言（MCP 默认中文），节点写的是中文，两种都认。
-var deployNotices = []string{"注意：", "警告：", "Warning:", "Note:", "已按配置中的端口添加端口映射", "Added a port mapping from the configuration",
-	"未开放", "isn't exposed", "被忽略"}
+// deployNotices 是部署日志里要放进 warnings 的行，只认面板和节点自己写的固定开头：「注意：」「警告：」
+// （internal/agent/project 的 deploy.go、startwatch.go、composedir.go，面板的 move.go），端口导入和跳过的提示
+// （面板的 importPorts、spec.ComposePorts），保留路径覆盖了上传的内容（safefs.go）。面板写的行按请求的语言
+// （MCP 默认中文），节点写的是中文，两种都认。
+//
+// 日志里还有别人写的内容：git 服务器的进度（source.go）、部署失败时容器的日志（startwatch.go），节点都加了两个空格的缩进，
+// 所以以空白开头的行一律不收；其余的关键字必须在行首，不能是行中间的子串。否则恶意的 git 服务器或镜像写一行
+// 「Warning: …」，agent 会当成 Nagi 的提醒（见 docs/mcp.md）。
+var deployNotices = []*regexp.Regexp{
+	regexp.MustCompile(`^(注意|警告)：`),
+	regexp.MustCompile(`^(Warning|Note): `),
+	regexp.MustCompile(`^已按配置中的端口添加端口映射：`),
+	regexp.MustCompile(`^Added a port mapping from the configuration: `),
+	regexp.MustCompile(`^compose 中 \S+ 的端口 \d+ .*未开放`),
+	regexp.MustCompile(`^Port \d+ of \S+ in the compose file .*isn't exposed`),
+	regexp.MustCompile(`^保留路径 .+ 以节点上现有内容为准，新文件里的这部分被忽略$`),
+}
+
+// 部署结果里最多放多少条提醒、每条最多多少个字符（git 服务器不换行就能把一行做得很大）。
+const (
+	maxDeployNotices   = 20
+	maxDeployNoticeLen = 300
+)
 
 func deployNotice(line string) bool {
-	return slices.ContainsFunc(deployNotices, func(s string) bool { return strings.Contains(line, s) })
+	if r, _ := utf8.DecodeRuneInString(line); line == "" || unicode.IsSpace(r) {
+		return false
+	}
+	return slices.ContainsFunc(deployNotices, func(re *regexp.Regexp) bool { return re.MatchString(line) })
+}
+
+// clipNotice 把提醒截到 maxDeployNoticeLen 个字符，截掉的部分用 … 表示。
+func clipNotice(line string) string {
+	if utf8.RuneCountInString(line) <= maxDeployNoticeLen {
+		return line
+	}
+	return string([]rune(line)[:maxDeployNoticeLen]) + "…"
 }
 
 // follow 跟着一个流式操作（部署、启停、回滚、快照），把输出作为进度通知发给客户端，等到结果。
@@ -99,8 +131,10 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 			}
 			n++
 			tail = append(tail, it.line)
-			if deployNotice(it.line) && len(warnings) < 20 && !slices.Contains(warnings, it.line) {
-				warnings = append(warnings, it.line)
+			if deployNotice(it.line) && len(warnings) < maxDeployNotices {
+				if w := clipNotice(it.line); !slices.Contains(warnings, w) {
+					warnings = append(warnings, w)
+				}
 			}
 			if len(tail) > 50 {
 				tail = tail[len(tail)-50:]
