@@ -2,8 +2,10 @@
 # 连同面板安装脚本、卸载脚本和 SHA256SUMS 上传到 GitHub Release。
 # 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
 #
-# 测试和两个架构的编译同时进行，都通过后才发布。Go 的编译缓存用 main 上 ci.yml 存下的：
+# 测试、漏洞检查和两个架构的编译同时进行，都通过后才发布。Go 的编译缓存用 main 上 ci.yml 存下的：
 # 标签上的流程只能读当前标签和默认分支的缓存（GitHub 的限制），所以缓存要靠 main 预热。
+# 发版时 main 和标签一起推，不等 main 上的 ci.yml 跑完：那时它还没存下这次的缓存，按 restore-keys 用 main 上一次的，
+# 只多编译改过的包。这里自己跑测试和漏洞检查，不依赖 ci.yml 的结果。
 name: release
 
 on:
@@ -43,6 +45,31 @@ jobs:
       # web/dist 里有占位文件，测试不用等前端构建。
       - name: Test
         run: go test ./...
+
+  # 依赖和标准库里会被调用到的已知漏洞（和 ci.yml 的一样）。
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: false
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-test-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-test-${{ hashFiles('go.sum') }}-
+            go-test-
+
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   build:
     runs-on: ubuntu-latest
@@ -145,10 +172,10 @@ jobs:
             dist/android-cert.txt
           retention-days: 1
 
-  # 面板的测试和编译都通过才发布；安卓 App 成功了就带上，失败或跳过也照常发布面板。
+  # 面板的测试、漏洞检查和编译都通过才发布；安卓 App 成功了就带上，失败或跳过也照常发布面板。
   release:
-    needs: [test, build, android]
-    if: ${{ !cancelled() && needs.test.result == 'success' && needs.build.result == 'success' }}
+    needs: [test, vuln, build, android]
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.vuln.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
