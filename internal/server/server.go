@@ -426,6 +426,10 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 	go s.auth.CleanupLoop(ctx)
+	// 证明证书的吊销列表（见 docs/android.md#吊销列表）：每天取一次、复查已添加的手机。备用面板只读，不复查。
+	if s.standby == nil {
+		go s.auth.RevocationLoop(ctx, s.cfg.DataDir, s.log.With("component", "attestation"), nil)
+	}
 
 	mux := http.NewServeMux()
 	oauthServer := oauth.New(s.q, s.log)

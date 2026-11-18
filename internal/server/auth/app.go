@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -324,10 +325,12 @@ type keyCheck struct {
 	level      string
 	bootLocked bool
 	patch      int64
+	// serials 是证明链里叶子以外各张证书的序列号，没有证明时为空。
+	serials []string
 }
 
-// checkAppKey 校验一把密钥：公钥是 P-256，证明链、挑战、包名、硬件、使用条件。开发模式下没有证明时当作软件密钥。
-func checkAppKey(k AppKeyProof, rule keyRule, challenge []byte, sdk int, dev bool, now time.Time) (keyCheck, error) {
+// checkAppKey 校验一把密钥：公钥是 P-256，证明链、吊销列表、挑战、包名、硬件、使用条件。开发模式下没有证明时当作软件密钥。
+func checkAppKey(k AppKeyProof, rule keyRule, challenge []byte, sdk int, dev bool, now time.Time, rev *attestation.Revocations) (keyCheck, error) {
 	if _, err := parseP256(k.PublicKey); err != nil {
 		return keyCheck{}, errors.New(rule.name + " 公钥格式不正确")
 	}
@@ -340,6 +343,10 @@ func checkAppKey(k AppKeyProof, rule keyRule, challenge []byte, sdk int, dev boo
 	r, err := attestation.Parse(k.Attestation, now)
 	if err != nil {
 		return keyCheck{}, err
+	}
+	// 被吊销的证明密钥（泄露的 keybox）能给任意密钥签出有效的证明，开发模式下也不接受。
+	if serial, reason, revoked := rev.Check(r.Serials); revoked {
+		return keyCheck{}, fmt.Errorf("证明证书 %s 已被 Google 吊销（%s）", serial, reason)
 	}
 	if !bytes.Equal(r.PublicKey, k.PublicKey) {
 		return keyCheck{}, errors.New("证明里的密钥和提交的公钥不一致")
@@ -371,7 +378,7 @@ func checkAppKey(k AppKeyProof, rule keyRule, challenge []byte, sdk int, dev boo
 			return keyCheck{}, errors.New(msg)
 		}
 	}
-	return keyCheck{level: level, bootLocked: r.BootLocked(), patch: r.PatchLevel()}, nil
+	return keyCheck{level: level, bootLocked: r.BootLocked(), patch: r.PatchLevel(), serials: r.Serials}, nil
 }
 
 // PairApp 用配对码添加手机：校验三把密钥的证明，记下设备。证明的挑战是配对码的 SHA-256。
@@ -402,9 +409,10 @@ func (s *Service) PairApp(ctx context.Context, ip, code string, keys [3]AppKeyPr
 	dev := s.devAppKeys()
 	challenge := sha256.Sum256([]byte(code))
 	now := time.Now()
+	rev := s.Revocations()
 	var checks [3]keyCheck
 	for i, rule := range appKeyRules {
-		c, err := checkAppKey(keys[i], rule, challenge[:], info.SDK, dev, now)
+		c, err := checkAppKey(keys[i], rule, challenge[:], info.SDK, dev, now, rev)
 		if err != nil {
 			msg := i18n.Errorf("密钥证明不通过：%s", err.Error()).Error()
 			at, aid, an := userActor(user.ID, user.Username)
@@ -449,6 +457,22 @@ func (s *Service) PairApp(ctx context.Context, ip, code string, keys [3]AppKeyPr
 	if level == "software" {
 		d.BootLocked = false
 	}
+	// 三把密钥都有证明时才算检查过吊销；记下各条链的序列号（去重），拿到新的吊销列表时复查。
+	d.RevocationChecked = true
+	seen := map[string]bool{}
+	var serials []string
+	for _, c := range checks {
+		if len(c.serials) == 0 {
+			d.RevocationChecked = false
+		}
+		for _, sn := range c.serials {
+			if !seen[sn] {
+				seen[sn] = true
+				serials = append(serials, sn)
+			}
+		}
+	}
+	d.AttestationSerials = strings.Join(serials, " ")
 	if err := s.q.CreateAppDevice(ctx, d); err != nil {
 		s.app.mu.Lock()
 		cur.used, cur.device = false, ""

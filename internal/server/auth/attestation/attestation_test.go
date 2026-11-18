@@ -159,3 +159,47 @@ func TestLenientBooleans(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRevocations(t *testing.T) {
+	now := time.Now()
+	r, err := ParseRevocations([]byte(`{"entries": {"00AB": {"status": "REVOKED", "reason": "KEY_COMPROMISE"}, "cd": {"status": "SUSPENDED"}}}`), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, reason, ok := r.Check([]string{"12", "ab"}); !ok || s != "ab" || reason != "KEY_COMPROMISE" {
+		t.Errorf("前导 0 和大写：%q %q %v", s, reason, ok)
+	}
+	if _, reason, ok := r.Check([]string{"0cd"}); !ok || reason != "SUSPENDED" {
+		t.Errorf("没有 reason 时取 status：%q %v", reason, ok)
+	}
+	if _, _, ok := r.Check([]string{"abc"}); ok {
+		t.Error("不在列表里的不算吊销")
+	}
+	for _, bad := range []string{`not json`, `{}`, `{"entries": []}`} {
+		if _, err := ParseRevocations([]byte(bad), now); err == nil {
+			t.Errorf("%s 应该解析失败", bad)
+		}
+	}
+	if _, err := ParseRevocations(make([]byte, MaxStatusBytes+1), now); err == nil {
+		t.Error("太大的列表应该拒绝")
+	}
+}
+
+// 随面板发布的列表能读出来，有日期。
+func TestEmbeddedRevocations(t *testing.T) {
+	r := Embedded()
+	if r.Len() < 100 || r.Updated.IsZero() {
+		t.Errorf("随面板发布的列表：%d 项，日期 %v", r.Len(), r.Updated)
+	}
+}
+
+// Parse 记下叶子以外各张证书的序列号。
+func TestParseSerials(t *testing.T) {
+	r, err := Parse(berChain(t, nil), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Serials) != 1 || r.Serials[0] != "1" {
+		t.Errorf("序列号 %v，想要根证书的 1", r.Serials)
+	}
+}

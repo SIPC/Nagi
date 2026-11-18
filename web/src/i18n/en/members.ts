@@ -47,6 +47,7 @@ export default {
   androidVersion: (v) => `Android ${v}`,
   bootUnlocked: "Bootloader unlocked",
   revocationUnchecked: "Revocation not checked",
+  attestationRevoked: "Attestation certificate revoked",
   softwareKeys: "Software keys",
   devKeys: "Developer mode",
   scope: {

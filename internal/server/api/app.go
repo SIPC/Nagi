@@ -180,7 +180,7 @@ func (s *settingsService) appSessions(ctx context.Context, userID int64, current
 			Id: appSessionPrefix + d.ID, Kind: "app", Current: d.ID == current, CreatedAt: timestamppb.New(time.Unix(d.CreatedAt, 0)),
 			Ip: d.LastIP, LastIp: d.LastIP, Agent: d.Name, DeviceName: d.Name, Model: d.Model, AndroidVersion: d.AndroidVersion,
 			AppVersion: d.AppVersion, SecurityLevel: d.SecurityLevel, BootLocked: d.BootLocked, RevocationChecked: d.RevocationChecked,
-			DevKeys: d.DevKeys,
+			DevKeys: d.DevKeys, RevokedReason: d.RevokedReason,
 		}
 		if d.LastUsedAt > 0 {
 			ls.LastSeen = timestamppb.New(time.Unix(d.LastUsedAt, 0))

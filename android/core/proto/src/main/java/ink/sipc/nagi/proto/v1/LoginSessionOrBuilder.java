@@ -242,4 +242,24 @@ public interface LoginSessionOrBuilder extends
    * @return The devKeys.
    */
   boolean getDevKeys();
+
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   * @return The revokedReason.
+   */
+  java.lang.String getRevokedReason();
+  /**
+   * <pre>
+   * 证明证书被 Google 吊销的原因（例如 KEY_COMPROMISE），没有被吊销时为空（见 docs/android.md#吊销列表）。
+   * </pre>
+   *
+   * <code>string revoked_reason = 18 [json_name = "revokedReason"];</code>
+   * @return The bytes for revokedReason.
+   */
+  com.google.protobuf.ByteString
+      getRevokedReasonBytes();
 }

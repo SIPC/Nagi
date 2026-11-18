@@ -27,6 +27,10 @@ type AppDevice struct {
 	LastIP            string
 	LastUnlockAt      int64
 	SigFailures       int64
+	// AttestationSerials：添加时证明证书链里叶子以外各张证书的序列号，空格分隔（见 docs/android.md#吊销列表）。
+	AttestationSerials string
+	// RevokedReason：证明证书被吊销的原因，没有被吊销时为空。
+	RevokedReason string
 }
 
 // AppDeviceUser 是手机连同它所属成员的当前角色和访问范围（换取和使用令牌时查）。
@@ -42,21 +46,47 @@ type AppDeviceUser struct {
 
 const appDeviceColumns = `d.id, d.user_id, d.name, d.model, d.android_version, d.app_version, d.device_key, d.confirm_key, d.push_key,
 	d.security_level, d.boot_locked, d.patch_level, d.revocation_checked, d.dev_keys, d.created_at, d.last_used_at, d.last_ip,
-	d.last_unlock_at, d.sig_failures`
+	d.last_unlock_at, d.sig_failures, d.attestation_serials, d.revoked_reason`
 
 func appDeviceDest(d *AppDevice) []any {
 	return []any{&d.ID, &d.UserID, &d.Name, &d.Model, &d.AndroidVersion, &d.AppVersion, &d.DeviceKey, &d.ConfirmKey, &d.PushKey,
 		&d.SecurityLevel, &d.BootLocked, &d.PatchLevel, &d.RevocationChecked, &d.DevKeys, &d.CreatedAt, &d.LastUsedAt, &d.LastIP,
-		&d.LastUnlockAt, &d.SigFailures}
+		&d.LastUnlockAt, &d.SigFailures, &d.AttestationSerials, &d.RevokedReason}
 }
 
 // CreateAppDevice 保存新添加的手机。
 func (q *Queries) CreateAppDevice(ctx context.Context, d AppDevice) error {
 	_, err := q.db.ExecContext(ctx, `INSERT INTO app_devices (id, user_id, name, model, android_version, app_version, device_key,
 		confirm_key, push_key, security_level, boot_locked, patch_level, revocation_checked, dev_keys, created_at, last_used_at, last_ip,
-		last_unlock_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		last_unlock_at, attestation_serials, revoked_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.ID, d.UserID, d.Name, d.Model, d.AndroidVersion, d.AppVersion, d.DeviceKey, d.ConfirmKey, d.PushKey, d.SecurityLevel,
-		d.BootLocked, d.PatchLevel, d.RevocationChecked, d.DevKeys, d.CreatedAt, d.LastUsedAt, d.LastIP, d.LastUnlockAt)
+		d.BootLocked, d.PatchLevel, d.RevocationChecked, d.DevKeys, d.CreatedAt, d.LastUsedAt, d.LastIP, d.LastUnlockAt,
+		d.AttestationSerials, d.RevokedReason)
+	return err
+}
+
+// AppDevicesWithSerials 列出记了证明证书序列号的手机和它的成员，用来按新的吊销列表复查。
+func (q *Queries) AppDevicesWithSerials(ctx context.Context) ([]AppDeviceUser, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT `+appDeviceColumns+`, u.username, u.display_name, u.role, u.all_projects, u.all_nodes, u.avatar
+		FROM app_devices d JOIN users u ON u.id = d.user_id WHERE d.attestation_serials != '' ORDER BY d.created_at, d.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AppDeviceUser{}
+	for rows.Next() {
+		var d AppDeviceUser
+		if err := rows.Scan(append(appDeviceDest(&d.AppDevice), &d.Username, &d.DisplayName, &d.Role, &d.AllProjects, &d.AllNodes, &d.Avatar)...); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// SetAppDeviceRevoked 记下手机的证明证书被吊销的原因，reason 为空表示没有被吊销。
+func (q *Queries) SetAppDeviceRevoked(ctx context.Context, id, reason string) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE app_devices SET revoked_reason = ? WHERE id = ?`, reason, id)
 	return err
 }
 

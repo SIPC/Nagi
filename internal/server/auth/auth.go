@@ -24,6 +24,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/server/audit"
+	"github.com/SIPC/nagi/internal/server/auth/attestation"
 	"github.com/SIPC/nagi/internal/server/store"
 	"golang.org/x/crypto/argon2"
 )
@@ -60,8 +61,10 @@ type Service struct {
 	audit    *audit.Log
 	failures failureSummary
 	// app 是安卓 App 的配对码、挑战和令牌（见 app.go）。
-	app     appState
-	streaks totpStreaks
+	app appState
+	// revocations 是取到的证明证书吊销列表，没有时用随面板发布的（见 revocation.go）。
+	revocations atomic.Pointer[attestation.Revocations]
+	streaks     totpStreaks
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
 	Alert func(ctx context.Context, key, title, message string)

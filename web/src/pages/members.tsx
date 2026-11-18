@@ -500,6 +500,7 @@ export function SessionList() {
                       s.androidVersion && t.members.androidVersion(s.androidVersion),
                       s.lastIp || s.ip,
                       s.lastSeen && t.members.lastActive(timeAgo(toDate(s.lastSeen))),
+                      s.revokedReason && t.members.attestationRevoked,
                       !s.bootLocked && t.members.bootUnlocked,
                       !s.revocationChecked && t.members.revocationUnchecked,
                       s.securityLevel === "software" && t.members.softwareKeys,

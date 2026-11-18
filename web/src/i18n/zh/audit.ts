@@ -113,6 +113,7 @@ export default {
     app_paired: "添加手机",
     app_removed: "退出手机",
     app_attestation_failed: "手机密钥证明未通过",
+    app_attestation_revoked: "手机证明证书被吊销",
     app_signature_invalid: "手机签名不符",
     app_unlock_required: "手机需解锁 App",
     session_expired: "登录过期",
