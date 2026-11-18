@@ -346,7 +346,26 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
 
 // ContainerPage：容器自己的页（项目 / 容器），标签 概览、配置、版本、日志、终端、数据；当前标签记在地址的 view 参数里。
 // 宽屏时左边有项目栏（见 ProjectSplit），不再显示上级链接。
-export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAutoDeployed }: { projectId: string; name: string; view: DetailView; onView: (v: DetailView) => void; autoDeploy?: boolean; onAutoDeployed?: () => void }) {
+// service 是容器组里选中的服务（地址的 service 参数），日志和终端按它打开，项目栏里点服务时带上。
+export function ContainerPage({
+  projectId,
+  name,
+  view,
+  onView,
+  service,
+  onService,
+  autoDeploy,
+  onAutoDeployed,
+}: {
+  projectId: string;
+  name: string;
+  view: DetailView;
+  onView: (v: DetailView) => void;
+  service?: string;
+  onService?: (s: string) => void;
+  autoDeploy?: boolean;
+  onAutoDeployed?: () => void;
+}) {
   const project = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectClient.getProject({ projectId }),
@@ -383,7 +402,7 @@ export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAut
   return (
     <>
       <Breadcrumb items={[...crumbs, { label: containerLabel(container) }]} className="max-md:hidden xl:hidden" />
-      <ContainerDetail project={p} container={container} services={services} imageUpdates={imageUpdates} view={view} onView={onView} autoDeploy={autoDeploy} onAutoDeployed={onAutoDeployed} />
+      <ContainerDetail project={p} container={container} services={services} imageUpdates={imageUpdates} view={view} onView={onView} service={service} onService={onService} autoDeploy={autoDeploy} onAutoDeployed={onAutoDeployed} />
     </>
   );
 }
@@ -468,6 +487,8 @@ function ContainerDetail({
   imageUpdates,
   view: viewProp,
   onView,
+  service,
+  onService,
   autoDeploy,
   onAutoDeployed,
 }: {
@@ -477,6 +498,8 @@ function ContainerDetail({
   imageUpdates: { image: string }[];
   view: DetailView;
   onView: (v: DetailView) => void;
+  service?: string;
+  onService?: (s: string) => void;
   autoDeploy?: boolean;
   onAutoDeployed?: () => void;
 }) {
@@ -764,10 +787,12 @@ function ContainerDetail({
             container={container.name}
             services={serviceNames}
             containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
+            service={service}
+            onService={onService}
           />
         )}
         {view === "terminal" && !isViewer && (
-          <TerminalView projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
+          <TerminalView projectId={project.id} container={container.name} services={[...new Set(services.filter((s) => s.state === "running").map((s) => s.name))]} service={service} onService={onService} />
         )}
         {view === "network" && <ContainerNetwork project={project} container={container} services={services} />}
         {view === "storage" && <ContainerStorage project={project} container={container} />}
@@ -1092,9 +1117,27 @@ type Line = { key: number; service: string; stream: string; text: string; time?:
 
 const maxLines = 2000;
 
-function Logs({ projectId, container, services, containers }: { projectId: string; container: string; services: string[]; containers: string }) {
+function Logs({
+  projectId,
+  container,
+  services,
+  containers,
+  service: chosen,
+  onService,
+}: {
+  projectId: string;
+  container: string;
+  services: string[];
+  containers: string;
+  service?: string;
+  onService?: (s: string) => void;
+}) {
   const l_ = t.projectContainers.logs;
-  const [service, setService] = useState("");
+  // 选中的服务记在地址里（有 onService 时），不认识的服务当作全部。
+  const [local, setLocal] = useState("");
+  const picked = onService ? (chosen ?? "") : local;
+  const service = services.includes(picked) ? picked : "";
+  const setService = onService ?? setLocal;
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(true);

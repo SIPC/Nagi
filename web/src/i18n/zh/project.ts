@@ -23,5 +23,9 @@ export default {
     draft: "草稿",
     // 读屏软件在容器名后面读出的状态和节点。
     stateOnNode: (state: string, node: string) => `（${state}，节点 ${node}）`,
+    // 容器组里一个服务有多个副本时，名称后面的「×2」。
+    replicas: (n: number) => `${n} 个副本`,
+    // 读屏软件在服务名后面读出的状态。
+    serviceState: (state: string) => `（${state}）`,
   },
 };

@@ -23,5 +23,7 @@ export default {
     containers: "Containers",
     draft: "Draft",
     stateOnNode: (state, node) => ` (${state}, node ${node})`,
+    replicas: (n) => `${n} replicas`,
+    serviceState: (state) => ` (${state})`,
   },
 } satisfies typeof zh;

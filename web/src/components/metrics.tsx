@@ -261,6 +261,22 @@ export function containerUsage(series: MetricSeries[] | undefined) {
   return usage;
 }
 
+// serviceUsage：容器组里各服务当前的 CPU 和内存，键是「容器/服务」。节点按服务记录（多个副本已加在一起），
+// 上限只按容器记，所以服务没有上限，圆环按每核 100% 和 memFallback 算。
+export function serviceUsage(series: MetricSeries[] | undefined) {
+  const usage = new Map<string, Usage>();
+  const fresh = Date.now() / 1000 - 60;
+  for (const s of series ?? []) {
+    const { kind, path, metric } = parseName(s.name);
+    if (kind !== "c" || (metric !== "cpu" && metric !== "mem") || s.values.length === 0) continue;
+    if (Number(s.times[s.times.length - 1]) < fresh) continue;
+    const u = usage.get(path) ?? { cpu: 0, mem: 0 };
+    u[metric] += s.values[s.values.length - 1];
+    usage.set(path, u);
+  }
+  return usage;
+}
+
 // 不是 0 但按一位小数会显示成 0.0 的值写成 <0.1，和真正的 0 区分开。
 const tiny = (v: number) => v > 0 && v < 0.05;
 export const fmtCpu = (v: number) => (tiny(v) ? "<0.1%" : `${v.toFixed(1)}%`);

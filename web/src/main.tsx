@@ -173,17 +173,19 @@ const projectRoute = createRoute({
 const containerRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "c/$container",
-  validateSearch: (search: Record<string, unknown>): { view?: DetailView; volume?: string; deploy?: boolean } => ({
+  validateSearch: (search: Record<string, unknown>): { view?: DetailView; volume?: string; deploy?: boolean; service?: string } => ({
     // 旧地址的「数据」标签拆成了存储和高可用，快照在存储里。
     view: search.view === "data" ? "storage" : containerTabs.includes(search.view as DetailView) ? (search.view as DetailView) : undefined,
     // 存储标签里打开的卷（文件管理就地显示，后退能回到卷列表）。
     volume: typeof search.volume === "string" && search.volume ? search.volume : undefined,
     // 添加容器时选了「添加并部署」：进入容器页后开始部署。
     deploy: search.deploy === true ? true : undefined,
+    // 容器组里选中的服务，日志和终端按它打开。
+    service: typeof search.service === "string" && search.service ? search.service : undefined,
   }),
   component: function ContainerRoute() {
     const { projectId, container } = containerRoute.useParams();
-    const { view, deploy } = containerRoute.useSearch();
+    const { view, deploy, service } = containerRoute.useSearch();
     const navigate = containerRoute.useNavigate();
     return (
       <ContainerPage
@@ -191,7 +193,9 @@ const containerRoute = createRoute({
         projectId={projectId}
         name={container}
         view={view ?? "overview"}
-        onView={(t) => navigate({ search: { view: t === "overview" ? undefined : t }, replace: true })}
+        onView={(t) => navigate({ search: (s) => ({ view: t === "overview" ? undefined : t, service: s.service }), replace: true })}
+        service={service}
+        onService={(v) => navigate({ search: (s) => ({ ...s, service: v || undefined }), replace: true })}
         autoDeploy={!!deploy}
         onAutoDeployed={() => navigate({ search: (s) => ({ ...s, deploy: undefined }), replace: true })}
       />
