@@ -11,6 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"golang.org/x/crypto/cryptobyte"
+	cryptobyte_asn1 "golang.org/x/crypto/cryptobyte/asn1"
 )
 
 // roots.pem 是 Google 的硬件证明根证书（https://android.googleapis.com/attestation/root），随面板版本更新。
@@ -138,12 +141,17 @@ func Parse(chain [][]byte, now time.Time) (*Result, error) {
 		return nil, errors.New("证明证书链太长")
 	}
 	certs := make([]*x509.Certificate, len(chain))
+	// tbs 是每张证书原样的待签名部分：签名按手机发来的字节校验，不用放宽布尔值以后的。
+	tbs := make([][]byte, len(chain))
 	for i, der := range chain {
 		if len(der) > MaxCertBytes {
 			return nil, errors.New("证明证书太大")
 		}
-		c, err := x509.ParseCertificate(der)
+		c, err := x509.ParseCertificate(lenientBooleans(der))
 		if err != nil {
+			return nil, fmt.Errorf("证明证书无法解析：%w", err)
+		}
+		if tbs[i], err = rawTBS(der); err != nil {
 			return nil, fmt.Errorf("证明证书无法解析：%w", err)
 		}
 		certs[i] = c
@@ -158,7 +166,7 @@ func Parse(chain [][]byte, now time.Time) (*Result, error) {
 				return nil, errors.New("证明证书链不正确：密钥证明只能在第一张证书里")
 			}
 		}
-		if err := parent.CheckSignature(child.SignatureAlgorithm, child.RawTBSCertificate, child.Signature); err != nil {
+		if err := parent.CheckSignature(child.SignatureAlgorithm, tbs[i], child.Signature); err != nil {
 			return nil, fmt.Errorf("证明证书链的签名不正确：%w", err)
 		}
 		if i+1 < len(certs) && (now.Before(parent.NotBefore) || now.After(parent.NotAfter)) {
@@ -191,7 +199,7 @@ func Parse(chain [][]byte, now time.Time) (*Result, error) {
 		SW            asn1.RawValue
 		HW            asn1.RawValue
 	}
-	if _, err := asn1.Unmarshal(ext, &kd); err != nil {
+	if _, err := asn1.Unmarshal(lenientBooleans(ext), &kd); err != nil {
 		return nil, fmt.Errorf("密钥证明无法解析：%w", err)
 	}
 	res.SecurityLevel = int(kd.SecurityLevel)
@@ -282,4 +290,86 @@ func parseAuthList(b []byte) (AuthList, error) {
 		}
 	}
 	return l, nil
+}
+
+// lenientBooleans 把 DER 里写成 0x01 这类（非 0、非 0xFF）的布尔值改成 0xFF，返回一份副本。
+//
+// DER 规定「是」只能写成 0xFF，Go 的 x509 和 encoding/asn1 只认 0x00 和 0xFF；有的手机（例如部分小米机型）的 Keystore
+// 把证书扩展的 critical、证明里的 deviceLocked 写成 0x01，按 BER 也是「是」，安卓自己照常能读。改的只是这一个字节，长度和
+// 结构不变，意思也不变；签名另按原样的字节校验（见 [rawTBS]），所以改动不会让伪造的证书通过。
+// 只进入 SEQUENCE、SET 这类构造类型，不进入 OCTET STRING（扩展的值是 OCTET STRING，证明扩展另外调用一次）。
+// 结构看不懂（长度不对、不定长、嵌套太深）时原样返回，交给后面的解析报错。
+func lenientBooleans(der []byte) []byte {
+	out := bytes.Clone(der)
+	changed, ok := fixBooleans(out, 0)
+	if !ok || !changed {
+		return der
+	}
+	return out
+}
+
+func fixBooleans(b []byte, depth int) (changed, ok bool) {
+	if depth > 32 {
+		return false, false
+	}
+	for len(b) > 0 {
+		tag := b[0]
+		i := 1
+		if tag&0x1f == 0x1f {
+			// 多字节的标签号：后面每个字节最高位为 1 表示还没完。
+			for {
+				if i >= len(b) {
+					return false, false
+				}
+				c := b[i]
+				i++
+				if c&0x80 == 0 {
+					break
+				}
+			}
+		}
+		if i >= len(b) {
+			return false, false
+		}
+		n := int(b[i])
+		i++
+		if n&0x80 != 0 {
+			k := n & 0x7f
+			if k == 0 || k > 3 || i+k > len(b) {
+				return false, false
+			}
+			n = 0
+			for ; k > 0; k-- {
+				n = n<<8 | int(b[i])
+				i++
+			}
+		}
+		if n > len(b)-i {
+			return false, false
+		}
+		content := b[i : i+n]
+		if tag == 0x01 && n == 1 && content[0] != 0x00 && content[0] != 0xff {
+			content[0] = 0xff
+			changed = true
+		}
+		if tag&0x20 != 0 {
+			c, ok := fixBooleans(content, depth+1)
+			if !ok {
+				return false, false
+			}
+			changed = changed || c
+		}
+		b = b[i+n:]
+	}
+	return changed, true
+}
+
+// rawTBS 取出证书原样的待签名部分（Certificate 里的第一项 TBSCertificate）。
+func rawTBS(der []byte) ([]byte, error) {
+	s := cryptobyte.String(der)
+	var cert, tbs cryptobyte.String
+	if !s.ReadASN1(&cert, cryptobyte_asn1.SEQUENCE) || !cert.ReadASN1Element(&tbs, cryptobyte_asn1.SEQUENCE) {
+		return nil, errors.New("证书结构不正确")
+	}
+	return tbs, nil
 }
