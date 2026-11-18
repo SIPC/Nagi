@@ -8,6 +8,7 @@ import { confirmAction } from "@/components/confirm";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
 import { cn, timeAgo } from "@/lib/utils";
+import { fmtBytes, fmtRate } from "@/components/metrics";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { Node, UpdateState } from "@/gen/nagi/v1/api_pb";
 
@@ -58,6 +59,41 @@ export function cancelable(s: UpdateState | undefined, n: Node | undefined) {
 
 export function updateActive(s: UpdateState | undefined) {
   return !!s && s.phase !== "failed";
+}
+
+// progressText：下载、核对、试运行的进度（见 docs/panel.md#更新状态），例如「下载中 45% · 3.2 MB/s · ghfast.top」「核对中」。
+// 只在 installing 时有；旧版本的节点不报进度，返回空串，照旧显示原来的文案。withSource 为 false 时不带下载地址（列表里用）。
+export function progressText(s: UpdateState | undefined, withSource = true) {
+  if (s?.phase !== "installing") return "";
+  const p = t.update.progress;
+  switch (s.stage) {
+    case "verify":
+      return p.verify;
+    case "test":
+      return p.test;
+    case "download": {
+      const done = Number(s.downloaded);
+      const total = Number(s.total);
+      const speed = Number(s.bytesPerSecond);
+      const parts = [p.download(total > 0 ? `${Math.floor((100 * Math.min(done, total)) / total)}%` : done > 0 ? fmtBytes(done) : "")];
+      if (speed > 0) parts.push(fmtRate(speed));
+      if (withSource && s.source) parts.push(s.source);
+      return parts.join(" · ");
+    }
+  }
+  return "";
+}
+
+// UpdateProgressBar：知道文件大小时的细进度条，和备份同步、上传的进度条一样。核对、试运行时是满的。
+export function UpdateProgressBar({ state, className }: { state: UpdateState | undefined; className?: string }) {
+  const total = Number(state?.total ?? 0);
+  if (!state || !progressText(state) || total <= 0) return null;
+  const pct = state.stage === "download" ? Math.min(100, (100 * Number(state.downloaded)) / total) : 100;
+  return (
+    <span className={cn("block h-1 overflow-hidden rounded-full bg-muted", className)} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={t.update.progress.label}>
+      <span className="block h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${pct}%` }} />
+    </span>
+  );
 }
 
 // usePanelUpdate：最新版本的信息。面板自己缓存 1 小时，查不到时不重试（侧栏只是不显示提示）。
@@ -173,7 +209,12 @@ export function UpdateTips({ nodes, isStandby }: { nodes: Node[]; isStandby: boo
   if (panel?.phase === "failed") {
     panelTip = { key: `panel-failed-${panel.target}-${panel.startedAt?.seconds}`, kind: "error", title: t.update.tips.panelFailed(panel.target), description: panel.error, to: "update" };
   } else if (panel) {
-    panelTip = { key: `panel-${panel.phase}`, kind: "loading", title: panel.phase === "restarting" ? t.update.restartingTitle(panel.target) : t.update.installingTitle(panel.target) };
+    panelTip = {
+      key: `panel-${panel.phase}`,
+      kind: "loading",
+      title: panel.phase === "restarting" ? t.update.restartingTitle(panel.target) : t.update.installingTitle(panel.target),
+      description: progressText(panel) || undefined,
+    };
   } else if (latest) {
     panelTip = { key: `panel-new-${latest}`, kind: "info", title: t.update.tips.available(latest), to: "update" };
   }
@@ -395,7 +436,16 @@ export function PanelVersion({ isAdmin }: { isAdmin: boolean }) {
 
   // 版本下面：进行中的进度、失败原因。
   let below: React.ReactNode = null;
-  if (panel && active) {
+  const progress = progressText(panel);
+  if (panel && active && progress) {
+    // 下载进度：进度条在上，文字在下，和备份同步一样。
+    below = (
+      <div className="grid gap-1.5">
+        <UpdateProgressBar state={panel} />
+        <p className="text-[13px] leading-5 text-muted-foreground tabular-nums">{progress}</p>
+      </div>
+    );
+  } else if (panel && active) {
     below = <p className="text-pretty text-muted-foreground">{panel.phase === "restarting" ? t.update.restartingText(panel.source) : t.update.installingText}</p>;
   } else if (panel && failed && panel.error) {
     below = <p className="text-pretty text-muted-foreground">{panel.error}</p>;

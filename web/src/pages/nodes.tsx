@@ -57,7 +57,7 @@ import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/na
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { requireElevation } from "@/components/elevate";
-import { cancelable, updateActive, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { cancelable, progressText, updateActive, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
@@ -478,6 +478,7 @@ function NodeList({ children }: { children: React.ReactNode }) {
 function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
   const usage = n.online && !n.pending ? nodeUsage(n.usage, n.info) : undefined;
   const tone = n.pending ? "warning" : n.online ? "success" : "neutral";
+  const progress = progressText(upgrade, false);
   return (
     <div className={cn(nodeCols, "relative min-h-13 rounded-md px-2 py-1.5 transition-colors hover:bg-accent has-[>a:focus-visible]:ring-2 has-[>a:focus-visible]:ring-ring/40")}>
       <Link to="/nodes/$nodeId" params={{ nodeId: n.id }} aria-label={n.name} className="absolute inset-0 rounded-md outline-none" />
@@ -501,7 +502,12 @@ function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: 
         </div>
         {/* 标签跟在地址后面，放不下的整个折到下一行藏起来，不截断半个。 */}
         <div className="flex min-w-0 items-center gap-2">
-          <span className="max-w-full shrink-0 truncate font-mono text-[13px] leading-5 text-muted-foreground">{n.address || n.id}</span>
+          {/* 升级下载时这一行换成进度（阶段、百分比和速度，下载地址在详情里），第一行的节点名不被挤掉。旧版本的节点没有进度。 */}
+          {progress ? (
+            <span className="min-w-0 truncate text-[13px] leading-5 text-muted-foreground tabular-nums">{progress}</span>
+          ) : (
+            <span className="max-w-full shrink-0 truncate font-mono text-[13px] leading-5 text-muted-foreground">{n.address || n.id}</span>
+          )}
           {n.tags.length > 0 && (
             <span className="flex h-5 min-w-0 flex-1 flex-wrap gap-1 overflow-hidden" title={n.tags.join(", ")} aria-label={`${t.labels.tags}: ${n.tags.join(", ")}`}>
               {n.tags.map((x) => (
@@ -830,8 +836,10 @@ function NodeUpgrade({ n, target, state, onDone }: { n: Node; target: string; st
             )
           }
         >
-          {queued ? t.nodes.upgrade.queuedText : t.nodes.upgrade.installingText}
+          {queued ? t.nodes.upgrade.queuedText : progressText(state) || t.nodes.upgrade.installingText}
           {!cancelable(state, n) && t.nodes.upgrade.noCancel}
+          {/* 进度条放在文字下面，和文字一样宽，不伸到按钮下面。 */}
+          <UpdateProgressBar state={state} className="mt-2" />
         </Notice>
         {error && <Alert>{error}</Alert>}
       </>

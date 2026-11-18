@@ -21,6 +21,12 @@ export default {
   retry: "重试",
   installingTitle: (version: string) => `正在更新到 ${version}`,
   installingText: "面板正在下载并校验新版本，完成后原地重启，页面将自动刷新。可离开此页，进度保存在面板上。",
+  progress: {
+    label: "下载进度",
+    download: (detail: string) => (detail ? `下载中 ${detail}` : "下载中"),
+    verify: "核对中",
+    test: "试运行中",
+  },
   tips: {
     view: "查看",
     available: (version: string) => `发现新版本 ${version}`,
