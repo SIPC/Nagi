@@ -841,8 +841,11 @@ service ProjectService {
   rpc SetContainerAlertRules(SetContainerAlertRulesRequest) returns (Project);
   // 容器单独设置定时快照计划，schedule 为空时改回用项目的。
   rpc SetContainerSnapshotSchedule(SetContainerSnapshotScheduleRequest) returns (Project);
-  // 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+  // 立即同步到备份节点（node_id 为空时依次同步到所有备份节点）。节点支持时只开始同步就返回，进度和结果看 Container.backups；
+  // 旧版本的节点同步完才有结果，面板在后台等。
   rpc SyncBackup(BackupNodeRef) returns (Project);
+  // 停止正在进行的同步（node_id 为空时停止到所有备份节点的）。已经传完的文件留在备份节点上，下次接着传。
+  rpc StopBackupSync(BackupNodeRef) returns (Project);
   // 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
   rpc ListBackupSnapshots(BackupNodeRef) returns (ListSnapshotsResponse);
   // 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。

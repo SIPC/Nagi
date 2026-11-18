@@ -4905,6 +4905,7 @@ const (
 	ProjectService_SetContainerAlertRules_FullMethodName       = "/nagi.v1.ProjectService/SetContainerAlertRules"
 	ProjectService_SetContainerSnapshotSchedule_FullMethodName = "/nagi.v1.ProjectService/SetContainerSnapshotSchedule"
 	ProjectService_SyncBackup_FullMethodName                   = "/nagi.v1.ProjectService/SyncBackup"
+	ProjectService_StopBackupSync_FullMethodName               = "/nagi.v1.ProjectService/StopBackupSync"
 	ProjectService_ListBackupSnapshots_FullMethodName          = "/nagi.v1.ProjectService/ListBackupSnapshots"
 	ProjectService_SetBackupReplicaDir_FullMethodName          = "/nagi.v1.ProjectService/SetBackupReplicaDir"
 	ProjectService_RestoreFromBackup_FullMethodName            = "/nagi.v1.ProjectService/RestoreFromBackup"
@@ -5000,8 +5001,11 @@ type ProjectServiceClient interface {
 	SetContainerAlertRules(ctx context.Context, in *SetContainerAlertRulesRequest, opts ...grpc.CallOption) (*Project, error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(ctx context.Context, in *SetContainerSnapshotScheduleRequest, opts ...grpc.CallOption) (*Project, error)
-	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点）。节点支持时只开始同步就返回，进度和结果看 Container.backups；
+	// 旧版本的节点同步完才有结果，面板在后台等。
 	SyncBackup(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*Project, error)
+	// 停止正在进行的同步（node_id 为空时停止到所有备份节点的）。已经传完的文件留在备份节点上，下次接着传。
+	StopBackupSync(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*Project, error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
 	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
@@ -5439,6 +5443,16 @@ func (c *projectServiceClient) SyncBackup(ctx context.Context, in *BackupNodeRef
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
 	err := c.cc.Invoke(ctx, ProjectService_SyncBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) StopBackupSync(ctx context.Context, in *BackupNodeRef, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_StopBackupSync_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5907,8 +5921,11 @@ type ProjectServiceServer interface {
 	SetContainerAlertRules(context.Context, *SetContainerAlertRulesRequest) (*Project, error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(context.Context, *SetContainerSnapshotScheduleRequest) (*Project, error)
-	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点）。节点支持时只开始同步就返回，进度和结果看 Container.backups；
+	// 旧版本的节点同步完才有结果，面板在后台等。
 	SyncBackup(context.Context, *BackupNodeRef) (*Project, error)
+	// 停止正在进行的同步（node_id 为空时停止到所有备份节点的）。已经传完的文件留在备份节点上，下次接着传。
+	StopBackupSync(context.Context, *BackupNodeRef) (*Project, error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(context.Context, *BackupNodeRef) (*ListSnapshotsResponse, error)
 	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
@@ -6066,6 +6083,9 @@ func (UnimplementedProjectServiceServer) SetContainerSnapshotSchedule(context.Co
 }
 func (UnimplementedProjectServiceServer) SyncBackup(context.Context, *BackupNodeRef) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncBackup not implemented")
+}
+func (UnimplementedProjectServiceServer) StopBackupSync(context.Context, *BackupNodeRef) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopBackupSync not implemented")
 }
 func (UnimplementedProjectServiceServer) ListBackupSnapshots(context.Context, *BackupNodeRef) (*ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBackupSnapshots not implemented")
@@ -6733,6 +6753,24 @@ func _ProjectService_SyncBackup_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProjectService_StopBackupSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BackupNodeRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).StopBackupSync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_StopBackupSync_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).StopBackupSync(ctx, req.(*BackupNodeRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProjectService_ListBackupSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BackupNodeRef)
 	if err := dec(in); err != nil {
@@ -7335,6 +7373,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SyncBackup",
 			Handler:    _ProjectService_SyncBackup_Handler,
+		},
+		{
+			MethodName: "StopBackupSync",
+			Handler:    _ProjectService_StopBackupSync_Handler,
 		},
 		{
 			MethodName: "ListBackupSnapshots",

@@ -2842,8 +2842,10 @@ type NodeInfo struct {
 	ReplicaDir string `protobuf:"bytes,26,opt,name=replica_dir,json=replicaDir,proto3" json:"replica_dir,omitempty"`
 	// 直连下载的状态（见 docs/agent.md#直连下载）。旧版本的节点不报。
 	DirectDownload *DirectDownload `protobuf:"bytes,30,opt,name=direct_download,json=directDownload,proto3" json:"direct_download,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 节点支持后台同步备份节点（SyncBackupRequest.async、cancel）并上报同步进度（BackupStatus.bytes_total 等）。旧版本的节点不报。
+	AsyncBackupSync bool `protobuf:"varint,41,opt,name=async_backup_sync,json=asyncBackupSync,proto3" json:"async_backup_sync,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -3056,6 +3058,13 @@ func (x *NodeInfo) GetDirectDownload() *DirectDownload {
 		return x.DirectDownload
 	}
 	return nil
+}
+
+func (x *NodeInfo) GetAsyncBackupSync() bool {
+	if x != nil {
+		return x.AsyncBackupSync
+	}
+	return false
 }
 
 // DirectDownload 是节点直连下载的状态：浏览器直接从节点下载文件，不经面板和 mesh。
@@ -4765,7 +4774,20 @@ type BackupStatus struct {
 	// 最近一次同步失败的原因，成功时为空。
 	LastError string `protobuf:"bytes,4,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
 	// 正在同步。
-	Syncing       bool `protobuf:"varint,5,opt,name=syncing,proto3" json:"syncing,omitempty"`
+	Syncing bool `protobuf:"varint,5,opt,name=syncing,proto3" json:"syncing,omitempty"`
+	// 以下是正在进行的同步的进度（见 docs/snapshot.md#同步的进度），syncing 为 false 时为空。旧版本的节点不报。
+	// 这次要传的字节数（开始时按对方缺少的文件算，传输中有新文件时变大）和已经传了的字节数。
+	BytesTotal int64 `protobuf:"varint,6,opt,name=bytes_total,json=bytesTotal,proto3" json:"bytes_total,omitempty"`
+	BytesDone  int64 `protobuf:"varint,7,opt,name=bytes_done,json=bytesDone,proto3" json:"bytes_done,omitempty"`
+	// 最近约 20 秒的平均速度（字节/秒），刚开始时为 0。
+	BytesPerSecond int64 `protobuf:"varint,8,opt,name=bytes_per_second,json=bytesPerSecond,proto3" json:"bytes_per_second,omitempty"`
+	// 这次同步开始的时间。
+	StartedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	// 连接断开后自动重试的次数和最近一次断开的原因（这次同步里）。
+	Retries    uint32 `protobuf:"varint,10,opt,name=retries,proto3" json:"retries,omitempty"`
+	RetryError string `protobuf:"bytes,11,opt,name=retry_error,json=retryError,proto3" json:"retry_error,omitempty"`
+	// 最近一次同步是用户停止的（last_error 是停止的说明，不告警）。
+	Stopped       bool `protobuf:"varint,12,opt,name=stopped,proto3" json:"stopped,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4831,6 +4853,55 @@ func (x *BackupStatus) GetLastError() string {
 func (x *BackupStatus) GetSyncing() bool {
 	if x != nil {
 		return x.Syncing
+	}
+	return false
+}
+
+func (x *BackupStatus) GetBytesTotal() int64 {
+	if x != nil {
+		return x.BytesTotal
+	}
+	return 0
+}
+
+func (x *BackupStatus) GetBytesDone() int64 {
+	if x != nil {
+		return x.BytesDone
+	}
+	return 0
+}
+
+func (x *BackupStatus) GetBytesPerSecond() int64 {
+	if x != nil {
+		return x.BytesPerSecond
+	}
+	return 0
+}
+
+func (x *BackupStatus) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *BackupStatus) GetRetries() uint32 {
+	if x != nil {
+		return x.Retries
+	}
+	return 0
+}
+
+func (x *BackupStatus) GetRetryError() string {
+	if x != nil {
+		return x.RetryError
+	}
+	return ""
+}
+
+func (x *BackupStatus) GetStopped() bool {
+	if x != nil {
+		return x.Stopped
 	}
 	return false
 }
@@ -6102,7 +6173,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\x81\a\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xad\a\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -6134,7 +6205,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\freplica_dirs\x18\x19 \x01(\bR\vreplicaDirs\x12\x1f\n" +
 	"\vreplica_dir\x18\x1a \x01(\tR\n" +
 	"replicaDir\x12@\n" +
-	"\x0fdirect_download\x18\x1e \x01(\v2\x17.nagi.v1.DirectDownloadR\x0edirectDownload\"\x88\x02\n" +
+	"\x0fdirect_download\x18\x1e \x01(\v2\x17.nagi.v1.DirectDownloadR\x0edirectDownload\x12*\n" +
+	"\x11async_backup_sync\x18) \x01(\bR\x0fasyncBackupSync\"\x88\x02\n" +
 	"\x0eDirectDownload\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\x10\n" +
 	"\x03off\x18\x02 \x01(\bR\x03off\x12\x18\n" +
@@ -6292,7 +6364,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x13direct_download_off\x18\x03 \x01(\bR\x11directDownloadOff\x12.\n" +
 	"\x13set_direct_download\x18\x04 \x01(\bR\x11setDirectDownload\x12(\n" +
 	"\x10direct_http_port\x18\x05 \x01(\rR\x0edirectHttpPort\x12&\n" +
-	"\x0fset_direct_http\x18\x06 \x01(\bR\rsetDirectHttp\"\xc7\x01\n" +
+	"\x0fset_direct_http\x18\x06 \x01(\bR\rsetDirectHttp\"\xc1\x03\n" +
 	"\fBackupStatus\x12$\n" +
 	"\x0etarget_node_id\x18\x01 \x01(\tR\ftargetNodeId\x12\x1f\n" +
 	"\vtarget_name\x18\x02 \x01(\tR\n" +
@@ -6300,7 +6372,19 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tlast_sync\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\blastSync\x12\x1d\n" +
 	"\n" +
 	"last_error\x18\x04 \x01(\tR\tlastError\x12\x18\n" +
-	"\asyncing\x18\x05 \x01(\bR\asyncing\"\xb0\x02\n" +
+	"\asyncing\x18\x05 \x01(\bR\asyncing\x12\x1f\n" +
+	"\vbytes_total\x18\x06 \x01(\x03R\n" +
+	"bytesTotal\x12\x1d\n" +
+	"\n" +
+	"bytes_done\x18\a \x01(\x03R\tbytesDone\x12(\n" +
+	"\x10bytes_per_second\x18\b \x01(\x03R\x0ebytesPerSecond\x129\n" +
+	"\n" +
+	"started_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x18\n" +
+	"\aretries\x18\n" +
+	" \x01(\rR\aretries\x12\x1f\n" +
+	"\vretry_error\x18\v \x01(\tR\n" +
+	"retryError\x12\x18\n" +
+	"\astopped\x18\f \x01(\bR\astopped\"\xb0\x02\n" +
 	"\aReplica\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
@@ -6561,26 +6645,27 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	65, // 68: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
 	41, // 69: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
 	65, // 70: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	65, // 71: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	49, // 72: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	49, // 73: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	49, // 74: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	50, // 75: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	65, // 76: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	55, // 77: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	57, // 78: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	53, // 79: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
-	54, // 80: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
-	5,  // 81: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
-	56, // 82: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
-	36, // 83: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
-	56, // 84: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	16, // 85: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	86, // [86:86] is the sub-list for method output_type
-	86, // [86:86] is the sub-list for method input_type
-	86, // [86:86] is the sub-list for extension type_name
-	86, // [86:86] is the sub-list for extension extendee
-	0,  // [0:86] is the sub-list for field type_name
+	65, // 71: nagi.v1.BackupStatus.started_at:type_name -> google.protobuf.Timestamp
+	65, // 72: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	49, // 73: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	49, // 74: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	49, // 75: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	50, // 76: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	65, // 77: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	55, // 78: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	57, // 79: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	53, // 80: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	54, // 81: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	5,  // 82: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
+	56, // 83: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	36, // 84: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
+	56, // 85: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	16, // 86: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	87, // [87:87] is the sub-list for method output_type
+	87, // [87:87] is the sub-list for method input_type
+	87, // [87:87] is the sub-list for extension type_name
+	87, // [87:87] is the sub-list for extension extendee
+	0,  // [0:87] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }

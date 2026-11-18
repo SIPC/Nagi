@@ -8,7 +8,7 @@ import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/l
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { useRun } from "@/components/run";
-import { fmtBytes } from "@/components/metrics";
+import { fmtBytes, fmtRate } from "@/components/metrics";
 import {
   Alert,
   Button,
@@ -36,7 +36,7 @@ import {
   Menu,
   textLink,
 } from "@/components/ui";
-import type { Container, Project } from "@/gen/nagi/v1/common_pb";
+import type { BackupStatus, Container, Project } from "@/gen/nagi/v1/common_pb";
 import type { VolumeInfo } from "@/gen/nagi/v1/agent_pb";
 import { useDefaultDir } from "@/pages/projects";
 import { ask, confirmAction } from "@/components/confirm";
@@ -78,6 +78,8 @@ function useNodes() {
     // 节点支持选择副本的存放位置；replicaDir 是节点的副本目录（为空是默认的 <节点目录>/replicas）。
     replicaDirs: (id: string) => list.find((n) => n.id === id)?.info?.replicaDirs === true,
     replicaDir: (id: string) => list.find((n) => n.id === id)?.info?.replicaDir ?? "",
+    // 节点在后台同步备份节点、能停止同步（旧版本的节点不能停止）。
+    asyncBackupSync: (id: string) => list.find((n) => n.id === id)?.info?.asyncBackupSync === true,
   };
 }
 
@@ -741,6 +743,41 @@ function backupStatusOf(container: Container, id: string) {
   return container.backups.find((s) => s.targetNodeId === id);
 }
 
+// remainingTime：剩余时间，按秒、分钟、小时取整。
+function remainingTime(sec: number) {
+  if (sec < 60) return t.common.time.seconds(Math.max(1, Math.round(sec)));
+  if (sec < 3600) return t.common.time.minutes(Math.round(sec / 60));
+  return t.common.time.hours(Math.round(sec / 3600));
+}
+
+// syncProgress：正在同步时的进度：已传 / 总量、速度、剩余时间，断开重试过时加上次数（原因在提示里）。
+function syncProgress(st: BackupStatus): React.ReactNode {
+  const b = t.projectData.backup;
+  const done = Number(st.bytesDone);
+  const total = Number(st.bytesTotal);
+  const speed = Number(st.bytesPerSecond);
+  const parts = [b.progress(fmtBytes(done), fmtBytes(total))];
+  if (speed > 0) parts.push(fmtRate(speed));
+  if (speed > 0 && total > done) parts.push(b.remaining(remainingTime((total - done) / speed)));
+  if (st.retries > 0) parts.push(b.retried(st.retries));
+  return (
+    <span className="tabular-nums" title={st.retryError || undefined}>
+      {parts.join(" · ")}
+    </span>
+  );
+}
+
+// ProgressBar：同步的进度条，和上传的一样。
+function ProgressBar({ st, label }: { st: BackupStatus; label: string }) {
+  const total = Number(st.bytesTotal);
+  const pct = total > 0 ? Math.min(100, (100 * Number(st.bytesDone)) / total) : 0;
+  return (
+    <span className="block h-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label={label}>
+      <span className="block h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${pct}%` }} />
+    </span>
+  );
+}
+
 // defaultBackup：和面板一样选恢复用的备份节点：在线的、最近同步成功的那个，都没同步过时第一个在线的。
 function defaultBackup(container: Container, nodes: Nodes) {
   let best = "";
@@ -846,12 +883,15 @@ function BackupDetail({ project, container, nodes, run }: { project: Project; co
     const st = backupStatusOf(container, id);
     // 所在节点离线时最上面已有提示，这里不再写状态。
     if (!sourceOnline) return null;
+    // 新版本的节点排队等前面的备份节点时还没有开始时间。
+    if (st?.syncing && !st.startedAt && nodes.asyncBackupSync(container.nodeId)) return <Status tone="neutral">{b.queued}</Status>;
     if (st?.syncing)
       return (
         <Status tone="info" pulse>
           {t.common.status.syncing}
         </Status>
       );
+    if (st?.stopped) return <Status tone="neutral">{b.stopped}</Status>;
     if (st?.lastError) return <Status tone="danger">{b.syncFailed}</Status>;
     if (st?.lastSync) return <Status tone="success">{b.healthy}</Status>;
     return <Status tone="neutral">{b.waitingFirstSync}</Status>;
@@ -891,17 +931,35 @@ function BackupDetail({ project, container, nodes, run }: { project: Project; co
           const st = backupStatusOf(container, id);
           // 所在节点离线、面板又没有它上报过的状态时（例如面板重启过），不知道同步过没有。
           const last = st?.lastSync ? b.lastSyncAgo(timeAgo(toDate(st.lastSync))) : sourceOnline ? b.neverSynced : b.syncUnknown;
+          // 正在传：标题下面是进度条，副标题是进度；排队时副标题说明在等什么。
+          const transferring = sourceOnline && !!st?.syncing && !!st.startedAt;
+          const queued = sourceOnline && !!st?.syncing && !st.startedAt && nodes.asyncBackupSync(container.nodeId);
+          const canStop = !!st?.syncing && sourceOnline && nodes.asyncBackupSync(container.nodeId);
+          const name = (
+            <>
+              <span className="truncate">{nodes.name(id)}</span>
+              {!nodes.online(id) && <span className="shrink-0 text-muted-foreground">{t.common.status.offline}</span>}
+            </>
+          );
           return (
             <Row
               key={id}
               title={
-                <>
-                  <span className="truncate">{nodes.name(id)}</span>
-                  {!nodes.online(id) && <span className="shrink-0 text-muted-foreground">{t.common.status.offline}</span>}
-                </>
+                transferring ? (
+                  <span className="grid min-w-0 flex-1 gap-1.5">
+                    <span className="flex min-w-0 items-center gap-2">{name}</span>
+                    <ProgressBar st={st} label={nodes.name(id)} />
+                  </span>
+                ) : (
+                  name
+                )
               }
               sub={
-                st?.lastError ? (
+                transferring ? (
+                  syncProgress(st)
+                ) : queued ? (
+                  <span className="wrap-anywhere">{b.queuedHint}</span>
+                ) : st?.lastError && !st.stopped ? (
                   <span className="text-destructive" title={st.lastError}>
                     {st.lastError}
                   </span>
@@ -920,7 +978,9 @@ function BackupDetail({ project, container, nodes, run }: { project: Project; co
                 ) : (
                   <RowMenu
                     items={[
-                      { label: b.syncNow, disabled: busy || run.busy || !sourceOnline || !!st?.syncing, onSelect: () => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name, nodeId: id }), "sync:" + id) },
+                      canStop
+                        ? { label: b.stopSync, disabled: busy || run.busy, onSelect: () => call(() => projectClient.stopBackupSync({ projectId: project.id, container: container.name, nodeId: id }), "sync:" + id) }
+                        : { label: b.syncNow, disabled: busy || run.busy || !sourceOnline || !!st?.syncing, onSelect: () => call(() => projectClient.syncBackup({ projectId: project.id, container: container.name, nodeId: id }), "sync:" + id) },
                       // 存放位置只有管理员能改，节点要在线、支持（旧版本的节点没有这一项）。
                       ...(isAdmin && nodes.replicaDirs(id)
                         ? [{ label: b.editDir, disabled: busy || run.busy || !nodes.online(id), onSelect: () => setEditingDir(id) }]

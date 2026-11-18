@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -331,7 +333,12 @@ type backupEntry struct {
 	Target    string `json:"target"` // 备份节点 ID
 	LastSync  int64  `json:"last_sync"`
 	LastError string `json:"last_error"`
-	syncing   bool
+	// Stopped：最近一次同步是用户停止的（LastError 是停止的说明，不告警）。
+	Stopped bool `json:"stopped,omitempty"`
+	// Interrupted：同步进行中节点退出了，启动后接着同步（见 resumeInterruptedSyncs）。
+	Interrupted bool `json:"interrupted,omitempty"`
+	// run 是正在进行（或排着队）的同步。
+	run *syncRun
 }
 
 // backupStates 记录每个容器同步到各个备份节点的结果，保存在 <节点目录>/backup-status.json。
@@ -397,9 +404,12 @@ func (b *backupStates) statuses(s *nagiv1.ContainerSpec) []*nagiv1.BackupStatus 
 	out := make([]*nagiv1.BackupStatus, 0, len(targets))
 	for _, t := range targets {
 		e := b.entry(s.GetProjectId()+"-"+s.GetName(), t.GetNodeId())
-		st := &nagiv1.BackupStatus{TargetNodeId: t.GetNodeId(), TargetName: t.GetName(), LastError: e.LastError, Syncing: e.syncing}
+		st := &nagiv1.BackupStatus{TargetNodeId: t.GetNodeId(), TargetName: t.GetName(), LastError: e.LastError, Syncing: e.run != nil, Stopped: e.Stopped}
 		if e.LastSync > 0 {
 			st.LastSync = timestamppb.New(time.Unix(e.LastSync, 0))
+		}
+		if e.run != nil {
+			e.run.progress.fill(st)
 		}
 		out = append(out, st)
 	}
@@ -410,7 +420,7 @@ func (b *backupStates) statuses(s *nagiv1.ContainerSpec) []*nagiv1.BackupStatus 
 func (b *backupStates) failures(id string, targets []*nagiv1.BackupTarget) []string {
 	var out []string
 	for _, t := range targets {
-		if e := b.entry(id, t.GetNodeId()); e.LastError != "" {
+		if e := b.entry(id, t.GetNodeId()); e.LastError != "" && !e.Stopped {
 			out = append(out, t.GetName()+"："+e.LastError)
 		}
 	}
@@ -456,25 +466,47 @@ func (s *meshService) ReplicaManifest(ctx context.Context, req *nagiv1.ReplicaMa
 	if err != nil {
 		return nil, err
 	}
+	return replicaManifest(files), nil
+}
+
+// replicaManifest 列出副本 files 目录里的文件和传了一半的文件（见 replicaPartSuffix）。
+func replicaManifest(files string) *nagiv1.ReplicaManifestResponse {
 	out := &nagiv1.ReplicaManifestResponse{}
 	_ = filepath.WalkDir(files, func(full string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil || isReplicaTemp(d.Name()) {
+		if err != nil || !info.Mode().IsRegular() {
 			return nil
 		}
 		rel, _ := filepath.Rel(files, full)
-		out.Files = append(out.Files, &nagiv1.ReplicaFile{Path: filepath.ToSlash(rel), Size: info.Size()})
+		rel = filepath.ToSlash(rel)
+		if dest, ok := strings.CutSuffix(rel, replicaPartSuffix); ok {
+			out.Partials = append(out.Partials, &nagiv1.ReplicaFile{Path: dest, Size: info.Size()})
+			return nil
+		}
+		if isReplicaTemp(d.Name()) {
+			return nil
+		}
+		out.Files = append(out.Files, &nagiv1.ReplicaFile{Path: rel, Size: info.Size()})
 		return nil
 	})
-	return out, nil
+	return out
 }
 
 // replicaTempMark 是接收中的临时文件名里的标记：<文件名>.nagi-tmp-<随机>。随机后缀让同时写同一个文件的两条流
 // 各写各的临时文件，不会互相覆盖；清单不列它们，提交时作为多余的文件删掉。
 const replicaTempMark = ".nagi-tmp"
+
+// replicaPartSuffix 是传了一半的文件：<文件名>.nagi-tmp-part。流断开时（连接断了、超时、源节点停止），
+// 收到的部分不少于 replicaPartMin 就把临时文件改成这个名字留着，清单里报给源节点（partials），下次从这里接着传；
+// 接着传时先改名成新的临时文件（只有一条流能拿到它），核对源节点给的前一半的 SHA-256，对不上就丢掉从头传。
+// 提交时它和其他多余的文件一起删掉。
+const replicaPartSuffix = replicaTempMark + "-part"
+
+// replicaPartMin：收到的部分太少时不留，从头传也不费事。
+const replicaPartMin = 1 << 20
 
 func isReplicaTemp(name string) bool { return strings.Contains(name, replicaTempMark) }
 
@@ -486,12 +518,29 @@ const replicaPutMax = 6 * time.Hour
 
 // ReplicaPut 接收源节点同步来的文件。不限大小（快照仓库可以很大），但磁盘剩余空间不够时停下（见 metrics.CheckDisk）。
 func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
+	return receiveReplica(stream, func(projectID, container string) (string, func(), error) {
+		if _, err := replicaID(projectID, container); err != nil {
+			return "", nil, err
+		}
+		unlock := s.a.replicas.rlock(projectID, container)
+		files, err := s.authorizeReplica(stream.Context(), projectID, container, true)
+		if err != nil {
+			unlock()
+			return "", nil, err
+		}
+		return files, unlock, nil
+	})
+}
+
+// receiveReplica 是 ReplicaPut 的实现。authorize 在收到第一块时核对调用方、拿副本的锁，返回副本的 files 目录和释放锁的函数。
+func receiveReplica(stream nagiv1.MeshService_ReplicaPutServer, authorize func(projectID, container string) (string, func(), error)) error {
 	var (
 		files, path string
 		// root 是副本的 files 目录：写入都经过它，副本里被换成指向外面的符号链接时拒绝，不会写到别处（见 openReplicaFiles）。
 		root      *os.Root
 		f         *os.File
 		tmp, dest string // 相对 root 的路径
+		size      int64  // 当前文件已经写了多少（包括接着传时原有的部分）
 		count     uint32
 		unlock    func()
 		guard     *metrics.DiskGuard
@@ -514,8 +563,11 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 	}
 	defer func() {
 		if f != nil {
+			// 流断开了：收到的部分够多就留着，下次接着传（见 replicaPartSuffix）。
 			f.Close()
-			root.Remove(tmp)
+			if size < replicaPartMin || root.Rename(tmp, dest+replicaPartSuffix) != nil {
+				root.Remove(tmp)
+			}
 		}
 		if root != nil {
 			root.Close()
@@ -554,6 +606,9 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 		var r recv
 		select {
 		case r = <-ch:
+		case <-stream.Context().Done():
+			// 源节点断开、取消了：马上收尾（留下传了一半的文件、放开锁），下一次连接不用等 replicaIdle。
+			return status.FromContextError(stream.Context().Err()).Err()
 		case <-idle.C:
 			return status.Error(codes.DeadlineExceeded, "同步副本时长时间没有收到数据")
 		case <-total.C:
@@ -571,11 +626,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			return err
 		}
 		if files == "" {
-			if _, err := replicaID(c.GetProjectId(), c.GetContainer()); err != nil {
-				return err
-			}
-			unlock = s.a.replicas.rlock(c.GetProjectId(), c.GetContainer())
-			if files, err = s.authorizeReplica(stream.Context(), c.GetProjectId(), c.GetContainer(), true); err != nil {
+			if files, unlock, err = authorize(c.GetProjectId(), c.GetContainer()); err != nil {
 				return err
 			}
 			if root, err = openReplicaFiles(files); err != nil {
@@ -596,7 +647,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 				return err
 			}
 			tmp = dest + replicaTempMark + "-" + randomSuffix()
-			if f, err = root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600); err != nil {
+			if f, size, err = openReplicaTemp(root, dest, tmp, c.GetOffset(), c.GetPrefixSha256()); err != nil {
 				return err
 			}
 		}
@@ -606,7 +657,55 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 		if _, err := f.Write(c.GetData()); err != nil {
 			return err
 		}
+		size += int64(len(c.GetData()))
 	}
+}
+
+// openReplicaTemp 打开接收 dest 用的临时文件 tmp（都是 root 里的路径）。offset 为 0 时新建；
+// 否则接着上次传了一半的文件：先把它改名成 tmp（同时只有一条流能拿到），核对前 offset 字节的 SHA-256 等于 prefix，
+// 多出来的截掉，返回的文件位置在 offset。传了一半的文件不在了、比 offset 短或者对不上时丢掉它，返回 DataLoss，源节点下次从头传。
+func openReplicaTemp(root *os.Root, dest, tmp string, offset int64, prefix []byte) (*os.File, int64, error) {
+	if offset < 0 {
+		return nil, 0, status.Error(codes.InvalidArgument, "接着传的位置无效")
+	}
+	if offset == 0 {
+		f, err := root.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		return f, 0, err
+	}
+	if len(prefix) != sha256.Size {
+		return nil, 0, status.Error(codes.InvalidArgument, "接着传的文件缺少校验值")
+	}
+	if err := root.Rename(dest+replicaPartSuffix, tmp); err != nil {
+		return nil, 0, status.Errorf(codes.DataLoss, "%s 传了一半的部分已经不在了，下次从头传", dest)
+	}
+	f, err := root.OpenFile(tmp, os.O_RDWR, 0)
+	if err != nil {
+		root.Remove(tmp)
+		return nil, 0, err
+	}
+	fail := func(err error) (*os.File, int64, error) {
+		f.Close()
+		root.Remove(tmp)
+		return nil, 0, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return fail(err)
+	}
+	if !info.Mode().IsRegular() || info.Size() < offset {
+		return fail(status.Errorf(codes.DataLoss, "%s 传了一半的部分比源节点记的短，下次从头传", dest))
+	}
+	sum, err := prefixHash(f, offset)
+	if err != nil {
+		return fail(err)
+	}
+	if !bytes.Equal(sum, prefix) {
+		return fail(status.Errorf(codes.DataLoss, "%s 传了一半的部分和源节点的对不上，下次从头传", dest))
+	}
+	if err := f.Truncate(offset); err != nil {
+		return fail(err)
+	}
+	return f, offset, nil
 }
 
 // openReplicaFiles 打开副本的 files 目录作为 os.Root，之后的写入都在它里面解析路径：里面的符号链接指向外面时拒绝。
@@ -698,14 +797,14 @@ func replicaExtras(root *os.Root, keep map[string]bool) (existing int, remove []
 
 // ---- 源节点：同步 ----
 
-// errAlreadySyncing：这个容器已经有一次同步在进行（同一个容器同时只有一次同步）。
+// errAlreadySyncing：这个容器到这个备份节点已经有一次同步在进行（同一个容器到同一个备份节点同时只有一次同步）。
 var errAlreadySyncing = errors.New("已经在同步")
 
-// runBackupSync 依次把容器同步到它的各个备份节点并记录结果（targetID 不为空时只同步到这一个）。
-// 一个失败了接着同步下一个；有失败的就告警（一个容器一条，写明哪些节点），都成功了恢复。
-// 没有设置备份节点时什么都不做；要同步的那个已经有一次同步在进行时返回 errAlreadySyncing（同步全部时跳过它）。
-func (a *agent) runBackupSync(ctx context.Context, projectID, container, targetID string) error {
-	c, err := a.projects.Get(ctx, projectID, container)
+// startBackupSync 开始把容器同步到它的备份节点（targetID 不为空时只同步到这一个），不等同步结束。
+// 同步在节点自己的上下文（parent）里依次进行，结果记在状态里；已经在同步的备份节点不再开一次，让它结束后再同步一次。
+// 没有设置备份节点时什么都不做。
+func (a *agent) startBackupSync(parent context.Context, projectID, container, targetID string) error {
+	c, err := a.projects.Get(parent, projectID, container)
 	if err != nil {
 		return err
 	}
@@ -715,23 +814,39 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container, targetI
 	b.mu.Lock()
 	b.prune(id, targets)
 	b.mu.Unlock()
-	var firstErr error
+	var list []*nagiv1.BackupTarget
+	var runs []*syncRun
 	for _, t := range targets {
 		if targetID != "" && t.GetNodeId() != targetID {
 			continue
 		}
-		err := a.syncBackupTo(ctx, projectID, container, t)
-		if errors.Is(err, errAlreadySyncing) && targetID == "" {
-			continue
-		}
-		if err != nil && firstErr == nil {
-			firstErr = err
+		if run := b.claim(parent, id, t.GetNodeId()); run != nil {
+			list, runs = append(list, t), append(runs, run)
 		}
 	}
+	if len(runs) == 0 {
+		return nil
+	}
+	a.changed()
+	go a.runBackupSyncs(projectID, container, targets, list, runs)
+	return nil
+}
 
+// runBackupSyncs 依次同步到 list 里的备份节点（runs 是各自已经登记好的同步），一个失败了接着同步下一个，上行带宽不叠加。
+// 都结束后，有失败的就告警（一个容器一条，写明哪些节点），都成功了恢复。targets 是容器所有的备份节点。
+func (a *agent) runBackupSyncs(projectID, container string, targets, list []*nagiv1.BackupTarget, runs []*syncRun) {
+	for i, t := range list {
+		a.syncBackupTo(projectID, container, t, runs[i])
+	}
+	if a.ctx != nil && a.ctx.Err() != nil {
+		return // 节点退出：结果留到下次启动接着同步
+	}
+	id := projectID + "-" + container
+	b := a.backups
 	b.mu.Lock()
 	failed := b.failures(id, targets)
 	b.mu.Unlock()
+	ctx := context.Background()
 	key := "backup:" + id
 	if len(failed) > 0 {
 		if a.alerts.ContainerEnabled(projectID, container, alert.RuleBackup) {
@@ -740,48 +855,77 @@ func (a *agent) runBackupSync(ctx context.Context, projectID, container, targetI
 	} else {
 		a.alerts.Resolve(ctx, key)
 	}
-	return firstErr
 }
 
-// syncBackupTo 同步到一个备份节点并记录结果。
-func (a *agent) syncBackupTo(ctx context.Context, projectID, container string, t *nagiv1.BackupTarget) error {
+// syncBackupTo 用登记好的 run 同步到一个备份节点并记录结果。同步期间又有人请求（run.again）就再同步一次。
+func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget, run *syncRun) {
 	id := projectID + "-" + container
 	b := a.backups
-	b.mu.Lock()
-	e := b.entry(id, t.GetNodeId())
-	if e.syncing {
+	defer func() {
+		run.cancel(nil)
+		close(run.done)
+	}()
+	for {
+		b.mu.Lock()
+		e := b.entry(id, t.GetNodeId())
+		// 上次是用户停止的：这次开始了就不再显示「已停止」，失败的原因留到这次有结果再换。
+		if e.Stopped {
+			e.Stopped, e.LastError = false, ""
+		}
+		e.Interrupted = true
+		b.persist()
 		b.mu.Unlock()
-		return errAlreadySyncing
-	}
-	e.syncing = true
-	b.mu.Unlock()
-	a.changed()
+		a.changed()
 
-	_, err := a.syncTo(ctx, projectID, container, t)
-	if status.Code(err) == codes.NotFound {
-		err = fmt.Errorf("%s 上已经没有这个容器的副本登记（可能已经在那里恢复成了容器）。要继续备份，请重新添加这个备份节点（%w）", t.GetName(), err)
+		// 同一个容器同时只同步到一个备份节点（几次请求各自开始的也一样），上行带宽不叠加；排队时界面显示「排队中」。
+		unlock, err := lockSync(run.ctx, "backup/"+id)
+		if err == nil {
+			run.progress.begin(time.Now())
+			a.changed()
+			_, err = a.syncTo(run.ctx, projectID, container, t, run.progress)
+			unlock()
+		}
+		if status.Code(err) == codes.NotFound {
+			err = fmt.Errorf("%s 上已经没有这个容器的副本登记（可能已经在那里恢复成了容器）。要继续备份，请重新添加这个备份节点（%w）", t.GetName(), err)
+		}
+		cause := context.Cause(run.ctx)
+		shutdown := err != nil && run.ctx.Err() != nil && !errors.Is(cause, errSyncStopped)
+		b.mu.Lock()
+		again := run.again && err == nil
+		run.again = false
+		switch {
+		case shutdown:
+			// 节点退出（或者备份节点被去掉了）：不改上次的结果，Interrupted 留着，启动后接着同步。
+		case errors.Is(cause, errSyncStopped):
+			e.LastError, e.Stopped, e.Interrupted = errSyncStopped.Error(), true, false
+		case err != nil:
+			e.LastError, e.Stopped, e.Interrupted = err.Error(), false, false
+		default:
+			e.LastError, e.Stopped, e.Interrupted, e.LastSync = "", false, false, time.Now().Unix()
+		}
+		if !again {
+			e.run = nil
+		} else {
+			// 再同步一次：进度从头算。
+			run.progress = &syncProgress{}
+		}
+		b.persist()
+		b.mu.Unlock()
+		a.changed()
+		if err != nil && !shutdown && !errors.Is(cause, errSyncStopped) {
+			a.log.Warn("同步到备份节点失败", "project", projectID, "container", container, "target", t.GetName(), "err", err)
+		}
+		if !again {
+			return
+		}
 	}
-	b.mu.Lock()
-	e.syncing = false
-	if err != nil {
-		e.LastError = err.Error()
-	} else {
-		e.LastError, e.LastSync = "", time.Now().Unix()
-	}
-	b.persist()
-	b.mu.Unlock()
-	a.changed()
-	if err != nil {
-		a.log.Warn("同步到备份节点失败", "project", projectID, "container", container, "target", t.GetName(), "err", err)
-	}
-	return err
 }
 
-// syncTo 把容器的快照仓库增量同步到目标节点，返回传输的字节数。备份和迁移共用。
+// syncTo 把容器的快照仓库增量同步到目标节点，返回传输的字节数。备份和迁移共用；p 不为空时记下进度。
 // 连接中途断了（大文件走慢线路时连接超时，或者对方节点刚重启，旧的 QUIC 连接收到无状态重置）时换一条新连接接着传：
-// 对方每收完一个文件就落盘，下次核对清单时跳过，所以每次重试都从断开的地方往后。上一次传过去了数据就继续重试，
-// 最多 syncAttempts 次；一点都没传过去就不再试（线路是真的不通）。
-func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
+// 对方每收完一个文件就落盘，传了一半的文件也留着（见 ReplicaPut），下次核对清单时跳过已有的、从一半处接着传，
+// 所以每次重试都从断开的地方往后。规则见 resumeSync。
+func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget, p *syncProgress) (int64, error) {
 	// 同一个容器到同一个目标同时只有一次同步：定时快照后的同步、每 15 分钟一次的热备同步、迁移、切回可能重叠，
 	// 两次同步交错时，一次提交会删掉另一次刚传的文件。后来的等前一次结束。
 	unlock, err := lockSync(ctx, projectID+"/"+container+"/"+string(target.GetKey()))
@@ -789,44 +933,70 @@ func (a *agent) syncTo(ctx context.Context, projectID, container string, target 
 		return 0, err
 	}
 	defer unlock()
-	return resumeSync(ctx, func() (int64, error) { return a.syncOnce(ctx, projectID, container, target) }, func(attempt int, n int64, err error) {
+	if p == nil {
+		p = &syncProgress{}
+	}
+	return resumeSync(ctx, func() (int64, int64, error) { return a.syncOnce(ctx, projectID, container, target, p) }, func(attempt int, n int64, err error) {
+		p.retried(err)
+		a.changed()
 		a.log.Info("同步时连接断开，接着传", "project", projectID, "container", container, "target", target.GetName(),
 			"attempt", attempt, "bytes", n, "err", err)
 	})
 }
 
-// resumeSync 按 syncTo 说的规则反复调用 once，返回一共传了多少字节和最后一次的结果。
-func resumeSync(ctx context.Context, once func() (int64, error), onRetry func(attempt int, n int64, err error)) (int64, error) {
+// resumeSync 反复调用 once（返回这次传了多少字节、开始时还要传多少字节，核对清单之前就失败时是 -1），
+// 返回一共传了多少字节和最后一次的结果。成功、对方拒绝（不是连接问题）、ctx 取消时停下。
+// 连接断了就等一会儿再连：还要传的比以前少了（上一次有进展）就接着来，等待从 syncRetryDelay 重新算；
+// 连续 syncStallAttempts 次没有进展才放弃，等待每次翻倍、最多 syncRetryMax（一共约 3 分钟），家用宽带重新拨号、换地址也等得过去。
+func resumeSync(ctx context.Context, once func() (int64, int64, error), onRetry func(attempt int, n int64, err error)) (int64, error) {
 	var total int64
+	best := int64(-1)
+	stalled := 0
+	delay := syncRetryDelay
 	for attempt := 1; ; attempt++ {
-		n, err := once()
+		n, need, err := once()
 		total += n
-		if err == nil || !connectionLost(err) || attempt == syncAttempts || (attempt > 1 && n == 0) {
+		if err == nil || ctx.Err() != nil || !connectionLost(err) {
+			return total, err
+		}
+		if need >= 0 && (best < 0 || need < best) {
+			best, stalled, delay = need, 0, syncRetryDelay
+		} else {
+			stalled++
+		}
+		if stalled >= syncStallAttempts {
 			return total, err
 		}
 		onRetry(attempt, n, err)
 		select {
 		case <-ctx.Done():
 			return total, err
-		case <-time.After(syncRetryDelay):
+		case <-time.After(delay):
+		}
+		if stalled > 0 {
+			delay = min(2*delay, syncRetryMax)
 		}
 	}
 }
 
-// syncAttempts 是一次同步最多连接几次；syncRetryDelay 是断开以后等多久再连。
-const syncAttempts = 10
+// syncStallAttempts 是连续多少次重试没有进展就放弃；syncRetryDelay 是断开以后等多久再连，没有进展时翻倍，最多 syncRetryMax。
+const syncStallAttempts = 8
 
-var syncRetryDelay = 2 * time.Second
+var (
+	syncRetryDelay = 2 * time.Second
+	syncRetryMax   = time.Minute
+)
 
 // connectionLost 判断同步失败是不是因为传输断了，而不是对方拒绝：连接断开（Unavailable），
-// 或者对方太久没收到数据（DeadlineExceeded，例如旧版本的对方一次只收一条流，其余的流等它时超时）。
+// 对方太久没收到数据（DeadlineExceeded，例如旧版本的对方一次只收一条流，其余的流等它时超时），
+// 或者对方传了一半的文件对不上、已经丢掉（DataLoss，下次从头传）。
 func connectionLost(err error) bool {
 	var se interface{ GRPCStatus() *status.Status }
 	if !errors.As(err, &se) {
 		return false
 	}
 	c := se.GRPCStatus().Code()
-	return c == codes.Unavailable || c == codes.DeadlineExceeded
+	return c == codes.Unavailable || c == codes.DeadlineExceeded || c == codes.DataLoss
 }
 
 // syncLocks 是正在进行的同步，键是容器和目标，值是只能放一个的通道（能被 ctx 取消的锁）。
@@ -851,76 +1021,115 @@ func randomSuffix() string {
 	return hex.EncodeToString(b[:])
 }
 
-func (a *agent) syncOnce(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget) (int64, error) {
+// sendFile 是要传的一个文件；offset 大于 0 时对方已经有前 offset 字节（上次传了一半），从那里接着传。
+type sendFile struct {
+	project.ReplicaFile
+	offset int64
+}
+
+// plan 按对方已有的文件（remote：路径 → 大小）和传了一半的文件（partial）分出这次要传的文件。
+// 对方已经有、而且不会再变的文件不用传，直接算进提交的清单（keep）。数据包先传，都到了再传引用它们的索引等文件：
+// 中途断开时，备份节点上不会出现指向还没收到的数据包的索引。need 是要传的字节数。
+func planSync(files []project.ReplicaFile, remote, partial map[string]int64) (keep []string, packs, others []sendFile, need int64) {
+	for _, f := range files {
+		if size, ok := remote[f.Path]; ok && f.Immutable && size == f.Size {
+			keep = append(keep, f.Path)
+			continue
+		}
+		s := sendFile{ReplicaFile: f}
+		// 只接着传不会再变的文件：kopia.* 会被改写，前一半可能已经不一样了。
+		if n := partial[f.Path]; f.Immutable && n > 0 && n <= f.Size {
+			s.offset = n
+		}
+		need += f.Size - s.offset
+		if f.Pack {
+			packs = append(packs, s)
+		} else {
+			others = append(others, s)
+		}
+	}
+	return keep, packs, others, need
+}
+
+// syncOnce 同步一次：核对清单、传缺少的文件、提交。返回传了多少字节，和核对清单后要传多少字节（核对清单之前就失败时是 -1）。
+func (a *agent) syncOnce(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget, p *syncProgress) (int64, int64, error) {
 	// 同步期间仓库的文件不能被立即清理删掉，否则备份节点会收到不完整的一套文件。
 	defer a.projects.ReadRepo(projectID, container)()
 	if a.mesh == nil {
-		return 0, errors.New("节点网络没有启动")
+		return 0, -1, errors.New("节点网络没有启动")
 	}
 	key, err := mesh.ParseKey(target.GetKey())
 	if err != nil {
-		return 0, err
+		return 0, -1, err
 	}
-	cc, err := mesh.Client(a.mesh.m, key)
+	dial := func() (*grpc.ClientConn, error) { return mesh.Client(a.mesh.m, key) }
+	n, need, err := transferReplica(ctx, dial, projectID, container, target.GetName(), func() ([]project.ReplicaFile, error) {
+		return a.projects.ReplicaFiles(ctx, projectID, container)
+	}, p)
+	if err == nil {
+		a.log.Info("已同步副本", "project", projectID, "container", container, "target", target.GetName(), "bytes", n)
+	}
+	return n, need, err
+}
+
+// transferReplica 是 syncOnce 的传输部分：经 dial 连上对方，核对清单、传缺少的文件、提交。
+// files 在拿到对方的清单以后调用，返回源节点上现在的文件。
+func transferReplica(ctx context.Context, dial func() (*grpc.ClientConn, error), projectID, container, targetName string,
+	files func() ([]project.ReplicaFile, error), p *syncProgress) (int64, int64, error) {
+	cc, err := dial()
 	if err != nil {
-		return 0, err
+		return 0, -1, err
 	}
 	defer cc.Close()
 	c := nagiv1.NewMeshServiceClient(cc)
 	man, err := c.ReplicaManifest(ctx, &nagiv1.ReplicaManifestRequest{ProjectId: projectID, Container: container})
 	if err != nil {
-		return 0, fmt.Errorf("连接节点 %s: %w", target.GetName(), err)
+		return 0, -1, fmt.Errorf("连接节点 %s: %w", targetName, err)
 	}
-	remote := map[string]int64{}
+	remote, partial := map[string]int64{}, map[string]int64{}
 	for _, f := range man.GetFiles() {
 		remote[f.GetPath()] = f.GetSize()
 	}
-	files, err := a.projects.ReplicaFiles(ctx, projectID, container)
+	for _, f := range man.GetPartials() {
+		partial[f.GetPath()] = f.GetSize()
+	}
+	list, err := files()
 	if err != nil {
-		return 0, err
+		return 0, -1, err
 	}
-	// 对方已经有、而且不会再变的文件不用传，直接算进提交的清单。数据包先传，都到了再传引用它们的索引等文件：
-	// 中途断开时，备份节点上不会出现指向还没收到的数据包的索引。
-	var paths []string
-	var packs, others []project.ReplicaFile
-	for _, f := range files {
-		switch size, ok := remote[f.Path]; {
-		case ok && f.Immutable && size == f.Size:
-			paths = append(paths, f.Path)
-		case f.Pack:
-			packs = append(packs, f)
-		default:
-			others = append(others, f)
-		}
-	}
+	paths, packs, others, need := planSync(list, remote, partial)
+	p.plan(need)
 	var sent atomic.Int64
-	for _, batch := range [][]project.ReplicaFile{packs, others} {
-		dial := func() (*grpc.ClientConn, error) { return mesh.Client(a.mesh.m, key) }
-		done, err := sendReplicaFiles(ctx, dial, cc, projectID, container, batch, &sent)
+	count := func(n int64) {
+		sent.Add(n)
+		p.add(n)
+	}
+	for _, batch := range [][]sendFile{packs, others} {
+		done, err := sendReplicaFiles(ctx, dial, cc, projectID, container, batch, count)
 		paths = append(paths, done...)
 		if err != nil {
-			return sent.Load(), err
+			return sent.Load(), need, err
 		}
 	}
 	if _, err := c.ReplicaCommit(ctx, &nagiv1.ReplicaCommitRequest{ProjectId: projectID, Container: container, Paths: paths}); err != nil {
-		return sent.Load(), fmt.Errorf("提交: %w", err)
+		return sent.Load(), need, fmt.Errorf("提交: %w", err)
 	}
-	a.log.Info("已同步副本", "project", projectID, "container", container, "target", target.GetName(), "bytes", sent.Load())
-	return sent.Load(), nil
+	return sent.Load(), need, nil
 }
 
 // syncStreams 是同步副本时最多同时开几条流（每条是单独的一个 mesh 连接，走 QUIC 时是同一条连接上的不同流）。
-// 文件多、线路延迟高时，几个文件一起传比一个接一个快；对方写盘也能并行。
-const syncStreams = 4
+// 文件多、线路延迟高时，几个文件一起传比一个接一个快；对方写盘也能并行。测试里替换。
+var syncStreams = 4
 
 // sendReplicaFiles 用最多 syncStreams 条 ReplicaPut 流把 files 传给对方，各条流从同一个队列里取文件。
 // 返回传完了的文件（对方收到并确认了）。first 是已经建好的连接，第一条流用它，其余的各用 dial 建一个。
+// count 记下发出的字节数。
 func sendReplicaFiles(ctx context.Context, dial func() (*grpc.ClientConn, error), first *grpc.ClientConn, projectID, container string,
-	files []project.ReplicaFile, sent *atomic.Int64) ([]string, error) {
+	files []sendFile, count func(int64)) ([]string, error) {
 	if len(files) == 0 {
 		return nil, nil
 	}
-	queue := make(chan project.ReplicaFile, len(files))
+	queue := make(chan sendFile, len(files))
 	for _, f := range files {
 		queue <- f
 	}
@@ -938,7 +1147,7 @@ func sendReplicaFiles(ctx context.Context, dial func() (*grpc.ClientConn, error)
 				}
 				defer cc.Close()
 			}
-			ok, err := sendReplicaStream(gctx, nagiv1.NewMeshServiceClient(cc), projectID, container, queue, sent)
+			ok, err := sendReplicaStream(gctx, nagiv1.NewMeshServiceClient(cc), projectID, container, queue, count)
 			if err != nil {
 				return err
 			}
@@ -952,9 +1161,18 @@ func sendReplicaFiles(ctx context.Context, dial func() (*grpc.ClientConn, error)
 	return done, err
 }
 
+// prefixHash 返回文件前 n 字节的 SHA-256，读完后文件的位置正好在 n。
+func prefixHash(f *os.File, n int64) ([]byte, error) {
+	h := sha256.New()
+	if _, err := io.CopyN(h, f, n); err != nil {
+		return nil, err
+	}
+	return h.Sum(nil), nil
+}
+
 // sendReplicaStream 在一条 ReplicaPut 流上传队列里的文件，直到队列空了，返回这条流上传完的文件。
 func sendReplicaStream(ctx context.Context, c nagiv1.MeshServiceClient, projectID, container string,
-	queue <-chan project.ReplicaFile, sent *atomic.Int64) ([]string, error) {
+	queue <-chan sendFile, count func(int64)) ([]string, error) {
 	var put nagiv1.MeshService_ReplicaPutClient
 	var paths []string
 	buf := make([]byte, 256<<10)
@@ -962,6 +1180,13 @@ func sendReplicaStream(ctx context.Context, c nagiv1.MeshServiceClient, projectI
 		in, err := os.Open(f.Abs)
 		if err != nil {
 			continue // 维护时被删掉了，不再同步
+		}
+		var prefix []byte
+		if f.offset > 0 {
+			if prefix, err = prefixHash(in, f.offset); err != nil {
+				in.Close()
+				continue // 文件变短了：维护时被删掉、又不是原来的文件了，不再同步
+			}
 		}
 		if put == nil {
 			if put, err = c.ReplicaPut(ctx); err != nil {
@@ -979,10 +1204,13 @@ func sendReplicaStream(ctx context.Context, c nagiv1.MeshServiceClient, projectI
 				if start && len(paths) == 0 {
 					chunk.ProjectId, chunk.Container = projectID, container
 				}
+				if start && f.offset > 0 {
+					chunk.Offset, chunk.PrefixSha256 = f.offset, prefix
+				}
 				if sendErr = put.Send(chunk); sendErr != nil {
 					break
 				}
-				sent.Add(int64(n))
+				count(int64(n))
 				start = false
 			}
 			if rerr != nil {
@@ -1006,8 +1234,10 @@ func sendReplicaStream(ctx context.Context, c nagiv1.MeshServiceClient, projectI
 
 // ---- AgentService ----
 
-// SyncBackup 立即同步到一个备份节点（为空时第一个），同步完才返回这个备份节点的状态。已经有一次同步在进行时
-// （例如快照之后自动开始的），等它结束再做一次：那一次可能是在最新的快照之前开始的。
+// SyncBackup 立即同步到一个备份节点（为空时第一个），返回这个备份节点的状态。已经有一次同步在进行时
+// （例如快照之后自动开始的），让它结束后再做一次：那一次可能是在最新的快照之前开始的。
+// 同步在节点自己的上下文里进行，面板断开、等不及也不会中断：async 时开始了就返回（进度随容器状态上报），
+// 否则（旧版本的面板）等同步结束再返回。cancel 时停止正在进行的同步。
 func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.SyncBackupRequest) (*nagiv1.BackupStatus, error) {
 	c, err := s.projects.Get(ctx, req.GetProjectId(), req.GetContainer())
 	if err != nil {
@@ -1025,17 +1255,33 @@ func (s *agentService) SyncBackup(ctx context.Context, req *nagiv1.SyncBackupReq
 	if i < 0 {
 		return nil, status.Error(codes.FailedPrecondition, "该节点不是这个容器的备份节点")
 	}
-	err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer(), target)
-	for errors.Is(err, errAlreadySyncing) {
-		select {
-		case <-ctx.Done():
-			return nil, toStatus(ctx.Err())
-		case <-time.After(500 * time.Millisecond):
+	b := s.node.backups
+	id := req.GetProjectId() + "-" + req.GetContainer()
+	if req.GetCancel() {
+		if b.stop(id, target) {
+			s.node.log.Info("已停止同步到备份节点", "project", req.GetProjectId(), "container", req.GetContainer(), "target", targets[i].GetName())
 		}
-		err = s.node.runBackupSync(ctx, req.GetProjectId(), req.GetContainer(), target)
+		return b.statuses(c.Spec)[i], nil
+	}
+	parent := s.node.ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+	if err := s.node.startBackupSync(parent, req.GetProjectId(), req.GetContainer(), target); err != nil {
+		return nil, toStatus(err)
+	}
+	if !req.GetAsync() {
+		// 等这个备份节点的同步（包括排着的下一次）结束。
+		for run := b.running(id, target); run != nil; run = b.running(id, target) {
+			select {
+			case <-ctx.Done():
+				return nil, toStatus(ctx.Err())
+			case <-run.done:
+			}
+		}
 	}
 	// 失败的原因记在状态里（last_error）。
-	return s.node.backups.statuses(c.Spec)[i], nil
+	return b.statuses(c.Spec)[i], nil
 }
 
 // AcceptReplica 登记（或更新）副本。replica_dir 为空时：新登记的放在默认目录，已有的留在原处。
@@ -1218,7 +1464,7 @@ func (s *agentService) MigrateOut(req *nagiv1.MigrateOutRequest, stream nagiv1.A
 	pid, name := req.GetProjectId(), req.GetContainer()
 	return runStream(stream.Send, func(onLine func(string)) error {
 		onLine("第一次同步到 " + t.GetName() + "（容器照常运行）")
-		n, err := s.node.syncTo(ctx, pid, name, t)
+		n, err := s.node.syncTo(ctx, pid, name, t, nil)
 		if err != nil {
 			return err
 		}
@@ -1227,7 +1473,7 @@ func (s *agentService) MigrateOut(req *nagiv1.MigrateOutRequest, stream nagiv1.A
 			return err
 		}
 		onLine("增量同步最后的数据")
-		if n, err = s.node.syncTo(ctx, pid, name, t); err != nil {
+		if n, err = s.node.syncTo(ctx, pid, name, t, nil); err != nil {
 			return err
 		}
 		onLine("已同步 " + humanBytes(n))

@@ -590,7 +590,7 @@ func (a *agent) syncStandby(ctx context.Context, id string) {
 	if me == nil || !isHolder {
 		return
 	}
-	_, err := a.syncTo(ctx, cfg.GetProjectId(), cfg.GetContainer(), &nagiv1.BackupTarget{NodeId: other.GetNodeId(), Name: other.GetName(), Key: other.GetKey()})
+	_, err := a.syncTo(ctx, cfg.GetProjectId(), cfg.GetContainer(), &nagiv1.BackupTarget{NodeId: other.GetNodeId(), Name: other.GetName(), Key: other.GetKey()}, nil)
 	f.mu.Lock()
 	if err != nil && !bytes.Equal(st.holder, a.selfKey()) {
 		// 同步的过程中本节点被顶替、退为热备了：对方拒绝是正常的，不算失败。
@@ -784,7 +784,7 @@ func (a *agent) failback(ctx context.Context, id string) {
 	a.log.Info("原节点已稳定，切回容器", "project", pid, "container", name, "to", other.GetName())
 	a.changed()
 	// 先在容器运行时同步一次，停止以后只需要同步很少的增量，停机时间短。
-	if _, err := a.syncTo(ctx, pid, name, target); err != nil {
+	if _, err := a.syncTo(ctx, pid, name, target, nil); err != nil {
 		done(err)
 		return
 	}
@@ -799,7 +799,7 @@ func (a *agent) failback(ctx context.Context, id string) {
 		}
 		done(err)
 	}
-	if _, err := a.syncTo(ctx, pid, name, target); err != nil {
+	if _, err := a.syncTo(ctx, pid, name, target, nil); err != nil {
 		resume(err)
 		return
 	}

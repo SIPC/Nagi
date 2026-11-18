@@ -30,39 +30,60 @@ func TestConnectionLost(t *testing.T) {
 	}
 }
 
-// 连接断了而且有进展就接着传；一点没传过去、对方拒绝或者到了次数上限就停。
+// 连接断了而且有进展（还要传的比以前少）就接着传；连续 syncStallAttempts 次没有进展、对方拒绝、ctx 取消就停。
 func TestResumeSync(t *testing.T) {
-	old := syncRetryDelay
-	syncRetryDelay = 0
-	t.Cleanup(func() { syncRetryDelay = old })
+	oldDelay, oldMax := syncRetryDelay, syncRetryMax
+	syncRetryDelay, syncRetryMax = 0, 0
+	t.Cleanup(func() { syncRetryDelay, syncRetryMax = oldDelay, oldMax })
 	lost := status.Error(codes.Unavailable, "received a stateless reset")
-	run := func(results ...any) (int64, error, int) {
+	type step struct {
+		sent, need int64
+		err        error
+	}
+	run := func(ctx context.Context, steps ...step) (int64, error, int) {
 		calls := 0
-		total, err := resumeSync(context.Background(), func() (int64, error) {
-			n, e := results[2*calls].(int64), results[2*calls+1]
+		total, err := resumeSync(ctx, func() (int64, int64, error) {
+			s := steps[min(calls, len(steps)-1)]
 			calls++
-			if e == nil {
-				return n, nil
-			}
-			return n, e.(error)
+			return s.sent, s.need, s.err
 		}, func(int, int64, error) {})
 		return total, err, calls
 	}
-	if total, err, calls := run(int64(100), lost, int64(50), lost, int64(30), nil); err != nil || total != 180 || calls != 3 {
+	ctx := context.Background()
+	if total, err, calls := run(ctx, step{100, 180, lost}, step{50, 80, lost}, step{30, 30, nil}); err != nil || total != 180 || calls != 3 {
 		t.Errorf("断了两次后传完：total=%d err=%v calls=%d", total, err, calls)
 	}
-	if _, err, calls := run(int64(100), lost, int64(0), lost); err == nil || calls != 2 {
-		t.Errorf("重试一点没传过去应停下：err=%v calls=%d", err, calls)
+	// 一直没有进展：第一次算有（记下 need），之后连续 syncStallAttempts 次没变少就停。
+	if _, err, calls := run(ctx, step{100, 500, lost}); err == nil || calls != syncStallAttempts+1 {
+		t.Errorf("没有进展应停下：err=%v calls=%d", err, calls)
 	}
-	if _, err, calls := run(int64(0), status.Error(codes.PermissionDenied, "no")); err == nil || calls != 1 {
+	// 清单都拿不到（连不上）也算没有进展。
+	if _, err, calls := run(ctx, step{0, -1, lost}); err == nil || calls != syncStallAttempts {
+		t.Errorf("连不上应停下：err=%v calls=%d", err, calls)
+	}
+	// 有进展就一直接着传，不限次数。
+	steps := []step{}
+	for i := range 3 * syncStallAttempts {
+		steps = append(steps, step{10, int64(1000 - i), lost})
+	}
+	steps = append(steps, step{10, 1, nil})
+	if _, err, calls := run(ctx, steps...); err != nil || calls != len(steps) {
+		t.Errorf("一直有进展应传完：err=%v calls=%d", err, calls)
+	}
+	if _, err, calls := run(ctx, step{0, 10, status.Error(codes.PermissionDenied, "no")}); err == nil || calls != 1 {
 		t.Errorf("对方拒绝不重试：err=%v calls=%d", err, calls)
 	}
-	many := []any{}
-	for i := 0; i < syncAttempts+2; i++ {
-		many = append(many, int64(10), lost)
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err, calls := run(canceled, step{10, 10, lost}); err == nil || calls != 1 {
+		t.Errorf("取消后不重试：err=%v calls=%d", err, calls)
 	}
-	if _, err, calls := run(many...); err == nil || calls != syncAttempts {
-		t.Errorf("最多 %d 次：calls=%d", syncAttempts, calls)
+}
+
+// 传了一半的文件对不上、被对方丢掉（DataLoss）也接着传，下次从头传。
+func TestConnectionLostDataLoss(t *testing.T) {
+	if !connectionLost(fmt.Errorf("传输文件: %w", status.Error(codes.DataLoss, "对不上"))) {
+		t.Fatal("DataLoss 应该接着传")
 	}
 }
 

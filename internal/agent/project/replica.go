@@ -32,6 +32,13 @@ type ReplicaFile struct {
 	Pack bool
 }
 
+// isPack 判断仓库里的相对路径（rel，用 / 分隔）是不是数据包。kopia 的文件系统存储按 .shards 把文件名切成几级目录
+// （例如 p0123abcd.f 存成 p/012/3abcd.f），文件名本身不再以 p、q 开头，要看第一级。
+func isPack(rel string) bool {
+	first, _, _ := strings.Cut(rel, "/")
+	return strings.HasPrefix(first, "p") || strings.HasPrefix(first, "q")
+}
+
 // ReplicaFiles 返回容器快照仓库里要同步的文件。先数据包、再其他文件：仓库的索引写在数据包之后，
 // 按这个顺序传，备份节点上的仓库始终能打开。
 func (m *Manager) ReplicaFiles(ctx context.Context, projectID, container string) ([]ReplicaFile, error) {
@@ -50,9 +57,8 @@ func (m *Manager) ReplicaFiles(ctx context.Context, projectID, container string)
 			return nil // 维护时可能正在删除
 		}
 		rel, _ := filepath.Rel(dir, full)
-		b := d.Name()
-		f := ReplicaFile{Path: "repo/" + filepath.ToSlash(rel), Abs: full, Size: info.Size(), Immutable: !strings.HasPrefix(b, "kopia."),
-			Pack: strings.HasPrefix(b, "p") || strings.HasPrefix(b, "q")}
+		rel = filepath.ToSlash(rel)
+		f := ReplicaFile{Path: "repo/" + rel, Abs: full, Size: info.Size(), Immutable: !strings.HasPrefix(d.Name(), "kopia."), Pack: isPack(rel)}
 		if f.Pack {
 			packs = append(packs, f)
 		} else {

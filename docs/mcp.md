@@ -176,7 +176,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口） | `SaveRoute` |
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
-| `sync_backup` | 立即依次同步到所有备份节点（或只同步 `backup_node`），同步完才返回各自的结果 | `SyncBackup` |
+| `sync_backup` | 开始依次同步到所有备份节点（或只同步 `backup_node`）。同步在源节点上进行、不限时，工具最多等 `wait_seconds`（默认 30，最多 600）后返回各自的状态和进度（`bytes_done`、`bytes_total`、`bytes_per_second`、`eta_seconds`、重试次数），没传完时说明仍在进行，之后用 `get_container` 查；`stop` 停止正在进行的同步，已传的文件留着，下次接着传（见 [snapshot.md](snapshot.md#同步的进度)） | `SyncBackup`、`StopBackupSync`、`GetProject` |
 | `set_node_alert_rules` | 只给管理员：修改节点的告警规则（内存、磁盘、离线、证书、CPU） | `SetNodeAlertRules` |
 | `pull_node_image` | 只给管理员：在节点上拉取镜像，用节点全局的 Docker 登录信息和镜像加速，等拉完才返回，最长 30 分钟 | `PullNodeImage` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用，操作员不能进入特权容器；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
@@ -201,7 +201,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `delete_node_images` | 只给管理员：删除节点上的镜像（连同全部标签，`images` 填标签或至少 12 位的 ID）或单个标签（`tags`）。预览列出会删除的和节点会拒绝的（有容器使用、Nagi 需要） | 预览给的确认码 | `ListNodeImages`、`DeleteNodeImages` |
 | `prune_node_images` | 只给管理员：一键清理节点上没有容器使用、Nagi 也不需要的镜像，`build_cache` 时（默认不）同时清理构建缓存。预览列出镜像和至少释放的空间 | 预览给的确认码 | `ListNodeImages`、`PruneNodeImages` |
 
-`change_witness`（更换见证人，顶替照常进行）不中断服务，不用确认。`get_container` 返回备份节点的同步状态、单独指定的副本存放位置（`replica_location`）和顶替的状态（在哪个节点上运行、最近一次同步、是否在等确认）。
+`change_witness`（更换见证人，顶替照常进行）不中断服务，不用确认。`get_container` 返回备份节点的同步状态（正在同步时带进度 `progress`，用户停止的标 `stopped`）、单独指定的副本存放位置（`replica_location`）和顶替的状态（在哪个节点上运行、最近一次同步、是否在等确认）。
 
 ### 文件
 

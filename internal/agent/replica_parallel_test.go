@@ -76,7 +76,7 @@ func TestSendReplicaFilesParallel(t *testing.T) {
 	defer first.Close()
 
 	dir := t.TempDir()
-	var files []project.ReplicaFile
+	var files []sendFile
 	want := map[string][]byte{}
 	for i := range 12 {
 		data := make([]byte, 100<<10*(i%4)) // 有空文件，也有超过一块（256 KiB）的
@@ -86,14 +86,14 @@ func TestSendReplicaFilesParallel(t *testing.T) {
 			t.Fatal(err)
 		}
 		path := fmt.Sprintf("repo/p%02d", i)
-		files = append(files, project.ReplicaFile{Path: path, Abs: abs, Size: int64(len(data))})
+		files = append(files, sendFile{ReplicaFile: project.ReplicaFile{Path: path, Abs: abs, Size: int64(len(data))}})
 		want[path] = data
 	}
 	// 维护时被删掉的文件跳过，不算传完。
-	files = append(files, project.ReplicaFile{Path: "repo/gone", Abs: filepath.Join(dir, "gone")})
+	files = append(files, sendFile{ReplicaFile: project.ReplicaFile{Path: "repo/gone", Abs: filepath.Join(dir, "gone")}})
 
 	var sent atomic.Int64
-	done, err := sendReplicaFiles(context.Background(), dial, first, "p", "c", files, &sent)
+	done, err := sendReplicaFiles(context.Background(), dial, first, "p", "c", files, func(n int64) { sent.Add(n) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestSendReplicaFilesParallel(t *testing.T) {
 	}
 
 	// 没有文件时不开流。
-	if done, err := sendReplicaFiles(context.Background(), dial, first, "p", "c", nil, &sent); err != nil || done != nil {
+	if done, err := sendReplicaFiles(context.Background(), dial, first, "p", "c", nil, func(n int64) { sent.Add(n) }); err != nil || done != nil {
 		t.Fatalf("空列表：%v %v", done, err)
 	}
 }

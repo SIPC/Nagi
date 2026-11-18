@@ -341,6 +341,11 @@ func (s *projectService) SyncBackup(ctx context.Context, req *connect.Request[na
 	return reply(s.Projects.SyncBackup(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId()))
 }
 
+func (s *projectService) StopBackupSync(ctx context.Context, req *connect.Request[nagiv1.BackupNodeRef]) (*connect.Response[nagiv1.Project], error) {
+	m := req.Msg
+	return reply(s.Projects.StopBackupSync(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId()))
+}
+
 func (s *projectService) ListBackupSnapshots(ctx context.Context, req *connect.Request[nagiv1.BackupNodeRef]) (*connect.Response[nagiv1.ListSnapshotsResponse], error) {
 	m := req.Msg
 	list, err := s.Projects.BackupSnapshots(ctx, m.GetProjectId(), m.GetContainer(), m.GetNodeId())

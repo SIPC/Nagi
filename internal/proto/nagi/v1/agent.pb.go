@@ -1432,10 +1432,15 @@ func (x *AcceptReplicaRequest) GetReplicaDir() string {
 }
 
 type SyncBackupRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Container     string                 `protobuf:"bytes,2,opt,name=container,proto3" json:"container,omitempty"`
-	TargetNodeId  string                 `protobuf:"bytes,3,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId    string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container    string                 `protobuf:"bytes,2,opt,name=container,proto3" json:"container,omitempty"`
+	TargetNodeId string                 `protobuf:"bytes,3,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	// 只开始同步就返回（NodeInfo.async_backup_sync）：节点在后台做完，进度和结果在容器状态里上报。
+	// 已经在同步时不再开一次，这次结束后再同步一次（那一次可能是在最新的快照之前开始的）。旧版本的节点不认识，同步完才返回。
+	Async bool `protobuf:"varint,4,opt,name=async,proto3" json:"async,omitempty"`
+	// 停止正在进行的同步（也取消排着的下一次）。已经传完的文件留着，下次接着传。
+	Cancel        bool `protobuf:"varint,5,opt,name=cancel,proto3" json:"cancel,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1489,6 +1494,20 @@ func (x *SyncBackupRequest) GetTargetNodeId() string {
 		return x.TargetNodeId
 	}
 	return ""
+}
+
+func (x *SyncBackupRequest) GetAsync() bool {
+	if x != nil {
+		return x.Async
+	}
+	return false
+}
+
+func (x *SyncBackupRequest) GetCancel() bool {
+	if x != nil {
+		return x.Cancel
+	}
+	return false
 }
 
 type AcceptReplicaResponse struct {
@@ -8421,12 +8440,14 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"sourceName\x12*\n" +
 	"\x11extra_source_keys\x18\x05 \x03(\fR\x0fextraSourceKeys\x12\x1f\n" +
 	"\vreplica_dir\x18\x06 \x01(\tR\n" +
-	"replicaDir\"v\n" +
+	"replicaDir\"\xa4\x01\n" +
 	"\x11SyncBackupRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
 	"\tcontainer\x18\x02 \x01(\tR\tcontainer\x12$\n" +
-	"\x0etarget_node_id\x18\x03 \x01(\tR\ftargetNodeId\"\x17\n" +
+	"\x0etarget_node_id\x18\x03 \x01(\tR\ftargetNodeId\x12\x14\n" +
+	"\x05async\x18\x04 \x01(\bR\x05async\x12\x16\n" +
+	"\x06cancel\x18\x05 \x01(\bR\x06cancel\"\x17\n" +
 	"\x15AcceptReplicaResponse\"\x15\n" +
 	"\x13ListReplicasRequest\"D\n" +
 	"\x14ListReplicasResponse\x12,\n" +
