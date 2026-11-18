@@ -655,6 +655,8 @@ func (c *call) waitHealthy(projectID string, containers []string, wait time.Dura
 type ControlArgs struct {
 	ContainerArg
 	Action string `json:"action" jsonschema:"start, stop or restart"`
+	// 容器组里的一个服务：只控制它，其他服务不动。
+	Service string `json:"service,omitempty" jsonschema:"optional: a service of the container group (see get_container's services); only that service is started, stopped or restarted"`
 }
 
 func toolControl(c *call, in ControlArgs) (any, error) {
@@ -668,6 +670,11 @@ func toolControl(c *call, in ControlArgs) (any, error) {
 	s, m, err := c.container(in.ContainerArg)
 	if err != nil {
 		return nil, err
+	}
+	if in.Service != "" {
+		return c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
+			return c.h.clients.projects.ControlService(ctx, connect.NewRequest(&nagiv1.ControlServiceRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName(), Service: in.Service, Action: action}))
+		})
 	}
 	return c.follow(func(ctx context.Context) (*connect.ServerStreamForClient[nagiv1.DeployEvent], error) {
 		return c.h.clients.projects.ControlContainer(ctx, connect.NewRequest(&nagiv1.ControlContainerRequest{ProjectId: s.GetProject().GetId(), Container: m.GetName(), Action: action}))

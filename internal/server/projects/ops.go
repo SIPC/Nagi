@@ -184,6 +184,38 @@ func (s *Service) ControlContainer(ctx context.Context, projectID, name string, 
 	return err
 }
 
+// ControlService 手动启动、停止或重启容器组里的一个服务，其他服务不动。规则和 ControlContainer 一样：
+// 要已部署，设了顶替的不能停止（顶替按整个容器算）。服务名由节点按 compose 核对。
+func (s *Service) ControlService(ctx context.Context, projectID, name, service string, action nagiv1.ContainerAction, out Output) error {
+	ctx = context.WithoutCancel(ctx)
+	if service == "" {
+		return invalid("容器 %s 里没有服务 %s", name, service)
+	}
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return err
+	}
+	if c.DeployedVersion == 0 {
+		return invalid("容器还没有部署，请先部署")
+	}
+	if action == nagiv1.ContainerAction_CONTAINER_ACTION_STOP && len(c.Failover) > 0 {
+		return invalid("容器已设置顶替，停止前须取消顶替")
+	}
+	agent, err := s.agent(ctx, c.NodeID)
+	if err != nil {
+		return err
+	}
+	stream, err := agent.ControlService(ctx, &nagiv1.ControlServiceRequest{ProjectId: projectID, Container: name, Service: service, Action: action})
+	if err != nil {
+		return err
+	}
+	_, err = recvResult(stream.Recv, out)
+	if status.Code(err) == codes.Unimplemented {
+		return i18n.Errorf("节点 %s 版本过低，升级后才能单独启动、停止或重启服务", s.NodeName(ctx, c.NodeID))
+	}
+	return err
+}
+
 // Logs 打开容器日志的流。
 func (s *Service) Logs(ctx context.Context, projectID, name, service string, tail int32, follow bool) (nagiv1.AgentService_StreamLogsClient, error) {
 	c, err := s.container(ctx, projectID, name)

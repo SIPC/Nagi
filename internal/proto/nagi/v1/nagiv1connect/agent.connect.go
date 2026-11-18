@@ -45,6 +45,9 @@ const (
 	// AgentServiceControlContainerProcedure is the fully-qualified name of the AgentService's
 	// ControlContainer RPC.
 	AgentServiceControlContainerProcedure = "/nagi.v1.AgentService/ControlContainer"
+	// AgentServiceControlServiceProcedure is the fully-qualified name of the AgentService's
+	// ControlService RPC.
+	AgentServiceControlServiceProcedure = "/nagi.v1.AgentService/ControlService"
 	// AgentServiceListVolumesProcedure is the fully-qualified name of the AgentService's ListVolumes
 	// RPC.
 	AgentServiceListVolumesProcedure = "/nagi.v1.AgentService/ListVolumes"
@@ -260,6 +263,8 @@ type AgentServiceClient interface {
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
+	// 手动启动、停止或重启容器组里的一个服务（docker compose start|stop|restart <服务>），其他服务不动。
+	ControlService(context.Context, *connect.Request[v1.ControlServiceRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error)
 	// 容器的存储：data/、命名 volume，大小和挂载位置。
 	ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error)
 	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
@@ -434,6 +439,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AgentServiceControlContainerProcedure,
 			connect.WithSchema(agentServiceMethods.ByName("ControlContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		controlService: connect.NewClient[v1.ControlServiceRequest, v1.DeployEvent](
+			httpClient,
+			baseURL+AgentServiceControlServiceProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("ControlService")),
 			connect.WithClientOptions(opts...),
 		),
 		listVolumes: connect.NewClient[v1.ContainerRef, v1.ListVolumesResponse](
@@ -889,6 +900,7 @@ type agentServiceClient struct {
 	deployContainer       *connect.Client[v1.DeployContainerRequest, v1.DeployEvent]
 	deleteContainer       *connect.Client[v1.DeleteContainerRequest, v1.DeleteContainerResponse]
 	controlContainer      *connect.Client[v1.ControlContainerRequest, v1.DeployEvent]
+	controlService        *connect.Client[v1.ControlServiceRequest, v1.DeployEvent]
 	listVolumes           *connect.Client[v1.ContainerRef, v1.ListVolumesResponse]
 	listVolumeFiles       *connect.Client[v1.VolumeFileRef, v1.ListVolumeFilesResponse]
 	deleteVolumeFile      *connect.Client[v1.VolumeFileRef, v1.VolumeFileOpResponse]
@@ -983,6 +995,11 @@ func (c *agentServiceClient) DeleteContainer(ctx context.Context, req *connect.R
 // ControlContainer calls nagi.v1.AgentService.ControlContainer.
 func (c *agentServiceClient) ControlContainer(ctx context.Context, req *connect.Request[v1.ControlContainerRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
 	return c.controlContainer.CallServerStream(ctx, req)
+}
+
+// ControlService calls nagi.v1.AgentService.ControlService.
+func (c *agentServiceClient) ControlService(ctx context.Context, req *connect.Request[v1.ControlServiceRequest]) (*connect.ServerStreamForClient[v1.DeployEvent], error) {
+	return c.controlService.CallServerStream(ctx, req)
 }
 
 // ListVolumes calls nagi.v1.AgentService.ListVolumes.
@@ -1366,6 +1383,8 @@ type AgentServiceHandler interface {
 	DeleteContainer(context.Context, *connect.Request[v1.DeleteContainerRequest]) (*connect.Response[v1.DeleteContainerResponse], error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error
+	// 手动启动、停止或重启容器组里的一个服务（docker compose start|stop|restart <服务>），其他服务不动。
+	ControlService(context.Context, *connect.Request[v1.ControlServiceRequest], *connect.ServerStream[v1.DeployEvent]) error
 	// 容器的存储：data/、命名 volume，大小和挂载位置。
 	ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error)
 	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
@@ -1536,6 +1555,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		AgentServiceControlContainerProcedure,
 		svc.ControlContainer,
 		connect.WithSchema(agentServiceMethods.ByName("ControlContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	agentServiceControlServiceHandler := connect.NewServerStreamHandler(
+		AgentServiceControlServiceProcedure,
+		svc.ControlService,
+		connect.WithSchema(agentServiceMethods.ByName("ControlService")),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceListVolumesHandler := connect.NewUnaryHandler(
@@ -1992,6 +2017,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceDeleteContainerHandler.ServeHTTP(w, r)
 		case AgentServiceControlContainerProcedure:
 			agentServiceControlContainerHandler.ServeHTTP(w, r)
+		case AgentServiceControlServiceProcedure:
+			agentServiceControlServiceHandler.ServeHTTP(w, r)
 		case AgentServiceListVolumesProcedure:
 			agentServiceListVolumesHandler.ServeHTTP(w, r)
 		case AgentServiceListVolumeFilesProcedure:
@@ -2163,6 +2190,10 @@ func (UnimplementedAgentServiceHandler) DeleteContainer(context.Context, *connec
 
 func (UnimplementedAgentServiceHandler) ControlContainer(context.Context, *connect.Request[v1.ControlContainerRequest], *connect.ServerStream[v1.DeployEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ControlContainer is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) ControlService(context.Context, *connect.Request[v1.ControlServiceRequest], *connect.ServerStream[v1.DeployEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.ControlService is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) ListVolumes(context.Context, *connect.Request[v1.ContainerRef]) (*connect.Response[v1.ListVolumesResponse], error) {

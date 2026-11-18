@@ -88,6 +88,9 @@ func TestScopeCheckRequest(t *testing.T) {
 		{"/nagi.v1.ProjectService/GetProject", &nagiv1.ProjectRef{ProjectId: "p2"}, connect.CodeNotFound},
 		{"/nagi.v1.ProjectService/AddContainer", &nagiv1.AddContainerRequest{ProjectId: "p1", NodeId: "n1"}, 0},
 		{"/nagi.v1.ProjectService/AddContainer", &nagiv1.AddContainerRequest{ProjectId: "p1", NodeId: "n2"}, connect.CodeNotFound},
+		// 单独控制服务和控制容器一样按项目核对范围。
+		{"/nagi.v1.ProjectService/ControlService", &nagiv1.ControlServiceRequest{ProjectId: "p1", Container: "stack", Service: "web"}, 0},
+		{"/nagi.v1.ProjectService/ControlService", &nagiv1.ControlServiceRequest{ProjectId: "p2", Container: "stack", Service: "web"}, connect.CodeNotFound},
 		{"/nagi.v1.ProjectService/ConnectProject", &nagiv1.ConnectProjectRequest{ProjectId: "p1", OtherProjectId: "p2"}, connect.CodeNotFound},
 		// 见证人为空表示面板。
 		{"/nagi.v1.ProjectService/SetFailover", &nagiv1.SetFailoverApiRequest{ProjectId: "p1", StandbyNodeId: "n1"}, 0},

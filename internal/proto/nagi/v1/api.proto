@@ -805,6 +805,8 @@ service ProjectService {
   rpc DeleteContainer(DeleteContainerApiRequest) returns (Project);
   // 手动启动、停止或重启容器：不改配置，不生成版本。设置了顶替的容器不能停止。
   rpc ControlContainer(ControlContainerRequest) returns (stream DeployEvent);
+  // 手动启动、停止或重启容器组里的一个服务，其他服务不动。规则和 ControlContainer 一样。
+  rpc ControlService(ControlServiceRequest) returns (stream DeployEvent);
   rpc SaveDraft(SaveDraftRequest) returns (Project);
   rpc DiscardDraft(ContainerRevisionRef) returns (Project);
   // 部署一个或多个容器：有草稿的容器把草稿记为新版本，没有的重新部署最新版本。

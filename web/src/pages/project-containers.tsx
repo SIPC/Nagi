@@ -197,7 +197,7 @@ function shortImage(image: string) {
 
 // displayImage 是概览里显示的镜像：有标签时去掉摘要（标签已经说明了版本，完整的放在悬停提示里），
 // 没有标签时保留 12 位摘要；省掉 Docker Hub 的默认前缀。
-function displayImage(image: string) {
+export function displayImage(image: string) {
   let s = image.replace(/^docker\.io\/(library\/)?/, "");
   const at = s.indexOf("@sha256:");
   if (at >= 0) s = /:[^/]+$/.test(s.slice(0, at)) ? s.slice(0, at) : shortImage(s);
@@ -408,7 +408,7 @@ export function ContainerPage({
 }
 
 // ContainerSkeleton：容器页加载中，和页头、标签一样的版面。
-function ContainerSkeleton() {
+export function ContainerSkeleton() {
   return (
     <div role="status" aria-label={t.common.feedback.loading}>
       <div className="mb-4 flex min-h-8 items-center justify-between gap-4">
@@ -891,7 +891,7 @@ function RenameContainer({ project, container, onDone }: { project: Project; con
   );
 }
 
-function uptime(services: ServiceStatus[]) {
+export function uptime(services: ServiceStatus[]) {
   const up = t.projectContainers.overview.uptime;
   const m = /^Up\s+(.+)$/.exec(serviceDetail(services.find((s) => s.state === "running")?.status ?? ""));
   if (!m) return "—";
@@ -1025,7 +1025,7 @@ function Overview({ project, container, services }: { project: Project; containe
   );
 }
 
-function KvItem({ k, v, mono, className }: { k: React.ReactNode; v: React.ReactNode; mono?: boolean; className?: string }) {
+export function KvItem({ k, v, mono, className }: { k: React.ReactNode; v: React.ReactNode; mono?: boolean; className?: string }) {
   return (
     <div className={cn("grid min-w-0 gap-1", className)}>
       <span className="text-muted-foreground">{k}</span>
@@ -1117,13 +1117,15 @@ type Line = { key: number; service: string; stream: string; text: string; time?:
 
 const maxLines = 2000;
 
-function Logs({
+// fixed：服务页里只看这一个服务，没有服务选择。
+export function Logs({
   projectId,
   container,
   services,
   containers,
   service: chosen,
   onService,
+  fixed,
 }: {
   projectId: string;
   container: string;
@@ -1131,12 +1133,13 @@ function Logs({
   containers: string;
   service?: string;
   onService?: (s: string) => void;
+  fixed?: string;
 }) {
   const l_ = t.projectContainers.logs;
   // 选中的服务记在地址里（有 onService 时），不认识的服务当作全部。
   const [local, setLocal] = useState("");
   const picked = onService ? (chosen ?? "") : local;
-  const service = services.includes(picked) ? picked : "";
+  const service = fixed ?? (services.includes(picked) ? picked : "");
   const setService = onService ?? setLocal;
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
@@ -1211,7 +1214,7 @@ function Logs({
               { value: "stderr", label: l_.stderrOnly },
             ]}
           />
-          {services.length > 1 && (
+          {services.length > 1 && !fixed && (
             <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={l_.service}>
               <option value="">{l_.allContainers}</option>
               {services.map((s) => (

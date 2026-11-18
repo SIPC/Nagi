@@ -23,6 +23,7 @@ const (
 	AgentService_DeployContainer_FullMethodName       = "/nagi.v1.AgentService/DeployContainer"
 	AgentService_DeleteContainer_FullMethodName       = "/nagi.v1.AgentService/DeleteContainer"
 	AgentService_ControlContainer_FullMethodName      = "/nagi.v1.AgentService/ControlContainer"
+	AgentService_ControlService_FullMethodName        = "/nagi.v1.AgentService/ControlService"
 	AgentService_ListVolumes_FullMethodName           = "/nagi.v1.AgentService/ListVolumes"
 	AgentService_ListVolumeFiles_FullMethodName       = "/nagi.v1.AgentService/ListVolumeFiles"
 	AgentService_DeleteVolumeFile_FullMethodName      = "/nagi.v1.AgentService/DeleteVolumeFile"
@@ -115,6 +116,8 @@ type AgentServiceClient interface {
 	DeleteContainer(ctx context.Context, in *DeleteContainerRequest, opts ...grpc.CallOption) (*DeleteContainerResponse, error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(ctx context.Context, in *ControlContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
+	// 手动启动、停止或重启容器组里的一个服务（docker compose start|stop|restart <服务>），其他服务不动。
+	ControlService(ctx context.Context, in *ControlServiceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error)
 	// 容器的存储：data/、命名 volume，大小和挂载位置。
 	ListVolumes(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVolumesResponse, error)
 	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
@@ -322,6 +325,25 @@ func (c *agentServiceClient) ControlContainer(ctx context.Context, in *ControlCo
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ControlContainerClient = grpc.ServerStreamingClient[DeployEvent]
 
+func (c *agentServiceClient) ControlService(ctx context.Context, in *ControlServiceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_ControlService_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ControlServiceRequest, DeployEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ControlServiceClient = grpc.ServerStreamingClient[DeployEvent]
+
 func (c *agentServiceClient) ListVolumes(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (*ListVolumesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVolumesResponse)
@@ -374,7 +396,7 @@ func (c *agentServiceClient) RestoreVolumeFile(ctx context.Context, in *VolumeFi
 
 func (c *agentServiceClient) TransferVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_TransferVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_TransferVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +415,7 @@ type AgentService_TransferVolumeFilesClient = grpc.ServerStreamingClient[FileOpE
 
 func (c *agentServiceClient) CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_CompressVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_CompressVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +434,7 @@ type AgentService_CompressVolumeFilesClient = grpc.ServerStreamingClient[FileOpE
 
 func (c *agentServiceClient) ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_ExtractVolumeFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_ExtractVolumeFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +473,7 @@ func (c *agentServiceClient) ListSnapshots(ctx context.Context, in *ContainerRef
 
 func (c *agentServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[5], AgentService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +492,7 @@ type AgentService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[6], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -499,7 +521,7 @@ func (c *agentServiceClient) DeleteSnapshot(ctx context.Context, in *RestoreSnap
 
 func (c *agentServiceClient) StreamLogs(ctx context.Context, in *StreamLogsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[7], AgentService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +540,7 @@ type AgentService_StreamLogsClient = grpc.ServerStreamingClient[LogLine]
 
 func (c *agentServiceClient) Exec(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExecInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[8], AgentService_Exec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_Exec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +553,7 @@ type AgentService_ExecClient = grpc.BidiStreamingClient[ExecInput, ExecOutput]
 
 func (c *agentServiceClient) NodeShell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[NodeShellInput, ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[9], AgentService_NodeShell_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_NodeShell_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -544,7 +566,7 @@ type AgentService_NodeShellClient = grpc.BidiStreamingClient[NodeShellInput, Exe
 
 func (c *agentServiceClient) NodeExec(ctx context.Context, in *NodeExecRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecOutput], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[10], AgentService_NodeExec_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[11], AgentService_NodeExec_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +585,7 @@ type AgentService_NodeExecClient = grpc.ServerStreamingClient[ExecOutput]
 
 func (c *agentServiceClient) ReclaimSnapshots(ctx context.Context, in *ReclaimSnapshotsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[11], AgentService_ReclaimSnapshots_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[12], AgentService_ReclaimSnapshots_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -662,7 +684,7 @@ func (c *agentServiceClient) RestoreNodeFileBackup(ctx context.Context, in *Rest
 
 func (c *agentServiceClient) TransferNodeFiles(ctx context.Context, in *NodeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[12], AgentService_TransferNodeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[13], AgentService_TransferNodeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -681,7 +703,7 @@ type AgentService_TransferNodeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *agentServiceClient) CompressNodeFiles(ctx context.Context, in *NodeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[13], AgentService_CompressNodeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[14], AgentService_CompressNodeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -700,7 +722,7 @@ type AgentService_CompressNodeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *agentServiceClient) ExtractNodeFile(ctx context.Context, in *NodeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[14], AgentService_ExtractNodeFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[15], AgentService_ExtractNodeFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -799,7 +821,7 @@ func (c *agentServiceClient) CheckContainer(ctx context.Context, in *PutContaine
 
 func (c *agentServiceClient) RestoreReplica(ctx context.Context, in *RestoreReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[15], AgentService_RestoreReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[16], AgentService_RestoreReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -828,7 +850,7 @@ func (c *agentServiceClient) DeleteReplica(ctx context.Context, in *ContainerRef
 
 func (c *agentServiceClient) MigrateOut(ctx context.Context, in *MigrateOutRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[16], AgentService_MigrateOut_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[17], AgentService_MigrateOut_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +869,7 @@ type AgentService_MigrateOutClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MigrateResume(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[17], AgentService_MigrateResume_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[18], AgentService_MigrateResume_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -866,7 +888,7 @@ type AgentService_MigrateResumeClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) SetReplicaDir(ctx context.Context, in *SetReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[18], AgentService_SetReplicaDir_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[19], AgentService_SetReplicaDir_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -885,7 +907,7 @@ type AgentService_SetReplicaDirClient = grpc.ServerStreamingClient[DeployEvent]
 
 func (c *agentServiceClient) MoveReplica(ctx context.Context, in *MoveReplicaRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[19], AgentService_MoveReplica_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[20], AgentService_MoveReplica_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1204,7 +1226,7 @@ func (c *agentServiceClient) PruneImages(ctx context.Context, in *PruneImagesReq
 
 func (c *agentServiceClient) PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[20], AgentService_PullImage_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[21], AgentService_PullImage_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1237,6 +1259,8 @@ type AgentServiceServer interface {
 	DeleteContainer(context.Context, *DeleteContainerRequest) (*DeleteContainerResponse, error)
 	// 手动启动、停止或重启容器：不改配置，不生成版本。
 	ControlContainer(*ControlContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error
+	// 手动启动、停止或重启容器组里的一个服务（docker compose start|stop|restart <服务>），其他服务不动。
+	ControlService(*ControlServiceRequest, grpc.ServerStreamingServer[DeployEvent]) error
 	// 容器的存储：data/、命名 volume，大小和挂载位置。
 	ListVolumes(context.Context, *ContainerRef) (*ListVolumesResponse, error)
 	// 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
@@ -1397,6 +1421,9 @@ func (UnimplementedAgentServiceServer) DeleteContainer(context.Context, *DeleteC
 }
 func (UnimplementedAgentServiceServer) ControlContainer(*ControlContainerRequest, grpc.ServerStreamingServer[DeployEvent]) error {
 	return status.Error(codes.Unimplemented, "method ControlContainer not implemented")
+}
+func (UnimplementedAgentServiceServer) ControlService(*ControlServiceRequest, grpc.ServerStreamingServer[DeployEvent]) error {
+	return status.Error(codes.Unimplemented, "method ControlService not implemented")
 }
 func (UnimplementedAgentServiceServer) ListVolumes(context.Context, *ContainerRef) (*ListVolumesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVolumes not implemented")
@@ -1698,6 +1725,17 @@ func _AgentService_ControlContainer_Handler(srv interface{}, stream grpc.ServerS
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ControlContainerServer = grpc.ServerStreamingServer[DeployEvent]
+
+func _AgentService_ControlService_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ControlServiceRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).ControlService(m, &grpc.GenericServerStream[ControlServiceRequest, DeployEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ControlServiceServer = grpc.ServerStreamingServer[DeployEvent]
 
 func _AgentService_ListVolumes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ContainerRef)
@@ -3135,6 +3173,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ControlContainer",
 			Handler:       _AgentService_ControlContainer_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ControlService",
+			Handler:       _AgentService_ControlService_Handler,
 			ServerStreams: true,
 		},
 		{

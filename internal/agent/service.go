@@ -152,6 +152,17 @@ func (s *agentService) ControlContainer(req *nagiv1.ControlContainerRequest, str
 	})
 }
 
+// ControlService 只控制容器组里的一个服务。顶替的规则按整个容器算：设了顶替的不能停，只有持有租约的节点能启动、重启。
+func (s *agentService) ControlService(req *nagiv1.ControlServiceRequest, stream nagiv1.AgentService_ControlServiceServer) error {
+	return runStream(stream.Send, func(onLine func(string)) error {
+		if err := s.node.checkControl(req.GetProjectId(), req.GetContainer(), req.GetAction()); err != nil {
+			return err
+		}
+		defer s.changed()
+		return s.projects.ControlService(stream.Context(), req.GetProjectId(), req.GetContainer(), req.GetService(), req.GetAction(), onLine)
+	})
+}
+
 func (s *agentService) ListVolumes(ctx context.Context, req *nagiv1.ContainerRef) (*nagiv1.ListVolumesResponse, error) {
 	out, err := s.projects.ListVolumes(ctx, req.GetProjectId(), req.GetContainer())
 	if err != nil {

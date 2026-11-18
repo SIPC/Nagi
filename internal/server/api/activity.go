@@ -127,6 +127,10 @@ func (a *API) target(ctx context.Context, method string, req proto.Message) (typ
 		v := strings.Join(names, ", ")
 		return "container", v, v
 	}
+	if r, ok := req.(*nagiv1.ControlServiceRequest); ok {
+		// 对象是容器，名称里带上服务，例如 stack/web。
+		return "container", r.GetContainer(), r.GetContainer() + "/" + r.GetService()
+	}
 	if v := activityField(req, "node_id"); v != "" {
 		return "node", v, a.nodeName(ctx, v)
 	}

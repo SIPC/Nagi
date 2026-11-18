@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpCircle, ChevronDown, ChevronLeft, Plus } from "lucide-react";
@@ -10,6 +10,7 @@ import { offlineNodeNames, ProjectState, stateOf } from "@/components/status";
 import { containerUsage, projectMetricNodes, serviceUsage, UsageRings, useProjectMetrics } from "@/components/metrics";
 import { ActiveBox, Badge, Button, ButtonLink, Collapse, dotColor, HelpTip, Loading, QueryError, Roll, Slide, Tabs, useActiveBox } from "@/components/ui";
 import { containerKind, containerLabel, ContainersTab, useProjectActions, type DetailView } from "@/pages/project-containers";
+import type { ServiceView } from "@/pages/project-service";
 import { NetworkTab } from "@/pages/project-network";
 import { SettingsTab } from "@/pages/project-settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
@@ -117,14 +118,18 @@ export function ProjectSplit({
   projectId,
   tab,
   container,
+  service,
   view,
+  serviceTab,
   adding,
   children,
 }: {
   projectId: string;
   tab: ProjectTab;
   container?: string;
+  service?: string;
   view?: DetailView;
+  serviceTab?: ServiceView;
   adding?: boolean;
   children: React.ReactNode;
 }) {
@@ -134,10 +139,10 @@ export function ProjectSplit({
   return (
     <>
       <aside className="hidden motion-safe:animate-fade-in xl:sticky xl:top-0 xl:block xl:h-screen xl:w-70 xl:shrink-0 xl:overflow-y-auto xl:border-r xl:px-3 xl:pt-8 xl:pb-4">
-        <ProjectColumn projectId={projectId} tab={tab} container={container} view={view} adding={adding} />
+        <ProjectColumn projectId={projectId} tab={tab} container={container} service={service} view={view} serviceTab={serviceTab} adding={adding} />
       </aside>
       <div className="min-w-0 flex-1 xl:px-8 xl:pt-8 xl:pb-16">
-        <Slide id={adding ? "add" : container ? "c/" + container : tab} index={position} variant="project" className="xl:mx-auto xl:max-w-[1120px]">
+        <Slide id={adding ? "add" : container ? "c/" + container + (service ? "/s/" + service : "") : tab} index={position} variant="project" className="xl:mx-auto xl:max-w-[1120px]">
           {children}
         </Slide>
       </div>
@@ -169,10 +174,11 @@ function readExpanded(): string[] | null {
 function useExpandedGroups(projectId: string) {
   const [expanded, setExpanded] = useState<string[]>(() => readExpanded() ?? []);
   const key = (name: string) => projectId + "/" + name;
-  const toggle = (name: string) => {
-    // 手机导航和项目栏各记一份，以存下的为准再切换。
+  // open 为空时切换。手机导航和项目栏各记一份，以存下的为准再改。
+  const set = (name: string, open?: boolean) => {
     const saved = readExpanded() ?? expanded;
-    const next = saved.includes(key(name)) ? saved.filter((k) => k !== key(name)) : [...saved, key(name)];
+    const want = open ?? !saved.includes(key(name));
+    const next = want ? [...new Set([...saved, key(name)])] : saved.filter((k) => k !== key(name));
     setExpanded(next);
     try {
       localStorage.setItem(expandedKey, JSON.stringify(next));
@@ -180,7 +186,15 @@ function useExpandedGroups(projectId: string) {
       // 存不了就只在这次有效。
     }
   };
-  return { isOpen: (name: string) => expanded.includes(key(name)), toggle };
+  const toggle = (name: string) => set(name);
+  const isOpen = (name: string) => expanded.includes(key(name));
+  // 打开某个服务的页时，它所在的容器组跟着展开，选中的服务看得见。
+  const useOpenFor = (container: string | undefined, service: string | undefined) =>
+    useEffect(() => {
+      if (container && service && !isOpen(container)) set(container, true);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [container, service]);
+  return { isOpen, toggle, useOpenFor };
 }
 
 // groupServices：容器组里的服务，按状态里出现的顺序，同名的是一个服务的多个副本。
@@ -195,9 +209,6 @@ function serviceState(m: Container, list: ServiceStatus[], node: Node | undefine
   if (node?.online === false) return { tone: "neutral" as const, label: t.common.status.nodesOffline([node.name]) };
   return stateOf(list, m.deployedVersion > 0n);
 }
-
-// 点服务打开容器组的日志（已在终端时留在终端），只看这个服务。
-const serviceView = (view?: DetailView): DetailView => (view === "terminal" ? "terminal" : "logs");
 
 // GroupToggle：容器组展开、收起服务的按钮。
 function GroupToggle({ m, open, onToggle, controls, className }: { m: Container; open: boolean; onToggle: () => void; controls: string; className?: string }) {
@@ -246,13 +257,19 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
   const project = useQuery({ queryKey: ["project", projectId], queryFn: () => projectClient.getProject({ projectId }) });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const groups = useExpandedGroups(projectId);
+  const pathParts = location.pathname.split("/").filter(Boolean);
+  groups.useOpenFor(pathParts[2] === "c" && pathParts[4] === "s" ? decodeURIComponent(pathParts[3] ?? "") : undefined, pathParts[4] === "s" ? decodeURIComponent(pathParts[5] ?? "") : undefined);
   if (project.isPending) return <Loading />;
   if (project.error) return <QueryError error={errorMessage(project.error)} onRetry={() => project.refetch()} />;
   const p = project.data.project;
   if (!p) return <QueryError error={t.project.notFound} onRetry={() => project.refetch()} />;
   const parts = location.pathname.split("/").filter(Boolean);
-  const search = location.search as { tab?: ProjectTab; view?: DetailView };
+  const search = location.search as { tab?: ProjectTab; view?: string };
   const container = parts[2] === "c" ? decodeURIComponent(parts[3] ?? "") : "";
+  // 服务页：/projects/<项目>/c/<容器组>/s/<服务>。
+  const service = parts[2] === "c" && parts[4] === "s" ? decodeURIComponent(parts[5] ?? "") : "";
+  const containerView = service ? undefined : (search.view as DetailView | undefined);
+  const serviceTab = service ? (search.view as ServiceView | undefined) : undefined;
   const onSection = parts.length === 2;
   const tab = search.tab ?? "containers";
   const item = (active: boolean) => cn("flex min-h-11 items-center gap-2 rounded-md px-2 text-sm transition-colors", active ? "bg-accent" : "hover:bg-accent/50");
@@ -278,7 +295,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
         const st = navState(m, node, services);
         const svc = m.kind === "group" ? groupServices(m, services) : [];
         const row = (
-          <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: search.view }} className={cn(item(m.name === container), hasToggle && "pr-12")} title={st.label}>
+          <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: containerView }} className={cn(item(m.name === container && !service), hasToggle && "pr-12")} title={st.label}>
             <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
             <span className="min-w-0 truncate">{containerLabel(m)}</span>
             <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
@@ -308,10 +325,10 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
                   return (
                     <Link
                       key={sv.name}
-                      to="/projects/$projectId/c/$container"
-                      params={{ projectId: p.id, container: m.name }}
-                      search={{ view: serviceView(search.view), service: sv.name }}
-                      className={item(false)}
+                      to="/projects/$projectId/c/$container/s/$service"
+                      params={{ projectId: p.id, container: m.name, service: sv.name }}
+                      search={{ view: serviceTab }}
+                      className={item(m.name === container && sv.name === service)}
                       title={sst.label}
                     >
                       <ServiceName name={sv.name} replicas={sv.list.length} st={sst} />
@@ -337,7 +354,23 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
 
 // ProjectColumn：项目栏。概览、各个容器（状态、节点、当前 CPU 和内存）、网络、设置，选中的一项由一块背景标出，换选中项时这块背景滑过去。
 // 点容器时保留容器页当前的标签，方便对比几个容器的日志。
-function ProjectColumn({ projectId, tab, container, view, adding }: { projectId: string; tab: ProjectTab; container?: string; view?: DetailView; adding?: boolean }) {
+function ProjectColumn({
+  projectId,
+  tab,
+  container,
+  service,
+  view,
+  serviceTab,
+  adding,
+}: {
+  projectId: string;
+  tab: ProjectTab;
+  container?: string;
+  service?: string;
+  view?: DetailView;
+  serviceTab?: ServiceView;
+  adding?: boolean;
+}) {
   const project = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectClient.getProject({ projectId }),
@@ -348,6 +381,7 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
   const usage = containerUsage(metrics.data);
   const perService = serviceUsage(metrics.data);
   const groups = useExpandedGroups(projectId);
+  groups.useOpenFor(container, service);
   const memFallback = Math.max(0, ...[...usage.values()].map((u) => u.mem));
   const { ref, box } = useActiveBox();
 
@@ -392,7 +426,8 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
         {p.containers.map((m) => {
           const node = knownNodes(nodes.data).find((n) => n.id === m.nodeId);
           const st = navState(m, node, services);
-          const active = m.name === container;
+          // 打开的是服务页时，选中的是那个服务，不是容器组。
+          const active = m.name === container && !service;
           const u = node?.online === false ? undefined : usage.get(m.name);
           const svc = m.kind === "group" ? groupServices(m, services) : [];
           const row = (
@@ -441,10 +476,11 @@ function ProjectColumn({ projectId, tab, container, view, adding }: { projectId:
                     return (
                       <Link
                         key={sv.name}
-                        to="/projects/$projectId/c/$container"
-                        params={{ projectId: p.id, container: m.name }}
-                        search={{ view: serviceView(view), service: sv.name }}
-                        className="relative grid gap-1 rounded-md p-2 transition-colors hover:bg-accent/50"
+                        to="/projects/$projectId/c/$container/s/$service"
+                        params={{ projectId: p.id, container: m.name, service: sv.name }}
+                        search={{ view: serviceTab }}
+                        data-active={(m.name === container && sv.name === service) || undefined}
+                        className={cn("relative grid gap-1 rounded-md p-2 transition-colors", !(m.name === container && sv.name === service) && "hover:bg-accent/50")}
                       >
                         <span className="flex min-w-0 items-center gap-2 leading-5" title={sst.label}>
                           <ServiceName name={sv.name} replicas={sv.list.length} st={sst} />

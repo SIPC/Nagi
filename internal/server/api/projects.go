@@ -493,6 +493,13 @@ func (s *projectService) ControlContainer(ctx context.Context, req *connect.Requ
 	})
 }
 
+func (s *projectService) ControlService(ctx context.Context, req *connect.Request[nagiv1.ControlServiceRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
+	m := req.Msg
+	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
+		return 0, s.Projects.ControlService(ctx, m.GetProjectId(), m.GetContainer(), m.GetService(), m.GetAction(), o)
+	})
+}
+
 func (s *projectService) RestoreSnapshot(ctx context.Context, req *connect.Request[nagiv1.RestoreSnapshotRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {

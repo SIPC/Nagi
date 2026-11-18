@@ -15,6 +15,7 @@ func TestActivityRecorded(t *testing.T) {
 	for procedure, want := range map[string]bool{
 		nagiv1connect.ProjectServiceDeployProcedure:           true,
 		nagiv1connect.ProjectServiceControlContainerProcedure: true,
+		nagiv1connect.ProjectServiceControlServiceProcedure:   true,
 		nagiv1connect.AuthServiceLoginProcedure:               false, // 在 auth 里记
 		nagiv1connect.ProjectServiceListVersionsProcedure:     false,
 		nagiv1connect.ProjectServiceGetProjectProcedure:       true, // 带着变量值，按会话每小时记一条

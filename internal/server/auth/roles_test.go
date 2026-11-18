@@ -52,6 +52,23 @@ func TestAllowed(t *testing.T) {
 	}
 }
 
+// 单独控制一个服务和控制整个容器的权限一样：管理员、操作员可以，只读不行；访问令牌要勾「可修改」。
+func TestControlServiceLikeControlContainer(t *testing.T) {
+	for _, procedure := range []string{"/nagi.v1.ProjectService/ControlContainer", "/nagi.v1.ProjectService/ControlService"} {
+		for role, want := range map[string]bool{RoleAdmin: true, RoleOperator: true, RoleViewer: false} {
+			if got := Allowed(role, procedure); got != want {
+				t.Errorf("Allowed(%q, %s) = %v，应为 %v", role, procedure, got, want)
+			}
+		}
+		if TokenAllowed(User{ID: 1, Role: RoleOperator, TokenID: 1}, procedure) {
+			t.Errorf("只读令牌不能调用 %s", procedure)
+		}
+		if !TokenAllowed(User{ID: 1, Role: RoleOperator, TokenID: 1, AllowWrite: true}, procedure) {
+			t.Errorf("可修改的令牌应能调用 %s", procedure)
+		}
+	}
+}
+
 // 节点镜像只给管理员（见 docs/agent.md#节点镜像）。访问令牌：查看不用额外权限，删除、清理、拉取要勾「可修改」。
 func TestNodeImagesAdminOnly(t *testing.T) {
 	read := User{ID: 1, Role: RoleAdmin, TokenID: 1}

@@ -582,7 +582,8 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
 }
 
 // ContainerMetrics：一个容器的资源：CPU、内存、下行、上行，容器组按服务分组。重启过的话在数值块下面写一行。
-export function ContainerMetrics({ projectId, nodeIds, container, range }: { projectId: string; nodeIds: string[]; container: string; range: MetricRange }) {
+// service：服务页里只显示这一个服务，不写服务名。
+export function ContainerMetrics({ projectId, nodeIds, container, service: only, range }: { projectId: string; nodeIds: string[]; container: string; service?: string; range: MetricRange }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
   if (q.isPending) return <MetricsSkeleton />;
   if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
@@ -591,6 +592,7 @@ export function ContainerMetrics({ projectId, nodeIds, container, range }: { pro
     const { kind, path, metric } = parseName(s.name);
     if (kind !== "c" || !path.startsWith(container + "/")) continue;
     const service = path.slice(container.length + 1);
+    if (only !== undefined && service !== only) continue;
     if (!services.has(service)) services.set(service, new Map());
     services.get(service)!.set(metric, toPoints(s));
   }
@@ -602,7 +604,7 @@ export function ContainerMetrics({ projectId, nodeIds, container, range }: { pro
         return (
           <div key={name} className="grid gap-4">
             {/* 单个容器（只有一个服务）不再重复名称。 */}
-            {services.size > 1 && <div className="font-mono text-[13px] text-muted-foreground">{name}</div>}
+            {services.size > 1 && only === undefined && <div className="font-mono text-[13px] text-muted-foreground">{name}</div>}
             <MetricCells series={series} range={range} />
             {restarts > 0 && (
               <div className="text-muted-foreground">
