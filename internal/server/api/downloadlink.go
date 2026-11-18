@@ -216,9 +216,9 @@ var nodeSourceFor = func(a *API, _ context.Context, nodeID, path string) (fileSo
 func (a *API) linkAllowed(ctx context.Context, u auth.User, c downloadClaims) bool {
 	switch c.Kind {
 	case linkKindVolume:
-		return auth.CanOperate(u.Role) && a.projectAllowed(ctx, u, c.Project) == nil
+		return a.projectAllowed(ctx, u, c.Project, auth.PermFilesRead) == nil
 	case linkKindNode:
-		return u.Role == auth.RoleAdmin
+		return a.nodeRootAllowed(ctx, u, c.Node) == nil
 	}
 	return false
 }

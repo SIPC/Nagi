@@ -23,11 +23,11 @@ func init() {
 }
 
 var replicaDirTools = []tool{
-	def(tool{name: "set_node_replica_dir", title: "Set node replica directory", write: true, destructive: true, adminOnly: true, nodeExec: true,
+	def(tool{name: "set_node_replica_dir", title: "Set node replica directory", write: true, destructive: true, nodeExec: true,
 		description: "Administrators only, and only with a token created with the allow-changes and node terminal permissions. Change where a node stores the replicas it receives as a backup node or failover standby (dir empty means the default <node data dir>/replicas). The node validates the path and moves the replicas in the old default directory there, verifying every file before switching; replicas with their own location do not move, and a replica whose move fails stays where it was. Syncing of a replica pauses while it moves. Every call previews first: show the preview to the user, and only after they agree call again with the same arguments and confirm set to the code from the preview.",
 		procedures:  []string{nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.NodeServiceListNodeReplicasProcedure, nagiv1connect.NodeServiceSetNodeReplicaDirProcedure}},
 		toolSetNodeReplicaDir),
-	def(tool{name: "set_replica_location", title: "Set replica location", write: true, destructive: true, adminOnly: true, nodeExec: true,
+	def(tool{name: "set_replica_location", title: "Set replica location", write: true, destructive: true, nodeExec: true,
 		description: "Administrators only, and only with a token created with the allow-changes and node terminal permissions. Change where one container's replica is stored on one of its backup nodes (dir empty moves it back to the node's replica directory). The node validates the path, moves the replica there and verifies it before switching; on failure it stays where it was. Syncing to that node pauses during the move. Every call previews first: show the preview to the user, and only after they agree call again with the same arguments and confirm set to the code from the preview.",
 		procedures: []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.NodeServiceListNodesProcedure,
 			nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure}},

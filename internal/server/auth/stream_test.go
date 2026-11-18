@@ -42,7 +42,7 @@ func TestStreamUser(t *testing.T) {
 	}
 
 	// 角色、访问范围改了：按新的算。
-	exec(`UPDATE users SET role = 'viewer', all_projects = 0 WHERE username = 'op'`)
+	exec(`UPDATE users SET role_id = 3, all_projects = 0 WHERE username = 'op'`)
 	u, err := h.s.StreamUser(at("198.51.100.20"), opened, hdr)
 	if err != nil || u.Role != RoleViewer || !u.LimitProjects || u.LimitNodes || u.DeviceID != id {
 		t.Fatalf("应按成员当前的设置：%+v，%v", u, err)
@@ -95,7 +95,7 @@ func TestStreamUser(t *testing.T) {
 
 	// 网页会话：角色改了按新的算，不带高权限确认；会话被退出后结束。
 	web := h.webUser("op")
-	exec(`UPDATE users SET role = 'viewer' WHERE username = 'op'`)
+	exec(`UPDATE users SET role_id = 3 WHERE username = 'op'`)
 	u, err = h.s.StreamUser(at("198.51.100.7"), web, http.Header{})
 	if err != nil || u.Role != RoleViewer || u.SessionID != web.SessionID || u.ElevatedUntil != 0 {
 		t.Fatalf("网页会话应按成员当前的设置：%+v，%v", u, err)

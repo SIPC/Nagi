@@ -20,7 +20,7 @@ import (
 func init() {
 	ln := nagiv1connect.NodeServiceListNodesProcedure
 	node := func(t tool) tool {
-		t.adminOnly, t.nodeExec, t.exec = true, true, true
+		t.nodeExec, t.exec = true, true
 		return t
 	}
 	allTools = append(allTools,
@@ -681,9 +681,9 @@ func pendingHAView(ph *nagiv1.PendingHA, nodes *nagiv1.ListNodesResponse) map[st
 	if f := ph.GetFailover(); f != nil {
 		witness := "panel"
 		if !f.GetWitnessIsPanel() {
-			witness = f.GetWitness().GetName()
+			witness = orOther(f.GetWitness().GetName())
 		}
-		out["failover"] = map[string]any{"nodes": []string{f.GetA().GetName(), f.GetB().GetName()}, "witness": witness, "auto_stateful": f.GetAutoStateful()}
+		out["failover"] = map[string]any{"nodes": []string{orOther(f.GetA().GetName()), orOther(f.GetB().GetName())}, "witness": witness, "auto_stateful": f.GetAutoStateful()}
 	}
 	var backups []string
 	for _, id := range ph.GetBackupNodeIds() {

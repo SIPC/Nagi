@@ -30,10 +30,14 @@ func TestCreateProjectEgressAdminOnly(t *testing.T) {
 	h := newAuditHarness(t)
 	ctx := context.Background()
 	h.a.Projects = &projects.Service{Q: h.a.Q, Sealer: h.a.Sealer, Log: slog.New(slog.DiscardHandler)}
-	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.RoleAdmin); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.a.Auth.CreateUser(ctx, "op", "op-password-1", auth.RoleOperator); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "op", "op-password-1", auth.OperatorRoleID); err != nil {
+		t.Fatal(err)
+	}
+	// 预置的操作员不能新建项目：给它加上「项目管理」，没有「网络和域名」。
+	if err := h.a.Q.SetRolePermissions(ctx, auth.OperatorRoleID, append(auth.PresetOperator.Names(), "project.manage")); err != nil {
 		t.Fatal(err)
 	}
 	create := func(pc nagiv1connect.ProjectServiceClient, name string, e *nagiv1.Egress) (*nagiv1.Project, error) {
@@ -60,7 +64,12 @@ func TestCreateProjectEgressAdminOnly(t *testing.T) {
 		if err != nil {
 			t.Fatalf("操作员用默认出站限制新建项目：%v", err)
 		}
-		if got := p.GetSettings().GetEgress(); got.GetMode() != "block" || len(got.GetAllow()) != 0 {
+		// 回复里没有出站限制（操作员没有「网络和域名」），按存下的看。
+		saved, err := h.a.Projects.Get(ctx, p.GetId())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := saved.GetProject().GetSettings().GetEgress(); got.GetMode() != "block" || len(got.GetAllow()) != 0 {
 			t.Errorf("新项目的出站限制 = %v，应该是默认的拦截", got)
 		}
 	}

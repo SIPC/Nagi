@@ -61,7 +61,7 @@ func toolCheckRoutes(c *call, in RoutesArgs) (any, error) {
 	for _, d := range res.Msg.GetDomains() {
 		v := domain{Route: d.GetRoute(), Domain: d.GetDomain(), Addresses: d.GetAddresses(), Entries: []entry{}}
 		for _, e := range d.GetEntries() {
-			v.Entries = append(v.Entries, entry{Node: e.GetNodeName(), Address: e.GetAddress(), DNS: e.GetDns(), Cert: e.GetCert(), CertError: e.GetCertError(), CertUntil: ts(e.GetCertNotAfter())})
+			v.Entries = append(v.Entries, entry{Node: orOther(e.GetNodeName()), Address: e.GetAddress(), DNS: e.GetDns(), Cert: e.GetCert(), CertError: e.GetCertError(), CertUntil: ts(e.GetCertNotAfter())})
 		}
 		out.Domains = append(out.Domains, v)
 	}

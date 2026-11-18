@@ -142,6 +142,14 @@ message MeResponse {
   string avatar_type = 7;
   // 高权限确认的有效期。过了这个时间（或者为空）要重新确认。
   google.protobuf.Timestamp elevated_until = 8;
+  // 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+  repeated string permissions = 9;
+  // 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+  int64 role_id = 10;
+  string role_name = 11;
+  string role_builtin = 12;
+  // 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+  UserScope scope = 13;
 }
 
 message ElevateRequest {
@@ -529,7 +537,53 @@ service SettingsService {
   // 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
   rpc GetAdminNetworks(GetAdminNetworksRequest) returns (AdminNetworks);
   rpc SetAdminNetworks(AdminNetworks) returns (AdminNetworks);
+  // 角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+  // 正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+  rpc CreateRole(CreateRoleRequest) returns (Role);
+  rpc UpdateRole(UpdateRoleRequest) returns (Role);
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse);
 }
+
+// Role 是一个角色。
+message Role {
+  int64 id = 1;
+  // 名称。预置角色没有改过名称时为空，界面显示本地化的名称。
+  string name = 2;
+  // admin（管理员）、operator、viewer（预置），自定义角色为空。
+  string builtin = 3;
+  // 权限名称（见 docs/panel.md#权限）。管理员是全部。
+  repeated string permissions = 4;
+  // 用这个角色的成员数。
+  uint32 members = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListRolesRequest {}
+
+message ListRolesResponse {
+  repeated Role roles = 1;
+  // 当前成员能授予的权限：管理员是除只给管理员的以外的全部，其他成员是自己有的。
+  repeated string grantable = 2;
+}
+
+message CreateRoleRequest {
+  string name = 1;
+  repeated string permissions = 2;
+}
+
+message UpdateRoleRequest {
+  int64 id = 1;
+  // 为空表示不改。预置角色可以改名，填空不会清除名称。
+  string name = 2;
+  repeated string permissions = 3;
+}
+
+message DeleteRoleRequest {
+  int64 id = 1;
+}
+
+message DeleteRoleResponse {}
 
 message AccessToken {
   int64 id = 1;
@@ -1045,6 +1099,10 @@ message PanelUser {
   string avatar_type = 10;
   // 成员的通行密钥（见 docs/panel.md#通行密钥）。管理员能看到、能清除：重置密码以后，通行密钥照样能登录。
   repeated Passkey passkeys = 11;
+  // 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+  int64 role_id = 12;
+  string role_name = 13;
+  string role_builtin = 14;
 }
 
 // UserScope 是成员能访问的项目和节点（见 docs/panel.md#访问范围）。管理员不受限制。
@@ -1057,6 +1115,8 @@ message UserScope {
   // 分组和标签（见 docs/panel.md#分组和标签）：分组里的项目、带其中任一标签的节点都在范围内，以后加进来的也算。
   repeated string project_groups = 5;
   repeated string node_tags = 6;
+  // 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+  bool nodes_follow = 7;
 }
 
 message ListUsersRequest {}
@@ -1068,9 +1128,11 @@ message ListUsersResponse {
 message CreateUserRequest {
   string username = 1;
   string password = 2 [debug_redact = true];
+  // 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
   string role = 3;
-  // 为空表示全部。
+  // 为空表示项目全部、节点跟随项目。
   UserScope scope = 4;
+  int64 role_id = 5;
 }
 
 message UpdateUserRequest {
@@ -1084,6 +1146,8 @@ message UpdateUserRequest {
   UserScope scope = 5;
   // 删除这个成员的所有通行密钥。重置密码、清除两步验证时也会删除。
   bool clear_passkeys = 6;
+  // 角色，0 表示不改（填了时不看 role）。
+  int64 role_id = 7;
 }
 
 message UpdateUserResponse {}
@@ -1924,6 +1988,11 @@ message AppInfoResponse {
   string role = 10;
   bytes avatar = 11;
   string avatar_type = 12;
+  // 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+  repeated string permissions = 13;
+  int64 role_id = 14;
+  string role_name = 15;
+  string role_builtin = 16;
 }
 
 message AppLogoutRequest {}

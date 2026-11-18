@@ -83,7 +83,7 @@ func authorize(t *testing.T, s *Server, client, redirect string, write bool) str
 	t.Helper()
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, State: "xyz",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, Grant{Write: write, Exec: false, Node: false})
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator}, req, "https://panel.example.com", true, 30, Grant{Write: write, Exec: false, Node: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestOAuthDeny(t *testing.T) {
 	// 本机回调可以换端口。
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: "http://127.0.0.1:50000/callback", State: "s",
 		CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", false, 0, Grant{Write: true, Exec: true, Node: false})
+	to, err := s.Approve(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator}, req, "https://panel.example.com", false, 0, Grant{Write: true, Exec: true, Node: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestOAuthNodeExec(t *testing.T) {
 	redirect := "https://claude.ai/api/mcp/auth_callback"
 	client := register(t, hs, redirect)
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, Grant{Write: true, Exec: true, Node: true}); err == nil {
+	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator}, req, "https://panel.example.com", true, 30, Grant{Write: true, Exec: true, Node: true}); err == nil {
 		t.Error("操作员不能授权节点终端")
 	}
 	admin := auth.User{ID: 3, Role: auth.RoleAdmin}
@@ -250,7 +250,7 @@ func TestOAuthPanel(t *testing.T) {
 	redirect := "https://claude.ai/api/mcp/auth_callback"
 	client := register(t, hs, redirect)
 	req := &nagiv1.OAuthRequest{ResponseType: "code", ClientId: client, RedirectUri: redirect, CodeChallenge: challenge(verifier), CodeChallengeMethod: "S256"}
-	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator}, req, "https://panel.example.com", true, 30, Grant{Panel: true}); err == nil {
+	if _, err := s.Approve(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator}, req, "https://panel.example.com", true, 30, Grant{Panel: true}); err == nil {
 		t.Error("操作员不能授权管理面板")
 	}
 	to, err := s.Approve(ctx, auth.User{ID: 3, Role: auth.RoleAdmin}, req, "https://panel.example.com", true, 30, Grant{Panel: true})

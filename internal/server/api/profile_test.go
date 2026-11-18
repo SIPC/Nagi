@@ -25,7 +25,7 @@ func TestUpdateProfile(t *testing.T) {
 	}
 	q := store.New(d)
 	s := &authService{&API{Q: q, Auth: auth.New(q, nil)}}
-	ctx = auth.WithUser(ctx, auth.User{ID: 7, Name: "admin", Role: auth.RoleViewer})
+	ctx = auth.WithUser(ctx, auth.User{ID: 7, Name: "admin", Role: auth.RoleViewer, Perms: auth.PresetViewer})
 	update := func(name string, avatar []byte) error {
 		_, err := s.UpdateProfile(ctx, connect.NewRequest(&nagiv1.UpdateProfileRequest{DisplayName: name, Avatar: avatar}))
 		return err

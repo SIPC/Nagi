@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"slices"
-	"strconv"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -18,17 +17,32 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// 访问范围（见 docs/panel.md#访问范围）：操作员和只读成员可以只访问指定的项目、节点。
-// 请求里的项目、节点在这里统一核对，回复里范围外的内容在这里去掉，处理函数不用管。
+// 访问范围和权限（见 docs/panel.md#访问范围、#成员和角色）：不是管理员的成员只能访问范围内的项目、节点，
+// 回复里只留他有权限看的内容。请求里的项目、节点在这里统一核对，回复在 clean.go 里统一清理，处理函数不用管。
 
-// access 是一个成员能访问的项目和节点。nil 的 *access 和 nil 的集合都表示全部。
+// access 是一个成员能访问的项目、节点和他的权限。nil 的 *access 表示管理员（全部）；nil 的集合表示全部。
 type access struct {
+	perms    auth.Perms
 	projects map[string]bool
 	nodes    map[string]bool
+	// names 是全部节点的 ID → 名称（清理回复里的节点名用），按需读出。
+	names map[string]string
 }
 
 func (x *access) project(id string) bool { return x == nil || x.projects == nil || x.projects[id] }
-func (x *access) node(id string) bool    { return x == nil || x.nodes == nil || x.nodes[id] }
+
+// nodeInScope 判断节点在不在访问范围内（不看「查看节点」权限）。
+func (x *access) nodeInScope(id string) bool {
+	return x == nil || id != "" && (x.nodes == nil || x.nodes[id])
+}
+
+// node 判断成员看不看得到这个节点：在范围内，并且有「查看节点」权限。看不到的节点在回复里一律是「其他节点」。
+func (x *access) node(id string) bool {
+	return x == nil || x.perms.Has(auth.PermNodeView) && x.nodeInScope(id)
+}
+
+// can 判断有没有一项权限。
+func (x *access) can(p auth.Perm) bool { return x == nil || x.perms.Has(p) }
 
 func toSet(ids []string) map[string]bool {
 	m := make(map[string]bool, len(ids))
@@ -38,12 +52,12 @@ func toSet(ids []string) map[string]bool {
 	return m
 }
 
-// loadAccess 读出用户的访问范围。管理员和两项都是全部的成员返回 nil。
+// loadAccess 读出成员的访问范围和权限。管理员和没登录的请求返回 nil。
 func (a *API) loadAccess(ctx context.Context, u auth.User) (*access, error) {
-	if u.ID == 0 || u.Role == auth.RoleAdmin || !u.LimitProjects && !u.LimitNodes {
+	if u.ID == 0 || u.IsAdmin() {
 		return nil, nil
 	}
-	x := &access{}
+	x := &access{perms: u.Perms}
 	if u.LimitProjects {
 		ids, err := a.Q.ListUserProjects(ctx, u.ID)
 		if err != nil {
@@ -60,7 +74,20 @@ func (a *API) loadAccess(ctx context.Context, u auth.User) (*access, error) {
 		}
 		x.projects = toSet(append(ids, more...))
 	}
-	if u.LimitNodes {
+	switch {
+	case u.NodesFollow:
+		// 跟随项目：范围内项目的容器所在的节点，按当时的位置算，容器迁走后原节点就不在范围内。
+		rows, err := a.Q.ContainerNodes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		x.nodes = map[string]bool{}
+		for _, r := range rows {
+			if x.project(r.ProjectID) {
+				x.nodes[r.NodeID] = true
+			}
+		}
+	case u.LimitNodes:
 		ids, err := a.Q.ListUserNodes(ctx, u.ID)
 		if err != nil {
 			return nil, err
@@ -92,27 +119,46 @@ var (
 	scopeNodeFields    = map[protoreflect.Name]bool{"node_id": true, "node_ids": true, "standby_node_id": true, "witness_node_id": true}
 )
 
-// scopeFiltered 是请求里没有项目、节点，靠过滤回复（或者另外处理）的接口。新增这类接口时要在这里登记，
-// 并在 filterReply 或 checkRequest 里处理，scope_test.go 会检查。
+// scopeFiltered 是请求里没有项目、节点，靠清理回复（或者另外处理）的项目和节点接口。新增这类接口时要在这里登记，
+// 并在 clean.go 或 checkRequest 里处理，scope_test.go 会检查。
 var scopeFiltered = map[string]bool{
 	nagiv1connect.ProjectServiceListProjectsProcedure:  true,
 	nagiv1connect.ProjectServiceCreateProjectProcedure: true, // 目标节点按 node_id 核对，新项目加进范围
 	nagiv1connect.NodeServiceListNodesProcedure:        true,
-	nagiv1connect.NodeServiceGetPanelMeshProcedure:     true,
+	nagiv1connect.NodeServiceGetPanelMeshProcedure:     true, // 只给管理员
 }
 
 func scopedService(procedure string) bool {
 	return strings.HasPrefix(procedure, "/"+nagiv1connect.ProjectServiceName+"/") || strings.HasPrefix(procedure, "/"+nagiv1connect.NodeServiceName+"/")
 }
 
-// checkRequest 核对请求里的项目和节点。
+// checkRequest 核对请求里的项目和节点。范围外、或者没有「查看节点」权限时看不到的节点一律当作不存在。
+// 成员看不到的、原来就有的节点（管理员设的备份节点、入口节点）在这里补回请求里，改别的不受影响。
 func (a *API) checkRequest(ctx context.Context, x *access, procedure string, msg any) error {
 	m, ok := msg.(proto.Message)
 	if !ok || !scopedService(procedure) {
 		return nil
 	}
-	if q, ok := msg.(*nagiv1.QueryNodeMetricsRequest); ok && projectMetrics(x, q.GetPrefix()) {
-		return nil
+	switch m := msg.(type) {
+	case *nagiv1.QueryNodeMetricsRequest:
+		return a.checkMetricsRequest(ctx, x, m)
+	case *nagiv1.SetBackupNodesRequest:
+		if !x.project(m.GetProjectId()) {
+			return projectNotFound()
+		}
+		// 看不到的备份节点在回复里是空的 ID：去掉空的，再把原来的补回原来的位置。新加的备份节点要看得到。
+		old := a.backupNodesOf(ctx, m.GetProjectId(), m.GetContainer())
+		m.BackupNodeIds = a.keepHidden(x, old, m.GetBackupNodeIds())
+		for _, id := range m.GetBackupNodeIds() {
+			if !x.node(id) && !slices.Contains(old, id) {
+				return nodeNotFound()
+			}
+		}
+		for id := range m.GetReplicaDirs() {
+			if !x.node(id) {
+				delete(m.ReplicaDirs, id)
+			}
+		}
 	}
 	r := m.ProtoReflect()
 	var err error
@@ -149,16 +195,9 @@ func (a *API) checkRequest(ctx context.Context, x *access, procedure string, msg
 				}
 			}
 		}
-	case *nagiv1.SetBackupNodesRequest:
-		// 新加的备份节点要在范围内；原来就有的（管理员设的）可以留着，改别的不受影响。
-		old := a.backupNodesOf(ctx, m.GetProjectId(), m.GetContainer())
-		for _, id := range m.GetBackupNodeIds() {
-			if !x.node(id) && !slices.Contains(old, id) {
-				return nodeNotFound()
-			}
-		}
 	case *nagiv1.PingNodeMeshRequest:
-		if owner := a.meshNodes(ctx)[hex.EncodeToString(m.GetPublicKey())]; owner != "" && !x.node(owner) {
+		// 不属于任何节点的对端（面板、备用面板、已移除的节点）只给管理员。
+		if owner := a.meshNodes(ctx)[hex.EncodeToString(m.GetPublicKey())]; owner == "" || !x.node(owner) {
 			return nodeNotFound()
 		}
 	// 映射的入口节点在 route 里面，上面只看最外层，这里单独核对。
@@ -174,28 +213,86 @@ func (a *API) checkRequest(ctx context.Context, x *access, procedure string, msg
 	return nil
 }
 
-// checkEntryNodes 核对映射的入口节点。这个映射原来就有的入口节点（管理员设的）可以留着，改别的设置不受影响。
+// keepHidden 把成员看不到的原有节点补回列表：看不到的留在原来的位置，看得到的按请求的顺序填进其余位置，多出来的放在最后。
+// 请求里的空 ID（回复里看不到的节点）去掉。
+func (a *API) keepHidden(x *access, old, req []string) []string {
+	visible := make([]string, 0, len(req))
+	for _, id := range req {
+		if id != "" && !slices.Contains(visible, id) {
+			visible = append(visible, id)
+		}
+	}
+	out := make([]string, 0, len(old)+len(visible))
+	for _, id := range old {
+		if !x.node(id) {
+			out = append(out, id)
+		} else if len(visible) > 0 {
+			out = append(out, visible[0])
+			visible = visible[1:]
+		}
+	}
+	return append(out, visible...)
+}
+
+// checkMetricsRequest：节点整体的序列要节点在范围内；项目页查本项目容器的占用（前缀 c:<项目 ID>/）时，
+// 节点在范围外也放行，但容器要确实在这台节点上，不能借报错探出别的节点在不在（回复经过 filterMetrics，只剩这个项目的序列）。
+func (a *API) checkMetricsRequest(ctx context.Context, x *access, m *nagiv1.QueryNodeMetricsRequest) error {
+	if x.node(m.GetNodeId()) {
+		return nil
+	}
+	kind, rest, _ := strings.Cut(m.GetPrefix(), ":")
+	project, ok := metricProject(rest)
+	if kind == "node" || kind == "m" || !ok || !x.project(project) {
+		return nodeNotFound()
+	}
+	rows, err := a.Q.ContainerNodes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if r.ProjectID == project && r.NodeID == m.GetNodeId() {
+			return nil
+		}
+	}
+	return nodeNotFound()
+}
+
+// checkEntryNodes 核对映射的入口节点。看不到的入口节点在回复里是空的 ID：去掉空的，把这个映射原来就有的
+// 看不到的入口节点（管理员设的）补回去，改别的设置不受影响。
 func (a *API) checkEntryNodes(ctx context.Context, x *access, projectID string, r *nagiv1.Exposure) error {
+	if r == nil {
+		return nil
+	}
 	var kept []string
+	if r.GetName() != "" {
+		routes, err := a.Q.ListRoutes(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		for _, old := range routes {
+			if old.Name == r.GetName() {
+				kept = projects.RouteProto(old).GetEntryNodes()
+			}
+		}
+	}
+	nodes := make([]string, 0, len(r.GetEntryNodes()))
 	for _, id := range r.GetEntryNodes() {
-		if x.node(id) {
-			continue
-		}
-		if kept == nil && r.GetName() != "" {
-			routes, err := a.Q.ListRoutes(ctx, projectID)
-			if err != nil {
-				return err
-			}
-			for _, old := range routes {
-				if old.Name == r.GetName() {
-					kept = projects.RouteProto(old).GetEntryNodes()
-				}
-			}
-		}
-		if !slices.Contains(kept, id) {
+		switch {
+		case id == "":
+		case x.node(id):
+			nodes = append(nodes, id)
+		case slices.Contains(kept, id):
+			nodes = append(nodes, id)
+		default:
 			return nodeNotFound()
 		}
 	}
+	for _, id := range kept {
+		if !x.node(id) && !slices.Contains(nodes, id) {
+			nodes = append(nodes, id)
+		}
+	}
+	r.EntryNodes = nodes
 	return nil
 }
 
@@ -236,140 +333,15 @@ func (a *API) meshNodes(ctx context.Context) map[string]string {
 	return out
 }
 
-// filterReply 去掉回复里范围外的内容。
-func (a *API) filterReply(ctx context.Context, x *access, msg any) {
-	switch m := msg.(type) {
-	case *nagiv1.ListProjectsResponse:
-		kept := m.Projects[:0]
-		for _, s := range m.GetProjects() {
-			if x.project(s.GetProject().GetId()) {
-				hideLinks(x, s.GetProject())
-				kept = append(kept, s)
-			}
-		}
-		m.Projects = kept
-	case *nagiv1.ProjectSummary:
-		hideLinks(x, m.GetProject())
-	case *nagiv1.Project:
-		hideLinks(x, m)
-	case *nagiv1.ListNodesResponse:
-		a.filterNodes(ctx, x, m)
-	case *nagiv1.MeshStatus:
-		owners := a.meshNodes(ctx)
-		kept := m.Peers[:0]
-		for _, p := range m.GetPeers() {
-			if id := owners[hex.EncodeToString(p.GetPublicKey())]; id == "" || x.node(id) {
-				kept = append(kept, p)
-			}
-		}
-		m.Peers = kept
-	case *nagiv1.QueryMetricsResponse:
-		a.filterMetrics(ctx, x, m)
-	case *nagiv1.ListNodeReplicasResponse:
-		kept := m.Replicas[:0]
-		for _, r := range m.GetReplicas() {
-			if x.project(r.GetReplica().GetProjectId()) {
-				kept = append(kept, r)
-			}
-		}
-		m.Replicas = kept
-	}
-}
-
-// hideLinks：已连接的项目不在范围内时不显示名称，界面显示"另一个项目"。网络名留着，配置里要用它访问对方的容器。
-func hideLinks(x *access, p *nagiv1.Project) {
-	for _, l := range p.GetLinks() {
-		if !x.project(l.GetProjectId()) {
-			l.Name = ""
-		}
-	}
-}
-
-// filterNodes 只留范围内的节点。范围内项目的容器用到的范围外节点放进 other_nodes，只给名称和是否在线。
-// 节点上的容器数只算范围内的项目；不认识的容器只有管理员能处理，不给。
-func (a *API) filterNodes(ctx context.Context, x *access, m *nagiv1.ListNodesResponse) {
-	summaries, _ := a.Projects.List(ctx)
-	used := map[string]bool{}
-	count := map[string]int32{}
-	for _, s := range summaries {
-		if !x.project(s.GetProject().GetId()) {
-			continue
-		}
-		for _, c := range s.GetProject().GetContainers() {
-			count[c.GetNodeId()]++
-			used[c.GetNodeId()] = true
-			for _, id := range c.GetBackupNodeIds() {
-				used[id] = true
-			}
-			for _, p := range []*nagiv1.FailoverParticipant{c.GetFailover().GetA(), c.GetFailover().GetB(), c.GetFailover().GetWitness()} {
-				used[p.GetNodeId()] = true
-			}
-		}
-	}
-	kept := m.Nodes[:0]
-	for _, n := range m.GetNodes() {
-		n.UnknownContainers, n.StaleProjects = nil, nil
-		if x.projects != nil {
-			n.Containers = count[n.GetId()]
-		}
-		if x.node(n.GetId()) {
-			kept = append(kept, n)
-		} else if used[n.GetId()] {
-			m.OtherNodes = append(m.OtherNodes, &nagiv1.Node{Id: n.GetId(), Name: n.GetName(), Online: n.GetOnline()})
-		}
-	}
-	m.Nodes = kept
-}
-
-// filterMetrics：节点整体的序列（node:）照常给。到范围外节点的 mesh 流量（m:）不显示是哪个节点，换成编号，
-// 概览算对外流量时仍然能从网卡流量里减掉它。其余序列都以"<种类>:<项目 ID>/"开头（容器 c:、端口映射 r:、
-// 日志 l: 等），只留范围内的项目；不是这种形式的也去掉，以后加了新的种类不会漏。
-func (a *API) filterMetrics(ctx context.Context, x *access, m *nagiv1.QueryMetricsResponse) {
-	var owners map[string]string
-	hidden := map[string]string{}
-	kept := m.Series[:0]
-	for _, s := range m.GetSeries() {
-		kind, rest, _ := strings.Cut(s.GetName(), ":")
-		switch kind {
-		case "node":
-		case "m":
-			key, metric, _ := strings.Cut(rest, ":")
-			if owners == nil {
-				owners = a.meshNodes(ctx)
-			}
-			if id := owners[key]; id != "" && !x.node(id) {
-				if hidden[key] == "" {
-					hidden[key] = strconv.Itoa(len(hidden))
-				}
-				s.Name = "m:" + hidden[key] + ":" + metric
-			}
-		default:
-			if project, ok := metricProject(rest); !ok || !x.project(project) {
-				continue
-			}
-		}
-		kept = append(kept, s)
-	}
-	m.Series = kept
-}
-
 // metricProject 取"<项目 ID>/..."里的项目 ID。
 func metricProject(rest string) (string, bool) {
 	project, _, ok := strings.Cut(rest, "/")
 	return project, ok && project != ""
 }
 
-// projectMetrics 判断是不是只查一个范围内项目的序列（前缀形如 c:<项目 ID>/）。项目页要看本项目容器的占用，
-// 容器在范围外的节点上时也放行：回复经过 filterMetrics，只剩这个项目的序列。
-func projectMetrics(x *access, prefix string) bool {
-	kind, rest, _ := strings.Cut(prefix, ":")
-	project, ok := metricProject(rest)
-	return kind != "node" && kind != "m" && ok && x.project(project)
-}
-
 // afterCall 处理调用成功以后的事：限定了项目范围的成员新建的项目加进他的范围。
 func (a *API) afterCall(ctx context.Context, x *access, procedure string, msg any) {
-	if procedure != nagiv1connect.ProjectServiceCreateProjectProcedure || x.projects == nil {
+	if procedure != nagiv1connect.ProjectServiceCreateProjectProcedure || x == nil || x.projects == nil {
 		return
 	}
 	if p, ok := msg.(*nagiv1.Project); ok {
@@ -380,8 +352,13 @@ func (a *API) afterCall(ctx context.Context, x *access, procedure string, msg an
 	}
 }
 
-// projectAllowed 给不走 Connect 的入口（终端、上传、卷文件）核对项目范围。
-func (a *API) projectAllowed(ctx context.Context, u auth.User, projectID string) error {
+// projectAllowed 给不走 Connect 的入口（终端、上传、卷文件）核对项目范围和权限。
+func (a *API) projectAllowed(ctx context.Context, u auth.User, projectID string, need ...auth.Perm) error {
+	for _, p := range need {
+		if !u.Can(p) {
+			return errNoPermission
+		}
+	}
 	x, err := a.loadAccess(ctx, u)
 	if err != nil {
 		return err
@@ -392,7 +369,9 @@ func (a *API) projectAllowed(ctx context.Context, u auth.User, projectID string)
 	return nil
 }
 
-// scopeCheck 是访问范围的拦截器，放在角色检查之后。
+var errNoPermission = i18n.New("当前账号没有权限执行这个操作")
+
+// scopeCheck 是访问范围的拦截器，放在角色检查之后：核对请求，清理回复（clean.go）。
 type scopeCheck struct{ a *API }
 
 func (s scopeCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
@@ -434,7 +413,7 @@ func (s scopeCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) conn
 	}
 }
 
-// scopedConn 在流式接口收到请求时核对范围，发出的消息同样过滤。
+// scopedConn 在流式接口收到请求时核对范围，发出的消息同样清理。
 type scopedConn struct {
 	connect.StreamingHandlerConn
 	ctx context.Context

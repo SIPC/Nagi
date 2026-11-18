@@ -384,6 +384,18 @@ const (
 	// SettingsServiceSetAdminNetworksProcedure is the fully-qualified name of the SettingsService's
 	// SetAdminNetworks RPC.
 	SettingsServiceSetAdminNetworksProcedure = "/nagi.v1.SettingsService/SetAdminNetworks"
+	// SettingsServiceListRolesProcedure is the fully-qualified name of the SettingsService's ListRoles
+	// RPC.
+	SettingsServiceListRolesProcedure = "/nagi.v1.SettingsService/ListRoles"
+	// SettingsServiceCreateRoleProcedure is the fully-qualified name of the SettingsService's
+	// CreateRole RPC.
+	SettingsServiceCreateRoleProcedure = "/nagi.v1.SettingsService/CreateRole"
+	// SettingsServiceUpdateRoleProcedure is the fully-qualified name of the SettingsService's
+	// UpdateRole RPC.
+	SettingsServiceUpdateRoleProcedure = "/nagi.v1.SettingsService/UpdateRole"
+	// SettingsServiceDeleteRoleProcedure is the fully-qualified name of the SettingsService's
+	// DeleteRole RPC.
+	SettingsServiceDeleteRoleProcedure = "/nagi.v1.SettingsService/DeleteRole"
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
@@ -2752,6 +2764,12 @@ type SettingsServiceClient interface {
 	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
 	GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error)
 	SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error)
+	// 角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+	// 正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+	ListRoles(context.Context, *connect.Request[v1.ListRolesRequest]) (*connect.Response[v1.ListRolesResponse], error)
+	CreateRole(context.Context, *connect.Request[v1.CreateRoleRequest]) (*connect.Response[v1.Role], error)
+	UpdateRole(context.Context, *connect.Request[v1.UpdateRoleRequest]) (*connect.Response[v1.Role], error)
+	DeleteRole(context.Context, *connect.Request[v1.DeleteRoleRequest]) (*connect.Response[v1.DeleteRoleResponse], error)
 }
 
 // NewSettingsServiceClient constructs a client for the nagi.v1.SettingsService service. By default,
@@ -3053,6 +3071,30 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(settingsServiceMethods.ByName("SetAdminNetworks")),
 			connect.WithClientOptions(opts...),
 		),
+		listRoles: connect.NewClient[v1.ListRolesRequest, v1.ListRolesResponse](
+			httpClient,
+			baseURL+SettingsServiceListRolesProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("ListRoles")),
+			connect.WithClientOptions(opts...),
+		),
+		createRole: connect.NewClient[v1.CreateRoleRequest, v1.Role](
+			httpClient,
+			baseURL+SettingsServiceCreateRoleProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("CreateRole")),
+			connect.WithClientOptions(opts...),
+		),
+		updateRole: connect.NewClient[v1.UpdateRoleRequest, v1.Role](
+			httpClient,
+			baseURL+SettingsServiceUpdateRoleProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("UpdateRole")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteRole: connect.NewClient[v1.DeleteRoleRequest, v1.DeleteRoleResponse](
+			httpClient,
+			baseURL+SettingsServiceDeleteRoleProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("DeleteRole")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -3106,6 +3148,10 @@ type settingsServiceClient struct {
 	deletePasskey            *connect.Client[v1.DeletePasskeyRequest, v1.Security]
 	getAdminNetworks         *connect.Client[v1.GetAdminNetworksRequest, v1.AdminNetworks]
 	setAdminNetworks         *connect.Client[v1.AdminNetworks, v1.AdminNetworks]
+	listRoles                *connect.Client[v1.ListRolesRequest, v1.ListRolesResponse]
+	createRole               *connect.Client[v1.CreateRoleRequest, v1.Role]
+	updateRole               *connect.Client[v1.UpdateRoleRequest, v1.Role]
+	deleteRole               *connect.Client[v1.DeleteRoleRequest, v1.DeleteRoleResponse]
 }
 
 // GetSettings calls nagi.v1.SettingsService.GetSettings.
@@ -3348,6 +3394,26 @@ func (c *settingsServiceClient) SetAdminNetworks(ctx context.Context, req *conne
 	return c.setAdminNetworks.CallUnary(ctx, req)
 }
 
+// ListRoles calls nagi.v1.SettingsService.ListRoles.
+func (c *settingsServiceClient) ListRoles(ctx context.Context, req *connect.Request[v1.ListRolesRequest]) (*connect.Response[v1.ListRolesResponse], error) {
+	return c.listRoles.CallUnary(ctx, req)
+}
+
+// CreateRole calls nagi.v1.SettingsService.CreateRole.
+func (c *settingsServiceClient) CreateRole(ctx context.Context, req *connect.Request[v1.CreateRoleRequest]) (*connect.Response[v1.Role], error) {
+	return c.createRole.CallUnary(ctx, req)
+}
+
+// UpdateRole calls nagi.v1.SettingsService.UpdateRole.
+func (c *settingsServiceClient) UpdateRole(ctx context.Context, req *connect.Request[v1.UpdateRoleRequest]) (*connect.Response[v1.Role], error) {
+	return c.updateRole.CallUnary(ctx, req)
+}
+
+// DeleteRole calls nagi.v1.SettingsService.DeleteRole.
+func (c *settingsServiceClient) DeleteRole(ctx context.Context, req *connect.Request[v1.DeleteRoleRequest]) (*connect.Response[v1.DeleteRoleResponse], error) {
+	return c.deleteRole.CallUnary(ctx, req)
+}
+
 // SettingsServiceHandler is an implementation of the nagi.v1.SettingsService service.
 type SettingsServiceHandler interface {
 	GetSettings(context.Context, *connect.Request[v1.GetSettingsRequest]) (*connect.Response[v1.GetSettingsResponse], error)
@@ -3431,6 +3497,12 @@ type SettingsServiceHandler interface {
 	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
 	GetAdminNetworks(context.Context, *connect.Request[v1.GetAdminNetworksRequest]) (*connect.Response[v1.AdminNetworks], error)
 	SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error)
+	// 角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+	// 正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+	ListRoles(context.Context, *connect.Request[v1.ListRolesRequest]) (*connect.Response[v1.ListRolesResponse], error)
+	CreateRole(context.Context, *connect.Request[v1.CreateRoleRequest]) (*connect.Response[v1.Role], error)
+	UpdateRole(context.Context, *connect.Request[v1.UpdateRoleRequest]) (*connect.Response[v1.Role], error)
+	DeleteRole(context.Context, *connect.Request[v1.DeleteRoleRequest]) (*connect.Response[v1.DeleteRoleResponse], error)
 }
 
 // NewSettingsServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -3728,6 +3800,30 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		connect.WithSchema(settingsServiceMethods.ByName("SetAdminNetworks")),
 		connect.WithHandlerOptions(opts...),
 	)
+	settingsServiceListRolesHandler := connect.NewUnaryHandler(
+		SettingsServiceListRolesProcedure,
+		svc.ListRoles,
+		connect.WithSchema(settingsServiceMethods.ByName("ListRoles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceCreateRoleHandler := connect.NewUnaryHandler(
+		SettingsServiceCreateRoleProcedure,
+		svc.CreateRole,
+		connect.WithSchema(settingsServiceMethods.ByName("CreateRole")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceUpdateRoleHandler := connect.NewUnaryHandler(
+		SettingsServiceUpdateRoleProcedure,
+		svc.UpdateRole,
+		connect.WithSchema(settingsServiceMethods.ByName("UpdateRole")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceDeleteRoleHandler := connect.NewUnaryHandler(
+		SettingsServiceDeleteRoleProcedure,
+		svc.DeleteRole,
+		connect.WithSchema(settingsServiceMethods.ByName("DeleteRole")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.SettingsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SettingsServiceGetSettingsProcedure:
@@ -3826,6 +3922,14 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceGetAdminNetworksHandler.ServeHTTP(w, r)
 		case SettingsServiceSetAdminNetworksProcedure:
 			settingsServiceSetAdminNetworksHandler.ServeHTTP(w, r)
+		case SettingsServiceListRolesProcedure:
+			settingsServiceListRolesHandler.ServeHTTP(w, r)
+		case SettingsServiceCreateRoleProcedure:
+			settingsServiceCreateRoleHandler.ServeHTTP(w, r)
+		case SettingsServiceUpdateRoleProcedure:
+			settingsServiceUpdateRoleHandler.ServeHTTP(w, r)
+		case SettingsServiceDeleteRoleProcedure:
+			settingsServiceDeleteRoleHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -4025,6 +4129,22 @@ func (UnimplementedSettingsServiceHandler) GetAdminNetworks(context.Context, *co
 
 func (UnimplementedSettingsServiceHandler) SetAdminNetworks(context.Context, *connect.Request[v1.AdminNetworks]) (*connect.Response[v1.AdminNetworks], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetAdminNetworks is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) ListRoles(context.Context, *connect.Request[v1.ListRolesRequest]) (*connect.Response[v1.ListRolesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.ListRoles is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) CreateRole(context.Context, *connect.Request[v1.CreateRoleRequest]) (*connect.Response[v1.Role], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.CreateRole is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) UpdateRole(context.Context, *connect.Request[v1.UpdateRoleRequest]) (*connect.Response[v1.Role], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.UpdateRole is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) DeleteRole(context.Context, *connect.Request[v1.DeleteRoleRequest]) (*connect.Response[v1.DeleteRoleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.DeleteRole is not implemented"))
 }
 
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.

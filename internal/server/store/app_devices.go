@@ -42,6 +42,9 @@ type AppDeviceUser struct {
 	AllProjects int64
 	AllNodes    int64
 	Avatar      []byte
+	RoleID      int64
+	NodesFollow int64
+	Perms       string
 }
 
 const appDeviceColumns = `d.id, d.user_id, d.name, d.model, d.android_version, d.app_version, d.device_key, d.confirm_key, d.push_key,
@@ -67,7 +70,7 @@ func (q *Queries) CreateAppDevice(ctx context.Context, d AppDevice) error {
 
 // AppDevicesWithSerials 列出记了证明证书序列号的手机和它的成员，用来按新的吊销列表复查。
 func (q *Queries) AppDevicesWithSerials(ctx context.Context) ([]AppDeviceUser, error) {
-	rows, err := q.db.QueryContext(ctx, `SELECT `+appDeviceColumns+`, u.username, u.display_name, u.role, u.all_projects, u.all_nodes, u.avatar
+	rows, err := q.db.QueryContext(ctx, `SELECT `+appDeviceColumns+`, u.username, u.display_name, u.role, u.all_projects, u.all_nodes, u.avatar, u.role_id, u.nodes_follow, `+RolePermsColumn+`
 		FROM app_devices d JOIN users u ON u.id = d.user_id WHERE d.attestation_serials != '' ORDER BY d.created_at, d.id`)
 	if err != nil {
 		return nil, err
@@ -76,7 +79,7 @@ func (q *Queries) AppDevicesWithSerials(ctx context.Context) ([]AppDeviceUser, e
 	out := []AppDeviceUser{}
 	for rows.Next() {
 		var d AppDeviceUser
-		if err := rows.Scan(append(appDeviceDest(&d.AppDevice), &d.Username, &d.DisplayName, &d.Role, &d.AllProjects, &d.AllNodes, &d.Avatar)...); err != nil {
+		if err := rows.Scan(append(appDeviceDest(&d.AppDevice), &d.Username, &d.DisplayName, &d.Role, &d.AllProjects, &d.AllNodes, &d.Avatar, &d.RoleID, &d.NodesFollow, &d.Perms)...); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -93,8 +96,8 @@ func (q *Queries) SetAppDeviceRevoked(ctx context.Context, id, reason string) er
 // AppDeviceByID 按设备 ID 找手机和它的成员。
 func (q *Queries) AppDeviceByID(ctx context.Context, id string) (AppDeviceUser, error) {
 	var d AppDeviceUser
-	dest := append(appDeviceDest(&d.AppDevice), &d.Username, &d.DisplayName, &d.Role, &d.AllProjects, &d.AllNodes, &d.Avatar)
-	err := q.db.QueryRowContext(ctx, `SELECT `+appDeviceColumns+`, u.username, u.display_name, u.role, u.all_projects, u.all_nodes, u.avatar
+	dest := append(appDeviceDest(&d.AppDevice), &d.Username, &d.DisplayName, &d.Role, &d.AllProjects, &d.AllNodes, &d.Avatar, &d.RoleID, &d.NodesFollow, &d.Perms)
+	err := q.db.QueryRowContext(ctx, `SELECT `+appDeviceColumns+`, u.username, u.display_name, u.role, u.all_projects, u.all_nodes, u.avatar, u.role_id, u.nodes_follow, `+RolePermsColumn+`
 		FROM app_devices d JOIN users u ON u.id = d.user_id WHERE d.id = ?`, id).Scan(dest...)
 	return d, err
 }

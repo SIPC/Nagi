@@ -45,13 +45,13 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	switch {
 	case len(command) == 0:
 		return ExecResult{}, i18n.New("命令不能为空")
-	case !auth.CanOperate(u.Role) || u.TokenID != 0 && !u.AllowExec:
-		return fail(i18n.New("当前账号没有权限执行这个操作"))
+	case u.TokenID != 0 && !u.AllowExec:
+		return fail(errNoPermission)
 	}
-	if err := a.projectAllowed(ctx, u, projectID); err != nil {
+	if err := a.projectAllowed(ctx, u, projectID, auth.PermTerminal); err != nil {
 		return fail(err)
 	}
-	if err := a.checkPrivilegedEntry(ctx, u.Role, projectID, container); err != nil {
+	if err := a.checkPrivilegedEntry(ctx, u, projectID, container); err != nil {
 		return fail(err)
 	}
 	if a.Panel.Standby != nil {

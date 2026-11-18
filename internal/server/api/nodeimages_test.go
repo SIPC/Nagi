@@ -67,7 +67,7 @@ func TestNodeImagesElevation(t *testing.T) {
 	// 实际的网页会话：没有确认时拦截器拒绝，带上要确认的标记。
 	h := newAuditHarness(t)
 	ctx := context.Background()
-	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.RoleAdmin); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
 	jar, _ := cookiejar.New(nil)

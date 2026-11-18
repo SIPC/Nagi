@@ -19,7 +19,7 @@ import (
 )
 
 // RunNodeCommand 在节点上执行一条命令并等它结束，给 MCP 的 node_exec 工具用（见 docs/mcp.md#节点命令）。
-// 这等于节点的 root，所以比节点终端还多一道：只有管理员的访问令牌、创建时单独勾选了「节点终端」才能用；
+// 这等于节点的 root，所以比节点终端还多一道：只有有「节点终端和文件」权限的成员的访问令牌、创建时单独勾选了「节点终端」才能用；
 // 网页的会话不走这里。每次执行都记进活动记录（连同命令），并发一条告警。节点上关闭了节点访问时节点会拒绝。
 func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, timeout time.Duration) (ExecResult, error) {
 	u := auth.CurrentUser(ctx)
@@ -30,8 +30,8 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 	switch {
 	case command == "":
 		return ExecResult{}, i18n.New("命令不能为空")
-	case u.Role != auth.RoleAdmin || u.TokenID == 0 || !u.AllowNodeExec:
-		return fail(i18n.New("当前账号没有权限执行这个操作"))
+	case u.TokenID == 0 || !u.AllowNodeExec || a.nodeRootAllowed(ctx, u, nodeID) != nil:
+		return fail(errNoPermission)
 	case a.Panel.Standby != nil:
 		return fail(a.standbyError())
 	}

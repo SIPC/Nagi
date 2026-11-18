@@ -39,7 +39,7 @@ func TestVolumeDirectLinkPermissions(t *testing.T) {
 	ref := &nagiv1.VolumeFileRef{ProjectId: "p", Container: "web", Volume: "data", Path: "a.txt"}
 	for name, u := range map[string]auth.User{
 		"令牌不能执行命令": {ID: 1, TokenID: 7, Role: auth.RoleAdmin},
-		"只读角色":     {ID: 2, Role: auth.RoleViewer},
+		"只读角色":     {ID: 2, Role: auth.RoleViewer, Perms: auth.PresetViewer},
 	} {
 		if _, err := h.a.VolumeDirectLink(auth.WithUser(context.Background(), u), ref); err == nil || errors.Is(err, ErrNoDirect) {
 			t.Errorf("%s：应该拒绝，实际 %v", name, err)

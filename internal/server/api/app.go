@@ -145,10 +145,14 @@ func (s *appService) Info(ctx context.Context, _ *connect.Request[nagiv1.AppInfo
 	out := &nagiv1.AppInfoResponse{
 		PanelName: s.Panel.Name(ctx), Version: s.Panel.Version, Features: appFeatures, PublicAddress: s.Panel.PublicHostPort(ctx),
 		Domain: s.Panel.Domain(ctx), UnlockMinutes: int32(s.Auth.AppUnlockMinutes(ctx)), DeviceName: u.DeviceName,
-		Username: u.Name, Role: u.Role,
+		Username: u.Name, Role: u.Role, Permissions: u.EffectivePerms().Names(),
 	}
 	if row, err := s.Q.GetUserByID(ctx, u.ID); err == nil {
 		out.DisplayName, out.Avatar, out.AvatarType = row.DisplayName, row.Avatar, avatarType(row.Avatar)
+		out.RoleId = row.RoleID
+		if r, err := s.Q.GetRole(ctx, row.RoleID); err == nil {
+			out.RoleName, out.RoleBuiltin = r.Name, r.Builtin
+		}
 	}
 	return connect.NewResponse(out), nil
 }

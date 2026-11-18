@@ -27,7 +27,7 @@ func TestSetBackupNodesReplicaDirAdminOnly(t *testing.T) {
 		return connect.CodeUnknown
 	}
 
-	operator := auth.WithUser(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator, ElevatedUntil: time.Now().Add(time.Minute).Unix()})
+	operator := auth.WithUser(context.Background(), auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, ElevatedUntil: time.Now().Add(time.Minute).Unix()})
 	if _, err := s.SetBackupNodes(operator, req(map[string]string{"n2": "/mnt/big"})); code(err) != connect.CodePermissionDenied {
 		t.Fatalf("操作员指定存放位置应该被拒绝：%v", err)
 	}
@@ -60,7 +60,7 @@ func TestReplicaDirNeedsElevation(t *testing.T) {
 	}
 	for _, role := range []string{auth.RoleOperator, auth.RoleViewer} {
 		for _, p := range []string{nagiv1connect.NodeServiceSetNodeReplicaDirProcedure, nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure} {
-			if auth.Allowed(role, p) {
+			if auth.Allowed(auth.PresetUser(role), p) {
 				t.Errorf("%s 不应该能调用 %s", role, p)
 			}
 		}

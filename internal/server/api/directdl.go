@@ -148,6 +148,16 @@ func (a *API) volumeDirect(ctx context.Context, u auth.User, ref *nagiv1.VolumeF
 	if err != nil {
 		return DirectResult{}, nil
 	}
+	// 直连的链接和命令里有节点的 IP：没有「查看访问地址」、或者节点在范围外时一律经面板中转（A3、B8）。
+	if !u.IsAdmin() {
+		x, err := a.loadAccess(ctx, u)
+		if err != nil {
+			return DirectResult{}, err
+		}
+		if !u.Can(auth.PermAddresses) || !x.node(nodeID) {
+			return DirectResult{}, nil
+		}
+	}
 	id := directdl.NewID()
 	claims := directdl.Claims{Kind: directdl.KindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
 		Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath(), ID: id, User: u.Name}
@@ -197,11 +207,11 @@ func (a *API) VolumeDirectHandler() http.Handler {
 			jsonFail(w, r, http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
-		if !auth.CanOperate(u.Role) {
-			jsonFail(w, r, http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
+		q := r.URL.Query()
+		if !u.Can(auth.PermFilesRead) {
+			jsonFail(w, r, http.StatusForbidden, errNoPermission)
 			return
 		}
-		q := r.URL.Query()
 		if err := a.projectAllowed(r.Context(), u, q.Get("project")); err != nil {
 			jsonFail(w, r, http.StatusNotFound, err)
 			return
@@ -217,7 +227,7 @@ func (a *API) VolumeDirectHandler() http.Handler {
 	})
 }
 
-// NodeDirectHandler：GET /api/node-file/direct?node=&path=，参数和权限同 /api/node-file 的下载（管理员，要先确认身份）。
+// NodeDirectHandler：GET /api/node-file/direct?node=&path=，参数和权限同 /api/node-file 的下载（节点终端和文件，要先确认身份）。
 // 带 mode=command 时回答加密 HTTP 下载的命令（writeCommand）。
 func (a *API) NodeDirectHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -229,9 +239,9 @@ func (a *API) NodeDirectHandler() http.Handler {
 		q := r.URL.Query()
 		nodeID, path := q.Get("node"), q.Get("path")
 		ctx := auth.WithRequest(auth.WithUser(r.Context(), u), r)
-		if u.Role != auth.RoleAdmin {
+		if err := a.nodeRootAllowed(ctx, u, nodeID); err != nil {
 			a.recordNodeAccess(ctx, "DownloadNodeFile", nodeID, path+": 当前账号没有权限执行这个操作", true)
-			jsonFail(w, r, http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
+			jsonFail(w, r, http.StatusForbidden, errNoPermission)
 			return
 		}
 		if !u.Elevated() {
@@ -257,11 +267,11 @@ func (a *API) VolumeDirectLink(ctx context.Context, ref *nagiv1.VolumeFileRef) (
 	return res, err
 }
 
-// NodeDirectLink 是 MCP 的 get_node_download_link：和 read_node_file 一样只给管理员，令牌要勾「节点终端」
+// NodeDirectLink 是 MCP 的 get_node_download_link：和 read_node_file 一样要「节点终端和文件」，令牌要勾「节点终端」
 // （网页的会话要做过高权限确认）。规则同 VolumeDirectLink。
 func (a *API) NodeDirectLink(ctx context.Context, nodeID, path string) (DirectResult, error) {
 	u := auth.CurrentUser(ctx)
-	if u.Role != auth.RoleAdmin || !u.ElevatedFor(nagiv1connect.NodeServiceReadNodeFileProcedure) {
+	if a.nodeRootAllowed(ctx, u, nodeID) != nil || !u.ElevatedFor(nagiv1connect.NodeServiceReadNodeFileProcedure) {
 		a.recordNodeAccess(ctx, "DownloadNodeFile", nodeID, path+": 当前账号没有权限执行这个操作", true)
 		return DirectResult{}, i18n.New("当前账号没有权限执行这个操作")
 	}

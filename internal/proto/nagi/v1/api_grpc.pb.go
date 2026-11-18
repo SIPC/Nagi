@@ -3079,6 +3079,10 @@ const (
 	SettingsService_DeletePasskey_FullMethodName            = "/nagi.v1.SettingsService/DeletePasskey"
 	SettingsService_GetAdminNetworks_FullMethodName         = "/nagi.v1.SettingsService/GetAdminNetworks"
 	SettingsService_SetAdminNetworks_FullMethodName         = "/nagi.v1.SettingsService/SetAdminNetworks"
+	SettingsService_ListRoles_FullMethodName                = "/nagi.v1.SettingsService/ListRoles"
+	SettingsService_CreateRole_FullMethodName               = "/nagi.v1.SettingsService/CreateRole"
+	SettingsService_UpdateRole_FullMethodName               = "/nagi.v1.SettingsService/UpdateRole"
+	SettingsService_DeleteRole_FullMethodName               = "/nagi.v1.SettingsService/DeleteRole"
 )
 
 // SettingsServiceClient is the client API for SettingsService service.
@@ -3166,6 +3170,12 @@ type SettingsServiceClient interface {
 	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
 	GetAdminNetworks(ctx context.Context, in *GetAdminNetworksRequest, opts ...grpc.CallOption) (*AdminNetworks, error)
 	SetAdminNetworks(ctx context.Context, in *AdminNetworks, opts ...grpc.CallOption) (*AdminNetworks, error)
+	// 角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+	// 正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
+	CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*Role, error)
+	UpdateRole(ctx context.Context, in *UpdateRoleRequest, opts ...grpc.CallOption) (*Role, error)
+	DeleteRole(ctx context.Context, in *DeleteRoleRequest, opts ...grpc.CallOption) (*DeleteRoleResponse, error)
 }
 
 type settingsServiceClient struct {
@@ -3674,6 +3684,46 @@ func (c *settingsServiceClient) SetAdminNetworks(ctx context.Context, in *AdminN
 	return out, nil
 }
 
+func (c *settingsServiceClient) ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRolesResponse)
+	err := c.cc.Invoke(ctx, SettingsService_ListRoles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*Role, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Role)
+	err := c.cc.Invoke(ctx, SettingsService_CreateRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) UpdateRole(ctx context.Context, in *UpdateRoleRequest, opts ...grpc.CallOption) (*Role, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Role)
+	err := c.cc.Invoke(ctx, SettingsService_UpdateRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) DeleteRole(ctx context.Context, in *DeleteRoleRequest, opts ...grpc.CallOption) (*DeleteRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteRoleResponse)
+	err := c.cc.Invoke(ctx, SettingsService_DeleteRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SettingsServiceServer is the server API for SettingsService service.
 // All implementations must embed UnimplementedSettingsServiceServer
 // for forward compatibility.
@@ -3759,6 +3809,12 @@ type SettingsServiceServer interface {
 	// 管理员登录地址（见 docs/panel.md#管理员登录地址）：只有管理员能看和改，保存时当前地址必须在列表里。
 	GetAdminNetworks(context.Context, *GetAdminNetworksRequest) (*AdminNetworks, error)
 	SetAdminNetworks(context.Context, *AdminNetworks) (*AdminNetworks, error)
+	// 角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+	// 正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
+	CreateRole(context.Context, *CreateRoleRequest) (*Role, error)
+	UpdateRole(context.Context, *UpdateRoleRequest) (*Role, error)
+	DeleteRole(context.Context, *DeleteRoleRequest) (*DeleteRoleResponse, error)
 	mustEmbedUnimplementedSettingsServiceServer()
 }
 
@@ -3912,6 +3968,18 @@ func (UnimplementedSettingsServiceServer) GetAdminNetworks(context.Context, *Get
 }
 func (UnimplementedSettingsServiceServer) SetAdminNetworks(context.Context, *AdminNetworks) (*AdminNetworks, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAdminNetworks not implemented")
+}
+func (UnimplementedSettingsServiceServer) ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRoles not implemented")
+}
+func (UnimplementedSettingsServiceServer) CreateRole(context.Context, *CreateRoleRequest) (*Role, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateRole not implemented")
+}
+func (UnimplementedSettingsServiceServer) UpdateRole(context.Context, *UpdateRoleRequest) (*Role, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateRole not implemented")
+}
+func (UnimplementedSettingsServiceServer) DeleteRole(context.Context, *DeleteRoleRequest) (*DeleteRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteRole not implemented")
 }
 func (UnimplementedSettingsServiceServer) mustEmbedUnimplementedSettingsServiceServer() {}
 func (UnimplementedSettingsServiceServer) testEmbeddedByValue()                         {}
@@ -4784,6 +4852,78 @@ func _SettingsService_SetAdminNetworks_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SettingsService_ListRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRolesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).ListRoles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_ListRoles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).ListRoles(ctx, req.(*ListRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_CreateRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).CreateRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_CreateRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).CreateRole(ctx, req.(*CreateRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_UpdateRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).UpdateRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_UpdateRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).UpdateRole(ctx, req.(*UpdateRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_DeleteRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).DeleteRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_DeleteRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).DeleteRole(ctx, req.(*DeleteRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SettingsService_ServiceDesc is the grpc.ServiceDesc for SettingsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -4974,6 +5114,22 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetAdminNetworks",
 			Handler:    _SettingsService_SetAdminNetworks_Handler,
+		},
+		{
+			MethodName: "ListRoles",
+			Handler:    _SettingsService_ListRoles_Handler,
+		},
+		{
+			MethodName: "CreateRole",
+			Handler:    _SettingsService_CreateRole_Handler,
+		},
+		{
+			MethodName: "UpdateRole",
+			Handler:    _SettingsService_UpdateRole_Handler,
+		},
+		{
+			MethodName: "DeleteRole",
+			Handler:    _SettingsService_DeleteRole_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

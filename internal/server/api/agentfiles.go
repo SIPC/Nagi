@@ -13,18 +13,22 @@ import (
 )
 
 // MCP 读写卷里的文件（见 docs/mcp.md#文件）。和网页的文件管理走同一条路：经 mesh 传给容器所在的节点，节点用 os.Root
-// 限制在卷里，顶替的容器只在持有租约时能写。权限和终端一样：能操作容器的角色、访问范围内的项目，令牌还要允许执行命令
-// （能执行命令本来就能读写容器里的文件）。读写都记进活动记录，带着路径。
+// 限制在卷里，顶替的容器只在持有租约时能写。权限和网页的文件管理一样：读要「文件查看」、写要「文件修改」，访问范围内的项目，
+// 令牌还要允许执行命令（能执行命令本来就能读写容器里的文件）。读写都记进活动记录，带着路径。
 
 // ErrFileTooLarge 表示文件超过了读取的上限。
 var ErrFileTooLarge = errors.New("file too large")
 
 func (a *API) checkAgentFiles(ctx context.Context, projectID string, write bool) error {
 	u := auth.CurrentUser(ctx)
-	if !auth.CanOperate(u.Role) || u.TokenID != 0 && !u.AllowExec {
-		return i18n.New("当前账号没有权限执行这个操作")
+	need := auth.PermFilesRead
+	if write {
+		need = auth.PermFilesWrite
 	}
-	if err := a.projectAllowed(ctx, u, projectID); err != nil {
+	if u.TokenID != 0 && !u.AllowExec {
+		return errNoPermission
+	}
+	if err := a.projectAllowed(ctx, u, projectID, need); err != nil {
 		return err
 	}
 	if write && a.Panel.Standby != nil {

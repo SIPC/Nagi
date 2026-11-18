@@ -82,27 +82,27 @@ func (s *settingsService) CreateAccessToken(ctx context.Context, req *connect.Re
 	} else if n >= oauth.MaxTokens {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不再使用的令牌", oauth.MaxTokens))
 	}
-	viewer := u.Role == auth.RoleViewer
 	now := time.Now()
 	secret := auth.NewSecret()
+	// 令牌的选项不能超过成员的权限（见 docs/mcp.md#权限）：执行命令要终端权限。
 	t := store.AccessToken{
 		UserID: u.ID, Name: name, Source: auth.TokenSourcePersonal, TokenHash: auth.HashToken(secret),
-		AllowWrite: m.GetAllowWrite() && !viewer, AllowExec: m.GetAllowExec() && !viewer, CreatedAt: now.Unix(),
+		AllowWrite: m.GetAllowWrite(), AllowExec: m.GetAllowExec() && u.Can(auth.PermTerminal), CreatedAt: now.Unix(),
 	}
-	// 节点终端等于节点的 root：只有管理员能给令牌勾上（创建令牌本身已经要求确认过身份）。
+	// 节点终端等于节点的 root：要「节点终端和文件」权限（创建令牌本身已经要求确认过身份）。
 	if m.GetAllowNodeExec() {
-		if u.Role != auth.RoleAdmin {
-			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能创建可在节点上执行命令的令牌"))
+		if !u.Can(auth.PermNodeRoot) {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("没有「节点终端和文件」权限，不能创建可在节点上执行命令的令牌"))
 		}
 		if !t.AllowExec {
 			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("允许节点终端时须同时允许执行命令"))
 		}
 		t.AllowNodeExec = true
 	}
-	// 管理面板：只有管理员能给令牌勾上（生成令牌本身已经要求确认过身份）。
+	// 管理面板：要有面板的权限（生成令牌本身已经要求确认过身份）。
 	if m.GetAllowPanel() {
-		if u.Role != auth.RoleAdmin {
-			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能创建可以管理面板的令牌"))
+		if u.EffectivePerms()&auth.PanelPerms == 0 {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("没有面板的权限，不能创建可以管理面板的令牌"))
 		}
 		t.AllowPanel = true
 	}

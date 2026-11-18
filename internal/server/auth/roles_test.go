@@ -25,8 +25,8 @@ func TestAllowed(t *testing.T) {
 		role, procedure string
 		want            bool
 	}{
-		{RoleAdmin, deploy, true}, {RoleAdmin, settings, true}, {RoleAdmin, users, true}, {RoleAdmin, unknown, true},
-		{RoleOperator, deploy, true}, {RoleOperator, list, true}, {RoleOperator, key, true}, {RoleOperator, nodes, true},
+		{RoleAdmin, deploy, true}, {RoleAdmin, settings, true}, {RoleAdmin, users, true}, {RoleAdmin, unknown, false},
+		{RoleOperator, deploy, true}, {RoleOperator, list, true}, {RoleOperator, key, false}, {RoleOperator, nodes, true},
 		{RoleOperator, settings, false}, {RoleOperator, users, false}, {RoleOperator, alerts, false}, {RoleOperator, removeN, false}, {RoleOperator, unknown, false},
 		{RoleOperator, password, true}, {RoleOperator, sessions, true},
 		{RoleOperator, events, true}, {RoleViewer, events, true},
@@ -44,9 +44,13 @@ func TestAllowed(t *testing.T) {
 		{RoleAdmin, "/nagi.v1.ProjectService/SetBackupReplicaDir", true}, {RoleAdmin, "/nagi.v1.NodeService/SetNodeReplicaDir", true},
 		{RoleOperator, "/nagi.v1.ProjectService/SetBackupReplicaDir", false}, {RoleViewer, "/nagi.v1.ProjectService/SetBackupReplicaDir", false},
 		{RoleOperator, "/nagi.v1.NodeService/SetNodeReplicaDir", false}, {RoleViewer, "/nagi.v1.NodeService/SetNodeReplicaDir", false},
-		{RoleOperator, "/nagi.v1.ProjectService/SetBackupNodes", true},
+		// 收紧后的预置操作员没有备份、高可用、迁移、网络和域名、告警规则、镜像仓库、项目管理。
+		{RoleOperator, "/nagi.v1.ProjectService/SetBackupNodes", false}, {RoleOperator, "/nagi.v1.ProjectService/SetFailover", false},
+		{RoleOperator, "/nagi.v1.ProjectService/MigrateContainer", false}, {RoleOperator, "/nagi.v1.ProjectService/SaveRoute", false},
+		{RoleOperator, "/nagi.v1.ProjectService/SetContainerAlertRules", false}, {RoleOperator, "/nagi.v1.ProjectService/ListRegistries", false},
+		{RoleOperator, "/nagi.v1.ProjectService/CreateProject", false}, {RoleOperator, "/nagi.v1.ProjectService/CreateSnapshot", true},
 	} {
-		if got := Allowed(c.role, c.procedure); got != c.want {
+		if got := Allowed(PresetUser(c.role), c.procedure); got != c.want {
 			t.Errorf("Allowed(%q, %s) = %v，应为 %v", c.role, c.procedure, got, c.want)
 		}
 	}
@@ -56,7 +60,7 @@ func TestAllowed(t *testing.T) {
 func TestControlServiceLikeControlContainer(t *testing.T) {
 	for _, procedure := range []string{"/nagi.v1.ProjectService/ControlContainer", "/nagi.v1.ProjectService/ControlService"} {
 		for role, want := range map[string]bool{RoleAdmin: true, RoleOperator: true, RoleViewer: false} {
-			if got := Allowed(role, procedure); got != want {
+			if got := Allowed(PresetUser(role), procedure); got != want {
 				t.Errorf("Allowed(%q, %s) = %v，应为 %v", role, procedure, got, want)
 			}
 		}
@@ -75,11 +79,11 @@ func TestNodeImagesAdminOnly(t *testing.T) {
 	write := User{ID: 1, Role: RoleAdmin, TokenID: 1, AllowWrite: true}
 	for _, method := range []string{"ListNodeImages", "DeleteNodeImages", "PruneNodeImages", "PullNodeImage"} {
 		p := "/nagi.v1.NodeService/" + method
-		if !Allowed(RoleAdmin, p) {
+		if !Allowed(PresetUser(RoleAdmin), p) {
 			t.Errorf("管理员应能调用 %s", method)
 		}
 		for _, role := range []string{RoleOperator, RoleViewer} {
-			if Allowed(role, p) {
+			if Allowed(PresetUser(role), p) {
 				t.Errorf("%s 不应该能调用 %s", role, method)
 			}
 		}
@@ -99,7 +103,7 @@ func TestNodeAccessAdminOnly(t *testing.T) {
 		"RenameNodeFile", "MoveNodeFiles", "CopyNodeFiles", "CompressNodeFiles", "ExtractNodeFile", "ListNodeDirSizes",
 	} {
 		for _, role := range []string{RoleOperator, RoleViewer} {
-			if Allowed(role, "/nagi.v1.NodeService/"+method) {
+			if Allowed(PresetUser(role), "/nagi.v1.NodeService/"+method) {
 				t.Errorf("%s 不应该能调用 %s", role, method)
 			}
 		}

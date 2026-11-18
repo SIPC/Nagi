@@ -86,17 +86,17 @@ func TestCheckPrivilegedEntry(t *testing.T) {
 		{auth.RoleAdmin, "fresh", false},
 	}
 	for _, c := range cases {
-		err := a.checkPrivilegedEntry(ctx, c.role, project, c.container)
+		err := a.checkPrivilegedEntry(ctx, auth.PresetUser(c.role), project, c.container)
 		if got := errors.Is(err, errPrivilegedEntry); got != c.denied || err != nil && !got {
 			t.Errorf("%s 进入 %s：%v", c.role, c.container, err)
 		}
 		// 往容器里写文件按同样的规则。
-		err = a.checkPrivilegedWrite(ctx, c.role, project, c.container)
+		err = a.checkPrivilegedWrite(ctx, auth.PresetUser(c.role), project, c.container)
 		if got := errors.Is(err, errPrivilegedWrite); got != c.denied || err != nil && !got {
 			t.Errorf("%s 写入 %s：%v", c.role, c.container, err)
 		}
 		// 卷的所有写接口（删除、新建目录、上传、恢复、改名、移动、复制、压缩、解压）都经 checkVolumeWrite。
-		err = a.checkVolumeWrite(auth.WithUser(ctx, auth.User{ID: 1, Role: c.role}), project, c.container)
+		err = a.checkVolumeWrite(auth.WithUser(ctx, auth.PresetUser(c.role)), project, c.container)
 		if got := errors.Is(err, errPrivilegedWrite); got != c.denied || err != nil && !got {
 			t.Errorf("%s 经 checkVolumeWrite 写入 %s：%v", c.role, c.container, err)
 		}
@@ -109,11 +109,11 @@ func TestCheckPrivilegedEntry(t *testing.T) {
 		want   error
 	}{
 		{auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 7, AllowWrite: true}, "back", errTokenNoExec},
-		{auth.User{ID: 1, Role: auth.RoleOperator, TokenID: 7, AllowWrite: true}, "back", errTokenNoExec},
-		{auth.User{ID: 1, Role: auth.RoleOperator, TokenID: 7, AllowWrite: true, AllowExec: true}, "back", nil},
+		{auth.User{ID: 1, Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 7, AllowWrite: true}, "back", errTokenNoExec},
+		{auth.User{ID: 1, Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 7, AllowWrite: true, AllowExec: true}, "back", nil},
 		{auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 7, AllowWrite: true, AllowExec: true}, "web", nil},
-		{auth.User{ID: 1, Role: auth.RoleOperator, TokenID: 7, AllowWrite: true, AllowExec: true}, "web", errPrivilegedWrite},
-		{auth.User{ID: 1, Role: auth.RoleOperator}, "back", nil}, // 网页的会话
+		{auth.User{ID: 1, Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 7, AllowWrite: true, AllowExec: true}, "web", errPrivilegedWrite},
+		{auth.User{ID: 1, Role: auth.RoleOperator, Perms: auth.PresetOperator}, "back", nil}, // 网页的会话
 	} {
 		err := a.checkVolumeWrite(auth.WithUser(ctx, c.user), project, c.target)
 		if c.want == nil && err != nil || c.want != nil && !errors.Is(err, c.want) {
@@ -123,7 +123,7 @@ func TestCheckPrivilegedEntry(t *testing.T) {
 
 	// 原有的删除、新建目录、恢复也走同样的检查：被拒绝时根本不会去找节点。
 	ps := &projectService{a}
-	opCtx := auth.WithUser(ctx, auth.User{ID: 2, Role: auth.RoleOperator})
+	opCtx := auth.WithUser(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator})
 	ref := &nagiv1.VolumeFileRef{ProjectId: project, Container: "web", Volume: ".data", Path: "a"}
 	for name, call := range map[string]func() error{
 		"DeleteVolumeFile":  func() error { _, err := ps.DeleteVolumeFile(opCtx, connect.NewRequest(ref)); return err },

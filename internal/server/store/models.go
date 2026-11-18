@@ -153,6 +153,8 @@ type User struct {
 	Avatar       []byte
 	AllProjects  int64
 	AllNodes     int64
+	RoleID       int64
+	NodesFollow  int64
 }
 
 type UserNode struct {

@@ -65,10 +65,10 @@ func newSessionHarness(t *testing.T) *sessionHarness {
 		h.alerts = append(h.alerts, msg)
 		h.mu.Unlock()
 	}
-	if _, err := h.s.CreateUser(ctx, "admin", "correct horse", RoleAdmin); err != nil {
+	if _, err := h.s.CreateUser(ctx, "admin", "correct horse", AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.s.CreateUser(ctx, "op", "correct horse", RoleOperator); err != nil {
+	if _, err := h.s.CreateUser(ctx, "op", "correct horse", OperatorRoleID); err != nil {
 		t.Fatal(err)
 	}
 	return h

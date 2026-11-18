@@ -165,7 +165,7 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 	if utf8.RuneCountInString(req.Msg.GetPassword()) < 8 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("密码至少 8 个字符"))
 	}
-	userID, err := s.Auth.CreateUser(ctx, username, req.Msg.GetPassword(), auth.RoleAdmin)
+	userID, err := s.Auth.CreateUser(ctx, username, req.Msg.GetPassword(), auth.AdminRoleID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.Lo
 
 func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeRequest]) (*connect.Response[nagiv1.MeResponse], error) {
 	u := auth.CurrentUser(ctx)
-	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role}
+	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role, Permissions: u.EffectivePerms().Names()}
 	if u.Elevated() {
 		resp.ElevatedUntil = timestamppb.New(time.Unix(u.ElevatedUntil, 0))
 	}
@@ -222,6 +222,13 @@ func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeReques
 		resp.DisplayName = row.DisplayName
 		resp.Avatar = row.Avatar
 		resp.AvatarType = avatarType(row.Avatar)
+		resp.RoleId = row.RoleID
+		if r, err := s.Q.GetRole(ctx, row.RoleID); err == nil {
+			resp.RoleName, resp.RoleBuiltin = r.Name, r.Builtin
+		}
+		if !u.IsAdmin() {
+			resp.Scope, _ = userScopeOf(ctx, s.Q, row)
+		}
 	}
 	return connect.NewResponse(resp), nil
 }

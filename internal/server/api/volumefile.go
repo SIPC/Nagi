@@ -44,8 +44,9 @@ func (a *API) VolumeFileHandler() http.Handler {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
-		if !auth.CanOperate(u.Role) {
-			fail(http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
+		// 下载要「文件查看」，上传等修改另由 checkVolumeWrite 检查「文件修改」。
+		if !u.Can(auth.PermFilesRead) {
+			fail(http.StatusForbidden, errNoPermission)
 			return
 		}
 		if err := a.projectAllowed(r.Context(), u, r.URL.Query().Get("project")); err != nil {

@@ -18,7 +18,7 @@ import (
 func (h *auditHarness) adminWithElevation(t *testing.T) (nagiv1connect.AuthServiceClient, nagiv1connect.SettingsServiceClient) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.RoleAdmin); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
 	ac, sc := h.login("admin", "admin-password-1")

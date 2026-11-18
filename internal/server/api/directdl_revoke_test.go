@@ -24,14 +24,14 @@ func TestRevokeRotatesDirectKeys(t *testing.T) {
 	t.Cleanup(func() { rotateDirect = old })
 
 	ctx := context.Background()
-	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.RoleAdmin); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	bob, err := h.a.Auth.CreateUser(ctx, "bob", "bob-password-1", auth.RoleViewer)
+	bob, err := h.a.Auth.CreateUser(ctx, "bob", "bob-password-1", auth.ViewerRoleID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	carol, err := h.a.Auth.CreateUser(ctx, "carol", "carol-password-1", auth.RoleOperator)
+	carol, err := h.a.Auth.CreateUser(ctx, "carol", "carol-password-1", auth.OperatorRoleID)
 	if err != nil {
 		t.Fatal(err)
 	}

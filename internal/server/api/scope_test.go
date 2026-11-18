@@ -25,7 +25,7 @@ func TestScopeCoversMethods(t *testing.T) {
 		for i := range svc.Methods().Len() {
 			md := svc.Methods().Get(i)
 			procedure := "/nagi.v1." + name + "/" + string(md.Name())
-			if !auth.Allowed(auth.RoleOperator, procedure) && !auth.Allowed(auth.RoleViewer, procedure) {
+			if !auth.Allowed(auth.PresetUser(auth.RoleOperator), procedure) && !auth.Allowed(auth.PresetUser(auth.RoleViewer), procedure) {
 				continue
 			}
 			if scopeFiltered[procedure] {
@@ -55,7 +55,7 @@ func scopeTestAPI(t *testing.T, extra ...string) (*API, *store.Queries) {
 	}
 	t.Cleanup(func() { d.Close() })
 	for _, q := range append([]string{
-		`INSERT INTO users (id, username, password_hash, created_at, role, all_projects, all_nodes) VALUES (2, 'op', 'x', 0, 'operator', 0, 0)`,
+		`INSERT INTO users (id, username, password_hash, created_at, role, role_id, all_projects, all_nodes) VALUES (2, 'op', 'x', 0, 'member', 2, 0, 0)`,
 		`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n1', 'a', 0, x'01'), ('n2', 'b', 0, x'02')`,
 		`INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('p1', 'one', 'one', 1, 0, x''), ('p2', 'two', 'two', 1, 0, x'')`,
 		`INSERT INTO user_projects (user_id, project_id) VALUES (2, 'p1')`,
@@ -70,9 +70,11 @@ func scopeTestAPI(t *testing.T, extra ...string) (*API, *store.Queries) {
 }
 
 func TestScopeCheckRequest(t *testing.T) {
-	a, _ := scopeTestAPI(t)
+	a, _ := scopeTestAPI(t,
+		`INSERT INTO containers (project_id, name, position, node_id, dir, revision, created_at, webhook_hash, secrets, deploy_key_pub)
+		 VALUES ('p1', 'web', 1, 'n2', '/srv/web', 1, 0, 'h', x'', '')`)
 	ctx := context.Background()
-	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true})
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitProjects: true, LimitNodes: true})
 	if err != nil || x == nil {
 		t.Fatal(x, err)
 	}
@@ -96,12 +98,15 @@ func TestScopeCheckRequest(t *testing.T) {
 		{"/nagi.v1.ProjectService/SetFailover", &nagiv1.SetFailoverApiRequest{ProjectId: "p1", StandbyNodeId: "n1"}, 0},
 		{"/nagi.v1.ProjectService/SetFailover", &nagiv1.SetFailoverApiRequest{ProjectId: "p1", StandbyNodeId: "n1", WitnessNodeId: "n2"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2"}, connect.CodeNotFound},
-		// 范围外节点上本项目容器的占用可以查，别的不行。
+		// 范围外节点上本项目容器的占用可以查，别的不行；容器不在那台节点上时和节点不存在一样（A8）。
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:p1/"}, 0},
+		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n3", Prefix: "c:p1/"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:p2/"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{2}}, connect.CodeNotFound},
-		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{9}}, 0},
+		// 不属于节点的对端（面板）只给管理员（A4）。
+		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{9}}, connect.CodeNotFound},
+		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{1}}, 0},
 	}
 	for _, c := range cases {
 		err := a.checkRequest(ctx, x, c.procedure, c.msg)
@@ -119,7 +124,7 @@ func TestScopeEntryNodes(t *testing.T) {
 		`INSERT INTO routes (project_id, name, container, service, target, protocol, entry_nodes) VALUES ('p1', 'web-80', 'web', '', 80, 'tcp', '["n2"]')`,
 	)
 	ctx := context.Background()
-	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true})
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitProjects: true, LimitNodes: true})
 	if err != nil || x == nil {
 		t.Fatal(x, err)
 	}
@@ -152,7 +157,7 @@ func TestScopeEntryNodes(t *testing.T) {
 func TestScopeFilterReply(t *testing.T) {
 	a, _ := scopeTestAPI(t)
 	ctx := context.Background()
-	x := &access{projects: map[string]bool{"p1": true}, nodes: map[string]bool{"n1": true}}
+	x := &access{perms: auth.PresetOperator | auth.PermsOf(auth.PermNetwork), projects: map[string]bool{"p1": true}, nodes: map[string]bool{"n1": true}}
 
 	projects := &nagiv1.ListProjectsResponse{Projects: []*nagiv1.ProjectSummary{
 		{Project: &nagiv1.Project{Id: "p1", Links: []*nagiv1.LinkedProject{{ProjectId: "p2", Name: "two", NetworkName: "two"}}}},
@@ -166,10 +171,15 @@ func TestScopeFilterReply(t *testing.T) {
 		t.Errorf("范围外的已连接项目只去掉名称：%v", l)
 	}
 
-	mesh := &nagiv1.MeshStatus{Peers: []*nagiv1.MeshPeerStatus{{PublicKey: []byte{1}}, {PublicKey: []byte{2}}, {PublicKey: []byte{9}, Name: "panel"}}}
+	// 范围外的节点和不属于节点的对端（面板）都去掉（A4），地址不给（B6）。
+	mesh := &nagiv1.MeshStatus{Address: "fd00::1", Port: 51820, Endpoints: []string{"203.0.113.1:51820"},
+		Peers: []*nagiv1.MeshPeerStatus{{PublicKey: []byte{1}, Endpoint: "198.51.100.1:51820", Address: "fd00::2", Via: "b"}, {PublicKey: []byte{2}}, {PublicKey: []byte{9}, Name: "panel"}}}
 	a.filterReply(ctx, x, mesh)
-	if len(mesh.Peers) != 2 || mesh.Peers[0].PublicKey[0] != 1 || mesh.Peers[1].Name != "panel" {
-		t.Errorf("mesh 成员只去掉范围外的节点：%v", mesh.Peers)
+	if len(mesh.Peers) != 1 || mesh.Peers[0].PublicKey[0] != 1 {
+		t.Errorf("mesh 成员只留范围内的节点：%v", mesh.Peers)
+	}
+	if p := mesh.Peers[0]; p.Endpoint != "" || p.Address != "" || p.Via != "" || mesh.Address != "" || mesh.Port != 0 || len(mesh.Endpoints) != 0 {
+		t.Errorf("mesh 的地址没有去掉：%v", mesh)
 	}
 
 	metrics := &nagiv1.QueryMetricsResponse{Series: []*nagiv1.MetricSeries{
@@ -183,7 +193,8 @@ func TestScopeFilterReply(t *testing.T) {
 	for _, s := range metrics.Series {
 		names = append(names, s.Name)
 	}
-	if got, want := strings.Join(names, " "), "node:net_rx c:p1/web/web:cpu r:p1/web:req l:p1/web:cpu m:01:rx m:0:rx m:0:tx"; got != want {
+	// 到范围外节点的流量合并成一条 m:other（A5），看不出有几台。
+	if got, want := strings.Join(names, " "), "node:net_rx c:p1/web/web:cpu r:p1/web:req l:p1/web:cpu m:01:rx m:other:rx m:other:tx"; got != want {
 		t.Errorf("监控序列：%s，想要 %s", got, want)
 	}
 	if strings.Contains(strings.Join(names, " "), hex.EncodeToString([]byte{2})+":") {
@@ -216,7 +227,7 @@ func TestScopeGroupsAndTags(t *testing.T) {
 		`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n3', 'c', 0, x'03')`,
 	)
 	ctx := context.Background()
-	u := auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true}
+	u := auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitProjects: true, LimitNodes: true}
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -282,10 +293,10 @@ func TestScopeGroupsAndTags(t *testing.T) {
 func TestGroupAdminOnly(t *testing.T) {
 	for _, p := range []string{"/nagi.v1.ProjectService/SetProjectGroup", "/nagi.v1.ProjectService/RenameProjectGroup",
 		"/nagi.v1.NodeService/SetNodeTags", "/nagi.v1.NodeService/RenameNodeTag"} {
-		if auth.Allowed(auth.RoleOperator, p) || auth.Allowed(auth.RoleViewer, p) {
+		if auth.Allowed(auth.PresetUser(auth.RoleOperator), p) || auth.Allowed(auth.PresetUser(auth.RoleViewer), p) {
 			t.Errorf("%s 只有管理员能用", p)
 		}
-		if !auth.Allowed(auth.RoleAdmin, p) {
+		if !auth.Allowed(auth.PresetUser(auth.RoleAdmin), p) {
 			t.Errorf("%s 管理员要能用", p)
 		}
 	}
@@ -300,7 +311,7 @@ func TestScopeBackupNodes(t *testing.T) {
 		 VALUES ('p1', 'web', 1, 'n1', '/srv/web', 1, 0, 'h', x'', '', 'n2')`,
 	)
 	ctx := context.Background()
-	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true, LimitNodes: true})
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitProjects: true, LimitNodes: true})
 	if err != nil || x == nil {
 		t.Fatal(x, err)
 	}
@@ -342,7 +353,7 @@ func TestAuditViewerIncludesGroups(t *testing.T) {
 	if err := q.SetUserProjectGroups(ctx, 2, []string{"web"}); err != nil {
 		t.Fatal(err)
 	}
-	u := auth.User{ID: 2, Role: auth.RoleOperator, LimitProjects: true}
+	u := auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitProjects: true}
 	v, err := a.auditViewer(auth.WithUser(ctx, u))
 	if err != nil {
 		t.Fatal(err)

@@ -35,7 +35,7 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 	case *nagiv1.ChangePasswordRequest:
 		a.notify(ctx, "password", i18n.Errorf("账号 %s 修改了密码", u.Name).Error(), "")
 	case *nagiv1.CreateUserRequest:
-		if m.GetRole() == auth.RoleAdmin {
+		if m.GetRoleId() == auth.AdminRoleID || m.GetRoleId() == 0 && m.GetRole() == auth.RoleAdmin {
 			a.notify(ctx, "admin", i18n.Errorf("新增管理员 %s", m.GetUsername()).Error(), "")
 		}
 	case *nagiv1.UpdateUserRequest:
@@ -45,7 +45,7 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 		} else if m.GetClearPasskeys() {
 			a.notify(ctx, "passkey", i18n.Errorf("成员 %s 的通行密钥被清除", name).Error(), "")
 		}
-		if m.GetRole() == auth.RoleAdmin {
+		if m.GetRoleId() == auth.AdminRoleID || m.GetRoleId() == 0 && m.GetRole() == auth.RoleAdmin {
 			a.notify(ctx, "admin", i18n.Errorf("成员 %s 的角色设为管理员", name).Error(), "")
 		}
 	case *nagiv1.CreateAccessTokenRequest:

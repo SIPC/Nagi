@@ -27,12 +27,17 @@ type auditViewer struct {
 	session string
 	// projects 是访问范围内的项目，nil 表示全部项目。
 	projects []string
+	// x 是查看者的访问范围（管理员为 nil），scrub 去掉文字里他看不到的节点名（A7）。
+	x     *access
+	scrub func(string) string
 }
 
+// auditViewer：管理员和有「审计日志」权限的成员看全部记录；其他成员只看范围内项目的记录，没有「查看配置」时不看参数和失败详情。
 func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 	u := auth.CurrentUser(ctx)
-	v := auditViewer{admin: u.Role == auth.RoleAdmin, viewer: u.Role == auth.RoleViewer, userID: strconv.FormatInt(u.ID, 10), session: audit.SessionTag(u.SessionID)}
-	if v.admin || !u.LimitProjects {
+	v := auditViewer{admin: u.Can(auth.PermAudit), viewer: !u.Can(auth.PermConfig), userID: strconv.FormatInt(u.ID, 10),
+		session: audit.SessionTag(u.SessionID), scrub: func(s string) string { return s }}
+	if v.admin {
 		return v, nil
 	}
 	// 和其他页面用同一个访问范围：直接给的项目，加上范围里的分组中的项目（见 scope.go）。
@@ -40,14 +45,16 @@ func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 	if err != nil {
 		return v, err
 	}
-	ids := []string{}
-	if x != nil {
+	v.x = x
+	v.scrub = func(s string) string { return a.scrubNodes(ctx, x, s) }
+	if x != nil && x.projects != nil {
+		ids := []string{}
 		for id := range x.projects {
 			ids = append(ids, id)
 		}
+		slices.Sort(ids)
+		v.projects = ids
 	}
-	slices.Sort(ids)
-	v.projects = ids
 	return v, nil
 }
 
@@ -56,6 +63,10 @@ func (v auditViewer) filter(f *nagiv1.AuditFilter) audit.Filter {
 	out := audit.Filter{
 		ActorID: f.GetActorId(), Via: f.GetVia(), Categories: f.GetCategories(), ProjectID: f.GetProjectId(),
 		NodeID: f.GetNodeId(), FailedOnly: f.GetFailedOnly(), Search: f.GetSearch(),
+	}
+	// 只能按看得到的节点筛（A7）：看不到的节点和不存在的一样查不到，借结果条数探不出节点在不在。
+	if !v.admin && out.NodeID != "" && !v.x.node(out.NodeID) {
+		out.NodeID = "-"
 	}
 	if f.GetFrom() != nil {
 		out.From = f.GetFrom().AsTime()
@@ -117,11 +128,62 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 		}
 		out.RecordingId = ""
 		if v.viewer {
-			// 操作失败的详情可能带着配置里的内容（compose 报错等），参数里也有配置，只读角色只看结果。
+			// 操作失败的详情可能带着配置里的内容（compose 报错等），参数里也有配置，没有「查看配置」时只看结果。
 			out.Error, out.Params = "", ""
 		}
+		// 看不到的节点：目标、操作者（告警由节点发出）、报错和参数里的节点名都换成「其他节点」（A7）；参数里的地址去掉（B9）。
+		if e.TargetType == "node" && !v.x.node(e.TargetID) {
+			out.TargetId, out.TargetName = "", ""
+		}
+		out.ActorName, out.TargetName, out.Error = v.scrub(out.ActorName), v.scrub(out.TargetName), v.scrub(out.Error)
+		if e.ActorType == "node" && !v.x.node(e.ActorID) {
+			out.ActorId = ""
+		}
+		out.Params = v.scrub(stripAddressParams(out.Params))
 	}
 	return out
+}
+
+// addressParam 判断审计参数的键是不是地址类的（B9）：issued_ip、ip、address、endpoint 这些。
+func addressParam(key string) bool {
+	k := strings.ToLower(key)
+	return k == "ip" || strings.HasSuffix(k, "_ip") || strings.HasPrefix(k, "ip_") || strings.Contains(k, "address") ||
+		strings.Contains(k, "endpoint") || strings.HasSuffix(k, "_addr") || k == "addr" || k == "host"
+}
+
+// stripAddressParams 去掉 JSON 参数里地址类的键（包括嵌套的），不是 JSON 对象时原样返回。
+func stripAddressParams(params string) string {
+	if params == "" || params[0] != '{' {
+		return params
+	}
+	var m map[string]any
+	if json.Unmarshal([]byte(params), &m) != nil {
+		return params
+	}
+	var strip func(v any) any
+	strip = func(v any) any {
+		switch t := v.(type) {
+		case map[string]any:
+			for k, x := range t {
+				if addressParam(k) {
+					delete(t, k)
+				} else {
+					t[k] = strip(x)
+				}
+			}
+		case []any:
+			for i, x := range t {
+				t[i] = strip(x)
+			}
+		}
+		return v
+	}
+	strip(m)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 func (v auditViewer) canSee(e audit.Event) bool {
@@ -219,7 +281,7 @@ func (s *settingsService) ExportAuditEvents(ctx context.Context, req *connect.Re
 		return err
 	}
 	if !v.admin {
-		return connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能导出审计记录"))
+		return connect.NewError(connect.CodePermissionDenied, i18n.New("没有「审计日志」权限，不能导出审计记录"))
 	}
 	f := v.filter(req.Msg.GetFilter())
 	var buf bytes.Buffer
@@ -316,7 +378,7 @@ func (s *projectService) projectEvents(ctx context.Context, f audit.Filter) (*co
 	if err != nil {
 		return nil, err
 	}
-	viewer := auth.CurrentUser(ctx).Role == auth.RoleViewer
+	viewer := !auth.CurrentUser(ctx).Can(auth.PermConfig)
 	names := s.auditNames(ctx)
 	out := &nagiv1.ListActivityResponse{}
 	for _, r := range rows {
