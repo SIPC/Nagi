@@ -59,11 +59,11 @@ func TestDownloadLinkToolsAllowed(t *testing.T) {
 // 返回结果：HTTPS 给链接；加密 HTTP 给命令，并提醒密钥；没有 SHA-256 时写明原因。
 func TestDirectView(t *testing.T) {
 	v := directView(api.DirectResult{URL: "https://203.0.113.5/.nagi/download/x"}, "a.txt")
-	if v["method"] != "https" || v["url"] == "" || v["command"] != nil {
+	if v["method"] != "https" || v["url"] == "" || v["command_posix"] != nil {
 		t.Errorf("链接：%v", v)
 	}
-	v = directView(api.DirectResult{Command: &nodes.DirectHTTPCommand{Command: "curl …", Name: "a.txt", Size: 3, HashSkipped: "too_large"}}, "a.txt")
-	if v["method"] != "encrypted_http" || v["command"] != "curl …" || v["not_verified"] != "too_large" || !strings.Contains(v["note"].(string), "key") {
+	v = directView(api.DirectResult{Command: &nodes.DirectHTTPCommand{Command: "curl …", CommandWindows: "& { … }", Name: "a.txt", Size: 3, HashSkipped: "too_large"}}, "a.txt")
+	if v["method"] != "encrypted_http" || v["command_posix"] != "curl …" || v["command_windows"] != "& { … }" || v["not_verified"] != "too_large" || !strings.Contains(v["note"].(string), "key") {
 		t.Errorf("命令：%v", v)
 	}
 }

@@ -1,16 +1,20 @@
-// 复制下载链接、下载命令（见 docs/agent.md#直连下载、#加密-http-下载）：文件菜单里的两项和它们的对话框，卷文件和节点文件共用。
-// 下载链接是 HTTPS 的直连链接，给下载工具或别的设备用；HTTPS 不能用（节点拿不到 IP 证书等）时，改用加密 HTTP 下载，给一条命令：
-// curl 经 HTTP 下载密文，openssl 在本地解密。浏览器拦截 HTTPS 页面上的 HTTP 下载，所以命令只能复制。
+// 文件的「下载」和「复制下载链接」（见 docs/agent.md#直连下载、#加密-http-下载），卷文件和节点文件共用。
+// 「下载」按节点的直连下载状态选方式：
+//   - 关了直连下载（或旧版本的节点）：经面板下载，用面板签发的签名链接（见 lib/direct-download.ts 的 relayLink）；
+//   - HTTPS 能用：探测能连上就直接从节点下载，否则悄悄改为经面板下载；
+//   - 只有加密 HTTP：打开下载命令的对话框（curl 经 HTTP 下载密文，在本地解密）。浏览器拦截 HTTPS 页面上的 HTTP 下载，
+//     所以命令只能复制；对话框里也可以改为经面板下载。
+// 「复制下载链接」只在 HTTPS 能用时出现，给下载工具或别的设备用。
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, CodeBlock, Dialog, DialogActions, Spinner } from "@/components/ui";
+import { Alert, Button, CodeBlock, Dialog, DialogActions, Segmented, Spinner } from "@/components/ui";
 import type { DirectDownload } from "@/gen/nagi/v1/common_pb";
 import { t } from "@/i18n";
 import { errorMessage } from "@/lib/api";
-import { type DirectCommand, directActions, directEndpoint, fetchDirectCommand, fetchDirectLink } from "@/lib/direct-download";
+import { type DirectCommand, directActions, directEndpoint, directLink, fetchDirectCommand, fetchDirectLink, relayLink, saveFrom } from "@/lib/direct-download";
 
 type Options = {
-  // direct：节点上报的直连下载状态；旧版本的节点没有，两项都不出现。
+  // direct：节点上报的直连下载状态；旧版本的节点没有，一律经面板下载。
   direct: DirectDownload | undefined;
   // url：经面板下载的地址（/api/volume-file?…、/api/node-file?…）。
   url: (path: string) => string;
@@ -22,13 +26,41 @@ type Options = {
 };
 
 type CommandState = { path: string; data?: DirectCommand; error?: string };
+type OS = "posix" | "windows";
 
-export function useDownloadLinks({ direct, url, check, fail, onError }: Options) {
+// visitorOS：命令默认给哪个系统。
+function visitorOS(): OS {
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = nav.userAgentData?.platform || nav.userAgent;
+  return /windows/i.test(platform) ? "windows" : "posix";
+}
+
+export function useDownloads({ direct, url, check, fail, onError }: Options) {
   const m = t.fileManager.link;
   const can = directActions(direct);
   const [link, setLink] = useState<string | null>(null);
   const [cmd, setCmd] = useState<CommandState | null>(null);
+  const [relaying, setRelaying] = useState(false);
   const abort = useRef<AbortController | null>(null);
+
+  const relay = async (path: string) => saveFrom(await relayLink(url(path), fail));
+
+  // download 返回时下载已经交给浏览器（或者打开了命令的对话框）；出错时抛错，由页面显示。
+  const download = async (path: string) => {
+    if (can.command) {
+      void openCommand(path);
+      return;
+    }
+    if (can.link) {
+      await check(path);
+      const direct = await directLink(directEndpoint(url(path)));
+      if (direct) {
+        saveFrom(direct);
+        return;
+      }
+    }
+    await relay(path);
+  };
 
   const copyLink = async (path: string) => {
     let value: string;
@@ -65,11 +97,20 @@ export function useDownloadLinks({ direct, url, check, fail, onError }: Options)
     abort.current?.abort();
     setCmd(null);
   };
+  const relayFromDialog = async () => {
+    if (!cmd) return;
+    setRelaying(true);
+    try {
+      await relay(cmd.path);
+      closeCommand();
+    } catch (err) {
+      setCmd({ ...cmd, error: errorMessage(err), data: undefined });
+    } finally {
+      setRelaying(false);
+    }
+  };
 
-  const items = (path: string) => [
-    ...(can.link ? [{ label: m.copyLink, onSelect: () => void copyLink(path) }] : []),
-    ...(can.command ? [{ label: m.copyCommand, onSelect: () => void openCommand(path) }] : []),
-  ];
+  const items = (path: string) => (can.link ? [{ label: m.copyLink, onSelect: () => void copyLink(path) }] : []);
 
   const dialogs = (
     <>
@@ -79,7 +120,7 @@ export function useDownloadLinks({ direct, url, check, fail, onError }: Options)
           <Button onClick={() => setLink(null)}>{t.common.actions.done}</Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={cmd !== null} onClose={closeCommand} title={m.commandTitle}>
+      <Dialog open={cmd !== null} onClose={closeCommand} title={m.commandTitle} description={m.commandHelp}>
         {cmd?.data ? (
           <CommandBody data={cmd.data} />
         ) : cmd?.error ? (
@@ -91,31 +132,49 @@ export function useDownloadLinks({ direct, url, check, fail, onError }: Options)
           </p>
         )}
         <DialogActions>
-          <Button variant={cmd?.data ? "default" : "outline"} onClick={closeCommand}>
-            {cmd?.data ? t.common.actions.done : t.common.actions.cancel}
+          <Button variant="outline" onClick={() => void relayFromDialog()} disabled={relaying}>
+            {relaying && <Spinner />}
+            {m.relay}
           </Button>
+          <Button onClick={closeCommand}>{t.common.actions.done}</Button>
         </DialogActions>
       </Dialog>
     </>
   );
 
-  return { items, dialogs, available: can.link || can.command };
+  return { download, items, dialogs, available: can.link };
 }
 
-// CommandBody：命令和几条说明（加密、密钥留在历史里、需要的工具、续传和校验）。
+// CommandBody：Linux / macOS、Windows 两种命令和几条说明（加密、密钥留在历史里、需要的工具、分段、续传和校验）。
 function CommandBody({ data }: { data: DirectCommand }) {
   const m = t.fileManager.link;
-  const notes = [m.encrypted, m.tools];
+  const [os, setOS] = useState<OS>(() => (data.command_windows ? visitorOS() : "posix"));
+  const notes = [m.encrypted, os === "windows" ? m.windowsTools : m.posixTools];
   if (data.archive) notes.push(m.archive);
   else {
+    if (data.segmented) notes.push(m.segmented);
     notes.push(m.resume, m.changing);
     if (data.sha256) notes.push(m.verified);
     else if (data.hash_skipped === "too_large") notes.push(m.tooLarge);
     else if (data.hash_skipped === "timeout") notes.push(m.timeout);
   }
+  const text = os === "windows" && data.command_windows ? data.command_windows : data.command;
   return (
     <>
-      <CodeBlock copy>{data.command}</CodeBlock>
+      {data.command_windows && (
+        <Segmented
+          value={os}
+          onChange={setOS}
+          label={m.commandTitle}
+          items={[
+            { value: "posix", label: m.posix },
+            { value: "windows", label: m.windows },
+          ]}
+        />
+      )}
+      <CodeBlock copy className="[&>code]:max-h-72 [&>code]:overflow-auto">
+        {text}
+      </CodeBlock>
       <ul className="grid gap-1 leading-5 text-muted-foreground">
         {notes.map((n) => (
           <li key={n}>{n}</li>

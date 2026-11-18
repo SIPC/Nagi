@@ -936,7 +936,7 @@ export function CopyButton({ text, className }: { text: string; className?: stri
 
 // CodeBlock：一段等宽文字（命令、密钥、地址），右上角可复制。
 export function CodeBlock({ children, copy, nowrap, className }: { children: string; copy?: boolean; nowrap?: boolean; className?: string }) {
-  // nowrap：一行命令或接入码，放不下时截断，完整内容在悬停提示里，复制按钮在右边。默认按需折行。
+  // nowrap：一行命令或接入码，放不下时截断，完整内容在悬停提示里，复制按钮在右边。默认按需折行，保留换行（多行的脚本）。
   if (nowrap)
     return (
       <div className={cn("flex min-h-10 min-w-0 items-center justify-between gap-2 rounded-lg bg-accent pr-1 pl-3", className)}>
@@ -948,7 +948,7 @@ export function CodeBlock({ children, copy, nowrap, className }: { children: str
     );
   return (
     <div className={cn("relative rounded-lg bg-accent", className)}>
-      <code className={cn("block px-3 py-2.5 font-mono text-[13px] leading-relaxed break-all", copy && "pr-10")}>{children}</code>
+      <code className={cn("block px-3 py-2.5 font-mono text-[13px] leading-relaxed break-all whitespace-pre-wrap", copy && "pr-10")}>{children}</code>
       {copy && <CopyButton text={children} className="absolute top-1 right-1" />}
     </div>
   );

@@ -218,7 +218,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `create_dir` | 在卷里新建目录（连同上级目录） | `CreateVolumeDir` |
 | `restore_file` | 把定时、手动或部署前快照里的一个文件或目录恢复到原位，不停容器：快照里有的文件覆盖当前的，别的不动。不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才执行 | `ListSnapshots`、`RestoreVolumeFile` |
 | `delete_file` | 删除卷里的一个文件或目录（连同里面的内容）。不带 `confirm` 只返回预览，`confirm` 原样填路径才删除 | `DeleteVolumeFile` |
-| `get_download_link` | 只给管理员。给一个文件或目录（打包成 .tar.gz，`snapshot_id` 时是快照里的）的直连下载，交给别的机器或下载工具：HTTPS 能用时是 5 分钟有效的链接（`method: https`）；HTTPS 不能用、节点改用[加密 HTTP](agent.md#加密-http-下载) 时是一条 curl + openssl 的命令（`method: encrypted_http`，带 SHA-256 或不校验的原因）；命令只能在第一次运行它的机器上用（链接绑定第一次下载的来源地址），文件在下载中被修改时中断；关了直连下载或都不能用时报错，改用网页下载。规则和网页的菜单一样 | 面板签发，节点的 `PrepareDirectHttp` |
+| `get_download_link` | 只给管理员。给一个文件或目录（打包成 .tar.gz，`snapshot_id` 时是快照里的）的直连下载，交给别的机器或下载工具：HTTPS 能用时是 5 分钟有效的链接（`method: https`）；HTTPS 不能用、节点改用[加密 HTTP](agent.md#加密-http-下载) 时是下载命令（`method: encrypted_http`，`command_posix` 是 Linux、macOS 的 curl + openssl，`command_windows` 是 Windows 的 PowerShell 脚本；大文件分 4 段同时下载；带 SHA-256 或不校验的原因）；命令只能在第一次运行它的机器上用（链接绑定第一次下载的来源地址），文件在下载中被修改时中断；关了直连下载或都不能用时报错，改用网页下载。规则和网页的菜单一样 | 面板签发，节点的 `PrepareDirectHttp` |
 
 `get_download_link` 的命令里有解密的密钥：它出现在对话里（工具说明写明了），运行后留在 shell 历史中，只交给用户。和网页一样每次签发记一次 `DownloadVolumeFile`（参数里有链接编号 `direct_link`，命令另有 `direct_http`），工具调用的记录不含返回的结果，密钥不进活动记录。
 

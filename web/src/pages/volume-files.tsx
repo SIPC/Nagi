@@ -2,12 +2,11 @@
 // 目录大小；以及查看快照里的文件并恢复单个文件。在存储标签里就地换内容（地址的 volume 参数），不开对话框。
 // 规则在节点上执行（只读角色看不到入口，接口也拒绝；有顶替的容器只在持有租约时能写）。
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { directEndpoint, directLink, saveFrom } from "@/lib/direct-download";
 import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
-import { useDownloadLinks } from "@/components/download-links";
+import { useDownloads } from "@/components/download-links";
 import { ClipboardBar, DirSizeText, formatModified, useDirSizes, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
 import type { UploadTarget } from "@/lib/chunked-upload";
 import { Alert, Button, Collapse, EmptyRow, HelpTip, Input, List, Menu, Notice, QueryError, Row, RowMenu, RowsSkeleton, Select, Spinner, Textarea } from "@/components/ui";
@@ -135,20 +134,16 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     if (snapshot) q.set("snapshot", snapshot);
     return `/api/volume-file?${q}`;
   };
-  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。确认后交给浏览器下载（大文件可以断点续传），
-  // 节点能直连时直接从节点下载（见 lib/direct-download.ts）。
+  // 先确认能下载：浏览器直接打开出错的地址会离开面板，只显示一段 JSON。下载的方式见 components/download-links.tsx：
+  // 经面板（签名链接）、直接从节点（HTTPS），或者打开下载命令（只有加密 HTTP 时）。
   const checkDownload = async (p: string) => {
     const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
     if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
   };
+  const links = useDownloads({ direct, url: fileURL, check: checkDownload, onError: setError });
   const download = (p: string) => {
-    run(`download:${p}`, async () => {
-      await checkDownload(p);
-      saveFrom((await directLink(directEndpoint(fileURL(p)))) ?? fileURL(p));
-    });
+    run(`download:${p}`, () => links.download(p));
   };
-  // 复制下载链接、下载命令（节点支持时才有）。
-  const links = useDownloadLinks({ direct, url: fileURL, check: checkDownload, onError: setError });
 
   // 操作前可选先做一份快照，改错了能找回来。
   const snapshotFirst = async () => {

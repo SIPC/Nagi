@@ -102,7 +102,11 @@ func (c *Conn) DirectLink(claims directdl.Claims) string {
 // DirectHTTPCommand 是一条加密 HTTP 下载的命令（见 docs/agent.md#加密-http-下载），连同界面要显示的信息。
 // Command 里有内容密钥，只交给签发它的成员，不记进活动记录和日志。
 type DirectHTTPCommand struct {
-	Command string
+	// Command 是 POSIX sh 的命令（Linux、macOS），CommandWindows 是 PowerShell 的（见 directdl.Command）。
+	Command        string
+	CommandWindows string
+	// Segmented：命令分段同时下载（大文件，见 directdl.Command.Segmented）。
+	Segmented bool
 	// ID 是链接编号（活动记录的 direct_link）。
 	ID      string
 	Name    string
@@ -144,7 +148,7 @@ func (c *Conn) DirectHTTP(ctx context.Context, claims directdl.Claims) (*DirectH
 		ck = directdl.FileKey(key, claims, res.GetEtag())
 	}
 	cmd := directdl.Command{URL: directdl.HTTPURL(addr, int(st.GetHttpPort()), token), Name: res.GetName(), Key: ck,
-		SHA256: res.GetSha256(), Resume: !res.GetArchive()}
-	return &DirectHTTPCommand{Command: cmd.String(), ID: claims.ID, Name: directdl.SafeName(res.GetName()), Size: res.GetSize(),
+		SHA256: res.GetSha256(), Resume: !res.GetArchive(), Size: res.GetSize()}
+	return &DirectHTTPCommand{Command: cmd.String(), CommandWindows: cmd.Windows(), Segmented: cmd.Segmented(), ID: claims.ID, Name: directdl.SafeName(res.GetName()), Size: res.GetSize(),
 		Archive: res.GetArchive(), SHA256: res.GetSha256(), HashSkipped: res.GetHashSkipped(), Expires: expires}, nil
 }

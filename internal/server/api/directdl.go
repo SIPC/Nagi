@@ -80,7 +80,7 @@ func writeCommand(w http.ResponseWriter, r *http.Request, cmd *nodes.DirectHTTPC
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"command": cmd.Command, "name": cmd.Name, "size": cmd.Size, "archive": cmd.Archive,
+		"command": cmd.Command, "command_windows": cmd.CommandWindows, "segmented": cmd.Segmented, "name": cmd.Name, "size": cmd.Size, "archive": cmd.Archive,
 		"sha256": cmd.SHA256, "hash_skipped": cmd.HashSkipped, "expires": cmd.Expires.Unix(),
 	})
 }

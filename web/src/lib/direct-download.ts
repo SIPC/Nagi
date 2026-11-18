@@ -59,6 +59,17 @@ export function directActions(d: DirectDownload | undefined): { link: boolean; c
   return { link: d.ready, command: !d.ready && d.httpReady };
 }
 
+// relayLink 向面板要经面板下载的签名链接（/api/download/…，5 分钟内有效，见 docs/panel.md#会话）：和下载一样先确认能下载。
+// 下载用签名链接，不靠 cookie：下载工具截下下载、用自己的客户端重新请求时，不会被当成会话被盗而退出登录。
+export async function relayLink(panelURL: string, fail = failure): Promise<string> {
+  const sep = panelURL.includes("?") ? "&" : "?";
+  const res = await fetch(`${panelURL}${sep}check=1&sign=1`, { headers: { "Accept-Language": locale } });
+  if (!res.ok) throw await fail(res);
+  const url = (await res.json().catch(() => null))?.url;
+  if (typeof url !== "string" || !url.startsWith("/api/download/")) throw new Error(t.common.errors.http(String(res.status)));
+  return url;
+}
+
 async function failure(res: Response): Promise<Error> {
   return new Error((await res.json().catch(() => null))?.message || t.common.errors.http(String(res.status)));
 }
@@ -73,8 +84,19 @@ export async function fetchDirectLink(endpoint: string, fail = failure): Promise
   return url;
 }
 
-// DirectCommand 是加密 HTTP 下载的命令。command 里有内容密钥，只显示，不存。
-export type DirectCommand = { command: string; name: string; size: number; archive: boolean; sha256: string; hash_skipped: string; expires: number };
+// DirectCommand 是加密 HTTP 下载的命令：command 是 Linux、macOS 的（sh），command_windows 是 PowerShell 的；
+// segmented：大文件分段同时下载。命令里有内容密钥，只显示，不存。
+export type DirectCommand = {
+  command: string;
+  command_windows?: string;
+  segmented?: boolean;
+  name: string;
+  size: number;
+  archive: boolean;
+  sha256: string;
+  hash_skipped: string;
+  expires: number;
+};
 
 // fetchDirectCommand 向面板要加密 HTTP 下载的命令（节点要先算 SHA-256，最多半分钟）。
 export async function fetchDirectCommand(endpoint: string, fail = failure, signal?: AbortSignal): Promise<DirectCommand> {

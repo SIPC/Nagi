@@ -26,14 +26,14 @@ type DirectAccess struct {
 
 const (
 	linkNote    = "anyone with this link can download the file within 5 minutes (downloads already started finish); share it only with the intended recipient"
-	commandNote = "this node has no IP certificate, so the file is served over plain HTTP, encrypted. The command contains the decryption key, which is now part of this conversation and ends up in the shell history where it runs: treat it like a password. It needs curl and openssl (Linux, macOS, or WSL/Git Bash on Windows), is valid for 5 minutes, and works only from the first machine (source address) that uses it. If the file changes during the download, the download stops; get a new command"
+	commandNote = "this node has no IP certificate, so the file is served over plain HTTP, encrypted. The command contains the decryption key, which is now part of this conversation and ends up in the shell history where it runs: treat it like a password. command_posix needs sh, curl and openssl (Linux, macOS); command_windows is a PowerShell script for Windows 10/11 (built-in curl.exe, no OpenSSL; paste it into PowerShell, not cmd.exe). Large files download over 4 connections (N at the top of the script). It is valid for 5 minutes, and works only from the first machine (source address) that uses it. If the file changes during the download, the download stops; get a new command"
 )
 
 func init() {
 	ln := nagiv1connect.NodeServiceListNodesProcedure
 	allTools = append(allTools,
 		def(tool{name: "get_download_link", title: "Get download link", exec: true, adminOnly: true,
-			description: "Administrators only, with the run-commands permission. Get a link to download a file or directory (directories as .tar.gz) of a container volume straight from its node, for another machine or a download manager: an HTTPS link valid for 5 minutes when the node has an IP certificate; otherwise, when the node only has the encrypted HTTP fallback, a shell command (curl + openssl) that downloads and decrypts it. The command contains the decryption key, so it ends up in this conversation: only hand it to the user. Fails when the node's direct download is off or unavailable; use read_file for small files. Recorded like a download.",
+			description: "Administrators only, with the run-commands permission. Get a link to download a file or directory (directories as .tar.gz) of a container volume straight from its node, for another machine or a download manager: an HTTPS link valid for 5 minutes when the node has an IP certificate; otherwise, when the node only has the encrypted HTTP fallback, a command that downloads and decrypts it, for Linux/macOS (curl + openssl) and for Windows (PowerShell). The command contains the decryption key, so it ends up in this conversation: only hand it to the user. Fails when the node's direct download is off or unavailable; use read_file for small files. Recorded like a download.",
 			procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure}},
 			toolGetDownloadLink),
 		def(tool{name: "get_node_download_link", title: "Get node download link", exec: true, nodeExec: true, adminOnly: true,
@@ -90,7 +90,7 @@ func directView(res api.DirectResult, path string) map[string]any {
 		return map[string]any{"path": path, "method": "https", "url": res.URL, "expires_in_seconds": int(directdl.TTL.Seconds()), "note": linkNote}
 	}
 	cmd := res.Command
-	out := map[string]any{"path": path, "method": "encrypted_http", "command": cmd.Command, "file_name": cmd.Name,
+	out := map[string]any{"path": path, "method": "encrypted_http", "command_posix": cmd.Command, "command_windows": cmd.CommandWindows, "file_name": cmd.Name,
 		"archive": cmd.Archive, "expires_in_seconds": int(directdl.TTL.Seconds()), "note": commandNote}
 	if !cmd.Archive {
 		out["size_bytes"] = cmd.Size

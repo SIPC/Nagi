@@ -1,0 +1,280 @@
+#### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=1000 resume=true
+curl -fg -C - -o 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' -out 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt' && rm -f -- 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' && [ "$(openssl dgst -sha256 < 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt'
+base='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=0 resume=false
+curl -fg -o 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' -out 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt' && rm -f -- 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part'
+#### 1 "a<b>:c\"d|e?f*\\g.bin" size=1000 resume=true
+curl -fg -C - -o 'a<b>:c"d|e?f*\g.bin.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'a<b>:c"d|e?f*\g.bin.e8788c81.part' -out 'a<b>:c"d|e?f*\g.bin' && rm -f -- 'a<b>:c"d|e?f*\g.bin.e8788c81.part' && [ "$(openssl dgst -sha256 < 'a<b>:c"d|e?f*\g.bin' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 1 "a<b>:c\"d|e?f*\\g.bin" size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='a<b>:c"d|e?f*\g.bin'
+base='a<b>:c"d|e?f*\g.bin.e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 1 "a<b>:c\"d|e?f*\\g.bin" size=0 resume=false
+curl -fg -o 'a<b>:c"d|e?f*\g.bin.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'a<b>:c"d|e?f*\g.bin.e8788c81.part' -out 'a<b>:c"d|e?f*\g.bin' && rm -f -- 'a<b>:c"d|e?f*\g.bin.e8788c81.part'
+#### 2 "CON.txt" size=1000 resume=true
+curl -fg -C - -o 'CON.txt.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'CON.txt.e8788c81.part' -out 'CON.txt' && rm -f -- 'CON.txt.e8788c81.part' && [ "$(openssl dgst -sha256 < 'CON.txt' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 2 "CON.txt" size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='CON.txt'
+base='CON.txt.e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 2 "CON.txt" size=0 resume=false
+curl -fg -o 'CON.txt.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'CON.txt.e8788c81.part' -out 'CON.txt' && rm -f -- 'CON.txt.e8788c81.part'
+#### 3 "lpt1" size=1000 resume=true
+curl -fg -C - -o 'lpt1.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'lpt1.e8788c81.part' -out 'lpt1' && rm -f -- 'lpt1.e8788c81.part' && [ "$(openssl dgst -sha256 < 'lpt1' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 3 "lpt1" size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='lpt1'
+base='lpt1.e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 3 "lpt1" size=0 resume=false
+curl -fg -o 'lpt1.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'lpt1.e8788c81.part' -out 'lpt1' && rm -f -- 'lpt1.e8788c81.part'
+#### 4 "trailing. . " size=1000 resume=true
+curl -fg -C - -o 'trailing. . .e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'trailing. . .e8788c81.part' -out 'trailing. . ' && rm -f -- 'trailing. . .e8788c81.part' && [ "$(openssl dgst -sha256 < 'trailing. . ' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 4 "trailing. . " size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='trailing. . '
+base='trailing. . .e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 4 "trailing. . " size=0 resume=false
+curl -fg -o 'trailing. . .e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'trailing. . .e8788c81.part' -out 'trailing. . ' && rm -f -- 'trailing. . .e8788c81.part'
+#### 5 "line\nbreak\r\x00.bin" size=1000 resume=true
+curl -fg -C - -o 'line_break__.bin.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'line_break__.bin.e8788c81.part' -out 'line_break__.bin' && rm -f -- 'line_break__.bin.e8788c81.part' && [ "$(openssl dgst -sha256 < 'line_break__.bin' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 5 "line\nbreak\r\x00.bin" size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='line_break__.bin'
+base='line_break__.bin.e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 5 "line\nbreak\r\x00.bin" size=0 resume=false
+curl -fg -o 'line_break__.bin.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'line_break__.bin.e8788c81.part' -out 'line_break__.bin' && rm -f -- 'line_break__.bin.e8788c81.part'
+#### 6 "-rf" size=1000 resume=true
+curl -fg -C - -o '-rf.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in '-rf.e8788c81.part' -out '-rf' && rm -f -- '-rf.e8788c81.part' && [ "$(openssl dgst -sha256 < '-rf' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+#### 6 "-rf" size=67108864 resume=true
+(
+N=4
+url='http://[2001:db8::5]/.nagi/dl/abc.def'
+out='-rf'
+base='-rf.e8788c81'
+size=67108864
+seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+ok=1
+for p in $pids; do wait "$p" || ok=0; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
+  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+else
+  echo 'FAILED: download incomplete, run the command again to resume' >&2
+fi
+)
+#### 6 "-rf" size=0 resume=false
+curl -fg -o '-rf.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in '-rf.e8788c81.part' -out '-rf' && rm -f -- '-rf.e8788c81.part'

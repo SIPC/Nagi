@@ -1,8 +1,7 @@
 // 节点访问：节点的终端和文件（见 docs/node-access.md）。规则在节点和面板上执行，这里只是把用不了的入口藏起来、把原因说清楚。
 // 文件页和卷的文件管理共用 components/file-manager 的多选、剪贴板、改名、压缩解压、分块上传和目录大小。
 import { Code, ConnectError } from "@connectrpc/connect";
-import { directEndpoint, directLink, saveFrom } from "@/lib/direct-download";
-import { useDownloadLinks } from "@/components/download-links";
+import { useDownloads } from "@/components/download-links";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -213,18 +212,13 @@ function Browser({ node, path, onPath, onTerminal, onExit, onExpired }: { node: 
     }
     return new Error((await res.json().catch(() => null))?.message || t.common.errors.http(String(res.status)));
   };
-  // 确认后交给浏览器下载，大文件可以断点续传；节点能直连时直接从节点下载（见 lib/direct-download.ts）。
+  // 先确认能下载，再按节点的直连下载状态选方式（见 components/download-links.tsx）。
   const checkDownload = async (p: string) => {
     const res = await fetch(`${fileURL(p)}&check=1`, { headers: { "Accept-Language": locale } });
     if (!res.ok) throw await failure(res);
   };
-  const download = (p: string) =>
-    run(`download:${p}`, async () => {
-      await checkDownload(p);
-      saveFrom((await directLink(directEndpoint(fileURL(p)))) ?? fileURL(p));
-    });
-  // 复制下载链接、下载命令（节点支持时才有）。
-  const links = useDownloadLinks({ direct: node.info?.directDownload, url: (p) => fileURL(p), check: checkDownload, fail: failure, onError: setError });
+  const links = useDownloads({ direct: node.info?.directDownload, url: (p) => fileURL(p), check: checkDownload, fail: failure, onError: setError });
+  const download = (p: string) => run(`download:${p}`, () => links.download(p));
 
   // withSensitive：动到敏感路径时先确认。看得出来的（当前目录或选中的项是敏感的）先问；看不出来的由节点拒绝，问过再重试。
   const confirmedRef = useRef(false);

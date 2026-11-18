@@ -1,0 +1,1799 @@
+#### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt'
+$base = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt'
+$base = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt'
+$base = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
+#### 1 "a<b>:c\"d|e?f*\\g.bin" size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = 'a_b__c_d_e_f__g.bin'
+$base = 'a_b__c_d_e_f__g.bin.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 1 "a<b>:c\"d|e?f*\\g.bin" size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = 'a_b__c_d_e_f__g.bin'
+$base = 'a_b__c_d_e_f__g.bin.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 1 "a<b>:c\"d|e?f*\\g.bin" size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = 'a_b__c_d_e_f__g.bin'
+$base = 'a_b__c_d_e_f__g.bin.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
+#### 2 "CON.txt" size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = '_CON.txt'
+$base = '_CON.txt.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 2 "CON.txt" size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = '_CON.txt'
+$base = '_CON.txt.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 2 "CON.txt" size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = '_CON.txt'
+$base = '_CON.txt.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
+#### 3 "lpt1" size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = '_lpt1'
+$base = '_lpt1.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 3 "lpt1" size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = '_lpt1'
+$base = '_lpt1.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 3 "lpt1" size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = '_lpt1'
+$base = '_lpt1.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
+#### 4 "trailing. . " size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = 'trailing'
+$base = 'trailing.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 4 "trailing. . " size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = 'trailing'
+$base = 'trailing.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 4 "trailing. . " size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = 'trailing'
+$base = 'trailing.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
+#### 5 "line\nbreak\r\x00.bin" size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = 'line_break__.bin'
+$base = 'line_break__.bin.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 5 "line\nbreak\r\x00.bin" size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = 'line_break__.bin'
+$base = 'line_break__.bin.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 5 "line\nbreak\r\x00.bin" size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = 'line_break__.bin'
+$base = 'line_break__.bin.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
+#### 6 "-rf" size=1000 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = '-rf'
+$base = '-rf.e8788c81'
+[long]$size = 1000
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 6 "-rf" size=67108864 resume=true
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$N = 4
+$url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
+$out = '-rf'
+$base = '-rf.e8788c81'
+[long]$size = 67108864
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$seg = [long][math]::Floor(($size + $N - 1) / $N)
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
+    $null = $p.Handle; $run += $p
+  }
+  if ($run.Count -eq 0) { break }
+  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+}
+#### 6 "-rf" size=0 resume=false
+# PowerShell (Windows 10/11). cmd.exe is not supported.
+& {
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = '-rf'
+$base = '-rf.e8788c81'
+[long]$size = 0
+$ErrorActionPreference = 'Stop'
+$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+if (-not ('NagiCtr1' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Security.Cryptography;
+public static class NagiCtr1 {
+    public static byte[] Hex(string s) {
+        byte[] b = new byte[s.Length / 2];
+        for (int i = 0; i < b.Length; i++) b[i] = Convert.ToByte(s.Substring(i * 2, 2), 16);
+        return b;
+    }
+    public static long Length(string path) {
+        return File.Exists(path) ? new FileInfo(path).Length : 0;
+    }
+    // Append adds what one curl run received (tmp) to the segment file, then deletes tmp.
+    public static void Append(string tmp, string part) {
+        if (!File.Exists(tmp)) return;
+        using (FileStream o = new FileStream(part, FileMode.Append, FileAccess.Write))
+        using (FileStream i = new FileStream(tmp, FileMode.Open, FileAccess.Read)) { i.CopyTo(o); }
+        File.Delete(tmp);
+    }
+    // Decrypt reads the segments in order and writes the AES-256-CTR plaintext. ecb: AES-ECB encryptor, no padding.
+    // The counter is a 128-bit big-endian number starting at the IV, like openssl enc -aes-256-ctr.
+    public static void Decrypt(string[] inputs, string output, ICryptoTransform ecb, string ivHex) {
+        byte[] ctr = Hex(ivHex);
+        const int B = 1 << 20;
+        byte[] buf = new byte[B], blocks = new byte[B], ks = new byte[B];
+        int next = 0;
+        Stream cur = null;
+        try {
+            using (FileStream o = new FileStream(output, FileMode.Create, FileAccess.Write)) {
+                while (true) {
+                    int n = 0;
+                    while (n < B) {
+                        if (cur == null) {
+                            if (next >= inputs.Length) break;
+                            cur = new FileStream(inputs[next++], FileMode.Open, FileAccess.Read);
+                        }
+                        int r = cur.Read(buf, n, B - n);
+                        if (r == 0) { cur.Dispose(); cur = null; continue; }
+                        n += r;
+                    }
+                    if (n == 0) break;
+                    int nb = (n + 15) / 16;
+                    for (int j = 0; j < nb; j++) {
+                        Buffer.BlockCopy(ctr, 0, blocks, j * 16, 16);
+                        for (int k = 15; k >= 0; k--) { ctr[k]++; if (ctr[k] != 0) break; }
+                    }
+                    ecb.TransformBlock(blocks, 0, nb * 16, ks, 0);
+                    for (int j = 0; j < n; j++) buf[j] ^= ks[j];
+                    o.Write(buf, 0, n);
+                    if (n < B) break;
+                }
+            }
+        } finally {
+            if (cur != null) cur.Dispose();
+        }
+    }
+}
+'@
+}
+$parts = @(Join-Path $dir ($base + '.part'))
+& curl.exe '-4' '-fgS' -o $parts[0] $url
+if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+$aes = [Security.Cryptography.Aes]::Create()
+$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
+$o = Join-Path $dir $out
+[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
+foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+'Done'
+}
