@@ -213,7 +213,7 @@ fun SecurityScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> 
             },
         ) {
             Spacer(Modifier.height(12.dp))
-            NagiTextField(code, { code = it }, label = stringResource(R.string.totp_disable_label), placeholder = stringResource(R.string.totp_disable_placeholder))
+            NagiTextField(code, { code = it }, label = stringResource(R.string.totp_disable_label), placeholder = stringResource(R.string.totp_disable_placeholder), password = true)
             ActionError(action)
         }
     }
