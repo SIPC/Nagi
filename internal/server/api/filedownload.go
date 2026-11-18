@@ -19,6 +19,8 @@ type fileDownload struct {
 	fail   func(code int, err error)
 	// check：只确认能下载（界面先问一次），不发内容、不记录。
 	check bool
+	// checked：check 时确认能下载以后调用，由它回答（见 downloadlink.go）；为空时回 204。
+	checked func(w http.ResponseWriter)
 	// key 标识谁在下载哪个文件（用户、项目或节点、路径），分段请求按它去重。
 	key string
 }
@@ -33,8 +35,9 @@ func (d fileDownload) serve(w http.ResponseWriter, r *http.Request) {
 				d.record("")
 			}
 		},
-		Fail:  d.fail,
-		Check: d.check,
-		Key:   d.key,
+		Fail:    d.fail,
+		Check:   d.check,
+		Checked: d.checked,
+		Key:     d.key,
 	}.Serve(w, r)
 }

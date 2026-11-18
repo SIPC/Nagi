@@ -618,3 +618,25 @@ func (s *Service) SessionByID(ctx context.Context, id string) (User, error) {
 	}
 	return userOf(st), nil
 }
+
+// LinkUser 给签名下载链接（见 docs/panel.md#会话）重查签发链接的会话：会话还在、属于这个用户、没有过期、
+// 不用重新验证，管理员还要从允许的地址来。不看 cookie，也不做设备、TLS 指纹和网络的检查，不改会话：
+// 下载工具（IDM 等）用自己的客户端重新发请求，指纹和浏览器不同，不能因此退出登录。
+func (s *Service) LinkUser(ctx context.Context, sessionID string, userID int64, ip string) (User, error) {
+	st, err := s.q.SessionByID(ctx, sessionID)
+	if err != nil || st.UserID != userID {
+		return User{}, i18n.New("请先登录")
+	}
+	now := time.Now()
+	policy := s.Policy(ctx)
+	if st.ExpiresAt < now.Unix() || now.Sub(time.Unix(st.CreatedAt, 0)) > policy.MaxAge || st.LastSeen > 0 && now.Sub(time.Unix(st.LastSeen, 0)) > policy.Idle {
+		return User{}, i18n.New("登录已过期，请重新登录")
+	}
+	if st.Reverify != "" {
+		return User{}, &ErrReverify{Reason: st.Reverify}
+	}
+	if st.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
+		return User{}, i18n.New("管理员只能从允许的地址登录")
+	}
+	return userOf(st), nil
+}

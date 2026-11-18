@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strconv"
 	"time"
@@ -415,6 +416,38 @@ func (a *API) NodeFileHandler() http.Handler {
 			fail(http.StatusForbidden, i18n.New("请先验证身份"))
 			return
 		}
+		if r.Method == http.MethodGet {
+			src, err := nodeSourceFor(a, ctx, nodeID, path)
+			if err != nil {
+				fail(sourceCode(err), err)
+				return
+			}
+			defer src.close()
+			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
+			// 再带 sign=1 时确认后签发签名下载链接（见 downloadlink.go），这时就记录。
+			var checked func(http.ResponseWriter)
+			if q.Get("sign") == "1" {
+				checked = func(w http.ResponseWriter) {
+					issueDownloadLink(w, r, ctx, u, downloadClaims{Kind: linkKindNode, Node: nodeID, Path: path}, func(extra map[string]any) {
+						params := map[string]any{"detail": path}
+						maps.Copy(params, extra)
+						b, _ := json.Marshal(params)
+						a.Record(context.WithoutCancel(ctx), audit.Event{Action: "DownloadNodeFile", TargetType: "node", TargetID: nodeID,
+							TargetName: a.nodeName(ctx, nodeID), Params: string(b)})
+					})
+				}
+			}
+			fileDownload{
+				open:    src.open,
+				record:  record,
+				fail:    fail,
+				check:   q.Get("check") == "1" || checked != nil,
+				checked: checked,
+				key:     fmt.Sprintf("%s|%s|%s", auth.Username(ctx), nodeID, path),
+			}.serve(w, r)
+			return
+		}
+
 		m := a.Nodes.Mesh()
 		if m == nil {
 			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法传输文件"))
@@ -433,20 +466,6 @@ func (a *API) NodeFileHandler() http.Handler {
 		defer cc.Close()
 		client := nagiv1.NewMeshServiceClient(cc)
 		ref := &nagiv1.NodeFileRef{NodeId: nodeID, Path: path}
-
-		if r.Method == http.MethodGet {
-			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
-			fileDownload{
-				open: func(ctx context.Context, offset, length int64) (chunkStream, error) {
-					return client.NodeFileDownload(ctx, &nagiv1.NodeFileRef{NodeId: nodeID, Path: path, Offset: offset, Length: length})
-				},
-				record: record,
-				fail:   fail,
-				check:  q.Get("check") == "1",
-				key:    fmt.Sprintf("%s|%s|%s", auth.Username(ctx), nodeID, path),
-			}.serve(w, r)
-			return
-		}
 
 		if r.Header.Get("X-Nagi-Upload") != "1" {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))

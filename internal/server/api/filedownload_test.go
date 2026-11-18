@@ -89,7 +89,7 @@ func TestFileDownloadRanges(t *testing.T) {
 			t.Errorf("%s：得到 %d %q Content-Range=%q 记录 %d 次", c.desc, rec.Code, rec.Body.String(), rec.Header().Get("Content-Range"), recorded)
 		}
 		if c.code == 200 || c.code == 206 {
-			if rec.Header().Get("Cache-Control") != "no-store" {
+			if rec.Header().Get("Cache-Control") != "private, no-store" {
 				t.Errorf("%s：下载不能被浏览器缓存", c.desc)
 			}
 			if rec.Header().Get("Accept-Ranges") != "bytes" || rec.Header().Get("ETag") != etag {

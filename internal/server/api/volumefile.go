@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +10,10 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // maxVolumeUpload 是上传到卷的单个文件的上限。
@@ -65,6 +64,35 @@ func (a *API) VolumeFileHandler() http.Handler {
 		ref := &nagiv1.VolumeFileRef{
 			ProjectId: q.Get("project"), Container: q.Get("container"), Volume: q.Get("volume"), Path: q.Get("path"), SnapshotId: q.Get("snapshot"),
 		}
+		if r.Method == http.MethodGet {
+			src, err := volumeSourceFor(a, ctx, ref)
+			if err != nil {
+				fail(sourceCode(err), err)
+				return
+			}
+			defer src.close()
+			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
+			// 再带 sign=1 时确认后签发签名下载链接（见 downloadlink.go），这时就记录。
+			var checked func(http.ResponseWriter)
+			if q.Get("sign") == "1" {
+				checked = func(w http.ResponseWriter) {
+					issueDownloadLink(w, r, ctx, u, downloadClaims{Kind: linkKindVolume, Project: ref.GetProjectId(), Container: ref.GetContainer(),
+						Volume: ref.GetVolume(), Snapshot: ref.GetSnapshotId(), Path: ref.GetPath()}, func(extra map[string]any) {
+						a.recordCallWith(ctx, "/DownloadVolumeFile", ref, audit.ResultOK, "", 0, extra)
+					})
+				}
+			}
+			fileDownload{
+				open:    src.open,
+				record:  func(failure string) { a.recordOperation(ctx, "/DownloadVolumeFile", ref, failure) },
+				fail:    fail,
+				check:   q.Get("check") == "1" || checked != nil,
+				checked: checked,
+				key:     fmt.Sprintf("%d|%s|%s|%s|%s|%s", u.ID, ref.GetProjectId(), ref.GetContainer(), ref.GetVolume(), ref.GetSnapshotId(), ref.GetPath()),
+			}.serve(w, r)
+			return
+		}
+
 		m := a.Nodes.Mesh()
 		if m == nil {
 			fail(http.StatusServiceUnavailable, i18n.New("面板的节点网络没有启动，无法传输文件"))
@@ -87,22 +115,6 @@ func (a *API) VolumeFileHandler() http.Handler {
 		}
 		defer cc.Close()
 		client := nagiv1.NewMeshServiceClient(cc)
-
-		if r.Method == http.MethodGet {
-			// check=1 只确认能下载，界面先问一次，出错时留在页面上提示。真正下载时才记录。
-			fileDownload{
-				open: func(ctx context.Context, offset, length int64) (chunkStream, error) {
-					part := proto.CloneOf(ref)
-					part.Offset, part.Length = offset, length
-					return client.VolumeDownload(ctx, part)
-				},
-				record: func(failure string) { a.recordOperation(ctx, "/DownloadVolumeFile", ref, failure) },
-				fail:   fail,
-				check:  q.Get("check") == "1",
-				key:    fmt.Sprintf("%d|%s|%s|%s|%s|%s", u.ID, ref.GetProjectId(), ref.GetContainer(), ref.GetVolume(), ref.GetSnapshotId(), ref.GetPath()),
-			}.serve(w, r)
-			return
-		}
 
 		if r.Header.Get("X-Nagi-Upload") != "1" {
 			fail(http.StatusBadRequest, i18n.New("缺少 X-Nagi-Upload 请求头"))

@@ -31,6 +31,8 @@ type Download struct {
 	Fail   func(code int, err error)
 	// Check：只确认能下载（界面先问一次），不发内容、不记录。
 	Check bool
+	// Checked：Check 时确认能下载以后调用，由它回答（签发签名下载链接）；为空时回 204。
+	Checked func(w http.ResponseWriter)
 	// Key 标识谁在下载哪个文件（用户、项目或节点、路径），分段请求按它去重。
 	Key string
 }
@@ -91,6 +93,10 @@ func (d Download) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.Check {
+		if d.Checked != nil {
+			d.Checked(w)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -114,7 +120,7 @@ func (d Download) Serve(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	// 带了 ETag、Last-Modified 后浏览器会自行缓存，再下载同一个地址可能拿到旧的内容。不缓存不影响续传：
 	// 续传靠的是 If-Range。
-	h.Set("Cache-Control", "no-store")
+	h.Set("Cache-Control", "private, no-store")
 	h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": head.GetName()}))
 	code := http.StatusOK
 	if !head.GetArchive() {
