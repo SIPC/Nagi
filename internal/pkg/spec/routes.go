@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
 	"slices"
 	"strconv"
@@ -256,6 +257,12 @@ func ComposePorts(container string, proj *types.Project) []ComposePort {
 				proto = ProtoUDP
 			}
 			cp := ComposePort{Key: fmt.Sprintf("%s/%d/%s", name, port.Target, proto)}
+			// 只绑定在本机地址的端口本来就不想对外开放（例如 127.0.0.1:5432:5432）。Caddy 不认 host_ip，导入就会对外开放。
+			if LoopbackHost(port.HostIP) {
+				cp.Skip = i18n.Errorf("compose 中 %s 的端口 %d 只绑定在本机地址，未开放；项目内的容器可以直接访问，需要对外开放时手动添加端口映射", name, port.Target)
+				out = append(out, cp)
+				continue
+			}
 			published, _ := strconv.Atoi(strings.Split(port.Published, "-")[0])
 			if published == 0 {
 				cp.Skip = i18n.Errorf("compose 中 %s 的端口 %d 没有指定对外端口，未开放，可手动添加端口映射", name, port.Target)
@@ -274,6 +281,16 @@ func ComposePorts(container string, proj *types.Project) []ComposePort {
 		}
 	}
 	return out
+}
+
+// LoopbackHost 判断 compose 端口的 host_ip 是不是本机地址：localhost、127.0.0.0/8、::1。
+func LoopbackHost(host string) bool {
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.Unmap().IsLoopback()
 }
 
 // RouteLabel 用于日志，例如 web:80 → example.com、umami/db:5432 → tcp/15432。
