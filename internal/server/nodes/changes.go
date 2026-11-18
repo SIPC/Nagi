@@ -38,36 +38,53 @@ func (c *Changes) Bump() {
 // ActiveAlert 是一条节点发来、还没恢复的告警。
 type ActiveAlert struct {
 	NodeID, NodeName     string
-	Key, Title, Message  string
+	Key, Title           string
 	ProjectID, Container string
 	Since                time.Time
 }
 
-// activeAlerts 记着节点发来、还没恢复的告警（按 节点|key）。只在内存里：面板重启后要等节点再发一次
+// maxActiveAlertsPerNode 是每个节点最多记几条未恢复的告警。告警来自节点（被攻破的节点可以每次换一个 key），
+// 不限的话面板内存会一直涨；满了以后新的 key 不再记，已经记着的照常更新和恢复。
+const maxActiveAlertsPerNode = 200
+
+// activeAlerts 记着节点发来、还没恢复的告警（按节点、key）。只在内存里：面板重启后要等节点再发一次
 // （节点在 Report 里带上未恢复的告警以后再做，见 docs/android.md#现有接口的改动）。
+// 文字和活动记录一样截断（key 200 字、标题 120 字），不存正文。
 type activeAlerts struct {
 	mu   sync.Mutex
-	list map[string]ActiveAlert
+	list map[string]map[string]ActiveAlert // 节点 ID → key → 告警
 }
 
 func (a *activeAlerts) record(nodeID, node, projectID, container string, al *nagiv1.Alert) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.list == nil {
-		a.list = map[string]ActiveAlert{}
-	}
-	k := nodeID + "|" + al.GetKey()
+	key := clipText(al.GetKey(), 200)
+	byKey := a.list[nodeID]
 	if al.GetStatus() == "resolved" {
-		delete(a.list, k)
+		delete(byKey, key)
+		if len(byKey) == 0 {
+			delete(a.list, nodeID)
+		}
 		return
 	}
 	since := time.Now()
-	if old, ok := a.list[k]; ok {
+	old, ok := byKey[key]
+	switch {
+	case ok:
 		since = old.Since
-	} else if t := al.GetTime(); t != nil {
-		since = t.AsTime()
+	case len(byKey) >= maxActiveAlertsPerNode:
+		return
+	case al.GetTime() != nil:
+		since = al.GetTime().AsTime()
 	}
-	a.list[k] = ActiveAlert{NodeID: nodeID, NodeName: node, Key: al.GetKey(), Title: al.GetTitle(), Message: al.GetMessage(),
+	if byKey == nil {
+		if a.list == nil {
+			a.list = map[string]map[string]ActiveAlert{}
+		}
+		byKey = map[string]ActiveAlert{}
+		a.list[nodeID] = byKey
+	}
+	byKey[key] = ActiveAlert{NodeID: nodeID, NodeName: clipText(node, 64), Key: key, Title: clipText(al.GetTitle(), 120),
 		ProjectID: projectID, Container: container, Since: since}
 }
 
@@ -75,19 +92,23 @@ func (a *activeAlerts) record(nodeID, node, projectID, container string, al *nag
 func (a *activeAlerts) forget(nodeID string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for k, v := range a.list {
-		if v.NodeID == nodeID {
-			delete(a.list, k)
-		}
-	}
+	delete(a.list, nodeID)
+}
+
+// Forget 去掉节点还没恢复的告警（节点被移除、撤销时），并通知订阅流。
+func (r *Registry) Forget(nodeID string) {
+	r.alerts.forget(nodeID)
+	r.Changes.Bump()
 }
 
 // ActiveAlerts 返回还没恢复的告警，先出现的在前。
 func (r *Registry) ActiveAlerts() []ActiveAlert {
 	r.alerts.mu.Lock()
-	out := make([]ActiveAlert, 0, len(r.alerts.list))
-	for _, v := range r.alerts.list {
-		out = append(out, v)
+	var out []ActiveAlert
+	for _, byKey := range r.alerts.list {
+		for _, v := range byKey {
+			out = append(out, v)
+		}
 	}
 	r.alerts.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].Since.Before(out[j].Since) })
