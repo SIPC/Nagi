@@ -48,8 +48,8 @@ var docs = []struct{ uri, name, title, text string }{
 - Project shared variables: ${VAR} in every compose file of the project.
 - Compose variables of a container group: ${VAR} in that compose file; they override shared ones.
 - Environment variables: passed into a container (image form: env; container group: per service).
-- Variable values are never returned by the tools; get_container lists their names. Use variables instead of
-  literal values in compose files (see nagi://docs/deploy).
+- Variable values are never returned by the tools; get_container lists their names. Never write secrets as literal
+  values in compose files; plain settings may be literal, but variables are preferred (see nagi://docs/deploy).
 
 ## What operators cannot save
 
@@ -116,8 +116,12 @@ when a configuration breaks them: fix it, or tell the user why it stays.
 - Container group: write NAME: ${NAME} in the compose file and set the value with env (the group's compose variables,
   env_secret for secrets), or with update_shared_env when several groups of the project use the same value.
   service_env injects variables into one service without a line in the compose file.
-- Do not hard-code values under environment:, do not write .env files (write_file) and do not use env_file:
-  Nagi generates the container directory's .env itself and never passes other .env files to compose.
+- Never hard-code secrets in compose: passwords, tokens, keys, credentials, and passwords inside connection strings
+  (postgres://app:<password>@db). Write them as ${NAME} (only the password part of a connection string:
+  postgres://app:${DB_PASSWORD}@db:5432/app) and mark them secret with env_secret. Plain settings (NODE_ENV, TZ,
+  ports) may be written as values in compose, but prefer variables for anything that differs between deployments.
+- Do not write .env files (write_file) and do not use env_file: Nagi generates the container directory's .env itself
+  and never passes other .env files to compose.
 - Shared variables are saved as a draft: after update_shared_env, deploy with apply_shared_env.
 - Do not reach the node or the LAN (host.docker.internal, host-gateway, 172.17.0.1, LAN IPs): new projects block
   connections from containers to the node, the LAN and cloud metadata. Run the database in Nagi too, or ask an
@@ -192,12 +196,13 @@ Do: two image-form containers in one project.
 No ports are published: web reaches the database as db:5432, and HTTP goes through the port mapping. (localhost in
 web's health check is fine: the check runs inside web.)
 
-Don't: one compose file with literal values, a host path, an env_file and a published database port.
+Don't: one compose file with literal secrets, a host path, an env_file and a published database port.
 
     services:
       db:
         image: postgres:latest                   # no pinned version for a database
         environment:
+          POSTGRES_DB: shop                      # fine: a plain setting
           POSTGRES_PASSWORD: s3cret              # literal secret in the compose file
         ports:
           - "5432:5432"                          # opened to the outside on the first deploy
@@ -207,7 +212,7 @@ Don't: one compose file with literal values, a host path, an env_file and a publ
         image: ghcr.io/acme/shop:1.4.2
         env_file: .env                           # a file Nagi does not manage
         environment:
-          DATABASE_URL: postgres://shop:s3cret@172.18.0.2:5432/shop   # container IP: use db:5432
+          DATABASE_URL: postgres://shop:s3cret@172.18.0.2:5432/shop   # literal password and a container IP
         ports:
           - "8080:8080"                          # use save_route with a domain
 
@@ -216,21 +221,21 @@ behind when the container migrates or fails over, and web cannot be deployed or 
 
 ## When a container group is right
 
-The user gives a compose file, e.g. an app's official docker-compose.yml. Keep its structure, but move values to
-variables, keep data in the container directory and drop ports of internal services:
+The user gives a compose file, e.g. an app's official docker-compose.yml. Keep its structure and its plain settings,
+but move secrets to variables, keep data in the container directory and drop ports of internal services:
 
     services:
       app:
         image: ghcr.io/umami-software/umami:postgresql-v2.18
         environment:
-          DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+          DATABASE_URL: postgresql://umami:${DB_PASSWORD}@db:5432/umami
           APP_SECRET: ${APP_SECRET}
         depends_on: [db]
       db:
         image: postgres:16
         environment:
-          POSTGRES_DB: ${DB_NAME}
-          POSTGRES_USER: ${DB_USER}
+          POSTGRES_DB: umami
+          POSTGRES_USER: umami
           POSTGRES_PASSWORD: ${DB_PASSWORD}
         volumes:
           - db-data:/var/lib/postgresql/data
@@ -240,12 +245,12 @@ variables, keep data in the container directory and drop ports of internal servi
       db-data:
 
     add_container {"project": "analytics", "name": "umami", "compose": "<the file above>",
-      "env": {"DB_NAME": "umami", "DB_USER": "umami", "DB_PASSWORD": "<generated>", "APP_SECRET": "<generated>"},
+      "env": {"DB_PASSWORD": "<generated>", "APP_SECRET": "<generated>"},
       "env_secret": ["DB_PASSWORD", "APP_SECRET"]}
     save_route {"project": "analytics", "container": "umami", "service": "app", "port": 3000, "domains": ["stats.example.com"]}
 
 Inside the group the services use their compose names (db); other containers of the project reach them as app.umami
-and db.umami. If the user's file has literal values, env_file, host paths or published internal ports, convert them
+and db.umami. If the user's file has literal secrets, env_file, host paths or published internal ports, convert them
 like this, or tell the user what stays as it is and why.
 `},
 }

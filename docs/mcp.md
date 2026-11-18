@@ -338,12 +338,12 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 给 agent 的说明
 
-agent 常见的乱部署：单个服务也写 compose，值写死在 compose 里或另写 `.env`，数据挂到容器目录外的宿主机路径，数据库开放端口，用 IP 或 `host.docker.internal` 互相访问。说明分四层，越靠前越短：
+agent 常见的乱部署：单个服务也写 compose，密码这类值写死在 compose 里或另写 `.env`，数据挂到容器目录外的宿主机路径，数据库开放端口，用 IP 或 `host.docker.internal` 互相访问。说明分四层，越靠前越短：
 
 - **服务说明**：MCP 初始化时返回，每次连接都发，所以只写一小段：Nagi 的概念（节点、项目、容器、容器组）、修改要先存草稿再部署、部署规则的摘要（每条一句），以及操作员不能保存带特权的配置（[node-access.md](node-access.md#操作员不能借-compose-拿到节点-root)）、当前令牌的角色和权限。部署规则：
   - 单个服务用镜像表单；只有用户给了 compose，或者几个服务必须在同一台机器上一起运行时，才用容器组。
   - 一起工作的容器放在同一个项目里，优先拆成几个容器；只用名字互相访问（`容器`、`服务.组`），不用 IP 和 `localhost`；访问别的项目先 `connect_project`，用 `容器.网络名`。
-  - 配置和密钥放 Nagi 的变量（`env`、`env_secret`，compose 里写 `${NAME}`，或者共享变量）；不在 compose 里写死值，不写 `.env`、`env_file`。
+  - 配置放 Nagi 的变量（`env`、`env_secret`，compose 里写 `${NAME}`，或者共享变量）；普通配置可以写在 compose 里，但优先用变量；密钥（密码、令牌、密钥、连接串里的密码）绝不写死在 compose 里；不写 `.env`、`env_file`。
   - 数据放持久化目录（`volumes`）或相对路径、命名卷，都在容器目录下；不挂容器目录外的宿主机路径。
   - 数据库、缓存这类内部服务不写 `ports`：第一次部署时导入成映射、对外开放，不认 `host_ip`。
   - HTTP 用 `save_route` 绑域名；部署过的容器改对外端口用 `save_route`，不改 ports（只导入一次）。
@@ -361,7 +361,7 @@ agent 常见的乱部署：单个服务也写 compose，值写死在 compose 里
   | 提醒 | 触发条件 | 工具 |
   | --- | --- | --- |
   | 单个服务 | compose 里只有一个服务（工具分不出用户是否明确要了 compose，措辞写「除非用户要的是 compose」） | `add_container`、`update_container` |
-  | 写死的值 | compose 服务的 `environment` 里有值，不是 `${VAR}` 引用、也不是只写名字；名字像密钥的建议标为密钥（`spec.LooksSecret`，和导入现有目录同一个规则） | 同上、`import_compose_dir` |
+  | 写死的密钥 | compose 服务的 `environment` 里写死了值（不是 `${VAR}` 引用、也不是只写名字），并且变量名像密钥（`spec.SecretVarName`，不区分大小写：含 `PASSWORD`、`PASSWD`、`SECRET`、`TOKEN`、`CREDENTIAL`，或者有 `KEY`、`AUTH`、`PWD`、`DSN` 这样的词，例如 `API_KEY`、`PRIVATE_KEY`、`APIKEY`、`BASIC_AUTH`；`KEYBOARD`、`AUTHOR` 和 `*_FILE` 不算）；或者值是带着写死的密码的连接串（`scheme://用户:密码@`，密码是 `${VAR}` 的不算）。普通配置（`NODE_ENV`、`TZ`、`PORT`）不提醒。提醒列出变量名，建议改成 `${NAME}` 并用 `env_secret` 标为密钥 | 同上、`import_compose_dir` |
   | `env_file` | compose 服务用了 `env_file` | `add_container`、`update_container` |
   | 宿主机路径 | bind 的源路径是绝对路径、`~`、`..` 开头，或命名卷用 `driver_opts.device` 绑到宿主机目录；`/etc/localtime`、`/run`、`/var/run`、`/dev` 这类系统路径和用了变量的不算 | 同上、`import_compose_dir` |
   | 内部服务的端口 | 容器端口是 5432、3306、1433、6379、27017、9200、9300、11211、5672、9042 并且写了对外端口（只绑定本机地址的不算） | 同上 |
@@ -381,7 +381,7 @@ agent 常见的乱部署：单个服务也写 compose，值写死在 compose 里
   | 直接用 docker | 命令里有 `docker run`、`docker compose up/stop/rm/down` 这类，或 `docker login` | `node_exec` 的预览 |
   | 容器目录 | 路径在节点的项目根目录里 | `write_node_file` 的预览 |
 
-  镜像表单的环境变量本来就是 Nagi 的变量，不提醒写死的值。`update_container` 只检查这次改到的部分。导入现有目录时 compose 是用户原有的，不提醒单个服务和 `env_file`（`env_file: .env` 由导入换成面板的变量），宿主机路径的提醒改为「快照只能包含原目录的子目录」。
+  镜像表单的环境变量本来就是 Nagi 的变量，不提醒写死的密钥。`update_container` 只检查这次改到的部分。导入现有目录时 compose 是用户原有的，不提醒单个服务和 `env_file`（`env_file: .env` 由导入换成面板的变量），宿主机路径的提醒改为「快照只能包含原目录的子目录」。
 
 ## 安全
 

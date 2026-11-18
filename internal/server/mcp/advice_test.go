@@ -34,11 +34,15 @@ func TestComposeWarnings(t *testing.T) {
 			not: []string{"only one service"}},
 		{name: "导入不提醒单个服务", compose: "services:\n  web:\n    image: nginx:1.27\n", opts: adviceOpts{imported: true},
 			not: []string{"only one service"}},
-		{name: "写死的值", compose: "services:\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_PASSWORD: s3cret\n      POSTGRES_USER: app\n  web:\n    image: web:1\n",
-			want: []string{"hard-codes environment values (db: POSTGRES_PASSWORD, POSTGRES_USER)", "Mark POSTGRES_PASSWORD as secret"},
-			not:  []string{"s3cret"}},
+		{name: "写死的密钥", compose: "services:\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_PASSWORD: s3cret\n      POSTGRES_USER: app\n  web:\n    image: web:1\n    environment:\n      API_KEY: abc\n",
+			want: []string{"hard-codes secrets (db: POSTGRES_PASSWORD; web: API_KEY)", "mark POSTGRES_PASSWORD, API_KEY as secret"},
+			not:  []string{"s3cret", "abc", "POSTGRES_USER"}},
+		{name: "带密码的连接串", compose: "services:\n  web:\n    image: web:1\n    environment:\n      DATABASE_URL: postgres://app:s3cret@db:5432/app\n  db:\n    image: postgres:16\n",
+			want: []string{"hard-codes secrets (web: DATABASE_URL)"}, not: []string{"s3cret"}},
+		{name: "普通配置不提醒", compose: "services:\n  web:\n    image: web:1\n    environment:\n      NODE_ENV: production\n      TZ: Asia/Shanghai\n      PORT: 8080\n      KEYBOARD_LAYOUT: us\n  db:\n    image: postgres:16\n",
+			not: []string{"hard-codes"}},
 		{name: "变量引用不提醒", compose: "services:\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_PASSWORD: ${DB_PASSWORD}\n  web:\n    image: web:1\n    environment: [\"DATABASE_URL=postgres://app:${DB_PASSWORD}@db:5432/app\"]\n",
-			not: []string{"hard-codes", "Mark"}},
+			not: []string{"hard-codes"}},
 		{name: "env_file", compose: "services:\n  web:\n    image: web:1\n    env_file: .env\n  db:\n    image: postgres:16\n",
 			want: []string{"reads env_file (web: .env)"}},
 		{name: "导入不提醒 env_file", compose: "services:\n  web:\n    image: web:1\n    env_file: .env\n  db:\n    image: postgres:16\n", opts: adviceOpts{imported: true},
@@ -71,6 +75,8 @@ func TestComposeWarnings(t *testing.T) {
 		{name: "有数据的服务没有固定版本", compose: "services:\n  db:\n    image: postgres\n    volumes: [\"pg:/var/lib/postgresql/data\"]\n  cache:\n    image: redis:latest\n  web:\n    image: web:latest\nvolumes:\n  pg:\n",
 			want: []string{"(db: postgres)"}, not: []string{"web:latest", "redis:latest"}},
 		{name: "解析不了不提醒", compose: "services: [\n"},
+		// 部署指南里容器组的正确例子：普通配置写值，密钥用变量，不该有提醒。
+		{name: "指南的正确例子", compose: "services:\n  app:\n    image: ghcr.io/umami-software/umami:postgresql-v2.18\n    environment:\n      DATABASE_URL: postgresql://umami:${DB_PASSWORD}@db:5432/umami\n      APP_SECRET: ${APP_SECRET}\n    depends_on: [db]\n  db:\n    image: postgres:16\n    environment:\n      POSTGRES_DB: umami\n      POSTGRES_USER: umami\n      POSTGRES_PASSWORD: ${DB_PASSWORD}\n    volumes:\n      - db-data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U $${POSTGRES_USER}\"]\nvolumes:\n  db-data:\n"},
 	}
 	for _, c := range cases {
 		got := composeWarnings(c.compose, c.opts)
@@ -296,7 +302,7 @@ func TestAddContainerWarnings(t *testing.T) {
 		t.Fatal("有提醒也要照常保存")
 	}
 	w := warningsOf(t, out)
-	for _, want := range []string{"only one service", "hard-codes environment values (db: POSTGRES_PASSWORD)", "outside the container directory"} {
+	for _, want := range []string{"only one service", "hard-codes secrets (db: POSTGRES_PASSWORD)", "outside the container directory"} {
 		if !hasWarning(w, want) {
 			t.Errorf("应该提醒 %q，得到 %q", want, w)
 		}
@@ -360,7 +366,7 @@ func TestUpdateContainerWarnings(t *testing.T) {
 		t.Fatal("有提醒也要照常存草稿")
 	}
 	w := warningsOf(t, out)
-	if !hasWarning(w, "web: API_TOKEN") || !hasWarning(w, "Mark API_TOKEN as secret") || !hasWarning(w, "not imported again") {
+	if !hasWarning(w, "web: API_TOKEN") || !hasWarning(w, "mark API_TOKEN as secret") || !hasWarning(w, "not imported again") {
 		t.Errorf("应该提醒写死的值和改端口：%q", w)
 	}
 	// 镜像表单改端口。

@@ -82,25 +82,19 @@ func composeWarnings(text string, o adviceOpts) []string {
 	if !o.imported && len(a.Services) == 1 {
 		out = append(out, fmt.Sprintf("The compose file has only one service (%s). Unless the user asked for a compose file, a single service belongs in the image form: add_container with image, env (env_secret for secrets) and volumes, without a compose file.", a.Services[0]))
 	}
-	if len(a.LiteralEnv) > 0 {
-		var parts, secrets []string
+	if len(a.LiteralSecrets) > 0 {
+		var parts, names []string
 		for _, svc := range a.Services {
-			names := a.LiteralEnv[svc]
-			if len(names) == 0 {
-				continue
-			}
-			parts = append(parts, svc+": "+strings.Join(names, ", "))
-			for _, n := range names {
-				if spec.LooksSecret(n) && !slices.Contains(secrets, n) {
-					secrets = append(secrets, n)
+			if list := a.LiteralSecrets[svc]; len(list) > 0 {
+				parts = append(parts, svc+": "+strings.Join(list, ", "))
+				for _, n := range list {
+					if !slices.Contains(names, n) {
+						names = append(names, n)
+					}
 				}
 			}
 		}
-		w := fmt.Sprintf("The compose file hard-codes environment values (%s). Move them to Nagi variables: write NAME: ${NAME} in the compose file and set the value with env, or with update_shared_env when other containers of the project use it too.", strings.Join(parts, "; "))
-		if len(secrets) > 0 {
-			w += fmt.Sprintf(" Mark %s as secret with env_secret.", strings.Join(secrets, ", "))
-		}
-		out = append(out, w)
+		out = append(out, fmt.Sprintf("The compose file hard-codes secrets (%s). Move them to Nagi variables: write NAME: ${NAME} in the compose file (or only the password in a connection string: postgres://app:${DB_PASSWORD}@db:5432/app), set the value with env and mark %s as secret with env_secret, or use update_shared_env when other containers of the project use it too.", strings.Join(parts, "; "), strings.Join(names, ", ")))
 	}
 	if !o.imported && len(a.EnvFiles) > 0 {
 		var parts []string

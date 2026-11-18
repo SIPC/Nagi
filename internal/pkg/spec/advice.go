@@ -31,8 +31,9 @@ type HostPath struct {
 type ComposeAdvice struct {
 	// Services 是服务名，排好序。
 	Services []string
-	// LiteralEnv 是服务 environment 里写死了值（不是 ${变量} 引用、也不是只写名字从变量里取）的变量名。
-	LiteralEnv map[string][]string
+	// LiteralSecrets 是服务 environment 里写死的密钥：名字像密钥（SecretVarName）、值写死了（不是 ${变量} 引用、
+	// 也不是只写名字从变量里取）的变量，以及值是带着写死的密码的连接串（scheme://用户:密码@）的变量。普通配置不算。
+	LiteralSecrets map[string][]string
 	// EnvFiles 是服务的 env_file 路径。
 	EnvFiles map[string][]string
 	// HostPaths 是容器目录以外的宿主机路径，按服务、卷名排好序。
@@ -83,14 +84,14 @@ func AdviseCompose(text string) (ComposeAdvice, error) {
 	if err != nil {
 		return ComposeAdvice{}, err
 	}
-	out := ComposeAdvice{LiteralEnv: map[string][]string{}, EnvFiles: map[string][]string{}, EnvValues: map[string]map[string]string{},
+	out := ComposeAdvice{LiteralSecrets: map[string][]string{}, EnvFiles: map[string][]string{}, EnvValues: map[string]map[string]string{},
 		ExtraHosts: map[string][]string{}, Images: map[string]string{}}
 	services, _ := model["services"].(map[string]any)
 	for name, raw := range services {
 		out.Services = append(out.Services, name)
 		svc, _ := raw.(map[string]any)
-		if names := literalEnv(svc["environment"]); len(names) > 0 {
-			out.LiteralEnv[name] = names
+		if names := literalSecrets(svc["environment"]); len(names) > 0 {
+			out.LiteralSecrets[name] = names
 		}
 		if vals := envValues(svc["environment"]); len(vals) > 0 {
 			out.EnvValues[name] = vals
@@ -236,27 +237,71 @@ func extraHosts(v any) []string {
 	return out
 }
 
-// literalEnv 返回 environment 里写死了值的变量名，排好序。environment 可以是 map（值为空表示从变量里取），
-// 也可以是 NAME=值 的列表（只写 NAME 表示从变量里取）。
-func literalEnv(env any) []string {
+// secretWords 是密钥类变量名里的词，按 _ - . 分开的整个词比较。KEY、AUTH 也可以接在别的词后面（APIKEY、OAUTH），
+// 但不能接着字母（KEYBOARD、AUTHOR 不算）。
+var (
+	secretWords = []string{"PASSWORD", "PASSWD", "PWD", "SECRET", "TOKEN", "KEY", "CREDENTIAL", "CREDENTIALS", "AUTH", "DSN"}
+	secretParts = regexp.MustCompile(`(?i)(PASSWORD|PASSWD|SECRET|TOKEN|CREDENTIAL)`)
+	secretTail  = regexp.MustCompile(`(?i)[A-Z0-9](KEY|AUTH|PWD|DSN)$`)
+)
+
+// SecretVarName 判断变量名像不像密钥（不区分大小写）：含 PASSWORD、PASSWD、SECRET、TOKEN、CREDENTIAL，
+// 或者有 KEY、AUTH、PWD、DSN 这样的词（API_KEY、PRIVATE_KEY、BASIC_AUTH、APIKEY、SENTRY_DSN）。*_FILE 不算。
+func SecretVarName(name string) bool {
+	// POSTGRES_PASSWORD_FILE 这类放的是密钥文件的路径，不是密钥本身。
+	if strings.HasSuffix(strings.ToUpper(name), "_FILE") {
+		return false
+	}
+	if secretParts.MatchString(name) || secretTail.MatchString(name) {
+		return true
+	}
+	for _, w := range strings.FieldsFunc(strings.ToUpper(name), func(r rune) bool { return r == '_' || r == '-' || r == '.' }) {
+		if slices.Contains(secretWords, w) {
+			return true
+		}
+	}
+	return false
+}
+
+// credentialURL 匹配带着写死的密码的连接串：scheme://用户:密码@，密码里没有变量。
+var credentialURL = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]*:([^\s@/]+)@`)
+
+// HasLiteralPassword 判断值里有没有带着写死的密码的连接串，例如 postgres://app:s3cret@db:5432/app。
+// 密码是 ${变量} 的不算（postgres://app:${DB_PASSWORD}@db/app）。
+func HasLiteralPassword(value string) bool {
+	for _, m := range credentialURL.FindAllStringSubmatch(value, -1) {
+		if !hasVarRef(m[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+// literalSecrets 返回 environment 里写死的密钥的变量名，排好序（见 ComposeAdvice.LiteralSecrets）。
+// environment 可以是 map（值为空表示从变量里取），也可以是 NAME=值 的列表（只写 NAME 表示从变量里取）。
+func literalSecrets(env any) []string {
 	var names []string
+	check := func(k string, v any) {
+		s, isStr := v.(string)
+		switch {
+		case v == nil || isStr && s == "":
+		case isStr && HasLiteralPassword(s):
+			names = append(names, k)
+		case (!isStr || !hasVarRef(s)) && SecretVarName(k):
+			names = append(names, k)
+		}
+	}
 	switch e := env.(type) {
 	case map[string]any:
 		for k, v := range e {
-			if s, ok := v.(string); v == nil || ok && (s == "" || hasVarRef(s)) {
-				continue
-			}
-			names = append(names, k)
+			check(k, v)
 		}
 	case []any:
 		for _, item := range e {
-			s, ok := item.(string)
-			if !ok {
-				continue
-			}
-			k, v, hasValue := strings.Cut(s, "=")
-			if hasValue && v != "" && !hasVarRef(v) {
-				names = append(names, k)
+			if s, ok := item.(string); ok {
+				if k, v, hasValue := strings.Cut(s, "="); hasValue {
+					check(k, v)
+				}
 			}
 		}
 	}

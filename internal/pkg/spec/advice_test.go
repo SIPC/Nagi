@@ -5,41 +5,72 @@ import (
 	"testing"
 )
 
+// 只提醒写死的密钥：名字像密钥、值写死了，或者值是带着写死的密码的连接串。普通配置不提醒。
 func TestAdviseComposeEnvironment(t *testing.T) {
 	a, err := AdviseCompose(`services:
   db:
     image: postgres:17
     environment:
       POSTGRES_PASSWORD: s3cret
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg
       POSTGRES_USER: ${DB_USER}
       PORT: 5432
-      EMPTY: ""
-      FROM_ENV:
-      ESCAPED: "a$$b"
+      EMPTY_TOKEN: ""
+      FROM_ENV_SECRET:
+      TZ: UTC
   web:
     image: shop
     environment:
       - DATABASE_URL=postgres://app:${DB_PASSWORD}@db:5432/app
+      - CACHE_URL=redis://:hunter2@cache:6379/0
+      - MYSQL=mysql://root:pw@${HOST}/app
       - NODE_ENV=production
+      - API_KEY=abc
+      - KEYBOARD_LAYOUT=us
       - TOKEN
-      - SHORT=$HOME
+      - SESSION_SECRET=$$literal
   worker:
     image: shop
     environment:
       A: ${A}
+      SENTRY_DSN: https://abc@sentry.io/1
+      PUBLIC_URL: https://user@example.com/
 `)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string][]string{"db": {"ESCAPED", "PORT", "POSTGRES_PASSWORD"}, "web": {"NODE_ENV"}}
-	if !reflect.DeepEqual(a.LiteralEnv, want) {
-		t.Errorf("写死的变量 = %v，应为 %v", a.LiteralEnv, want)
+	want := map[string][]string{"db": {"POSTGRES_PASSWORD"}, "web": {"API_KEY", "CACHE_URL", "MYSQL", "SESSION_SECRET"}, "worker": {"SENTRY_DSN"}}
+	if !reflect.DeepEqual(a.LiteralSecrets, want) {
+		t.Errorf("写死的密钥 = %v，应为 %v", a.LiteralSecrets, want)
 	}
 	if !reflect.DeepEqual(a.Services, []string{"db", "web", "worker"}) {
 		t.Errorf("服务 = %v", a.Services)
 	}
 	if len(a.EnvFiles) != 0 || len(a.HostPaths) != 0 {
 		t.Errorf("不该有 env_file 和宿主机路径：%v %v", a.EnvFiles, a.HostPaths)
+	}
+}
+
+func TestSecretVarName(t *testing.T) {
+	for name, want := range map[string]bool{
+		"POSTGRES_PASSWORD": true, "db_passwd": true, "MYSQL_PWD": true, "APP_SECRET": true, "GITHUB_TOKEN": true, "API_KEY": true,
+		"PRIVATE_KEY": true, "APIKEY": true, "aws_secret_access_key": true, "GOOGLE_CREDENTIALS": true, "BASIC_AUTH": true, "OAUTH": true,
+		"AUTH": true, "SENTRY_DSN": true, "KEY": true,
+		"KEYBOARD_LAYOUT": false, "AUTHOR_NAME": false, "NODE_ENV": false, "TZ": false, "PORT": false, "POSTGRES_USER": false,
+		"POSTGRES_PASSWORD_FILE": false, "KEYCLOAK_URL": false, "DATABASE_URL": false,
+	} {
+		if SecretVarName(name) != want {
+			t.Errorf("SecretVarName(%q) 应为 %v", name, want)
+		}
+	}
+	for v, want := range map[string]bool{
+		"postgres://user:pass@db:5432/app": true, "mysql://root:pw@db/app": true, "redis://:secret@cache:6379": true,
+		"amqp://guest:guest@mq:5672/": true, "postgres://app:${DB_PASSWORD}@db/app": false, "https://user@example.com": false,
+		"postgres://db:5432/app": false, "http://localhost:3000": false, "": false,
+	} {
+		if HasLiteralPassword(v) != want {
+			t.Errorf("HasLiteralPassword(%q) 应为 %v", v, want)
+		}
 	}
 }
 
@@ -137,7 +168,7 @@ volumes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(a.LiteralEnv) != 0 || len(a.EnvFiles) != 0 || len(a.HostPaths) != 0 || len(a.Services) != 2 {
+	if len(a.LiteralSecrets) != 0 || len(a.EnvFiles) != 0 || len(a.HostPaths) != 0 || len(a.Services) != 2 {
 		t.Errorf("没有不建议的写法，却得到 %+v", a)
 	}
 	if _, err := AdviseCompose("services: [\n"); err == nil {

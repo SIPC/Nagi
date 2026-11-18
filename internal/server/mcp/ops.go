@@ -152,10 +152,10 @@ type AddContainerArgs struct {
 	ProjectArg
 	Name    string            `json:"name,omitempty" jsonschema:"container name (lowercase letters, digits and -); taken from the image when omitted; required with compose"`
 	Image   string            `json:"image,omitempty" jsonschema:"image to run, e.g. nginx:1.27 (the image form); use either image or compose. A single service always uses image. Pin a major version for containers with data (postgres:16)"`
-	Compose string            `json:"compose,omitempty" jsonschema:"a whole compose file, added as a container group. Only when the user gives a compose file or several services must run together on one node. Write values as ${NAME} and set them with env; keep data in relative paths or named volumes"`
+	Compose string            `json:"compose,omitempty" jsonschema:"a whole compose file, added as a container group. Only when the user gives a compose file or several services must run together on one node. Write secrets as ${NAME} and set them with env; keep data in relative paths or named volumes"`
 	Command string            `json:"command,omitempty" jsonschema:"command for an image container"`
 	Ports   []portArg         `json:"ports,omitempty"`
-	Env     map[string]string `json:"env,omitempty" jsonschema:"environment variables of an image container, or ${VARIABLES} of a compose file. Configuration and secrets go here, not in the compose file or a .env file"`
+	Env     map[string]string `json:"env,omitempty" jsonschema:"environment variables of an image container, or ${VARIABLES} of a compose file. Secrets go here (mark them with env_secret), never as literal values in the compose file or in a .env file; prefer variables for other settings too"`
 	// 添加时就把密码这类变量标为密钥，不用再调一次 update_container。
 	EnvSecret []string `json:"env_secret,omitempty" jsonschema:"names from env to mark as secret (passwords, tokens, keys): hidden by default in the web UI"`
 	// 容器组的服务级环境变量（和 update_container 的 service_env 一样）。
@@ -408,13 +408,13 @@ type UpdateContainerArgs struct {
 	Command          *string           `json:"command,omitempty" jsonschema:"image-form containers only; empty string clears it"`
 	Ports            []portArg         `json:"ports,omitempty" jsonschema:"image-form containers only; replaces all ports"`
 	Volumes          []string          `json:"volumes,omitempty" jsonschema:"image-form containers only: persisted paths, paths inside the container whose data is kept in the container directory; replaces the list. Removing a path does not delete its data"`
-	Env              map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES}). Configuration and secrets go here, not in the compose file or a .env file"`
+	Env              map[string]string `json:"env,omitempty" jsonschema:"set these variables (image form: environment variables; container group: compose ${VARIABLES}). Secrets go here (mark them with env_secret), never as literal values in the compose file or in a .env file; prefer variables for other settings too"`
 	EnvUnset         []string          `json:"env_unset,omitempty" jsonschema:"remove these variables"`
 	EnvSecret        []string          `json:"env_secret,omitempty" jsonschema:"mark these variables as secret (passwords, tokens, keys; hidden by default in the web UI)"`
 	// 服务级环境变量（容器组）：只注入对应服务。
 	ServiceEnv      map[string]map[string]string `json:"service_env,omitempty" jsonschema:"container groups only: service name to environment variables injected only into that service"`
 	ServiceEnvUnset map[string][]string          `json:"service_env_unset,omitempty" jsonschema:"container groups only: service name to service environment variables to remove"`
-	Compose         string                       `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file. Write values as ${NAME} (set with env), keep data in relative paths or named volumes"`
+	Compose         string                       `json:"compose,omitempty" jsonschema:"container groups only: the whole new compose file. Write secrets as ${NAME} (set with env), keep data in relative paths or named volumes"`
 	configArgs
 }
 
