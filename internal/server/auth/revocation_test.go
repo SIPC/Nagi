@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/asn1"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -129,7 +130,7 @@ func TestAppRevocation(t *testing.T) {
 func TestRevocationLoop(t *testing.T) {
 	h := newSessionHarness(t)
 	dir := t.TempDir()
-	// 比随面板发布的新、又不晚于现在（读回时晚于现在的日期按现在算）。
+	// 比随面板发布的新、又不晚于现在（读回时日期晚于现在的不用）。
 	updated := time.Now().Add(-time.Second).UTC().Truncate(time.Second)
 	body := []byte(`{"entries": {"abc": {"status": "REVOKED", "reason": "KEY_COMPROMISE"}}}`)
 	fetched := make(chan struct{}, 1)
@@ -189,14 +190,36 @@ func TestRevocationLoop(t *testing.T) {
 
 func discardLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
-// 数据目录里的日期写成将来时按现在算，免得之后的列表都换不上。
+// 数据目录里的日期写成将来时不用这份（按现在算的话，之后的列表都换不上它），RevocationLoop 启动时删掉它。
 func TestLoadRevocationsFutureDate(t *testing.T) {
-	dir := t.TempDir()
+	dataDir := t.TempDir()
+	dir := filepath.Join(dataDir, "attestation")
 	if err := saveRevocations(dir, []byte(`{"entries": {}}`), time.Now().Add(365*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadRevocations(dir); err == nil {
-		t.Error("日期晚于现在的列表应该不用")
+	if _, err := loadRevocations(dir); !errors.Is(err, errFutureRevocations) {
+		t.Errorf("日期晚于现在的列表应该不用：%v", err)
+	}
+	h := newSessionHarness(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	fetched := make(chan struct{})
+	var once sync.Once
+	go func() {
+		defer close(done)
+		h.s.RevocationLoop(ctx, dataDir, discardLogger(), func(context.Context) ([]byte, time.Time, error) {
+			once.Do(func() { close(fetched) })
+			return nil, time.Time{}, context.DeadlineExceeded
+		})
+	}()
+	<-fetched
+	cancel()
+	<-done
+	if _, err := os.Stat(filepath.Join(dir, "status.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("日期晚于现在的列表应该删掉：%v", err)
+	}
+	if h.s.Revocations() != attestation.Embedded() {
+		t.Error("应该用随面板发布的列表")
 	}
 }
 
@@ -222,6 +245,21 @@ func TestRevocationRecheckSignal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 首轮复查结束的标志：先把这台手机标成吊销（当前列表里没有它），首轮复查会清掉。
+	if err := h.q.SetAppDeviceRevoked(ctx, res.DeviceID, "STALE"); err != nil {
+		t.Fatal(err)
+	}
+	reason := func() string { d, _ := h.q.AppDeviceByID(ctx, res.DeviceID); return d.RevokedReason }
+	waitFor := func(want, what string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for reason() != want {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s：吊销原因 %q，想要 %q", what, reason(), want)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 	loopCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
@@ -231,16 +269,13 @@ func TestRevocationRecheckSignal(t *testing.T) {
 		})
 	}()
 	defer func() { cancel(); <-done }()
+	waitFor("", "首轮复查")
+	// 首轮复查之后换列表：取列表要 6 小时后，不叫复查就不会标出。
 	h.s.SetRevocations(revocationList(t, attestation.Embedded().Updated.Add(time.Hour), "1"))
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		h.s.requestRecheck()
-		if d, _ := h.q.AppDeviceByID(ctx, res.DeviceID); d.RevokedReason != "" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("叫复查以后没有标出被吊销的手机")
-		}
-		time.Sleep(20 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
+	if r := reason(); r != "" {
+		t.Fatalf("没叫复查就标出了（%q），测不到复查通知", r)
 	}
+	h.s.requestRecheck()
+	waitFor("KEY_COMPROMISE", "叫复查以后")
 }
