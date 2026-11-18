@@ -13,7 +13,7 @@ import (
 // 备用面板只读（见 docs/standby.md）：接口只放行查询，修改返回"这是备用面板"。
 
 // readOnlyPrefixes 是备用面板上放行的接口：方法名以这些开头的都是查询。
-var readOnlyPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping"}
+var readOnlyPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping", "Watch"}
 
 // readOnlyAllowed 是另外放行的接口：登录、退出只改本面板自己的会话；提升为主面板；更新只换本面板自己的程序。
 var readOnlyAllowed = map[string]bool{
@@ -24,6 +24,10 @@ var readOnlyAllowed = map[string]bool{
 	nagiv1connect.AuthServiceMeProcedure:                 true,
 	nagiv1connect.SettingsServicePromoteStandbyProcedure: true,
 	nagiv1connect.SettingsServiceUpdatePanelProcedure:    true,
+	// 安卓 App 在备用面板上照常换取令牌（不更新最近活动），只能查看（见 docs/android.md#面板地址和备用面板）。
+	nagiv1connect.AppServiceChallengeProcedure: true,
+	nagiv1connect.AppServiceTokenProcedure:     true,
+	nagiv1connect.AppServiceInfoProcedure:      true,
 }
 
 func readOnlyProcedure(procedure string) bool {

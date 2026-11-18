@@ -3,6 +3,8 @@ syntax = "proto3";
 package nagi.v1;
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+option java_multiple_files = true;
+option java_package = "io.github.sipc.nagi.proto.v1";
 
 // EnrollService：节点用一次性令牌加入面板。节点此时还没有客户端证书，
 // 通过普通 HTTPS（钉住面板公钥）调用。

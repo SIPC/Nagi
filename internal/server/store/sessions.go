@@ -11,13 +11,15 @@ import (
 
 // SessionState 是一个会话的全部状态，连同成员的角色和访问范围。
 type SessionState struct {
-	ID               string
-	TokenHash        string
-	UserID           int64
-	CreatedAt        int64
-	ExpiresAt        int64
-	ElevatedUntil    int64
-	ElevatedIP       string
+	ID            string
+	TokenHash     string
+	UserID        int64
+	CreatedAt     int64
+	ExpiresAt     int64
+	ElevatedUntil int64
+	ElevatedIP    string
+	// ElevatedBy 是高权限确认用的方式：password（密码或验证码）。
+	ElevatedBy       string
 	RotatedAt        int64
 	Challenge        string
 	ChallengeAt      int64
@@ -36,13 +38,13 @@ type SessionState struct {
 	AllNodes         int64
 }
 
-const sessionColumns = `s.id, s.token_hash, s.user_id, s.created_at, s.expires_at, s.elevated_until, s.elevated_ip, s.rotated_at,
+const sessionColumns = `s.id, s.token_hash, s.user_id, s.created_at, s.expires_at, s.elevated_until, s.elevated_ip, s.elevated_by, s.rotated_at,
 	s.challenge, s.challenge_at, s.public_key, s.key_until, s.user_agent, s.last_ip, s.last_seen, s.tls_fp, s.nets, s.reverify,
 	s.reverify_failures, u.username, u.role, u.all_projects, u.all_nodes`
 
 func scanSession(r interface{ Scan(...any) error }) (SessionState, error) {
 	var s SessionState
-	err := r.Scan(&s.ID, &s.TokenHash, &s.UserID, &s.CreatedAt, &s.ExpiresAt, &s.ElevatedUntil, &s.ElevatedIP, &s.RotatedAt,
+	err := r.Scan(&s.ID, &s.TokenHash, &s.UserID, &s.CreatedAt, &s.ExpiresAt, &s.ElevatedUntil, &s.ElevatedIP, &s.ElevatedBy, &s.RotatedAt,
 		&s.Challenge, &s.ChallengeAt, &s.PublicKey, &s.KeyUntil, &s.UserAgent, &s.LastIP, &s.LastSeen, &s.TLSFP, &s.Nets, &s.Reverify,
 		&s.ReverifyFailures, &s.Username, &s.Role, &s.AllProjects, &s.AllNodes)
 	return s, err
@@ -80,7 +82,7 @@ func (q *Queries) SessionByID(ctx context.Context, id string) (SessionState, err
 // sessionFields 是 UpdateSession 能改的列。
 var sessionFields = map[string]bool{
 	"rotated_at": true, "challenge": true, "challenge_at": true, "public_key": true, "key_until": true, "last_ip": true,
-	"last_seen": true, "tls_fp": true, "nets": true, "elevated_until": true, "elevated_ip": true, "reverify": true,
+	"last_seen": true, "tls_fp": true, "nets": true, "elevated_until": true, "elevated_ip": true, "elevated_by": true, "reverify": true,
 	"reverify_failures": true, "user_agent": true, "expires_at": true,
 }
 

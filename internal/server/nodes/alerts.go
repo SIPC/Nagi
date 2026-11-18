@@ -251,6 +251,14 @@ func (r *Registry) recordAlert(ctx context.Context, node, nodeID string, a *nagi
 	if target != "" && projectID != "" {
 		e.TargetType, e.TargetID = "container", target
 	}
+	if nodeID != "" {
+		container := ""
+		if e.TargetType == "container" {
+			container = target
+		}
+		r.alerts.record(nodeID, node, projectID, container, a)
+		r.Changes.Bump()
+	}
 	if nodeID == "" {
 		// 面板自己发出的告警（节点离线等）：操作者是面板，对象是告警里的节点。
 		e.ActorType, e.ActorName, e.Via = audit.ActorPanel, "", audit.ViaSystem

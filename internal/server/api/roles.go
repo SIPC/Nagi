@@ -334,6 +334,10 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if err := s.Q.DeleteUserAccessTokens(ctx, u.ID); err != nil {
 			return nil, err
 		}
+		// 手机也一起退出（见 docs/android.md#管理和撤销）。
+		if err := s.Auth.RemoveUserAppDevices(ctx, u.ID); err != nil {
+			return nil, err
+		}
 	}
 	if m.GetClearTotp() {
 		if err := s.Q.ClearUserTOTP(ctx, u.ID); err != nil {
@@ -397,15 +401,31 @@ func (s *settingsService) ListSessions(ctx context.Context, req *connect.Request
 			CreatedAt: timestamppb.New(time.Unix(r.CreatedAt, 0)), ExpiresAt: timestamppb.New(time.Unix(r.ExpiresAt, 0)),
 			Agent: auth.ParseAgent(r.UserAgent).String(), LastIp: r.LastIp,
 		}
+		s.Kind = "web"
 		if r.LastSeen > 0 {
 			s.LastSeen = timestamppb.New(time.Unix(r.LastSeen, 0))
 		}
 		out.Sessions = append(out.Sessions, s)
 	}
+	phones, err := s.appSessions(ctx, auth.CurrentUser(ctx).ID, auth.CurrentUser(ctx).DeviceID)
+	if err != nil {
+		return nil, err
+	}
+	out.Sessions = append(out.Sessions, phones...)
 	return connect.NewResponse(out), nil
 }
 
 func (s *settingsService) RevokeSession(ctx context.Context, req *connect.Request[nagiv1.RevokeSessionRequest]) (*connect.Response[nagiv1.RevokeSessionResponse], error) {
+	if strings.HasPrefix(req.Msg.GetId(), appSessionPrefix) {
+		ok, err := s.revokeAppSession(ctx, req.Msg.GetId())
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, connect.NewError(connect.CodeNotFound, i18n.New("登录设备不存在"))
+		}
+		return connect.NewResponse(&nagiv1.RevokeSessionResponse{}), nil
+	}
 	n, err := s.Q.DeleteUserSessionByPrefix(ctx, auth.CurrentUser(ctx).ID, req.Msg.GetId())
 	if err != nil {
 		return nil, err

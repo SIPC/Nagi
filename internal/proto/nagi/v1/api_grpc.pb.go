@@ -175,6 +175,8 @@ const (
 	AuthService_PasskeyLogin_FullMethodName       = "/nagi.v1.AuthService/PasskeyLogin"
 	AuthService_GetProjectOrder_FullMethodName    = "/nagi.v1.AuthService/GetProjectOrder"
 	AuthService_SetProjectOrder_FullMethodName    = "/nagi.v1.AuthService/SetProjectOrder"
+	AuthService_CreateAppPairing_FullMethodName   = "/nagi.v1.AuthService/CreateAppPairing"
+	AuthService_GetAppPairing_FullMethodName      = "/nagi.v1.AuthService/GetAppPairing"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -209,6 +211,10 @@ type AuthServiceClient interface {
 	GetProjectOrder(ctx context.Context, in *GetProjectOrderRequest, opts ...grpc.CallOption) (*ProjectOrder, error)
 	// 整份覆盖。
 	SetProjectOrder(ctx context.Context, in *ProjectOrder, opts ...grpc.CallOption) (*SetProjectOrderResponse, error)
+	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
+	CreateAppPairing(ctx context.Context, in *CreateAppPairingRequest, opts ...grpc.CallOption) (*CreateAppPairingResponse, error)
+	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
+	GetAppPairing(ctx context.Context, in *GetAppPairingRequest, opts ...grpc.CallOption) (*GetAppPairingResponse, error)
 }
 
 type authServiceClient struct {
@@ -379,6 +385,26 @@ func (c *authServiceClient) SetProjectOrder(ctx context.Context, in *ProjectOrde
 	return out, nil
 }
 
+func (c *authServiceClient) CreateAppPairing(ctx context.Context, in *CreateAppPairingRequest, opts ...grpc.CallOption) (*CreateAppPairingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateAppPairingResponse)
+	err := c.cc.Invoke(ctx, AuthService_CreateAppPairing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) GetAppPairing(ctx context.Context, in *GetAppPairingRequest, opts ...grpc.CallOption) (*GetAppPairingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAppPairingResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetAppPairing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -411,6 +437,10 @@ type AuthServiceServer interface {
 	GetProjectOrder(context.Context, *GetProjectOrderRequest) (*ProjectOrder, error)
 	// 整份覆盖。
 	SetProjectOrder(context.Context, *ProjectOrder) (*SetProjectOrderResponse, error)
+	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
+	CreateAppPairing(context.Context, *CreateAppPairingRequest) (*CreateAppPairingResponse, error)
+	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
+	GetAppPairing(context.Context, *GetAppPairingRequest) (*GetAppPairingResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -468,6 +498,12 @@ func (UnimplementedAuthServiceServer) GetProjectOrder(context.Context, *GetProje
 }
 func (UnimplementedAuthServiceServer) SetProjectOrder(context.Context, *ProjectOrder) (*SetProjectOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProjectOrder not implemented")
+}
+func (UnimplementedAuthServiceServer) CreateAppPairing(context.Context, *CreateAppPairingRequest) (*CreateAppPairingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAppPairing not implemented")
+}
+func (UnimplementedAuthServiceServer) GetAppPairing(context.Context, *GetAppPairingRequest) (*GetAppPairingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAppPairing not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -778,6 +814,42 @@ func _AuthService_SetProjectOrder_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_CreateAppPairing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateAppPairingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CreateAppPairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_CreateAppPairing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).CreateAppPairing(ctx, req.(*CreateAppPairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_GetAppPairing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAppPairingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetAppPairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetAppPairing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetAppPairing(ctx, req.(*GetAppPairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -849,6 +921,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "SetProjectOrder",
 			Handler:    _AuthService_SetProjectOrder_Handler,
 		},
+		{
+			MethodName: "CreateAppPairing",
+			Handler:    _AuthService_CreateAppPairing_Handler,
+		},
+		{
+			MethodName: "GetAppPairing",
+			Handler:    _AuthService_GetAppPairing_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "nagi/v1/api.proto",
@@ -889,6 +969,7 @@ const (
 	NodeService_SetNodeReplicaDir_FullMethodName     = "/nagi.v1.NodeService/SetNodeReplicaDir"
 	NodeService_CreateEnrollCommand_FullMethodName   = "/nagi.v1.NodeService/CreateEnrollCommand"
 	NodeService_QueryNodeMetrics_FullMethodName      = "/nagi.v1.NodeService/QueryNodeMetrics"
+	NodeService_QueryTraffic_FullMethodName          = "/nagi.v1.NodeService/QueryTraffic"
 	NodeService_GetNodeStorage_FullMethodName        = "/nagi.v1.NodeService/GetNodeStorage"
 	NodeService_RemoveNode_FullMethodName            = "/nagi.v1.NodeService/RemoveNode"
 	NodeService_ApproveNode_FullMethodName           = "/nagi.v1.NodeService/ApproveNode"
@@ -966,6 +1047,8 @@ type NodeServiceClient interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(ctx context.Context, in *CreateEnrollCommandRequest, opts ...grpc.CallOption) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(ctx context.Context, in *QueryNodeMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
+	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
+	QueryTraffic(ctx context.Context, in *QueryTrafficRequest, opts ...grpc.CallOption) (*TrafficHistory, error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeStorage, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -1403,6 +1486,16 @@ func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, in *QueryNodeM
 	return out, nil
 }
 
+func (c *nodeServiceClient) QueryTraffic(ctx context.Context, in *QueryTrafficRequest, opts ...grpc.CallOption) (*TrafficHistory, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TrafficHistory)
+	err := c.cc.Invoke(ctx, NodeService_QueryTraffic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) GetNodeStorage(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*NodeStorage, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NodeStorage)
@@ -1640,6 +1733,8 @@ type NodeServiceServer interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *CreateEnrollCommandRequest) (*CreateEnrollCommandResponse, error)
 	QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error)
+	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
+	QueryTraffic(context.Context, *QueryTrafficRequest) (*TrafficHistory, error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(context.Context, *NodeRef) (*NodeStorage, error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -1784,6 +1879,9 @@ func (UnimplementedNodeServiceServer) CreateEnrollCommand(context.Context, *Crea
 }
 func (UnimplementedNodeServiceServer) QueryNodeMetrics(context.Context, *QueryNodeMetricsRequest) (*QueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryNodeMetrics not implemented")
+}
+func (UnimplementedNodeServiceServer) QueryTraffic(context.Context, *QueryTrafficRequest) (*TrafficHistory, error) {
+	return nil, status.Error(codes.Unimplemented, "method QueryTraffic not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeStorage(context.Context, *NodeRef) (*NodeStorage, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeStorage not implemented")
@@ -2427,6 +2525,24 @@ func _NodeService_QueryNodeMetrics_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_QueryTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).QueryTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_QueryTraffic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).QueryTraffic(ctx, req.(*QueryTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_GetNodeStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(NodeRef)
 	if err := dec(in); err != nil {
@@ -2844,6 +2960,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryNodeMetrics",
 			Handler:    _NodeService_QueryNodeMetrics_Handler,
+		},
+		{
+			MethodName: "QueryTraffic",
+			Handler:    _NodeService_QueryTraffic_Handler,
 		},
 		{
 			MethodName: "GetNodeStorage",
@@ -4873,6 +4993,8 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	ProjectService_ListProjects_FullMethodName                 = "/nagi.v1.ProjectService/ListProjects"
+	ProjectService_GetAttention_FullMethodName                 = "/nagi.v1.ProjectService/GetAttention"
+	ProjectService_WatchOverview_FullMethodName                = "/nagi.v1.ProjectService/WatchOverview"
 	ProjectService_CreateProject_FullMethodName                = "/nagi.v1.ProjectService/CreateProject"
 	ProjectService_GetProject_FullMethodName                   = "/nagi.v1.ProjectService/GetProject"
 	ProjectService_UpdateProjectSettings_FullMethodName        = "/nagi.v1.ProjectService/UpdateProjectSettings"
@@ -4944,6 +5066,10 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProjectServiceClient interface {
 	ListProjects(ctx context.Context, in *ListProjectsRequest, opts ...grpc.CallOption) (*ListProjectsResponse, error)
+	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
+	GetAttention(ctx context.Context, in *GetAttentionRequest, opts ...grpc.CallOption) (*Attention, error)
+	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
+	WatchOverview(ctx context.Context, in *WatchOverviewRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Overview], error)
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*Project, error)
 	GetProject(ctx context.Context, in *ProjectRef, opts ...grpc.CallOption) (*ProjectSummary, error)
@@ -5075,6 +5201,35 @@ func (c *projectServiceClient) ListProjects(ctx context.Context, in *ListProject
 	return out, nil
 }
 
+func (c *projectServiceClient) GetAttention(ctx context.Context, in *GetAttentionRequest, opts ...grpc.CallOption) (*Attention, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Attention)
+	err := c.cc.Invoke(ctx, ProjectService_GetAttention_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) WatchOverview(ctx context.Context, in *WatchOverviewRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Overview], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_WatchOverview_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchOverviewRequest, Overview]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_WatchOverviewClient = grpc.ServerStreamingClient[Overview]
+
 func (c *projectServiceClient) CreateProject(ctx context.Context, in *CreateProjectRequest, opts ...grpc.CallOption) (*Project, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Project)
@@ -5187,7 +5342,7 @@ func (c *projectServiceClient) DeleteContainer(ctx context.Context, in *DeleteCo
 
 func (c *projectServiceClient) ControlContainer(ctx context.Context, in *ControlContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[0], ProjectService_ControlContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_ControlContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5206,7 +5361,7 @@ type ProjectService_ControlContainerClient = grpc.ServerStreamingClient[DeployEv
 
 func (c *projectServiceClient) ControlService(ctx context.Context, in *ControlServiceRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[1], ProjectService_ControlService_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_ControlService_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5245,7 +5400,7 @@ func (c *projectServiceClient) DiscardDraft(ctx context.Context, in *ContainerRe
 
 func (c *projectServiceClient) Deploy(ctx context.Context, in *DeployRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[2], ProjectService_Deploy_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_Deploy_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5294,7 +5449,7 @@ func (c *projectServiceClient) ListProjectEvents(ctx context.Context, in *ListPr
 
 func (c *projectServiceClient) Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[3], ProjectService_Rollback_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_Rollback_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5323,7 +5478,7 @@ func (c *projectServiceClient) ListDeployments(ctx context.Context, in *ProjectR
 
 func (c *projectServiceClient) RestoreDeployment(ctx context.Context, in *RestoreDeploymentRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[4], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_RestoreDeployment_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5342,7 +5497,7 @@ type ProjectService_RestoreDeploymentClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) StreamLogs(ctx context.Context, in *StreamLogsApiRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LogLine], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[5], ProjectService_StreamLogs_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_StreamLogs_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5471,7 +5626,7 @@ func (c *projectServiceClient) ListBackupSnapshots(ctx context.Context, in *Back
 
 func (c *projectServiceClient) SetBackupReplicaDir(ctx context.Context, in *SetBackupReplicaDirRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[6], ProjectService_SetBackupReplicaDir_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_SetBackupReplicaDir_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5490,7 +5645,7 @@ type ProjectService_SetBackupReplicaDirClient = grpc.ServerStreamingClient[Deplo
 
 func (c *projectServiceClient) RestoreFromBackup(ctx context.Context, in *RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[7], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_RestoreFromBackup_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5509,7 +5664,7 @@ type ProjectService_RestoreFromBackupClient = grpc.ServerStreamingClient[DeployE
 
 func (c *projectServiceClient) MigrateContainer(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[8], ProjectService_MigrateContainer_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_MigrateContainer_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5528,7 +5683,7 @@ type ProjectService_MigrateContainerClient = grpc.ServerStreamingClient[DeployEv
 
 func (c *projectServiceClient) RedeployElsewhere(ctx context.Context, in *MoveContainerRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[9], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_RedeployElsewhere_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5667,7 +5822,7 @@ func (c *projectServiceClient) RenameVolumeFile(ctx context.Context, in *VolumeT
 
 func (c *projectServiceClient) MoveVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[10], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_MoveVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5686,7 +5841,7 @@ type ProjectService_MoveVolumeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *projectServiceClient) CopyVolumeFiles(ctx context.Context, in *VolumeTransferRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[11], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_CopyVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5705,7 +5860,7 @@ type ProjectService_CopyVolumeFilesClient = grpc.ServerStreamingClient[FileOpEve
 
 func (c *projectServiceClient) CompressVolumeFiles(ctx context.Context, in *VolumeCompressRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[12], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_CompressVolumeFiles_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5724,7 +5879,7 @@ type ProjectService_CompressVolumeFilesClient = grpc.ServerStreamingClient[FileO
 
 func (c *projectServiceClient) ExtractVolumeFile(ctx context.Context, in *VolumeExtractRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileOpEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[13], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[14], ProjectService_ExtractVolumeFile_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5763,7 +5918,7 @@ func (c *projectServiceClient) ListSnapshots(ctx context.Context, in *ContainerR
 
 func (c *projectServiceClient) CreateSnapshot(ctx context.Context, in *ContainerRef, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[14], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[15], ProjectService_CreateSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5782,7 +5937,7 @@ type ProjectService_CreateSnapshotClient = grpc.ServerStreamingClient[DeployEven
 
 func (c *projectServiceClient) RestoreSnapshot(ctx context.Context, in *RestoreSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DeployEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[15], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProjectService_ServiceDesc.Streams[16], ProjectService_RestoreSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -5864,6 +6019,10 @@ func (c *projectServiceClient) CheckImages(ctx context.Context, in *ProjectRef, 
 // for forward compatibility.
 type ProjectServiceServer interface {
 	ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error)
+	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
+	GetAttention(context.Context, *GetAttentionRequest) (*Attention, error)
+	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
+	WatchOverview(*WatchOverviewRequest, grpc.ServerStreamingServer[Overview]) error
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(context.Context, *CreateProjectRequest) (*Project, error)
 	GetProject(context.Context, *ProjectRef) (*ProjectSummary, error)
@@ -5987,6 +6146,12 @@ type UnimplementedProjectServiceServer struct{}
 
 func (UnimplementedProjectServiceServer) ListProjects(context.Context, *ListProjectsRequest) (*ListProjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProjects not implemented")
+}
+func (UnimplementedProjectServiceServer) GetAttention(context.Context, *GetAttentionRequest) (*Attention, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAttention not implemented")
+}
+func (UnimplementedProjectServiceServer) WatchOverview(*WatchOverviewRequest, grpc.ServerStreamingServer[Overview]) error {
+	return status.Error(codes.Unimplemented, "method WatchOverview not implemented")
 }
 func (UnimplementedProjectServiceServer) CreateProject(context.Context, *CreateProjectRequest) (*Project, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateProject not implemented")
@@ -6218,6 +6383,35 @@ func _ProjectService_ListProjects_Handler(srv interface{}, ctx context.Context, 
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _ProjectService_GetAttention_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAttentionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).GetAttention(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_GetAttention_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).GetAttention(ctx, req.(*GetAttentionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_WatchOverview_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchOverviewRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProjectServiceServer).WatchOverview(m, &grpc.GenericServerStream[WatchOverviewRequest, Overview]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProjectService_WatchOverviewServer = grpc.ServerStreamingServer[Overview]
 
 func _ProjectService_CreateProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateProjectRequest)
@@ -7271,6 +7465,10 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProjectService_ListProjects_Handler,
 		},
 		{
+			MethodName: "GetAttention",
+			Handler:    _ProjectService_GetAttention_Handler,
+		},
+		{
 			MethodName: "CreateProject",
 			Handler:    _ProjectService_CreateProject_Handler,
 		},
@@ -7465,6 +7663,11 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "WatchOverview",
+			Handler:       _ProjectService_WatchOverview_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "ControlContainer",
 			Handler:       _ProjectService_ControlContainer_Handler,
 			ServerStreams: true,
@@ -7545,5 +7748,313 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
+	Metadata: "nagi/v1/api.proto",
+}
+
+const (
+	AppService_GetPairing_FullMethodName = "/nagi.v1.AppService/GetPairing"
+	AppService_Pair_FullMethodName       = "/nagi.v1.AppService/Pair"
+	AppService_Challenge_FullMethodName  = "/nagi.v1.AppService/Challenge"
+	AppService_Token_FullMethodName      = "/nagi.v1.AppService/Token"
+	AppService_Info_FullMethodName       = "/nagi.v1.AppService/Info"
+	AppService_Logout_FullMethodName     = "/nagi.v1.AppService/Logout"
+)
+
+// AppServiceClient is the client API for AppService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// App 会话和配对（见 docs/android.md#appservice）。
+type AppServiceClient interface {
+	// 查询配对码：面板名称、成员。不认识的配对码返回 not_found。
+	GetPairing(ctx context.Context, in *GetPairingRequest, opts ...grpc.CallOption) (*GetPairingResponse, error)
+	// 提交三把密钥的公钥和证明，返回设备 ID。
+	Pair(ctx context.Context, in *PairRequest, opts ...grpc.CallOption) (*PairResponse, error)
+	// 换取令牌用的挑战。设备 ID 不认识时返回 not_found。
+	Challenge(ctx context.Context, in *AppChallengeRequest, opts ...grpc.CallOption) (*AppChallengeResponse, error)
+	// 用设备密钥或确认密钥签名换取令牌。需要解锁 App 时，设备密钥的签名返回 failed_precondition。
+	Token(ctx context.Context, in *AppTokenRequest, opts ...grpc.CallOption) (*AppTokenResponse, error)
+	// 面板和这台手机的信息（要令牌）。
+	Info(ctx context.Context, in *AppInfoRequest, opts ...grpc.CallOption) (*AppInfoResponse, error)
+	// 退出：删除这台手机的设备记录（要令牌）。
+	Logout(ctx context.Context, in *AppLogoutRequest, opts ...grpc.CallOption) (*AppLogoutResponse, error)
+}
+
+type appServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAppServiceClient(cc grpc.ClientConnInterface) AppServiceClient {
+	return &appServiceClient{cc}
+}
+
+func (c *appServiceClient) GetPairing(ctx context.Context, in *GetPairingRequest, opts ...grpc.CallOption) (*GetPairingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPairingResponse)
+	err := c.cc.Invoke(ctx, AppService_GetPairing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Pair(ctx context.Context, in *PairRequest, opts ...grpc.CallOption) (*PairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PairResponse)
+	err := c.cc.Invoke(ctx, AppService_Pair_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Challenge(ctx context.Context, in *AppChallengeRequest, opts ...grpc.CallOption) (*AppChallengeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppChallengeResponse)
+	err := c.cc.Invoke(ctx, AppService_Challenge_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Token(ctx context.Context, in *AppTokenRequest, opts ...grpc.CallOption) (*AppTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppTokenResponse)
+	err := c.cc.Invoke(ctx, AppService_Token_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Info(ctx context.Context, in *AppInfoRequest, opts ...grpc.CallOption) (*AppInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppInfoResponse)
+	err := c.cc.Invoke(ctx, AppService_Info_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Logout(ctx context.Context, in *AppLogoutRequest, opts ...grpc.CallOption) (*AppLogoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppLogoutResponse)
+	err := c.cc.Invoke(ctx, AppService_Logout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AppServiceServer is the server API for AppService service.
+// All implementations must embed UnimplementedAppServiceServer
+// for forward compatibility.
+//
+// App 会话和配对（见 docs/android.md#appservice）。
+type AppServiceServer interface {
+	// 查询配对码：面板名称、成员。不认识的配对码返回 not_found。
+	GetPairing(context.Context, *GetPairingRequest) (*GetPairingResponse, error)
+	// 提交三把密钥的公钥和证明，返回设备 ID。
+	Pair(context.Context, *PairRequest) (*PairResponse, error)
+	// 换取令牌用的挑战。设备 ID 不认识时返回 not_found。
+	Challenge(context.Context, *AppChallengeRequest) (*AppChallengeResponse, error)
+	// 用设备密钥或确认密钥签名换取令牌。需要解锁 App 时，设备密钥的签名返回 failed_precondition。
+	Token(context.Context, *AppTokenRequest) (*AppTokenResponse, error)
+	// 面板和这台手机的信息（要令牌）。
+	Info(context.Context, *AppInfoRequest) (*AppInfoResponse, error)
+	// 退出：删除这台手机的设备记录（要令牌）。
+	Logout(context.Context, *AppLogoutRequest) (*AppLogoutResponse, error)
+	mustEmbedUnimplementedAppServiceServer()
+}
+
+// UnimplementedAppServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAppServiceServer struct{}
+
+func (UnimplementedAppServiceServer) GetPairing(context.Context, *GetPairingRequest) (*GetPairingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPairing not implemented")
+}
+func (UnimplementedAppServiceServer) Pair(context.Context, *PairRequest) (*PairResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Pair not implemented")
+}
+func (UnimplementedAppServiceServer) Challenge(context.Context, *AppChallengeRequest) (*AppChallengeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Challenge not implemented")
+}
+func (UnimplementedAppServiceServer) Token(context.Context, *AppTokenRequest) (*AppTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Token not implemented")
+}
+func (UnimplementedAppServiceServer) Info(context.Context, *AppInfoRequest) (*AppInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Info not implemented")
+}
+func (UnimplementedAppServiceServer) Logout(context.Context, *AppLogoutRequest) (*AppLogoutResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Logout not implemented")
+}
+func (UnimplementedAppServiceServer) mustEmbedUnimplementedAppServiceServer() {}
+func (UnimplementedAppServiceServer) testEmbeddedByValue()                    {}
+
+// UnsafeAppServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AppServiceServer will
+// result in compilation errors.
+type UnsafeAppServiceServer interface {
+	mustEmbedUnimplementedAppServiceServer()
+}
+
+func RegisterAppServiceServer(s grpc.ServiceRegistrar, srv AppServiceServer) {
+	// If the following call panics, it indicates UnimplementedAppServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AppService_ServiceDesc, srv)
+}
+
+func _AppService_GetPairing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPairingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).GetPairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_GetPairing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).GetPairing(ctx, req.(*GetPairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Pair_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PairRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Pair(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Pair_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Pair(ctx, req.(*PairRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Challenge_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppChallengeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Challenge(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Challenge_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Challenge(ctx, req.(*AppChallengeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Token_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Token(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Token_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Token(ctx, req.(*AppTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Info_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Info(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Info_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Info(ctx, req.(*AppInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Logout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppLogoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Logout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Logout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Logout(ctx, req.(*AppLogoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AppService_ServiceDesc is the grpc.ServiceDesc for AppService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AppService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nagi.v1.AppService",
+	HandlerType: (*AppServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetPairing",
+			Handler:    _AppService_GetPairing_Handler,
+		},
+		{
+			MethodName: "Pair",
+			Handler:    _AppService_Pair_Handler,
+		},
+		{
+			MethodName: "Challenge",
+			Handler:    _AppService_Challenge_Handler,
+		},
+		{
+			MethodName: "Token",
+			Handler:    _AppService_Token_Handler,
+		},
+		{
+			MethodName: "Info",
+			Handler:    _AppService_Info_Handler,
+		},
+		{
+			MethodName: "Logout",
+			Handler:    _AppService_Logout_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "nagi/v1/api.proto",
 }

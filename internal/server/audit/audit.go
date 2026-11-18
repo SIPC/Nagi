@@ -58,6 +58,7 @@ const (
 // 来源。
 const (
 	ViaWeb    = "web"
+	ViaApp    = "app" // 安卓 App（见 docs/android.md#审计）
 	ViaMCP    = "mcp"
 	ViaCLI    = "cli"
 	ViaSystem = "system"

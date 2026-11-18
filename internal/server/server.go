@@ -53,6 +53,8 @@ type Config struct {
 	NewMasterKey bool
 	// StandbyCode：作为备用面板启动时主面板生成的配对码（只在第一次启动、数据目录为空时用）。
 	StandbyCode string
+	// DevAppKeys：安卓 App 的开发模式（--dev-app-keys），接受软件密钥和模拟器的证明（见 docs/android.md#工程）。
+	DevAppKeys bool
 }
 
 const (
@@ -275,6 +277,10 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
 	s.auth = auth.New(s.q, s.sealer)
 	s.auth.SetAudit(s.audit)
+	if cfg.DevAppKeys {
+		s.auth.SetDevAppKeys(true)
+		log.Warn("安卓 App 开发模式已打开（--dev-app-keys）：手机可以用软件密钥和模拟器添加，不要在正式环境使用")
+	}
 	if info != nil {
 		s.standby = &standby.Client{Info: info, DataDir: cfg.DataDir, DB: d, Log: log.With("component", "standby")}
 	} else {

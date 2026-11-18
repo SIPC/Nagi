@@ -56,7 +56,7 @@ func (s *Service) Elevate(ctx context.Context, ip, token, password, code string)
 	result = outcomeSuccess
 	until := time.Now().Add(ElevationTTL)
 	// 只对做确认时的 IP 有效：15 分钟内 IP 变了要重新确认（见 docs/panel.md#会话）。
-	if err := s.q.UpdateSession(ctx, st.ID, map[string]any{"elevated_until": until.Unix(), "elevated_ip": ip}); err != nil {
+	if err := s.q.UpdateSession(ctx, st.ID, map[string]any{"elevated_until": until.Unix(), "elevated_ip": ip, "elevated_by": ElevatedByPassword}); err != nil {
 		return time.Time{}, err
 	}
 	return until, nil

@@ -48,6 +48,8 @@ var tokenElevationRules = map[string]string{
 	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure:       "node+write",
 	nagiv1connect.NodeServiceDeleteNodeImagesProcedure:             "write",
 	nagiv1connect.NodeServicePruneNodeImagesProcedure:              "write",
+	// 添加手机：令牌一律不行（也不在 tokenAccount 里）。
+	nagiv1connect.AuthServiceCreateAppPairingProcedure: "",
 }
 
 // 每个要确认的接口都按上表判断：各种令牌（勾的选项、角色）能不能调用、算不算确认过；网页的会话只看有没有做过确认。
@@ -96,9 +98,14 @@ func TestTokenElevationRules(t *testing.T) {
 		if !needsElevation(session, p) {
 			t.Errorf("%s：没做确认的网页会话应该要确认", p)
 		}
-		session.ElevatedUntil = time.Now().Add(time.Minute).Unix()
+		session.ElevatedUntil, session.ElevatedBy = time.Now().Add(time.Minute).Unix(), auth.ElevatedByPassword
 		if needsElevation(session, p) {
 			t.Errorf("%s：确认过的网页会话应该放行", p)
+		}
+		// 不是用密码或验证码做的确认（以后 App 用确认密钥做的）：只认密码的接口仍要确认，其余放行。
+		session.ElevatedBy = "app-key"
+		if got, want := needsElevation(session, p), slices.Contains(auth.PasswordElevationProcedures(), p); got != want {
+			t.Errorf("%s：确认密钥做的确认，要再确认 = %v，想要 %v", p, got, want)
 		}
 	}
 	// 不要确认的接口，令牌也不会被这条规则拦下或放行别的。

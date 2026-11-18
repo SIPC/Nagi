@@ -375,7 +375,7 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 }
 
 func userOf(st store.SessionState) User {
-	return User{ID: st.UserID, Name: st.Username, Role: st.Role, ElevatedUntil: st.ElevatedUntil,
+	return User{ID: st.UserID, Name: st.Username, Role: st.Role, ElevatedUntil: st.ElevatedUntil, ElevatedBy: st.ElevatedBy,
 		LimitProjects: st.AllProjects == 0, LimitNodes: st.AllNodes == 0, SessionID: st.ID}
 }
 

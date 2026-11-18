@@ -65,6 +65,8 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.SettingsServiceBeginTOTPProcedure: true,
 	// 添加通行密钥：和两步验证一样，拿到会话的人不能借它给自己留一个登录凭据。
 	nagiv1connect.SettingsServiceBeginPasskeyRegistrationProcedure: true,
+	// 添加手机：同样会给自己留下登录凭据（见 docs/android.md#扫码）。和上面三项一样只认密码或验证码做的确认（auth.passwordElevation）。
+	nagiv1connect.AuthServiceCreateAppPairingProcedure: true,
 	// 管理员登录地址：拿到会话的人不能借它把账号主人锁在外面（见 docs/panel.md#管理员登录地址）。
 	nagiv1connect.SettingsServiceSetAdminNetworksProcedure: true,
 	// 恢复从节点缓存拼回的顶替和备份设置：会让别的节点接收并运行这个容器的配置（见 docs/panel.md#项目数据）。

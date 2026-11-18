@@ -52,7 +52,7 @@ var operatorReads = map[string]bool{
 	"GetBackupKey": true, "ListRegistries": true, "ListVolumeFiles": true, "ListVolumeDirSizes": true,
 }
 
-var readPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping"}
+var readPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping", "Watch"}
 
 func isRead(method string) bool {
 	for _, p := range readPrefixes {
@@ -93,6 +93,24 @@ var tokenElevated = map[string]tokenNeed{
 	"/nagi.v1.NodeService/SetNodeReplicaDir": needNode, "/nagi.v1.ProjectService/SetBackupReplicaDir": needNode,
 	// 删除、清理节点上的镜像（见 docs/agent.md#节点镜像）：节点拒绝删有容器在用、Nagi 需要的，只要「可修改」。
 	"/nagi.v1.NodeService/DeleteNodeImages": needWrite, "/nagi.v1.NodeService/PruneNodeImages": needWrite,
+}
+
+// passwordElevation 是只认密码或验证码做的高权限确认的接口：给自己留下登录凭据的操作，手机的确认密钥不算
+// （见 docs/android.md#高权限确认和重新验证）。这些接口也都在 api 的 elevationRequired 里。
+var passwordElevation = map[string]bool{
+	"/nagi.v1.SettingsService/CreateAccessToken":        true,
+	"/nagi.v1.SettingsService/BeginPasskeyRegistration": true,
+	"/nagi.v1.SettingsService/BeginTOTP":                true,
+	"/nagi.v1.AuthService/CreateAppPairing":             true,
+}
+
+// PasswordElevationProcedures 列出 passwordElevation 里的接口（测试用）。
+func PasswordElevationProcedures() []string {
+	out := make([]string, 0, len(passwordElevation))
+	for p := range passwordElevation {
+		out = append(out, p)
+	}
+	return out
 }
 
 // TokenElevatedProcedures 列出 tokenElevated 里的接口（测试用：和 api 的 elevationRequired 对照）。
@@ -154,6 +172,9 @@ func TokenAllowed(u User, procedure string) bool {
 // ElevatedFor 判断调用这个接口时算不算做过高权限确认。网页的会话看 Elevated（和以前一样）；访问令牌只在调用
 // tokenElevated 里的接口、是管理员、勾了要求的选项时算确认过，别的一律不算。
 func (u User) ElevatedFor(procedure string) bool {
+	if passwordElevation[procedure] && u.ElevatedBy != ElevatedByPassword {
+		return false
+	}
 	if u.TokenID == 0 {
 		return u.Elevated()
 	}
@@ -174,7 +195,7 @@ func Allowed(role, procedure string) bool {
 		return false
 	}
 	service, method := parts[0], parts[1]
-	if service == "nagi.v1.AuthService" || selfMethods[method] {
+	if service == "nagi.v1.AuthService" || service == "nagi.v1.AppService" || selfMethods[method] {
 		return true
 	}
 	if adminReads[method] || adminWrites[method] {

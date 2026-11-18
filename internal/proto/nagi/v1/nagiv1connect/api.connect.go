@@ -31,6 +31,8 @@ const (
 	SettingsServiceName = "nagi.v1.SettingsService"
 	// ProjectServiceName is the fully-qualified name of the ProjectService service.
 	ProjectServiceName = "nagi.v1.ProjectService"
+	// AppServiceName is the fully-qualified name of the AppService service.
+	AppServiceName = "nagi.v1.AppService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -88,6 +90,12 @@ const (
 	// AuthServiceSetProjectOrderProcedure is the fully-qualified name of the AuthService's
 	// SetProjectOrder RPC.
 	AuthServiceSetProjectOrderProcedure = "/nagi.v1.AuthService/SetProjectOrder"
+	// AuthServiceCreateAppPairingProcedure is the fully-qualified name of the AuthService's
+	// CreateAppPairing RPC.
+	AuthServiceCreateAppPairingProcedure = "/nagi.v1.AuthService/CreateAppPairing"
+	// AuthServiceGetAppPairingProcedure is the fully-qualified name of the AuthService's GetAppPairing
+	// RPC.
+	AuthServiceGetAppPairingProcedure = "/nagi.v1.AuthService/GetAppPairing"
 	// NodeServiceListNodesProcedure is the fully-qualified name of the NodeService's ListNodes RPC.
 	NodeServiceListNodesProcedure = "/nagi.v1.NodeService/ListNodes"
 	// NodeServiceListNodeDirProcedure is the fully-qualified name of the NodeService's ListNodeDir RPC.
@@ -186,6 +194,9 @@ const (
 	// NodeServiceQueryNodeMetricsProcedure is the fully-qualified name of the NodeService's
 	// QueryNodeMetrics RPC.
 	NodeServiceQueryNodeMetricsProcedure = "/nagi.v1.NodeService/QueryNodeMetrics"
+	// NodeServiceQueryTrafficProcedure is the fully-qualified name of the NodeService's QueryTraffic
+	// RPC.
+	NodeServiceQueryTrafficProcedure = "/nagi.v1.NodeService/QueryTraffic"
 	// NodeServiceGetNodeStorageProcedure is the fully-qualified name of the NodeService's
 	// GetNodeStorage RPC.
 	NodeServiceGetNodeStorageProcedure = "/nagi.v1.NodeService/GetNodeStorage"
@@ -376,6 +387,12 @@ const (
 	// ProjectServiceListProjectsProcedure is the fully-qualified name of the ProjectService's
 	// ListProjects RPC.
 	ProjectServiceListProjectsProcedure = "/nagi.v1.ProjectService/ListProjects"
+	// ProjectServiceGetAttentionProcedure is the fully-qualified name of the ProjectService's
+	// GetAttention RPC.
+	ProjectServiceGetAttentionProcedure = "/nagi.v1.ProjectService/GetAttention"
+	// ProjectServiceWatchOverviewProcedure is the fully-qualified name of the ProjectService's
+	// WatchOverview RPC.
+	ProjectServiceWatchOverviewProcedure = "/nagi.v1.ProjectService/WatchOverview"
 	// ProjectServiceCreateProjectProcedure is the fully-qualified name of the ProjectService's
 	// CreateProject RPC.
 	ProjectServiceCreateProjectProcedure = "/nagi.v1.ProjectService/CreateProject"
@@ -566,6 +583,18 @@ const (
 	// ProjectServiceCheckImagesProcedure is the fully-qualified name of the ProjectService's
 	// CheckImages RPC.
 	ProjectServiceCheckImagesProcedure = "/nagi.v1.ProjectService/CheckImages"
+	// AppServiceGetPairingProcedure is the fully-qualified name of the AppService's GetPairing RPC.
+	AppServiceGetPairingProcedure = "/nagi.v1.AppService/GetPairing"
+	// AppServicePairProcedure is the fully-qualified name of the AppService's Pair RPC.
+	AppServicePairProcedure = "/nagi.v1.AppService/Pair"
+	// AppServiceChallengeProcedure is the fully-qualified name of the AppService's Challenge RPC.
+	AppServiceChallengeProcedure = "/nagi.v1.AppService/Challenge"
+	// AppServiceTokenProcedure is the fully-qualified name of the AppService's Token RPC.
+	AppServiceTokenProcedure = "/nagi.v1.AppService/Token"
+	// AppServiceInfoProcedure is the fully-qualified name of the AppService's Info RPC.
+	AppServiceInfoProcedure = "/nagi.v1.AppService/Info"
+	// AppServiceLogoutProcedure is the fully-qualified name of the AppService's Logout RPC.
+	AppServiceLogoutProcedure = "/nagi.v1.AppService/Logout"
 )
 
 // SetupServiceClient is a client for the nagi.v1.SetupService service.
@@ -694,6 +723,10 @@ type AuthServiceClient interface {
 	GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error)
 	// 整份覆盖。
 	SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error)
+	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
+	CreateAppPairing(context.Context, *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error)
+	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
+	GetAppPairing(context.Context, *connect.Request[v1.GetAppPairingRequest]) (*connect.Response[v1.GetAppPairingResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the nagi.v1.AuthService service. By default, it uses
@@ -803,6 +836,18 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("SetProjectOrder")),
 			connect.WithClientOptions(opts...),
 		),
+		createAppPairing: connect.NewClient[v1.CreateAppPairingRequest, v1.CreateAppPairingResponse](
+			httpClient,
+			baseURL+AuthServiceCreateAppPairingProcedure,
+			connect.WithSchema(authServiceMethods.ByName("CreateAppPairing")),
+			connect.WithClientOptions(opts...),
+		),
+		getAppPairing: connect.NewClient[v1.GetAppPairingRequest, v1.GetAppPairingResponse](
+			httpClient,
+			baseURL+AuthServiceGetAppPairingProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetAppPairing")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -824,6 +869,8 @@ type authServiceClient struct {
 	passkeyLogin       *connect.Client[v1.PasskeyLoginRequest, v1.LoginResponse]
 	getProjectOrder    *connect.Client[v1.GetProjectOrderRequest, v1.ProjectOrder]
 	setProjectOrder    *connect.Client[v1.ProjectOrder, v1.SetProjectOrderResponse]
+	createAppPairing   *connect.Client[v1.CreateAppPairingRequest, v1.CreateAppPairingResponse]
+	getAppPairing      *connect.Client[v1.GetAppPairingRequest, v1.GetAppPairingResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -906,6 +953,16 @@ func (c *authServiceClient) SetProjectOrder(ctx context.Context, req *connect.Re
 	return c.setProjectOrder.CallUnary(ctx, req)
 }
 
+// CreateAppPairing calls nagi.v1.AuthService.CreateAppPairing.
+func (c *authServiceClient) CreateAppPairing(ctx context.Context, req *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error) {
+	return c.createAppPairing.CallUnary(ctx, req)
+}
+
+// GetAppPairing calls nagi.v1.AuthService.GetAppPairing.
+func (c *authServiceClient) GetAppPairing(ctx context.Context, req *connect.Request[v1.GetAppPairingRequest]) (*connect.Response[v1.GetAppPairingResponse], error) {
+	return c.getAppPairing.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the nagi.v1.AuthService service.
 type AuthServiceHandler interface {
 	// 开启了两步验证时，没带验证码会返回 failed_precondition，界面据此显示验证码输入框。
@@ -936,6 +993,10 @@ type AuthServiceHandler interface {
 	GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error)
 	// 整份覆盖。
 	SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error)
+	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
+	CreateAppPairing(context.Context, *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error)
+	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
+	GetAppPairing(context.Context, *connect.Request[v1.GetAppPairingRequest]) (*connect.Response[v1.GetAppPairingResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -1041,6 +1102,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("SetProjectOrder")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceCreateAppPairingHandler := connect.NewUnaryHandler(
+		AuthServiceCreateAppPairingProcedure,
+		svc.CreateAppPairing,
+		connect.WithSchema(authServiceMethods.ByName("CreateAppPairing")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceGetAppPairingHandler := connect.NewUnaryHandler(
+		AuthServiceGetAppPairingProcedure,
+		svc.GetAppPairing,
+		connect.WithSchema(authServiceMethods.ByName("GetAppPairing")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -1075,6 +1148,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetProjectOrderHandler.ServeHTTP(w, r)
 		case AuthServiceSetProjectOrderProcedure:
 			authServiceSetProjectOrderHandler.ServeHTTP(w, r)
+		case AuthServiceCreateAppPairingProcedure:
+			authServiceCreateAppPairingHandler.ServeHTTP(w, r)
+		case AuthServiceGetAppPairingProcedure:
+			authServiceGetAppPairingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1148,6 +1225,14 @@ func (UnimplementedAuthServiceHandler) SetProjectOrder(context.Context, *connect
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.SetProjectOrder is not implemented"))
 }
 
+func (UnimplementedAuthServiceHandler) CreateAppPairing(context.Context, *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.CreateAppPairing is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetAppPairing(context.Context, *connect.Request[v1.GetAppPairingRequest]) (*connect.Response[v1.GetAppPairingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.GetAppPairing is not implemented"))
+}
+
 // NodeServiceClient is a client for the nagi.v1.NodeService service.
 type NodeServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -1204,6 +1289,8 @@ type NodeServiceClient interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
+	QueryTraffic(context.Context, *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -1454,6 +1541,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
 			connect.WithClientOptions(opts...),
 		),
+		queryTraffic: connect.NewClient[v1.QueryTrafficRequest, v1.TrafficHistory](
+			httpClient,
+			baseURL+NodeServiceQueryTrafficProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("QueryTraffic")),
+			connect.WithClientOptions(opts...),
+		),
 		getNodeStorage: connect.NewClient[v1.NodeRef, v1.NodeStorage](
 			httpClient,
 			baseURL+NodeServiceGetNodeStorageProcedure,
@@ -1595,6 +1688,7 @@ type nodeServiceClient struct {
 	setNodeReplicaDir     *connect.Client[v1.SetNodeReplicaDirRequest, v1.DeployEvent]
 	createEnrollCommand   *connect.Client[v1.CreateEnrollCommandRequest, v1.CreateEnrollCommandResponse]
 	queryNodeMetrics      *connect.Client[v1.QueryNodeMetricsRequest, v1.QueryMetricsResponse]
+	queryTraffic          *connect.Client[v1.QueryTrafficRequest, v1.TrafficHistory]
 	getNodeStorage        *connect.Client[v1.NodeRef, v1.NodeStorage]
 	removeNode            *connect.Client[v1.RemoveNodeRequest, v1.RemoveNodeResponse]
 	approveNode           *connect.Client[v1.ApproveNodeRequest, v1.ApproveNodeResponse]
@@ -1784,6 +1878,11 @@ func (c *nodeServiceClient) QueryNodeMetrics(ctx context.Context, req *connect.R
 	return c.queryNodeMetrics.CallUnary(ctx, req)
 }
 
+// QueryTraffic calls nagi.v1.NodeService.QueryTraffic.
+func (c *nodeServiceClient) QueryTraffic(ctx context.Context, req *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error) {
+	return c.queryTraffic.CallUnary(ctx, req)
+}
+
 // GetNodeStorage calls nagi.v1.NodeService.GetNodeStorage.
 func (c *nodeServiceClient) GetNodeStorage(ctx context.Context, req *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error) {
 	return c.getNodeStorage.CallUnary(ctx, req)
@@ -1925,6 +2024,8 @@ type NodeServiceHandler interface {
 	// 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
 	CreateEnrollCommand(context.Context, *connect.Request[v1.CreateEnrollCommandRequest]) (*connect.Response[v1.CreateEnrollCommandResponse], error)
 	QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
+	QueryTraffic(context.Context, *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error)
 	// 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
 	GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error)
 	// 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -2171,6 +2272,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("QueryNodeMetrics")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceQueryTrafficHandler := connect.NewUnaryHandler(
+		NodeServiceQueryTrafficProcedure,
+		svc.QueryTraffic,
+		connect.WithSchema(nodeServiceMethods.ByName("QueryTraffic")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceGetNodeStorageHandler := connect.NewUnaryHandler(
 		NodeServiceGetNodeStorageProcedure,
 		svc.GetNodeStorage,
@@ -2343,6 +2450,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceCreateEnrollCommandHandler.ServeHTTP(w, r)
 		case NodeServiceQueryNodeMetricsProcedure:
 			nodeServiceQueryNodeMetricsHandler.ServeHTTP(w, r)
+		case NodeServiceQueryTrafficProcedure:
+			nodeServiceQueryTrafficHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeStorageProcedure:
 			nodeServiceGetNodeStorageHandler.ServeHTTP(w, r)
 		case NodeServiceRemoveNodeProcedure:
@@ -2520,6 +2629,10 @@ func (UnimplementedNodeServiceHandler) CreateEnrollCommand(context.Context, *con
 
 func (UnimplementedNodeServiceHandler) QueryNodeMetrics(context.Context, *connect.Request[v1.QueryNodeMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.QueryNodeMetrics is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) QueryTraffic(context.Context, *connect.Request[v1.QueryTrafficRequest]) (*connect.Response[v1.TrafficHistory], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.QueryTraffic is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) GetNodeStorage(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.NodeStorage], error) {
@@ -3923,6 +4036,10 @@ func (UnimplementedSettingsServiceHandler) SetAdminNetworks(context.Context, *co
 // ProjectServiceClient is a client for the nagi.v1.ProjectService service.
 type ProjectServiceClient interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
+	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
+	GetAttention(context.Context, *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error)
+	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
+	WatchOverview(context.Context, *connect.Request[v1.WatchOverviewRequest]) (*connect.ServerStreamForClient[v1.Overview], error)
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.Project], error)
 	GetProject(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ProjectSummary], error)
@@ -4051,6 +4168,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceListProjectsProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("ListProjects")),
+			connect.WithClientOptions(opts...),
+		),
+		getAttention: connect.NewClient[v1.GetAttentionRequest, v1.Attention](
+			httpClient,
+			baseURL+ProjectServiceGetAttentionProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("GetAttention")),
+			connect.WithClientOptions(opts...),
+		),
+		watchOverview: connect.NewClient[v1.WatchOverviewRequest, v1.Overview](
+			httpClient,
+			baseURL+ProjectServiceWatchOverviewProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("WatchOverview")),
 			connect.WithClientOptions(opts...),
 		),
 		createProject: connect.NewClient[v1.CreateProjectRequest, v1.Project](
@@ -4443,6 +4572,8 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 // projectServiceClient implements ProjectServiceClient.
 type projectServiceClient struct {
 	listProjects                 *connect.Client[v1.ListProjectsRequest, v1.ListProjectsResponse]
+	getAttention                 *connect.Client[v1.GetAttentionRequest, v1.Attention]
+	watchOverview                *connect.Client[v1.WatchOverviewRequest, v1.Overview]
 	createProject                *connect.Client[v1.CreateProjectRequest, v1.Project]
 	getProject                   *connect.Client[v1.ProjectRef, v1.ProjectSummary]
 	updateProjectSettings        *connect.Client[v1.UpdateProjectSettingsRequest, v1.Project]
@@ -4512,6 +4643,16 @@ type projectServiceClient struct {
 // ListProjects calls nagi.v1.ProjectService.ListProjects.
 func (c *projectServiceClient) ListProjects(ctx context.Context, req *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {
 	return c.listProjects.CallUnary(ctx, req)
+}
+
+// GetAttention calls nagi.v1.ProjectService.GetAttention.
+func (c *projectServiceClient) GetAttention(ctx context.Context, req *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error) {
+	return c.getAttention.CallUnary(ctx, req)
+}
+
+// WatchOverview calls nagi.v1.ProjectService.WatchOverview.
+func (c *projectServiceClient) WatchOverview(ctx context.Context, req *connect.Request[v1.WatchOverviewRequest]) (*connect.ServerStreamForClient[v1.Overview], error) {
+	return c.watchOverview.CallServerStream(ctx, req)
 }
 
 // CreateProject calls nagi.v1.ProjectService.CreateProject.
@@ -4837,6 +4978,10 @@ func (c *projectServiceClient) CheckImages(ctx context.Context, req *connect.Req
 // ProjectServiceHandler is an implementation of the nagi.v1.ProjectService service.
 type ProjectServiceHandler interface {
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
+	// 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
+	GetAttention(context.Context, *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error)
+	// 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
+	WatchOverview(context.Context, *connect.Request[v1.WatchOverviewRequest], *connect.ServerStream[v1.Overview]) error
 	// 新建项目，可以同时带上第一个容器（只保存，不部署）。
 	CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.Project], error)
 	GetProject(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.ProjectSummary], error)
@@ -4961,6 +5106,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceListProjectsProcedure,
 		svc.ListProjects,
 		connect.WithSchema(projectServiceMethods.ByName("ListProjects")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceGetAttentionHandler := connect.NewUnaryHandler(
+		ProjectServiceGetAttentionProcedure,
+		svc.GetAttention,
+		connect.WithSchema(projectServiceMethods.ByName("GetAttention")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceWatchOverviewHandler := connect.NewServerStreamHandler(
+		ProjectServiceWatchOverviewProcedure,
+		svc.WatchOverview,
+		connect.WithSchema(projectServiceMethods.ByName("WatchOverview")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceCreateProjectHandler := connect.NewUnaryHandler(
@@ -5351,6 +5508,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		switch r.URL.Path {
 		case ProjectServiceListProjectsProcedure:
 			projectServiceListProjectsHandler.ServeHTTP(w, r)
+		case ProjectServiceGetAttentionProcedure:
+			projectServiceGetAttentionHandler.ServeHTTP(w, r)
+		case ProjectServiceWatchOverviewProcedure:
+			projectServiceWatchOverviewHandler.ServeHTTP(w, r)
 		case ProjectServiceCreateProjectProcedure:
 			projectServiceCreateProjectHandler.ServeHTTP(w, r)
 		case ProjectServiceGetProjectProcedure:
@@ -5490,6 +5651,14 @@ type UnimplementedProjectServiceHandler struct{}
 
 func (UnimplementedProjectServiceHandler) ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.ListProjects is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) GetAttention(context.Context, *connect.Request[v1.GetAttentionRequest]) (*connect.Response[v1.Attention], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.GetAttention is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) WatchOverview(context.Context, *connect.Request[v1.WatchOverviewRequest], *connect.ServerStream[v1.Overview]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.WatchOverview is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) CreateProject(context.Context, *connect.Request[v1.CreateProjectRequest]) (*connect.Response[v1.Project], error) {
@@ -5746,4 +5915,216 @@ func (UnimplementedProjectServiceHandler) LogoutRegistry(context.Context, *conne
 
 func (UnimplementedProjectServiceHandler) CheckImages(context.Context, *connect.Request[v1.ProjectRef]) (*connect.Response[v1.CheckImagesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.CheckImages is not implemented"))
+}
+
+// AppServiceClient is a client for the nagi.v1.AppService service.
+type AppServiceClient interface {
+	// 查询配对码：面板名称、成员。不认识的配对码返回 not_found。
+	GetPairing(context.Context, *connect.Request[v1.GetPairingRequest]) (*connect.Response[v1.GetPairingResponse], error)
+	// 提交三把密钥的公钥和证明，返回设备 ID。
+	Pair(context.Context, *connect.Request[v1.PairRequest]) (*connect.Response[v1.PairResponse], error)
+	// 换取令牌用的挑战。设备 ID 不认识时返回 not_found。
+	Challenge(context.Context, *connect.Request[v1.AppChallengeRequest]) (*connect.Response[v1.AppChallengeResponse], error)
+	// 用设备密钥或确认密钥签名换取令牌。需要解锁 App 时，设备密钥的签名返回 failed_precondition。
+	Token(context.Context, *connect.Request[v1.AppTokenRequest]) (*connect.Response[v1.AppTokenResponse], error)
+	// 面板和这台手机的信息（要令牌）。
+	Info(context.Context, *connect.Request[v1.AppInfoRequest]) (*connect.Response[v1.AppInfoResponse], error)
+	// 退出：删除这台手机的设备记录（要令牌）。
+	Logout(context.Context, *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error)
+}
+
+// NewAppServiceClient constructs a client for the nagi.v1.AppService service. By default, it uses
+// the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and sends
+// uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC() or
+// connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewAppServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) AppServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	appServiceMethods := v1.File_nagi_v1_api_proto.Services().ByName("AppService").Methods()
+	return &appServiceClient{
+		getPairing: connect.NewClient[v1.GetPairingRequest, v1.GetPairingResponse](
+			httpClient,
+			baseURL+AppServiceGetPairingProcedure,
+			connect.WithSchema(appServiceMethods.ByName("GetPairing")),
+			connect.WithClientOptions(opts...),
+		),
+		pair: connect.NewClient[v1.PairRequest, v1.PairResponse](
+			httpClient,
+			baseURL+AppServicePairProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Pair")),
+			connect.WithClientOptions(opts...),
+		),
+		challenge: connect.NewClient[v1.AppChallengeRequest, v1.AppChallengeResponse](
+			httpClient,
+			baseURL+AppServiceChallengeProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Challenge")),
+			connect.WithClientOptions(opts...),
+		),
+		token: connect.NewClient[v1.AppTokenRequest, v1.AppTokenResponse](
+			httpClient,
+			baseURL+AppServiceTokenProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Token")),
+			connect.WithClientOptions(opts...),
+		),
+		info: connect.NewClient[v1.AppInfoRequest, v1.AppInfoResponse](
+			httpClient,
+			baseURL+AppServiceInfoProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Info")),
+			connect.WithClientOptions(opts...),
+		),
+		logout: connect.NewClient[v1.AppLogoutRequest, v1.AppLogoutResponse](
+			httpClient,
+			baseURL+AppServiceLogoutProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Logout")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// appServiceClient implements AppServiceClient.
+type appServiceClient struct {
+	getPairing *connect.Client[v1.GetPairingRequest, v1.GetPairingResponse]
+	pair       *connect.Client[v1.PairRequest, v1.PairResponse]
+	challenge  *connect.Client[v1.AppChallengeRequest, v1.AppChallengeResponse]
+	token      *connect.Client[v1.AppTokenRequest, v1.AppTokenResponse]
+	info       *connect.Client[v1.AppInfoRequest, v1.AppInfoResponse]
+	logout     *connect.Client[v1.AppLogoutRequest, v1.AppLogoutResponse]
+}
+
+// GetPairing calls nagi.v1.AppService.GetPairing.
+func (c *appServiceClient) GetPairing(ctx context.Context, req *connect.Request[v1.GetPairingRequest]) (*connect.Response[v1.GetPairingResponse], error) {
+	return c.getPairing.CallUnary(ctx, req)
+}
+
+// Pair calls nagi.v1.AppService.Pair.
+func (c *appServiceClient) Pair(ctx context.Context, req *connect.Request[v1.PairRequest]) (*connect.Response[v1.PairResponse], error) {
+	return c.pair.CallUnary(ctx, req)
+}
+
+// Challenge calls nagi.v1.AppService.Challenge.
+func (c *appServiceClient) Challenge(ctx context.Context, req *connect.Request[v1.AppChallengeRequest]) (*connect.Response[v1.AppChallengeResponse], error) {
+	return c.challenge.CallUnary(ctx, req)
+}
+
+// Token calls nagi.v1.AppService.Token.
+func (c *appServiceClient) Token(ctx context.Context, req *connect.Request[v1.AppTokenRequest]) (*connect.Response[v1.AppTokenResponse], error) {
+	return c.token.CallUnary(ctx, req)
+}
+
+// Info calls nagi.v1.AppService.Info.
+func (c *appServiceClient) Info(ctx context.Context, req *connect.Request[v1.AppInfoRequest]) (*connect.Response[v1.AppInfoResponse], error) {
+	return c.info.CallUnary(ctx, req)
+}
+
+// Logout calls nagi.v1.AppService.Logout.
+func (c *appServiceClient) Logout(ctx context.Context, req *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error) {
+	return c.logout.CallUnary(ctx, req)
+}
+
+// AppServiceHandler is an implementation of the nagi.v1.AppService service.
+type AppServiceHandler interface {
+	// 查询配对码：面板名称、成员。不认识的配对码返回 not_found。
+	GetPairing(context.Context, *connect.Request[v1.GetPairingRequest]) (*connect.Response[v1.GetPairingResponse], error)
+	// 提交三把密钥的公钥和证明，返回设备 ID。
+	Pair(context.Context, *connect.Request[v1.PairRequest]) (*connect.Response[v1.PairResponse], error)
+	// 换取令牌用的挑战。设备 ID 不认识时返回 not_found。
+	Challenge(context.Context, *connect.Request[v1.AppChallengeRequest]) (*connect.Response[v1.AppChallengeResponse], error)
+	// 用设备密钥或确认密钥签名换取令牌。需要解锁 App 时，设备密钥的签名返回 failed_precondition。
+	Token(context.Context, *connect.Request[v1.AppTokenRequest]) (*connect.Response[v1.AppTokenResponse], error)
+	// 面板和这台手机的信息（要令牌）。
+	Info(context.Context, *connect.Request[v1.AppInfoRequest]) (*connect.Response[v1.AppInfoResponse], error)
+	// 退出：删除这台手机的设备记录（要令牌）。
+	Logout(context.Context, *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error)
+}
+
+// NewAppServiceHandler builds an HTTP handler from the service implementation. It returns the path
+// on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewAppServiceHandler(svc AppServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	appServiceMethods := v1.File_nagi_v1_api_proto.Services().ByName("AppService").Methods()
+	appServiceGetPairingHandler := connect.NewUnaryHandler(
+		AppServiceGetPairingProcedure,
+		svc.GetPairing,
+		connect.WithSchema(appServiceMethods.ByName("GetPairing")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServicePairHandler := connect.NewUnaryHandler(
+		AppServicePairProcedure,
+		svc.Pair,
+		connect.WithSchema(appServiceMethods.ByName("Pair")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServiceChallengeHandler := connect.NewUnaryHandler(
+		AppServiceChallengeProcedure,
+		svc.Challenge,
+		connect.WithSchema(appServiceMethods.ByName("Challenge")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServiceTokenHandler := connect.NewUnaryHandler(
+		AppServiceTokenProcedure,
+		svc.Token,
+		connect.WithSchema(appServiceMethods.ByName("Token")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServiceInfoHandler := connect.NewUnaryHandler(
+		AppServiceInfoProcedure,
+		svc.Info,
+		connect.WithSchema(appServiceMethods.ByName("Info")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServiceLogoutHandler := connect.NewUnaryHandler(
+		AppServiceLogoutProcedure,
+		svc.Logout,
+		connect.WithSchema(appServiceMethods.ByName("Logout")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/nagi.v1.AppService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case AppServiceGetPairingProcedure:
+			appServiceGetPairingHandler.ServeHTTP(w, r)
+		case AppServicePairProcedure:
+			appServicePairHandler.ServeHTTP(w, r)
+		case AppServiceChallengeProcedure:
+			appServiceChallengeHandler.ServeHTTP(w, r)
+		case AppServiceTokenProcedure:
+			appServiceTokenHandler.ServeHTTP(w, r)
+		case AppServiceInfoProcedure:
+			appServiceInfoHandler.ServeHTTP(w, r)
+		case AppServiceLogoutProcedure:
+			appServiceLogoutHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedAppServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedAppServiceHandler struct{}
+
+func (UnimplementedAppServiceHandler) GetPairing(context.Context, *connect.Request[v1.GetPairingRequest]) (*connect.Response[v1.GetPairingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.GetPairing is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Pair(context.Context, *connect.Request[v1.PairRequest]) (*connect.Response[v1.PairResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Pair is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Challenge(context.Context, *connect.Request[v1.AppChallengeRequest]) (*connect.Response[v1.AppChallengeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Challenge is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Token(context.Context, *connect.Request[v1.AppTokenRequest]) (*connect.Response[v1.AppTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Token is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Info(context.Context, *connect.Request[v1.AppInfoRequest]) (*connect.Response[v1.AppInfoResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Info is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Logout(context.Context, *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Logout is not implemented"))
 }

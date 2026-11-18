@@ -63,6 +63,10 @@ func ResetPassword(ctx context.Context, dataDir, username string) (string, strin
 	if _, err := q.DeleteUserPasskeys(ctx, user.ID); err != nil {
 		return "", "", err
 	}
+	// 手机也一起退出（见 docs/android.md#管理和撤销）。运行中的面板每次请求都查设备记录，令牌随之失效。
+	if err := q.DeleteUserAppDevices(ctx, user.ID); err != nil {
+		return "", "", err
+	}
 	return user.Username, password, q.DeleteUserSessions(ctx, user.ID)
 }
 

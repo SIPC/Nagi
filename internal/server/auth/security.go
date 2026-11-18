@@ -82,6 +82,10 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, token, curre
 	if err := s.q.UpdatePassword(ctx, store.UpdatePasswordParams{PasswordHash: hash, ID: userID}); err != nil {
 		return err
 	}
+	// 手机和其他网页登录一起退出（见 docs/android.md#管理和撤销）。
+	if err := s.RemoveUserAppDevices(ctx, userID); err != nil {
+		return err
+	}
 	return s.deleteOtherSessions(ctx, userID, token)
 }
 
@@ -237,7 +241,10 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || p == "/api/standby/pair" || p == "/api/standby/status" {
+		// 安卓 App 的配对和换取令牌（见 docs/android.md#appservice）：和备用面板配对一样不受安全入口限制，
+		// 不认识的配对码、设备 ID 返回 404。
+		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || p == "/api/standby/pair" || p == "/api/standby/status" ||
+			strings.HasPrefix(p, "/nagi.v1.AppService/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -252,6 +259,11 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if _, err := s.session(r.Context(), SessionToken(r.Header)); err == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// 带着面板发过的 App 令牌（过期、换了网段也算，接口会让 App 重新换取）。
+		if t := AppBearer(r.Header); t != "" && s.knownAppToken(t) {
 			next.ServeHTTP(w, r)
 			return
 		}

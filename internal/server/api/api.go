@@ -73,6 +73,8 @@ type API struct {
 	origins originDenials
 	// directRot：正在给节点换直连下载的密钥（见 revokeDirectLinks）。
 	directRot directRotation
+	// traffic：首页流量的缓存（见 overview.go）。
+	traffic trafficCacheState
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -87,6 +89,11 @@ func (a *API) Mount(mux *http.ServeMux) {
 		// 要求重新验证的会话，其他接口都被拒绝，只有这个能用（处理函数自己找会话）。
 		nagiv1connect.AuthServiceReverifyProcedure,
 		nagiv1connect.EnrollServiceEnrollProcedure,
+		// 安卓 App 的配对和换取令牌（见 docs/android.md#appservice），凭配对码或硬件密钥的签名。
+		nagiv1connect.AppServiceGetPairingProcedure,
+		nagiv1connect.AppServicePairProcedure,
+		nagiv1connect.AppServiceChallengeProcedure,
+		nagiv1connect.AppServiceTokenProcedure,
 	)}
 	if a.Panel.Standby != nil {
 		chain = append(chain, readOnly{a})
@@ -104,6 +111,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(&projectService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewEnrollServiceHandler(&enrollService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
+	mux.Handle(nagiv1connect.NewAppServiceHandler(&appService{a}, interceptors))
 	mux.Handle("/hooks/", a.standbyBlock(a.WebhookHandler()))
 	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))
 	mux.Handle("/ws/node-shell", a.standbyBlock(a.NodeShellHandler()))

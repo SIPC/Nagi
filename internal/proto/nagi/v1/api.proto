@@ -7,6 +7,8 @@ import "nagi/v1/agent.proto";
 import "nagi/v1/common.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+option java_multiple_files = true;
+option java_package = "io.github.sipc.nagi.proto.v1";
 
 // 以下服务供浏览器调用（Connect-RPC）。
 
@@ -61,6 +63,10 @@ service AuthService {
   rpc GetProjectOrder(GetProjectOrderRequest) returns (ProjectOrder);
   // 整份覆盖。
   rpc SetProjectOrder(ProjectOrder) returns (SetProjectOrderResponse);
+  // 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
+  rpc CreateAppPairing(CreateAppPairingRequest) returns (CreateAppPairingResponse);
+  // 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
+  rpc GetAppPairing(GetAppPairingRequest) returns (GetAppPairingResponse);
 }
 
 // OAuthRequest 是客户端打开授权页时带的参数（/oauth/authorize 的查询参数）。
@@ -231,6 +237,8 @@ service NodeService {
   // 生成一条添加节点的安装命令，里面带一次性令牌（1 小时内有效）。
   rpc CreateEnrollCommand(CreateEnrollCommandRequest) returns (CreateEnrollCommandResponse);
   rpc QueryNodeMetrics(QueryNodeMetricsRequest) returns (QueryMetricsResponse);
+  // 流量趋势：对外（网卡减去节点网络，估算值）和节点之间，按访问范围内的在线节点合计。
+  rpc QueryTraffic(QueryTrafficRequest) returns (TrafficHistory);
   // 节点的磁盘占用明细（只读）。只有管理员能看：内容涉及节点上所有项目。
   rpc GetNodeStorage(NodeRef) returns (NodeStorage);
   // 移除节点：面板忘记它并拒绝它再连接。节点上还有容器时拒绝。
@@ -781,6 +789,10 @@ message ListNodesResponse {
 
 service ProjectService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // 需要处理的事（见 docs/android.md#首页）：按成员的访问范围算，严重的在前。
+  rpc GetAttention(GetAttentionRequest) returns (Attention);
+  // 首页的订阅流（见 docs/android.md#订阅流）：先发一份完整的当前状态，之后每次变化发一份，30 秒没有变化时发心跳。
+  rpc WatchOverview(WatchOverviewRequest) returns (stream Overview);
   // 新建项目，可以同时带上第一个容器（只保存，不部署）。
   rpc CreateProject(CreateProjectRequest) returns (Project);
   rpc GetProject(ProjectRef) returns (ProjectSummary);
@@ -1091,6 +1103,21 @@ message LoginSession {
   // 最近一次请求的 IP 和时间。
   string last_ip = 7;
   google.protobuf.Timestamp last_seen = 8;
+  // web 或 app（安卓 App，见 docs/android.md#管理和撤销）。下面几项只有手机有。
+  string kind = 9;
+  // 手机名称（默认是型号）、型号、系统版本、App 版本。
+  string device_name = 10;
+  string model = 11;
+  string android_version = 12;
+  string app_version = 13;
+  // 密钥所在的硬件：strongbox、tee；开发模式下的软件密钥是 software。
+  string security_level = 14;
+  // bootloader 已锁定。
+  bool boot_locked = 15;
+  // 检查过证书吊销列表。
+  bool revocation_checked = 16;
+  // 用 --dev-app-keys 添加的（接受软件密钥）。
+  bool dev_keys = 17;
 }
 
 message ListSessionsRequest {}
@@ -1756,3 +1783,203 @@ message AdminNetworks {
   // 当前请求的地址（只在回复里），界面据此提示。
   string current_ip = 2;
 }
+
+// ---- 安卓 App（见 docs/android.md） ----
+
+message CreateAppPairingRequest {}
+
+message CreateAppPairingResponse {
+  string code = 1 [debug_redact = true];
+  // 二维码内容：nagi-app://pair?v=1&a=<对外地址:端口>&d=<域名>&fp=<公钥指纹>&c=<配对码>。
+  string uri = 2 [debug_redact = true];
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message GetAppPairingRequest {
+  string code = 1 [debug_redact = true];
+}
+
+message GetAppPairingResponse {
+  // 已经用它添加了手机。
+  bool used = 1;
+  // 添加的手机名称。
+  string device_name = 2;
+  // 已过期或作废（重新生成、会话退出）。
+  bool expired = 3;
+}
+
+// 需要处理的一项。
+message AttentionItem {
+  // alert（未恢复的告警）、node_offline、node_pending、container（容器异常）、image_update、standby_offline。
+  string kind = 1;
+  // critical、warning、info。
+  string severity = 2;
+  string title = 3;
+  // 第二行：对象、时长等。
+  string detail = 4;
+  string project_id = 5;
+  string container = 6;
+  string node_id = 7;
+  google.protobuf.Timestamp since = 8;
+  // 行尾的一步操作：approve（批准节点）、update（更新镜像），没有时为空。
+  string action = 9;
+}
+
+message GetAttentionRequest {}
+
+message Attention {
+  repeated AttentionItem items = 1;
+}
+
+message WatchOverviewRequest {}
+
+// RouteTraffic 是一条端口映射的当前速率（字节/秒）。
+message RouteTraffic {
+  string project_id = 1;
+  string project_name = 2;
+  string route = 3;
+  // 访问地址，例如 https://example.com 或 203.0.113.10:8080。
+  string address = 4;
+  double rx = 5;
+  double tx = 6;
+}
+
+message Overview {
+  // 心跳：没有别的内容。
+  bool heartbeat = 1;
+  Attention attention = 2;
+  int32 nodes_online = 3;
+  int32 nodes_total = 4;
+  int32 containers_running = 5;
+  int32 containers_total = 6;
+  // 对外入站、出站（字节/秒），估算值。traffic_ready 为 false 时还没有数据。
+  double external_rx = 7;
+  double external_tx = 8;
+  bool traffic_ready = 9;
+  // 流量最大的端口映射，最多 5 条。
+  repeated RouteTraffic top_routes = 10;
+  // 面板名称（顶部栏）。
+  string panel_name = 11;
+}
+
+message QueryTrafficRequest {
+  google.protobuf.Timestamp from = 1;
+  // 聚合步长（秒）。
+  int64 step = 2;
+}
+
+// TrafficHistory 是合计的流量趋势，四个数组一一对应（字节/秒）。
+message TrafficHistory {
+  repeated int64 times = 1;
+  repeated double external_rx = 2;
+  repeated double external_tx = 3;
+  // 节点之间（按发送方合计）。
+  repeated double mesh = 4;
+}
+
+// App 会话和配对（见 docs/android.md#appservice）。
+service AppService {
+  // 查询配对码：面板名称、成员。不认识的配对码返回 not_found。
+  rpc GetPairing(GetPairingRequest) returns (GetPairingResponse);
+  // 提交三把密钥的公钥和证明，返回设备 ID。
+  rpc Pair(PairRequest) returns (PairResponse);
+  // 换取令牌用的挑战。设备 ID 不认识时返回 not_found。
+  rpc Challenge(AppChallengeRequest) returns (AppChallengeResponse);
+  // 用设备密钥或确认密钥签名换取令牌。需要解锁 App 时，设备密钥的签名返回 failed_precondition。
+  rpc Token(AppTokenRequest) returns (AppTokenResponse);
+  // 面板和这台手机的信息（要令牌）。
+  rpc Info(AppInfoRequest) returns (AppInfoResponse);
+  // 退出：删除这台手机的设备记录（要令牌）。
+  rpc Logout(AppLogoutRequest) returns (AppLogoutResponse);
+}
+
+message GetPairingRequest {
+  string code = 1 [debug_redact = true];
+}
+
+message GetPairingResponse {
+  string panel_name = 1;
+  string username = 2;
+  string display_name = 3;
+  string role = 4;
+  string panel_version = 5;
+  string domain = 6;
+  bytes avatar = 7;
+  string avatar_type = 8;
+}
+
+// AppKey 是 Keystore 里一把密钥的公钥（SPKI DER）和证明证书链（叶子在前）。
+message AppKey {
+  bytes public_key = 1;
+  repeated bytes attestation = 2;
+}
+
+message AppDeviceInfo {
+  string model = 1;
+  string android_version = 2;
+  string app_version = 3;
+  int32 sdk = 4;
+}
+
+message PairRequest {
+  string code = 1 [debug_redact = true];
+  AppKey device_key = 2;
+  AppKey confirm_key = 3;
+  AppKey push_key = 4;
+  AppDeviceInfo device = 5;
+}
+
+message PairResponse {
+  string device_id = 1;
+  string panel_name = 2;
+}
+
+message AppChallengeRequest {
+  string device_id = 1;
+}
+
+message AppChallengeResponse {
+  string challenge = 1;
+}
+
+message AppTokenRequest {
+  string device_id = 1;
+  string challenge = 2;
+  // device（设备密钥）或 confirm（确认密钥，同时解锁 App）。
+  string key = 3;
+  // 对 nagi-app-token、host、设备 ID、挑战四行（换行分隔）的 ECDSA P-256 / SHA-256 签名（DER）。
+  bytes signature = 4;
+  // 连接的主机（地址:端口或域名），面板只认自己的。
+  string host = 5;
+}
+
+message AppTokenResponse {
+  string token = 1 [debug_redact = true];
+  google.protobuf.Timestamp expires_at = 2;
+  // 下一次换取用的挑战。
+  string next_challenge = 3;
+  // 距上次解锁超过这个时长时，要用确认密钥（分钟）。
+  int32 unlock_minutes = 4;
+}
+
+message AppInfoRequest {}
+
+message AppInfoResponse {
+  string panel_name = 1;
+  string version = 2;
+  // 支持的功能，App 据此决定显示哪些入口。
+  repeated string features = 3;
+  string public_address = 4;
+  string domain = 5;
+  int32 unlock_minutes = 6;
+  string device_name = 7;
+  string username = 8;
+  string display_name = 9;
+  string role = 10;
+  bytes avatar = 11;
+  string avatar_type = 12;
+}
+
+message AppLogoutRequest {}
+
+message AppLogoutResponse {}

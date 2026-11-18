@@ -1102,7 +1102,8 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"RelayAlert\x12\x1a.nagi.v1.RelayAlertRequest\x1a\x1b.nagi.v1.RelayAlertResponse\x12H\n" +
 	"\vReportAlert\x12\x1b.nagi.v1.ReportAlertRequest\x1a\x1c.nagi.v1.ReportAlertResponse\x129\n" +
 	"\tMeshRelay\x12\x13.nagi.v1.MeshPacket\x1a\x13.nagi.v1.MeshPacket(\x010\x01\x12W\n" +
-	"\x10ReportViolations\x12 .nagi.v1.ReportViolationsRequest\x1a!.nagi.v1.ReportViolationsResponseB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\x10ReportViolations\x12 .nagi.v1.ReportViolationsRequest\x1a!.nagi.v1.ReportViolationsResponseBT\n" +
+	"\x1cio.github.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_panel_proto_rawDescOnce sync.Once

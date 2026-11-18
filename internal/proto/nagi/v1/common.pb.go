@@ -6489,7 +6489,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\bStateful\x12\x11\n" +
 	"\rSTATEFUL_AUTO\x10\x00\x12\x10\n" +
 	"\fSTATEFUL_YES\x10\x01\x12\x0f\n" +
-	"\vSTATEFUL_NO\x10\x02B4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\vSTATEFUL_NO\x10\x02BT\n" +
+	"\x1cio.github.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_common_proto_rawDescOnce sync.Once

@@ -59,7 +59,9 @@ type Service struct {
 
 	audit    *audit.Log
 	failures failureSummary
-	streaks  totpStreaks
+	// app 是安卓 App 的配对码、挑战和令牌（见 app.go）。
+	app     appState
+	streaks totpStreaks
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
 	Alert func(ctx context.Context, key, title, message string)
@@ -324,6 +326,10 @@ type User struct {
 	AllowPanel bool
 	// SessionID 是网页会话的固定 ID（审计记录用它的哈希把一次登录里的操作串起来），令牌调用为空。
 	SessionID string
+	// ElevatedBy 是高权限确认用的方式（ElevatedByPassword），见 passwordElevation。
+	ElevatedBy string
+	// DeviceID、DeviceName：用安卓 App 的令牌调用时是这台手机（Via 是 app，见 docs/android.md）。
+	DeviceID, DeviceName string
 }
 
 // SessionUser 根据会话 token 返回用户，给不走 Connect 的入口检查角色用。
@@ -345,6 +351,11 @@ func (s *Service) session(ctx context.Context, token string) (User, error) {
 
 // RequestUser 检查不走 Connect 的请求（终端、上传下载）的会话：和接口一样检查设备和网络，但不轮换令牌。
 func (s *Service) RequestUser(r *http.Request) (User, error) {
+	if SessionToken(r.Header) == "" {
+		if t := AppBearer(r.Header); t != "" {
+			return s.AppTokenUser(r.Context(), t, RequestIP(r.RemoteAddr, r.Header))
+		}
+	}
 	info := RequestInfo{IP: RequestIP(r.RemoteAddr, r.Header), UserAgent: r.Header.Get("User-Agent"), Fingerprint: RequestFingerprint(r.Context(), r.RemoteAddr, r.Header), CDN: ViaCDN(r.Header)}
 	res, err := s.authenticate(r.Context(), SessionToken(r.Header), info)
 	if err != nil {
@@ -372,6 +383,7 @@ func (s *Service) CleanupLoop(ctx context.Context) {
 		}
 		_ = s.q.PruneSessionTokens(ctx, now.Add(-7*24*time.Hour).Unix())
 		s.FlushLoginFailures(ctx)
+		s.cleanupAppDevices(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -463,6 +475,18 @@ func (i *interceptor) check(ctx context.Context, procedure, addr string, h http.
 		return ctx, checked{}, nil
 	}
 	token := SessionToken(h)
+	// 安卓 App：不带 cookie，带 Authorization: Bearer nagi_app_…（见 docs/android.md#换取令牌）。
+	if app := AppBearer(h); token == "" && app != "" {
+		u, err := i.s.AppTokenUser(ctx, app, m.IP)
+		if rt := new(ErrAppRetoken); errors.As(err, &rt) {
+			e := connect.NewError(connect.CodeUnauthenticated, err)
+			e.Meta().Set(RetokenHeader, rt.Reason)
+			return nil, checked{}, e
+		} else if err != nil {
+			return nil, checked{}, connect.NewError(connect.CodeUnauthenticated, err)
+		}
+		return context.WithValue(ctx, userKey{}, u), checked{}, nil
+	}
 	res, err := i.s.authenticate(ctx, token, RequestInfo{IP: m.IP, UserAgent: m.UserAgent, Fingerprint: m.Fingerprint, CDN: m.CDN})
 	var rv *ErrReverify
 	if errors.As(err, &rv) {

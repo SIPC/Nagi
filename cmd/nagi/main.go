@@ -49,6 +49,7 @@ func serverCmd() *cobra.Command {
 		noProxy     bool
 		newKey      bool
 		standbyCode string
+		devAppKeys  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "server",
@@ -77,6 +78,7 @@ func serverCmd() *cobra.Command {
 					SelfTLS:      !runAgent || noProxy,
 					NewMasterKey: newKey,
 					StandbyCode:  standbyCode,
+					DevAppKeys:   devAppKeys,
 				})
 				if err != nil {
 					return err
@@ -110,6 +112,7 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "内嵌节点不启动 Caddy（仅用于开发）")
 	cmd.Flags().BoolVar(&newKey, "new-master-key", false, "面板主密钥确实丢了时使用：生成新的主密钥，清掉用旧密钥加密的数据")
 	cmd.Flags().StringVar(&standbyCode, "standby", "", "作为备用面板启动：主面板生成的配对码（数据目录须为空）")
+	cmd.Flags().BoolVar(&devAppKeys, "dev-app-keys", false, "开发模式：安卓 App 可以用软件密钥和模拟器添加（仅用于开发和测试）")
 	return cmd
 }
 

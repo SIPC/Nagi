@@ -33,6 +33,12 @@ var auditSkipped = map[string]bool{
 	nagiv1connect.AuthServiceSetProjectOrderProcedure: true,
 	nagiv1connect.SetupServiceGetSetupStateProcedure:  true,
 	nagiv1connect.EnrollServiceEnrollProcedure:        true,
+	// 安卓 App 的配对、换取令牌、退出在 auth 里记成安全事件（app_paired、app_unlock_required 等）；Info 是查询。
+	nagiv1connect.AppServicePairProcedure:      true,
+	nagiv1connect.AppServiceChallengeProcedure: true,
+	nagiv1connect.AppServiceTokenProcedure:     true,
+	nagiv1connect.AppServiceInfoProcedure:      true,
+	nagiv1connect.AppServiceLogoutProcedure:    true,
 	// 退出在处理函数里单独记（这时会话还在，查得到是谁）；登录在 auth 里记（成功时才知道是哪个成员）。
 	nagiv1connect.AuthServiceLogoutProcedure: true,
 	nagiv1connect.AuthServiceLoginProcedure:  true,
@@ -170,6 +176,10 @@ func auditActor(ctx context.Context, e *audit.Event) {
 	}
 	e.Session = audit.SessionTag(u.SessionID)
 	e.IP, e.UserAgent, e.Client = m.IP, m.UserAgent, m.Client
+	// 安卓 App：来源是 app，同一台手机的操作用设备 ID 的哈希串在一起，客户端写手机名称（见 docs/android.md#审计）。
+	if u.DeviceID != "" {
+		e.Via, e.Session, e.Client = audit.ViaApp, audit.SessionTag("app:"+u.DeviceID), u.DeviceName
+	}
 	if e.ParentID == 0 {
 		e.ParentID = audit.Parent(ctx)
 	}
@@ -330,6 +340,12 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		start := time.Now()
 		res, err := next(ctx, req)
 		procedure := req.Spec().Procedure
+		// 修改成功后通知订阅流（见 overview.go）：部署、操作的结果、配置的修改。
+		if err == nil && activityRecorded(procedure) {
+			if l.a.Nodes != nil {
+				l.a.Nodes.Changes.Bump()
+			}
+		}
 		if !activityRecorded(procedure) || unauthenticatedNoise(procedure, err) {
 			return res, err
 		}

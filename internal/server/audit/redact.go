@@ -32,6 +32,7 @@ var SafeFields = map[protoreflect.FullName]string{
 	"nagi.v1.OAuthRequest.code_challenge":        "PKCE 的挑战值是验证码的哈希，本来就公开传递",
 	"nagi.v1.OAuthRequest.code_challenge_method": "PKCE 的算法名",
 	"nagi.v1.EnvVar.key":                         "环境变量名，值不记",
+	"nagi.v1.AppTokenRequest.key":                "用的是哪把密钥（device、confirm），不是密钥本身",
 }
 
 // envVar 是环境变量的消息名，值不记。

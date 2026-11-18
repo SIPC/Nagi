@@ -5,6 +5,8 @@ package nagi.v1;
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+option java_multiple_files = true;
+option java_package = "io.github.sipc.nagi.proto.v1";
 
 // Project 是面板上的项目：一组一起工作的容器。项目不属于哪台机器，每个容器各自指定节点运行。
 // 项目和容器的配置、版本记录、部署记录以面板为准（见 docs/panel.md#项目数据）。

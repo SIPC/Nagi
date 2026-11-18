@@ -13,3 +13,10 @@ plugins:
     out: web/src/gen
     opt:
       - target=ts
+  # 安卓 App（见 docs/android.md#工程）：protobuf-javalite 和 connect-kotlin。需要 protoc 和 protoc-gen-connect-kotlin 在 PATH 里。
+  - protoc_builtin: java
+    out: android/core/proto/src/main/java
+    opt: lite
+  - local: protoc-gen-connect-kotlin
+    out: android/core/proto/src/main/kotlin
+    opt: generateCallbackMethods=false

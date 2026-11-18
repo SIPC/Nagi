@@ -82,6 +82,10 @@ type Registry struct {
 	// violations 是节点上报的越权记录的时间，限制每个节点能写多少条（见 ReportViolations）。
 	violations map[string][]time.Time
 
+	// Changes 通知订阅流有变化（见 changes.go）。
+	Changes Changes
+	alerts  activeAlerts
+
 	// OnReport 在节点上报后调用（不阻塞上报）：面板据此给缓存过时的容器补推配置。
 	OnReport func(c *Conn, req *nagiv1.ReportRequest)
 	// Cluster 返回主备面板的信息，随上报的回复告诉节点（见 docs/standby.md）。
@@ -225,6 +229,7 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 			go r.OnReport(c, c.LastReport())
 		}
 	}
+	r.Changes.Bump()
 	r.log.Info("节点已批准", "node", nodeID)
 	return nil
 }
@@ -323,6 +328,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	}
 	r.conns[nodeID] = c
 	r.mu.Unlock()
+	r.Changes.Bump()
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
 
 	select {
@@ -335,6 +341,7 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 		delete(r.conns, nodeID)
 	}
 	r.mu.Unlock()
+	r.Changes.Bump()
 	r.updateMesh()
 	if ctx.Err() == nil {
 		r.touch(context.Background(), nodeID, c.LastReport())
@@ -404,6 +411,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	p.r.updateMesh()
 
 	p.r.touch(ctx, p.conn.NodeID, req)
+	p.r.Changes.Bump()
 	// 节点认的主面板不是本面板时，Behind 去核实（本面板可能已经落后）；这次不补推配置，
 	// 但回复照常带上主备信息：节点可能只是还没收到本面板的新任期。
 	if !pending && p.r.Behind != nil && p.r.Behind(ctx, req) {
