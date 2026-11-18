@@ -557,18 +557,23 @@ func trafficFlows(t *trafficNow, rows []store.Node, x *access, online func(strin
 }
 
 // WatchOverview 是首页的订阅流：先发一份完整的当前状态，之后有变化（节点上报、上下线、告警、修改）时重新算，
-// 和上一次的不同才发；30 秒没有发过时发心跳。访问范围每次重新计算。
-func (s *projectService) WatchOverview(ctx context.Context, _ *connect.Request[nagiv1.WatchOverviewRequest], stream *connect.ServerStream[nagiv1.Overview]) error {
+// 和上一次的不同才发；30 秒没有发过时发心跳。
+//
+// 每一轮（有变化时、心跳时）都重查调用者（auth.StreamUser），按成员当前的角色和访问范围计算：降低角色、缩小范围
+// 之后下一条消息就按新的算（修改成员会通知到这里）。会话退出、手机被退出时流立即结束；App 令牌过期（10 分钟）、
+// 换了网段、管理员不在允许的地址时流也结束（带 Nagi-App-Retoken），App 换新令牌重新打开。
+func (s *projectService) WatchOverview(ctx context.Context, req *connect.Request[nagiv1.WatchOverviewRequest], stream *connect.ServerStream[nagiv1.Overview]) error {
+	opened := auth.CurrentUser(ctx)
 	var last *nagiv1.Overview
 	heartbeat := time.NewTimer(overviewHeartbeat)
 	defer heartbeat.Stop()
 	for {
 		changed := s.Nodes.Changes.Wait()
-		// 会话退出、手机被退出时流立即结束（退出是一次修改，会通知到这里）。
-		if err := s.stillSignedIn(ctx); err != nil {
+		u, err := s.Auth.StreamUser(ctx, opened, req.Header())
+		if err != nil {
 			return err
 		}
-		cur, err := s.overview(ctx)
+		cur, err := s.overview(auth.WithUser(ctx, u))
 		if err != nil {
 			return err
 		}
@@ -597,22 +602,6 @@ func (s *projectService) WatchOverview(ctx context.Context, _ *connect.Request[n
 		case <-time.After(overviewMerge):
 		}
 	}
-}
-
-// stillSignedIn 检查订阅流的调用者还登录着：手机的设备记录、网页的会话还在。
-func (a *API) stillSignedIn(ctx context.Context) error {
-	u := auth.CurrentUser(ctx)
-	switch {
-	case u.DeviceID != "":
-		if _, err := a.Q.AppDeviceByID(ctx, u.DeviceID); err != nil {
-			return connect.NewError(connect.CodeUnauthenticated, i18n.New("这台手机已退出，请重新添加"))
-		}
-	case u.SessionID != "":
-		if _, err := a.Auth.SessionByID(ctx, u.SessionID); err != nil {
-			return connect.NewError(connect.CodeUnauthenticated, err)
-		}
-	}
-	return nil
 }
 
 // ---- 流量趋势 ----

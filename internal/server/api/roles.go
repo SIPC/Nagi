@@ -288,10 +288,14 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	}
 	// 降低角色、重置密码、修改访问范围都可能撤销这个成员已有的权限：之后换掉直连下载的密钥，
 	// 让他已经拿到的链接立即失效（见 revokeDirectLinks）。中途出错时已经改了的部分也算。
-	revoked := false
+	revoked, changed := false, false
 	defer func() {
 		if revoked {
 			s.revokeDirectLinks()
+		}
+		// 角色、访问范围变了：打开着的订阅流马上按新的重新计算（见 WatchOverview）。中途出错时已经改了的部分也算。
+		if changed && s.Nodes != nil {
+			s.Nodes.Changes.Bump()
 		}
 	}()
 	if sc := m.GetScope(); sc != nil {
@@ -313,6 +317,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if err := s.Q.SetUserRole(ctx, store.SetUserRoleParams{Role: role, ID: u.ID}); err != nil {
 			return nil, err
 		}
+		changed = true
 		revoked = roleRank(role) < roleRank(u.Role)
 	}
 	if m.GetPassword() != "" {
@@ -326,7 +331,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		if err := s.Q.UpdatePassword(ctx, store.UpdatePasswordParams{PasswordHash: hash, ID: u.ID}); err != nil {
 			return nil, err
 		}
-		revoked = true
+		revoked, changed = true, true
 		// 别人重置了密码，这个用户已有的登录和访问令牌都要失效。
 		if err := s.Q.DeleteUserSessions(ctx, u.ID); err != nil {
 			return nil, err
@@ -352,7 +357,7 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 		}
 	}
 	if sc := m.GetScope(); sc != nil {
-		revoked = true
+		revoked, changed = true, true
 		if err := s.saveScope(ctx, u.ID, sc); err != nil {
 			return nil, err
 		}

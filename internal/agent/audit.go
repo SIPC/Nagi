@@ -36,11 +36,12 @@ func (a *agent) openAudit(ctx context.Context) {
 	}()
 }
 
-// auditSkip 是不记的方法：查询、上报、心跳，以及在处理函数里另外记的（终端和命令带着成员和来源地址）。
+// auditSkip 是不记的方法：查询、上报、心跳、轮询（升级期间面板每秒问一次的 UpgradeProgress），
+// 以及在处理函数里另外记的（终端和命令带着成员和来源地址）。
 var auditSkip = map[string]bool{
 	"StreamLogs": true, "Exec": false, "NodeShell": true, "NodeExec": true, "MeshPing": true, "MeshSpeedTest": true,
 	"QueryMetrics": true, "CheckContainer": true, "CheckPorts": true, "CheckImages": true, "InspectComposeDir": true,
-	"ReadNodeFile": true, "SetAuditSink": false, "ReadAuditLog": true,
+	"ReadNodeFile": true, "SetAuditSink": false, "ReadAuditLog": true, "UpgradeProgress": true,
 }
 
 var auditReadPrefixes = []string{"Get", "List", "Query", "Read", "Check", "Stream"}

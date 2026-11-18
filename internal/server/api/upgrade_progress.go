@@ -121,16 +121,34 @@ func (a *API) pollUpgradeProgress(ctx context.Context, agent nagiv1.AgentService
 		case err != nil:
 			continue
 		}
-		// 值来自节点，原样显示给界面和 MCP：只认已知的阶段，地址（主机名）限长，字节数不能是负的（总大小未知时为 -1）。
-		stage := release.Stage(p.GetStage())
-		if stage != release.StageDownload && stage != release.StageVerify && stage != release.StageTest {
-			continue
+		if np, ok := nodeProgress(p); ok {
+			a.updates.setProgress(rec, np, time.Now())
 		}
-		total := max(p.GetTotal(), -1)
-		if total == 0 {
-			total = -1
-		}
-		a.updates.setProgress(rec, release.Progress{Stage: stage, Source: clipBytes(p.GetSource(), 255),
-			Downloaded: max(p.GetDownloaded(), 0), Total: total}, time.Now())
 	}
+}
+
+const (
+	// maxNodeSourceBytes 是节点报的下载地址（主机名）的上限，Upgrade 和 UpgradeProgress 都按它截。
+	maxNodeSourceBytes = 255
+	// maxNodeProgressBytes 是节点报的已下载、总大小的上限。Nagi 的二进制只有几十 MiB，
+	// 超过的按上限算（总大小按未知），速度和百分比不会溢出。
+	maxNodeProgressBytes = 1 << 30
+)
+
+// nodeSource 截短节点报的下载地址：值来自节点，原样显示给界面和 MCP，还会存进 settings 表。
+func nodeSource(s string) string { return clipBytes(s, maxNodeSourceBytes) }
+
+// nodeProgress 把节点报的进度整理成能显示的：只认已知的阶段，地址限长，
+// 字节数不能是负的，也不能超过 maxNodeProgressBytes（总大小未知时为 -1）。不认识的阶段返回 false。
+func nodeProgress(p *nagiv1.UpgradeProgressResponse) (release.Progress, bool) {
+	stage := release.Stage(p.GetStage())
+	if stage != release.StageDownload && stage != release.StageVerify && stage != release.StageTest {
+		return release.Progress{}, false
+	}
+	total := max(p.GetTotal(), -1)
+	if total == 0 || total > maxNodeProgressBytes {
+		total = -1
+	}
+	return release.Progress{Stage: stage, Source: nodeSource(p.GetSource()),
+		Downloaded: min(max(p.GetDownloaded(), 0), maxNodeProgressBytes), Total: total}, true
 }
