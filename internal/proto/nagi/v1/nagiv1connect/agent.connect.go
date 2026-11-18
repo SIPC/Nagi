@@ -234,6 +234,9 @@ const (
 	// AgentServiceCancelUpgradeProcedure is the fully-qualified name of the AgentService's
 	// CancelUpgrade RPC.
 	AgentServiceCancelUpgradeProcedure = "/nagi.v1.AgentService/CancelUpgrade"
+	// AgentServiceUpgradeProgressProcedure is the fully-qualified name of the AgentService's
+	// UpgradeProgress RPC.
+	AgentServiceUpgradeProgressProcedure = "/nagi.v1.AgentService/UpgradeProgress"
 	// AgentServiceSetAuditSinkProcedure is the fully-qualified name of the AgentService's SetAuditSink
 	// RPC.
 	AgentServiceSetAuditSinkProcedure = "/nagi.v1.AgentService/SetAuditSink"
@@ -390,6 +393,9 @@ type AgentServiceClient interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
+	// 正在进行的升级的进度：面板在等 Upgrade 返回时每秒问一次（见 docs/panel.md#更新状态）。没有在升级时返回空的。
+	// v0.35.0 起支持，更早的节点返回 Unimplemented，面板不再问。
+	UpgradeProgress(context.Context, *connect.Request[v1.UpgradeProgressRequest]) (*connect.Response[v1.UpgradeProgressResponse], error)
 	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
 	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
@@ -855,6 +861,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("CancelUpgrade")),
 			connect.WithClientOptions(opts...),
 		),
+		upgradeProgress: connect.NewClient[v1.UpgradeProgressRequest, v1.UpgradeProgressResponse](
+			httpClient,
+			baseURL+AgentServiceUpgradeProgressProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("UpgradeProgress")),
+			connect.WithClientOptions(opts...),
+		),
 		setAuditSink: connect.NewClient[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse](
 			httpClient,
 			baseURL+AgentServiceSetAuditSinkProcedure,
@@ -969,6 +981,7 @@ type agentServiceClient struct {
 	prepareDirectHttp     *connect.Client[v1.PrepareDirectHttpRequest, v1.PrepareDirectHttpResponse]
 	upgrade               *connect.Client[v1.UpgradeRequest, v1.UpgradeResponse]
 	cancelUpgrade         *connect.Client[v1.CancelUpgradeRequest, v1.CancelUpgradeResponse]
+	upgradeProgress       *connect.Client[v1.UpgradeProgressRequest, v1.UpgradeProgressResponse]
 	setAuditSink          *connect.Client[v1.SetAuditSinkRequest, v1.SetAuditSinkResponse]
 	readAuditLog          *connect.Client[v1.ReadAuditLogRequest, v1.ReadAuditLogResponse]
 	listImages            *connect.Client[v1.ListImagesRequest, v1.NodeImages]
@@ -1342,6 +1355,11 @@ func (c *agentServiceClient) CancelUpgrade(ctx context.Context, req *connect.Req
 	return c.cancelUpgrade.CallUnary(ctx, req)
 }
 
+// UpgradeProgress calls nagi.v1.AgentService.UpgradeProgress.
+func (c *agentServiceClient) UpgradeProgress(ctx context.Context, req *connect.Request[v1.UpgradeProgressRequest]) (*connect.Response[v1.UpgradeProgressResponse], error) {
+	return c.upgradeProgress.CallUnary(ctx, req)
+}
+
 // SetAuditSink calls nagi.v1.AgentService.SetAuditSink.
 func (c *agentServiceClient) SetAuditSink(ctx context.Context, req *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error) {
 	return c.setAuditSink.CallUnary(ctx, req)
@@ -1510,6 +1528,9 @@ type AgentServiceHandler interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error)
+	// 正在进行的升级的进度：面板在等 Upgrade 返回时每秒问一次（见 docs/panel.md#更新状态）。没有在升级时返回空的。
+	// v0.35.0 起支持，更早的节点返回 Unimplemented，面板不再问。
+	UpgradeProgress(context.Context, *connect.Request[v1.UpgradeProgressRequest]) (*connect.Response[v1.UpgradeProgressResponse], error)
 	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
 	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error)
@@ -1971,6 +1992,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("CancelUpgrade")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceUpgradeProgressHandler := connect.NewUnaryHandler(
+		AgentServiceUpgradeProgressProcedure,
+		svc.UpgradeProgress,
+		connect.WithSchema(agentServiceMethods.ByName("UpgradeProgress")),
+		connect.WithHandlerOptions(opts...),
+	)
 	agentServiceSetAuditSinkHandler := connect.NewUnaryHandler(
 		AgentServiceSetAuditSinkProcedure,
 		svc.SetAuditSink,
@@ -2155,6 +2182,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceUpgradeHandler.ServeHTTP(w, r)
 		case AgentServiceCancelUpgradeProcedure:
 			agentServiceCancelUpgradeHandler.ServeHTTP(w, r)
+		case AgentServiceUpgradeProgressProcedure:
+			agentServiceUpgradeProgressHandler.ServeHTTP(w, r)
 		case AgentServiceSetAuditSinkProcedure:
 			agentServiceSetAuditSinkHandler.ServeHTTP(w, r)
 		case AgentServiceReadAuditLogProcedure:
@@ -2466,6 +2495,10 @@ func (UnimplementedAgentServiceHandler) Upgrade(context.Context, *connect.Reques
 
 func (UnimplementedAgentServiceHandler) CancelUpgrade(context.Context, *connect.Request[v1.CancelUpgradeRequest]) (*connect.Response[v1.CancelUpgradeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.CancelUpgrade is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) UpgradeProgress(context.Context, *connect.Request[v1.UpgradeProgressRequest]) (*connect.Response[v1.UpgradeProgressResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.UpgradeProgress is not implemented"))
 }
 
 func (UnimplementedAgentServiceHandler) SetAuditSink(context.Context, *connect.Request[v1.SetAuditSinkRequest]) (*connect.Response[v1.SetAuditSinkResponse], error) {

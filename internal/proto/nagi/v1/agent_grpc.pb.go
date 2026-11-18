@@ -92,6 +92,7 @@ const (
 	AgentService_PrepareDirectHttp_FullMethodName     = "/nagi.v1.AgentService/PrepareDirectHttp"
 	AgentService_Upgrade_FullMethodName               = "/nagi.v1.AgentService/Upgrade"
 	AgentService_CancelUpgrade_FullMethodName         = "/nagi.v1.AgentService/CancelUpgrade"
+	AgentService_UpgradeProgress_FullMethodName       = "/nagi.v1.AgentService/UpgradeProgress"
 	AgentService_SetAuditSink_FullMethodName          = "/nagi.v1.AgentService/SetAuditSink"
 	AgentService_ReadAuditLog_FullMethodName          = "/nagi.v1.AgentService/ReadAuditLog"
 	AgentService_ListImages_FullMethodName            = "/nagi.v1.AgentService/ListImages"
@@ -243,6 +244,9 @@ type AgentServiceClient interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(ctx context.Context, in *CancelUpgradeRequest, opts ...grpc.CallOption) (*CancelUpgradeResponse, error)
+	// 正在进行的升级的进度：面板在等 Upgrade 返回时每秒问一次（见 docs/panel.md#更新状态）。没有在升级时返回空的。
+	// v0.35.0 起支持，更早的节点返回 Unimplemented，面板不再问。
+	UpgradeProgress(ctx context.Context, in *UpgradeProgressRequest, opts ...grpc.CallOption) (*UpgradeProgressResponse, error)
 	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
 	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(ctx context.Context, in *SetAuditSinkRequest, opts ...grpc.CallOption) (*SetAuditSinkResponse, error)
@@ -1174,6 +1178,16 @@ func (c *agentServiceClient) CancelUpgrade(ctx context.Context, in *CancelUpgrad
 	return out, nil
 }
 
+func (c *agentServiceClient) UpgradeProgress(ctx context.Context, in *UpgradeProgressRequest, opts ...grpc.CallOption) (*UpgradeProgressResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpgradeProgressResponse)
+	err := c.cc.Invoke(ctx, AgentService_UpgradeProgress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *agentServiceClient) SetAuditSink(ctx context.Context, in *SetAuditSinkRequest, opts ...grpc.CallOption) (*SetAuditSinkResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SetAuditSinkResponse)
@@ -1386,6 +1400,9 @@ type AgentServiceServer interface {
 	// 取消正在下载、校验的升级，Upgrade 返回 Canceled，节点还是原来的版本。没有在升级时返回 NotFound，
 	// 已经开始替换时返回 FailedPrecondition。v0.20.0 起支持，更早的节点返回 Unimplemented。
 	CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error)
+	// 正在进行的升级的进度：面板在等 Upgrade 返回时每秒问一次（见 docs/panel.md#更新状态）。没有在升级时返回空的。
+	// v0.35.0 起支持，更早的节点返回 Unimplemented，面板不再问。
+	UpgradeProgress(context.Context, *UpgradeProgressRequest) (*UpgradeProgressResponse, error)
 	// 旧版本的面板用它把外送目标（带凭据）下发给节点。v0.29.1 起节点不再保存，收到后删掉以前保存的；
 	// 新面板只发空列表，让旧版本的节点删掉凭据（见 docs/audit.md#节点本地审计）。
 	SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error)
@@ -1628,6 +1645,9 @@ func (UnimplementedAgentServiceServer) Upgrade(context.Context, *UpgradeRequest)
 }
 func (UnimplementedAgentServiceServer) CancelUpgrade(context.Context, *CancelUpgradeRequest) (*CancelUpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelUpgrade not implemented")
+}
+func (UnimplementedAgentServiceServer) UpgradeProgress(context.Context, *UpgradeProgressRequest) (*UpgradeProgressResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpgradeProgress not implemented")
 }
 func (UnimplementedAgentServiceServer) SetAuditSink(context.Context, *SetAuditSinkRequest) (*SetAuditSinkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetAuditSink not implemented")
@@ -2827,6 +2847,24 @@ func _AgentService_CancelUpgrade_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_UpgradeProgress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradeProgressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).UpgradeProgress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_UpgradeProgress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).UpgradeProgress(ctx, req.(*UpgradeProgressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentService_SetAuditSink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetAuditSinkRequest)
 	if err := dec(in); err != nil {
@@ -3142,6 +3180,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelUpgrade",
 			Handler:    _AgentService_CancelUpgrade_Handler,
+		},
+		{
+			MethodName: "UpgradeProgress",
+			Handler:    _AgentService_UpgradeProgress_Handler,
 		},
 		{
 			MethodName: "SetAuditSink",
