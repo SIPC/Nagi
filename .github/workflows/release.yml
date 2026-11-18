@@ -16,8 +16,13 @@ permissions:
   contents: write
 
 jobs:
+  # mesh 的测试单独一个任务：它的测试并行运行、很占 CPU，和别的包（agent 里按时间判定的端到端测试）挤在一台机器上会互相拖慢。
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [mesh, rest]
     steps:
       - uses: actions/checkout@v4
 
@@ -33,9 +38,10 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-test-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          key: go-test-${{ matrix.shard }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
           restore-keys: |
-            go-test-${{ hashFiles('go.sum') }}-
+            go-test-${{ matrix.shard }}-${{ hashFiles('go.sum') }}-
+            go-test-${{ matrix.shard }}-
             go-test-
 
       # 没写更新日志就别白编译：先检查，正文在 release 里再生成一次。
@@ -44,7 +50,12 @@ jobs:
 
       # web/dist 里有占位文件，测试不用等前端构建。
       - name: Test
-        run: go test ./...
+        run: |
+          if [ "${{ matrix.shard }}" = mesh ]; then
+            go test ./internal/pkg/mesh/...
+          else
+            go test $(go list ./... | grep -v /internal/pkg/mesh)
+          fi
 
   # 依赖和标准库里会被调用到的已知漏洞（和 ci.yml 的一样）。
   vuln:
@@ -63,9 +74,10 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-test-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          key: go-test-rest-${{ hashFiles('go.sum') }}-${{ github.sha }}
           restore-keys: |
-            go-test-${{ hashFiles('go.sum') }}-
+            go-test-rest-${{ hashFiles('go.sum') }}-
+            go-test-rest-
             go-test-
 
       - name: Vulnerability check

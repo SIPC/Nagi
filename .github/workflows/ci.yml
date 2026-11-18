@@ -10,8 +10,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  # mesh 的测试单独一个任务：它的测试并行运行、很占 CPU，和别的包（agent 里按时间判定的端到端测试）挤在一台机器上会互相拖慢。
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [mesh, rest]
     steps:
       - uses: actions/checkout@v4
 
@@ -27,16 +32,23 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-test-${{ hashFiles('go.sum') }}-${{ github.sha }}
+          key: go-test-${{ matrix.shard }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
           restore-keys: |
-            go-test-${{ hashFiles('go.sum') }}-
+            go-test-${{ matrix.shard }}-${{ hashFiles('go.sum') }}-
+            go-test-${{ matrix.shard }}-
             go-test-
 
       - name: Test
-        run: go test ./...
+        run: |
+          if [ "${{ matrix.shard }}" = mesh ]; then
+            go test ./internal/pkg/mesh/...
+          else
+            go test $(go list ./... | grep -v /internal/pkg/mesh)
+          fi
 
       # 检查依赖和标准库里会被调用到的已知漏洞。
       - name: Vulnerability check
+        if: matrix.shard == 'rest'
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   build:

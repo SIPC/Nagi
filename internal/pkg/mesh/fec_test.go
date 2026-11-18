@@ -346,9 +346,9 @@ func TestFECLossyLink(t *testing.T) {
 		t.Fatal("开了 FEC 但一个包都没恢复")
 	}
 	// 两个方向的丢包率：A 发给 B 的（B 报告的）、B 收 A 的（B 自己算的），都应该在 2% 左右。
-	// 丢包率随能力包每 2 秒算一次，传得快时数据已经收完还没算过，等它出来。
+	// 丢包率随能力包每 2 秒算一次，传得快时数据已经收完还没算过，等它出来（CI 的机器忙时要等久一些）。
 	tx, rx := int64(-1), int64(-1)
-	for deadline := time.Now().Add(10 * time.Second); (tx < 0 || rx < 0) && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+	for deadline := time.Now().Add(20 * time.Second); (tx < 0 || rx < 0) && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 		for _, s := range a.m.Status() {
 			if s.Key == b.m.PublicKey() {
 				tx = s.TxLoss
