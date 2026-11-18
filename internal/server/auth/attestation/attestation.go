@@ -118,14 +118,30 @@ func (r *Result) PatchLevel() int64 {
 	return r.SW.OSPatchLevel
 }
 
+const (
+	// MaxChain 是证明证书链最多几张。真实的链是叶子、一两张中间证书和根证书（远程配发的密钥多一两张），不超过 5 张。
+	MaxChain = 10
+	// MaxCertBytes 是每张证书的上限。真实的证书一两 KiB，叶子带证明扩展也不到 4 KiB。
+	MaxCertBytes = 16 << 10
+)
+
 // Parse 校验证书链（叶子在前）每一张都由下一张签发，并读出证明扩展。不检查根证书是不是 Google 的：结果里的 HardwareRoot 说明。
 // now 用来检查中间证书的有效期；叶子证书的有效期由手机随意填写，不检查。
+//
+// 除叶子外每张证书都必须是 CA，证明扩展只能出现在叶子里：Keystore 生成的密钥（叶子）不是 CA，
+// 但它的私钥能对任意数据签名，不检查的话可以用一把真的硬件密钥给伪造的叶子签名，把链延长一张（「链延长」）。
 func Parse(chain [][]byte, now time.Time) (*Result, error) {
 	if len(chain) < 2 {
 		return nil, errors.New("证明证书链不完整")
 	}
+	if len(chain) > MaxChain {
+		return nil, errors.New("证明证书链太长")
+	}
 	certs := make([]*x509.Certificate, len(chain))
 	for i, der := range chain {
+		if len(der) > MaxCertBytes {
+			return nil, errors.New("证明证书太大")
+		}
 		c, err := x509.ParseCertificate(der)
 		if err != nil {
 			return nil, fmt.Errorf("证明证书无法解析：%w", err)
@@ -134,6 +150,14 @@ func Parse(chain [][]byte, now time.Time) (*Result, error) {
 	}
 	for i := 0; i+1 < len(certs); i++ {
 		child, parent := certs[i], certs[i+1]
+		if !parent.BasicConstraintsValid || !parent.IsCA {
+			return nil, errors.New("证明证书链不正确：签发证书不是 CA")
+		}
+		for _, e := range parent.Extensions {
+			if e.Id.Equal(oidKeyDescription) {
+				return nil, errors.New("证明证书链不正确：密钥证明只能在第一张证书里")
+			}
+		}
 		if err := parent.CheckSignature(child.SignatureAlgorithm, child.RawTBSCertificate, child.Signature); err != nil {
 			return nil, fmt.Errorf("证明证书链的签名不正确：%w", err)
 		}

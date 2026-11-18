@@ -229,6 +229,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 **密钥证明**：添加手机时，App 提交三把密钥的证明证书链（Key Attestation），证明的挑战是配对码的 SHA-256。面板核对：
 
 - 证书链能追溯到 Google 的硬件证明根证书（`internal/server/auth/attestation/roots.pem`，取自 `https://android.googleapis.com/attestation/root`）。按根证书的公钥比较：同一把根密钥签发过不止一张证书，旧手机的链可能以旧证书结尾。根证书随面板版本更新。吊销列表还没有做，所有手机都标明「未检查吊销」（`revocation_checked` 为 0）；以后在面板能访问 Google 时每天获取一次。
+- 链里每张证书由下一张签发；除第一张（叶子）外每张都必须是 CA（`BasicConstraints` 的 `cA` 为真），证明扩展只能出现在第一张。否则任何一把 Keystore 密钥（不是 CA，但私钥能对任意数据签名）都能给一张伪造的叶子签名，把链延长一张，冒充硬件密钥（「链延长」）。链最多 10 张，每张最多 16 KiB（`attestation.MaxChain`、`MaxCertBytes`）。
 - 密钥在硬件里（`attestationSecurityLevel` 是 TrustedEnvironment 或 StrongBox），不能导出。
 - 每把密钥的使用条件和上表一致（`unlockedDeviceRequired`、`userAuthType`、`authTimeout`、`noAuthRequired`），密钥是在硬件里生成的（`origin` 为 GENERATED）。`unlockedDeviceRequired` 在有的手机上由 Keystore 软件实现、记在 softwareEnforced 里，所以两组都认；其余几项只认 hardwareEnforced。
 - 证明里的应用包名是 Nagi 的包名 `ink.sipc.nagi`（`auth.AppPackage`）。
