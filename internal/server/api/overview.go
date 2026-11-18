@@ -418,6 +418,10 @@ func (s *projectService) WatchOverview(ctx context.Context, _ *connect.Request[n
 	defer heartbeat.Stop()
 	for {
 		changed := s.Nodes.Changes.Wait()
+		// 会话退出、手机被退出时流立即结束（退出是一次修改，会通知到这里）。
+		if err := s.stillSignedIn(ctx); err != nil {
+			return err
+		}
 		cur, err := s.overview(ctx)
 		if err != nil {
 			return err
@@ -447,6 +451,22 @@ func (s *projectService) WatchOverview(ctx context.Context, _ *connect.Request[n
 		case <-time.After(overviewMerge):
 		}
 	}
+}
+
+// stillSignedIn 检查订阅流的调用者还登录着：手机的设备记录、网页的会话还在。
+func (a *API) stillSignedIn(ctx context.Context) error {
+	u := auth.CurrentUser(ctx)
+	switch {
+	case u.DeviceID != "":
+		if _, err := a.Q.AppDeviceByID(ctx, u.DeviceID); err != nil {
+			return connect.NewError(connect.CodeUnauthenticated, i18n.New("这台手机已退出，请重新添加"))
+		}
+	case u.SessionID != "":
+		if _, err := a.Auth.SessionByID(ctx, u.SessionID); err != nil {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+	}
+	return nil
 }
 
 // ---- 流量趋势 ----
