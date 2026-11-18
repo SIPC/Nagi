@@ -909,8 +909,8 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"ReplicaPut\x12\x15.nagi.v1.ReplicaChunk\x1a\x1b.nagi.v1.ReplicaPutResponse(\x01\x12N\n" +
 	"\rReplicaCommit\x12\x1d.nagi.v1.ReplicaCommitRequest\x1a\x1e.nagi.v1.ReplicaCommitResponse\x12E\n" +
 	"\n" +
-	"LeaseVotes\x12\x1a.nagi.v1.LeaseVotesRequest\x1a\x1b.nagi.v1.LeaseVotesResponseBT\n" +
-	"\x1cio.github.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"LeaseVotes\x12\x1a.nagi.v1.LeaseVotesRequest\x1a\x1b.nagi.v1.LeaseVotesResponseBN\n" +
+	"\x16ink.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_mesh_proto_rawDescOnce sync.Once

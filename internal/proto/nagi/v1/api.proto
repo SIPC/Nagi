@@ -8,7 +8,7 @@ import "nagi/v1/common.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 option java_multiple_files = true;
-option java_package = "io.github.sipc.nagi.proto.v1";
+option java_package = "ink.sipc.nagi.proto.v1";
 
 // 以下服务供浏览器调用（Connect-RPC）。
 

@@ -9034,8 +9034,8 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"ListImages\x12\x1a.nagi.v1.ListImagesRequest\x1a\x13.nagi.v1.NodeImages\x12K\n" +
 	"\fDeleteImages\x12\x1c.nagi.v1.DeleteImagesRequest\x1a\x1d.nagi.v1.DeleteImagesResponse\x12H\n" +
 	"\vPruneImages\x12\x1b.nagi.v1.PruneImagesRequest\x1a\x1c.nagi.v1.PruneImagesResponse\x12A\n" +
-	"\tPullImage\x12\x19.nagi.v1.PullImageRequest\x1a\x17.nagi.v1.ImagePullEvent0\x01BT\n" +
-	"\x1cio.github.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\tPullImage\x12\x19.nagi.v1.PullImageRequest\x1a\x17.nagi.v1.ImagePullEvent0\x01BN\n" +
+	"\x16ink.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_agent_proto_rawDescOnce sync.Once

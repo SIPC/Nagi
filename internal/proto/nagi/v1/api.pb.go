@@ -16082,8 +16082,8 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\tChallenge\x12\x1c.nagi.v1.AppChallengeRequest\x1a\x1d.nagi.v1.AppChallengeResponse\x12<\n" +
 	"\x05Token\x12\x18.nagi.v1.AppTokenRequest\x1a\x19.nagi.v1.AppTokenResponse\x129\n" +
 	"\x04Info\x12\x17.nagi.v1.AppInfoRequest\x1a\x18.nagi.v1.AppInfoResponse\x12?\n" +
-	"\x06Logout\x12\x19.nagi.v1.AppLogoutRequest\x1a\x1a.nagi.v1.AppLogoutResponseBT\n" +
-	"\x1cio.github.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\x06Logout\x12\x19.nagi.v1.AppLogoutRequest\x1a\x1a.nagi.v1.AppLogoutResponseBN\n" +
+	"\x16ink.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_api_proto_rawDescOnce sync.Once

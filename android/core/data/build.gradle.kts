@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.sipc.nagi.data"
+    namespace = "ink.sipc.nagi.data"
     compileSdk = 36
     defaultConfig { minSdk = 28 }
     compileOptions {

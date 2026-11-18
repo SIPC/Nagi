@@ -219,7 +219,7 @@ Android 9 和 10 上，每次使用都要验证的密钥只支持指纹和面容
 - 证书链能追溯到 Google 的硬件证明根证书（`internal/server/auth/attestation/roots.pem`，取自 `https://android.googleapis.com/attestation/root`）。按根证书的公钥比较：同一把根密钥签发过不止一张证书，旧手机的链可能以旧证书结尾。根证书随面板版本更新。吊销列表还没有做，所有手机都标明「未检查吊销」（`revocation_checked` 为 0）；以后在面板能访问 Google 时每天获取一次。
 - 密钥在硬件里（`attestationSecurityLevel` 是 TrustedEnvironment 或 StrongBox），不能导出。
 - 每把密钥的使用条件和上表一致（`unlockedDeviceRequired`、`userAuthType`、`authTimeout`、`noAuthRequired`），密钥是在硬件里生成的（`origin` 为 GENERATED）。`unlockedDeviceRequired` 在有的手机上由 Keystore 软件实现、记在 softwareEnforced 里，所以两组都认；其余几项只认 hardwareEnforced。
-- 证明里的应用包名是 Nagi 的包名 `io.github.sipc.nagi`（`auth.AppPackage`）。
+- 证明里的应用包名是 Nagi 的包名 `ink.sipc.nagi`（`auth.AppPackage`）。
 - 证明里的公钥和提交的公钥一致。
 
 任何一项不符合时拒绝添加，提示原因。证明里的 bootloader 状态（`verifiedBootState`）和系统安全补丁日期记在设备上：bootloader 没有锁定时照样允许添加（有人会在自己 root 过的手机上用），但在设备列表和添加通知里标明。
@@ -421,7 +421,7 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
   | `feature:home`、`feature:projects`、`feature:nodes`、`feature:settings`、`feature:pairing` | 各部分的页面和 ViewModel（首版只有 `feature:home` 和 `feature:pairing`，其余三个标签是 `app` 里的占位页） |
   | `push` | 前台服务、推送连接、通知、小组件 |
 
-- **生成代码**：`buf.gen.yaml` 加 Java（lite，`protoc_builtin: java`）和 connect-kotlin 两个插件，输出到 `android/core/proto/src/main/{java,kotlin}`。需要 `protoc`（36.x，和 protobuf-javalite 4.36 对应）和 `protoc-gen-connect-kotlin`（0.10，和 connect-kotlin 运行库版本一致）在 PATH 里。proto 文件都加了 `java_multiple_files` 和 `java_package = io.github.sipc.nagi.proto.v1`。改了 proto 以后和 Go、网页的代码一起重新生成。
+- **生成代码**：`buf.gen.yaml` 加 Java（lite，`protoc_builtin: java`）和 connect-kotlin 两个插件，输出到 `android/core/proto/src/main/{java,kotlin}`。需要 `protoc`（36.x，和 protobuf-javalite 4.36 对应）和 `protoc-gen-connect-kotlin`（0.10，和 connect-kotlin 运行库版本一致）在 PATH 里。proto 文件都加了 `java_multiple_files` 和 `java_package = ink.sipc.nagi.proto.v1`。改了 proto 以后和 Go、网页的代码一起重新生成。
 - **版本**：AGP 8.13、Kotlin 2.4（connect-kotlin 0.10 用 Kotlin 2.4 编译，要求 2.3 以上）、Compose BOM 2026.03（Compose 1.10；更新的 BOM 要求 AGP 9.1 和 compileSdk 37）、compileSdk 和 targetSdk 36、Gradle 8.14。字体是 MiSans 的子集（`core/ui/fonts/subset.py`：拉丁、标点和 GB2312 汉字，每种字重约 1.4 MB），缺的字由系统字体补上。
 - **主要依赖**：Jetpack Compose、Navigation Compose、Material 3 的自适应布局（只用窗口尺寸和导航栏，不用它的视觉风格）、OkHttp、connect-kotlin、protobuf-javalite、Vico、Termux 的终端库、Sora Editor、Jetpack Glance、AndroidX Biometric。依赖注入手写，不用 Hilt。
 - **系统版本**：`minSdk` 28，`targetSdk` 跟随当年 Google 要求的版本。
@@ -430,7 +430,7 @@ App 和网页用同一套接口、同一套权限检查，不为 App 另写业�
   - **开发模式**：`nagi server --dev-app-keys` 启动的面板接受软件密钥和模拟器的证明，开发和自动化测试可以用模拟器。只能用启动参数开，界面、接口、MCP 都改不了；开着时面板启动日志每次打印警告，设备列表里这些手机标明「开发模式」，添加时记审计。正式发布的安装方式不带这个参数。
   - App：令牌管理、重连、缓存加密写单元测试；主要页面用 Compose 的界面测试在模拟器上跑。每个阶段完成后在真机上实际操作一遍，脚本测试只是补充。
 - **崩溃日志**：只存在本机，不上报任何地方（自托管、不依赖外部服务）。最多保留最近 10 次，去掉地址、令牌、设备 ID 和集群数据；「本机 → 关于」里可以查看和分享。
-- **构建和发布**：GitHub Actions 构建 APK，发版时用签名密钥签名，和面板的二进制一起上传到 Release。签名密钥只放在 CI 的密钥里。
+- **构建和发布**：推送 `v*` 标签时 `release.yml` 编译 release 包（R8 裁剪和混淆、资源裁剪），用仓库 Secrets 里的签名密钥签名，以 `nagi-android.apk` 和面板的二进制一起上传到 Release，详见 [development.md](development.md#发布)。签名密钥只放在 CI 的 Secrets 和维护者自己的备份里。
 
 ## 进度
 

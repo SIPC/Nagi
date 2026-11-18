@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.sipc.nagi.pairing"
+    namespace = "ink.sipc.nagi.pairing"
     compileSdk = 36
     defaultConfig { minSdk = 28 }
     compileOptions {

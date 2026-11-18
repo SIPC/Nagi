@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.sipc.nagi.security"
+    namespace = "ink.sipc.nagi.security"
     compileSdk = 36
     defaultConfig { minSdk = 28 }
     compileOptions {

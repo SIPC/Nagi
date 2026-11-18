@@ -8,7 +8,7 @@ import "nagi/v1/panel.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 option java_multiple_files = true;
-option java_package = "io.github.sipc.nagi.proto.v1";
+option java_package = "ink.sipc.nagi.proto.v1";
 
 // AgentService：面板调用节点（反向 gRPC），走控制连接。
 // 容器的配置以面板为准：面板把完整配置（ContainerSpec）下发给容器所在的节点，节点照着运行并缓存在本地。

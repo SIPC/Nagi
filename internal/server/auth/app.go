@@ -42,7 +42,7 @@ const (
 	// MaxAppDevices 是每个成员最多添加的手机数。
 	MaxAppDevices = 10
 	// AppPackage 是 App 的包名，证明里的包名要和它一致。
-	AppPackage = "io.github.sipc.nagi"
+	AppPackage = "ink.sipc.nagi"
 	// SettingAppUnlock 是解锁 App 的时长（分钟）在 settings 表里的键。
 	SettingAppUnlock = "app_unlock_minutes"
 	// DefaultAppUnlockMinutes 是默认的解锁时长。

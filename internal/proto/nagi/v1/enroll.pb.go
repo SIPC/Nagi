@@ -168,8 +168,8 @@ const file_nagi_v1_enroll_proto_rawDesc = "" +
 	"\vcertificate\x18\x02 \x01(\fR\vcertificate\x12%\n" +
 	"\x0eca_certificate\x18\x03 \x01(\fR\rcaCertificate2J\n" +
 	"\rEnrollService\x129\n" +
-	"\x06Enroll\x12\x16.nagi.v1.EnrollRequest\x1a\x17.nagi.v1.EnrollResponseBT\n" +
-	"\x1cio.github.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\x06Enroll\x12\x16.nagi.v1.EnrollRequest\x1a\x17.nagi.v1.EnrollResponseBN\n" +
+	"\x16ink.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_enroll_proto_rawDescOnce sync.Once
