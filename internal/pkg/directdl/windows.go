@@ -146,8 +146,8 @@ func (c Command) Windows() string {
 	w("$o = Join-Path $dir $out")
 	w("[" + ctrType + "]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '" + hex.EncodeToString(c.Key.IV[:]) + "')")
 	w("foreach ($f in $parts) { Remove-Item -LiteralPath $f }")
-	if c.SHA256 != "" {
-		w("if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq '" + c.SHA256 + "') { 'SHA-256 OK' } else { Write-Host 'FAILED' }")
+	if ValidSHA256(c.SHA256) {
+		w("if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq " + psQuote(c.SHA256) + ") { 'SHA-256 OK' } else { Write-Host 'FAILED' }")
 	} else {
 		w("'Done'")
 	}
