@@ -81,8 +81,8 @@ type peerState struct {
 	directConn int                          // 直连用的本地端口（Bind.conns 的下标）
 	// confirmed 是最近经 ping/pong 确认过的对方地址（对方有备用端口时可能不止一个）。这些地址发来的包都收，
 	// 发只走 direct：两端各自选端口，对方用来发的端口不一定是我们选来发给它的那个。
-	confirmed map[netip.AddrPort]time.Time
-	directAt   time.Time                    // 最近一次 pong 的时间
+	confirmed  map[netip.AddrPort]time.Time
+	directAt   time.Time // 最近一次 pong 的时间
 	rtt        time.Duration
 	relays     []Key // 可以代为中转的面板
 	nodeRelays []Key // 可以代为中转的节点，先于面板用
@@ -144,8 +144,8 @@ type Bind struct {
 	byMesh    map[netip.Addr]Key     // mesh 地址 → 对端
 	relayKeys map[Key]bool
 	links     map[Key]*Link
-	quic      *quicPacketConn              // 收到的 QUIC 包交给它（见 quic.go）
-	onCaps    func(Key)                    // 对方刚表示支持 QUIC 时调用
+	quic      *quicPacketConn       // 收到的 QUIC 包交给它（见 quic.go）
+	onCaps    func(Key)             // 对方刚表示支持 QUIC 时调用
 	observed  map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
 	recv      chan delivery
 	done      chan struct{}
@@ -989,8 +989,8 @@ type PeerStatus struct {
 	Direct netip.AddrPort
 	// LocalPort 是直连用的本地端口（主端口或备用端口）。
 	LocalPort uint16
-	Via    Key // 中转的面板
-	RTT    time.Duration
+	Via       Key // 中转的面板
+	RTT       time.Duration
 	// FEC 是发给对方时每 10 个包加的校验包个数，-1 表示没用 FEC（对方不支持或不是直连）。
 	FEC int
 	// LossPPM 是对方报告的丢包率（百万分之几），Recovered 是靠 FEC 恢复的、来自对方的包。

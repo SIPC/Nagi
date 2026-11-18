@@ -289,9 +289,9 @@ func TestFECLoss(t *testing.T) {
 // TestFECLossyLink：直连随机丢 2% 的包，FEC 自动开启并恢复丢包，数据原样到达。
 func TestFECLossyLink(t *testing.T) {
 	testNoQUIC = true // QUIC 不经过 WireGuard，也就没有 FEC
-	defer func() { setDropUDP(nil); testNoQUIC = false }()
+	defer func() { testNoQUIC = false }()
 	_, a, b := setupWith(t, func(_, a, b testNode) {
-		setDropUDP(func(from uint16, to netip.AddrPort) bool {
+		dropFor(t, func(from uint16, to netip.AddrPort) bool {
 			between := (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
 			return between && mrand.Float64() < 0.02
 		})
@@ -346,9 +346,9 @@ func TestFECLossyLink(t *testing.T) {
 		t.Fatal("开了 FEC 但一个包都没恢复")
 	}
 	// 两个方向的丢包率：A 发给 B 的（B 报告的）、B 收 A 的（B 自己算的），都应该在 2% 左右。
-	// 丢包率随能力包每 2 秒算一次，传得快时数据已经收完还没算过，等它出来。
+	// 丢包率随能力包每 2 秒算一次，传得快时数据已经收完还没算过，等它出来（CI 的机器忙时要等久一些）。
 	tx, rx := int64(-1), int64(-1)
-	for deadline := time.Now().Add(10 * time.Second); (tx < 0 || rx < 0) && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+	for deadline := time.Now().Add(20 * time.Second); (tx < 0 || rx < 0) && time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 		for _, s := range a.m.Status() {
 			if s.Key == b.m.PublicKey() {
 				tx = s.TxLoss
@@ -369,7 +369,7 @@ func TestFECLossyLink(t *testing.T) {
 
 // TestFECOldPeer：对端不支持 FEC（旧版本）时不加 FEC 包头，照常能通。
 func TestFECOldPeer(t *testing.T) {
-	setDropUDP(nil)
+	t.Parallel()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var pa, pb Key
 	_, _ = rand.Read(pa[:])
@@ -427,6 +427,7 @@ func fecParityPkt(gid uint32, idx, k, m int, payload ...byte) []byte {
 
 // 同一组的包声明不同的组大小时不能越界（FEC 在 WireGuard 解密之前处理，包头可能是伪造的）。
 func TestFECConflictingGroupSize(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	d := newFECDecoder()
 	d.push(fecDataPkt(7, 0, 1, true, 1, 2, 3), now)

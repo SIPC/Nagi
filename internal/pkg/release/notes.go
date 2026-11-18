@@ -22,7 +22,7 @@ func ChangelogName(lang i18n.Lang) string {
 func FetchChangelog(ctx context.Context, base, name string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	b, err := fetch(ctx, base+"/"+name, 1<<20, nil)
+	b, err := fetch(ctx, base+"/"+name, 1<<20, nil, nil)
 	if err != nil {
 		return "", err
 	}

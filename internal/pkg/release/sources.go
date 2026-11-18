@@ -131,7 +131,7 @@ func githubSums(ctx context.Context, sources []Source) (string, error) {
 	}
 	pctx, cancel := context.WithTimeout(ctx, pinTimeout)
 	defer cancel()
-	b, err := fetch(pctx, direct.Base+"/SHA256SUMS", 64<<10, nil)
+	b, err := fetch(pctx, direct.Base+"/SHA256SUMS", 64<<10, nil, nil)
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -157,6 +157,8 @@ func githubSums(ctx context.Context, sources []Source) (string, error) {
 // 开始之前先直接从 GitHub 取 SHA256SUMS（见 githubSums）。取到了，经加速代理下载的 SHA256SUMS 里的值必须和它一致，
 // 记着的、排在 GitHub 前面的代理也一样：代理不能换一份自己的文件和校验值。GitHub 上没有这个版本时直接失败。
 // 这一次没取到、之后直接下载时取到了（即使文件下载失败），后面的代理也要和它一致。
+//
+// ctx 带着进度回调时（见 WithProgress）报告每个地址的下载、核对和试运行，换下一个地址时从 0 重新报。
 func fetchFirst(ctx context.Context, sources []Source, dst string, check func(Source) error, log *slog.Logger) (Source, error) {
 	if log == nil {
 		log = slog.Default()
@@ -167,14 +169,28 @@ func fetchFirst(ctx context.Context, sources []Source, dst string, check func(So
 	if err != nil {
 		return Source{}, err
 	}
+	progress := progressFrom(ctx)
 	var first error
 	for _, s := range sources {
 		pin := ""
 		if s.Proxy != "" {
 			pin = pinned
 		}
-		sum, err := download(ctx, s.Base, dst, pin)
+		var report func(Stage, int64, int64)
+		var last Progress
+		if progress != nil {
+			name := s.Name()
+			report = func(stage Stage, got, total int64) {
+				last = Progress{Stage: stage, Source: name, Downloaded: got, Total: total}
+				progress(last)
+			}
+			report(StageDownload, 0, -1)
+		}
+		sum, err := download(ctx, s.Base, dst, pin, report)
 		if err == nil && check != nil {
+			if report != nil {
+				report(StageTest, last.Downloaded, last.Total)
+			}
 			err = check(s)
 		}
 		if err == nil {

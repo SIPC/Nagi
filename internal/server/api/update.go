@@ -36,6 +36,9 @@ type panelUpdates struct {
 	saved   string
 	// cancels：正在下载的节点升级的取消函数，按记录找。在 stateMu 里读写。
 	cancels map[*updateState]context.CancelFunc
+	// progress：进行中的更新的下载进度，按记录找，只在内存里（见 upgrade_progress.go）。在 progressMu 里读写。
+	progressMu sync.Mutex
+	progress   map[*updateState]*liveProgress
 
 	// notes：各语言最新版本的更新日志，版本变了再下载。
 	notesMu sync.Mutex

@@ -241,7 +241,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器 | — | `SetNodeProjectsRoot` |
 | `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转、关闭直连下载、设置 HTTPS 不能用时加密 HTTP 下载的端口（`direct_http_port`，0 是默认的 80，见 [agent.md](agent.md#加密-http-下载)），只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
 | `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
-| `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
+| `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本，用 `check_panel_update` 看各节点的阶段和下载进度；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
 | `reclaim_node_snapshots` | 立即清理节点上每个容器的快照仓库，回收没用到的数据，快照本身不删 | — | `ReclaimNodeSnapshots` |
 | `remove_node_panel` | 从节点的信任列表移除一个面板；移除的是本面板时本面板忘记这个节点 | 面板指纹 | `ListNodePanels`、`RemoveNodePanel` |
 | `delete_node_replica` | 删除节点上已经没有容器使用的副本（`get_node` 里 `in_use` 为 false） | 容器名 | `ListNodeReplicas`、`DeleteNodeReplica` |
@@ -322,7 +322,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `query_audit` | 按时间、成员、来源、类别、项目、节点、只看失败、关键字查审计记录，翻页；或者取一条记录和它的上下级 | `ListAuditEvents`、`GetAuditEvent` |
 | `export_audit` | 按筛选条件导出 JSON Lines，最多 256 KB（超出时截断，只留完整的行） | `ExportAuditEvents` |
 | `verify_audit` | 校验审计日志的哈希链，返回结果和最近一次外送的锚点 | `VerifyAudit` |
-| `check_panel_update` | 有没有新版本、更新日志、面板和节点的更新进度；最新版本是经加速代理查到的时带 `latest_checked_via`（见 [panel.md](panel.md#更新面板)） | `CheckPanelUpdate`、`GetPanelReleaseNotes`、`GetUpdateStatus` |
+| `check_panel_update` | 有没有新版本、更新日志、面板和节点的更新进度（下载时带 `progress`：阶段、已下载、总大小、百分比、速度，见 [panel.md](panel.md#更新状态)；旧版本的节点没有）；最新版本是经加速代理查到的时带 `latest_checked_via`（见 [panel.md](panel.md#更新面板)） | `CheckPanelUpdate`、`GetPanelReleaseNotes`、`GetUpdateStatus` |
 | `update_panel` | 更新面板到最新版本（要确认），面板重启期间 MCP 暂时不能用 | `CheckPanelUpdate`、`UpdatePanel` |
 | `list_members` | 成员、角色、访问范围、是否开了两步验证、通行密钥的名称。只读 | `ListUsers` |
 

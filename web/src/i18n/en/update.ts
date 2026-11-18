@@ -24,6 +24,12 @@ export default {
   retry: "Retry",
   installingTitle: (version) => `Updating to ${version}`,
   installingText: "The panel is downloading and verifying the new version, then restarts in place and this page refreshes. You can leave this page; progress is kept on the panel.",
+  progress: {
+    label: "Download progress",
+    download: (detail) => (detail ? `Downloading ${detail}` : "Downloading"),
+    verify: "Verifying",
+    test: "Testing",
+  },
   tips: {
     view: "View",
     available: (version) => `New version ${version} available`,
