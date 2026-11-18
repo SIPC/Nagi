@@ -19,7 +19,7 @@ func serveSpeedFor(t *testing.T, m *Mesh) {
 
 // TestSpeed：两个方向都测得出速率，直连且两端支持时走 QUIC。
 func TestSpeed(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	serveSpeedFor(t, b.m)
@@ -50,7 +50,7 @@ func TestSpeed(t *testing.T) {
 
 // TestSpeedNoQUIC：关掉 QUIC 以后测速走 WireGuard；再打开又走 QUIC。
 func TestSpeedNoQUIC(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	serveSpeedFor(t, b.m)
@@ -88,7 +88,7 @@ func TestSpeedNoQUIC(t *testing.T) {
 
 // TestSpeedBusy：对方正在测时拒绝第二个。
 func TestSpeedBusy(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	p, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	waitPath(t, p.m, b.m.PublicKey(), "direct")
@@ -111,7 +111,7 @@ func TestSpeedBusy(t *testing.T) {
 
 // TestSpeedOldPeer：对方没有测速服务（旧版本）时，两种路都报不支持。
 func TestSpeedOldPeer(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -127,11 +127,11 @@ func TestSpeedOldPeer(t *testing.T) {
 
 // TestQUICLoss：走 QUIC 时，发给对方的丢包率来自 QUIC 自己的统计。
 func TestQUICLoss(t *testing.T) {
-	defer func() { dropUDP = nil }()
+	defer setDropUDP(nil)
 	_, a, b := setupWith(t, func(_, a, b testNode) {
-		dropUDP = func(from uint16, to netip.AddrPort) bool {
+		setDropUDP(func(from uint16, to netip.AddrPort) bool {
 			return from == a.port && to.Port() == b.port && mrand.Float64() < 0.02
-		}
+		})
 	})
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	serveSpeedFor(t, b.m)
@@ -176,7 +176,7 @@ func TestSpeedLimiter(t *testing.T) {
 
 // TestSpeedLimited：测得太频繁时对方拒绝，报 ErrSpeedLimited。
 func TestSpeedLimited(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	serveSpeedFor(t, b.m)
