@@ -25,9 +25,6 @@ import (
 // 目录就是 compose 的项目目录，数据留在原处；.env 复制成容器组变量；原来的命名卷改成引用原卷。
 // 读的是主机上的文件，所以只给管理员，而且和节点文件一样要先确认身份（见 elevationRequired）。
 
-// secretName 判断变量名像不像密钥，像的导入时标为密钥。
-var secretName = regexp.MustCompile(`(?i)(PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE)`)
-
 var importNameRe = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // databaseTargets 是常见数据库镜像的数据目录：挂载到这里的子目录，导入时推荐纳入快照。
@@ -78,7 +75,7 @@ func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.Conta
 	sort.Strings(keys)
 	var env []*nagiv1.EnvVar
 	for _, k := range keys {
-		v := &nagiv1.EnvVar{Key: k, Value: vars[k], Secret: secretName.MatchString(k)}
+		v := &nagiv1.EnvVar{Key: k, Value: vars[k], Secret: spec.LooksSecret(k)} // 名称像密钥的标为密钥
 		env = append(env, v)
 		preview.Variables = append(preview.Variables, k)
 		if v.Secret {
