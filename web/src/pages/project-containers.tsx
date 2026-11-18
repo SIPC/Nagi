@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowUpCircle, Plus, X } from "lucide-react";
 import { toast } from "sonner";
-import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, orOther, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { capitalize, cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
@@ -66,6 +66,7 @@ import { AlertRulesFields, AlertRulesForm, containerRules } from "@/components/a
 import { useUnsaved } from "@/components/unsaved";
 import { EnvEditor, type EnvMode } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
+import { WriteGate } from "@/components/perm";
 import { useRole } from "@/components/role";
 import { actionLabel } from "@/pages/audit";
 
@@ -79,7 +80,8 @@ export type DetailView = (typeof containerTabs)[number];
 // useProjectActions：项目概览页头的操作：更新有新版本的容器、部署全部容器、⋯。部署的输出显示在概览里。
 export function useProjectActions(project: Project, imageUpdates: ImageUpdate[]) {
   const navigate = useNavigate();
-  const { isViewer } = useRole();
+  const { can } = useRole();
+  const canDeploy = can("project.deploy");
   const { run, busy, output, hasOutput } = useRun(project.id);
   const pc = t.projectContainers;
   const updateNames = [...new Set(imageUpdates.map((u) => u.container))];
@@ -107,10 +109,11 @@ export function useProjectActions(project: Project, imageUpdates: ImageUpdate[])
     );
   };
 
+  // 部署、更新镜像、添加容器要「部署」权限，没有时页头不放这些按钮。
   const actions =
-    project.containers.length === 0 ? undefined : (
+    project.containers.length === 0 || !canDeploy ? undefined : (
       <>
-        {updateNames.length > 0 && !isViewer && (
+        {updateNames.length > 0 && (
           <Button variant="outline" disabled={busy} onClick={updateImages} title={pc.imageUpdates.hover(t.common.list([...new Set(imageUpdates.map((u) => u.image))]))}>
             {busy ? <Spinner /> : <ArrowUpCircle className="size-3.5! text-info" />}
             {pc.imageUpdates.action(updateNames.length)}
@@ -286,7 +289,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
           const version = m.deployedVersion > 0n ? `v${m.deployedVersion}${m.latestVersion !== m.deployedVersion ? pc.table.latest(String(m.latestVersion)) : ""}` : "";
           const address = m.kind !== "group" ? m.name : [...new Set(svc.filter((s) => !m.hostNetworkServices.includes(s.name)).map((s) => `${s.name}.${m.name}`))].join(" ");
           const notes: React.ReactNode[] = [
-            !offline && (node?.name ?? m.nodeId),
+            !offline && (node?.name ?? orOther(m.nodeId)),
             offline ? <span>{t.common.status.nodesOffline([node.name])}</span> : stateOf(svc, m.deployedVersion > 0n).label,
             offline && t.common.status.unknown,
             !offline && version,
@@ -505,15 +508,28 @@ function ContainerDetail({
 }) {
   const { run, busy, output, hasOutput, setLines } = useRun(project.id);
   const queryClient = useQueryClient();
-  const { isViewer } = useRole();
+  const { can } = useRole();
+  const canDeploy = can("project.deploy");
+  const canControl = can("project.control");
   const readOnly = useContext(ReadOnlyContext);
   const hasImageUpdate = imageUpdates.length > 0;
   const updateImages = t.common.list([...new Set(imageUpdates.map((u) => shortImage(u.image)))]);
   const tip = useImageTip(imageTipKey(project.id, container.name, updateImages));
   // 正在做的事：部署类（部署、上传、拉取、更新镜像）、回滚，或启停重启。按钮上的文字和转圈按它显示。
   const [doing, setDoing] = useState<"deploy" | "rollback" | "control">("deploy");
-  // 只读角色没有配置和终端，直接打开这些地址时显示概览。
-  const view = isViewer && (viewProp === "config" || viewProp === "terminal") ? "overview" : viewProp;
+  // 每个标签要的权限（见 internal/server/auth/perms.go）：没有的不显示，直接打开这些地址时显示概览。
+  const tabAllowed: Record<DetailView, boolean> = {
+    overview: true,
+    logs: can("project.logs"),
+    terminal: can("project.terminal"),
+    config: can("project.config"),
+    versions: can("project.config"),
+    network: can("project.network"),
+    storage: true,
+    ha: can("project.ha") || can("project.backup") || can("project.migrate"),
+    alerts: can("project.alerts"),
+  };
+  const view = tabAllowed[viewProp] ? viewProp : "overview";
   const fileRef = useRef<HTMLInputElement>(null);
   const [renaming, setRenaming] = useState(false);
   // 换了容器时，上一个容器的部署输出不再显示。
@@ -611,7 +627,7 @@ function ContainerDetail({
   const navigate = useNavigate();
   // 手机上打开卷的文件页时，标题栏换成卷名，不再显示容器标题和标签。
   const { volume } = useSearch({ strict: false }) as { volume?: string };
-  const browsing = view === "storage" && !!volume && !isViewer;
+  const browsing = view === "storage" && !!volume && can("project.files.read");
   // 现有目录的容器文件在节点上的那个目录里，不经面板上传。
   const uploadDeployable = !cfg?.projectDir && (!cfg?.form || !!cfg.form.workdir);
   const pullDeploy = () => confirmDeploy(d.pullDeployConfirm(container.name), d.pullDeploy, { pull: true });
@@ -622,7 +638,7 @@ function ContainerDetail({
 
   return (
     <>
-      {hasImageUpdate && !isViewer && !readOnly && tip.open && (
+      {hasImageUpdate && canDeploy && !readOnly && tip.open && (
         <div className={cn(browsing && "max-md:hidden")}>
           <ImageTip images={updateImages} disabled={busy || !nodeOnline} onClose={tip.close} onUpdate={updateFromTip} />
         </div>
@@ -639,7 +655,7 @@ function ContainerDetail({
             {container.stateful && <Badge>{t.projectContainers.badges.stateful}</Badge>}
             {container.hasDraft && <Badge tone="warning">{t.projectContainers.badges.draft}</Badge>}
             {hasImageUpdate &&
-              (isViewer || readOnly ? (
+              (!canDeploy || readOnly ? (
                 <Badge tone="info">{d.updatable}</Badge>
               ) : (
                 // 弹窗关掉以后，点这里重新打开。
@@ -663,7 +679,7 @@ function ContainerDetail({
               }}
             />
             {/* 页头只放重启（或启动）、重新部署和更多；上传、拉取并部署在更多里。 */}
-            {deployed && (running || !nodeOnline ? (
+            {canControl && deployed && (running || !nodeOnline ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -679,6 +695,7 @@ function ContainerDetail({
                 {d.start}
               </Button>
             ))}
+            {canDeploy && (
             <Button
               size="sm"
               // 只有要部署新内容（草稿、第一次部署）或正在部署时是主按钮。
@@ -701,17 +718,19 @@ function ContainerDetail({
                     ? t.projectContainers.detail.redeploy
                     : t.projectContainers.detail.deploy}
             </Button>
+            )}
+            {(canDeploy || canControl) && (
             <Menu
               title={container.name}
               items={[
-                ...(uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy || !nodeOnline }] : []),
-                ...(cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy || !nodeOnline }] : []),
-                { label: t.projectContainers.rename.action, onSelect: () => setRenaming(true) },
-                { label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy || !nodeOnline },
+                ...(canDeploy && uploadDeployable ? [{ label: t.projectContainers.detail.uploadDeploy, onSelect: () => fileRef.current?.click(), disabled: busy || !nodeOnline }] : []),
+                ...(canDeploy && cfg?.source?.gitUrl ? [{ label: t.projectContainers.detail.pullDeploy, onSelect: pullDeploy, disabled: busy || !nodeOnline }] : []),
+                ...(canDeploy ? [{ label: t.projectContainers.rename.action, onSelect: () => setRenaming(true) }] : []),
+                ...(canDeploy ? [{ label: t.projectContainers.detail.updateImage, onSelect: updateImage, disabled: busy || !nodeOnline }] : []),
                 // 容器组部分运行时，上面的按钮是重启，从这里启动其余的容器。
-                ...(deployed && running && stopped ? [{ label: d.start, onSelect: () => control(ContainerAction.START), disabled: busy || !nodeOnline }] : []),
+                ...(canControl && deployed && running && stopped ? [{ label: d.start, onSelect: () => control(ContainerAction.START), disabled: busy || !nodeOnline }] : []),
                 // 设置了顶替的容器停止后会被代管重启或另一个节点拉起，须先取消顶替（见 docs/failover.md）。
-                ...(deployed && running
+                ...(canControl && deployed && running
                   ? [
                       {
                         label: d.stop,
@@ -723,15 +742,20 @@ function ContainerDetail({
                       },
                     ]
                   : []),
-                {
-                  label: t.projectContainers.detail.deleteKind(isGroup),
-                  danger: true,
-                  onSelect: async () => {
-                    if (await remove()) navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
-                  },
-                },
+                ...(canDeploy
+                  ? [
+                      {
+                        label: t.projectContainers.detail.deleteKind(isGroup),
+                        danger: true,
+                        onSelect: async () => {
+                          if (await remove()) navigate({ to: "/projects/$projectId", params: { projectId: project.id } });
+                        },
+                      },
+                    ]
+                  : []),
               ]}
             />
+            )}
           </>
         }
       />
@@ -742,22 +766,14 @@ function ContainerDetail({
         className={cn("mb-6 max-md:mb-4", browsing && "max-md:hidden")}
         value={view}
         onChange={onView}
-        items={[
-          { value: "overview", label: t.projectContainers.tabs.overview },
-          { value: "logs", label: t.projectContainers.tabs.logs },
-          ...(isViewer ? [] : [{ value: "terminal" as const, label: t.projectContainers.tabs.terminal }]),
-          ...(isViewer ? [] : [{ value: "config" as const, label: t.projectContainers.tabs.config }]),
-          { value: "versions", label: t.projectContainers.tabs.versions },
-          { value: "network", label: t.projectContainers.tabs.network },
-          { value: "storage", label: t.projectContainers.tabs.storage },
-          { value: "ha", label: t.projectContainers.tabs.ha },
-          { value: "alerts", label: t.projectContainers.tabs.alerts },
-        ]}
+        items={containerTabs.filter((v) => tabAllowed[v]).map((v) => ({ value: v, label: t.projectContainers.tabs[v] }))}
       />
       <Slide id={view} index={containerTabs.indexOf(view)}>
         {view !== "storage" && view !== "ha" && hasOutput && <div className="mb-6">{output}</div>}
         {view === "overview" && <Overview project={project} container={container} services={services} />}
-        {view === "config" && !isViewer && <ContainerConfig
+        {view === "config" && (
+          <WriteGate allowed={canDeploy}>
+          <ContainerConfig
             key={`cfg-${container.revision}`}
             project={project}
             container={container}
@@ -767,8 +783,11 @@ function ContainerDetail({
               setDoing("deploy");
               run(() => projectClient.deploy({ projectId: project.id, targets: [{ container: container.name, baseRevision }] }));
             }}
-          />}
+          />
+          </WriteGate>
+        )}
         {view === "versions" && (
+          <WriteGate allowed={canDeploy}>
           <Versions
             container={container}
             projectId={project.id}
@@ -780,6 +799,7 @@ function ContainerDetail({
               run(() => projectClient.rollback({ projectId: project.id, container: container.name, version, restoreData }));
             }}
           />
+          </WriteGate>
         )}
         {view === "logs" && (
           <Logs
@@ -791,7 +811,7 @@ function ContainerDetail({
             onService={onService}
           />
         )}
-        {view === "terminal" && !isViewer && (
+        {view === "terminal" && (
           <TerminalView projectId={project.id} container={container.name} services={[...new Set(services.filter((s) => s.state === "running").map((s) => s.name))]} service={service} onService={onService} />
         )}
         {view === "network" && <ContainerNetwork project={project} container={container} services={services} />}
@@ -806,7 +826,7 @@ function ContainerDetail({
 // ContainerAlerts：容器的告警规则。默认用项目的；单独设置时整组替换项目的，起点是项目现在的规则。
 function ContainerAlerts({ project, container }: { project: Project; container: Container }) {
   const queryClient = useQueryClient();
-  const { isViewer } = useRole();
+  const isViewer = !useRole().can("project.alerts");
   const projectRules = project.settings?.alertRules;
   const [own, setOwn] = useState(!!container.alertRules);
   const save = async (rules: AlertRules | undefined) => {
@@ -939,7 +959,7 @@ function Overview({ project, container, services }: { project: Project; containe
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-x-6 gap-y-4 max-md:grid-cols-2">
           {isGroup && <KvItem k={pc.columns.kind} v={pc.kind.groupCompose} />}
           {!isGroup && <KvItem mono k={pc.columns.image} v={<span title={image}>{displayImage(image)}</span>} />}
-          <KvItem k={pc.columns.node} v={node?.name ?? container.nodeId} />
+          <KvItem k={pc.columns.node} v={node?.name ?? orOther(container.nodeId)} />
           <KvItem mono k={o.currentVersion} v={version} />
           <KvItem k={o.uptimeLabel} v={<Roll value={uptime(services)} />} />
           {isGroup && (
@@ -1691,7 +1711,8 @@ function AddContainer({ project }: { project: Project }) {
       {node.nodeField}
     </FormRow>
   );
-  const { isAdmin } = useRole();
+  // 现有目录、项目根目录以外的目录要「特权配置」。
+  const isAdmin = useRole().can("project.privileged");
   const form = useContainerForm(project.containers.length === 0, top, node.dirField, isAdmin);
   formRef.current = form;
   useUnsaved({ name, config: form.mode === "dir" ? {} : form.build() });

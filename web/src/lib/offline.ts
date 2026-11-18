@@ -6,15 +6,16 @@
 // 安全入口的路径同步到了备用面板，但它要保密，不记。
 
 export type KnownStandby = { name: string; address: string };
-export type KnownStandbys = { standbys: KnownStandby[]; at: number };
+// member：不是管理员。没有备用面板时离线页提示联系管理员（public/offline.js）。
+export type KnownStandbys = { standbys: KnownStandby[]; at: number; member?: boolean };
 
 // storageKey 和 public/offline.js 里的一致。
 const storageKey = "nagi.standbys";
 
-export function rememberStandbys(list: KnownStandby[]) {
+export function rememberStandbys(list: KnownStandby[], member = false) {
   try {
-    if (list.length === 0) localStorage.removeItem(storageKey);
-    else localStorage.setItem(storageKey, JSON.stringify({ standbys: list, at: Date.now() } satisfies KnownStandbys));
+    if (list.length === 0 && !member) localStorage.removeItem(storageKey);
+    else localStorage.setItem(storageKey, JSON.stringify({ standbys: list, at: Date.now(), member } satisfies KnownStandbys));
   } catch {
     // 浏览器不让用存储时就不记。
   }
@@ -36,6 +37,15 @@ export function forgetStandbys() {
   } catch {
     // 同上。
   }
+}
+
+// isHostAddress：地址（可以带端口）是不是域名，不是 IP。非管理员只记绑了域名的备用面板。
+export function isHostAddress(address: string) {
+  let host = address.replace(/^https?:\/\//, "").split("/")[0];
+  if (host.startsWith("[")) return false;
+  if ((host.match(/:/g) ?? []).length === 1) host = host.split(":")[0];
+  if (host.includes(":")) return false;
+  return /[a-z]/i.test(host) && !/^\d+(\.\d+){3}$/.test(host);
 }
 
 // standbyURL：备用面板的网页和节点连接用同一个地址和端口。

@@ -1,8 +1,9 @@
+import { useRole } from "@/components/role";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowUpCircle, ChevronDown, ChevronLeft, Plus } from "lucide-react";
-import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, orOther, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
@@ -52,9 +53,12 @@ export function ProjectPage({ projectId, tab, onTab }: { projectId: string; tab:
 
 function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable<ProjectData["project"]>; services: NonNullable<ProjectData["status"]>["services"]; imageUpdates: NonNullable<ProjectData["status"]>["imageUpdates"]; tab: ProjectTab; onTab: (t: ProjectTab) => void }) {
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
-  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? orOther(id);
   const nodeIds = [...new Set(p.containers.map((c) => c.nodeId))];
   const { actions, deploy, busy, output, hasOutput } = useProjectActions(p, imageUpdates);
+  // 网络要「网络和域名」：没有时不显示这一块（面板的回复里也没有映射）。
+  const canNetwork = useRole().can("project.network");
+  if (tab === "network" && !canNetwork) tab = "containers";
 
   return (
     <>
@@ -101,7 +105,7 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
         onChange={onTab}
         items={[
           { value: "containers", label: t.project.sections.overview },
-          { value: "network", label: t.project.sections.network, count: p.routes.length },
+          ...(canNetwork ? [{ value: "network" as const, label: t.project.sections.network, count: p.routes.length }] : []),
           { value: "settings", label: t.project.sections.settings },
         ]}
       />
@@ -254,6 +258,7 @@ const nestedList = "ml-[11px] grid gap-1 border-l pt-1 pl-0.5";
 // MobileProjectNav：手机的全屏导航在项目里的内容，和项目栏同样的入口，行高 44。点容器时同样保留当前的标签。
 export function MobileProjectNav({ projectId }: { projectId: string }) {
   const location = useRouterState({ select: (s) => s.location });
+  const { can } = useRole();
   const project = useQuery({ queryKey: ["project", projectId], queryFn: () => projectClient.getProject({ projectId }) });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const groups = useExpandedGroups(projectId);
@@ -298,7 +303,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
           <Link key={m.name} to="/projects/$projectId/c/$container" params={{ projectId: p.id, container: m.name }} search={{ view: containerView }} className={cn(item(m.name === container && !service), hasToggle && "pr-12")} title={st.label}>
             <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
             <span className="min-w-0 truncate">{containerLabel(m)}</span>
-            <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
+            <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? orOther(m.nodeId))}</span>
             {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
             {/* 和项目栏一样：镜像可更新时名称后面一个蓝色向上箭头。 */}
             {(project.data.status?.imageUpdates ?? []).some((x) => x.container === m.name) && (
@@ -306,7 +311,7 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
                 <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
               </span>
             )}
-            <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
+            <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? orOther(m.nodeId)}</span>
           </Link>
         );
         if (svc.length === 0) return row;
@@ -341,10 +346,12 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
         );
       })}
       <div className={label}>{t.project.column.project}</div>
-      <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} className={item(onSection && tab === "network")}>
-        {t.project.sections.network}
-        {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs tabular-nums text-muted-foreground" />}
-      </Link>
+      {can("project.network") && (
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} className={item(onSection && tab === "network")}>
+          {t.project.sections.network}
+          {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs tabular-nums text-muted-foreground" />}
+        </Link>
+      )}
       <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} className={item(onSection && tab === "settings")}>
         {t.project.sections.settings}
       </Link>
@@ -371,6 +378,7 @@ function ProjectColumn({
   serviceTab?: ServiceView;
   adding?: boolean;
 }) {
+  const { can } = useRole();
   const project = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectClient.getProject({ projectId }),
@@ -419,9 +427,11 @@ function ProjectColumn({
             {t.project.column.containers}
             <Roll value={String(p.containers.length)} className="ml-1 tabular-nums" />
           </span>
-          <ButtonLink to="/projects/$projectId/add" params={{ projectId: p.id }} variant="ghost" size="icon" className="-my-2 -mr-2 text-foreground" aria-label={t.projectContainers.table.addContainer}>
-            <Plus />
-          </ButtonLink>
+          {can("project.deploy") && (
+            <ButtonLink to="/projects/$projectId/add" params={{ projectId: p.id }} variant="ghost" size="icon" className="-my-2 -mr-2 text-foreground" aria-label={t.projectContainers.table.addContainer}>
+              <Plus />
+            </ButtonLink>
+          )}
         </div>
         {p.containers.map((m) => {
           const node = knownNodes(nodes.data).find((n) => n.id === m.nodeId);
@@ -442,7 +452,7 @@ function ProjectColumn({
               <span className="flex min-w-0 items-center gap-2 leading-5" title={st.label}>
                 <span className={cn("size-1.5 shrink-0 rounded-full", dotColor[st.tone])} />
                 <span className="truncate">{containerLabel(m)}</span>
-                <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? m.nodeId)}</span>
+                <span className="sr-only">{t.project.column.stateOnNode(st.label, node?.name ?? orOther(m.nodeId))}</span>
                 {m.kind === "group" && <span className="shrink-0 text-[13px] text-muted-foreground">{containerKind(m)}</span>}
                 {m.hasDraft && <Badge tone="warning">{t.project.column.draft}</Badge>}
                 {imageUpdates.some((x) => x.container === m.name) && (
@@ -450,7 +460,7 @@ function ProjectColumn({
                     <ArrowUpCircle role="img" aria-label={t.projects.card.imageUpdate} className="size-3.5 text-info" />
                   </span>
                 )}
-                <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? m.nodeId}</span>
+                <span aria-hidden className="ml-auto shrink-0 text-[13px] leading-5 text-muted-foreground">{node?.name ?? orOther(m.nodeId)}</span>
               </span>
               {node?.online === false ? (
                 <span className="pl-3.5 text-[13px] leading-5 text-muted-foreground">{t.common.status.nodesOffline([node.name])}</span>
@@ -494,11 +504,13 @@ function ProjectColumn({
             </div>
           );
         })}
-        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, "mt-2", !section("network") && idle)}>
-          {t.project.sections.network}
-          {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground" />}
-        </Link>
-        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} data-active={section("settings") || undefined} className={cn(item, !section("settings") && idle)}>
+        {can("project.network") && (
+          <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "network" }} data-active={section("network") || undefined} className={cn(item, "mt-2", !section("network") && idle)}>
+            {t.project.sections.network}
+            {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground" />}
+          </Link>
+        )}
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} data-active={section("settings") || undefined} className={cn(item, !can("project.network") && "mt-2", !section("settings") && idle)}>
           {t.project.sections.settings}
         </Link>
       </nav>

@@ -15,7 +15,7 @@ import { ActiveBox, Slide, useActiveBox } from "@/components/ui";
 import { t } from "@/i18n";
 import { MembersCard } from "@/pages/members";
 import { ProfileCard } from "@/components/account";
-import { useRole } from "@/components/role";
+import { useRole, type Can } from "@/components/role";
 
 // 设置页：左边二级菜单，右边只显示选中的一项。选中的一项记在地址的 tab 参数里。
 // 没有 tab 参数时显示菜单第一项个人资料，所有角色都有。
@@ -47,21 +47,34 @@ const menuGroups = [
   aboutGroup,
 ];
 
-// 不是管理员时只有自己的账号和关于。面板设置的接口也会拒绝。
-function groupsFor(isAdmin: boolean) {
-  return isAdmin ? menuGroups : [accountGroup, aboutGroup];
+// 每项要的权限（见 internal/server/auth/perms.go）：没有的不显示，接口也会拒绝。备用面板、节点邀请、面板的 mesh 只给管理员。
+const tabAllowed: Record<SettingsTab, (can: Can, isAdmin: boolean) => boolean> = {
+  profile: () => true,
+  security: () => true,
+  about: () => true,
+  access: (can) => can("panel.settings"),
+  "panel-security": (can) => can("panel.security"),
+  members: (can) => can("panel.members"),
+  alerts: (can) => can("panel.settings"),
+  standby: (_, isAdmin) => isAdmin,
+  invite: (_, isAdmin) => isAdmin,
+  mesh: (_, isAdmin) => isAdmin,
+};
+
+function groupsFor(can: Can, isAdmin: boolean) {
+  return menuGroups.map((g) => ({ ...g, tabs: g.tabs.filter((v) => tabAllowed[v](can, isAdmin)) })).filter((g) => g.tabs.length > 0);
 }
 
-// settingsTabsFor：当前角色能看到的设置项，按菜单顺序。标签页标题、命令面板也用它。
-export function settingsTabsFor(isAdmin: boolean) {
-  const values = groupsFor(isAdmin).flatMap((g) => g.tabs);
+// settingsTabsFor：当前成员能看到的设置项，按菜单顺序。标签页标题、命令面板也用它。
+export function settingsTabsFor(can: Can, isAdmin: boolean) {
+  const values = groupsFor(can, isAdmin).flatMap((g) => g.tabs);
   return values.map((value) => settingsTabs.find((x) => x.value === value)!);
 }
 
 // 选中项直接读地址：没有 tab 参数（或没有权限看）时显示菜单第一项。
 export function SettingsPage() {
-  const { isAdmin } = useRole();
-  const groups = groupsFor(isAdmin);
+  const { isAdmin, can } = useRole();
+  const groups = groupsFor(can, isAdmin);
   const allowed = groups.flatMap((g) => g.tabs);
   const tab = useSearch({ from: "/app/settings" }).tab ?? allowed[0];
   const cur: SettingsTab = allowed.includes(tab) ? tab : allowed[0];

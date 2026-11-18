@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { errorMessage, orOther, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
@@ -54,7 +54,8 @@ function addRate(rates: MeshRates, node: string, name: string, value: number, ke
     inc(rates[relay[1] as "rx" | "tx"], node, value);
     return;
   }
-  const m = /^m:([0-9a-f]+):(rx|tx)$/.exec(name);
+  // m:other 是到看不到的节点的流量合在一起（见 docs/panel.md#访问范围）：只从对外流量里扣，不画到哪个节点。
+  const m = /^m:([0-9a-f]+|other):(rx|tx)$/.exec(name);
   if (!m) return;
   const dir = m[2] as "rx" | "tx";
   const peer = keys.peers.get(m[1]);
@@ -217,7 +218,7 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
   const rows = merged.rows;
   const flows = merged.flows;
   const order = new Map(rows.map((r, i) => [r.id, i]));
-  const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? id;
+  const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? orOther(id);
   const isOffline = (id: string) => rows.some((r) => r.id === id && r.offline);
   const top = [...flows].sort((a, b) => b.rate - a.rate)[0];
 
@@ -784,7 +785,7 @@ export function OverviewPage() {
     if (points.length > 1 && (count.get(points[points.length - 1][0]) ?? 0) < (count.get(points[points.length - 2][0]) ?? 0)) points.pop();
     return points;
   };
-  const nameOf = (id: string) => (id === panelRow ? o.flow.panel : (all.find((n) => n.id === id)?.name ?? id));
+  const nameOf = (id: string) => (id === panelRow ? o.flow.panel : (all.find((n) => n.id === id)?.name ?? orOther(id)));
   const pairTotals = new Map<string, number>();
   for (const b of buckets.values()) for (const [k, v] of b.pairs) inc(pairTotals, k, v);
   const pairKeys = [...pairTotals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);

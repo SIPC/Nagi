@@ -1,10 +1,11 @@
+import { useRole } from "@/components/role";
 import { Fragment, useContext, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Plus } from "lucide-react";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
+import { errorMessage, orOther, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert, Button, ButtonLink, Check, Collapse, CopyButton, Dialog, DialogActions, EmptyRow, Field, FormRow, Input, List, Notice, QueryError, ReadOnlyContext, Row, RowMenu, RowsSkeleton, Section, Select, Skeleton, Spinner, Status, dotColor, textLink } from "@/components/ui";
@@ -128,9 +129,9 @@ function routeProblems(checks: DomainCheck[]) {
   const manyEntries = checks.flatMap((c) => c.entries).length > 1;
   return checks.flatMap((c) =>
     c.entries.flatMap((e) => {
-      const prefix = `${manyDomains ? `${c.domain} ` : ""}${manyEntries ? `${e.nodeName} ` : ""}`;
+      const prefix = `${manyDomains ? `${c.domain} ` : ""}${manyEntries ? `${orOther(e.nodeName)} ` : ""}`;
       const list: { text: string; danger?: boolean; cert?: boolean }[] = [];
-      if (e.dns === "mismatch") list.push({ text: m.dnsMismatch(t.common.list(c.addresses)) });
+      if (e.dns === "mismatch") list.push({ text: mismatchText(c) });
       if (e.dns === "unresolved") list.push({ text: m.dnsUnresolved, danger: true });
       if (e.dns === "unknown") list.push({ text: m.dnsUnknown });
       if (e.cert === "failed") list.push({ text: m.certFailed, danger: true, cert: true });
@@ -154,27 +155,40 @@ function certSummary(checks: DomainCheck[]) {
   return m.certExpires(formatDate(earliest) ?? "");
 }
 
+// mismatchText：没有「查看访问地址」时面板不给解析到的地址，只写结论。
+function mismatchText(c: DomainCheck) {
+  const m = t.projectNetwork.routes.check;
+  return c.addresses.length > 0 ? m.dnsMismatch(t.common.list(c.addresses)) : m.dnsMismatchHidden;
+}
+
+// Addresses：映射的访问地址。plain 为 true 时是「节点名:端口」（没有「查看访问地址」，或者看不到节点的地址），只是文字，不是链接。
+type Addresses = string[] & { plain?: boolean };
+
 function useRouteNodes(project: Project) {
+  const { can } = useRole();
   const nodes = useQuery({
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
-  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? orOther(id);
   // 映射开在它的入口节点上（默认是容器所在的节点），访问地址用这些节点的地址。
   const entriesOf = (r: Route) => {
     const own = project.containers.find((c) => c.name === r.container)?.nodeId ?? "";
     return [...new Set([...(r.noLocalEntry ? [] : [own]), ...r.entryNodes])].filter(Boolean);
   };
-  const addressesOf = (r: Route) =>
-    entriesOf(r)
-      .map((id) => nodes.data?.nodes.find((n) => n.id === id)?.address ?? "")
-      .filter(Boolean);
+  // 有「查看访问地址」、拿得到节点地址时用 IP:端口；否则用节点名（看不到的节点是「其他节点」）。
+  const addressesOf = (r: Route): Addresses => {
+    const ids = [...new Set([...(r.noLocalEntry ? [] : [project.containers.find((c) => c.name === r.container)?.nodeId ?? ""]), ...r.entryNodes])];
+    const real = ids.map((id) => nodes.data?.nodes.find((n) => n.id === id)?.address ?? "");
+    if (can("project.addresses") && real.length > 0 && real.every(Boolean)) return real;
+    return Object.assign([...new Set(ids.map(nodeName))], { plain: true });
+  };
   return { nodes, nodeName, entriesOf, addressesOf };
 }
 
 // RouteTitle：第一行的访问地址。http 绑了域名用域名，否则用"节点地址:端口"；tcp/udp 只给地址，不是网页。
 // 映射没生效或者不知道地址时写映射名。
-function RouteTitle({ route: r, addresses, linkClassName }: { route: Route; addresses: string[]; linkClassName?: string }) {
+function RouteTitle({ route: r, addresses, linkClassName }: { route: Route; addresses: Addresses; linkClassName?: string }) {
   const domains = r.domains.map((d) => `${r.httpOnly ? "http" : "https"}://${d}`);
   const list = r.published ? addresses : [];
   if (invalidReason(r) || (domains.length === 0 && list.length === 0)) return <span className="min-w-0 wrap-anywhere">{r.name}</span>;
@@ -185,7 +199,7 @@ function RouteTitle({ route: r, addresses, linkClassName }: { route: Route; addr
       ))}
       {domains.length === 0 &&
         list.map((address) =>
-          r.protocol === "http" ? (
+          r.protocol === "http" && !addresses.plain ? (
             <RouteLink key={address} url={`http://${address}:${r.published}`} className={linkClassName} />
           ) : (
             <span key={address} className="min-w-0 wrap-anywhere">
@@ -700,7 +714,7 @@ function DraftDns({ checks, error }: { checks: DomainCheck[]; error: unknown }) 
       {checks.flatMap((c) =>
         c.entries.map((e) => (
           <span key={`${c.domain}/${e.nodeId}`} className={cn("block text-sm", e.dns === "mismatch" && "text-warning-text", e.dns === "unresolved" && "text-destructive")}>
-            {`${multiple ? `${c.domain} ` : ""}${e.nodeName}: ${e.dns === "mismatch" ? m.dnsMismatch(t.common.list(c.addresses)) : e.dns === "ok" ? m.dnsOk : e.dns === "unresolved" ? m.dnsUnresolved : m.dnsUnknown}`}
+            {`${multiple ? `${c.domain} ` : ""}${orOther(e.nodeName)}: ${e.dns === "mismatch" ? mismatchText(c) : e.dns === "ok" ? m.dnsOk : e.dns === "unresolved" ? m.dnsUnresolved : m.dnsUnknown}`}
           </span>
         )),
       )}
@@ -732,7 +746,7 @@ function Intranet({ project, services }: { project: Project; services: ServiceSt
     queryKey: ["nodes"],
     queryFn: () => nodeClient.listNodes({}),
   });
-  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => knownNodes(nodes.data).find((n) => n.id === id)?.name ?? orOther(id);
   // editing：正在编辑的一行，名字；「其他」用空字符串。
   const [editing, setEditing] = useState<string | null>(null);
   const addresses = intranetAddresses(project, services);

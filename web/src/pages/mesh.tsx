@@ -40,7 +40,7 @@ function pathClass(path: string) {
 
 // meshSummary：本端在 mesh 中的地址、端口和直连地址，写在区块标题右边。标题旁只写第一个直连地址（面板不写），全部在悬停提示里。
 function meshSummary(status: MeshStatus, endpoints: string[]) {
-  return [status.address, `UDP ${status.port}`, endpoints.length > 0 && `${t.mesh.endpoints} ${t.common.list(endpoints)}`].filter(Boolean).join(" · ");
+  return [status.address, status.port > 0 && `UDP ${status.port}`, endpoints.length > 0 && `${t.mesh.endpoints} ${t.common.list(endpoints)}`].filter(Boolean).join(" · ");
 }
 
 type Ping = { text: string; failed?: boolean; detail?: string };
@@ -119,7 +119,8 @@ function PeerSub({ peer: p, ping }: { peer: MeshPeerStatus; ping?: Ping }) {
 
 // MeshPeers：与各节点、面板之间的连接；nodeId 不为空时可以从该节点测试延迟和速度（测速只有管理员能用）。
 function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) {
-  const { isAdmin } = useRole();
+  // 测速归「节点管理」。
+  const isAdmin = useRole().can("node.manage");
   const [ping, setPing] = useState<Record<string, Ping>>({});
   const [speed, setSpeed] = useState<Record<string, SpeedRun>>({});
   const [open, setOpen] = useState<string | null>(null);
@@ -164,12 +165,14 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
     set(() => ({ ...base, steps: [done, last] }));
   };
   if (status.peers.length === 0) return <EmptyRow>{t.mesh.noPeers}</EmptyRow>;
-  const openPeer = status.peers.find((p) => p.address === open);
+  // 按公钥区分成员：非管理员拿不到 mesh 地址（见 docs/panel.md#访问范围）。
+  const peerKey = (p: MeshPeerStatus) => Array.from(p.publicKey, (x) => x.toString(16).padStart(2, "0")).join("");
+  const openPeer = status.peers.find((p) => peerKey(p) === open);
   return (
     <>
       <List>
         {status.peers.map((p) => {
-          const key = p.address;
+          const key = peerKey(p);
           const result = ping[key];
           return (
             <Row
@@ -222,8 +225,8 @@ function MeshPeers({ status, nodeId }: { status: MeshStatus; nodeId?: string }) 
           );
         })}
       </List>
-      {openPeer && speed[openPeer.address] && nodeId && (
-        <SpeedDialog nodeId={nodeId} port={status.port} peer={openPeer} run={speed[openPeer.address]} onRetry={() => runSpeed(openPeer.address, openPeer)} onClose={() => setOpen(null)} />
+      {openPeer && speed[peerKey(openPeer)] && nodeId && (
+        <SpeedDialog nodeId={nodeId} port={status.port} peer={openPeer} run={speed[peerKey(openPeer)]} onRetry={() => runSpeed(peerKey(openPeer), openPeer)} onClose={() => setOpen(null)} />
       )}
     </>
   );
@@ -385,7 +388,7 @@ function MeshOption({
   onStatus?: React.ReactNode;
   extra?: (data: MeshStatus) => React.ReactNode;
 }) {
-  const { isAdmin } = useRole();
+  const isAdmin = useRole().can("node.manage");
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
   const q = useQuery({ queryKey: ["node-mesh", nodeId], queryFn: () => nodeClient.getNodeMesh({ nodeId }), enabled: online });
@@ -472,7 +475,8 @@ export function NodeDirectDownload({ node }: { node: Node }) {
     </span>
   );
   if (!d) status = m.unsupported;
-  else if (d.ready) status = m.ready(d.address);
+  // 非管理员看不到节点的地址。
+  else if (d.ready) status = d.address ? m.ready(d.address) : m.readyHidden;
   // 加密 HTTP 的端口按需打开：最近一次打开失败（端口被占用）时写原因。
   else if (d.httpReady && d.httpError) status = warn(m.failed(d.httpError), [d.error, d.httpError].filter(Boolean).join("\n"));
   else if (d.httpReady) status = <span title={d.error || undefined}>{m.httpFallback(d.httpPort)}</span>;

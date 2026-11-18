@@ -39,9 +39,10 @@ export function SearchButton({ compact }: { compact?: boolean }) {
 export function CommandPalette({ canCreateProject }: { canCreateProject: boolean }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const { isAdmin } = useRole();
-  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), enabled: open });
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), enabled: open });
+  const { isAdmin, can } = useRole();
+  // 没有相应权限的列表不查，入口也不显示。
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), enabled: open && can("project.view") });
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), enabled: open && can("node.view") });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,24 +80,30 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                   <navIcons.overview />
                   {t.app.nav.overview}
                 </CommandItem>
-                <CommandItem value="projects" keywords={[t.app.nav.projects]} onSelect={() => go(() => navigate({ to: "/projects" }))}>
-                  <navIcons.projects />
-                  {t.app.nav.projects}
-                </CommandItem>
-                <CommandItem value="nodes" keywords={[t.app.nav.nodes]} onSelect={() => go(() => navigate({ to: "/nodes" }))}>
-                  <navIcons.nodes />
-                  {t.app.nav.nodes}
-                </CommandItem>
+                {can("project.view") && (
+                  <CommandItem value="projects" keywords={[t.app.nav.projects]} onSelect={() => go(() => navigate({ to: "/projects" }))}>
+                    <navIcons.projects />
+                    {t.app.nav.projects}
+                  </CommandItem>
+                )}
+                {can("node.view") && (
+                  <CommandItem value="nodes" keywords={[t.app.nav.nodes]} onSelect={() => go(() => navigate({ to: "/nodes" }))}>
+                    <navIcons.nodes />
+                    {t.app.nav.nodes}
+                  </CommandItem>
+                )}
                 {canCreateProject && (
                   <CommandItem value="new project" keywords={[t.app.search.newProject]} onSelect={() => go(() => navigate({ to: "/projects/new" }))}>
                     <Plus />
                     {t.app.search.newProject}
                   </CommandItem>
                 )}
-                <CommandItem value="audit" keywords={[t.app.nav.audit]} onSelect={() => go(() => navigate({ to: "/audit" }))}>
-                  <navIcons.audit />
-                  {t.app.nav.audit}
-                </CommandItem>
+                {can("project.view") && (
+                  <CommandItem value="audit" keywords={[t.app.nav.audit]} onSelect={() => go(() => navigate({ to: "/audit" }))}>
+                    <navIcons.audit />
+                    {t.app.nav.audit}
+                  </CommandItem>
+                )}
               </CommandGroup>
               {list.length > 0 && (
                 <CommandGroup heading={t.app.nav.projects}>
@@ -132,19 +139,19 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                   )}
                 </CommandGroup>
               )}
-              {(nodes.data?.nodes.length ?? 0) > 0 && (
+              {/* 只按名称和标签搜节点，不按 IP：非管理员看不到节点的地址。 */}
+              {can("node.view") && (nodes.data?.nodes.length ?? 0) > 0 && (
                 <CommandGroup heading={t.app.nav.nodes}>
                   {nodes.data!.nodes.map((n) => (
-                    <CommandItem key={n.id} value={`node ${n.id}`} keywords={[n.name, n.address]} onSelect={() => go(() => navigate({ to: "/nodes/$nodeId", params: { nodeId: n.id } }))}>
+                    <CommandItem key={n.id} value={`node ${n.id}`} keywords={[n.name, ...n.tags]} onSelect={() => go(() => navigate({ to: "/nodes/$nodeId", params: { nodeId: n.id } }))}>
                       <navIcons.nodes />
                       {n.name}
-                      <span className="ml-auto font-mono text-[13px] text-muted-foreground">{n.address}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
               )}
               <CommandGroup heading={t.app.nav.settings}>
-                {settingsTabsFor(isAdmin).map((tab) => (
+                {settingsTabsFor(can, isAdmin).map((tab) => (
                   <CommandItem key={tab.value} value={`settings ${tab.value}`} keywords={[tab.label, t.app.nav.settings]} onSelect={() => go(() => navigate({ to: "/settings", search: { tab: tab.value } }))}>
                     <navIcons.settings />
                     {tab.label}

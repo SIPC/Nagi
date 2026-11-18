@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Server } from "lucide-react";
-import { errorMessage, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, orOther, nodeClient, projectClient, toDate } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { ButtonLink, HelpTip, List, QueryError, Row, RowsSkeleton, Section, Status, Waves } from "@/components/ui";
@@ -397,6 +397,8 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
   for (const [id, s] of statuses) if (s.address) byAddr.set(s.address, id);
   if (panel?.address) byAddr.set(panel.address, PANEL);
   const byName = new Map(nodes.map((n) => [n.name, n.id]));
+  // 非管理员拿不到 mesh 地址：按公钥对应。
+  const byKey = new Map([...statuses].map(([id, s]) => [toHex(s.publicKey), id] as const));
 
   const edges = new Map<string, MeshEdge>();
   const add = (from: string, to: string | undefined, peer: MeshPeerStatus) => {
@@ -416,7 +418,7 @@ function buildMeshEdges(nodes: Node[], statuses: Map<string, MeshStatus>, panel:
     if (old.kind === "direct" && rtt > 0) old.rtt = old.rtt > 0 ? (old.rtt + rtt) / 2 : rtt;
   };
   const scan = (from: string, s: MeshStatus) => {
-    for (const p of s.peers) add(from, byAddr.get(p.address) ?? byName.get(p.name), p);
+    for (const p of s.peers) add(from, (p.address && byAddr.get(p.address)) || byKey.get(toHex(p.publicKey)) || byName.get(p.name), p);
   };
   for (const [id, s] of statuses) scan(id, s);
   if (panel) scan(PANEL, panel);
@@ -493,7 +495,7 @@ function NetworkMap({ nodes }: { nodes: Node[] }) {
   const edges = buildMeshEdges(nodes, statuses, panelMesh.data, new Set([PANEL, ...live.map((n) => n.id)]));
   const { ref, width } = useWidth();
   const { pos, box, spacing } = layout(nodes, width);
-  const nameOf = (id: string) => (id === PANEL ? t.nodes.map.panel : (nodes.find((n) => n.id === id)?.name ?? id));
+  const nameOf = (id: string) => (id === PANEL ? t.nodes.map.panel : (nodes.find((n) => n.id === id)?.name ?? orOther(id)));
 
   // 悬停或聚焦某个节点时，突出它的连接，其他的淡下去。
   const touches = (e: MeshEdge) => active !== null && (e.a === active || e.b === active);
@@ -617,10 +619,11 @@ function LatencyMatrix({ nodes, statuses }: { nodes: Node[]; statuses: Map<strin
   if (nodes.length < 2) return null;
   const byAddr = new Map<string, string>();
   for (const [id, s] of statuses) if (s.address) byAddr.set(s.address, id);
+  const byKey = new Map([...statuses].map(([id, s]) => [toHex(s.publicKey), id] as const));
   const cells = new Map<string, Cell>();
   for (const [id, s] of statuses) {
     for (const p of s.peers) {
-      const to = byAddr.get(p.address);
+      const to = (p.address && byAddr.get(p.address)) || byKey.get(toHex(p.publicKey));
       if (to) cells.set(id + "|" + to, { path: p.path, rtt: p.path === "direct" ? p.rttMs : 0 });
     }
   }
@@ -929,7 +932,7 @@ function HaMap({ nodes }: { nodes: Node[] }) {
 // FailureReport：模拟 node 故障：它上面的容器按结果分组，最严重的在前；另外列出把它当作热备或备份节点的容器（失去副本）。
 function FailureReport({ node, nodes, items }: { node: Node; nodes: Node[]; items: Item[] }) {
   const online = (id: string) => id !== node.id && nodes.some((n) => n.id === id && n.online && !n.pending);
-  const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
+  const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? orOther(id);
   const groups = new Map<string, Group>();
   const put = (g: Omit<Group, "items">, it: Item) => {
     const old = groups.get(g.key) ?? { ...g, items: [] };

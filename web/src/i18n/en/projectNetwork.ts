@@ -28,6 +28,7 @@ export default {
     check: {
       dnsOk: "DNS is correct",
       dnsMismatch: (addresses) => `Resolves to ${addresses}, not the entry node. Ignore this behind a CDN`,
+      dnsMismatchHidden: "Doesn't match the entry node; ignore this if you use a CDN",
       dnsUnresolved: "Domain doesn't resolve",
       dnsUnknown: "Node is offline or has a private address, so DNS can't be compared",
       certObtained: (expires) => (expires ? `Certificate issued, expires ${expires}` : "Certificate issued"),

@@ -35,6 +35,7 @@ export default {
     title: "This panel is unavailable",
     withStandby: "The panel's machine may be offline. You can continue on a standby panel.",
     noStandby: "The panel's machine may be offline. This notice disappears when it comes back.",
+    contactAdmin: "The panel's machine may be offline. Contact your administrator.",
     open: "Open",
     note: "Standby panels are read-only until you promote one to primary.",
     noteHelp: "Sign in to each panel separately. If secure entry is turned on, add the entry path to the address.",

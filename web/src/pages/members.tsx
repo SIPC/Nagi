@@ -1,4 +1,4 @@
-// 成员：面板的账号和角色。只有管理员能看到。
+// 成员：面板的账号和角色。要「成员」权限。
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -6,14 +6,26 @@ import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
 import { avatarSrc, UserAvatar } from "@/components/account";
 import { Alert, Button, Check, checkListClass, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
-import type { PanelUser } from "@/gen/nagi/v1/api_pb";
+import type { PanelUser, Role } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { AccessTokenList } from "@/pages/tokens";
 import { formatClock, formatDateTime, formatMonthDay, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { groupsOf, tagsOf, type Label } from "@/components/labels";
+import { adminOnlyPermissions, permissionGroups, useRole, withoutDependents, withPrerequisites } from "@/components/role";
 
-const roles = ["admin", "operator", "viewer"] as const;
+const builtinRoles = ["admin", "operator", "viewer"] as const;
+
+// roleLabel：预置角色没有改名时用本地化的名称。
+export function roleLabel(r: { name?: string; roleName?: string; builtin?: string; roleBuiltin?: string }) {
+  const name = r.name ?? r.roleName ?? "";
+  const builtin = r.builtin ?? r.roleBuiltin ?? "";
+  return name || t.members.roles[builtin as (typeof builtinRoles)[number]] || builtin;
+}
+
+function useRoles() {
+  return useQuery({ queryKey: ["roles"], queryFn: () => settingsClient.listRoles({}) });
+}
 
 // shortDate：今天 08:12、昨天、10/28，不是今年的写全年份。
 function shortDate(d: Date | undefined) {
@@ -25,29 +37,41 @@ function shortDate(d: Date | undefined) {
   return formatMonthDay(d);
 }
 
-const roleOptions = roles.map((r) => (
-  <option key={r} value={r}>
-    {t.members.roles[r]}
-  </option>
-));
+function RoleSelect({ id, value, onChange }: { id: string; value: bigint; onChange: (id: bigint) => void }) {
+  const roles = useRoles();
+  if (!roles.data) return roles.error ? <QueryError error={roles.error} onRetry={() => roles.refetch()} /> : <RowsSkeleton count={1} />;
+  return (
+    <Select id={id} value={String(value)} onChange={(e) => onChange(BigInt(e.target.value))}>
+      {roles.data.roles.map((r) => (
+        <option key={String(r.id)} value={String(r.id)}>
+          {roleLabel(r)}
+        </option>
+      ))}
+    </Select>
+  );
+}
 
 // 访问范围（见 docs/panel.md#访问范围）。
 // 分组和标签（见 docs/panel.md#分组和标签）：分组里的项目、带其中任一标签的节点都在范围内，以后加进来的也算。
-type Scope = { allProjects: boolean; allNodes: boolean; projectIds: string[]; nodeIds: string[]; projectGroups: string[]; nodeTags: string[] };
-const fullScope: Scope = { allProjects: true, allNodes: true, projectIds: [], nodeIds: [], projectGroups: [], nodeTags: [] };
+// 节点范围「跟随项目」：只能看到范围内项目的容器所在的节点，是新成员的默认值。
+type Scope = { allProjects: boolean; allNodes: boolean; nodesFollow: boolean; projectIds: string[]; nodeIds: string[]; projectGroups: string[]; nodeTags: string[] };
+const defaultScope: Scope = { allProjects: true, allNodes: false, nodesFollow: true, projectIds: [], nodeIds: [], projectGroups: [], nodeTags: [] };
+const fullScope: Scope = { ...defaultScope, allNodes: true, nodesFollow: false };
 
 function scopeOf(u: PanelUser): Scope {
   const s = u.scope;
-  return s ? { allProjects: s.allProjects, allNodes: s.allNodes, projectIds: s.projectIds, nodeIds: s.nodeIds, projectGroups: s.projectGroups, nodeTags: s.nodeTags } : fullScope;
+  return s
+    ? { allProjects: s.allProjects, allNodes: s.allNodes, nodesFollow: s.nodesFollow, projectIds: s.projectIds, nodeIds: s.nodeIds, projectGroups: s.projectGroups, nodeTags: s.nodeTags }
+    : fullScope;
 }
 
 // memberSummary：第二行灰字。用户名（设置了显示名称时）、角色，限定了范围时再写范围。
 function memberSummary(u: PanelUser) {
   const s = scopeOf(u);
-  const parts = [u.displayName ? u.username : "", t.members.roles[u.role as (typeof roles)[number]] ?? u.role];
-  if (u.role !== "admin" && !(s.allProjects && s.allNodes)) {
+  const parts = [u.displayName ? u.username : "", roleLabel(u) || u.role];
+  if (u.roleBuiltin !== "admin" && !(s.allProjects && s.allNodes && !s.nodesFollow)) {
     parts.push(s.allProjects ? t.members.scope.allProjects : t.common.list([...s.projectGroups.map(t.members.scope.groupName), ...(s.projectIds.length > 0 || s.projectGroups.length === 0 ? [t.members.scope.projectCount(s.projectIds.length)] : [])]));
-    parts.push(s.allNodes ? t.members.scope.allNodes : t.common.list([...s.nodeTags.map(t.members.scope.tagName), ...(s.nodeIds.length > 0 || s.nodeTags.length === 0 ? [t.members.scope.nodeCount(s.nodeIds.length)] : [])]));
+    parts.push(s.nodesFollow ? t.members.scope.nodesFollow : s.allNodes ? t.members.scope.allNodes : t.common.list([...s.nodeTags.map(t.members.scope.tagName), ...(s.nodeIds.length > 0 || s.nodeTags.length === 0 ? [t.members.scope.nodeCount(s.nodeIds.length)] : [])]));
   }
   // 一行只放身份（ui.md 成员列表），通行密钥的个数不写在这里。
   return parts.filter(Boolean).join(" · ");
@@ -58,6 +82,7 @@ function ScopePick({
   label,
   hint,
   all,
+  follow,
   ids,
   options,
   labels,
@@ -73,6 +98,8 @@ function ScopePick({
   label: string;
   hint: string;
   all: boolean;
+  // follow：节点范围的「跟随项目」，不传时只有全部和指定。
+  follow?: { value: boolean; onChange: (v: boolean) => void };
   ids: string[];
   // labels：分组或标签；options 里的 labels 是这个选项属于哪些分组或标签。
   options: { id: string; name: React.ReactNode; labels: string[] }[] | undefined;
@@ -98,16 +125,18 @@ function ScopePick({
         <div>
           <Segmented
             label={label}
-            value={all ? "all" : "some"}
-            onChange={(v) => onChange(v === "all", ids, pickedLabels)}
+            value={follow?.value ? "follow" : all ? "all" : "some"}
+            onChange={(v) => (v === "follow" ? follow?.onChange(true) : onChange(v === "all", ids, pickedLabels))}
             items={[
               { value: "all", label: t.members.scope.all },
+              ...(follow ? [{ value: "follow", label: t.members.scope.follow }] : []),
               { value: "some", label: t.members.scope.some },
             ]}
           />
         </div>
+        {follow?.value && <p className="pt-2 text-[13px] text-muted-foreground">{t.members.scope.followHint}</p>}
         {/* 选「指定」时勾选列表展开，选「全部」时收起，下面的内容跟着平滑移动。 */}
-        <Collapse open={!all}>
+        <Collapse open={!all && !follow?.value}>
           <div className="pt-2">
             {!options && error ? (
               <QueryError error={error} onRetry={onRetry} />
@@ -189,6 +218,7 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
         label={t.members.scope.nodes}
         hint={t.members.scope.nodesHint}
         all={scope.allNodes}
+        follow={{ value: scope.nodesFollow, onChange: () => onChange({ ...scope, nodesFollow: true, allNodes: false }) }}
         ids={scope.nodeIds}
         labels={tagsOf(nodes.data?.nodes)}
         pickedLabels={scope.nodeTags}
@@ -204,7 +234,7 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
         error={nodes.error}
         onRetry={() => nodes.refetch()}
         options={nodes.data?.nodes.filter((n) => !n.pending).map((n) => ({ id: n.id, name: n.name, labels: n.tags }))}
-        onChange={(allNodes, nodeIds, nodeTags) => onChange({ ...scope, allNodes, nodeIds, nodeTags })}
+        onChange={(allNodes, nodeIds, nodeTags) => onChange({ ...scope, allNodes, nodeIds, nodeTags, nodesFollow: false })}
       />
     </>
   );
@@ -212,10 +242,13 @@ function ScopeFields({ scope, onChange }: { scope: Scope; onChange: (s: Scope) =
 
 // EditAccess：角色和访问范围。参考 Apple「用户与群组」：列表只显示身份，修改都在详情里。
 function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () => void; onCancel: () => void }) {
-  const [role, setRole] = useState(user.role);
+  const roles = useRoles();
+  const [roleId, setRoleId] = useState(user.roleId);
   const [scope, setScope] = useState(() => scopeOf(user));
+  const picked = roles.data?.roles.find((r) => r.id === roleId);
+  const isAdmin = picked ? picked.builtin === "admin" : user.roleBuiltin === "admin";
   const save = useMutation({
-    mutationFn: () => settingsClient.updateUser({ id: user.id, role: role === user.role ? "" : role, scope: role === "admin" ? undefined : scope }),
+    mutationFn: () => settingsClient.updateUser({ id: user.id, roleId: roleId === user.roleId ? 0n : roleId, scope: isAdmin ? undefined : scope }),
     onSuccess: onDone,
   });
   return (
@@ -224,16 +257,14 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
       onSubmit={async (e) => {
         e.preventDefault();
         // 把自己从管理员改成别的角色：保存后马上失去管理员权限（面板只拦最后一个管理员），先确认。
-        if (user.isSelf && user.role === "admin" && role !== "admin" && !(await confirmAction(t.members.demoteSelfConfirm(t.members.roles[role as (typeof roles)[number]] ?? role), { action: t.members.demoteSelf, danger: true }))) return;
+        if (user.isSelf && user.roleBuiltin === "admin" && !isAdmin && !(await confirmAction(t.members.demoteSelfConfirm(picked ? roleLabel(picked) : ""), { action: t.members.demoteSelf, danger: true }))) return;
         save.mutate();
       }}
     >
       <Field label={t.members.role} htmlFor="member-edit-role" help={t.members.roleHelp}>
-        <Select id="member-edit-role" value={role} onChange={(e) => setRole(e.target.value)}>
-          {roleOptions}
-        </Select>
+        <RoleSelect id="member-edit-role" value={roleId} onChange={setRoleId} />
       </Field>
-      {role !== "admin" && <ScopeFields scope={scope} onChange={setScope} />}
+      {!isAdmin && <ScopeFields scope={scope} onChange={setScope} />}
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onCancel}>
@@ -251,10 +282,15 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
 function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<string>("operator");
-  const [scope, setScope] = useState(fullScope);
+  const roles = useRoles();
+  // 默认选预置的操作员（没有时选第一个不是管理员的角色）。
+  const [chosen, setRoleId] = useState<bigint>(0n);
+  const fallback = roles.data?.roles.find((r) => r.builtin === "operator") ?? roles.data?.roles.find((r) => r.builtin !== "admin");
+  const roleId = chosen || fallback?.id || 0n;
+  const isAdmin = roles.data?.roles.find((r) => r.id === roleId)?.builtin === "admin";
+  const [scope, setScope] = useState(defaultScope);
   const add = useMutation({
-    mutationFn: () => settingsClient.createUser({ username, password, role, scope: role === "admin" ? fullScope : scope }),
+    mutationFn: () => settingsClient.createUser({ username, password, roleId, scope: isAdmin ? fullScope : scope }),
     onSuccess: () => {
       toast.success(t.members.added(username));
       onDone();
@@ -275,17 +311,15 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
         <Input id="member-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
       </Field>
       <Field label={t.members.role} htmlFor="member-role" help={t.members.roleHelp}>
-        <Select id="member-role" value={role} onChange={(e) => setRole(e.target.value)}>
-          {roleOptions}
-        </Select>
+        <RoleSelect id="member-role" value={roleId} onChange={setRoleId} />
       </Field>
-      {role !== "admin" && <ScopeFields scope={scope} onChange={setScope} />}
+      {!isAdmin && <ScopeFields scope={scope} onChange={setScope} />}
       {add.error && <Alert>{errorMessage(add.error)}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onCancel}>
           {t.common.actions.cancel}
         </Button>
-        <Button type="submit" disabled={add.isPending}>
+        <Button type="submit" disabled={add.isPending || roleId === 0n}>
           {add.isPending && <Spinner />}
           {t.members.add}
         </Button>
@@ -330,6 +364,7 @@ function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: ()
 }
 
 export function MembersCard() {
+  const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const users = useQuery({ queryKey: ["users"], queryFn: () => settingsClient.listUsers({}) });
   const [adding, setAdding] = useState(false);
@@ -337,7 +372,10 @@ export function MembersCard() {
   const [editing, setEditing] = useState<PanelUser | null>(null);
   const [tokensOf, setTokensOf] = useState<PanelUser | null>(null);
   const [error, setError] = useState("");
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["users"] });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["users"] });
+    queryClient.invalidateQueries({ queryKey: ["roles"] });
+  };
   // 结果在列表上就能看到，不另外提示。
   const call = async (fn: () => Promise<unknown>) => {
     setError("");
@@ -356,6 +394,7 @@ export function MembersCard() {
     </Button>
   );
   return (
+    <>
     <Section title={t.members.title} help={t.members.help} actions={addButton}>
       {error && <Alert>{error}</Alert>}
       {users.isPending ? (
@@ -386,7 +425,8 @@ export function MembersCard() {
                   className="size-9 last:mr-2 [&_svg]:size-5"
                   items={[
                     { label: t.members.editAccess, onSelect: () => setEditing(u) },
-                    { label: t.tokens.title, onSelect: () => setTokensOf(u), readOnlyOk: true },
+                    // 看、吊销别人的访问令牌只给管理员。
+                    ...(isAdmin ? [{ label: t.tokens.title, onSelect: () => setTokensOf(u), readOnlyOk: true }] : []),
                     { label: t.members.resetPassword, onSelect: () => setResetting(u) },
                     ...(u.totpEnabled && !u.isSelf
                       ? [
@@ -450,6 +490,179 @@ export function MembersCard() {
         {editing && (
           <EditAccess
             user={editing}
+            onCancel={() => setEditing(null)}
+            onDone={() => {
+              setEditing(null);
+              refresh();
+            }}
+          />
+        )}
+      </Dialog>
+    </Section>
+    <RolesCard />
+    </>
+  );
+}
+
+// ---- 角色（见 docs/panel.md#成员和角色） ----
+
+function RoleForm({ role, grantable, onDone, onCancel }: { role?: Role; grantable: string[]; onDone: () => void; onCancel: () => void }) {
+  const [name, setName] = useState(role ? role.name : "");
+  const [perms, setPerms] = useState(() => new Set<string>(role?.permissions ?? ["project.view"]));
+  const save = useMutation({
+    mutationFn: () => {
+      const permissions = [...withPrerequisites(perms)];
+      return role ? settingsClient.updateRole({ id: role.id, name: name.trim(), permissions }) : settingsClient.createRole({ name: name.trim(), permissions });
+    },
+    onSuccess: () => {
+      if (!role) toast.success(t.members.roleAdded(name.trim()));
+      onDone();
+    },
+  });
+  const allowed = new Set(grantable);
+  const heading = "pt-1 text-[13px] leading-5 text-muted-foreground first:pt-0";
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <Field label={t.members.roleName} htmlFor="role-name">
+        <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} required={!role?.builtin} placeholder={role?.builtin ? roleLabel({ builtin: role.builtin }) : undefined} maxLength={32} autoComplete="off" />
+      </Field>
+      <Field label={t.members.permissions}>
+        <div role="group" aria-label={t.members.permissions} className={checkListClass}>
+          {(Object.keys(permissionGroups) as (keyof typeof permissionGroups)[]).map((g) => (
+            <div key={g} className="contents">
+              <div className={heading}>{t.members.permGroups[g]}</div>
+              {permissionGroups[g].map((p) => {
+                const adminOnly = adminOnlyPermissions.includes(p);
+                const [label, hint] = t.members.perms[p] ?? [p, ""];
+                return (
+                  <Check
+                    key={p}
+                    checked={perms.has(p)}
+                    disabled={adminOnly || !allowed.has(p)}
+                    help={adminOnly ? t.members.adminOnly : hint}
+                    onChange={(v) => setPerms(v ? withPrerequisites([...perms, p]) : withoutDependents(perms, p))}
+                  >
+                    {label}
+                  </Check>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </Field>
+      {save.error && <Alert>{errorMessage(save.error)}</Alert>}
+      <DialogActions>
+        <Button variant="outline" onClick={onCancel}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending && <Spinner />}
+          {role ? t.common.actions.save : t.members.addRole}
+        </Button>
+      </DialogActions>
+    </form>
+  );
+}
+
+function RolesCard() {
+  const queryClient = useQueryClient();
+  const roles = useRoles();
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Role | null>(null);
+  const [error, setError] = useState("");
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["roles"] });
+    queryClient.invalidateQueries({ queryKey: ["users"] });
+    queryClient.invalidateQueries({ queryKey: ["me"] });
+  };
+  const addButton = (
+    <Button variant="outline" onClick={() => setAdding(true)}>
+      <Plus />
+      {t.members.addRole}
+    </Button>
+  );
+  const grantable = roles.data?.grantable ?? [];
+  return (
+    <Section title={t.members.rolesTitle} help={t.members.rolesHelp} actions={addButton}>
+      {error && <Alert>{error}</Alert>}
+      {roles.isPending ? (
+        <RowsSkeleton />
+      ) : !roles.data ? (
+        <QueryError error={errorMessage(roles.error)} onRetry={() => roles.refetch()} />
+      ) : (
+        <List>
+          {roles.data.roles.map((r) => {
+            const fixed = r.builtin === "admin";
+            return (
+              <Row
+                key={String(r.id)}
+                center
+                title={
+                  <>
+                    <span className="truncate">{roleLabel(r)}</span>
+                    {fixed && <span className="shrink-0 text-muted-foreground">{t.members.roleFixed}</span>}
+                  </>
+                }
+                sub={<span className="block truncate">{[fixed ? t.members.allPermissions : t.members.permissionCount(r.permissions.length), t.members.roleMembers(r.members)].join(" · ")}</span>}
+                actionsWidth="w-11"
+                actions={
+                  fixed ? null : (
+                    <RowMenu
+                      className="size-9 last:mr-2 [&_svg]:size-5"
+                      items={[
+                        { label: t.members.editRole, onSelect: () => setEditing(r) },
+                        ...(r.builtin
+                          ? []
+                          : [
+                              {
+                                label: t.members.deleteRole,
+                                danger: true,
+                                onSelect: async () => {
+                                  // 正在使用的角色不能删：直接说明，不弹确认。
+                                  if (r.members > 0) return setError(t.members.roleInUse);
+                                  if (!(await confirmAction(t.members.deleteRoleConfirm(roleLabel(r)), { action: t.members.deleteRole, danger: true }))) return;
+                                  setError("");
+                                  try {
+                                    await settingsClient.deleteRole({ id: r.id });
+                                  } catch (err) {
+                                    setError(errorMessage(err));
+                                  }
+                                  refresh();
+                                },
+                              },
+                            ]),
+                      ]}
+                    />
+                  )
+                }
+              />
+            );
+          })}
+        </List>
+      )}
+      <Dialog open={adding} onClose={() => setAdding(false)} title={t.members.addRole}>
+        {adding && (
+          <RoleForm
+            grantable={grantable}
+            onCancel={() => setAdding(false)}
+            onDone={() => {
+              setAdding(false);
+              refresh();
+            }}
+          />
+        )}
+      </Dialog>
+      <Dialog open={!!editing} onClose={() => setEditing(null)} title={t.members.editRole} description={editing ? roleLabel(editing) : undefined}>
+        {editing && (
+          <RoleForm
+            role={editing}
+            grantable={grantable}
             onCancel={() => setEditing(null)}
             onDone={() => {
               setEditing(null);

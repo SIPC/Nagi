@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
-import { useRole } from "@/components/role";
+import { nodeWritePerms, projectWritePerms, useRole } from "@/components/role";
 import { Alert, Button, Check, CodeBlock, Dialog, DialogActions, EmptyRow, Field, Input, List, oneLineTextarea, QueryError, Row, RowsSkeleton, Section, Select, SettingRow, Spinner, Textarea } from "@/components/ui";
 import type { AccessToken, CreateAccessTokenResponse } from "@/gen/nagi/v1/api_pb";
 import { authClient, errorMessage, settingsClient, toDate } from "@/lib/api";
@@ -92,7 +92,8 @@ export function AccessTokenList({ userId = 0n, emptyAction }: { userId?: bigint;
 }
 
 function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResponse) => void; onCancel: () => void }) {
-  const { isViewer, isAdmin } = useRole();
+  // 令牌的选项不能超过自己的权限（见 docs/mcp.md#权限）。
+  const opts = useTokenOptions();
   const [name, setName] = useState("");
   const [days, setDays] = useState(90);
   const [write, setWrite] = useState(false);
@@ -107,8 +108,8 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
         days,
         allowWrite: write,
         allowExec: exec,
-        allowNodeExec: isAdmin && nodeExec,
-        allowPanel: isAdmin && panel,
+        allowNodeExec: opts.nodeExec && nodeExec,
+        allowPanel: opts.panel && panel,
         networks: networks.split(/[\s,，、]+/).filter(Boolean), // i18n-ignore：输入时中英文的分隔符都认
       };
       try {
@@ -141,13 +142,13 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
           ))}
         </Select>
       </Field>
-      {!isViewer && (
+      {opts.write && (
         <Field label={t.tokens.permissions}>
           <div role="group" aria-label={t.tokens.permissions} className="grid gap-2">
           <Check checked={write} onChange={setWrite} help={t.tokens.allowWriteHelp}>
             {t.tokens.allowWrite}
           </Check>
-          <Check
+          {opts.exec && <Check
             checked={exec}
             onChange={(v) => {
               setExec(v);
@@ -156,8 +157,8 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
             help={t.tokens.allowExecHelp}
           >
             {t.tokens.allowExec}
-          </Check>
-          {isAdmin && (
+          </Check>}
+          {opts.nodeExec && (
             <Check
               checked={nodeExec}
               onChange={(v) => {
@@ -170,7 +171,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
               {t.tokens.allowNodeExec}
             </Check>
           )}
-          {isAdmin && (
+          {opts.panel && (
             <Check checked={panel} onChange={setPanel} help={t.tokens.allowPanelHelp}>
               {t.tokens.allowPanel}
             </Check>
@@ -297,6 +298,7 @@ function oauthRequest(search: URLSearchParams) {
 export function OAuthAuthorizePage() {
   const request = oauthRequest(new URLSearchParams(window.location.search));
   const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}), retry: false });
+  const opts = useTokenOptions();
   const check = useQuery({ queryKey: ["oauth-request", window.location.search], queryFn: () => authClient.getOAuthRequest(request), enabled: !!me.data, retry: false });
   const [days, setDays] = useState(90);
   const [write, setWrite] = useState(false);
@@ -348,7 +350,7 @@ export function OAuthAuthorizePage() {
       </AuthShell>
     );
   const c = check.data;
-  const viewer = c.role === "viewer";
+  const viewer = !opts.write;
   return (
     <AuthShell title={k.request(c.clientName)} description={k.redirect(c.redirectHost)}>
       <form
@@ -374,7 +376,7 @@ export function OAuthAuthorizePage() {
             <Check checked={write} onChange={setWrite} help={t.tokens.allowWriteHelp}>
               {t.tokens.allowWrite}
             </Check>
-            <Check
+            {opts.exec && <Check
               checked={exec}
               onChange={(v) => {
                 setExec(v);
@@ -383,8 +385,8 @@ export function OAuthAuthorizePage() {
               help={t.tokens.allowExecHelp}
             >
               {t.tokens.allowExec}
-            </Check>
-            {c.role === "admin" && (
+            </Check>}
+            {opts.nodeExec && (
               <Check
                 checked={nodeExec}
                 onChange={(v) => {
@@ -396,7 +398,7 @@ export function OAuthAuthorizePage() {
                 {t.tokens.allowNodeExec}
               </Check>
             )}
-            {c.role === "admin" && (
+            {opts.panel && (
               <Check checked={panel} onChange={setPanel} help={t.tokens.allowPanelHelp}>
                 {t.tokens.allowPanel}
               </Check>
@@ -419,4 +421,17 @@ export function OAuthAuthorizePage() {
       </form>
     </AuthShell>
   );
+}
+
+// useTokenOptions：令牌上能勾哪些选项：可修改要有修改类的权限，执行命令要「终端」，节点终端要「节点终端和文件」，
+// 管理面板要面板的任一权限。面板按同样的规则收窄（auth.applyToken）。
+function useTokenOptions() {
+  const { can } = useRole();
+  const panel = can("panel.members") || can("panel.settings") || can("panel.audit") || can("panel.security");
+  return {
+    write: projectWritePerms.some((p) => can(p)) || nodeWritePerms.some((p) => can(p)) || panel,
+    exec: can("project.terminal"),
+    nodeExec: can("node.root"),
+    panel,
+  };
 }

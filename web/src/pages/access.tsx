@@ -5,6 +5,7 @@ import { errorMessage, settingsClient } from "@/lib/api";
 import { confirmAction } from "@/components/confirm";
 import { Alert, Button, CodeBlock, Dialog, DialogActions, Input, QueryError, RowsSkeleton, Section, SettingRow, SettingRows, Skeleton, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
+import { useRole } from "@/components/role";
 
 // 设置行里的复制按钮：有框，写「复制」，各设置页统一用它。复制不改东西，备用面板上也能用。
 export function CopyTextButton({ text }: { text: string }) {
@@ -30,6 +31,8 @@ type Editing = "name" | "address" | "domain";
 
 // 「面板访问」：节点和浏览器怎么找到本面板。修改时在那一行下面展开输入框。
 export function PanelAccessCard() {
+  // 对外地址、指纹和安全入口只给管理员；有「面板设置」的成员能改名称和域名。
+  const { isAdmin } = useRole();
   const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ["settings"],
@@ -143,6 +146,7 @@ export function PanelAccessCard() {
           )}
         </SettingRow>
         {editing === "name" && editRow("name")}
+        {isAdmin && (
         <SettingRow
           label={t.access.address.label}
           help={t.access.address.help}
@@ -154,6 +158,7 @@ export function PanelAccessCard() {
             </Button>
           )}
         </SettingRow>
+        )}
         {editing === "address" && editRow("address")}
         <SettingRow label={t.access.domain.label} help={t.access.domain.help} description={s.domain ? t.access.domain.bound(s.domain) : t.access.domain.unbound}>
           {editing !== "domain" &&
@@ -183,16 +188,18 @@ export function PanelAccessCard() {
             ))}
         </SettingRow>
         {editing === "domain" && editRow("domain")}
-        <SettingRow label={t.access.fingerprint.label} help={t.access.fingerprint.help} description={<span className="break-all">{s.fingerprint}</span>}>
-          <CopyTextButton text={s.fingerprint} />
-        </SettingRow>
+        {isAdmin && (
+          <SettingRow label={t.access.fingerprint.label} help={t.access.fingerprint.help} description={<span className="break-all">{s.fingerprint}</span>}>
+            <CopyTextButton text={s.fingerprint} />
+          </SettingRow>
+        )}
         {/* 主密钥和公钥指纹放在一起：都是面板的身份，换机器恢复时要用到。 */}
         {s.masterKeyPath && (
           <SettingRow label={t.security.masterKey.label} help={t.security.masterKey.help} description={<span className="break-all">{`${s.masterKeyPath} · ${t.security.masterKey.backup}`}</span>}>
             <CopyTextButton text={s.masterKeyPath} />
           </SettingRow>
         )}
-        <SecureEntryRow />
+        {isAdmin && <SecureEntryRow />}
       </SettingRows>
     </Section>
   );

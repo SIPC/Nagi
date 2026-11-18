@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronRight, CircleArrowUp, GripVertical, Plus } from "lucide-react";
 import { rectSortingStrategy, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { authClient, errorMessage, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
+import { authClient, errorMessage, orOther, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { formatDate, slugName } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -162,7 +162,7 @@ const projectCard = cn(cardClass, "min-w-0 gap-3 p-4");
 
 function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; nodes: Node[] | undefined; draggable?: boolean }) {
   const p = summary.project!;
-  const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? id;
+  const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? orOther(id);
   const offline = (id: string) => nodes?.find((n) => n.id === id)?.online === false;
   const services = summary.status?.services ?? [];
   const deployed = p.containers.some((m) => m.deployedVersion > 0n);
@@ -337,7 +337,8 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   });
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const offlineNodes = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).map((n) => n.name);
-  const { isAdmin } = useRole();
+  const { isAdmin, can } = useRole();
+  const canCreate = can("project.manage");
   // 备用面板在设置里，只有管理员能处理。
   const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => isAdmin && !s.connected).map((s) => s.name);
   const search = useSearch({ strict: false }) as { q?: string; group?: string; ungrouped?: true };
@@ -371,7 +372,8 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   const allIds = () => order.sortProjects(all.slice().sort((a, b) => Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)), idOf).map(idOf);
   const projectName = (id: string) => all.find((s) => s.project?.id === id)?.project?.name ?? id;
 
-  const newButton = (
+  // 新建项目要「项目管理」。
+  const newButton = !canCreate ? null : (
     <ButtonLink to="/projects/new">
       <Plus />
       <span className="max-md:hidden">{t.projects.newProject}</span>
@@ -418,7 +420,7 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
           </>
         }
       />
-      {creating && <NewProjectDialog groups={groups.map((g) => g.name)} initialGroup={groupFilter} />}
+      {creating && canCreate && <NewProjectDialog groups={groups.map((g) => g.name)} initialGroup={groupFilter} />}
       <Dialog open={managing} onClose={() => setManaging(false)} title={t.labels.manageGroups}>
         <ManageLabels kind="group" labels={groups} />
       </Dialog>
@@ -616,7 +618,8 @@ export function NewProjectPage() {
 // 字段错误提交后才显示（不靠浏览器的必填气泡，也不边输入边报错）。创建后进入项目概览，第一个容器也要点添加。
 function NewProjectDialog({ groups, initialGroup }: { groups: string[]; initialGroup?: string }) {
   const navigate = useNavigate();
-  const { isAdmin } = useRole();
+  // 设分组归「成员」权限。
+  const isAdmin = useRole().can("panel.members");
   const [name, setName] = useState("");
   // 分组只有管理员能设；已经有分组时才显示，第一个分组在项目设置里建。
   const [group, setGroup] = useState(initialGroup ?? "");

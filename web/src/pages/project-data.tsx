@@ -4,7 +4,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { MoreSettings } from "@/components/container-form";
 import { toast } from "sonner";
-import { errorMessage, knownNodes, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, knownNodes, orOther, nodeClient, projectClient, toDate } from "@/lib/api";
 import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { useRun } from "@/components/run";
@@ -42,6 +42,7 @@ import { useDefaultDir } from "@/pages/projects";
 import { ask, confirmAction } from "@/components/confirm";
 import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { WriteGate } from "@/components/perm";
 import { useRole } from "@/components/role";
 import { snapshotTime, VolumeFiles } from "@/pages/volume-files";
 import { defaultSnapshotLimit } from "@/lib/config";
@@ -72,8 +73,9 @@ function useNodes() {
     loadError: nodes.data ? null : nodes.error,
     refetch: nodes.refetch,
     // fallback：顶替设置里记的名字。节点改过名时设置里的是旧名字，所以先按 ID 查当前的名字。
-    name: (id: string, fallback?: string) => known.find((n) => n.id === id)?.name ?? fallback ?? id,
-    online: (id: string) => known.find((n) => n.id === id)?.online === true,
+    name: (id: string, fallback?: string) => known.find((n) => n.id === id)?.name ?? (fallback || orOther(id)),
+    // 看不到的节点（空的 ID）不知道在不在线，按在线算，不提示「节点离线」。
+    online: (id: string) => id === "" || known.find((n) => n.id === id)?.online === true,
     usable: list.filter((n) => n.online && !n.pending),
     // 节点支持选择副本的存放位置；replicaDir 是节点的副本目录（为空是默认的 <节点目录>/replicas）。
     replicaDirs: (id: string) => list.find((n) => n.id === id)?.info?.replicaDirs === true,
@@ -117,22 +119,25 @@ export function ContainerStorage({
   container: Container;
 }) {
   const run = useRun(project.id);
-  const { isViewer } = useRole();
+  const { can } = useRole();
   // 这个组件不绑定某条路由，volume 由容器页的路由校验。
   const { volume } = useSearch({ strict: false }) as { volume?: string };
   const navigate = useNavigate();
   const openVolume = (name?: string) => navigate({ to: ".", search: ((prev: Record<string, unknown>) => ({ ...prev, volume: name })) as never });
-  // 只读角色没有文件管理的入口，直接打开链接也回到列表。
-  const browsing = volume && !isViewer ? volume : undefined;
+  // 没有「文件查看」时没有文件管理的入口，直接打开链接也回到列表。
+  const browsing = volume && can("project.files.read") ? volume : undefined;
   return (
     <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       {browsing ? (
-        <BrowseVolume key={`${container.name}/${browsing}`} project={project} container={container} volume={browsing} onClose={() => openVolume()} />
+        // 没有「文件修改」时文件只能看。
+        <WriteGate allowed={can("project.files.write")}>
+          <BrowseVolume key={`${container.name}/${browsing}`} project={project} container={container} volume={browsing} onClose={() => openVolume()} />
+        </WriteGate>
       ) : (
         <div className="min-w-0">
           <Volumes project={project} container={container} onBrowse={openVolume} />
-          <Snapshots project={project} container={container} run={run} />
+          {can("project.snapshots") && <Snapshots project={project} container={container} run={run} />}
         </div>
       )}
     </div>
@@ -149,25 +154,30 @@ export function ContainerHA({
 }) {
   const run = useRun(project.id);
   const nodes = useNodes();
+  // 顶替、备份、迁移各要相应的权限，没有的部分不显示（面板的回复里也没有这些字段）。
+  const { can } = useRole();
+  const ha = can("project.ha");
+  const backup = can("project.backup");
+  const migrate = can("project.migrate");
   if (nodes.pending) return <RowsSkeleton />;
   if (nodes.loadError) return <QueryError error={errorMessage(nodes.loadError)} onRetry={() => nodes.refetch()} />;
   // 设置了顶替时由顶替处理，不能从备份节点恢复（先取消顶替）。
-  const restorable = !container.failover && container.backupNodeIds.length > 0 && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
+  const restorable = backup && !container.failover && container.backupNodeIds.length > 0 && !nodes.online(container.nodeId) && container.deployedVersion > 0n;
   return (
     <div className="grid grid-cols-1 gap-6">
       {run.output && <div className="empty:hidden">{run.output}</div>}
       {container.pendingHa && <PendingHANotice project={project} container={container} nodes={nodes} />}
-      {container.failoverStandby?.pendingConfirm && <TakeoverNotice project={project} container={container} nodes={nodes} />}
+      {ha && container.failoverStandby?.pendingConfirm && <TakeoverNotice project={project} container={container} nodes={nodes} />}
       {restorable && <RestoreNotice project={project} container={container} nodes={nodes} run={run} />}
       <div className="min-w-0">
-        {container.failover && <FailoverDetail project={project} container={container} nodes={nodes} />}
-        {container.backupNodeIds.length > 0 && <BackupDetail project={project} container={container} nodes={nodes} run={run} />}
+        {ha && container.failover && <FailoverDetail project={project} container={container} nodes={nodes} />}
+        {backup && container.backupNodeIds.length > 0 && <BackupDetail project={project} container={container} nodes={nodes} run={run} />}
         {restorable && <RestorableSnapshots project={project} container={container} nodes={nodes} run={run} />}
         <Section>
           <List>
-            {!container.failover && <FailoverRow project={project} container={container} nodes={nodes} />}
-            {container.backupNodeIds.length === 0 && <BackupRow project={project} container={container} nodes={nodes} />}
-            <PlacementRow project={project} container={container} nodes={nodes} run={run} />
+            {ha && !container.failover && <FailoverRow project={project} container={container} nodes={nodes} />}
+            {backup && container.backupNodeIds.length === 0 && <BackupRow project={project} container={container} nodes={nodes} />}
+            {migrate && <PlacementRow project={project} container={container} nodes={nodes} run={run} />}
           </List>
         </Section>
       </div>
@@ -257,7 +267,10 @@ function BrowseVolume({ project, container, volume, onClose }: { project: Projec
 
 function Volumes({ project, container, onBrowse }: { project: Project; container: Container; onBrowse: (volume: string) => void }) {
   const nodes = useNodes();
-  const { isViewer } = useRole();
+  // 增删持久化目录是改配置（「部署」），浏览文件要「文件查看」。
+  const { can } = useRole();
+  const isViewer = !can("project.deploy");
+  const canBrowse = can("project.files.read");
   const m = t.projectData.volumes;
   const online = nodes.online(container.nodeId);
   const deployed = container.deployedVersion > 0n;
@@ -306,7 +319,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
   // volumeActions：浏览。取消挂载在卷的文件页右上角的更多里。
   const volumeActions = (v: VolumeInfo) =>
     v.kind !== "unmanaged" && (
-      <Button variant="ghost" size="row" onClick={() => onBrowse(v.name)}>
+      <Button variant="ghost" size="row" readOnlyOk onClick={() => onBrowse(v.name)}>
         {m.browse}
       </Button>
     );
@@ -406,7 +419,7 @@ function Volumes({ project, container, onBrowse }: { project: Project; container
                 { content: v.kind !== "unmanaged" && v.modified ? <span title={formatDateTime(toDate(v.modified))}>{capitalize(timeAgo(toDate(v.modified)))}</span> : "" },
               ]}
               actionsWidth="w-28"
-              actions={isViewer ? null : volumeActions(v)}
+              actions={canBrowse ? volumeActions(v) : null}
             />
           ))}
           {pendingAdd.map((target) => (
@@ -524,7 +537,7 @@ function Snapshots({
 function ContainerSchedule({ project, container, onDone }: { project: Project; container: Container; onDone: () => void }) {
   const m = t.projectData.schedule;
   const queryClient = useQueryClient();
-  const { isViewer } = useRole();
+  const isViewer = !useRole().can("project.snapshots");
   const fromProject = projectSchedule(project.settings);
   const [own, setOwn] = useState(!!container.snapshotSchedule);
   const [form, setForm] = useState(scheduleForm(container.snapshotSchedule ?? fromProject));
@@ -813,7 +826,8 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
   const b = t.projectData.backup;
   const { busy, error, call } = useCall(project.id);
   const candidates = backupCandidates(container, nodes);
-  const { isAdmin } = useRole();
+  // 指定副本的存放位置要「节点终端和文件」。
+  const isAdmin = useRole().can("node.root");
   const [nodeId, setNodeId] = useState("");
   const [dir, setDir] = useState("");
   const choice = nodeId || candidates[0]?.id || "";
@@ -869,7 +883,7 @@ function BackupDialog({ project, container, nodes, onClose }: { project: Project
 function BackupDetail({ project, container, nodes, run }: { project: Project; container: Container; nodes: Nodes; run: Run }) {
   const b = t.projectData.backup;
   const { busy, pending, error, call } = useCall(project.id);
-  const { isAdmin } = useRole();
+  const isAdmin = useRole().can("node.root");
   const [adding, setAdding] = useState(false);
   // editingDir：正在编辑存放位置的备份节点。
   const [editingDir, setEditingDir] = useState("");
@@ -1446,7 +1460,8 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
 // 确认会让别的节点接收并运行这个容器的配置，所以要高权限确认。
 function PendingHANotice({ project, container, nodes }: { project: Project; container: Container; nodes: Nodes }) {
   const f = t.projectData.failover;
-  const { isAdmin } = useRole();
+  // 确认从节点缓存拼回的顶替和备份设置要「节点管理」。
+  const isAdmin = useRole().can("node.manage");
   const { busy, error, call } = useCall(project.id);
   const p = container.pendingHa!;
   const ref = { projectId: project.id, container: container.name };

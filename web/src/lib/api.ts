@@ -1,9 +1,11 @@
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
+import { create } from "@bufbuild/protobuf";
 import {
   AuthService,
   type ListNodesResponse,
+  ListNodesResponseSchema,
   NodeService,
   ProjectService,
   SettingsService,
@@ -53,13 +55,28 @@ export function reverifyReason(err: unknown): string {
 
 export const setupClient = createClient(SetupService, transport);
 export const authClient = createClient(AuthService, transport);
-export const nodeClient = createClient(NodeService, transport);
+// 没有「查看节点」权限时节点列表当作空的（面板拒绝），页面不用到处处理：节点一律显示为「其他节点」。
+const rawNodeClient = createClient(NodeService, transport);
+export const nodeClient: typeof rawNodeClient = {
+  ...rawNodeClient,
+  listNodes: async (...args: Parameters<typeof rawNodeClient.listNodes>) => {
+    try {
+      return await rawNodeClient.listNodes(...args);
+    } catch (err) {
+      if (err instanceof ConnectError && err.code === Code.PermissionDenied) return create(ListNodesResponseSchema, {});
+      throw err;
+    }
+  },
+};
 export const projectClient = createClient(ProjectService, transport);
 export const settingsClient = createClient(SettingsService, transport);
 
-// knownNodes：节点列表加上访问范围外、但项目里的容器用到的节点（只有名称和是否在线，见 docs/panel.md#访问范围）。
-// 查节点名称和在线状态用；列出、选择节点只用 nodes。
+// knownNodes：查节点名称和在线状态用的节点列表；列出、选择节点只用 nodes。看不到的节点（访问范围外，或者没有「查看节点」权限）
+// 面板不给 ID 和名称，回复里是空的 ID，显示为「其他节点」，也不显示是否在线（见 docs/panel.md#访问范围）。
 export const knownNodes = (res: ListNodesResponse | undefined) => (res ? [...res.nodes, ...res.otherNodes] : []);
+
+// orOther：节点名称查不到时显示的文字。空的 ID 是看不到的节点。
+export const orOther = (id: string) => id || t.common.otherNode;
 
 // errorMessage 返回给人看的错误信息。面板返回的错误原样显示；连不上面板、接口不存在这类没有说明的错误换成一句话。
 export function errorMessage(err: unknown): string {

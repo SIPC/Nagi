@@ -193,7 +193,8 @@ export function UserMenu({
   const [editing, setEditing] = useState(false);
   if (!me) return null;
   const name = me.displayName || me.username;
-  const role = t.members.roles[me.role as keyof typeof t.members.roles];
+  // 角色名：自定义角色用名称，预置角色没有改名时用本地化的名称。
+  const role = me.roleName || t.members.roles[(me.roleBuiltin || me.role) as keyof typeof t.members.roles] || "";
   const src = avatarSrc(me.avatar, me.avatarType);
   const item = "flex items-center gap-2 [&_svg]:size-3.5";
   return (

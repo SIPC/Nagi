@@ -1,5 +1,6 @@
 // 通用的词：状态、按钮、时间。状态用固定的词（docs/ui.md）。
 export default {
+  otherNode: "其他节点",
   // 字段和标题旁问号按钮的读屏名称。
   help: "说明",
   // 设置行里的开关（SettingSwitch）。

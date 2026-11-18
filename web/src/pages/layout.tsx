@@ -17,6 +17,8 @@ import { settingsTabsFor } from "@/pages/settings";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import { useRole } from "@/components/role";
 import { MobileProjectNav } from "@/pages/project";
+import { nodeWritePerms, projectWritePerms, type Can, type Permission } from "@/components/role";
+import { isHostAddress } from "@/lib/offline";
 import { PanelDown } from "@/components/panel-down";
 import { forgetStandbys, registerOfflinePage, rememberStandbys } from "@/lib/offline";
 
@@ -59,7 +61,7 @@ function useTheme() {
 }
 
 // usePageTitle：浏览器标签页显示当前页面，方便在多个标签页之间区分。
-function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
+function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean, can: Can) {
   const location = useRouterState({ select: (s) => s.location });
   const parts = location.pathname.split("/").filter(Boolean);
   const projectId = parts[0] === "projects" && parts[1] && parts[1] !== "new" ? parts[1] : "";
@@ -81,7 +83,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
   } else if (parts[0] === "nodes") {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {
-    const allowed = settingsTabsFor(isAdmin);
+    const allowed = settingsTabsFor(can, isAdmin);
     const tab = allowed.find((x) => x.value === (location.search as { tab?: string }).tab) ?? allowed[0];
     title = `${tab.label} · ${t.app.nav.settings}`;
   }
@@ -147,13 +149,14 @@ function MobileNav({ open, onClose, title, children }: { open: boolean; onClose:
 }
 
 // 左侧导航（参照 OpenAI 平台后台）：上面是产品名和四个入口，下面是用户卡片。手机上收进 ☰ 打开的全屏导航。
-const navItems = [
+// perm：要的权限，没有时不显示（见 internal/server/auth/perms.go）。
+const navItems: { to: "/overview" | "/projects" | "/nodes" | "/audit" | "/settings"; label: string; icon: (typeof navIcons)["overview"]; perm?: Permission }[] = [
   { to: "/overview", label: t.app.nav.overview, icon: navIcons.overview },
-  { to: "/projects", label: t.app.nav.projects, icon: navIcons.projects },
-  { to: "/nodes", label: t.app.nav.nodes, icon: navIcons.nodes },
-  { to: "/audit", label: t.app.nav.audit, icon: navIcons.audit },
+  { to: "/projects", label: t.app.nav.projects, icon: navIcons.projects, perm: "project.view" },
+  { to: "/nodes", label: t.app.nav.nodes, icon: navIcons.nodes, perm: "node.view" },
+  { to: "/audit", label: t.app.nav.audit, icon: navIcons.audit, perm: "project.view" },
   { to: "/settings", label: t.app.nav.settings, icon: navIcons.settings },
-] as const;
+];
 
 const navLink =
   "relative flex h-8 items-center gap-2 rounded-md px-2 text-sm transition-colors outline-none not-data-active:hover:bg-accent/50 focus-ring focus-visible:ring-inset [&_svg]:size-4";
@@ -166,10 +169,11 @@ export function AppLayout() {
   const me = useQuery({ queryKey: ["me"], queryFn: () => authClient.me({}) });
   const standby = useStandbys().data;
   // 所有页面共用这份节点列表，定时刷新后状态才能及时更新。
+  const { isAdmin, can } = useRole();
+  // 没有「查看节点」时节点列表是空的（见 lib/api.ts），节点一律显示「其他节点」。
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: 10000 });
   const offlineCount = (nodes.data?.nodes ?? []).filter((n) => !n.online && !n.pending).length;
-  const { isAdmin, isViewer } = useRole();
-  const page = usePageTitle(nodes.data?.nodes, isAdmin);
+  const page = usePageTitle(nodes.data?.nodes, isAdmin, can);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const href = useRouterState({ select: (s) => s.location.href });
   const mobile = useIsMobile();
@@ -178,18 +182,25 @@ export function AppLayout() {
   const [promoteError, setPromoteError] = useState("");
   // 换了页面（例如用户菜单里的「安全」）就收起导航。
   useEffect(() => setNavOpen(false), [href]);
-  // 备用面板全部只读。账号角色：只读角色的项目和节点只能看，操作员的节点只能看；设置页里只有自己的账号，不受影响。
-  const readOnly = (standby?.isStandby ?? false) || (!pathname.startsWith("/settings") && !pathname.startsWith("/audit") && (isViewer || (pathname.startsWith("/nodes") && !isAdmin)));
+  // 备用面板全部只读。没有任何修改类的项目权限时项目只能看；节点页没有节点的修改权限时只能看。
+  // 有部分权限时各个入口按权限单独隐藏（见 role.ts）。设置页里只有自己能用的项，不受影响。
+  const projectWrites = projectWritePerms.some((p) => can(p));
+  const nodeWrites = nodeWritePerms.some((p) => can(p));
+  const readOnly =
+    (standby?.isStandby ?? false) ||
+    (!pathname.startsWith("/settings") && !pathname.startsWith("/audit") && (pathname.startsWith("/nodes") ? !nodeWrites : !projectWrites));
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
   const navBox = useActiveBox();
 
   // 面板所在机器挂了时提示转到备用面板（见 docs/standby.md#面板不可用时）：记下备用面板的地址，注册离线页。
   useEffect(registerOfflinePage, []);
-  const standbyAddresses = standby && !standby.isStandby ? JSON.stringify(standby.standbys.map((s) => ({ name: s.name, address: s.address }))) : undefined;
+  // 非管理员只拿到绑了域名的备用面板（面板已经过滤，这里再按域名过滤一次），浏览器里也只记这些。
+  const standbyAddresses =
+    standby && !standby.isStandby ? JSON.stringify(standby.standbys.filter((s) => isAdmin || isHostAddress(s.address)).map((s) => ({ name: s.name, address: s.address }))) : undefined;
   useEffect(() => {
-    if (standbyAddresses !== undefined) rememberStandbys(JSON.parse(standbyAddresses));
-  }, [standbyAddresses]);
+    if (standbyAddresses !== undefined) rememberStandbys(JSON.parse(standbyAddresses), !isAdmin);
+  }, [standbyAddresses, isAdmin]);
 
   const logout = async () => {
     await authClient.logout({});
@@ -203,7 +214,7 @@ export function AppLayout() {
       <Waves className="h-4 w-7 text-wave" />
     </Link>
   );
-  const nav = (className: string) => navItems.filter((it) => isAdmin || !("adminOnly" in it)).map((it) => (
+  const nav = (className: string) => navItems.filter((it) => !it.perm || can(it.perm)).map((it) => (
     <Link key={it.to} to={it.to} data-active={pathname.startsWith(it.to) || undefined} className={className}>
       <it.icon />
       {it.label}
@@ -226,7 +237,7 @@ export function AppLayout() {
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-1.5 focus:text-sm focus:shadow-lg">
         {t.app.skipToContent}
       </a>
-      <CommandPalette canCreateProject={!(standby?.isStandby ?? false) && !isViewer} />
+      <CommandPalette canCreateProject={!(standby?.isStandby ?? false) && can("project.manage")} />
       {me.data?.role === "admin" && <UpdateTips nodes={nodes.data?.nodes ?? []} isStandby={standby?.isStandby ?? false} />}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-background px-3 pt-4 pb-3 md:flex">
         {brand}
@@ -269,9 +280,12 @@ export function AppLayout() {
               <span className="font-medium">{t.app.standby.title}</span>
               <span className="text-muted-foreground">
                 {t.app.standby.readOnly}{" "}
-                <a className="font-mono text-foreground underline-offset-2 hover:underline" href={`https://${standby.primaryAddress}`} target="_blank" rel="noreferrer">
-                  {standby.primaryAddress}
-                </a>
+                {/* 主面板只有 IP 时，非管理员拿不到地址（见 docs/standby.md）。 */}
+                {standby.primaryAddress && (
+                  <a className="font-mono text-foreground underline-offset-2 hover:underline" href={`https://${standby.primaryAddress}`} target="_blank" rel="noreferrer">
+                    {standby.primaryAddress}
+                  </a>
+                )}
               </span>
               <span className="ml-auto text-muted-foreground">
                 {standby.connected ? (
@@ -309,7 +323,7 @@ export function AppLayout() {
           </ReadOnlyContext.Provider>
         </main>
       </div>
-      <PanelDown />
+      <PanelDown admin={isAdmin} />
     </div>
   );
 }

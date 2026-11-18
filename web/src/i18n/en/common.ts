@@ -3,6 +3,7 @@ import type zh from "../zh/common";
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
 export default {
+  otherNode: "Other node",
   // 字段和标题旁问号按钮的读屏名称。
   help: "More info",
   switch: { on: "On", off: "Off", turnOn: "Turn on", turnOff: "Turn off" },

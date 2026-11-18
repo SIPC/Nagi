@@ -46,7 +46,8 @@ function usePanelDown() {
   return down;
 }
 
-export function PanelDown() {
+// admin：不是管理员时只记了绑了域名的备用面板；一个都没有时请他联系管理员。
+export function PanelDown({ admin }: { admin: boolean }) {
   const down = usePanelDown();
   const ref = useRef<HTMLDivElement>(null);
   // 盖住整页时，下面的页面不能再用 Tab 或读屏碰到：其余顶层元素都设 inert，焦点移到提示上。
@@ -72,7 +73,7 @@ export function PanelDown() {
           {k.title}
         </h1>
         <p id="panel-down-text" className="mt-1 text-muted-foreground">
-          {standbys.length > 0 ? k.withStandby : k.noStandby}
+          {standbys.length > 0 ? k.withStandby : admin ? k.noStandby : k.contactAdmin}
         </p>
         {standbys.length > 0 && (
           <>

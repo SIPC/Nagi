@@ -34,6 +34,7 @@ export default {
     title: "此面板暂时无法访问",
     withStandby: "面板所在的机器可能已离线。可以转到备用面板继续查看。",
     noStandby: "面板所在的机器可能已离线，恢复后此提示会自动消失。",
+    contactAdmin: "面板所在的机器可能已离线，请联系管理员。",
     open: "打开",
     note: "备用面板只能查看，提升为主面板后才能编辑。",
     // 放进 note 旁的问号；静态的 offline.html 没有问号，两句连着写。
