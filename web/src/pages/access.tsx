@@ -26,7 +26,7 @@ export function CopyTextButton({ text }: { text: string }) {
   );
 }
 
-type Editing = "address" | "domain";
+type Editing = "name" | "address" | "domain";
 
 // 「面板访问」：节点和浏览器怎么找到本面板。修改时在那一行下面展开输入框。
 export function PanelAccessCard() {
@@ -65,13 +65,13 @@ export function PanelAccessCard() {
 
   const open = (what: Editing) => {
     setEditing(what);
-    setValue(what === "address" ? s.publicAddress : s.domain);
+    setValue(what === "name" ? s.name : what === "address" ? s.publicAddress : s.domain);
     setError("");
   };
 
   const save = async (what: Editing, raw: string) => {
     const next = raw.trim();
-    if (next === (what === "address" ? s.publicAddress : s.domain)) {
+    if (next === (what === "name" ? s.name : what === "address" ? s.publicAddress : s.domain)) {
       setEditing(null);
       return;
     }
@@ -79,7 +79,8 @@ export function PanelAccessCard() {
     setBusy(true);
     setError("");
     try {
-      if (what === "address") await settingsClient.updateSettings({ publicAddress: next });
+      if (what === "name") await settingsClient.setPanelName({ name: next });
+      else if (what === "address") await settingsClient.updateSettings({ publicAddress: next });
       else await settingsClient.setPanelDomain({ domain: next });
       setEditing(null);
       await queryClient.invalidateQueries({ queryKey: ["settings"] });
@@ -102,9 +103,10 @@ export function PanelAccessCard() {
         <Input
           autoFocus
           className="min-w-48 flex-1"
-          aria-label={what === "address" ? t.access.address.label : t.access.domain.label}
+          aria-label={what === "name" ? t.access.name.label : what === "address" ? t.access.address.label : t.access.domain.label}
           aria-invalid={!!error}
-          placeholder={what === "domain" ? "panel.example.com" : undefined}
+          placeholder={what === "domain" ? "panel.example.com" : what === "name" ? s.defaultName : undefined}
+          maxLength={what === "name" ? 64 : undefined}
           required={what === "domain" && !s.domain}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -112,7 +114,7 @@ export function PanelAccessCard() {
         {what === "address" && <span className="font-mono text-[13px] text-muted-foreground">:{s.port}</span>}
         <Button type="submit" disabled={busy}>
           {busy && <Spinner />}
-          {what === "address" ? t.common.actions.save : value.trim() || !s.domain ? t.access.domain.bind : t.access.domain.unbind}
+          {what !== "domain" ? t.common.actions.save : value.trim() || !s.domain ? t.access.domain.bind : t.access.domain.unbind}
         </Button>
         <Button variant="ghost" onClick={() => setEditing(null)} disabled={busy}>
           {t.common.actions.cancel}
@@ -132,6 +134,15 @@ export function PanelAccessCard() {
       {/* 解除绑定不经过输入框，错误显示在上面；修改时显示在输入框下面。 */}
       {error && !editing && <Alert>{error}</Alert>}
       <SettingRows>
+        {/* 面板名称：为空时恢复成主机名。 */}
+        <SettingRow label={t.access.name.label} description={s.name === s.defaultName ? `${t.access.name.unset(s.defaultName)} · ${t.access.name.usage}` : `${s.name} · ${t.access.name.usage}`}>
+          {editing !== "name" && (
+            <Button variant="outline" onClick={() => open("name")}>
+              {t.common.actions.edit}
+            </Button>
+          )}
+        </SettingRow>
+        {editing === "name" && editRow("name")}
         <SettingRow
           label={t.access.address.label}
           help={t.access.address.help}

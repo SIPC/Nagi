@@ -127,6 +127,7 @@ export default {
     AdoptStaleProject: "Rebuild project from node",
     AdoptNodeContainer: "Adopt container",
     UpdateSettings: "Edit panel settings",
+    SetPanelName: "Rename panel",
     SetPanelDomain: "Bind panel domain",
     UpdateAlertConfig: "Edit alert settings",
     TestAlertChannel: "Test alert channel",

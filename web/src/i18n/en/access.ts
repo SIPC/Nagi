@@ -1,6 +1,11 @@
 import type zh from "../zh/access";
 
 export default {
+  name: {
+    label: "Panel name",
+    usage: "Shown in the app's top bar and panel list",
+    unset: (host) => `Not set. Uses the host name ${host}`,
+  },
   address: {
     label: "Public address",
     usage: "Nodes and standby panels use it to connect to this panel",
