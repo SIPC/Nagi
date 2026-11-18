@@ -122,27 +122,27 @@ func waitPath(t *testing.T, m *Mesh, k Key, want string) {
 }
 
 func TestDirect(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	echo(t, a, b)
 }
 
 func TestUDPRelay(t *testing.T) {
-	defer func() { dropUDP = nil }()
+	defer setDropUDP(nil)
 	_, a, b := setupWith(t, func(_, a, b testNode) {
-		dropUDP = func(from uint16, to netip.AddrPort) bool {
+		setDropUDP(func(from uint16, to netip.AddrPort) bool {
 			return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
-		}
+		})
 	})
 	waitPath(t, a.m, b.m.PublicKey(), "udp-relay")
 	echo(t, a, b)
 }
 
 func TestTLSRelay(t *testing.T) {
-	defer func() { dropUDP = nil }()
+	defer setDropUDP(nil)
 	_, a, b := setupWith(t, func(_, _, _ testNode) {
-		dropUDP = func(uint16, netip.AddrPort) bool { return true }
+		setDropUDP(func(uint16, netip.AddrPort) bool { return true })
 	})
 	waitPath(t, a.m, b.m.PublicKey(), "tls-relay")
 	echo(t, a, b)
@@ -150,7 +150,7 @@ func TestTLSRelay(t *testing.T) {
 
 // TestUDP 经 mesh 收发 UDP：B 从随机端口连 A 开的端口。超过 MTU 的数据报靠 IPv6 分片。
 func TestUDP(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	_, a, b := setup(t)
 	waitPath(t, a.m, b.m.PublicKey(), "direct")
 	pc, err := a.m.ListenUDP(0)
@@ -201,7 +201,7 @@ func TestUDP(t *testing.T) {
 // 重启的一方加上成员时就发起握手，这时直连还没确认；要是这个握手包被丢掉，对方会一直用旧会话发包，
 // 等 WireGuard 自己重新握手要十几秒。
 func TestPeerRestart(t *testing.T) {
-	dropUDP = nil
+	setDropUDP(nil)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var privB Key
 	_, _ = rand.Read(privB[:])
@@ -352,7 +352,7 @@ func TestNATKind(t *testing.T) {
 // 线路按源端口负载均衡、其中一条链路坏了：A 的主端口发往 B 的包全丢（反方向正常）。
 // A 有备用端口时，换一个能通的源端口直连 B；没有备用端口时只能走中转。
 func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
-	defer func() { dropUDP = nil }()
+	defer setDropUDP(nil)
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mk := func(extra int, relay bool) testNode {
 		var priv Key
@@ -365,7 +365,7 @@ func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
 		return testNode{m: m, port: m.Port()}
 	}
 	p, a, b := mk(0, true), mk(4, false), mk(0, false)
-	dropUDP = func(from uint16, to netip.AddrPort) bool { return from == a.port && to.Port() == b.port }
+	setDropUDP(func(from uint16, to netip.AddrPort) bool { return from == a.port && to.Port() == b.port })
 	pk, ak, bk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey()
 	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}})
 	_ = a.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
@@ -383,7 +383,7 @@ func TestExtraPortsAvoidBrokenFlow(t *testing.T) {
 // A、B 之间直连不通、都和 R 直连：经 R 中转（node-relay），不绕到面板。
 // R 关掉中转以后，A 发过去的包被丢，过一会儿 A 不再用 R，改走面板。
 func TestNodeRelay(t *testing.T) {
-	defer func() { dropUDP = nil }()
+	defer setDropUDP(nil)
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mk := func(relay, nodeRelay bool) testNode {
 		var priv Key
@@ -396,9 +396,9 @@ func TestNodeRelay(t *testing.T) {
 		return testNode{m: m, port: m.Port()}
 	}
 	p, a, b, r := mk(true, false), mk(false, true), mk(false, true), mk(false, true)
-	dropUDP = func(from uint16, to netip.AddrPort) bool {
+	setDropUDP(func(from uint16, to netip.AddrPort) bool {
 		return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
-	}
+	})
 	pk, ak, bk, rk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey(), r.m.PublicKey()
 	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}, {Key: rk, Endpoints: local(r.port)}})
 	_ = r.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: ak, Endpoints: local(a.port), Relays: []Key{pk}}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})

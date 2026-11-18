@@ -375,16 +375,77 @@ func (b *backupStates) entry(id, target string) *backupEntry {
 	return e
 }
 
-// prune 去掉容器已经不用的备份节点的状态。调用时持有 mu。
-func (b *backupStates) prune(id string, targets []*nagiv1.BackupTarget) {
+// lookup 和 entry 一样，但没有记录时返回 nil，不新建（备份节点已经去掉时不会把状态加回来）。调用时持有 mu。
+func (b *backupStates) lookup(id, target string) *backupEntry {
+	if e := b.m[id]; e != nil && e.Target == target {
+		return e
+	}
+	return b.m[id+"/"+target]
+}
+
+// prune 去掉容器已经不用的备份节点（targets 为空时全部）的状态，正在进行或排着队的同步停下（errSyncStopped，
+// 也不再来一次）：去掉的备份节点上的副本可能已经删了，不用等它失败、重试。返回有没有去掉。调用时持有 mu。
+func (b *backupStates) prune(id string, targets []*nagiv1.BackupTarget) bool {
 	keep := map[string]bool{}
 	for _, t := range targets {
 		keep[t.GetNodeId()] = true
 	}
+	removed := false
 	for k, e := range b.m {
 		if (k == id || strings.HasPrefix(k, id+"/")) && !keep[e.Target] {
+			if e.run != nil {
+				e.run.again = false
+				e.run.cancel(errSyncStopped)
+			}
 			delete(b.m, k)
+			removed = true
 		}
+	}
+	return removed
+}
+
+// stopAll 停止容器 id 到所有备份节点的同步（也不再来一次），状态留着。删除容器前调用。
+func (b *backupStates) stopAll(id string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for k, e := range b.m {
+		if (k == id || strings.HasPrefix(k, id+"/")) && e.run != nil {
+			e.run.again = false
+			e.run.cancel(errSyncStopped)
+		}
+	}
+}
+
+// stopBackupSyncs 停下容器到所有备份节点的同步（删除、移走容器前）。
+func (a *agent) stopBackupSyncs(projectID, container string) {
+	if a != nil && a.backups != nil {
+		a.backups.stopAll(projectID + "-" + container)
+	}
+}
+
+// pruneBackups 按容器现在的配置（新的备份节点列表）去掉不用的备份节点，停下到它们的同步；容器已经不在（删除了）时
+// 去掉它所有的状态、停下所有的同步。配置更新（PutContainer、部署）和删除容器后调用。
+func (a *agent) pruneBackups(ctx context.Context, projectID, container string) {
+	if a == nil || a.backups == nil || a.projects == nil {
+		return
+	}
+	var targets []*nagiv1.BackupTarget
+	c, err := a.projects.Get(ctx, projectID, container)
+	switch {
+	case err == nil:
+		targets = backupTargets(c.Spec)
+	case !errors.Is(err, project.ErrNotFound):
+		return
+	}
+	b := a.backups
+	b.mu.Lock()
+	removed := b.prune(projectID+"-"+container, targets)
+	if removed {
+		b.persist()
+	}
+	b.mu.Unlock()
+	if removed {
+		a.changed()
 	}
 }
 
@@ -416,11 +477,11 @@ func (b *backupStates) statuses(s *nagiv1.ContainerSpec) []*nagiv1.BackupStatus 
 	return out
 }
 
-// failures 返回同步失败的备份节点和原因，用于告警。调用时持有 mu。
+// failures 返回同步失败的备份节点和原因，用于告警。已经去掉的备份节点（没有记录）不算。调用时持有 mu。
 func (b *backupStates) failures(id string, targets []*nagiv1.BackupTarget) []string {
 	var out []string
 	for _, t := range targets {
-		if e := b.entry(id, t.GetNodeId()); e.LastError != "" && !e.Stopped {
+		if e := b.lookup(id, t.GetNodeId()); e != nil && e.LastError != "" && !e.Stopped {
 			out = append(out, t.GetName()+"："+e.LastError)
 		}
 	}
@@ -867,7 +928,12 @@ func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget
 	}()
 	for {
 		b.mu.Lock()
-		e := b.entry(id, t.GetNodeId())
+		e := b.lookup(id, t.GetNodeId())
+		if e == nil || e.run != run {
+			// 备份节点已经去掉了、容器已经删除（prune 停下了这次同步）：不把状态加回来。
+			b.mu.Unlock()
+			return
+		}
 		// 上次是用户停止的：这次开始了就不再显示「已停止」，失败的原因留到这次有结果再换。
 		if e.Stopped {
 			e.Stopped, e.LastError = false, ""

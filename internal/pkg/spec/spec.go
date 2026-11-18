@@ -254,6 +254,13 @@ func Validate(ctx context.Context, cfg *nagiv1.ContainerConfig, container string
 	if err != nil {
 		return nil, Invalid("compose 无法解析：%v", err)
 	}
+	// compose 接受以 - 开头的服务名，单独启停服务时它会跟在 docker compose 的子命令后面。节点在服务名前加了 --，
+	// 这里再拒绝新保存的，免得被当成选项。
+	for name := range proj.Services {
+		if strings.HasPrefix(name, "-") {
+			return nil, Invalid("服务名 %s 不能以 - 开头", name)
+		}
+	}
 	for name := range ServiceEnv(cfg, container) {
 		if _, ok := proj.Services[name]; !ok {
 			return nil, Invalid("环境变量中的容器 %s 不在该容器组的 compose 中", name)

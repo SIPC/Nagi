@@ -858,7 +858,9 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	var sp *nagiv1.ContainerSpec
 	if c, err := a.projects.Get(ctx, pid, name); err == nil {
 		sp = c.Spec
+		a.stopBackupSyncs(pid, name)
 		kept, err := a.projects.Retire(ctx, pid, name, func(string) {})
+		a.pruneBackups(ctx, pid, name)
 		if err != nil {
 			a.log.Error("移出被顶替的容器失败", "project", pid, "container", name, "err", err)
 		} else {

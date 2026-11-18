@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -291,7 +292,7 @@ func TestDownloadLinkNode(t *testing.T) {
 }
 
 // 经旧地址确认并签发：check=1&sign=1 照常按 cookie 检查，记一次下载（带链接编号），返回链接；只带 check=1 时照旧回 204、不记录。
-// 从签发以外的地址使用时多记一条（每个地址一次）。
+// 链接第一次使用后绑定这个地址：别的地址 403，记一条安全事件（每个地址一次），不记下载。
 func TestDownloadLinkIssueViaHandler(t *testing.T) {
 	h := newLinkHarness(t)
 	token, _ := h.login(2)
@@ -313,40 +314,148 @@ func TestDownloadLinkIssueViaHandler(t *testing.T) {
 	if rec.Code != 200 || !strings.HasPrefix(body.URL, downloadLinkPath) || rec.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("sign=1：%d %s", rec.Code, rec.Body)
 	}
-	other := func() {
+	other := func() int {
 		req := httptest.NewRequest(http.MethodGet, body.URL, nil)
 		req.RemoteAddr = "198.51.100.7:1000"
-		h.mux.ServeHTTP(httptest.NewRecorder(), req)
+		rec := httptest.NewRecorder()
+		h.mux.ServeHTTP(rec, req)
+		return rec.Code
 	}
 	if got := h.get(body.URL); got.Code != 200 {
 		t.Fatalf("下载：%d", got.Code)
 	}
-	other()
-	other()
+	opened := len(h.opens)
+	for range 2 {
+		if code := other(); code != http.StatusForbidden {
+			t.Errorf("别的地址：%d，应为 403", code)
+		}
+	}
+	if len(h.opens) != opened {
+		t.Error("别的地址不应打开文件")
+	}
+	// 绑定的地址照常能用（续传、多线程）。
+	if got := h.get(body.URL, "Range", "bytes=0-3"); got.Code != 206 {
+		t.Errorf("绑定的地址续传：%d", got.Code)
+	}
 	events, err := h.a.Audit.List(context.Background(), audit.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var issued, otherIP int
+	var issued, otherIP, denied int
 	for _, e := range events {
-		if e.Action != "DownloadVolumeFile" {
-			continue
-		}
 		if strings.Contains(e.Params, body.URL[len(downloadLinkPath):]) {
-			t.Error("活动记录里不能有链接")
+			t.Error("记录里不能有链接")
 		}
 		switch {
+		case e.Action == "download_link_other_ip":
+			denied++
+			if e.Category != audit.Security || e.Result != audit.ResultDenied || e.IP != "198.51.100.7" || e.ActorName != "op" ||
+				!strings.Contains(e.Params, `"bound_ip":"`+linkIP+`"`) || !strings.Contains(e.Params, "download_link") {
+				t.Errorf("安全事件：%+v", e)
+			}
+		case e.Action != "DownloadVolumeFile":
 		case strings.Contains(e.Params, `"other_ip":true`):
 			otherIP++
-			if e.IP != "198.51.100.7" || !strings.Contains(e.Params, linkIP) {
-				t.Errorf("别的地址：%+v", e)
-			}
 		case strings.Contains(e.Params, "download_link"):
 			issued++
 		}
 	}
-	if issued != 1 || otherIP != 1 {
-		t.Errorf("签发记 %d 次、别的地址记 %d 次，应各 1 次", issued, otherIP)
+	if issued != 1 || otherIP != 0 || denied != 1 {
+		t.Errorf("签发记 %d 次、别的地址下载 %d 次、拒绝 %d 次，应为 1、0、1", issued, otherIP, denied)
+	}
+}
+
+// 第一次使用的地址不是签发的地址（下载工具走代理、浏览器换到 IPv6）：照常下载，绑定到这个地址，记一条 other_ip；
+// 之后签发的地址也不能用了（按确切的地址绑定，要重新下载）。
+func TestDownloadLinkBindsFirstUse(t *testing.T) {
+	h := newLinkHarness(t)
+	_, u := h.login(2)
+	url := h.issue(u, volumeClaims)
+	const v6 = "2001:db8::9"
+	from := func(addr string, header ...string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, url, nil)
+		req.RemoteAddr = addr
+		for i := 0; i+1 < len(header); i += 2 {
+			req.Header.Set(header[i], header[i+1])
+		}
+		rec := httptest.NewRecorder()
+		h.mux.ServeHTTP(rec, req)
+		return rec
+	}
+	for i := range 3 {
+		rec := from("["+v6+"]:"+strconv.Itoa(7000+i), "Range", "bytes="+strconv.Itoa(i*10)+"-"+strconv.Itoa(i*10+9))
+		if rec.Code != 206 || rec.Body.String() != string(h.data[i*10:i*10+10]) {
+			t.Fatalf("第 %d 段：%d %q", i, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := from(linkIP + ":5000"); rec.Code != http.StatusForbidden {
+		t.Errorf("签发的地址在绑定之后：%d，应为 403", rec.Code)
+	}
+	events, err := h.a.Audit.List(context.Background(), audit.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var otherIP, denied int
+	for _, e := range events {
+		switch {
+		case e.Action == "download_link_other_ip":
+			denied++
+			if e.IP != linkIP || !strings.Contains(e.Params, `"bound_ip":"`+v6+`"`) {
+				t.Errorf("安全事件：%+v", e)
+			}
+		case e.Action == "DownloadVolumeFile" && strings.Contains(e.Params, `"other_ip":true`):
+			otherIP++
+			if e.IP != v6 || !strings.Contains(e.Params, linkIP) {
+				t.Errorf("别的地址：%+v", e)
+			}
+		}
+	}
+	if otherIP != 1 || denied != 1 {
+		t.Errorf("other_ip %d 次、拒绝 %d 次，应各 1 次", otherIP, denied)
+	}
+}
+
+// 每个被拒绝的地址只报一次，记下的地址有上限；会话不再允许时不绑定，失败的请求不会占住链接。
+func TestDownloadLinkBindAfterAuth(t *testing.T) {
+	if b, r := bindLink("bind-test", "192.0.2.1"); b != "192.0.2.1" || r {
+		t.Fatalf("第一次：%q %v", b, r)
+	}
+	if b, r := bindLink("bind-test", "192.0.2.2"); b != "192.0.2.1" || !r {
+		t.Fatalf("别的地址：%q %v", b, r)
+	}
+	if _, r := bindLink("bind-test", "192.0.2.2"); r {
+		t.Error("同一个地址只报一次")
+	}
+	for i := range maxLinkDenied + 5 {
+		bindLink("bind-test", "198.51.100."+strconv.Itoa(i+1))
+	}
+	linkBinds.Lock()
+	n := len(linkBinds.m["bind-test"].denied)
+	linkBinds.Unlock()
+	if n > maxLinkDenied {
+		t.Errorf("拒绝的地址记了 %d 个", n)
+	}
+
+	h := newLinkHarness(t)
+	token, u := h.login(2)
+	url := h.issue(u, volumeClaims)
+	h.a.Auth.Logout(context.Background(), token)
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.RemoteAddr = "198.51.100.200:1000"
+	rec := httptest.NewRecorder()
+	h.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("退出后：%d", rec.Code)
+	}
+	id, err := openDownload(strings.TrimPrefix(url, downloadLinkPath), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkBinds.Lock()
+	_, bound := linkBinds.m[id.ID]
+	linkBinds.Unlock()
+	if bound {
+		t.Error("被拒绝的请求不应绑定链接")
 	}
 }
 

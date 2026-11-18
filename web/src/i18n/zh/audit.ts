@@ -137,6 +137,7 @@ export default {
     session_device_changed: "浏览器或系统变化",
     session_network_flip: "网段来回切换",
     session_network_changed: "网段变化",
+    download_link_other_ip: "下载链接从其他地址使用",
     cross_origin_request: "拒绝跨站请求",
     cross_origin_summary: "跨站请求汇总",
     RegisterSessionKey: "登记会话密钥",

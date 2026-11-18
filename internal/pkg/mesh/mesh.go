@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/tun/netstack"
 )
 
 // MTU 用 IPv6 的最小值，加上 WireGuard 和中转的包头也不会超过常见的 1500。
@@ -81,7 +80,7 @@ const DefaultExtraPorts = 4
 type Mesh struct {
 	bind *Bind
 	dev  *device.Device
-	tnet *netstack.Net
+	tnet *netTUN
 	quic *quicNet // 为 nil 时不用 QUIC
 	self Key
 	addr netip.Addr
@@ -101,7 +100,7 @@ func New(cfg Config) (*Mesh, error) {
 	}
 	self := PublicKey(cfg.PrivateKey)
 	addr := Address(self)
-	tun, tnet, err := netstack.CreateNetTUN([]netip.Addr{addr}, nil, MTU)
+	tnet, err := newNetTUN(addr, MTU, defaultTuning)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +113,7 @@ func New(cfg Config) (*Mesh, error) {
 	}
 	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, cfg.ExtraPorts, log)
 	bind.nodeRelay.Store(cfg.NodeRelay)
-	dev := device.NewDevice(tun, bind, &device.Logger{
+	dev := device.NewDevice(tnet, bind, &device.Logger{
 		Verbosef: device.DiscardLogf,
 		Errorf:   func(f string, a ...any) { log.Debug("wireguard: " + fmt.Sprintf(f, a...)) },
 	})
@@ -212,7 +211,7 @@ func (m *Mesh) SetQUIC(on bool) {
 
 // dialWireGuard 经 WireGuard 里的 TCP 连接，不走 QUIC（测速对比用）。
 func (m *Mesh) dialWireGuard(ctx context.Context, k Key, port uint16) (net.Conn, error) {
-	return m.tnet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(Address(k), port))
+	return m.tnet.dialTCP(ctx, netip.AddrPortFrom(Address(k), port))
 }
 
 // quicOff 返回直连的 k 和这一端之间是不是有一端关了 QUIC：here 是这一端，peer 是对方。
@@ -292,10 +291,18 @@ func (m *Mesh) SetPeers(peers []Peer) error {
 			fmt.Fprintf(&b, "public_key=%s\nremove=true\n", k.hex())
 		}
 	}
+	var later []Key
 	for k := range want {
 		if !m.configured[k] {
-			fmt.Fprintf(&b, "public_key=%s\nendpoint=%s\nallowed_ip=%s/128\npersistent_keepalive_interval=25\n",
-				k.hex(), k.hex(), Address(k))
+			// 设上保活时 WireGuard 立刻发起握手。两端同时加上对方（面板同时下发）时会同时发起，各自收到对方的发起后
+			// 丢掉自己这一轮，两边的回应都对不上，要等 5 秒重试，这期间隧道里的连接都建不起来。所以只让公钥小的一方马上发起，
+			// 大的一方过一会儿再设保活（那时通常已经有会话了，只发保活包）；它自己有包要发时照常马上握手。
+			keepalive := "persistent_keepalive_interval=25\n"
+			if bytes.Compare(m.self[:], k[:]) > 0 {
+				keepalive = ""
+				later = append(later, k)
+			}
+			fmt.Fprintf(&b, "public_key=%s\nendpoint=%s\nallowed_ip=%s/128\n%s", k.hex(), k.hex(), Address(k), keepalive)
 		}
 	}
 	m.configured = want
@@ -307,9 +314,37 @@ func (m *Mesh) SetPeers(peers []Peer) error {
 		return nil
 	}
 	err := m.dev.IpcSet(b.String())
+	if len(later) > 0 {
+		time.AfterFunc(keepaliveDelay, func() { m.setKeepalive(later) })
+	}
 	// 新成员立刻探测直连，不等下一轮：WireGuard 加上成员时就发起握手，路径一确认就补发。
 	m.bind.maintain(time.Now())
 	return err
+}
+
+// keepaliveDelay 是公钥大的一方加上成员后多久再设保活（见 SetPeers）。
+const keepaliveDelay = 2 * time.Second
+
+// setKeepalive 给还在成员列表里的 keys 设上保活。
+func (m *Mesh) setKeepalive(keys []Key) {
+	select {
+	case <-m.done:
+		return
+	default:
+	}
+	var b strings.Builder
+	m.mu.Lock()
+	for _, k := range keys {
+		if m.configured[k] {
+			fmt.Fprintf(&b, "public_key=%s\nupdate_only=true\npersistent_keepalive_interval=25\n", k.hex())
+		}
+	}
+	m.mu.Unlock()
+	if b.Len() > 0 {
+		if err := m.dev.IpcSet(b.String()); err != nil {
+			m.log.Debug("设置 WireGuard 保活失败", "err", err)
+		}
+	}
 }
 
 // AttachLink 登记经控制连接到某个对端的通道，返回取消登记的函数。HandleLink 处理从这条通道收到的包。
@@ -318,7 +353,7 @@ func (m *Mesh) HandleLink(src, dst Key, payload []byte)  { m.bind.HandleLink(src
 
 // Listen 在自己的 mesh 地址上监听 TCP。经 QUIC 来的连接（见 quic.go）也从这里收。
 func (m *Mesh) Listen(port uint16) (net.Listener, error) {
-	ln, err := m.tnet.ListenTCPAddrPort(netip.AddrPortFrom(m.addr, port))
+	ln, err := m.tnet.listenTCP(netip.AddrPortFrom(m.addr, port))
 	if err != nil || m.quic == nil {
 		return ln, err
 	}
@@ -344,17 +379,17 @@ func (m *Mesh) Dial(ctx context.Context, k Key, port uint16) (net.Conn, error) {
 			return c, nil
 		}
 	}
-	return m.tnet.DialContextTCPAddrPort(ctx, netip.AddrPortFrom(Address(k), port))
+	return m.tnet.dialTCP(ctx, netip.AddrPortFrom(Address(k), port))
 }
 
 // ListenUDP 在自己的 mesh 地址上开一个 UDP 端口，port 为 0 时随机选。
 func (m *Mesh) ListenUDP(port uint16) (net.PacketConn, error) {
-	return m.tnet.ListenUDPAddrPort(netip.AddrPortFrom(m.addr, port))
+	return m.tnet.dialUDP(netip.AddrPortFrom(m.addr, port), netip.AddrPort{})
 }
 
 // DialUDP 从自己 mesh 地址上的随机端口连接某个成员的 UDP 端口，只收得到对方这个端口发来的包。
 func (m *Mesh) DialUDP(k Key, port uint16) (net.Conn, error) {
-	return m.tnet.DialUDPAddrPort(netip.AddrPortFrom(m.addr, 0), netip.AddrPortFrom(Address(k), port))
+	return m.tnet.dialUDP(netip.AddrPortFrom(m.addr, 0), netip.AddrPortFrom(Address(k), port))
 }
 
 // KeyOf 返回 mesh 地址对应的成员。WireGuard 已经校验过来源，所以这就是对方的身份。

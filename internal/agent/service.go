@@ -97,6 +97,8 @@ func (s *agentService) PutContainer(ctx context.Context, req *nagiv1.PutContaine
 	if err := s.projects.Put(ctx, req.GetSpec()); err != nil {
 		return nil, toStatus(err)
 	}
+	// 去掉了的备份节点：停下正在进行的同步。
+	s.node.pruneBackups(ctx, req.GetSpec().GetProjectId(), req.GetSpec().GetName())
 	s.changed()
 	return &nagiv1.PutContainerResponse{}, nil
 }
@@ -111,6 +113,7 @@ func (s *agentService) DeployContainer(req *nagiv1.DeployContainerRequest, strea
 		_ = stream.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: line}})
 	}
 	res, err := s.projects.Deploy(stream.Context(), req.GetSpec(), opts, send)
+	s.node.pruneBackups(context.WithoutCancel(stream.Context()), req.GetSpec().GetProjectId(), req.GetSpec().GetName())
 	if errors.Is(err, project.ErrNotFound) || errors.Is(err, project.ErrInvalidArgument) {
 		return toStatus(err)
 	}
@@ -125,6 +128,8 @@ func (s *agentService) DeployContainer(req *nagiv1.DeployContainerRequest, strea
 }
 
 func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteContainerRequest) (*nagiv1.DeleteContainerResponse, error) {
+	// 先停下到备份节点的同步，删除成功后再去掉它们的状态（删除失败时容器还在，状态留着）。
+	s.node.stopBackupSyncs(req.GetProjectId(), req.GetContainer())
 	var err error
 	if req.GetRetire() {
 		var dir string
@@ -134,6 +139,7 @@ func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteCo
 	} else {
 		err = s.projects.Delete(ctx, req.GetProjectId(), req.GetContainer(), req.GetDeleteDir(), func(string) {})
 	}
+	s.node.pruneBackups(ctx, req.GetProjectId(), req.GetContainer())
 	s.changed()
 	if err != nil {
 		return nil, toStatus(err)
