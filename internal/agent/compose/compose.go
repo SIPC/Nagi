@@ -49,19 +49,24 @@ func Recreate(ctx context.Context, f Files, services []string, onLine func(strin
 	return run(ctx, f.DockerConfig, f.args(append([]string{"up", "-d", "--force-recreate", "--no-deps"}, services...)...), onLine)
 }
 
-// Start 启动项目已有的容器（不重建）。
-func Start(ctx context.Context, f Files, onLine func(string)) error {
-	return run(ctx, f.DockerConfig, f.args("start"), onLine)
+// Start 启动项目已有的容器（不重建）。给了 services 时只启动这些服务。
+func Start(ctx context.Context, f Files, onLine func(string), services ...string) error {
+	return run(ctx, f.DockerConfig, f.args(append([]string{"start"}, services...)...), onLine)
 }
 
-// Stop 停止项目的所有容器（不删除）。
-func Stop(ctx context.Context, f Files, onLine func(string)) error {
-	return run(ctx, f.DockerConfig, f.args("stop"), onLine)
+// UpServices 创建并启动指定的服务（不动它依赖的服务），服务还没有容器时用。
+func UpServices(ctx context.Context, f Files, services []string, onLine func(string)) error {
+	return run(ctx, f.DockerConfig, f.args(append([]string{"up", "-d", "--no-deps"}, services...)...), onLine)
 }
 
-// Restart 重启项目的所有容器（不重建）。
-func Restart(ctx context.Context, f Files, onLine func(string)) error {
-	return run(ctx, f.DockerConfig, f.args("restart"), onLine)
+// Stop 停止项目的所有容器（不删除）。给了 services 时只停止这些服务。
+func Stop(ctx context.Context, f Files, onLine func(string), services ...string) error {
+	return run(ctx, f.DockerConfig, f.args(append([]string{"stop"}, services...)...), onLine)
+}
+
+// Restart 重启项目的所有容器（不重建）。给了 services 时只重启这些服务。
+func Restart(ctx context.Context, f Files, onLine func(string), services ...string) error {
+	return run(ctx, f.DockerConfig, f.args(append([]string{"restart"}, services...)...), onLine)
 }
 
 // Down 停止并删除项目的容器和网络。removeVolumes 时一并删除命名 volume。

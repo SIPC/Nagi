@@ -20,6 +20,8 @@ service AgentService {
   rpc DeleteContainer(DeleteContainerRequest) returns (DeleteContainerResponse);
   // 手动启动、停止或重启容器：不改配置，不生成版本。
   rpc ControlContainer(ControlContainerRequest) returns (stream DeployEvent);
+  // 手动启动、停止或重启容器组里的一个服务（docker compose start|stop|restart <服务>），其他服务不动。
+  rpc ControlService(ControlServiceRequest) returns (stream DeployEvent);
   // 容器的存储：data/、命名 volume，大小和挂载位置。
   rpc ListVolumes(ContainerRef) returns (ListVolumesResponse);
   // 卷里的文件管理，都经 os.Root，不跟随符号链接。snapshot_id 不为空时读快照里的。
@@ -412,6 +414,14 @@ message ControlContainerRequest {
   string project_id = 1;
   string container = 2;
   ContainerAction action = 3;
+}
+
+message ControlServiceRequest {
+  string project_id = 1;
+  string container = 2;
+  // compose 里的服务名。
+  string service = 3;
+  ContainerAction action = 4;
 }
 
 message VolumeMount {

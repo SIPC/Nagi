@@ -28,6 +28,7 @@ import project from "./project";
 import projectContainers from "./projectContainers";
 import projectData from "./projectData";
 import projectNetwork from "./projectNetwork";
+import service from "./service";
 import projectSettings from "./projectSettings";
 import containerForm from "./containerForm";
 import importDir from "./importDir";
@@ -64,6 +65,7 @@ export default {
   projectContainers,
   projectData,
   projectNetwork,
+  service,
   projectSettings,
   containerForm,
   importDir,

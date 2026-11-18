@@ -20,6 +20,7 @@ import { metricRanges, type MetricRange } from "@/components/metrics";
 import { NewProjectPage, ProjectsPage } from "@/pages/projects";
 import { ProjectPage, ProjectSplit, projectTabs, type ProjectTab } from "@/pages/project";
 import { AddContainerPage, ContainerPage, containerTabs, type DetailView } from "@/pages/project-containers";
+import { ServicePage, serviceTabs, type ServiceView } from "@/pages/project-service";
 import { NodePage, NodesPage, nodeTabs, type NodeTab, type NodesView } from "@/pages/nodes";
 import { SettingsPage, settingsTabs, type SettingsTab } from "@/pages/settings";
 import { AuditPage, auditCategories, auditRanges, auditVias, type AuditSearch } from "@/pages/audit";
@@ -152,10 +153,20 @@ const projectRoute = createRoute({
     const { tab } = projectRoute.useSearch();
     const navigate = projectRoute.useNavigate();
     const child = useMatch({ from: containerRoute.id, shouldThrow: false });
+    const serviceChild = useMatch({ from: serviceRoute.id, shouldThrow: false });
     const adding = useMatch({ from: addContainerRoute.id, shouldThrow: false });
     return (
-      <ProjectSplit key={projectId} projectId={projectId} tab={tab ?? "containers"} container={child?.params.container} view={child?.search.view} adding={!!adding}>
-        {child || adding ? (
+      <ProjectSplit
+        key={projectId}
+        projectId={projectId}
+        tab={tab ?? "containers"}
+        container={child?.params.container ?? serviceChild?.params.container}
+        service={serviceChild?.params.service}
+        view={child?.search.view}
+        serviceTab={serviceChild?.search.view}
+        adding={!!adding}
+      >
+        {child || serviceChild || adding ? (
           <Outlet />
         ) : (
           <ProjectPage
@@ -173,17 +184,19 @@ const projectRoute = createRoute({
 const containerRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: "c/$container",
-  validateSearch: (search: Record<string, unknown>): { view?: DetailView; volume?: string; deploy?: boolean } => ({
+  validateSearch: (search: Record<string, unknown>): { view?: DetailView; volume?: string; deploy?: boolean; service?: string } => ({
     // 旧地址的「数据」标签拆成了存储和高可用，快照在存储里。
     view: search.view === "data" ? "storage" : containerTabs.includes(search.view as DetailView) ? (search.view as DetailView) : undefined,
     // 存储标签里打开的卷（文件管理就地显示，后退能回到卷列表）。
     volume: typeof search.volume === "string" && search.volume ? search.volume : undefined,
     // 添加容器时选了「添加并部署」：进入容器页后开始部署。
     deploy: search.deploy === true ? true : undefined,
+    // 容器组里选中的服务，日志和终端按它打开。
+    service: typeof search.service === "string" && search.service ? search.service : undefined,
   }),
   component: function ContainerRoute() {
     const { projectId, container } = containerRoute.useParams();
-    const { view, deploy } = containerRoute.useSearch();
+    const { view, deploy, service } = containerRoute.useSearch();
     const navigate = containerRoute.useNavigate();
     return (
       <ContainerPage
@@ -191,9 +204,35 @@ const containerRoute = createRoute({
         projectId={projectId}
         name={container}
         view={view ?? "overview"}
-        onView={(t) => navigate({ search: { view: t === "overview" ? undefined : t }, replace: true })}
+        onView={(t) => navigate({ search: (s) => ({ view: t === "overview" ? undefined : t, service: s.service }), replace: true })}
+        service={service}
+        onService={(v) => navigate({ search: (s) => ({ ...s, service: v || undefined }), replace: true })}
         autoDeploy={!!deploy}
         onAutoDeployed={() => navigate({ search: (s) => ({ ...s, deploy: undefined }), replace: true })}
+      />
+    );
+  },
+});
+
+// 服务页：容器组里一个服务的概览、日志、终端、监控，标签记在 view 参数里。
+const serviceRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: "c/$container/s/$service",
+  validateSearch: (search: Record<string, unknown>): { view?: ServiceView } => ({
+    view: serviceTabs.includes(search.view as ServiceView) && search.view !== "overview" ? (search.view as ServiceView) : undefined,
+  }),
+  component: function ServiceRoute() {
+    const { projectId, container, service } = serviceRoute.useParams();
+    const { view } = serviceRoute.useSearch();
+    const navigate = serviceRoute.useNavigate();
+    return (
+      <ServicePage
+        key={projectId + "/" + container + "/" + service}
+        projectId={projectId}
+        container={container}
+        service={service}
+        view={view ?? "overview"}
+        onView={(v) => navigate({ search: { view: v === "overview" ? undefined : v }, replace: true })}
       />
     );
   },
@@ -318,7 +357,7 @@ const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
   oauthRoute,
-  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, addContainerRoute]), nodesRoute, nodeRoute, auditRoute, activityRoute, settingsRoute]),
+  appRoute.addChildren([indexRoute, overviewRoute, projectsRoute, newProjectRoute, projectRoute.addChildren([containerRoute, serviceRoute, addContainerRoute]), nodesRoute, nodeRoute, auditRoute, activityRoute, settingsRoute]),
 ]);
 
 const router = createRouter({ routeTree, context: { queryClient }, defaultPreload: "intent", defaultNotFoundComponent: NotFound });

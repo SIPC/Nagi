@@ -63,6 +63,7 @@ export default {
     InspectComposeDir: "读取现有目录",
     DeleteContainer: "删除容器",
     ControlContainer: "启动、停止或重启容器",
+    ControlService: "启动、停止或重启服务",
     SaveDraft: "保存草稿",
     DiscardDraft: "放弃草稿",
     Deploy: "部署",

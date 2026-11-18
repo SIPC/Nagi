@@ -222,9 +222,12 @@ export function TerminalSession({ url, deps = [], beforeConnect, intro, canConne
 }
 
 // 容器终端：面板转发到节点上的 docker exec。
-export function TerminalView({ projectId, container, services }: { projectId: string; container: string; services: string[] }) {
-  const [service, setService] = useState("");
-  const selected = service || services[0] || "";
+// service、onService：选中的服务记在地址里（容器页的 service 参数），没有时只记在组件里。
+export function TerminalView({ projectId, container, services, service: chosen, onService }: { projectId: string; container: string; services: string[]; service?: string; onService?: (s: string) => void }) {
+  const [local, setLocal] = useState("");
+  const service = onService ? (chosen ?? "") : local;
+  const setService = onService ?? setLocal;
+  const selected = services.includes(service) ? service : services[0] || "";
   const picker = services.length > 1 && (
     <Select value={selected} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={t.projectContainers.logs.service}>
       {services.map((s) => (

@@ -2,6 +2,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore, useCallback, useLayoutEffect } from "react";
 import type * as React from "react";
+import { flushSync } from "react-dom";
 import { createLink } from "@tanstack/react-router";
 import { Check as CheckIcon, CircleHelp, Copy, Ellipsis, X } from "lucide-react";
 import { toast } from "sonner";
@@ -1000,20 +1001,39 @@ function useTabIndicator(value: string, listRef: React.RefObject<HTMLDivElement 
 }
 
 // useActiveBox 量出列表里选中项（data-active）的位置，给滑动的背景用。第一次只放到位、不做动画。
+// 只有换了选中项才滑过去；选中项没换、位置变了（例如项目栏里展开、收起容器组的服务）时背景立即跟上。
 export function useActiveBox() {
   const ref = useRef<HTMLElement>(null);
   const [box, setBox] = useState<{ top: number; bottom: number; motion?: string } | null>(null);
-  useLayoutEffect(() => {
+  const active = useRef<HTMLElement | null>(null);
+  const measure = useCallback(() => {
     const nav = ref.current;
-    const el = nav?.querySelector<HTMLElement>("[data-active]");
+    const el = nav?.querySelector<HTMLElement>("[data-active]") ?? null;
+    const moved = active.current !== null && el !== active.current;
+    active.current = el;
     setBox((prev) => {
       if (!nav || !el) return null;
       const top = el.offsetTop;
       const bottom = nav.offsetHeight - top - el.offsetHeight;
       if (prev && prev.top === top && prev.bottom === bottom) return prev;
-      return { top, bottom, motion: prev ? (top > prev.top ? sliderMotion.down : sliderMotion.up) : undefined };
+      return { top, bottom, motion: prev && moved ? (top > prev.top ? sliderMotion.down : sliderMotion.up) : undefined };
     });
+  }, []);
+  useLayoutEffect(measure);
+  // 导航可能晚于第一次渲染才出现（先显示加载中），所以每次渲染都看一眼，换了元素才重新观察。
+  const observed = useRef<{ nav: HTMLElement; observer: ResizeObserver } | null>(null);
+  useEffect(() => {
+    const nav = ref.current;
+    if (observed.current?.nav === nav) return;
+    observed.current?.observer.disconnect();
+    observed.current = null;
+    if (!nav || typeof ResizeObserver === "undefined") return;
+    // 同步渲染，背景和展开中的内容在同一帧里到位，不落后几帧。
+    const observer = new ResizeObserver(() => flushSync(measure));
+    observer.observe(nav);
+    observed.current = { nav, observer };
   });
+  useEffect(() => () => observed.current?.observer.disconnect(), []);
   return { ref, box };
 }
 

@@ -329,6 +329,40 @@ function RoutesOverview({ project }: { project: Project }) {
   );
 }
 
+// ServiceRoutes：服务页里指向这个服务的端口映射，只看不改；点一行到容器组的「网络」标签里修改。
+export function ServiceRoutes({ project, container, service }: { project: Project; container: string; service: string }) {
+  const routes = project.routes.filter((r) => r.container === container && r.service === service);
+  const { nodes, nodeName, entriesOf, addressesOf } = useRouteNodes(project);
+  const domains = useDomainChecks(project.id, routes.filter((r) => r.domains.length > 0), 15_000);
+  if (routes.length === 0) return <EmptyRow>{t.projectNetwork.routes.empty}</EmptyRow>;
+  if (nodes.isPending) return <RowsSkeleton count={Math.min(routes.length, 6)} />;
+  return (
+    <List>
+      {routes.map((r) => {
+        const checks = domains.checks.filter((c) => c.route === r.name);
+        const addresses = addressesOf(r);
+        return (
+          <div key={r.name} className="group/route relative">
+            <Link
+              to="/projects/$projectId/c/$container"
+              params={{ projectId: project.id, container: r.container }}
+              search={{ view: "network" }}
+              aria-label={r.name}
+              className="absolute inset-0 rounded-md outline-none focus-ring"
+            />
+            <Row
+              className="group-hover/route:bg-accent"
+              title={<RouteTitle route={r} addresses={addresses} linkClassName="relative z-10" />}
+              sub={<RouteSub route={r} checks={checks} entries={entriesOf(r).map(nodeName)} hasAddress={addresses.length > 0} />}
+              cols={[{ content: <RouteStatus state={routeState(r, checks, domains.pending)} />, phone: true }]}
+            />
+          </div>
+        );
+      })}
+    </List>
+  );
+}
+
 // ---- 端口映射 ----
 
 function RoutesSection({ project, services, container }: { project: Project; services: ServiceStatus[]; container: string }) {

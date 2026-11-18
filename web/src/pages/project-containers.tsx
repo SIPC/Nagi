@@ -197,7 +197,7 @@ function shortImage(image: string) {
 
 // displayImage 是概览里显示的镜像：有标签时去掉摘要（标签已经说明了版本，完整的放在悬停提示里），
 // 没有标签时保留 12 位摘要；省掉 Docker Hub 的默认前缀。
-function displayImage(image: string) {
+export function displayImage(image: string) {
   let s = image.replace(/^docker\.io\/(library\/)?/, "");
   const at = s.indexOf("@sha256:");
   if (at >= 0) s = /:[^/]+$/.test(s.slice(0, at)) ? s.slice(0, at) : shortImage(s);
@@ -346,7 +346,26 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
 
 // ContainerPage：容器自己的页（项目 / 容器），标签 概览、配置、版本、日志、终端、数据；当前标签记在地址的 view 参数里。
 // 宽屏时左边有项目栏（见 ProjectSplit），不再显示上级链接。
-export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAutoDeployed }: { projectId: string; name: string; view: DetailView; onView: (v: DetailView) => void; autoDeploy?: boolean; onAutoDeployed?: () => void }) {
+// service 是容器组里选中的服务（地址的 service 参数），日志和终端按它打开，项目栏里点服务时带上。
+export function ContainerPage({
+  projectId,
+  name,
+  view,
+  onView,
+  service,
+  onService,
+  autoDeploy,
+  onAutoDeployed,
+}: {
+  projectId: string;
+  name: string;
+  view: DetailView;
+  onView: (v: DetailView) => void;
+  service?: string;
+  onService?: (s: string) => void;
+  autoDeploy?: boolean;
+  onAutoDeployed?: () => void;
+}) {
   const project = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => projectClient.getProject({ projectId }),
@@ -383,13 +402,13 @@ export function ContainerPage({ projectId, name, view, onView, autoDeploy, onAut
   return (
     <>
       <Breadcrumb items={[...crumbs, { label: containerLabel(container) }]} className="max-md:hidden xl:hidden" />
-      <ContainerDetail project={p} container={container} services={services} imageUpdates={imageUpdates} view={view} onView={onView} autoDeploy={autoDeploy} onAutoDeployed={onAutoDeployed} />
+      <ContainerDetail project={p} container={container} services={services} imageUpdates={imageUpdates} view={view} onView={onView} service={service} onService={onService} autoDeploy={autoDeploy} onAutoDeployed={onAutoDeployed} />
     </>
   );
 }
 
 // ContainerSkeleton：容器页加载中，和页头、标签一样的版面。
-function ContainerSkeleton() {
+export function ContainerSkeleton() {
   return (
     <div role="status" aria-label={t.common.feedback.loading}>
       <div className="mb-4 flex min-h-8 items-center justify-between gap-4">
@@ -468,6 +487,8 @@ function ContainerDetail({
   imageUpdates,
   view: viewProp,
   onView,
+  service,
+  onService,
   autoDeploy,
   onAutoDeployed,
 }: {
@@ -477,6 +498,8 @@ function ContainerDetail({
   imageUpdates: { image: string }[];
   view: DetailView;
   onView: (v: DetailView) => void;
+  service?: string;
+  onService?: (s: string) => void;
   autoDeploy?: boolean;
   onAutoDeployed?: () => void;
 }) {
@@ -764,10 +787,12 @@ function ContainerDetail({
             container={container.name}
             services={serviceNames}
             containers={services.map((s) => s.containerId).filter(Boolean).join(",")}
+            service={service}
+            onService={onService}
           />
         )}
         {view === "terminal" && !isViewer && (
-          <TerminalView projectId={project.id} container={container.name} services={services.filter((s) => s.state === "running").map((s) => s.name)} />
+          <TerminalView projectId={project.id} container={container.name} services={[...new Set(services.filter((s) => s.state === "running").map((s) => s.name))]} service={service} onService={onService} />
         )}
         {view === "network" && <ContainerNetwork project={project} container={container} services={services} />}
         {view === "storage" && <ContainerStorage project={project} container={container} />}
@@ -866,7 +891,7 @@ function RenameContainer({ project, container, onDone }: { project: Project; con
   );
 }
 
-function uptime(services: ServiceStatus[]) {
+export function uptime(services: ServiceStatus[]) {
   const up = t.projectContainers.overview.uptime;
   const m = /^Up\s+(.+)$/.exec(serviceDetail(services.find((s) => s.state === "running")?.status ?? ""));
   if (!m) return "—";
@@ -1000,7 +1025,7 @@ function Overview({ project, container, services }: { project: Project; containe
   );
 }
 
-function KvItem({ k, v, mono, className }: { k: React.ReactNode; v: React.ReactNode; mono?: boolean; className?: string }) {
+export function KvItem({ k, v, mono, className }: { k: React.ReactNode; v: React.ReactNode; mono?: boolean; className?: string }) {
   return (
     <div className={cn("grid min-w-0 gap-1", className)}>
       <span className="text-muted-foreground">{k}</span>
@@ -1092,9 +1117,30 @@ type Line = { key: number; service: string; stream: string; text: string; time?:
 
 const maxLines = 2000;
 
-function Logs({ projectId, container, services, containers }: { projectId: string; container: string; services: string[]; containers: string }) {
+// fixed：服务页里只看这一个服务，没有服务选择。
+export function Logs({
+  projectId,
+  container,
+  services,
+  containers,
+  service: chosen,
+  onService,
+  fixed,
+}: {
+  projectId: string;
+  container: string;
+  services: string[];
+  containers: string;
+  service?: string;
+  onService?: (s: string) => void;
+  fixed?: string;
+}) {
   const l_ = t.projectContainers.logs;
-  const [service, setService] = useState("");
+  // 选中的服务记在地址里（有 onService 时），不认识的服务当作全部。
+  const [local, setLocal] = useState("");
+  const picked = onService ? (chosen ?? "") : local;
+  const service = fixed ?? (services.includes(picked) ? picked : "");
+  const setService = onService ?? setLocal;
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(true);
@@ -1168,7 +1214,7 @@ function Logs({ projectId, container, services, containers }: { projectId: strin
               { value: "stderr", label: l_.stderrOnly },
             ]}
           />
-          {services.length > 1 && (
+          {services.length > 1 && !fixed && (
             <Select value={service} onChange={(e) => setService(e.target.value)} className="w-40" aria-label={l_.service}>
               <option value="">{l_.allContainers}</option>
               {services.map((s) => (

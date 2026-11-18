@@ -261,6 +261,22 @@ export function containerUsage(series: MetricSeries[] | undefined) {
   return usage;
 }
 
+// serviceUsage：容器组里各服务当前的 CPU 和内存，键是「容器/服务」。节点按服务记录（多个副本已加在一起），
+// 上限只按容器记，所以服务没有上限，圆环按每核 100% 和 memFallback 算。
+export function serviceUsage(series: MetricSeries[] | undefined) {
+  const usage = new Map<string, Usage>();
+  const fresh = Date.now() / 1000 - 60;
+  for (const s of series ?? []) {
+    const { kind, path, metric } = parseName(s.name);
+    if (kind !== "c" || (metric !== "cpu" && metric !== "mem") || s.values.length === 0) continue;
+    if (Number(s.times[s.times.length - 1]) < fresh) continue;
+    const u = usage.get(path) ?? { cpu: 0, mem: 0 };
+    u[metric] += s.values[s.values.length - 1];
+    usage.set(path, u);
+  }
+  return usage;
+}
+
 // 不是 0 但按一位小数会显示成 0.0 的值写成 <0.1，和真正的 0 区分开。
 const tiny = (v: number) => v > 0 && v < 0.05;
 export const fmtCpu = (v: number) => (tiny(v) ? "<0.1%" : `${v.toFixed(1)}%`);
@@ -566,7 +582,8 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
 }
 
 // ContainerMetrics：一个容器的资源：CPU、内存、下行、上行，容器组按服务分组。重启过的话在数值块下面写一行。
-export function ContainerMetrics({ projectId, nodeIds, container, range }: { projectId: string; nodeIds: string[]; container: string; range: MetricRange }) {
+// service：服务页里只显示这一个服务，不写服务名。
+export function ContainerMetrics({ projectId, nodeIds, container, service: only, range }: { projectId: string; nodeIds: string[]; container: string; service?: string; range: MetricRange }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
   if (q.isPending) return <MetricsSkeleton />;
   if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
@@ -575,6 +592,7 @@ export function ContainerMetrics({ projectId, nodeIds, container, range }: { pro
     const { kind, path, metric } = parseName(s.name);
     if (kind !== "c" || !path.startsWith(container + "/")) continue;
     const service = path.slice(container.length + 1);
+    if (only !== undefined && service !== only) continue;
     if (!services.has(service)) services.set(service, new Map());
     services.get(service)!.set(metric, toPoints(s));
   }
@@ -586,7 +604,7 @@ export function ContainerMetrics({ projectId, nodeIds, container, range }: { pro
         return (
           <div key={name} className="grid gap-4">
             {/* 单个容器（只有一个服务）不再重复名称。 */}
-            {services.size > 1 && <div className="font-mono text-[13px] text-muted-foreground">{name}</div>}
+            {services.size > 1 && only === undefined && <div className="font-mono text-[13px] text-muted-foreground">{name}</div>}
             <MetricCells series={series} range={range} />
             {restarts > 0 && (
               <div className="text-muted-foreground">

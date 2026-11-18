@@ -169,7 +169,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
 | `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署 | `Deploy`、`GetProject` |
 | `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
-| `control_container` | 启动、停止、重启 | `ControlContainer` |
+| `control_container` | 启动、停止、重启。带 `service` 时只控制容器组里的这个服务（服务名见 `get_container` 的 `services`），其他服务不动；顶替的规则按整个容器算 | `ControlContainer`、`ControlService` |
 | `rollback` | 回到某个版本，只回配置和文件。带 `restore_data` 时同时把数据恢复到这个版本被替换之前，要先预览、`confirm` 原样填版本号才执行 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
 | `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |

@@ -63,6 +63,7 @@ export default {
     InspectComposeDir: "Read existing directory",
     DeleteContainer: "Delete container",
     ControlContainer: "Start, stop or restart container",
+    ControlService: "Start, stop or restart service",
     SaveDraft: "Save draft",
     DiscardDraft: "Discard draft",
     Deploy: "Deploy",

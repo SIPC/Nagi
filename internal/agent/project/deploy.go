@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/SIPC/nagi/internal/agent/compose"
+	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -340,6 +342,52 @@ func (m *Manager) Control(ctx context.Context, projectID, container string, acti
 		return compose.Stop(ctx, files, onLine)
 	case nagiv1.ContainerAction_CONTAINER_ACTION_RESTART:
 		err = compose.Restart(ctx, files, onLine)
+	default:
+		return invalid("操作只能是启动、停止或重启")
+	}
+	if err != nil {
+		return err
+	}
+	return m.SyncNetworks(ctx, projectID)
+}
+
+// ControlService 手动启动、停止或重启容器组里的一个服务，其他服务不动。服务名要是 compose 里有的，
+// 不能拿它往 docker compose 的命令行里塞参数。
+func (m *Manager) ControlService(ctx context.Context, projectID, container, service string, action nagiv1.ContainerAction, onLine func(string)) error {
+	l := m.lock(projectID, container)
+	l.Lock()
+	defer l.Unlock()
+	c, err := m.Get(ctx, projectID, container)
+	if err != nil {
+		return err
+	}
+	s := c.Spec
+	if s.GetVersion() == 0 {
+		return invalid("容器还没有部署，请先部署")
+	}
+	cp, err := spec.Load(ctx, s.GetConfig(), s.GetName(), s.GetSharedEnv(), containerPaths{root: s.GetDir()}.dataDir(), spec.ComposeProjectName(projectID, container))
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(cp.ServiceNames(), service) {
+		return invalid("容器 %s 里没有服务 %s", container, service)
+	}
+	files := composeFiles(s)
+	switch action {
+	case nagiv1.ContainerAction_CONTAINER_ACTION_START:
+		instances, ierr := m.docker.Instances(ctx, containerLabel(projectID, container))
+		if ierr != nil {
+			return ierr
+		}
+		if slices.ContainsFunc(instances, func(in docker.Instance) bool { return in.Service == service }) {
+			err = compose.Start(ctx, files, onLine, service)
+		} else {
+			err = compose.UpServices(ctx, files, []string{service}, onLine)
+		}
+	case nagiv1.ContainerAction_CONTAINER_ACTION_STOP:
+		return compose.Stop(ctx, files, onLine, service)
+	case nagiv1.ContainerAction_CONTAINER_ACTION_RESTART:
+		err = compose.Restart(ctx, files, onLine, service)
 	default:
 		return invalid("操作只能是启动、停止或重启")
 	}

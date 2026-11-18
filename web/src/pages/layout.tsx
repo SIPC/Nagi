@@ -75,7 +75,9 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean) {
     bar = project.data?.project?.name ?? "";
     const container = parts[2] === "c" && parts[3] ? decodeURIComponent(parts[3]) : "";
     const display = project.data?.project?.containers.find((c) => c.name === container)?.displayName || container;
-    title = container ? `${display} · ${name}` : name;
+    // 服务页：服务 · 容器组 · 项目。
+    const service = container && parts[4] === "s" && parts[5] ? decodeURIComponent(parts[5]) : "";
+    title = container ? `${service ? service + " · " : ""}${display} · ${name}` : name;
   } else if (parts[0] === "nodes") {
     title = parts[1] ? (nodes?.find((n) => n.id === parts[1])?.name ?? t.app.nav.nodes) : t.app.nav.nodes;
   } else if (parts[0] === "settings") {
