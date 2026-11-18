@@ -83,6 +83,7 @@ export default {
     SetBackupReplicaDir: "编辑副本存放位置",
     ConfirmPendingHA: "确认恢复高可用设置",
     SyncBackup: "同步备份",
+    StopBackupSync: "停止同步备份",
     RestoreFromBackup: "从备份恢复",
     MigrateContainer: "迁移容器",
     RedeployElsewhere: "在其他节点重新部署",

@@ -75,6 +75,9 @@ message ReplicaFile {
 
 message ReplicaManifestResponse {
   repeated ReplicaFile files = 1;
+  // 上次传了一半的文件（path 是文件本身的路径，size 是已经收到的字节数），源节点可以从这里接着传（ReplicaChunk.offset）。
+  // 旧版本的备份节点不报，源节点就从头传。
+  repeated ReplicaFile partials = 2;
 }
 
 // ReplicaChunk：path 变了表示开始一个新文件。
@@ -84,6 +87,10 @@ message ReplicaChunk {
   string path = 2;
   bytes data = 3;
   string container = 4;
+  // 只在一个文件的第一块：从 offset 处接着传（对方 ReplicaManifestResponse.partials 里报的大小），
+  // prefix_sha256 是源节点上这个文件前 offset 字节的 SHA-256，对方核对它收到的那一半，对不上时丢掉重来（返回 DataLoss）。
+  int64 offset = 5;
+  bytes prefix_sha256 = 6;
 }
 
 message ReplicaPutResponse {

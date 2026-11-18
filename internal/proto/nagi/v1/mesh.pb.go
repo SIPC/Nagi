@@ -345,8 +345,11 @@ func (x *ReplicaFile) GetSize() int64 {
 }
 
 type ReplicaManifestResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Files         []*ReplicaFile         `protobuf:"bytes,1,rep,name=files,proto3" json:"files,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Files []*ReplicaFile         `protobuf:"bytes,1,rep,name=files,proto3" json:"files,omitempty"`
+	// 上次传了一半的文件（path 是文件本身的路径，size 是已经收到的字节数），源节点可以从这里接着传（ReplicaChunk.offset）。
+	// 旧版本的备份节点不报，源节点就从头传。
+	Partials      []*ReplicaFile `protobuf:"bytes,2,rep,name=partials,proto3" json:"partials,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -388,14 +391,25 @@ func (x *ReplicaManifestResponse) GetFiles() []*ReplicaFile {
 	return nil
 }
 
+func (x *ReplicaManifestResponse) GetPartials() []*ReplicaFile {
+	if x != nil {
+		return x.Partials
+	}
+	return nil
+}
+
 // ReplicaChunk：path 变了表示开始一个新文件。
 type ReplicaChunk struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 第一块带上项目和容器。
-	ProjectId     string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Path          string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
-	Container     string `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
+	ProjectId string `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Path      string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Data      []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Container string `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
+	// 只在一个文件的第一块：从 offset 处接着传（对方 ReplicaManifestResponse.partials 里报的大小），
+	// prefix_sha256 是源节点上这个文件前 offset 字节的 SHA-256，对方核对它收到的那一半，对不上时丢掉重来（返回 DataLoss）。
+	Offset        int64  `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
+	PrefixSha256  []byte `protobuf:"bytes,6,opt,name=prefix_sha256,json=prefixSha256,proto3" json:"prefix_sha256,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -456,6 +470,20 @@ func (x *ReplicaChunk) GetContainer() string {
 		return x.Container
 	}
 	return ""
+}
+
+func (x *ReplicaChunk) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *ReplicaChunk) GetPrefixSha256() []byte {
+	if x != nil {
+		return x.PrefixSha256
+	}
+	return nil
 }
 
 type ReplicaPutResponse struct {
@@ -828,15 +856,18 @@ const file_nagi_v1_mesh_proto_rawDesc = "" +
 	"\tcontainer\x18\x02 \x01(\tR\tcontainer\"5\n" +
 	"\vReplicaFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
-	"\x04size\x18\x02 \x01(\x03R\x04size\"E\n" +
+	"\x04size\x18\x02 \x01(\x03R\x04size\"w\n" +
 	"\x17ReplicaManifestResponse\x12*\n" +
-	"\x05files\x18\x01 \x03(\v2\x14.nagi.v1.ReplicaFileR\x05files\"s\n" +
+	"\x05files\x18\x01 \x03(\v2\x14.nagi.v1.ReplicaFileR\x05files\x120\n" +
+	"\bpartials\x18\x02 \x03(\v2\x14.nagi.v1.ReplicaFileR\bpartials\"\xb0\x01\n" +
 	"\fReplicaChunk\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\fR\x04data\x12\x1c\n" +
-	"\tcontainer\x18\x04 \x01(\tR\tcontainer\"*\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\x12\x16\n" +
+	"\x06offset\x18\x05 \x01(\x03R\x06offset\x12#\n" +
+	"\rprefix_sha256\x18\x06 \x01(\fR\fprefixSha256\"*\n" +
 	"\x12ReplicaPutResponse\x12\x14\n" +
 	"\x05files\x18\x01 \x01(\rR\x05files\"i\n" +
 	"\x14ReplicaCommitRequest\x12\x1d\n" +
@@ -925,47 +956,48 @@ var file_nagi_v1_mesh_proto_depIdxs = []int32{
 	0,  // 0: nagi.v1.LeaseVotesRequest.votes:type_name -> nagi.v1.LeaseVoteRequest
 	3,  // 1: nagi.v1.LeaseVotesResponse.votes:type_name -> nagi.v1.LeaseVoteResponse
 	5,  // 2: nagi.v1.ReplicaManifestResponse.files:type_name -> nagi.v1.ReplicaFile
-	13, // 3: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
-	11, // 4: nagi.v1.MeshService.Upload:input_type -> nagi.v1.UploadChunk
-	15, // 5: nagi.v1.MeshService.VolumeDownload:input_type -> nagi.v1.VolumeFileRef
-	16, // 6: nagi.v1.MeshService.VolumeUpload:input_type -> nagi.v1.VolumeUploadChunk
-	17, // 7: nagi.v1.MeshService.NodeFileDownload:input_type -> nagi.v1.NodeFileRef
-	18, // 8: nagi.v1.MeshService.NodeFileUpload:input_type -> nagi.v1.NodeFileUploadChunk
-	19, // 9: nagi.v1.MeshService.VolumeUploadBegin:input_type -> nagi.v1.UploadBeginRequest
-	20, // 10: nagi.v1.MeshService.VolumeUploadPart:input_type -> nagi.v1.UploadPartChunk
-	21, // 11: nagi.v1.MeshService.VolumeUploadCommit:input_type -> nagi.v1.UploadCommitRequest
-	22, // 12: nagi.v1.MeshService.VolumeUploadAbort:input_type -> nagi.v1.UploadAbortRequest
-	19, // 13: nagi.v1.MeshService.NodeFileUploadBegin:input_type -> nagi.v1.UploadBeginRequest
-	20, // 14: nagi.v1.MeshService.NodeFileUploadPart:input_type -> nagi.v1.UploadPartChunk
-	21, // 15: nagi.v1.MeshService.NodeFileUploadCommit:input_type -> nagi.v1.UploadCommitRequest
-	22, // 16: nagi.v1.MeshService.NodeFileUploadAbort:input_type -> nagi.v1.UploadAbortRequest
-	4,  // 17: nagi.v1.MeshService.ReplicaManifest:input_type -> nagi.v1.ReplicaManifestRequest
-	7,  // 18: nagi.v1.MeshService.ReplicaPut:input_type -> nagi.v1.ReplicaChunk
-	9,  // 19: nagi.v1.MeshService.ReplicaCommit:input_type -> nagi.v1.ReplicaCommitRequest
-	1,  // 20: nagi.v1.MeshService.LeaseVotes:input_type -> nagi.v1.LeaseVotesRequest
-	14, // 21: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
-	12, // 22: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
-	23, // 23: nagi.v1.MeshService.VolumeDownload:output_type -> nagi.v1.VolumeFileChunk
-	24, // 24: nagi.v1.MeshService.VolumeUpload:output_type -> nagi.v1.VolumeUploadResponse
-	23, // 25: nagi.v1.MeshService.NodeFileDownload:output_type -> nagi.v1.VolumeFileChunk
-	24, // 26: nagi.v1.MeshService.NodeFileUpload:output_type -> nagi.v1.VolumeUploadResponse
-	25, // 27: nagi.v1.MeshService.VolumeUploadBegin:output_type -> nagi.v1.UploadSession
-	25, // 28: nagi.v1.MeshService.VolumeUploadPart:output_type -> nagi.v1.UploadSession
-	24, // 29: nagi.v1.MeshService.VolumeUploadCommit:output_type -> nagi.v1.VolumeUploadResponse
-	25, // 30: nagi.v1.MeshService.VolumeUploadAbort:output_type -> nagi.v1.UploadSession
-	25, // 31: nagi.v1.MeshService.NodeFileUploadBegin:output_type -> nagi.v1.UploadSession
-	25, // 32: nagi.v1.MeshService.NodeFileUploadPart:output_type -> nagi.v1.UploadSession
-	24, // 33: nagi.v1.MeshService.NodeFileUploadCommit:output_type -> nagi.v1.VolumeUploadResponse
-	25, // 34: nagi.v1.MeshService.NodeFileUploadAbort:output_type -> nagi.v1.UploadSession
-	6,  // 35: nagi.v1.MeshService.ReplicaManifest:output_type -> nagi.v1.ReplicaManifestResponse
-	8,  // 36: nagi.v1.MeshService.ReplicaPut:output_type -> nagi.v1.ReplicaPutResponse
-	10, // 37: nagi.v1.MeshService.ReplicaCommit:output_type -> nagi.v1.ReplicaCommitResponse
-	2,  // 38: nagi.v1.MeshService.LeaseVotes:output_type -> nagi.v1.LeaseVotesResponse
-	21, // [21:39] is the sub-list for method output_type
-	3,  // [3:21] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	5,  // 3: nagi.v1.ReplicaManifestResponse.partials:type_name -> nagi.v1.ReplicaFile
+	13, // 4: nagi.v1.MeshService.Ping:input_type -> nagi.v1.PingRequest
+	11, // 5: nagi.v1.MeshService.Upload:input_type -> nagi.v1.UploadChunk
+	15, // 6: nagi.v1.MeshService.VolumeDownload:input_type -> nagi.v1.VolumeFileRef
+	16, // 7: nagi.v1.MeshService.VolumeUpload:input_type -> nagi.v1.VolumeUploadChunk
+	17, // 8: nagi.v1.MeshService.NodeFileDownload:input_type -> nagi.v1.NodeFileRef
+	18, // 9: nagi.v1.MeshService.NodeFileUpload:input_type -> nagi.v1.NodeFileUploadChunk
+	19, // 10: nagi.v1.MeshService.VolumeUploadBegin:input_type -> nagi.v1.UploadBeginRequest
+	20, // 11: nagi.v1.MeshService.VolumeUploadPart:input_type -> nagi.v1.UploadPartChunk
+	21, // 12: nagi.v1.MeshService.VolumeUploadCommit:input_type -> nagi.v1.UploadCommitRequest
+	22, // 13: nagi.v1.MeshService.VolumeUploadAbort:input_type -> nagi.v1.UploadAbortRequest
+	19, // 14: nagi.v1.MeshService.NodeFileUploadBegin:input_type -> nagi.v1.UploadBeginRequest
+	20, // 15: nagi.v1.MeshService.NodeFileUploadPart:input_type -> nagi.v1.UploadPartChunk
+	21, // 16: nagi.v1.MeshService.NodeFileUploadCommit:input_type -> nagi.v1.UploadCommitRequest
+	22, // 17: nagi.v1.MeshService.NodeFileUploadAbort:input_type -> nagi.v1.UploadAbortRequest
+	4,  // 18: nagi.v1.MeshService.ReplicaManifest:input_type -> nagi.v1.ReplicaManifestRequest
+	7,  // 19: nagi.v1.MeshService.ReplicaPut:input_type -> nagi.v1.ReplicaChunk
+	9,  // 20: nagi.v1.MeshService.ReplicaCommit:input_type -> nagi.v1.ReplicaCommitRequest
+	1,  // 21: nagi.v1.MeshService.LeaseVotes:input_type -> nagi.v1.LeaseVotesRequest
+	14, // 22: nagi.v1.MeshService.Ping:output_type -> nagi.v1.PingResponse
+	12, // 23: nagi.v1.MeshService.Upload:output_type -> nagi.v1.UploadResponse
+	23, // 24: nagi.v1.MeshService.VolumeDownload:output_type -> nagi.v1.VolumeFileChunk
+	24, // 25: nagi.v1.MeshService.VolumeUpload:output_type -> nagi.v1.VolumeUploadResponse
+	23, // 26: nagi.v1.MeshService.NodeFileDownload:output_type -> nagi.v1.VolumeFileChunk
+	24, // 27: nagi.v1.MeshService.NodeFileUpload:output_type -> nagi.v1.VolumeUploadResponse
+	25, // 28: nagi.v1.MeshService.VolumeUploadBegin:output_type -> nagi.v1.UploadSession
+	25, // 29: nagi.v1.MeshService.VolumeUploadPart:output_type -> nagi.v1.UploadSession
+	24, // 30: nagi.v1.MeshService.VolumeUploadCommit:output_type -> nagi.v1.VolumeUploadResponse
+	25, // 31: nagi.v1.MeshService.VolumeUploadAbort:output_type -> nagi.v1.UploadSession
+	25, // 32: nagi.v1.MeshService.NodeFileUploadBegin:output_type -> nagi.v1.UploadSession
+	25, // 33: nagi.v1.MeshService.NodeFileUploadPart:output_type -> nagi.v1.UploadSession
+	24, // 34: nagi.v1.MeshService.NodeFileUploadCommit:output_type -> nagi.v1.VolumeUploadResponse
+	25, // 35: nagi.v1.MeshService.NodeFileUploadAbort:output_type -> nagi.v1.UploadSession
+	6,  // 36: nagi.v1.MeshService.ReplicaManifest:output_type -> nagi.v1.ReplicaManifestResponse
+	8,  // 37: nagi.v1.MeshService.ReplicaPut:output_type -> nagi.v1.ReplicaPutResponse
+	10, // 38: nagi.v1.MeshService.ReplicaCommit:output_type -> nagi.v1.ReplicaCommitResponse
+	2,  // 39: nagi.v1.MeshService.LeaseVotes:output_type -> nagi.v1.LeaseVotesResponse
+	22, // [22:40] is the sub-list for method output_type
+	4,  // [4:22] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_mesh_proto_init() }

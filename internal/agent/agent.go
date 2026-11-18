@@ -284,6 +284,8 @@ func Run(ctx context.Context, cfg Config) error {
 			a.domainProject(ctx, domain))
 	})
 	go a.snapshotLoop(ctx)
+	go a.backupProgressLoop(ctx)
+	go a.resumeInterruptedSyncs(ctx)
 	go a.imageCheckLoop(ctx)
 
 	if !cfg.DisableProxy {
@@ -494,6 +496,11 @@ func (a *agent) changed() {
 		default:
 		}
 	}
+	a.notifyReport()
+}
+
+// notifyReport 让各个面板连接马上上报一次（不重新生成 Caddy 配置），例如同步进度变了。
+func (a *agent) notifyReport() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, ch := range a.subs {
@@ -532,15 +539,16 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		ProjectsRoot: a.projectsRoot(),
 		Cpus:         int32(runtime.NumCPU()),
 
-		CrossNodeEntry: true,
-		ProxyProtocol:  true,
-		MultiBackup:    true,
-		FileOps:        true,
-		ImageOps:       true,
-		ReplicaDirs:    true,
-		ProxyDisabled:  a.cfg.DisableProxy,
-		EgressError:    a.egress.Error(),
-		ReportsCerts:   true,
+		CrossNodeEntry:  true,
+		ProxyProtocol:   true,
+		MultiBackup:     true,
+		AsyncBackupSync: true,
+		FileOps:         true,
+		ImageOps:        true,
+		ReplicaDirs:     true,
+		ProxyDisabled:   a.cfg.DisableProxy,
+		EgressError:     a.egress.Error(),
+		ReportsCerts:    true,
 
 		NodeAccess:         nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir),
 		NodeAccessDisabled: NodeAccessDisabled(a.cfg.DataDir),
@@ -814,7 +822,7 @@ func (a *agent) snapshotLoop(ctx context.Context) {
 			if err == nil {
 				a.alerts.Resolve(ctx, key)
 				// 每次定时快照成功后同步到备份节点或热备（没有设置时什么都不做）。
-				go a.runBackupSync(ctx, projectID, container, "")
+				_ = a.startBackupSync(ctx, projectID, container, "")
 				go a.syncStandby(ctx, projectID+"-"+container)
 				return
 			}

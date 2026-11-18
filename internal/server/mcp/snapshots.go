@@ -79,7 +79,13 @@ func (c *call) backupNodeID(m *nagiv1.Container, ref string) (string, error) {
 	return "", fmt.Errorf("%s is not a backup node of container %s", ref, m.GetName())
 }
 
-func toolSyncBackup(c *call, in BackupNodeArg) (any, error) {
+type SyncBackupArg struct {
+	BackupNodeArg
+	WaitSeconds *int `json:"wait_seconds,omitempty" jsonschema:"how long to wait for the sync to finish before returning its progress, 0 to 600; default 30"`
+	Stop        bool `json:"stop,omitempty" jsonschema:"stop the running sync instead of starting one"`
+}
+
+func toolSyncBackup(c *call, in SyncBackupArg) (any, error) {
 	s, m, err := c.container(in.ContainerArg)
 	if err != nil {
 		return nil, err
@@ -88,17 +94,29 @@ func toolSyncBackup(c *call, in BackupNodeArg) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	start := time.Now().Add(-time.Second)
-	_, syncErr := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(&nagiv1.BackupNodeRef{ProjectId: s.GetProject().GetId(), Container: m.GetName(), NodeId: target}))
-	// 同步状态由节点上报，同步完以后过一会儿才到面板上。
-	type result struct {
-		Node     string `json:"node"`
-		LastSync string `json:"last_sync,omitempty"`
-		Error    string `json:"error,omitempty"`
+	ref := &nagiv1.BackupNodeRef{ProjectId: s.GetProject().GetId(), Container: m.GetName(), NodeId: target}
+	wait := 30 * time.Second
+	if in.WaitSeconds != nil {
+		wait = time.Duration(min(max(*in.WaitSeconds, 0), 600)) * time.Second
 	}
-	var out []result
-	reported := false
-	for i := 0; i < 10 && !reported; i++ {
+	if in.Stop {
+		if _, err := c.h.clients.projects.StopBackupSync(c.ctx, connect.NewRequest(ref)); err != nil {
+			return nil, err
+		}
+		wait = 10 * time.Second
+	} else if _, err := c.h.clients.projects.SyncBackup(c.ctx, connect.NewRequest(ref)); err != nil {
+		return nil, err
+	}
+	nodes, err := c.nodes()
+	if err != nil {
+		return nil, err
+	}
+	// 同步状态由源节点上报（同步时约每 5 秒一次），到了面板上才看得到：先等它报「在同步」，再等同步结束或者等够 wait。
+	start := time.Now()
+	var out []backupView
+	finished := false
+	seen := map[string]bool{} // 已经报过「在同步」的备份节点
+	for {
 		p, err := c.getProject(s.GetProject().GetId())
 		if err != nil {
 			return nil, err
@@ -107,25 +125,37 @@ func toolSyncBackup(c *call, in BackupNodeArg) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		out, reported = nil, true
-		for _, b := range after.GetBackups() {
-			if target != "" && b.GetTargetNodeId() != target {
+		out, finished = nil, true
+		for i, id := range after.GetBackupNodeIds() {
+			if target != "" && id != target {
 				continue
 			}
-			out = append(out, result{Node: b.GetTargetName(), LastSync: ts(b.GetLastSync()), Error: b.GetLastError()})
-			if b.GetLastError() == "" && !b.GetLastSync().AsTime().After(start) {
-				reported = false
+			var b *nagiv1.BackupStatus
+			if i < len(after.GetBackups()) {
+				b = after.GetBackups()[i]
+			}
+			out = append(out, backupViewOf(nodeName(nodes, id), b))
+			seen[id] = seen[id] || b.GetSyncing()
+			// 刚开始的几秒节点可能还没报「在同步」，看到的是上一次的结果：报过「在同步」或者有了新的成功时间之前不算结束。
+			fresh := seen[id] || b.GetLastSync().AsTime().After(start) || time.Since(start) >= 10*time.Second
+			if b.GetSyncing() || (!in.Stop && !fresh) {
+				finished = false
 			}
 		}
-		if !reported {
-			time.Sleep(time.Second)
+		if finished || time.Since(start) >= wait {
+			break
+		}
+		select {
+		case <-c.ctx.Done():
+			return nil, c.ctx.Err()
+		case <-time.After(2 * time.Second):
 		}
 	}
-	if syncErr != nil {
-		return map[string]any{"error": syncErr.Error(), "backup_nodes": out}, nil
-	}
-	if !reported {
-		return map[string]any{"note": "sync finished; the node has not reported the new state yet, check get_container in a moment", "backup_nodes": out}, nil
+	switch {
+	case in.Stop:
+		return map[string]any{"note": "sync stopped; files already sent are kept and the next sync continues from there", "backup_nodes": out}, nil
+	case !finished:
+		return map[string]any{"note": "still syncing on the node; check progress with get_container or call sync_backup again with wait_seconds", "backup_nodes": out}, nil
 	}
 	return map[string]any{"backup_nodes": out}, nil
 }

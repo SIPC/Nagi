@@ -217,8 +217,8 @@ func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, li
 	// 源节点不在线时，上线后由 Sync 补推。
 	if err := s.push(ctx, projectID, name); err == nil && len(added) > 0 {
 		go func() {
-			for _, id := range added {
-				_ = s.syncBackup(context.Background(), projectID, name, id)
+			if err := s.syncBackup(context.Background(), projectID, name, added...); err != nil {
+				s.Log.Warn("开始第一次同步失败", "project", projectID, "container", name, "nodes", added, "err", err)
 			}
 		}()
 	}
@@ -237,45 +237,121 @@ func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, li
 	return s.reload(ctx, projectID)
 }
 
-// syncBackup 让源节点立即同步到备份节点 nodeID（为空时依次同步到所有备份节点），同步完才返回。
+// supportsAsyncSync 判断节点支持后台同步、上报进度和停止同步（NodeInfo.async_backup_sync），按它在线时最近一次上报的。
+func (s *Service) supportsAsyncSync(nodeID string) bool {
+	conn, err := s.Nodes.Peek(nodeID)
+	return err == nil && conn.LastReport().GetNode().GetAsyncBackupSync()
+}
+
+// oldNodeSyncWait 是旧版本的节点（同步完才返回）面板在后台最多等多久。等不及时取消，已经传完的文件留在备份节点上，下次接着传。
+const oldNodeSyncWait = 24 * time.Hour
+
+// syncStartTimeout 是请节点开始同步最多等多久（只是开始，不等同步结束）。
+const syncStartTimeout = 30 * time.Second
+
+// backupList 返回要同步的备份节点：ids 为空时容器所有的备份节点，否则确认它们都是。
+func (s *Service) backupList(ctx context.Context, c store.Container, ids ...string) ([]string, error) {
+	list := store.BackupNodes(c)
+	if len(list) == 0 {
+		return nil, invalid("容器 %s 没有设置备份节点", c.Name)
+	}
+	for _, id := range ids {
+		if !slices.Contains(list, id) {
+			return nil, invalid("节点 %s 不是容器 %s 的备份节点", s.NodeName(ctx, id), c.Name)
+		}
+	}
+	if len(ids) > 0 {
+		return ids, nil
+	}
+	return list, nil
+}
+
+// nonEmpty 返回只含 id 的列表，id 为空时返回 nil（表示全部）。
+func nonEmpty(id string) []string {
+	if id == "" {
+		return nil
+	}
+	return []string{id}
+}
+
+// syncBackup 让源节点开始同步到备份节点 nodeID（为空时到所有备份节点，节点依次同步），不等同步结束：
+// 同步在节点上跑完（面板这边不设时限），进度和结果随容器状态上报。旧版本的节点同步完才返回，面板在后台等，最多 oldNodeSyncWait。
 // 设置了顶替时由持有租约、运行容器的节点同步（就是 c.NodeID）。
-func (s *Service) syncBackup(ctx context.Context, projectID, name, nodeID string) error {
+func (s *Service) syncBackup(ctx context.Context, projectID, name string, nodeIDs ...string) error {
 	c, err := s.container(ctx, projectID, name)
 	if err != nil {
 		return err
 	}
-	list := store.BackupNodes(c)
-	if len(list) == 0 {
-		return invalid("容器 %s 没有设置备份节点", name)
-	}
-	if nodeID != "" {
-		if !slices.Contains(list, nodeID) {
-			return invalid("节点 %s 不是容器 %s 的备份节点", s.NodeName(ctx, nodeID), name)
-		}
-		list = []string{nodeID}
+	list, err := s.backupList(ctx, c, nodeIDs...)
+	if err != nil {
+		return err
 	}
 	agent, err := s.agent(ctx, c.NodeID)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Hour)
+	if s.supportsAsyncSync(c.NodeID) {
+		ctx, cancel := context.WithTimeout(ctx, syncStartTimeout)
+		defer cancel()
+		var errs []error
+		for _, id := range list {
+			if _, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id, Async: true}); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), oldNodeSyncWait)
+		defer cancel()
+		for _, id := range list {
+			if _, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id}); err != nil {
+				s.Log.Warn("同步到备份节点失败", "project", projectID, "container", name, "node", id, "err", err)
+			}
+		}
+	}()
+	return nil
+}
+
+// stopBackupSync 让源节点停止同步到备份节点 nodeID（为空时到所有备份节点的）。
+func (s *Service) stopBackupSync(ctx context.Context, projectID, name, nodeID string) error {
+	c, err := s.container(ctx, projectID, name)
+	if err != nil {
+		return err
+	}
+	list, err := s.backupList(ctx, c, nonEmpty(nodeID)...)
+	if err != nil {
+		return err
+	}
+	agent, err := s.agent(ctx, c.NodeID)
+	if err != nil {
+		return err
+	}
+	if !s.supportsAsyncSync(c.NodeID) {
+		return invalid("节点 %s 版本过低，不能停止同步，请先升级节点", s.NodeName(ctx, c.NodeID))
+	}
+	ctx, cancel := context.WithTimeout(ctx, syncStartTimeout)
 	defer cancel()
 	var errs []error
 	for _, id := range list {
-		st, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id})
-		switch {
-		case err != nil:
+		if _, err := agent.SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: projectID, Container: name, TargetNodeId: id, Async: true, Cancel: true}); err != nil {
 			errs = append(errs, err)
-		case st.GetLastError() != "":
-			errs = append(errs, i18n.Errorf("%s：%s", s.NodeName(ctx, id), st.GetLastError()))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// SyncBackup 立即同步到备份节点（nodeID 为空时依次同步到所有备份节点），同步完才返回。
+// StopBackupSync 停止同步到备份节点（nodeID 为空时停止到所有备份节点的）。
+func (s *Service) StopBackupSync(ctx context.Context, projectID, name, nodeID string) (*nagiv1.Project, error) {
+	if err := s.stopBackupSync(ctx, projectID, name, nodeID); err != nil {
+		return nil, err
+	}
+	return s.reload(ctx, projectID)
+}
+
+// SyncBackup 开始同步到备份节点（nodeID 为空时到所有备份节点），不等同步结束，见 syncBackup。
 func (s *Service) SyncBackup(ctx context.Context, projectID, name, nodeID string) (*nagiv1.Project, error) {
-	if err := s.syncBackup(ctx, projectID, name, nodeID); err != nil {
+	if err := s.syncBackup(ctx, projectID, name, nonEmpty(nodeID)...); err != nil {
 		return nil, err
 	}
 	return s.reload(ctx, projectID)

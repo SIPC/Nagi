@@ -336,6 +336,11 @@ message SyncBackupRequest {
   string project_id = 1;
   string container = 2;
   string target_node_id = 3;
+  // 只开始同步就返回（NodeInfo.async_backup_sync）：节点在后台做完，进度和结果在容器状态里上报。
+  // 已经在同步时不再开一次，这次结束后再同步一次（那一次可能是在最新的快照之前开始的）。旧版本的节点不认识，同步完才返回。
+  bool async = 4;
+  // 停止正在进行的同步（也取消排着的下一次）。已经传完的文件留着，下次接着传。
+  bool cancel = 5;
 }
 
 message AcceptReplicaResponse {}

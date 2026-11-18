@@ -83,6 +83,7 @@ export default {
     SetBackupReplicaDir: "Edit replica location",
     ConfirmPendingHA: "Confirm restored high availability settings",
     SyncBackup: "Sync backup",
+    StopBackupSync: "Stop backup sync",
     RestoreFromBackup: "Restore from backup",
     MigrateContainer: "Migrate container",
     RedeployElsewhere: "Redeploy on another node",

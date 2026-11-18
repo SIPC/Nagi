@@ -195,8 +195,9 @@ var allTools = []tool{
 			nagiv1connect.ProjectServiceListSnapshotsProcedure, nagiv1connect.ProjectServiceDeleteSnapshotProcedure}},
 		toolDeleteSnapshot),
 	def(tool{name: "sync_backup", title: "Sync to backup node", write: true,
-		description: "Sync a container's snapshots to its backup nodes now, one after another (or only to backup_node), and wait until done.",
-		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSyncBackupProcedure}},
+		description: "Start syncing a container's snapshots to its backup nodes now, one after another (or only to backup_node). The sync runs on the node with no time limit; this waits up to wait_seconds (default 30) and returns each backup node's state with progress (bytes, speed, ETA). Check progress later with get_container. stop stops a running sync instead; files already sent are kept and the next sync continues from there.",
+		procedures: []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.ProjectServiceSyncBackupProcedure,
+			nagiv1connect.ProjectServiceStopBackupSyncProcedure}},
 		toolSyncBackup),
 	def(tool{name: "save_route", title: "Save port mapping", write: true,
 		description: "Create or change a port mapping: HTTP with domains and automatic HTTPS, or TCP/UDP on a published port. Pass name to change an existing one. Takes effect immediately.",
@@ -768,8 +769,9 @@ func toolGetContainer(c *call, in ContainerArg) (any, error) {
 		if i < len(m.GetBackups()) {
 			b = m.GetBackups()[i]
 		}
-		out.Backups = append(out.Backups, backupView{Node: nodeName(nodes, id), LastSync: ts(b.GetLastSync()), Error: b.GetLastError(), Syncing: b.GetSyncing(),
-			Location: m.GetBackupReplicaDirs()[id]})
+		v := backupViewOf(nodeName(nodes, id), b)
+		v.Location = m.GetBackupReplicaDirs()[id]
+		out.Backups = append(out.Backups, v)
 	}
 	if f := m.GetFailover(); f != nil {
 		out.Failover = "standby on " + nodeName(nodes, f.GetB().GetNodeId())
@@ -809,9 +811,38 @@ type backupView struct {
 	Node     string `json:"node"`
 	LastSync string `json:"last_sync,omitempty"`
 	Error    string `json:"error,omitempty"`
-	Syncing  bool   `json:"syncing,omitempty"`
+	// Stopped：最近一次同步是用户停止的（error 是停止的说明）。
+	Stopped bool `json:"stopped,omitempty"`
+	Syncing bool `json:"syncing,omitempty"`
+	// Progress：正在进行的同步的进度（节点支持时），排队等前面的备份节点时为空。
+	Progress *syncProgressView `json:"progress,omitempty"`
 	// Location：单独指定的副本存放位置（见 set_replica_location），为空时在节点的副本目录里。
 	Location string `json:"replica_location,omitempty"`
+}
+
+// syncProgressView 是同步到一个备份节点的进度（见 docs/snapshot.md#同步的进度）。
+type syncProgressView struct {
+	BytesDone      int64  `json:"bytes_done"`
+	BytesTotal     int64  `json:"bytes_total"`
+	BytesPerSecond int64  `json:"bytes_per_second"`
+	ETASeconds     int64  `json:"eta_seconds,omitempty"`
+	StartedAt      string `json:"started_at"`
+	Retries        uint32 `json:"retries,omitempty"`
+	RetryError     string `json:"retry_error,omitempty"`
+}
+
+// backupViewOf 把源节点上报的同步状态转成输出的格式。
+func backupViewOf(node string, b *nagiv1.BackupStatus) backupView {
+	v := backupView{Node: node, LastSync: ts(b.GetLastSync()), Error: b.GetLastError(), Stopped: b.GetStopped(), Syncing: b.GetSyncing()}
+	if b.GetSyncing() && b.GetStartedAt() != nil {
+		p := &syncProgressView{BytesDone: b.GetBytesDone(), BytesTotal: b.GetBytesTotal(), BytesPerSecond: b.GetBytesPerSecond(),
+			StartedAt: ts(b.GetStartedAt()), Retries: b.GetRetries(), RetryError: b.GetRetryError()}
+		if left := b.GetBytesTotal() - b.GetBytesDone(); left > 0 && b.GetBytesPerSecond() > 0 {
+			p.ETASeconds = left / b.GetBytesPerSecond()
+		}
+		v.Progress = p
+	}
+	return v
 }
 
 type failoverView struct {

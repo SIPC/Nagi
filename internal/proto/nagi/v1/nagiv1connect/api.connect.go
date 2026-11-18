@@ -467,6 +467,9 @@ const (
 	// ProjectServiceSyncBackupProcedure is the fully-qualified name of the ProjectService's SyncBackup
 	// RPC.
 	ProjectServiceSyncBackupProcedure = "/nagi.v1.ProjectService/SyncBackup"
+	// ProjectServiceStopBackupSyncProcedure is the fully-qualified name of the ProjectService's
+	// StopBackupSync RPC.
+	ProjectServiceStopBackupSyncProcedure = "/nagi.v1.ProjectService/StopBackupSync"
 	// ProjectServiceListBackupSnapshotsProcedure is the fully-qualified name of the ProjectService's
 	// ListBackupSnapshots RPC.
 	ProjectServiceListBackupSnapshotsProcedure = "/nagi.v1.ProjectService/ListBackupSnapshots"
@@ -3972,8 +3975,11 @@ type ProjectServiceClient interface {
 	SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(context.Context, *connect.Request[v1.SetContainerSnapshotScheduleRequest]) (*connect.Response[v1.Project], error)
-	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点）。节点支持时只开始同步就返回，进度和结果看 Container.backups；
+	// 旧版本的节点同步完才有结果，面板在后台等。
 	SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
+	// 停止正在进行的同步（node_id 为空时停止到所有备份节点的）。已经传完的文件留在备份节点上，下次接着传。
+	StopBackupSync(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
@@ -4228,6 +4234,12 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(projectServiceMethods.ByName("SyncBackup")),
 			connect.WithClientOptions(opts...),
 		),
+		stopBackupSync: connect.NewClient[v1.BackupNodeRef, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceStopBackupSyncProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("StopBackupSync")),
+			connect.WithClientOptions(opts...),
+		),
 		listBackupSnapshots: connect.NewClient[v1.BackupNodeRef, v1.ListSnapshotsResponse](
 			httpClient,
 			baseURL+ProjectServiceListBackupSnapshotsProcedure,
@@ -4451,6 +4463,7 @@ type projectServiceClient struct {
 	setContainerAlertRules       *connect.Client[v1.SetContainerAlertRulesRequest, v1.Project]
 	setContainerSnapshotSchedule *connect.Client[v1.SetContainerSnapshotScheduleRequest, v1.Project]
 	syncBackup                   *connect.Client[v1.BackupNodeRef, v1.Project]
+	stopBackupSync               *connect.Client[v1.BackupNodeRef, v1.Project]
 	listBackupSnapshots          *connect.Client[v1.BackupNodeRef, v1.ListSnapshotsResponse]
 	setBackupReplicaDir          *connect.Client[v1.SetBackupReplicaDirRequest, v1.DeployEvent]
 	restoreFromBackup            *connect.Client[v1.RestoreFromBackupRequest, v1.DeployEvent]
@@ -4642,6 +4655,11 @@ func (c *projectServiceClient) SetContainerSnapshotSchedule(ctx context.Context,
 // SyncBackup calls nagi.v1.ProjectService.SyncBackup.
 func (c *projectServiceClient) SyncBackup(ctx context.Context, req *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error) {
 	return c.syncBackup.CallUnary(ctx, req)
+}
+
+// StopBackupSync calls nagi.v1.ProjectService.StopBackupSync.
+func (c *projectServiceClient) StopBackupSync(ctx context.Context, req *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error) {
+	return c.stopBackupSync.CallUnary(ctx, req)
 }
 
 // ListBackupSnapshots calls nagi.v1.ProjectService.ListBackupSnapshots.
@@ -4857,8 +4875,11 @@ type ProjectServiceHandler interface {
 	SetContainerAlertRules(context.Context, *connect.Request[v1.SetContainerAlertRulesRequest]) (*connect.Response[v1.Project], error)
 	// 容器单独设置定时快照计划，schedule 为空时改回用项目的。
 	SetContainerSnapshotSchedule(context.Context, *connect.Request[v1.SetContainerSnapshotScheduleRequest]) (*connect.Response[v1.Project], error)
-	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点），同步完才返回。
+	// 立即同步到备份节点（node_id 为空时依次同步到所有备份节点）。节点支持时只开始同步就返回，进度和结果看 Container.backups；
+	// 旧版本的节点同步完才有结果，面板在后台等。
 	SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
+	// 停止正在进行的同步（node_id 为空时停止到所有备份节点的）。已经传完的文件留在备份节点上，下次接着传。
+	StopBackupSync(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error)
 	// 备份节点上副本里的快照（node_id 为空时用第一个备份节点）。
 	ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error)
 	// 修改容器在一个备份节点上的副本存放位置，把副本移过去（dir 为空表示改回节点的默认目录）。只有管理员能用，要先做高权限确认。
@@ -5107,6 +5128,12 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceSyncBackupProcedure,
 		svc.SyncBackup,
 		connect.WithSchema(projectServiceMethods.ByName("SyncBackup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceStopBackupSyncHandler := connect.NewUnaryHandler(
+		ProjectServiceStopBackupSyncProcedure,
+		svc.StopBackupSync,
+		connect.WithSchema(projectServiceMethods.ByName("StopBackupSync")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceListBackupSnapshotsHandler := connect.NewUnaryHandler(
@@ -5361,6 +5388,8 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSetContainerSnapshotScheduleHandler.ServeHTTP(w, r)
 		case ProjectServiceSyncBackupProcedure:
 			projectServiceSyncBackupHandler.ServeHTTP(w, r)
+		case ProjectServiceStopBackupSyncProcedure:
+			projectServiceStopBackupSyncHandler.ServeHTTP(w, r)
 		case ProjectServiceListBackupSnapshotsProcedure:
 			projectServiceListBackupSnapshotsHandler.ServeHTTP(w, r)
 		case ProjectServiceSetBackupReplicaDirProcedure:
@@ -5558,6 +5587,10 @@ func (UnimplementedProjectServiceHandler) SetContainerSnapshotSchedule(context.C
 
 func (UnimplementedProjectServiceHandler) SyncBackup(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SyncBackup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) StopBackupSync(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.StopBackupSync is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) ListBackupSnapshots(context.Context, *connect.Request[v1.BackupNodeRef]) (*connect.Response[v1.ListSnapshotsResponse], error) {
