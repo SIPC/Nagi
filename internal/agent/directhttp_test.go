@@ -262,14 +262,14 @@ func TestDirectHTTPDownload(t *testing.T) {
 	if tw.Code != http.StatusNotFound {
 		t.Errorf("HTTPS 上的 HTTP 链接：%d", tw.Code)
 	}
-	// 发出的内容有上限：文件大小的 2 倍加 linkAllowance。在上限之内照常下载，超出的那次中断，之后 404。
+	// 发出的内容有上限：文件大小加 linkAllowance。在上限之内照常下载，超出的那次中断，之后 404。
 	tok3c := c
 	tok3c.ID = "00000000000000ee"
 	tok3 := directdl.SignHTTP(key, tok3c)
 	if _, err := s.PrepareDirectHttp(context.Background(), &nagiv1.PrepareDirectHttpRequest{Token: tok3}); err != nil {
 		t.Fatal(err)
 	}
-	full := (2*int64(len(content)) + linkAllowance) / int64(len(content))
+	full := (int64(len(content)) + linkAllowance) / int64(len(content))
 	for i := range full {
 		if w := httpDLRequest(a, http.MethodGet, directdl.HTTPPathPrefix+tok3, ""); w.Code != http.StatusOK || w.Body.Len() != len(content) {
 			t.Fatalf("第 %d 次：%d %d", i+1, w.Code, w.Body.Len())

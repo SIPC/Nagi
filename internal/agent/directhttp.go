@@ -200,14 +200,16 @@ type preparedLink struct {
 	expires time.Time
 	// ip 是第一次下载的来源地址：之后只认这个地址（中间人拿到链接也不能再下载一份密文）。
 	ip string
-	// served 是这个链接已经发出的字节，limit 是上限（文件大小的 2 倍加一点余量，目录打包不限，本来只能用一次）。
+	// served 是这个链接已经发出的字节，limit 是上限（文件大小加 linkAllowance，目录打包不限，本来只能用一次）。
 	served, limit int64
 	// changed：下载中途发现文件变了，这个链接作废，之后一律 409。
 	changed bool
 }
 
-// linkAllowance 是每个链接在文件大小 2 倍之外允许多发的字节（分段重试）。
-const linkAllowance = 1 << 20
+// linkAllowance 是每个链接在文件大小之外允许多发的字节：续传、分段重试时，断开前发出去却没收到的部分要重发。
+// 它也是同一段密钥流最多能多加密的量：抢先占住链接的中间人先下一份、再开一个请求故意读慢，
+// 文件在这期间被改写时，最多拿到这么多新旧两份同一段密钥流加密的内容（另见 recheckEvery）。
+const linkAllowance = 4 << 20
 
 // maxPrepared：同时登记的链接最多这么多（每个 5 分钟后过期）。
 const maxPrepared = 10000
@@ -346,7 +348,7 @@ func (s *agentService) PrepareDirectHttp(ctx context.Context, req *nagiv1.Prepar
 	expires := time.Unix(c.Expires, 0).Add(time.Minute)
 	link := &preparedLink{etag: resp.Etag, archive: resp.Archive, expires: expires}
 	if !resp.Archive {
-		link.limit = 2*resp.Size + linkAllowance
+		link.limit = resp.Size + linkAllowance
 	}
 	if err := d.remember(c.ID, link); err != nil {
 		return nil, err
@@ -382,8 +384,9 @@ func (d *directDL) hash(ctx context.Context, stream filehttp.ChunkStream) (strin
 	}
 }
 
-// recheckEvery：下载中每发出这么多字节再核对一次文件的版本，发完时也核对一次。
-var recheckEvery int64 = 8 << 20
+// recheckEvery：下载中每发出这么多字节再核对一次文件的版本，发完时也核对一次。和 linkAllowance 一样大：
+// 文件在核对的间隔内被改写时，同一段密钥流最多多加密这么多。
+var recheckEvery int64 = 4 << 20
 
 // currentETag 重新看一下文件现在的版本（只读文件头和 1 个字节）。
 func (d *directDL) currentETag(ctx context.Context, c directdl.Claims) (string, error) {
