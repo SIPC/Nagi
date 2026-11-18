@@ -154,26 +154,26 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
 | `create_project` | 新建项目（不带容器） | `CreateProject` |
-| `update_project` | 修改项目名称、网络名、定时快照（开关、间隔或每天定时）、份数上限、内部端口、出站限制（模式和放行地址，只有管理员能改，接口检查），立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
+| `update_project` | 修改项目名称、网络名、定时快照（开关、间隔或每天定时）、份数上限、内部端口（`容器:端口` 或 `服务.容器组:端口`，UDP 加 `/udp`）、出站限制（模式和放行地址，只有管理员能改，接口检查），立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
 | `set_alert_rules` | 修改项目里容器的告警规则（重启、5xx、4xx、健康检查、快照、备份同步、CPU、流量、出站拦截），或者给一个容器单独设置；`use_project` 让容器改回用项目的。只改传了的项 | `UpdateProjectSettings`、`SetContainerAlertRules` |
 | `update_shared_env` | 设置、删除共享变量，或标为密钥，存为草稿，返回引用了改动变量的容器。用 `deploy` 的 `apply_shared_env` 生效 | `SaveSharedEnv` |
 | `discard_shared_env` | 丢弃共享变量的草稿 | `DiscardSharedEnv` |
-| `connect_project`、`disconnect_project` | 连接、断开两个项目，立即生效 | `ConnectProject`、`DisconnectProject` |
+| `connect_project`、`disconnect_project` | 连接、断开两个项目，立即生效。连接后用 `容器.网络名` 访问对方的容器，容器组里的服务是 `服务.组.网络名` | `ConnectProject`、`DisconnectProject` |
 | `login_registry`、`logout_registry` | 登录、退出项目的私有镜像仓库。密码存在面板上，不返回 | `LoginRegistry`、`LogoutRegistry` |
-| `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口就是发布到节点上的端口，项目里的容器互相访问不需要 | `AddContainer`、`Deploy` |
-| `update_container` | 修改配置存为草稿，覆盖网页上容器配置的所有项：镜像、启动命令、端口、持久化目录、工作目录、资源限制、健康检查，或整份 compose；容器变量（设置、删除、标为密钥）、容器组的服务级环境变量；git 来源、保留路径、有无状态、部署依赖。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝。`add_container` 也接受同样的配置项 | `SaveDraft` |
+| `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口第一次部署时导入成映射、对外开放（不认 `host_ip`，只导入一次），项目里的容器互相访问不需要。添加时就能用 `env_secret` 把变量标为密钥，容器组可以带 `service_env`。照常保存，结果里带 `warnings`（见[给 agent 的说明](#给-agent-的说明)） | `AddContainer`、`Deploy` |
+| `update_container` | 修改配置存为草稿，覆盖网页上容器配置的所有项：镜像、启动命令、端口、持久化目录、工作目录、资源限制、健康检查，或整份 compose；容器变量（设置、删除、标为密钥）、容器组的服务级环境变量；git 来源、保留路径、有无状态、部署依赖。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝。`add_container` 也接受同样的配置项。结果里带 `warnings`：只检查这次改到的部分（新的 compose、改了的端口、这次设置的变量值、镜像和有无状态），只改变量时不重复提醒 compose 原有的写法 | `SaveDraft` |
 | `set_display_name` | 修改容器的显示名称 | `SetContainerDisplayName` |
 | `set_project_group` | 只给管理员：把项目放进分组（新名称即新建），或移出分组。会改变成员的访问范围（见 [panel.md#分组和标签](panel.md#分组和标签)） | `SetProjectGroup` |
 | `set_node_tags` | 只给管理员：替换节点的标签（最多 10 个） | `SetNodeTags` |
-| `set_snapshot_schedule` | 给容器单独设置定时快照（开关、间隔或每天定时），或改回用项目的 | `SetContainerSnapshotSchedule` |
+| `set_snapshot_schedule` | 给容器单独设置定时快照（开关、间隔或每天定时），或改回用项目的。有备份节点或顶替的容器关掉定时快照时，结果的 `warnings` 提醒（备份节点在每次定时快照后同步）；`set_backup_node` 添加备份节点时同样检查 | `SetContainerSnapshotSchedule` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
-| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署 | `Deploy`、`GetProject` |
+| `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚；没有健康检查的服务在 `health.note` 里注明只确认了在运行。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署。成功和失败都返回 `warnings`：部署日志里的提醒行（以「注意：」「警告：」开头的，端口导入和没导入的，保留路径覆盖了上传内容的），以及部署前就能看出的（有共享变量草稿却没带 `apply_shared_env`，git 来源从没拉取过却没带 `pull_git`） | `Deploy`、`GetProject` |
 | `restore_snapshot` | 从定时或手动快照恢复数据。不带 `confirm` 只返回预览（会发生什么、数据会怎样）；`confirm` 原样填快照 ID 才执行。执行前先给当前数据拍一份保护快照，拍失败就不恢复；保护快照会让要恢复的快照因份数上限被删掉时，直接拒绝。恢复时停止容器、替换 data/ 和 volumes/，配置不变 | `ListSnapshots`、`CreateSnapshot`、`RestoreSnapshot` |
 | `control_container` | 启动、停止、重启。带 `service` 时只控制容器组里的这个服务（服务名见 `get_container` 的 `services`），其他服务不动；顶替的规则按整个容器算 | `ControlContainer`、`ControlService` |
 | `rollback` | 回到某个版本，只回配置和文件。带 `restore_data` 时同时把数据恢复到这个版本被替换之前，要先预览、`confirm` 原样填版本号才执行 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
 | `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |
-| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口） | `SaveRoute` |
+| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口）。HTTP 服务用它绑域名，部署过的容器改对外端口也用它（镜像表单和 compose 的 ports 只导入一次） | `SaveRoute` |
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 开始依次同步到所有备份节点（或只同步 `backup_node`）。同步在源节点上进行、不限时，工具最多等 `wait_seconds`（默认 30，最多 600）后返回各自的状态和进度（`bytes_done`、`bytes_total`、`bytes_per_second`、`eta_seconds`、重试次数），没传完时说明仍在进行，之后用 `get_container` 查；`stop` 停止正在进行的同步，已传的文件留着，下次接着传（见 [snapshot.md](snapshot.md#同步的进度)） | `SyncBackup`、`StopBackupSync`、`GetProject` |
@@ -209,9 +209,9 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 | 工具 | 内容 | 用到的接口 |
 | --- | --- | --- |
-| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，部署时会被替换，保留的路径除外）；带上时列出卷里的一个目录，带 `snapshot_id` 时列出快照里的，带 `sizes` 时统计每个子目录的大小 | `ListVolumes`、`ListVolumeFiles`、`ListVolumeDirSizes` |
+| `list_files` | 不带 `volume` 时列出容器的卷（`.data` 是容器的 data/ 目录，git 拉取、上传、回滚时会被替换，保留的路径除外）；带上时列出卷里的一个目录，带 `snapshot_id` 时列出快照里的，带 `sizes` 时统计每个子目录的大小 | `ListVolumes`、`ListVolumeFiles`、`ListVolumeDirSizes` |
 | `read_file` | 读一个文件，最多 256 KB，返回内容和 SHA-256。默认只读文本；`encoding` 为 `base64` 时任何文件都按 base64 返回。目录拒绝 | 节点的 `VolumeDownload` |
-| `write_file` | 新建或整个覆盖一个文件，最多 1 MB：文本放 `content`，二进制（例如要用 `extract_file` 解开的压缩包）放 `content_base64`。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝，原来不在的文件期间被建了也拒绝（节点在写入前、持有容器锁时核对）；已有的文件超过 1 MB 时不能覆盖 | 节点的 `VolumeUpload` |
+| `write_file` | 新建或整个覆盖一个文件，最多 1 MB：文本放 `content`，二进制（例如要用 `extract_file` 解开的压缩包）放 `content_base64`。文件已经在时必须带 `expected_sha256`（`read_file` 返回的），期间被改过就拒绝，原来不在的文件期间被建了也拒绝（节点在写入前、持有容器锁时核对）；已有的文件超过 1 MB 时不能覆盖。`.data` 里的文件在 git 拉取、上传、回滚时被替换（保留路径除外）。写的是 `.env` 这类文件时，结果的 `warnings` 提醒改用变量：Nagi 不会把它传给 compose | 节点的 `VolumeUpload` |
 | `move_files` | 在一个卷里移动、复制（`action` 为 `move`、`copy`）或原地改名（`rename`）。同名时默认什么都不改、返回冲突的名字，agent 再选 `conflict`：`rename`（保留两者）、`skip`、`overwrite`。覆盖会丢掉目标位置原来的内容，先预览，`confirm` 填预览给的确认码才执行 | `RenameVolumeFile`、`MoveVolumeFiles`、`CopyVolumeFiles` |
 | `compress_files` | 把同一个目录里的几项打包成 zip 或 tar.gz，放在同一个卷里。同名的处理同上 | `CompressVolumeFiles` |
 | `extract_file` | 解开 zip、tar.gz、tar：默认解到以压缩包命名的新目录（和网页一样），`merge` 时解到已有的目录里。同名的处理同上 | `ExtractVolumeFile` |
@@ -261,13 +261,13 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_node_files` | 列出节点上的一个目录：类型、大小、权限、属主、访问规则（`normal`、`confirm`、`readonly`、`denied`），`sizes` 时统计子目录大小 | `ListNodeDir`、`ListNodeDirSizes` |
 | `read_node_file` | 读一个文本文件，最多 256 KB，返回内容和 SHA-256；二进制文件只返回属性 | `ReadNodeFile` |
 | `get_node_download_link` | 节点上一个文件或目录的直连下载链接或命令，规则同 `get_download_link`，记 `DownloadNodeFile` | 面板签发，节点的 `PrepareDirectHttp` |
-| `write_node_file` | 新建或覆盖一个文本文件，最多 1 MB。覆盖时要带 `read_node_file` 返回的 `expected_sha256`，旧内容按网页的规则保留备份 | `ListNodeDir`、`WriteNodeFile` |
+| `write_node_file` | 新建或覆盖一个文本文件，最多 1 MB。覆盖时要带 `read_node_file` 返回的 `expected_sha256`，旧内容按网页的规则保留备份。路径在节点的项目根目录（容器目录）里时，预览的 `warnings` 提醒：`compose.yml`、`override.yml`、`.env` 这些每次部署都重写，改动绕过草稿、版本和顶替 | `ListNodeDir`、`WriteNodeFile` |
 | `create_node_dir` | 新建目录（连同上级目录），不用确认 | `CreateNodeDir` |
 | `delete_node_file` | 删除文件或目录（连同里面的内容），符号链接只删链接，不备份 | `ListNodeDir`、`DeleteNodeFile` |
 | `move_node_files` | 移动、复制、改名，同名的处理和 `move_files` 一样 | `RenameNodeFile`、`MoveNodeFiles`、`CopyNodeFiles` |
 | `compress_node_files`、`extract_node_file` | 打包、解压 | `CompressNodeFiles`、`ExtractNodeFile` |
 | `restore_node_file` | 不带 `backup_id` 时列出文件保留的旧版本；带上时恢复这一版（要确认） | `ListNodeFileBackups`、`RestoreNodeFileBackup` |
-| `import_compose_dir` | 把节点上现有的 compose 目录导入为项目里的容器组，数据留在原处。不带 `confirm` 时读目录，返回导入后的 compose、变量名（不给值）、原来运行着的 compose 项目和注意事项；确认后才导入，不部署 | `InspectComposeDir`、`ImportComposeDir` |
+| `import_compose_dir` | 把节点上现有的 compose 目录导入为项目里的容器组，数据留在原处。不带 `confirm` 时读目录，返回导入后的 compose、变量名（不给值）、原来运行着的 compose 项目和注意事项；确认后才导入，不部署。预览和结果里带 `warnings`：写死的环境变量、原目录以外的宿主机路径这类（compose 是用户原有的，不提醒单个服务和 `env_file`） | `InspectComposeDir`、`ImportComposeDir` |
 | `isolate_node` | 隔离可能被攻破的节点（`undo` 解除），`confirm` 填节点名 | `IsolateNode`、`UnisolateNode` |
 | `confirm_pending_ha` | 让从节点缓存拼回的顶替和备份节点设置生效（`discard` 放弃），预览列出涉及的节点，配置有特权时醒目提示，`confirm` 填容器名 | `ConfirmPendingHA` |
 
@@ -291,6 +291,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 节点在本地关闭了节点访问（`nagi node access disable`）时拒绝，面板没法替节点打开。备用面板上没有这个工具。
 - 每次执行都记进活动记录（`NodeExec`，详情是命令和退出码），并向告警配置里的渠道发一条通知（不带命令内容）；节点也记一条本地日志，带面板指纹、用户名和令牌名。
 - shell 和环境变量和节点终端一样（见 [node-access.md](node-access.md#终端)）：root 的登录 shell，`sh -lc` 执行，不分配终端，没有输入。节点跑在容器里时，命令进的是这个容器，返回里会注明。
+- 命令里有 `docker run`、`docker compose up/stop/rm` 这类直接改动容器的命令，或者 `docker login` 时，预览的 `warnings` 提醒改用 `update_container`、`deploy`、`control_container` 和 `login_registry`。只提醒，确认后照常执行。
 - 和 `exec` 共用每分钟 10 次的限额。节点要升级到支持 `NodeExec` 的版本，旧节点返回「节点版本过旧」。命令的输出和日志一样当作不可信数据。
 
 ### 副本的存放位置
@@ -337,8 +338,50 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 给 agent 的说明
 
-- **服务说明**：MCP 初始化时返回一段简短说明：Nagi 的概念（节点、项目、容器、容器组）、修改要先存草稿再部署、操作员不能保存带特权的配置（[node-access.md](node-access.md#操作员不能借-compose-拿到节点-root)）、当前令牌的角色和权限。
-- **资源**：`nagi://docs/containers`：容器的种类、compose 的规则、变量的三层、操作员不能保存的配置，内容摘自 [agent.md](agent.md) 和 [node-access.md](node-access.md)，写在 `internal/server/mcp/resources.go` 里随程序编进去。改了那两份文档里相应的规则时要跟着改。
+agent 常见的乱部署：单个服务也写 compose，值写死在 compose 里或另写 `.env`，数据挂到容器目录外的宿主机路径，数据库开放端口，用 IP 或 `host.docker.internal` 互相访问。说明分四层，越靠前越短：
+
+- **服务说明**：MCP 初始化时返回，每次连接都发，所以只写一小段：Nagi 的概念（节点、项目、容器、容器组）、修改要先存草稿再部署、部署规则的摘要（每条一句），以及操作员不能保存带特权的配置（[node-access.md](node-access.md#操作员不能借-compose-拿到节点-root)）、当前令牌的角色和权限。部署规则：
+  - 单个服务用镜像表单；只有用户给了 compose，或者几个服务必须在同一台机器上一起运行时，才用容器组。
+  - 一起工作的容器放在同一个项目里，优先拆成几个容器；只用名字互相访问（`容器`、`服务.组`），不用 IP 和 `localhost`；访问别的项目先 `connect_project`，用 `容器.网络名`。
+  - 配置和密钥放 Nagi 的变量（`env`、`env_secret`，compose 里写 `${NAME}`，或者共享变量）；不在 compose 里写死值，不写 `.env`、`env_file`。
+  - 数据放持久化目录（`volumes`）或相对路径、命名卷，都在容器目录下；不挂容器目录外的宿主机路径。
+  - 数据库、缓存这类内部服务不写 `ports`：第一次部署时导入成映射、对外开放，不认 `host_ip`。
+  - HTTP 用 `save_route` 绑域名；部署过的容器改对外端口用 `save_route`，不改 ports（只导入一次）。
+  - 不用 `host.docker.internal`、`host-gateway`、`172.17.0.1`、局域网 IP 访问节点本机或局域网：新项目默认拦截（[出站限制](agent.md#出站限制)）。
+  - 不用 `node_exec` 执行 `docker run`、`docker compose up/stop/rm`，不改容器目录里的 `compose.yml`、`override.yml`、`.env`。
+  - 看每次 `add_container`、`update_container`、`deploy` 结果里的 `warnings`，改掉，或者告诉用户为什么保留。
+- **资源**：
+  - `nagi://docs/containers`：容器的种类、compose 的规则（相对路径、命名卷、端口怎么导入、内部端口的写法）、变量的三层、操作员不能保存的配置，内容摘自 [agent.md](agent.md) 和 [node-access.md](node-access.md)。
+  - `nagi://docs/deploy`：部署指南，写全部规则和「Do / Don't」例子：选哪种形式；项目、名字和地址（`服务.组`、`容器.网络名`、`internal_ports` 的写法、容器名不能改）；端口和域名；变量（共享变量要带 `apply_shared_env`、不访问节点和局域网）；数据（持久化目录、不设 `stateful: no`、`workdir` 和保留路径、固定大版本、有备份节点时不关定时快照、`exec` 和 `write_file` 的改动会被替换）；镜像和文件（不写 `build`、`login_registry`、`pull_git` 和 deploy key）；Nagi 会处理的 compose 字段（不写 `container_name`、`network_mode: host`、external，不用写 `restart`、`logging`）；修改和部署（修订号、健康检查和 `wait_healthy_seconds`、部署结果的提醒、`depends_on` 只管一起部署时的顺序、内存上限、不用 `node_exec` 动容器）。例子：Web 应用加 PostgreSQL 拆成两个镜像表单容器（对照一份写死密码、挂 `/opt/pg`、开放 5432 的 compose），以及用户给了 compose 时怎么改写成容器组。依据 [agent.md](agent.md)（创建方式、环境变量、部署方式、项目内网、出站限制）、[exposure.md](exposure.md#compose-里写的-ports) 和 [node-access.md](node-access.md)。
+
+  两份都写在 `internal/server/mcp/resources.go` 里随程序编进去，改了这些文档里相应的规则时要跟着改。
+- **工具说明**：`add_container`、`update_container`、`deploy`、`save_route`、`connect_project`、`write_file`、`import_compose_dir`、`node_exec`、`write_node_file`、`set_snapshot_schedule` 的说明和相关参数（`image`、`compose`、`env`、`env_secret`、`volumes`、`ports`、`stateful`、`workdir`、`internal_ports`）用一两句话重复关键规则。
+- **结果里的提醒**（`internal/server/mcp/advice.go`，compose 用 `spec.AdviseCompose` 读，和权限检查一样经 compose-go 的 `composeModel`，不做变量替换）：照常保存，只在结果里加 `warnings`（英文，每条说明问题和怎么改，只列变量名、不列值）。管理员可以合法地这样写，所以不拒绝，措辞留余地。
+
+  | 提醒 | 触发条件 | 工具 |
+  | --- | --- | --- |
+  | 单个服务 | compose 里只有一个服务（工具分不出用户是否明确要了 compose，措辞写「除非用户要的是 compose」） | `add_container`、`update_container` |
+  | 写死的值 | compose 服务的 `environment` 里有值，不是 `${VAR}` 引用、也不是只写名字；名字像密钥的建议标为密钥（`spec.LooksSecret`，和导入现有目录同一个规则） | 同上、`import_compose_dir` |
+  | `env_file` | compose 服务用了 `env_file` | `add_container`、`update_container` |
+  | 宿主机路径 | bind 的源路径是绝对路径、`~`、`..` 开头，或命名卷用 `driver_opts.device` 绑到宿主机目录；`/etc/localtime`、`/run`、`/var/run`、`/dev` 这类系统路径和用了变量的不算 | 同上、`import_compose_dir` |
+  | 内部服务的端口 | 容器端口是 5432、3306、1433、6379、27017、9200、9300、11211、5672、9042 并且写了对外端口（只绑定本机地址的不算） | 同上 |
+  | `host_ip` | 端口写了本机地址以外的 `host_ip` | 同上 |
+  | 80、443 | 对外端口是 80 或 443（导入时会跳过） | 同上 |
+  | 改端口不生效 | 部署过的容器，这次改了镜像表单的端口或 compose 里的端口 | `update_container` |
+  | 节点本机、局域网、`localhost` | 能看到的变量值（compose 的 `environment`、`extra_hosts`，这次设置的 `env`、`service_env`）里有 `host.docker.internal`、`host-gateway`、`172.17.0.1`、私网 IPv4，或连接串里的 `localhost`、`127.0.0.1`；`${VAR}` 的值看不到，只查写出来的部分 | `add_container`、`update_container` |
+  | `build`、`container_name`、`network_mode: host`、external | compose 里出现这些 | 同上、`import_compose_dir` |
+  | 没有固定版本 | 有数据的容器（持久化目录、命名卷、相对路径挂载，或 `stateful: yes`）的镜像没写标签或是 `latest`；写了摘要、用了变量的不算 | `add_container`、`update_container` |
+  | 有数据却无状态 | `stateful` 设为 `no`，但有持久化目录、命名卷或保留路径 | 同上 |
+  | `.env` 文件 | 写的文件名是 `.env`、`.env.*`、`*.env` | `write_file` |
+  | 部署日志 | 部署日志里以「注意：」「警告：」开头的行、端口导入和没导入的提示、保留路径覆盖了上传内容 | `deploy`、`add_container` 带 `deploy` |
+  | 共享变量草稿 | 项目有共享变量草稿，部署时没带 `apply_shared_env` | `deploy` |
+  | git 从没拉取 | 有 git 来源、从没拉取过（`last_commit` 为空），部署时没带 `pull_git` | `deploy` |
+  | 没有健康检查 | 带 `wait_healthy_seconds` 时，有服务没有 Docker 健康检查：`health.note` 注明只确认了在运行 | `deploy` |
+  | 关掉定时快照 | 有备份节点或顶替的容器，定时快照是关的 | `set_snapshot_schedule`、`set_backup_node` |
+  | 直接用 docker | 命令里有 `docker run`、`docker compose up/stop/rm/down` 这类，或 `docker login` | `node_exec` 的预览 |
+  | 容器目录 | 路径在节点的项目根目录里 | `write_node_file` 的预览 |
+
+  镜像表单的环境变量本来就是 Nagi 的变量，不提醒写死的值。`update_container` 只检查这次改到的部分。导入现有目录时 compose 是用户原有的，不提醒单个服务和 `env_file`（`env_file: .env` 由导入换成面板的变量），宿主机路径的提醒改为「快照只能包含原目录的子目录」。
 
 ## 安全
 
@@ -350,7 +393,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 
 ## 实现
 
-- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作、`images.go` 节点镜像、`replicadirs.go` 副本的存放位置、`panel.go` 管理面板和项目页排序）、给 agent 的资源（`resources.go`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 按[高权限确认](#高权限确认)的表逐个检查 `elevationRequired` 里的接口；`TestTokenNeverReaches` 逐个检查设置、账号、初始化的接口，令牌只能碰管理面板列出的那些。
+- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作、`images.go` 节点镜像、`replicadirs.go` 副本的存放位置、`panel.go` 管理面板和项目页排序）、给 agent 的资源（`resources.go`）、保存后的提醒（`advice.go`，compose 的读法在 `spec.AdviseCompose`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 按[高权限确认](#高权限确认)的表逐个检查 `elevationRequired` 里的接口；`TestTokenNeverReaches` 逐个检查设置、账号、初始化的接口，令牌只能碰管理面板列出的那些。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
 - `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
 - `internal/server/store`：`api_tokens`、`oauth_clients` 表。查询手写在 `tokens.go`，不放进 `queries.sql`。
