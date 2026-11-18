@@ -62,6 +62,11 @@ func (s *Service) RevocationLoop(ctx context.Context, dataDir string, log *slog.
 	dir := filepath.Join(dataDir, "attestation")
 	if r, err := loadRevocations(dir); err == nil {
 		s.SetRevocations(r)
+	} else if errors.Is(err, errFutureRevocations) {
+		// 删掉，免得连不上 Google 的面板每次启动都读到它、记一遍警告。
+		log.Warn("保存的吊销列表日期晚于现在，已删除，改用随面板发布的列表", "err", err)
+		_ = os.Remove(filepath.Join(dir, "status.updated"))
+		_ = os.Remove(filepath.Join(dir, "status.json"))
 	} else if !errors.Is(err, os.ErrNotExist) {
 		log.Warn("读取保存的吊销列表失败", "err", err)
 	}
@@ -148,6 +153,9 @@ func FetchRevocations(ctx context.Context) ([]byte, time.Time, error) {
 	return b, updated, nil
 }
 
+// errFutureRevocations：保存的列表日期晚于现在（见 loadRevocations）。
+var errFutureRevocations = errors.New("保存的吊销列表日期晚于现在")
+
 // 数据目录里存的列表：status.json 是 Google 返回的原文，status.updated 是它的日期。
 func loadRevocations(dir string) (*attestation.Revocations, error) {
 	d, err := os.ReadFile(filepath.Join(dir, "status.updated"))
@@ -161,7 +169,7 @@ func loadRevocations(dir string) (*attestation.Revocations, error) {
 	// 日期晚于现在（面板的时钟曾经快过，或者文件被改过）时不用这份：按现在算的话，每次启动它都和启动时一样新，
 	// 随新版本发布的列表永远换不上它。改用随面板发布的，下次取到新列表时覆盖这份文件。
 	if updated.After(time.Now()) {
-		return nil, fmt.Errorf("保存的吊销列表日期 %s 晚于现在，不使用", updated.Format(time.RFC3339))
+		return nil, fmt.Errorf("%w：%s", errFutureRevocations, updated.Format(time.RFC3339))
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "status.json"))
 	if err != nil {

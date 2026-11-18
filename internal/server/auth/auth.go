@@ -68,7 +68,7 @@ type Service struct {
 	recheckMu sync.Mutex
 	// recheckSignal 叫 RevocationLoop 复查（见 requestRecheck）。
 	recheckSignal chan struct{}
-	streaks     totpStreaks
+	streaks       totpStreaks
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
 	Alert func(ctx context.Context, key, title, message string)
