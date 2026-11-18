@@ -23,7 +23,7 @@ import (
 // 规则：
 //   - 没有相应权限时去掉字段：配置和变量（查看配置）、备份、顶替、端口映射和连接（网络和域名）、告警规则、快照计划；
 //   - 看不到的节点（范围外，或者没有「查看节点」）一律是「其他节点」：ID、名称、地址、目录、公钥都不返回，也不给是否在线；
-//   - 节点和面板的 IP 一律不返回，例外是有「查看访问地址」时域名检查里的地址；
+//   - 节点和面板的 IP 一律不返回，例外是有「查看访问地址」时看得到的节点的地址（端口映射的 IP:端口、直连下载）和域名检查里的地址；
 //   - 节点详情（主机名、系统、版本、路径、挂载点）要「查看节点详情」。
 //
 // clean_test.go 列出回复里所有带地址、节点引用的字段（cleanedFields），新增字段忘了登记时测试失败。
@@ -86,7 +86,7 @@ var cleanedFields = map[string]string{
 	// ---- 节点 ----
 	"nagi.v1.ListNodesResponse.other_nodes":       "不再返回（看不到的节点一律是「其他节点」，不给是否在线）",
 	"nagi.v1.Node.id":                             "看不到的节点整条去掉",
-	"nagi.v1.Node.address":                        "非管理员清空（B1）",
+	"nagi.v1.Node.address":                        "要查看访问地址（B1、B2：端口映射的 IP:端口）",
 	"nagi.v1.Node.unknown_containers":             "非管理员清空（C5）",
 	"nagi.v1.Node.stale_projects":                 "非管理员清空（C5）",
 	"nagi.v1.Node.alert_rules":                    "要节点管理",
@@ -96,10 +96,10 @@ var cleanedFields = map[string]string{
 	"nagi.v1.NodeInfo.replica_dir":                "要查看节点详情",
 	"nagi.v1.NodeInfo.in_container":               "要查看节点详情",
 	"nagi.v1.NodeInfo.embedded":                   "保留",
-	"nagi.v1.DirectDownload.address":              "非管理员清空（B1）",
+	"nagi.v1.DirectDownload.address":              "要查看访问地址",
 	"nagi.v1.DirectDownload.http_port":            "保留：端口号",
-	"nagi.v1.DirectDownload.error":                "去掉 IP",
-	"nagi.v1.DirectDownload.http_error":           "去掉 IP",
+	"nagi.v1.DirectDownload.error":                "没有查看访问地址时去掉 IP",
+	"nagi.v1.DirectDownload.http_error":           "没有查看访问地址时去掉 IP",
 	"nagi.v1.DiskUsage.mount":                     "要查看节点详情",
 	"nagi.v1.MeshStatus.address":                  "非管理员清空（B6）",
 	"nagi.v1.MeshStatus.port":                     "非管理员清空",
@@ -424,7 +424,11 @@ func (a *API) filterNodes(ctx context.Context, x *access, m *nagiv1.ListNodesRes
 		if !x.node(n.GetId()) {
 			continue
 		}
-		n.UnknownContainers, n.StaleProjects, n.Address = nil, nil, ""
+		n.UnknownContainers, n.StaleProjects = nil, nil
+		// 节点的地址只在有「查看访问地址」时给：端口映射的 IP:端口就是它（B1、B2）。
+		if !x.can(auth.PermAddresses) {
+			n.Address = ""
+		}
 		if x.projects != nil {
 			n.Containers = count[n.GetId()]
 		}
@@ -439,7 +443,7 @@ func (a *API) filterNodes(ctx context.Context, x *access, m *nagiv1.ListNodesRes
 
 func cleanNodeInfo(x *access, n *nagiv1.Node) {
 	if info := n.GetInfo(); info != nil {
-		if d := info.GetDirectDownload(); d != nil {
+		if d := info.GetDirectDownload(); d != nil && !x.can(auth.PermAddresses) {
 			d.Address, d.Error, d.HttpError = "", scrubIPs(d.GetError()), scrubIPs(d.GetHttpError())
 		}
 		if !x.can(auth.PermNodeDetails) {

@@ -214,6 +214,12 @@ func TestCleanNodes(t *testing.T) {
 	if n := m.Nodes[0]; n.Info.Hostname != "host-a" || n.AlertRules == nil || n.Address != "" {
 		t.Errorf("有查看节点详情、节点管理：%v", n)
 	}
+	// 有「查看访问地址」时给看得到的节点的地址（端口映射的 IP:端口），看不到的节点仍然整条去掉。
+	m = res()
+	a.filterReply(ctx, memberAccess(auth.PresetOperator|auth.PermsOf(auth.PermAddresses)), m)
+	if len(m.Nodes) != 1 || m.Nodes[0].Address != "203.0.113.1" || m.Nodes[0].Info.DirectDownload.Address == "" {
+		t.Errorf("有查看访问地址：%v", m.Nodes)
+	}
 	m = res()
 	a.filterReply(ctx, memberAccess(auth.PermsOf(auth.PermView)), m)
 	if len(m.Nodes) != 0 {

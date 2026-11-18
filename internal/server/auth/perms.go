@@ -192,6 +192,8 @@ var publicProcedures = map[string]bool{
 	"/nagi.v1.AuthService/Login": true, "/nagi.v1.AuthService/BeginPasskeyLogin": true, "/nagi.v1.AuthService/PasskeyLogin": true,
 	"/nagi.v1.AppService/GetPairing": true, "/nagi.v1.AppService/Pair": true, "/nagi.v1.AppService/Challenge": true,
 	"/nagi.v1.AppService/Token": true,
+	// 节点用接入码加入面板（enroll.proto），接入码自己就是凭据。
+	"/nagi.v1.EnrollService/Enroll": true,
 }
 
 var selfProcedures = map[string]bool{

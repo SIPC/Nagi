@@ -6,19 +6,23 @@ import (
 	"testing"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// api.proto 的每个接口都要登记到一项权限（或者 public、self、admin），没登记的一律拒绝。新增接口忘了登记时这里失败。
+// 浏览器、App 和节点加入时调用的 Connect 接口（api.proto 和 enroll.proto，挂在同一组拦截器上）都要登记到一项权限
+// （或者 public、self、admin），没登记的一律拒绝。新增接口忘了登记时这里失败。
 func TestEveryProcedureRegistered(t *testing.T) {
-	services := nagiv1.File_nagi_v1_api_proto.Services()
 	seen := map[string]bool{}
-	for i := range services.Len() {
-		svc := services.Get(i)
-		for j := range svc.Methods().Len() {
-			p := "/nagi.v1." + string(svc.Name()) + "/" + string(svc.Methods().Get(j).Name())
-			seen[p] = true
-			if ProcedureAccess(p) == "" {
-				t.Errorf("%s 没有登记权限（auth/perms.go）", p)
+	for _, file := range []protoreflect.FileDescriptor{nagiv1.File_nagi_v1_api_proto, nagiv1.File_nagi_v1_enroll_proto} {
+		services := file.Services()
+		for i := range services.Len() {
+			svc := services.Get(i)
+			for j := range svc.Methods().Len() {
+				p := "/nagi.v1." + string(svc.Name()) + "/" + string(svc.Methods().Get(j).Name())
+				seen[p] = true
+				if ProcedureAccess(p) == "" {
+					t.Errorf("%s 没有登记权限（auth/perms.go）", p)
+				}
 			}
 		}
 	}
