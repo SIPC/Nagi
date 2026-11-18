@@ -9,6 +9,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/api"
+	"github.com/SIPC/nagi/internal/server/auth"
 )
 
 // 直连下载的链接和命令（见 docs/agent.md#直连下载、docs/mcp.md#文件）：给管理员把大文件交给别的机器或下载工具。
@@ -16,7 +17,8 @@ import (
 // 权限和读文件相同：卷文件同 read_file（令牌要允许执行命令），节点文件同 read_node_file（令牌要勾「节点终端」），
 // 另外只给管理员。签发照常记一次下载的活动记录；返回的命令里有解密的密钥，只在结果里，不进活动记录。
 
-// DirectAccess 是签发直连下载的接口（api.API.VolumeDirectLink、NodeDirectLink），按 ctx 里的用户检查权限。
+// DirectAccess 是签发直连下载的接口（api.API.VolumeDirectLink、NodeDirectLink），按 ctx 里的用户（auth.WithUser）检查权限。
+// 和 FileAccess 一样不经过接口的拦截器，调用前要把令牌的用户放进 ctx。
 type DirectAccess struct {
 	Volume func(ctx context.Context, ref *nagiv1.VolumeFileRef) (api.DirectResult, error)
 	Node   func(ctx context.Context, nodeID, path string) (api.DirectResult, error)
@@ -55,7 +57,7 @@ func toolGetDownloadLink(c *call, in DownloadLinkArgs) (any, error) {
 		return nil, err
 	}
 	ref.SnapshotId = strings.TrimSpace(in.SnapshotID)
-	res, err := c.h.o.Direct.Volume(c.ctx, ref)
+	res, err := c.h.o.Direct.Volume(auth.WithUser(c.ctx, c.u), ref)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +76,7 @@ func toolGetNodeDownloadLink(c *call, in NodePathArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	res, err := c.h.o.Direct.Node(c.ctx, n.GetId(), p)
+	res, err := c.h.o.Direct.Node(auth.WithUser(c.ctx, c.u), n.GetId(), p)
 	if err != nil {
 		return nil, err
 	}

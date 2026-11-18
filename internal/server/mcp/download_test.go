@@ -1,8 +1,13 @@
 package mcp
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"connectrpc.com/connect"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 
 	"github.com/SIPC/nagi/internal/server/api"
 	"github.com/SIPC/nagi/internal/server/auth"
@@ -60,5 +65,30 @@ func TestDirectView(t *testing.T) {
 	v = directView(api.DirectResult{Command: &nodes.DirectHTTPCommand{Command: "curl …", Name: "a.txt", Size: 3, HashSkipped: "too_large"}}, "a.txt")
 	if v["method"] != "encrypted_http" || v["command"] != "curl …" || v["not_verified"] != "too_large" || !strings.Contains(v["note"].(string), "key") {
 		t.Errorf("命令：%v", v)
+	}
+}
+
+// listOnlyNodes 只回答节点列表。
+type listOnlyNodes struct {
+	nagiv1connect.NodeServiceClient
+}
+
+func (listOnlyNodes) ListNodes(context.Context, *connect.Request[nagiv1.ListNodesRequest]) (*connect.Response[nagiv1.ListNodesResponse], error) {
+	return connect.NewResponse(&nagiv1.ListNodesResponse{Nodes: []*nagiv1.Node{{Id: "n1", Name: "edge"}}}), nil
+}
+
+// 工具把令牌的用户放进 ctx 再调用 api（它不经过接口的拦截器，按 auth.CurrentUser 检查权限）。
+func TestNodeDownloadLinkPassesUser(t *testing.T) {
+	u := auth.User{ID: 3, Name: "admin", TokenID: 9, Role: auth.RoleAdmin, AllowExec: true, AllowNodeExec: true}
+	var got auth.User
+	h := &handler{clients: clients{nodes: listOnlyNodes{}}}
+	h.o.Direct.Node = func(ctx context.Context, nodeID, path string) (api.DirectResult, error) {
+		got = auth.CurrentUser(ctx)
+		return api.DirectResult{URL: "https://203.0.113.5/.nagi/download/x"}, nil
+	}
+	c := &call{ctx: auth.WithInternalUser(context.Background(), u), u: u, h: h}
+	v, err := toolGetNodeDownloadLink(c, NodePathArgs{Node: "edge", Path: "/srv/a"})
+	if err != nil || got.ID != 3 || got.TokenID != 9 || !got.AllowNodeExec {
+		t.Fatalf("api 拿到的用户：%+v，%v %v", got, v, err)
 	}
 }
