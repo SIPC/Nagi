@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nagi</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_projects">Projects</string>
+    <string name="tab_nodes">Nodes</string>
+    <string name="tab_settings">Settings</string>
+    <string name="placeholder">Coming in a later version.</string>
+    <string name="placeholder_update">Update this container\'s image on the web for now.</string>
+    <string name="panel_member">Member %1$s</string>
+    <string name="panel_logout">Sign out of this phone</string>
+    <string name="panel_logout_confirm">Sign out of this phone? You\'ll need to scan a new QR code on the web to add it again.</string>
+    <string name="cancel">Cancel</string>
+    <string name="sign_out">Sign out</string>
+    <string name="removed">This phone was signed out. You can add it again.</string>
+</resources>

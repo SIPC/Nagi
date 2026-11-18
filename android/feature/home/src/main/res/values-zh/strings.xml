@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="attention_title">需要处理</string>
+    <string name="attention_none">一切正常</string>
+    <string name="attention_more">还有 %1$d 项</string>
+    <string name="action_approve">批准</string>
+    <string name="action_update">更新</string>
+    <string name="approved">已批准</string>
+    <string name="offline_for">已离线 %1$s</string>
+    <string name="minutes">%1$d 分钟</string>
+    <string name="hours">%1$d 小时</string>
+    <string name="days">%1$d 天</string>
+    <string name="nodes_online">节点在线</string>
+    <string name="containers_running">容器运行中</string>
+    <string name="external_in">对外入站</string>
+    <string name="external_out">对外出站</string>
+    <string name="traffic_title">流量趋势</string>
+    <string name="range_hour">1 小时</string>
+    <string name="range_day">24 小时</string>
+    <string name="range_week">7 天</string>
+    <string name="traffic_external">对外</string>
+    <string name="traffic_mesh">节点之间</string>
+    <string name="now">现在</string>
+    <string name="top_routes">流量最大的映射</string>
+    <string name="retry">重试</string>
+    <string name="unreachable_title">连不上面板</string>
+    <string name="unreachable_cached">显示的是 %1$s 的数据，正在重试。</string>
+    <string name="unreachable_retrying">正在重试。</string>
+</resources>

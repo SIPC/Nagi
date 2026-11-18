@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="attention_title">Needs attention</string>
+    <string name="attention_none">All good</string>
+    <string name="attention_more">%1$d more</string>
+    <string name="action_approve">Approve</string>
+    <string name="action_update">Update</string>
+    <string name="approved">Approved</string>
+    <string name="offline_for">Offline for %1$s</string>
+    <string name="minutes">%1$d min</string>
+    <string name="hours">%1$d h</string>
+    <string name="days">%1$d d</string>
+    <string name="nodes_online">Nodes online</string>
+    <string name="containers_running">Containers running</string>
+    <string name="external_in">External in</string>
+    <string name="external_out">External out</string>
+    <string name="traffic_title">Traffic</string>
+    <string name="range_hour">1 hour</string>
+    <string name="range_day">24 hours</string>
+    <string name="range_week">7 days</string>
+    <string name="traffic_external">External</string>
+    <string name="traffic_mesh">Between nodes</string>
+    <string name="now">Now</string>
+    <string name="top_routes">Top port mappings</string>
+    <string name="retry">Retry</string>
+    <string name="unreachable_title">Can\'t reach the panel</string>
+    <string name="unreachable_cached">Showing data from %1$s. Retrying.</string>
+    <string name="unreachable_retrying">Retrying.</string>
+</resources>

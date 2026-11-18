@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nagi</string>
+    <string name="tab_home">首页</string>
+    <string name="tab_projects">项目</string>
+    <string name="tab_nodes">节点</string>
+    <string name="tab_settings">设置</string>
+    <string name="placeholder">后续版本提供。</string>
+    <string name="placeholder_update">这一版请在网页上更新这个容器的镜像。</string>
+    <string name="panel_member">成员 %1$s</string>
+    <string name="panel_logout">退出这台手机</string>
+    <string name="panel_logout_confirm">退出这台手机？之后要在网页上重新扫码才能添加。</string>
+    <string name="cancel">取消</string>
+    <string name="sign_out">退出</string>
+    <string name="removed">这台手机已退出，可以重新添加。</string>
+</resources>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="welcome_title">管理你的 Nagi 集群</string>
+    <string name="welcome_text">在网页的「设置 → 账号安全 → 手机 App」点「添加手机」，然后扫描页面上的二维码。</string>
+    <string name="welcome_scan">扫描二维码</string>
+    <string name="welcome_removed">这台手机已退出，可以重新添加。</string>
+    <string name="scan_hint">扫描网页上的二维码</string>
+    <string name="scan_wrong_code">不是添加手机的二维码</string>
+    <string name="scan_no_camera">需要相机权限才能扫描二维码</string>
+    <string name="scan_allow_camera">允许使用相机</string>
+    <string name="confirm_title">添加到 %1$s</string>
+    <string name="confirm_title_loading">添加到面板</string>
+    <string name="confirm_text">添加后这台手机可以用你的账号管理面板。</string>
+    <string name="confirm_unreachable">连不上面板：%1$s</string>
+    <string name="confirm_address">地址</string>
+    <string name="confirm_domain">域名</string>
+    <string name="confirm_fingerprint">指纹</string>
+    <string name="confirm_phone">手机</string>
+    <string name="confirm_hint">添加时需要验证指纹、面容或锁屏密码。</string>
+    <string name="confirm_add">添加</string>
+    <string name="retry">重试</string>
+    <string name="cancel">取消</string>
+    <string name="role_admin">管理员</string>
+    <string name="role_operator">操作员</string>
+    <string name="role_viewer">只读成员</string>
+    <string name="prompt_add_title">添加到 %1$s</string>
+    <string name="prompt_add_subtitle">在硬件里生成这台手机的密钥</string>
+    <string name="prompt_unlock_title">解锁 %1$s</string>
+    <string name="error_no_lock">这台手机没有设置锁屏密码或指纹，无法添加</string>
+    <string name="error_key_failed">无法生成密钥：%1$s</string>
+    <string name="unlock">解锁</string>
+    <string name="unlock_locked">已锁定</string>
+    <string name="unlock_idle">已锁定 · %1$d 分钟未使用</string>
+</resources>

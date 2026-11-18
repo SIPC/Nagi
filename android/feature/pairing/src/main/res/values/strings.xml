@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="welcome_title">Manage your Nagi cluster</string>
+    <string name="welcome_text">On the web, go to Settings → Account security → Phone app, click Add phone, then scan the QR code on the page.</string>
+    <string name="welcome_scan">Scan QR code</string>
+    <string name="welcome_removed">This phone was signed out. You can add it again.</string>
+    <string name="scan_hint">Scan the QR code on the web page</string>
+    <string name="scan_wrong_code">This isn\'t a QR code for adding a phone</string>
+    <string name="scan_no_camera">Camera access is needed to scan the QR code</string>
+    <string name="scan_allow_camera">Allow camera</string>
+    <string name="confirm_title">Add to %1$s</string>
+    <string name="confirm_title_loading">Add to panel</string>
+    <string name="confirm_text">After you add it, this phone can manage the panel with your account.</string>
+    <string name="confirm_unreachable">Can\'t reach the panel: %1$s</string>
+    <string name="confirm_address">Address</string>
+    <string name="confirm_domain">Domain</string>
+    <string name="confirm_fingerprint">Fingerprint</string>
+    <string name="confirm_phone">Phone</string>
+    <string name="confirm_hint">You\'ll verify with your fingerprint, face, or screen lock.</string>
+    <string name="confirm_add">Add</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="role_admin">Administrator</string>
+    <string name="role_operator">Operator</string>
+    <string name="role_viewer">Viewer</string>
+    <string name="prompt_add_title">Add to %1$s</string>
+    <string name="prompt_add_subtitle">Create this phone\'s keys in hardware</string>
+    <string name="prompt_unlock_title">Unlock %1$s</string>
+    <string name="error_no_lock">Set up a screen lock or fingerprint on this phone first</string>
+    <string name="error_key_failed">Can\'t create keys: %1$s</string>
+    <string name="unlock">Unlock</string>
+    <string name="unlock_locked">Locked</string>
+    <string name="unlock_idle">Locked · Not used for %1$d min</string>
+</resources>

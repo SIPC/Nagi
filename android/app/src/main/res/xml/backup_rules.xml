@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 面板列表和设备 ID 不备份：密钥在 Keystore 里，换了手机也用不了（见 docs/android.md#添加以后）。 -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>
