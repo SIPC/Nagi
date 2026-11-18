@@ -159,10 +159,10 @@ func (c Command) String() string {
 	return s
 }
 
-// SafeName 把文件名清理成能放进命令的样子：去掉路径，控制字符和不可见的格式字符换成 _，
-// 空的、只有点的换成 download。结果仍然要经 shellQuote 括起来。
+// SafeName 把文件名清理成能放进命令的样子：去掉路径（/ 之前的部分；Linux 的文件名里可以有 \，照原样保留），
+// 控制字符和不可见的格式字符换成 _，空的、只有点的换成 download。结果仍然要经 shellQuote 括起来。
 func SafeName(name string) string {
-	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+	if i := strings.LastIndex(name, "/"); i >= 0 {
 		name = name[i+1:]
 	}
 	if !utf8.ValidString(name) {

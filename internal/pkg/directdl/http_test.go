@@ -161,7 +161,8 @@ func TestSafeName(t *testing.T) {
 	for in, want := range map[string]string{
 		"a.txt":          "a.txt",
 		"dir/b.txt":      "b.txt",
-		`..\c.txt`:       "c.txt",
+		`..\c.txt`:       `..\c.txt`,
+		`it's \.bin`:     `it's \.bin`,
 		"":               "download",
 		"..":             "download",
 		"a\nb\rc\x00d":   "a_b_c_d",
