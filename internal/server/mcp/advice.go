@@ -72,10 +72,19 @@ func portWarnings(ports []spec.PortUse, o adviceOpts) []string {
 	return out
 }
 
-// composeWarnings 返回一份 compose 的提醒，没有时为 nil。compose 解析不了时不提醒（保存时的校验会报错）。
-func composeWarnings(text string, o adviceOpts) []string {
+// advise 读出一份 compose 里要提醒的内容，解析不了时为 nil（保存时的校验会报错）。一次调用里同一份 compose 只读一遍，
+// 结果交给 composeWarnings、composePorts、statefulWarning 共用。
+func advise(text string) *spec.ComposeAdvice {
 	a, err := spec.AdviseCompose(text)
 	if err != nil {
+		return nil
+	}
+	return &a
+}
+
+// composeWarnings 返回一份 compose（advise 的结果）的提醒，没有时为 nil。compose 解析不了（a 为 nil）时不提醒。
+func composeWarnings(a *spec.ComposeAdvice, o adviceOpts) []string {
+	if a == nil {
 		return nil
 	}
 	var out []string
@@ -185,10 +194,9 @@ func formPorts(f *nagiv1.ImageForm) []string {
 	return out
 }
 
-// composePorts 是 compose 端口的 portKey；解析不了时为 nil（不比较）。
-func composePorts(text string) []string {
-	a, err := spec.AdviseCompose(text)
-	if err != nil {
+// composePorts 是 compose（advise 的结果）端口的 portKey；解析不了时为 nil（不比较）。
+func composePorts(a *spec.ComposeAdvice) []string {
+	if a == nil {
 		return nil
 	}
 	out := []string{}
@@ -212,16 +220,14 @@ func imageTagWarning(images string) string {
 	return fmt.Sprintf("Containers with data should pin a major version, not latest or no tag (%s): an image update can bring a new major version that cannot read the existing data. Use a tag such as postgres:16.", images)
 }
 
-// statefulWarning：有数据（持久化目录、命名卷、保留路径）的容器却设成了无状态。
-func statefulWarning(cfg *nagiv1.ContainerConfig) string {
+// statefulWarning：有数据（持久化目录、命名卷、保留路径）的容器却设成了无状态。a 是容器组的 compose 交给 advise 的结果。
+func statefulWarning(cfg *nagiv1.ContainerConfig, a *spec.ComposeAdvice) string {
 	if cfg.GetStateful() != nagiv1.Stateful_STATEFUL_NO {
 		return ""
 	}
 	data := len(cfg.GetPreserve()) > 0 || len(cfg.GetForm().GetVolumes()) > 0
-	if cfg.GetForm() == nil {
-		if a, err := spec.AdviseCompose(cfg.GetCompose()); err == nil && len(a.DataServices) > 0 {
-			data = true
-		}
+	if cfg.GetForm() == nil && a != nil && len(a.DataServices) > 0 {
+		data = true
 	}
 	if !data {
 		return ""
@@ -269,20 +275,22 @@ func addressWarnings(values []labeled) []string {
 // configWarnings 是添加容器时对整份配置的提醒。env、serviceEnv 是这次设置的变量，查里面的地址。
 func configWarnings(cfg *nagiv1.ContainerConfig, env map[string]string, serviceEnv map[string]map[string]string) []string {
 	var out []string
+	var a *spec.ComposeAdvice
 	if f := cfg.GetForm(); f != nil {
 		out = append(out, formPortWarnings(f, adviceOpts{})...)
 		if w := formTagWarning(cfg); w != "" {
 			out = append(out, w)
 		}
 	} else {
-		out = append(out, composeWarnings(cfg.GetCompose(), adviceOpts{imported: cfg.GetProjectDir() != ""})...)
+		a = advise(cfg.GetCompose())
+		out = append(out, composeWarnings(a, adviceOpts{imported: cfg.GetProjectDir() != ""})...)
 	}
 	values := envLabels("env: ", env)
 	for _, svc := range slices.Sorted(maps.Keys(serviceEnv)) {
 		values = append(values, envLabels(svc+": ", serviceEnv[svc])...)
 	}
 	out = append(out, addressWarnings(values)...)
-	if w := statefulWarning(cfg); w != "" {
+	if w := statefulWarning(cfg, a); w != "" {
 		out = append(out, w)
 	}
 	return out

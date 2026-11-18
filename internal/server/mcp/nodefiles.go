@@ -619,7 +619,7 @@ func toolImportComposeDir(c *call, in ImportComposeDirArgs) (any, error) {
 			pr.GetPath(), n.GetName(), name, s.GetProject().GetName()),
 			map[string]any{"compose_file": pr.GetComposeFile(), "compose": pr.GetCompose(), "variables": pr.GetVariables(), "secret_variables": pr.GetSecretVariables(),
 				"running_project": pr.GetProject(), "running_containers": pr.GetContainers(), "notes": pr.GetNotes(), "backup_paths": backup, "untrusted": nodeUntrusted})
-		if w := composeWarnings(pr.GetCompose(), adviceOpts{imported: true}); len(w) > 0 {
+		if w := composeWarnings(advise(pr.GetCompose()), adviceOpts{imported: true}); len(w) > 0 {
 			out["warnings"] = w
 		}
 		if in.Confirm != "" {
@@ -633,7 +633,7 @@ func toolImportComposeDir(c *call, in ImportComposeDirArgs) (any, error) {
 		return nil, err
 	}
 	out := map[string]any{"container": name, "note": "added to the project, not deployed; check it with get_container, then deploy when ready"}
-	if w := composeWarnings(pr.GetCompose(), adviceOpts{imported: true}); len(w) > 0 {
+	if w := composeWarnings(advise(pr.GetCompose()), adviceOpts{imported: true}); len(w) > 0 {
 		out["warnings"] = w
 	}
 	return out, nil

@@ -264,6 +264,7 @@ var en = map[string]string{
 	"CPU 上限须在 0–1024 之间，0 表示不限制":                                          "CPU limit must be between 0 and 1024 (0 means no limit)",
 	"compose 不能为空":                                                        "Compose file is required",
 	"compose 无法解析：%v":                                                     "Can't parse the compose file: %v",
+	"compose 的端口过多：ports 和 expose 展开范围后最多 %d 个":                           "Too many ports in the compose file: ports and expose can have at most %d after expanding ranges",
 	"现有目录只用于容器组，且不能设置文件来源":                                                "An existing directory is only for container groups and can't have a file source",
 	"快照包含的子目录只用于现有目录":                                                     "Snapshot subdirectories are only for an existing directory",
 	"环境变量中的容器 %s 不在该容器组的 compose 中":                                       "Container %s in the environment variables isn't in this container group's compose file",
