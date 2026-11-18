@@ -26,7 +26,7 @@ After the panel is updated, nodes on an older version show **Upgrade available**
 1. In the sidebar of the panel, click **Nodes**.
 2. Click **Upgrade all nodes**, then click **Upgrade all** in the confirmation.
 
-Nodes download and verify the same version as the panel one at a time, then restart in place. Containers keep running during the upgrade, and the built-in Caddy is interrupted for a second or two.
+Nodes download and verify the same version as the panel one at a time, then restart in place. Containers keep running during the upgrade, and the built-in Caddy is interrupted for a second or two. The **Nodes** page and the node's page show the download progress.
 
 To upgrade a single node, open the node's page, then click **Upgrade**.
 
