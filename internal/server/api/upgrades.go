@@ -294,7 +294,7 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 			a.updates.clearProgress(mine)
 		}()
 		resp, err := conn.Agent.Upgrade(installCtx, &nagiv1.UpgradeRequest{Version: target})
-		source = resp.GetSource()
+		source = nodeSource(resp.GetSource()) // 来自节点，存进 settings 表，显示给界面和 MCP
 		switch {
 		case err == nil:
 			return nil

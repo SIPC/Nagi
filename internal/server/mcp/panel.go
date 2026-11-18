@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"slices"
 	"strings"
@@ -550,6 +551,20 @@ func toolVerifyAudit(c *call, _ empty) (any, error) {
 
 // ---- 面板更新 ----
 
+// downloadPercent 是下载百分比，夹在 0–100：字节数来自节点，可能已下载比总大小多，不能用乘法（会溢出）。
+func downloadPercent(downloaded, total int64) int64 {
+	if total <= 0 || downloaded <= 0 {
+		return 0
+	}
+	if downloaded >= total {
+		return 100
+	}
+	if downloaded > math.MaxInt64/100 {
+		return int64(float64(downloaded) / float64(total) * 100)
+	}
+	return downloaded * 100 / total
+}
+
 func toolCheckPanelUpdate(c *call, _ empty) (any, error) {
 	res, err := c.h.clients.settings.CheckPanelUpdate(c.ctx, connect.NewRequest(&nagiv1.CheckPanelUpdateRequest{}))
 	if err != nil {
@@ -587,7 +602,7 @@ func toolCheckPanelUpdate(c *call, _ empty) (any, error) {
 				p := map[string]any{"stage": u.GetStage(), "downloaded_bytes": u.GetDownloaded()}
 				if u.GetTotal() > 0 {
 					p["total_bytes"] = u.GetTotal()
-					p["percent"] = u.GetDownloaded() * 100 / u.GetTotal()
+					p["percent"] = downloadPercent(u.GetDownloaded(), u.GetTotal())
 				}
 				if u.GetBytesPerSecond() > 0 {
 					p["bytes_per_second"] = u.GetBytesPerSecond()

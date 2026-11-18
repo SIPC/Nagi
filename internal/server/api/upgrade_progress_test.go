@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"math"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -66,6 +68,42 @@ func TestLiveProgressSpeed(t *testing.T) {
 	slow.update(dl("a", 10<<20), at(10))
 	if s := slow.speed(); s != 1<<20 {
 		t.Errorf("隔 10 秒下载 10 MiB，速度应为 1 MiB/s：%d", s)
+	}
+}
+
+// 节点报的进度和地址来自节点：地址截到 255 字节，字节数夹到 0–1 GiB，速度不会溢出。
+func TestNodeProgressClamp(t *testing.T) {
+	long := strings.Repeat("a", 4<<20)
+	if s := nodeSource(long); len(s) != maxNodeSourceBytes {
+		t.Errorf("Upgrade 返回的地址应截到 255 字节：%d", len(s))
+	}
+	if s := nodeSource("ghfast.top"); s != "ghfast.top" {
+		t.Errorf("正常的地址不动：%q", s)
+	}
+	if _, ok := nodeProgress(&nagiv1.UpgradeProgressResponse{Stage: "replace"}); ok {
+		t.Error("不认识的阶段不记")
+	}
+	p, ok := nodeProgress(&nagiv1.UpgradeProgressResponse{Stage: "download", Source: long, Downloaded: math.MaxInt64, Total: math.MaxInt64})
+	if !ok || len(p.Source) != maxNodeSourceBytes || p.Downloaded != maxNodeProgressBytes || p.Total != -1 {
+		t.Errorf("超大的字节数应夹到上限、总大小按未知：%+v", p)
+	}
+	p, _ = nodeProgress(&nagiv1.UpgradeProgressResponse{Stage: "download", Downloaded: -3, Total: 0})
+	if p.Downloaded != 0 || p.Total != -1 {
+		t.Errorf("负数按 0，总大小 0 按未知：%+v", p)
+	}
+	p, _ = nodeProgress(&nagiv1.UpgradeProgressResponse{Stage: "download", Downloaded: 5 << 20, Total: 60 << 20})
+	if p.Downloaded != 5<<20 || p.Total != 60<<20 {
+		t.Errorf("正常的进度不动：%+v", p)
+	}
+
+	// 从 0 一下跳到上限：速度是正的，不溢出。
+	var l liveProgress
+	start := time.Unix(1000, 0)
+	l.update(release.Progress{Stage: release.StageDownload, Source: "a"}, start)
+	np, _ := nodeProgress(&nagiv1.UpgradeProgressResponse{Stage: "download", Source: "a", Downloaded: math.MaxInt64})
+	l.update(np, start.Add(time.Second))
+	if s := l.speed(); s != maxNodeProgressBytes {
+		t.Errorf("速度应为 1 GiB/s：%d", s)
 	}
 }
 
