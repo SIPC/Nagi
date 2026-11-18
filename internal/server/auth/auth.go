@@ -66,6 +66,8 @@ type Service struct {
 	revocations atomic.Pointer[attestation.Revocations]
 	// recheckMu：按吊销列表复查（RecheckAppDevices）同时只有一个。
 	recheckMu sync.Mutex
+	// recheckSignal 叫 RevocationLoop 复查（见 requestRecheck）。
+	recheckSignal chan struct{}
 	streaks     totpStreaks
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
@@ -85,7 +87,7 @@ type pendingTOTP struct {
 
 // New 创建登录服务。
 func New(q *store.Queries, sealer Sealer) *Service {
-	return &Service{q: q, sealer: sealer, limiter: newLimiter(), pending: map[int64]pendingTOTP{}}
+	return &Service{q: q, sealer: sealer, limiter: newLimiter(), pending: map[int64]pendingTOTP{}, recheckSignal: make(chan struct{}, 1)}
 }
 
 // ---- 密码 ----

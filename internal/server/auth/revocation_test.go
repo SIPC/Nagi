@@ -195,11 +195,52 @@ func TestLoadRevocationsFutureDate(t *testing.T) {
 	if err := saveRevocations(dir, []byte(`{"entries": {}}`), time.Now().Add(365*24*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	r, err := loadRevocations(dir)
+	if _, err := loadRevocations(dir); err == nil {
+		t.Error("日期晚于现在的列表应该不用")
+	}
+}
+
+// requestRecheck 让正在运行的 RevocationLoop 复查：换了列表以后，不等下一次取列表就标出被吊销的手机。
+func TestRevocationRecheckSignal(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := context.Background()
+	h.s.SetDevAppKeys(true)
+	keys := newAppKeys()
+	code, _, err := h.s.CreateAppPairing(ctx, h.webUser("op"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Updated.After(time.Now()) {
-		t.Errorf("读回的日期 %v 晚于现在", r.Updated)
+	ch := sha256.Sum256([]byte(code))
+	null := asn1.RawValue{Tag: asn1.TagNull}
+	sw := []asn1.RawValue{tagged(t, 709, appID(t, AppPackage))}
+	chains := [][][]byte{
+		fakeChain(t, keys.device, attestation.Software, ch[:], append(sw, tagged(t, 509, null)), nil),
+		fakeChain(t, keys.confirm, attestation.Software, ch[:], append(sw, tagged(t, 504, 3)), nil),
+		fakeChain(t, keys.push, attestation.Software, ch[:], append(sw, tagged(t, 503, null)), nil),
+	}
+	res, err := h.s.PairApp(ctx, "198.51.100.8", code, proofs(keys, chains), AppDeviceInfo{Model: "Redmi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loopCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.s.RevocationLoop(loopCtx, t.TempDir(), discardLogger(), func(context.Context) ([]byte, time.Time, error) {
+			return nil, time.Time{}, context.DeadlineExceeded
+		})
+	}()
+	defer func() { cancel(); <-done }()
+	h.s.SetRevocations(revocationList(t, attestation.Embedded().Updated.Add(time.Hour), "1"))
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.s.requestRecheck()
+		if d, _ := h.q.AppDeviceByID(ctx, res.DeviceID); d.RevokedReason != "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("叫复查以后没有标出被吊销的手机")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

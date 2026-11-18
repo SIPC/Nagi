@@ -53,6 +53,7 @@ func (s *Service) SetRevocations(r *attestation.Revocations) bool {
 }
 
 // RevocationLoop 先读数据目录里存的列表、复查一遍已添加的手机，之后每天从 Google 取一次。只在主面板上运行（要写数据库）。
+// 添加手机时换了列表的，由 requestRecheck 叫它复查（在这里运行，不占请求，审计也不带那次请求的信息）。
 // fetch 为 nil 时用 FetchRevocations。
 func (s *Service) RevocationLoop(ctx context.Context, dataDir string, log *slog.Logger, fetch func(context.Context) ([]byte, time.Time, error)) {
 	if fetch == nil {
@@ -83,19 +84,40 @@ func (s *Service) RevocationLoop(ctx context.Context, dataDir string, log *slog.
 			}
 			recheck = true
 		}
-		if recheck {
-			if err := s.RecheckAppDevices(ctx); err != nil {
-				log.Warn("按吊销列表复查手机失败", "err", err)
-				wait = revocationRetry
-			} else {
-				recheck = false
+		next := time.Now().Add(wait)
+		for {
+			if recheck {
+				if err := s.RecheckAppDevices(ctx); err != nil {
+					// 复查失败时最多 6 小时后再取一次列表、再复查。
+					log.Warn("按吊销列表复查手机失败", "err", err)
+					if t := time.Now().Add(revocationRetry); t.Before(next) {
+						next = t
+					}
+				} else {
+					recheck = false
+				}
 			}
+			timer := time.NewTimer(time.Until(next))
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-s.recheckSignal:
+				timer.Stop()
+				recheck = true
+				continue
+			case <-timer.C:
+			}
+			break
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(wait):
-		}
+	}
+}
+
+// requestRecheck 让 RevocationLoop 尽快复查一遍已添加的手机（不等它，它没在运行时什么也不做）。
+func (s *Service) requestRecheck() {
+	select {
+	case s.recheckSignal <- struct{}{}:
+	default:
 	}
 }
 
@@ -136,9 +158,10 @@ func loadRevocations(dir string) (*attestation.Revocations, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 日期不晚于现在：写成将来的日期会让之后取到的、随新版本发布的列表都换不上。
-	if now := time.Now(); updated.After(now) {
-		updated = now
+	// 日期晚于现在（面板的时钟曾经快过，或者文件被改过）时不用这份：按现在算的话，每次启动它都和启动时一样新，
+	// 随新版本发布的列表永远换不上它。改用随面板发布的，下次取到新列表时覆盖这份文件。
+	if updated.After(time.Now()) {
+		return nil, fmt.Errorf("保存的吊销列表日期 %s 晚于现在，不使用", updated.Format(time.RFC3339))
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "status.json"))
 	if err != nil {
