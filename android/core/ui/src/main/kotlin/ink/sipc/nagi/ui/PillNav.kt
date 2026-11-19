@@ -102,7 +102,7 @@ fun PillNav(
     val bounds = remember { mutableStateMapOf<Int, Rect>() }
     val slider = rememberSlidingIndicator(selected)
     val indicator = c.muted
-    val card = c.card
+    val card = pillBackground(c, dark)
     val border = c.border
     // 长按拖动见 PillGestures.kt（和宽屏左侧的 PillRail 共用）。
     PillLongPress {
@@ -211,7 +211,7 @@ private fun PillItem(item: PillNavItem, on: Boolean, maxLabel: Dp, reduced: Bool
                             .offset(x = 4.dp, y = (-3).dp)
                             .size(11.dp)
                             .clip(CircleShape)
-                            .background(c.card)
+                            .background(pillBackground(c, LocalNagiDark.current))
                             .padding(2.dp)
                             .clip(CircleShape)
                             .background(c.destructive),
