@@ -161,7 +161,8 @@ func (r *Repo) CreateWithRoot(ctx context.Context, kind Kind, dirs []Dir, ignore
 	var order []string
 	for _, d := range dirs {
 		if d.Existing {
-			if info, err := os.Stat(d.Path); err != nil || !info.IsDir() {
+			// Lstat：最后一级是符号链接时由 openSource 拒绝，不跟随（见 source.go 的 openDirNoFollow）。
+			if info, err := os.Lstat(d.Path); err != nil || !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
 				return "", "", fmt.Errorf("目录 %s 不存在", d.Path)
 			}
 		} else if err := os.MkdirAll(d.Path, 0o755); err != nil {

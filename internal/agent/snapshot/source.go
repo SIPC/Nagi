@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/kopia/kopia/fs"
@@ -28,20 +29,49 @@ var errChanged = errors.New("文件在读取时被替换")
 
 // openSource 打开一个来源目录，返回它的根目录条目，叫 name。用完调用 closer 关闭。
 func openSource(dir, name string) (fs.Directory, io.Closer, error) {
-	root, err := os.OpenRoot(dir)
+	root, info, err := openDirNoFollow(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &srcDir{srcEntry{root: root, rel: ".", name: name, info: info}}, root, nil
+}
+
+// openDirNoFollow 打开目录 dir 作为根，dir 的最后一级是符号链接时拒绝，不跟随。
+// 现有目录里「快照包含的子目录」在用户的原目录里，compose 把原目录挂进容器时（如 ./:/app），容器能把子目录
+// 换成指向节点任意目录的链接。上级目录由管理员设置，容器换不掉，照常解析。
+// 做法：经上级目录的 os.Root 先 Lstat 最后一级，确认是目录；再经同一个 Root 打开它（不会走出上级目录），
+// 打开后核对和 Lstat 看到的是同一个目录：两步之间被换成链接时，打开的是链接指向的目录，核对不过。
+func openDirNoFollow(dir string) (*os.Root, os.FileInfo, error) {
+	dir = filepath.Clean(dir)
+	parent, err := os.OpenRoot(filepath.Dir(dir))
+	if err != nil {
+		return nil, nil, err
+	}
+	defer parent.Close()
+	base := filepath.Base(dir)
+	want, err := parent.Lstat(base)
+	if err != nil {
+		return nil, nil, err
+	}
+	if want.Mode()&os.ModeSymlink != 0 {
+		return nil, nil, fmt.Errorf("目录 %s 是符号链接，为安全起见不纳入快照", dir)
+	}
+	if !want.IsDir() {
+		return nil, nil, fmt.Errorf("%s 不是目录", dir)
+	}
+	root, err := parent.OpenRoot(base)
 	if err != nil {
 		return nil, nil, err
 	}
 	info, err := root.Stat(".")
+	if err == nil && (!info.IsDir() || !os.SameFile(info, want)) {
+		err = fmt.Errorf("%w：%s", errChanged, dir)
+	}
 	if err != nil {
 		root.Close()
 		return nil, nil, err
 	}
-	if !info.IsDir() {
-		root.Close()
-		return nil, nil, fmt.Errorf("%s 不是目录", dir)
-	}
-	return &srcDir{srcEntry{root: root, rel: ".", name: name, info: info}}, root, nil
+	return root, info, nil
 }
 
 // srcEntry 是来源里的一个条目。info 是遍历时 Lstat 的结果，打开时用来核对。

@@ -365,6 +365,7 @@ var en = map[string]string{
 	"现有目录 %s 是（或包含）Nagi 的数据目录":                              "Existing directory %s is (or contains) Nagi's data directory",
 	"现有目录 %s 与此节点上容器 %s 的目录重叠":                              "Existing directory %[1]s overlaps the directory of container %[2]s on this node",
 	"%s 是符号链接（可能由容器创建），为安全起见不挂载。请删除该链接后重新部署":                "%s is a symbolic link (possibly created by the container) and isn't mounted for security. Delete the link and deploy again",
+	"目录 %s 是符号链接，为安全起见不纳入快照":                                "Directory %s is a symbolic link and isn't included in snapshots for security",
 	"容器没有设置 git 仓库":                                         "The container has no git repository",
 	"压缩包超过 %d GiB，无法上传":                                     "The archive is larger than %d GiB and can't be uploaded",
 	"该容器需要 data/ 中的文件，但没有文件来源，请先上传文件再部署":                    "This container uses files in data/ but has no file source. Upload files first, then deploy",
