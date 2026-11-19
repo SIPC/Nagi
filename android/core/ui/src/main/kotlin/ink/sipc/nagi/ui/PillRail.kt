@@ -122,7 +122,7 @@ fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, m
                     drawIntoCanvas { canvas ->
                         val paint = android.graphics.Paint().apply {
                             isAntiAlias = true
-                            color = c.card.toArgb()
+                            color = railBackground(c, dark).toArgb()
                             setShadowLayer(16.dp.toPx(), 0f, 4.dp.toPx(), shadowColor)
                         }
                         canvas.nativeCanvas.drawPath(frame.asAndroidPath(), paint)
@@ -227,9 +227,12 @@ private fun RailItem(item: PillNavItem, on: Boolean, onClick: () -> Unit) {
             if (item.badge) {
                 Box(
                     Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-3).dp).size(11.dp).clip(RoundedCornerShape(6.dp))
-                        .background(c.card).padding(2.dp).clip(RoundedCornerShape(4.dp)).background(c.destructive),
+                        .background(railBackground(c, LocalNagiDark.current)).padding(2.dp).clip(RoundedCornerShape(4.dp)).background(c.destructive),
                 )
             }
         }
     }
 }
+
+/** 胶囊的底色：深色时比 card（#171717）深一档，用 #121212；浅色时照常用 card。 */
+private fun railBackground(c: NagiColors, dark: Boolean) = if (dark) androidx.compose.ui.graphics.Color(0xFF121212) else c.card
