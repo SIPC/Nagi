@@ -1400,6 +1400,8 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
 // StaleProjects：节点报告配置由别的面板写过的项目。以节点为准要删掉面板上的记录，节点又可能被攻破，所以由管理员确认。
 function StaleProjects({ nodeId, list, onDone }: { nodeId: string; list: StaleProject[]; onDone: () => void }) {
   const [error, setError] = useState("");
+  // 以节点为准重建项目要「特权配置」权限，没有时只显示说明。
+  const canAdopt = useRole().can("project.privileged");
   const adopt = async (p: StaleProject) => {
     if (!(await confirmAction(t.nodes.stale.adoptConfirm(p.projectName), { action: t.nodes.stale.adopt, danger: true }))) return;
     setError("");
@@ -1423,9 +1425,11 @@ function StaleProjects({ nodeId, list, onDone }: { nodeId: string; list: StalePr
             title={<span className="truncate">{p.projectName}</span>}
             actionsWidth="w-auto"
             actions={
-              <Button size="row" variant="ghost" onClick={() => adopt(p)}>
-                {t.nodes.stale.adopt}
-              </Button>
+              canAdopt && (
+                <Button size="row" variant="ghost" onClick={() => adopt(p)}>
+                  {t.nodes.stale.adopt}
+                </Button>
+              )
             }
           />
         ))}

@@ -1042,13 +1042,18 @@ function Overview({ project, container, services }: { project: Project; containe
                   <CopyButton text={container.deployKey} />
                 </>,
               ],
-              [
-                <KeyHelp k={o.webhook} help={o.webhookHint} />,
-                <>
-                  <span className={cn(mono, "min-w-0")}>{webhookUrl}</span>
-                  <CopyButton text={webhookUrl} />
-                </>,
-              ],
+              // webhook 地址只给有「部署」权限的成员，没有令牌时不显示这一行。
+              ...(container.webhookToken
+                ? [
+                    [
+                      <KeyHelp k={o.webhook} help={o.webhookHint} />,
+                      <>
+                        <span className={cn(mono, "min-w-0")}>{webhookUrl}</span>
+                        <CopyButton text={webhookUrl} />
+                      </>,
+                    ] as [React.ReactNode, React.ReactNode],
+                  ]
+                : []),
             ]}
           />
         </Section>
