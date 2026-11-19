@@ -208,7 +208,8 @@ func (m *Manager) scheduledSnapshot(ctx context.Context, projectID, container st
 	}
 	failures := c.SnapshotFailures + 1
 	delay := retryDelay(failures, m.snapshotGap(c.Spec))
-	if serr := m.nodeQ.SetContainerSnapshotRetry(ctx, nodestore.SetContainerSnapshotRetryParams{
+	// 超时取消以后也要记下退避，所以不用调用方的 ctx。
+	if serr := m.nodeQ.SetContainerSnapshotRetry(context.WithoutCancel(ctx), nodestore.SetContainerSnapshotRetryParams{
 		SnapshotFailures: failures, SnapshotRetryAt: now.Add(delay).Unix(), ProjectID: projectID, Name: container,
 	}); serr != nil {
 		err = errors.Join(err, fmt.Errorf("记录重试时间失败：%w", serr))
@@ -218,31 +219,49 @@ func (m *Manager) scheduledSnapshot(ctx context.Context, projectID, container st
 
 // SnapshotDue 由节点每分钟调用一次：给到期的容器做定时快照，再给到期的仓库做维护。两件事各自判断：
 // 快照一直失败时维护照样做，失败留下的数据才能回收。task 是 "snapshot" 或 "maintain"。
+// 每个容器各自在一个协程里运行、带超时，不等它们做完就返回（见 dueRuns）：一个容器卡住不拖住别的容器，
+// 卡住或超时都按失败报告。上一轮还没结束的容器这一轮跳过。onResult 会在不同的协程里被调用。
 func (m *Manager) SnapshotDue(ctx context.Context, onResult func(projectID, container, task string, err error)) {
+	now := time.Now()
 	for _, c := range m.List(ctx) {
 		s := c.Spec
 		if s.GetVersion() == 0 {
 			continue
 		}
-		if m.snapshotDue(c, time.Now()) {
-			if err := m.scheduledSnapshot(ctx, s.GetProjectId(), s.GetName()); !errors.Is(err, errNotDue) && onResult != nil {
-				onResult(s.GetProjectId(), s.GetName(), "snapshot", err)
-			}
+		projectID, name := s.GetProjectId(), s.GetName()
+		var tasks []dueTask
+		if m.snapshotDue(c, now) {
+			tasks = append(tasks, dueTask{"snapshot", func(ctx context.Context) error {
+				return m.scheduledSnapshot(ctx, projectID, name)
+			}})
 		}
-		if time.Since(c.LastMaintain) >= maintainGap {
-			err := m.maintain(ctx, s)
-			if err != nil {
-				// 失败了过一小时再试：把上次维护的时间记成「再过 maintainRetry 就满 24 小时」。
-				_ = m.nodeQ.SetContainerMaintenanceTime(ctx, nodestore.SetContainerMaintenanceTimeParams{
-					LastMaintenance: time.Now().Add(maintainRetry - maintainGap).Unix(), ProjectID: s.GetProjectId(), Name: s.GetName(),
-				})
-				err = fmt.Errorf("快照仓库维护: %w", err)
-			}
+		if now.Sub(c.LastMaintain) >= maintainGap {
+			tasks = append(tasks, dueTask{"maintain", func(ctx context.Context) error {
+				return m.scheduledMaintain(ctx, s)
+			}})
+		}
+		if len(tasks) == 0 {
+			continue
+		}
+		m.due.start(ctx, uid(projectID, name), tasks, func(task string, err error) {
 			if onResult != nil {
-				onResult(s.GetProjectId(), s.GetName(), "maintain", err)
+				onResult(projectID, name, task, err)
 			}
-		}
+		})
 	}
+}
+
+// scheduledMaintain 做每天一次的仓库维护。失败了过一小时再试：把上次维护的时间记成「再过 maintainRetry 就满 24 小时」。
+func (m *Manager) scheduledMaintain(ctx context.Context, s *nagiv1.ContainerSpec) error {
+	err := m.maintain(ctx, s)
+	if err == nil {
+		return nil
+	}
+	// 超时取消以后也要记下来，所以不用调用方的 ctx。
+	_ = m.nodeQ.SetContainerMaintenanceTime(context.WithoutCancel(ctx), nodestore.SetContainerMaintenanceTimeParams{
+		LastMaintenance: time.Now().Add(maintainRetry - maintainGap).Unix(), ProjectID: s.GetProjectId(), Name: s.GetName(),
+	})
+	return fmt.Errorf("快照仓库维护: %w", err)
 }
 
 // ReclaimSpace 立即清理容器的快照仓库：回收没有快照用到的数据（过期、删除的快照，失败的快照留下的），
