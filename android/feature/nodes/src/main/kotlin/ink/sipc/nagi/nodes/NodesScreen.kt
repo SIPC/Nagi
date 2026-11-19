@@ -52,11 +52,11 @@ import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.Roll
 import ink.sipc.nagi.ui.SkeletonRows
 import ink.sipc.nagi.ui.StatusDot
-import ink.sipc.nagi.ui.UsageBar
+import ink.sipc.nagi.ui.UsageRing
 import ink.sipc.nagi.ui.rowClickable
 
 // 节点列表（docs/android.md「节点列表」，设计稿 s7 第 1 张）：有问题的排在前面；一行是状态点、名称（离线、待批准时后面写状态），
-// 第二行等宽字写地址，第三行是 CPU、内存、磁盘三条细占用条。右边是容器数，待批准的是「批准」。
+// 第二行写状态、等宽的地址和容器数，右边是 CPU、内存、磁盘三个占用环（和首页的节点状态一样），待批准的是「批准」。
 
 /** 节点列表的权限：还没查到时为 null。 */
 fun NodesViewModel.accessOf(state: Polled<NodeList>): Access? = (state as? Polled.Ready)?.value?.access
@@ -175,8 +175,9 @@ private fun NodeRow(
 ) {
     val c = NagiTheme.colors
     val usage = n.usageInfo()
+    // 和首页的节点状态同一种写法：第一行名称，第二行状态、地址和容器数，右边是 CPU、内存、磁盘三个占用环。
     Row(
-        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) c.muted else null).heightIn(min = 64.dp).padding(vertical = 10.dp),
+        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) c.muted else null).heightIn(min = Dimens.rowHeightTwoLine).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.align(Alignment.Top).padding(top = 7.dp)) { StatusDot(nodeDot(n)) }
@@ -184,51 +185,37 @@ private fun NodeRow(
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(n.name, style = NagiTheme.type.body, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                val status = nodeStatusText(n)
-                if (status.isNotEmpty()) {
-                    Spacer(Modifier.width(8.dp))
-                    Roll(status, NagiTheme.type.secondary, if (n.pending) c.warningText else c.mutedForeground)
-                }
                 if (n.info.embedded) {
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.embedded), style = NagiTheme.type.secondary, color = c.mutedForeground, maxLines = 1)
                 }
             }
-            Text(n.address.ifEmpty { n.id }, style = NagiTheme.type.mono, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (usage != null) {
-                Spacer(Modifier.height(8.dp))
-                UsageBars(usage)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val status = nodeStatusText(n)
+                if (status.isNotEmpty()) {
+                    Roll(status, NagiTheme.type.secondary, if (n.pending) c.warningText else c.mutedForeground)
+                    Text(" · ", style = NagiTheme.type.secondary, color = c.mutedForeground)
+                }
+                Text(n.address.ifEmpty { n.id }, style = NagiTheme.type.mono, color = c.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (!n.pending) {
+                    Text(" · ", style = NagiTheme.type.secondary, color = c.mutedForeground)
+                    Roll(stringResource(R.string.containers_count, n.containers), NagiTheme.type.secondary, c.mutedForeground)
+                }
             }
         }
-        Spacer(Modifier.width(16.dp))
         if (n.pending) {
-            if (canApprove) NagiButton(stringResource(R.string.approve), onApprove, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = approving)
-        } else {
-            Roll(stringResource(R.string.containers_count, n.containers), NagiTheme.type.secondary, c.mutedForeground)
+            if (canApprove) {
+                Spacer(Modifier.width(16.dp))
+                NagiButton(stringResource(R.string.approve), onApprove, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = approving)
+            }
+        } else if (usage != null) {
+            val track = if (selected) c.border else c.muted
+            Spacer(Modifier.width(16.dp))
+            UsageRing("CPU", NagiIcons.Cpu, usage.cpu, track = track)
+            Spacer(Modifier.width(8.dp))
+            UsageRing(stringResource(R.string.memory), NagiIcons.MemoryStick, usage.memory, track = track)
+            Spacer(Modifier.width(8.dp))
+            UsageRing(stringResource(R.string.disk), NagiIcons.HardDrive, if (usage.diskTotal > 0 || usage.disk > 0) usage.disk else null, track = track)
         }
-    }
-}
-
-/** CPU、内存、磁盘三条并排的细占用条（高 3），上面写名称和百分比。CPU 按核数折成 100%。 */
-@Composable
-internal fun UsageBars(u: NodeUsageInfo, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        UsageBarCell("CPU", u.cpu, Modifier.weight(1f))
-        UsageBarCell(stringResource(R.string.memory), u.memory, Modifier.weight(1f))
-        UsageBarCell(stringResource(R.string.disk), u.disk, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun UsageBarCell(label: String, fraction: Double, modifier: Modifier) {
-    val c = NagiTheme.colors
-    Column(modifier) {
-        Row {
-            Text(label, style = NagiTheme.type.small, color = c.mutedForeground, maxLines = 1, modifier = Modifier.weight(1f))
-            Roll(percentText(fraction * 100), NagiTheme.type.small, usageTextColor(fraction, c.mutedForeground))
-        }
-        Spacer(Modifier.height(4.dp))
-        // 很小但不是 0 的占用也留一点长度，和没有数据区分开（同网页）。
-        UsageBar((if (fraction > 0) maxOf(fraction, 0.03) else 0.0).toFloat(), usageColor(fraction, c.mutedForeground.copy(alpha = 0.6f)))
     }
 }

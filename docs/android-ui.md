@@ -66,6 +66,7 @@
 - `ChartLegend(items)`：图例，放在图上面。
 - `UsageBar(fraction, color, height)`：用量条，长度变化有过渡。
 - `StatusDot(color, size)`：状态点，默认 6，颜色变化有过渡。
+- `UsageRing(label, icon, fraction, track)`：一项占用的圆环（26，线宽 2.5，中间是图标，不写数字），首页的节点状态和节点列表都用它；到 80% 变警告色、90% 变红，不知道总量时传 null。放在 muted 底上（选中的一行）时 `track` 传 border。
 
 ## 头像和图标底
 
