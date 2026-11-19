@@ -227,7 +227,9 @@ func download(ctx context.Context, base, dst, pinned string, report func(stage S
 			report(StageDownload, n, size)
 		}
 	}
-	_, err = fetch(ctx, base+"/"+name, 0, io.MultiWriter(f, h), onRead)
+	// 大小有上限、写入时检查磁盘：恶意或被攻破的加速代理能给出正确的 SHA256SUMS（GitHub 上的值），
+	// 二进制却是无穷的数据，要写完才比较校验值，不设限就会写满磁盘（v0.35.0#22）。
+	_, err = fetch(ctx, base+"/"+name, maxBinary, &diskWriter{dir: filepath.Dir(dst), w: io.MultiWriter(f, h)}, onRead)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -243,6 +245,11 @@ func download(ctx context.Context, base, dst, pinned string, report func(stage S
 	}
 	return want, nil
 }
+
+// maxBinary 是下载的 nagi 可执行文件的大小上限。现在的发布文件约 100 MB（v0.35.0 的 linux-amd64），留足余量；
+// 超过的不是正常的发布文件。发布文件接近上限时调大（旧版本按旧上限下载，升级到超过旧上限的版本会失败）。
+// 测试时改小。
+var maxBinary int64 = 256 << 20
 
 // binaryName 是本机架构的发布文件名。
 func binaryName() string { return "nagi-linux-" + runtime.GOARCH }
@@ -286,7 +293,8 @@ var transport http.RoundTripper = func() http.RoundTripper {
 	return t
 }()
 
-// fetch 下载 url：w 不为空时写进 w，否则读进内存返回（最多 limit 字节）。速度太慢时放弃（见 watchSpeed）。
+// fetch 下载 url：w 不为空时写进 w，否则读进内存返回（最多 limit 字节）。写进 w 时 limit 大于 0 就是大小上限：
+// Content-Length 超过它时不下载，下载中超过它时停下，都返回错误。速度太慢时放弃（见 watchSpeed）。
 // report 不为空时报告进度：收到响应头时报一次 0，之后最多每 progressInterval 报一次，下载完再报一次。
 // total 是响应的 Content-Length，不知道时为 -1。
 func fetch(ctx context.Context, url string, limit int64, w io.Writer, report func(got, total int64)) ([]byte, error) {
@@ -322,6 +330,12 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer, report fun
 	if resp.StatusCode != http.StatusOK {
 		return nil, statusError{resp.StatusCode, i18n.Errorf("无法下载 %s（HTTP %d），请检查镜像地址", name, resp.StatusCode)}
 	}
+	tooLarge := func() error {
+		return i18n.Errorf("%s 超过 %d MiB，不是正常的发布文件，已停止下载", name, limit>>20)
+	}
+	if w != nil && limit > 0 && resp.ContentLength > limit {
+		return nil, tooLarge()
+	}
 	total.Store(resp.ContentLength)
 	body := &countingReader{r: resp.Body, n: &got}
 	if report != nil {
@@ -331,8 +345,18 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer, report fun
 		body.report = func(n int64) { report(n, size) }
 	}
 	if w != nil {
-		if _, err := io.Copy(w, body); err != nil {
+		var r io.Reader = body
+		if limit > 0 {
+			r = io.LimitReader(body, limit+1) // 多读一个字节，才知道超没超
+		}
+		n, err := io.Copy(w, r)
+		switch {
+		case isLowDisk(err):
+			return nil, err
+		case err != nil:
 			return nil, unreachable(err)
+		case limit > 0 && n > limit:
+			return nil, tooLarge()
 		}
 		if report != nil {
 			report(got.Load(), resp.ContentLength)

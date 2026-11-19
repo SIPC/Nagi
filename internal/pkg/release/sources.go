@@ -202,8 +202,8 @@ func fetchFirst(ctx context.Context, sources []Source, dst string, check func(So
 		if ctx.Err() != nil {
 			return Source{}, ctx.Err()
 		}
-		if IsUnusable(err) {
-			// 文件已经核对过，换个地址下载到的也是它。
+		if IsUnusable(err) || isLowDisk(err) {
+			// 文件已经核对过，换个地址下载到的也是它；磁盘不够时换个地址也一样。
 			return Source{}, err
 		}
 		if len(sources) > 1 {
