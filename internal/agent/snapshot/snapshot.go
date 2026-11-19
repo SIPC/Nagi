@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/kopia/kopia/fs"
-	"github.com/kopia/kopia/fs/localfs"
 	"github.com/kopia/kopia/fs/virtualfs"
 	"github.com/kopia/kopia/repo"
 	"github.com/kopia/kopia/repo/blob"
@@ -168,19 +167,24 @@ func (r *Repo) CreateWithRoot(ctx context.Context, kind Kind, dirs []Dir, ignore
 		} else if err := os.MkdirAll(d.Path, 0o755); err != nil {
 			return "", "", err
 		}
-		dir, err := localfs.Directory(d.Path)
+		parent, name, nested := strings.Cut(d.Name, "/")
+		if !nested {
+			name = d.Name
+		}
+		// 不用 kopia 的 localfs：它会跟随容器换上的符号链接、卡在 FIFO 上（见 source.go）。
+		dir, closer, err := openSource(d.Path, name)
 		if err != nil {
 			return "", "", err
 		}
-		parent, name, nested := strings.Cut(d.Name, "/")
+		defer closer.Close()
 		if !nested {
-			entries = append(entries, renamed{Directory: dir, name: d.Name})
+			entries = append(entries, dir)
 			continue
 		}
 		if _, ok := groups[parent]; !ok {
 			order = append(order, parent)
 		}
-		groups[parent] = append(groups[parent], renamed{Directory: dir, name: name})
+		groups[parent] = append(groups[parent], dir)
 	}
 	for _, parent := range order {
 		entries = append(entries, virtualfs.NewStaticDirectory(parent, groups[parent]))
@@ -511,11 +515,3 @@ func (r *Repo) Tags(ctx context.Context, id string) (map[string]string, error) {
 	}
 	return man.Tags, nil
 }
-
-// renamed 让本地目录在快照里换个名字（例如 /mnt/qmt/data 在快照里叫 data）。
-type renamed struct {
-	fs.Directory
-	name string
-}
-
-func (r renamed) Name() string { return r.name }
