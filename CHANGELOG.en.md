@@ -30,13 +30,15 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### Fixes
 
 - Fixed an issue where some Xiaomi phones could not be added.
-- Fixed an issue where the Android app crashed when a node reported abnormal values or a member uploaded an oversized avatar.
+- Fixed an issue where the Android app crashed in some cases.
 - Fixed known vulnerabilities and improved security.
 
 ### Behavior changes
 
 - The preset Operator role no longer includes backup, high availability, migration, network and domains, alert rules, registries, or project management. Edit the role if needed.
-- Changing a node's projects root requires the "Node terminal and files" permission and verifying your identity first.
+- Changing a node's projects root requires the "Node terminal and files" permission and verifying your identity first. Access tokens need "Node terminal" selected.
+- Access tokens need "Panel administration" selected to change project groups and node tags.
+- Pulling from a git repository is limited to 30 minutes and stops when the node runs low on disk space.
 - Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
 - Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
 - Creating or editing members, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity, with a password or verification code only.
@@ -51,7 +53,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 - Upgrade nodes to v0.35.0 to fix security issues on nodes. Later node upgrades will also show download progress.
 - After updating the panel, update the Android app to v0.35.0.
-- Port mappings previously imported from compose and bound only to a local address are still publicly exposed. Check them in the container's "Network" tab.
+- Check port mappings previously imported from compose in the container's "Network" tab.
 - If untrusted containers have run on a node, we recommend replacing the keys and passwords stored on it.
 
 ## v0.34.0
