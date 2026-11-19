@@ -31,8 +31,16 @@ func TestRolesAPI(t *testing.T) {
 	if got := r.Msg.GetPermissions(); !slices.Equal(got, []string{"project.view", "project.logs"}) {
 		t.Errorf("权限：%v", got)
 	}
-	if _, err := sc.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "审计", Permissions: []string{"panel.audit"}})); connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Errorf("审计日志只给管理员：%v", err)
+	if _, err := sc.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "安全", Permissions: []string{"panel.security"}})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("安全设置只给管理员：%v", err)
+	}
+	// 审计日志可以单独授予，不带别的权限。
+	if r, err := sc.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "审计", Permissions: []string{"panel.audit"}})); err != nil {
+		t.Errorf("审计日志可以授予：%v", err)
+	} else if got := r.Msg.GetPermissions(); !slices.Equal(got, []string{"panel.audit"}) {
+		t.Errorf("审计的权限：%v", got)
+	} else if _, err := sc.DeleteRole(ctx, connect.NewRequest(&nagiv1.DeleteRoleRequest{Id: r.Msg.GetId()})); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := sc.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "看日志", Permissions: []string{"project.view"}})); connect.CodeOf(err) != connect.CodeAlreadyExists {
 		t.Errorf("名称重复：%v", err)

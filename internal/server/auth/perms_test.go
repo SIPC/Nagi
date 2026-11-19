@@ -101,10 +101,39 @@ func TestPresets(t *testing.T) {
 
 // Normalize 补上前提的权限，去掉只给管理员的。
 func TestNormalize(t *testing.T) {
-	got := PermsOf(PermDeploy, PermAudit, PermFilesWrite, PermNodeImages).Normalize()
-	want := PermsOf(PermView, PermConfig, PermDeploy, PermFilesRead, PermFilesWrite, PermNodeView, PermNodeImages)
+	got := PermsOf(PermDeploy, PermSecurity, PermFilesWrite, PermNodeImages, PermAudit).Normalize()
+	want := PermsOf(PermView, PermConfig, PermDeploy, PermFilesRead, PermFilesWrite, PermNodeView, PermNodeImages, PermAudit)
 	if got != want {
 		t.Errorf("Normalize = %v，想要 %v", got.Names(), want.Names())
+	}
+}
+
+// 「审计日志」可以授予（不再只给管理员）：有它能调用审计的接口，没有时被拒绝；审计设置归「安全设置」，仍只给管理员。
+func TestAuditPermGrantable(t *testing.T) {
+	if AdminOnlyPerms.Has(PermAudit) || !AdminOnlyPerms.Has(PermSecurity) {
+		t.Fatal("审计日志可以授予，安全设置只给管理员")
+	}
+	if PresetOperator.Has(PermAudit) || PresetViewer.Has(PermAudit) {
+		t.Error("预置的操作员、只读默认没有审计日志")
+	}
+	auditor := MemberWith(5, PermsOf(PermAudit))
+	if !auditor.Perms.Has(PermAudit) {
+		t.Fatal("角色里的审计日志被去掉了")
+	}
+	others := MemberWith(5, AllPerms&^PermsOf(PermAudit))
+	for _, p := range []string{"/nagi.v1.SettingsService/GetAuditEvent", "/nagi.v1.SettingsService/ExportAuditEvents",
+		"/nagi.v1.SettingsService/VerifyAudit", "/nagi.v1.SettingsService/ListActivity", "/nagi.v1.SettingsService/GetRecording"} {
+		if !Allowed(auditor, p) {
+			t.Errorf("有审计日志应能调用 %s", p)
+		}
+		if Allowed(others, p) {
+			t.Errorf("没有审计日志不应能调用 %s", p)
+		}
+	}
+	for _, p := range []string{"/nagi.v1.SettingsService/GetAuditSettings", "/nagi.v1.SettingsService/SetAuditSettings", "/nagi.v1.SettingsService/TestAuditSink"} {
+		if Allowed(auditor, p) || Allowed(others, p) || !Allowed(PresetUser(RoleAdmin), p) {
+			t.Errorf("%s 只给管理员", p)
+		}
 	}
 }
 

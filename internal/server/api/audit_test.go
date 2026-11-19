@@ -191,10 +191,10 @@ func TestAuditRecordsAndFilters(t *testing.T) {
 		t.Errorf("按节点：%s", actions(ev))
 	}
 
-	// 操作员看不到不属于项目的记录（成员、告警配置），也看不到 IP。
+	// 操作员没有「审计日志」：查不了审计。
 	_, bob := h.login("bob", secret)
-	if ev := h.list(bob, nil); len(ev) != 0 {
-		t.Errorf("操作员看到了项目以外的记录：%s", actions(ev))
+	if _, err := bob.ListAuditEvents(ctx, connect.NewRequest(&nagiv1.ListAuditEventsRequest{})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("操作员查询审计：%v", err)
 	}
 	if _, err := bob.ExportAuditEvents(ctx, connect.NewRequest(&nagiv1.ExportAuditEventsRequest{})); err == nil {
 		// 服务端流的错误在第一次 Receive 时才返回。

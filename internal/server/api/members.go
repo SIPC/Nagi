@@ -105,7 +105,7 @@ func (s *settingsService) checkRoleInput(ctx context.Context, id int64, builtin,
 	}
 	perms := auth.ParsePerms(names)
 	if perms&auth.AdminOnlyPerms != 0 {
-		return "", 0, connect.NewError(connect.CodeInvalidArgument, i18n.New("审计日志和安全设置只给管理员"))
+		return "", 0, connect.NewError(connect.CodeInvalidArgument, i18n.New("安全设置只给管理员"))
 	}
 	perms = perms.Normalize()
 	if u := auth.CurrentUser(ctx); !u.IsAdmin() && perms&^u.Perms != 0 {
