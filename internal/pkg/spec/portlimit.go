@@ -5,10 +5,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/template"
+	"github.com/docker/go-connections/nat"
 	"gopkg.in/yaml.v3"
 )
 
@@ -136,25 +136,25 @@ func (c *portCounter) entry(n *yaml.Node) int {
 	return portRangeSize(s)
 }
 
-// portRangeSize 返回短写法 [IP:][对外端口:]容器端口[/协议] 里容器端口的个数。读不懂的算一个。
+// portRangeSize 返回短写法 [IP:][对外端口:]容器端口[/协议] 里容器端口的个数。
+// 和 compose 解析库展开时用同一套规则（go-connections 的 nat.ParsePortSpec）：按冒号分开取最后一段，
+// 去掉第一个斜杠后的协议，再用 nat.ParsePortRange 读范围（它认 "+1" 这样的写法），所以算出的数和真正展开的一样。
+// 读不了的：容器端口里有没替换的变量时算一个（解析库也读不了，不会展开）；没有变量却含 "-" 的按超过上限算，
+// 免得解析库和这里的规则有出入时被绕过；其余的（比如 "abc"）解析库也会报错，算一个。
 func portRangeSize(s string) int {
-	s = strings.TrimSpace(s)
-	if i := strings.LastIndexByte(s, '/'); i >= 0 {
-		s = s[:i]
-	}
-	if i := strings.LastIndexByte(s, ':'); i >= 0 {
-		s = s[i+1:]
-	}
-	lo, hi, ok := strings.Cut(s, "-")
-	if !ok {
+	parts := strings.Split(s, ":")
+	port, _, _ := strings.Cut(parts[len(parts)-1], "/")
+	lo, hi, err := nat.ParsePortRange(port)
+	switch {
+	case err == nil:
+		return capPorts(int(hi-lo) + 1)
+	case strings.Contains(port, "$"):
+		return 1
+	case strings.Contains(port, "-"):
+		return MaxComposePorts + 1
+	default:
 		return 1
 	}
-	a, err1 := strconv.ParseUint(strings.TrimSpace(lo), 10, 16)
-	b, err2 := strconv.ParseUint(strings.TrimSpace(hi), 10, 16)
-	if err1 != nil || err2 != nil || b < a {
-		return 1
-	}
-	return capPorts(int(b-a) + 1)
 }
 
 // serviceCount 是一个服务自己写的端口数和它 extends 的同一个文件里的服务。

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/docker/go-connections/nat"
 )
 
 // rangeBomb 是审查报告 2026-11-18-dddb82a#1 里的 compose：20 行 host_ip 不同的全范围端口，展开后 131 万个。
@@ -89,6 +90,18 @@ func TestCheckComposePorts(t *testing.T) {
 		{"变量的默认值", ports(`"${R:-1-65535}"`), map[string]string{}, false},
 		{"变量是一个端口", ports(`"${P}:80"`), map[string]string{"P": "8080"}, true},
 		{"不替换变量时按原文", ports(`"${R}:${R}"`), nil, true},
+		// 审查报告 v0.35.0#3：解析库认 "+1"，计数也要认。
+		{"起点带加号", ports(`"+1-65535:+1-65535"`), nil, false},
+		{"终点带加号", ports(`"1-+65535:1-+65535"`), nil, false},
+		{"两头都带加号", ports(`"+1-+65535"`), nil, false},
+		{"带 host_ip 和加号", ports(`"10.0.0.1:+1-65535:+1-65535"`), nil, false},
+		{"IPv6 地址和加号", ports(`"[::1]:+1-2000:+1-2000/udp"`), nil, false},
+		{"带加号但没超过上限", ports(`"+8000-+8010:+8000-+8010"`), nil, true},
+		{"expose 带加号", "services:\n  web:\n    image: nginx\n    expose: [\"+1-65535\", \"1-+65535/udp\"]\n", nil, false},
+		{"变量替换后带加号", ports(`"${R}"`), map[string]string{"R": "+1-65535"}, false},
+		{"含横线却读不了的", ports(`"1 - 2"`), nil, false},
+		{"expose 含横线却读不了的", "services:\n  web:\n    image: nginx\n    expose: [\"0x1-0xffff\"]\n", nil, false},
+		{"读不了但没有横线的", ports(`"abc"`), nil, true},
 	}
 	for _, c := range cases {
 		err := CheckComposePorts(c.compose, c.env)
@@ -101,6 +114,57 @@ func TestCheckComposePorts(t *testing.T) {
 	}
 	if err := CheckComposePorts("services: [", nil); err == nil {
 		t.Error("读不了的 YAML 应该报错")
+	}
+}
+
+// 计数和解析库（go-connections 的 nat.ParsePortSpec）真正展开的端口数一致；解析库读不了、含横线的按超过上限算。
+func TestPortRangeSizeMatchesCompose(t *testing.T) {
+	for _, s := range []string{
+		"80", "8080:80", "53/udp", "443:443/tcp", "127.0.0.1:5432:5432", "[::1]:80:80",
+		"27015-27030:27015-27030/udp", "8000-60000:80", "1-1000", "80-80",
+		"+80", "+1-1000", "1-+1000", "+1-+1000", "10.0.0.1:+1-500:+1-500", "[::1]:+1-500:+1-500/udp",
+		"0-999", "00001-00010", "1-65535", "+1-65535", "10.0.0.1:1-+65535:1-+65535/sctp",
+		"1-", "-5", "5-1", "1-70000", "+-1", "1 - 2", "0x1-0x10",
+	} {
+		got := portRangeSize(s)
+		maps, err := nat.ParsePortSpec(s)
+		switch {
+		case err == nil && got != min(len(maps), MaxComposePorts+1):
+			t.Errorf("%q：计数 %d，解析库展开 %d 个", s, got, len(maps))
+		case err != nil && strings.Contains(s, "-") && got <= MaxComposePorts:
+			t.Errorf("%q：解析库读不了（%v），含横线应按超过上限算，得到 %d", s, err, got)
+		}
+	}
+	if got := portRangeSize("${R}"); got != 1 {
+		t.Errorf("没替换的变量应该算一个，得到 %d", got)
+	}
+}
+
+// 用 "+" 写的全范围（审查报告 v0.35.0#3）和不带 "+" 的一样很快被拒绝，不交给解析库展开。
+func TestComposePortRangeBombPlus(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("services:\n  web:\n    image: nginx\n    ports:\n")
+	for i := 1; i <= 3; i++ {
+		fmt.Fprintf(&b, "      - \"10.0.0.%d:+1-65535:+1-65535\"\n", i)
+	}
+	b.WriteString("    expose: [\"+1-65535\"]\n")
+	text := b.String()
+	cfg := &nagiv1.ContainerConfig{Compose: text}
+	start := time.Now()
+	if _, err := Validate(context.Background(), cfg, "web", nil, "/check", "check"); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "端口过多") {
+		t.Errorf("保存校验应该以端口过多拒绝：%v", err)
+	}
+	if _, err := Load(context.Background(), cfg, "web", nil, "/check", "check"); err == nil {
+		t.Error("已经保存的超限 compose 读取时应该报错")
+	}
+	if reasons, _ := PrivilegeReasons(cfg, "web"); len(reasons) == 0 {
+		t.Error("解析不了的 compose 应该算有特权")
+	}
+	if _, err := AdviseCompose(text); err == nil {
+		t.Error("AdviseCompose 应该报错")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("用了 %v，应该很快拒绝", elapsed)
 	}
 }
 
