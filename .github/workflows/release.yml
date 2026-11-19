@@ -12,8 +12,10 @@ on:
   push:
     tags: ["v*"]
 
+# 默认只读，只有最后上传 Release 的任务可写：测试、编译时执行的依赖代码拿不到可写令牌。
+# 第三方 action 固定到提交（注释是对应的标签），checkout 不保存凭据。
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # mesh 的测试单独一个任务：它的测试并行运行、很占 CPU，和别的包（agent 里按时间判定的端到端测试）挤在一台机器上会互相拖慢。
@@ -24,16 +26,18 @@ jobs:
       matrix:
         shard: [mesh, rest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       # 用 1.26 的最新补丁版本编译，带上标准库的安全修复；go.mod 里的版本只是最低要求。
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
           check-latest: true
           cache: false
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -61,15 +65,17 @@ jobs:
   vuln:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
           check-latest: true
           cache: false
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -81,7 +87,7 @@ jobs:
             go-test-
 
       - name: Vulnerability check
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
   build:
     runs-on: ubuntu-latest
@@ -89,15 +95,17 @@ jobs:
       matrix:
         arch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
           check-latest: true
           cache: false
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -107,11 +115,11 @@ jobs:
             go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-
             go-build-${{ matrix.arch }}-
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -133,7 +141,7 @@ jobs:
             -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
             -o dist/nagi-linux-${{ matrix.arch }} ./cmd/nagi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nagi-linux-${{ matrix.arch }}
           path: dist/nagi-linux-${{ matrix.arch }}
@@ -145,15 +153,17 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: '17'
 
       # 只读缓存：标签上存的缓存别的标签用不到，缓存由 main 上的 android.yml 预热。
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           cache-read-only: true
 
@@ -179,7 +189,7 @@ jobs:
           "$apksigner" verify --print-certs dist/nagi-android.apk | sed -n 's/.*SHA-256 digest: //p' | head -1 > dist/android-cert.txt
           test -s dist/android-cert.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ hashFiles('dist/nagi-android.apk') != '' }}
         with:
           name: nagi-android
@@ -193,10 +203,14 @@ jobs:
     needs: [test, vuln, build, android]
     if: ${{ !cancelled() && needs.test.result == 'success' && needs.vuln.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
           pattern: nagi-*
@@ -220,7 +234,7 @@ jobs:
             printf '\n\n安卓 App 签名证书 SHA-256：`%s`\n' "$(cat android-cert.txt)" >> notes.md
           fi
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*
           body_path: notes.md
