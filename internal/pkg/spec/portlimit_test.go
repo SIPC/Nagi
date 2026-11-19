@@ -59,6 +59,16 @@ func TestComposePortRangeBomb(t *testing.T) {
 	}
 }
 
+// 容器端口的变量带默认值是常见写法，不算有特权。
+func TestPortVariableDefaultNotPrivileged(t *testing.T) {
+	for _, p := range []string{`"${PORT:-8080}"`, `"8080:${PORT:-80}"`, `"${A:-1}:${B:-2}/tcp"`} {
+		cfg := &nagiv1.ContainerConfig{Compose: "services:\n  web:\n    image: nginx\n    ports:\n      - " + p + "\n"}
+		if reasons, _ := PrivilegeReasons(cfg, "web"); len(reasons) != 0 {
+			t.Errorf("%s 不应该算有特权：%v", p, reasons)
+		}
+	}
+}
+
 func TestCheckComposePorts(t *testing.T) {
 	ports := func(lines ...string) string {
 		return "services:\n  web:\n    image: nginx\n    ports:\n      - " + strings.Join(lines, "\n      - ") + "\n"
@@ -90,6 +100,13 @@ func TestCheckComposePorts(t *testing.T) {
 		{"变量的默认值", ports(`"${R:-1-65535}"`), map[string]string{}, false},
 		{"变量是一个端口", ports(`"${P}:80"`), map[string]string{"P": "8080"}, true},
 		{"不替换变量时按原文", ports(`"${R}:${R}"`), nil, true},
+		// 容器端口的变量带默认值：不替换变量时最后一个冒号在变量里面，算一个。
+		{"不替换时容器端口带默认值", ports(`"${PORT:-8080}"`), nil, true},
+		{"不替换时对外端口后面带默认值", ports(`"8080:${PORT:-80}"`), nil, true},
+		{"不替换时两段都带默认值", ports(`"${A:-1}:${B:-2}/tcp"`), nil, true},
+		{"不替换时嵌套的默认值", ports(`"${A:-${B:-80}}"`), nil, true},
+		{"替换后默认值是一个端口", ports(`"8080:${PORT:-80}"`), map[string]string{}, true},
+		{"变量后面的范围照常算", ports(`"${IP:-0.0.0.0}:1-65535:1-65535"`), nil, false},
 		// 审查报告 v0.35.0#3：解析库认 "+1"，计数也要认。
 		{"起点带加号", ports(`"+1-65535:+1-65535"`), nil, false},
 		{"终点带加号", ports(`"1-+65535:1-+65535"`), nil, false},

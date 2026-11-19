@@ -139,7 +139,8 @@ func (c *portCounter) entry(n *yaml.Node) int {
 // portRangeSize 返回短写法 [IP:][对外端口:]容器端口[/协议] 里容器端口的个数。
 // 和 compose 解析库展开时用同一套规则（go-connections 的 nat.ParsePortSpec）：按冒号分开取最后一段，
 // 去掉第一个斜杠后的协议，再用 nat.ParsePortRange 读范围（它认 "+1" 这样的写法），所以算出的数和真正展开的一样。
-// 读不了的：容器端口里有没替换的变量时算一个（解析库也读不了，不会展开）；没有变量却含 "-" 的按超过上限算，
+// 读不了的：容器端口里有没替换的变量时算一个（解析库也读不了，不会展开），变量带默认值（"${PORT:-8080}"）时
+// 最后一个冒号在变量里面，取到的是 "-8080}"，同样算一个；没有变量却含 "-" 的按超过上限算，
 // 免得解析库和这里的规则有出入时被绕过；其余的（比如 "abc"）解析库也会报错，算一个。
 func portRangeSize(s string) int {
 	parts := strings.Split(s, ":")
@@ -148,13 +149,20 @@ func portRangeSize(s string) int {
 	switch {
 	case err == nil:
 		return capPorts(int(hi-lo) + 1)
-	case strings.Contains(port, "$"):
+	case strings.Contains(port, "$"), insideVariable(s):
 		return 1
 	case strings.Contains(port, "-"):
 		return MaxComposePorts + 1
 	default:
 		return 1
 	}
+}
+
+// insideVariable 判断 s 的最后一个冒号是不是在没替换的变量里面（"${PORT:-8080}"、"8080:${PORT:-80}"）：
+// 冒号之前的 "${" 比 "}" 多。
+func insideVariable(s string) bool {
+	i := strings.LastIndex(s, ":")
+	return i >= 0 && strings.Count(s[:i], "${") > strings.Count(s[:i], "}")
 }
 
 // serviceCount 是一个服务自己写的端口数和它 extends 的同一个文件里的服务。
