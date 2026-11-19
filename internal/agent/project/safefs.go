@@ -40,17 +40,18 @@ func walkRoot(root *os.Root, fn fs.WalkDirFunc) error {
 // 保留路径在 dst 里已经存在时，src 里的这部分被忽略，以 dst 现有内容为准；
 // 还不存在时（例如第一次部署），用 src 里的内容初始化。
 // src 必须是容器碰不到的目录（检出目录、上传目录、恢复用的临时目录）；dst 经 os.Root 操作。
+// 复制时定时检查 dst 所在磁盘的剩余空间和 inode（见 writeGuard），不够了就停下。
 func syncDir(src, dst string, preserve []string, onLine func(string)) error {
 	root, err := openDirRoot(dst)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
-	return syncRoot(root, src, preserve, onLine)
+	return syncRoot(root, src, preserve, onLine, &writeGuard{dir: dst})
 }
 
-// syncRoot 和 syncDir 一样，目标是已经打开的根。
-func syncRoot(root *os.Root, src string, preserve []string, onLine func(string)) error {
+// syncRoot 和 syncDir 一样，目标是已经打开的根。g 为 nil 时复制时不检查磁盘。
+func syncRoot(root *os.Root, src string, preserve []string, onLine func(string), g *writeGuard) error {
 	// 1. 清理旧文件。WalkDir 不跟随符号链接，链接本身会被删掉。
 	err := walkRoot(root, func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -117,6 +118,11 @@ func syncRoot(root *os.Root, src string, preserve []string, onLine func(string))
 		if err != nil {
 			return err
 		}
+		if g != nil {
+			if err := g.entry(); err != nil {
+				return err
+			}
+		}
 		switch {
 		case d.IsDir():
 			return root.MkdirAll(rel, info.Mode().Perm()|0o700)
@@ -127,13 +133,18 @@ func syncRoot(root *os.Root, src string, preserve []string, onLine func(string))
 			}
 			return root.Symlink(link, rel)
 		default:
-			return copyFileInto(root, rel, full, info.Mode().Perm())
+			return copyGuarded(root, rel, full, info.Mode().Perm(), g)
 		}
 	})
 }
 
 // copyFileInto 把 src 复制到根 root 下的 rel，需要时创建上级目录。
 func copyFileInto(root *os.Root, rel, src string, mode os.FileMode) error {
+	return copyGuarded(root, rel, src, mode, nil)
+}
+
+// copyGuarded 和 copyFileInto 一样，g 不为 nil 时按写入的字节数检查磁盘。
+func copyGuarded(root *os.Root, rel, src string, mode os.FileMode, g *writeGuard) error {
 	if dir := filepath.Dir(rel); dir != "." {
 		if err := root.MkdirAll(dir, 0o755); err != nil {
 			return err
@@ -144,11 +155,15 @@ func copyFileInto(root *os.Root, rel, src string, mode os.FileMode) error {
 		return err
 	}
 	defer in.Close()
+	var r io.Reader = in
+	if g != nil {
+		r = guardedReader{g, in}
+	}
 	out, err := root.OpenFile(rel, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
+	if _, err := io.Copy(out, r); err != nil {
 		out.Close()
 		return err
 	}

@@ -65,6 +65,15 @@ func DiskSpace(path string) (total, free int64) {
 	return int64(t), int64(f)
 }
 
+// DiskInodes 返回 path 所在文件系统的 inode 总数和剩余数。读不到、或者文件系统不限制 inode 个数（例如 btrfs 报 0）时都是 0。
+func DiskInodes(path string) (total, free int64) {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(path, &st); err != nil {
+		return 0, 0
+	}
+	return int64(st.Files), int64(st.Ffree)
+}
+
 // readDisk 返回 path 所在文件系统的总量和可用量（字节）。
 func readDisk(path string) (total, free uint64, ok bool) {
 	var st syscall.Statfs_t

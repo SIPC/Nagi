@@ -230,94 +230,148 @@ func guardedClone(ctx context.Context, dir string, clone func(ctx context.Contex
 	return err
 }
 
-// 检出时的限制，测试时替换：每写 gitDiskBytes 字节检查一次磁盘；文件（含符号链接、子模块目录）最多 gitMaxFiles 个。
+// 检出和复制时的限制，测试时替换：
+//   - 每写 gitDiskBytes 字节、或者每新建 gitDiskEntries 个条目检查一次磁盘（剩余空间和 inode，见 metrics.CheckDisk）。
+//     空文件和目录几乎不占空间、只占 inode，只按字节检查拦不住。
+//   - 条目（目录、文件、符号链接、子模块）最多 gitMaxEntries 个，路径最多 gitMaxDepth 层。
 var (
-	gitDiskBytes int64 = 32 << 20
-	gitMaxFiles        = 1_000_000
+	gitDiskBytes   int64 = 32 << 20
+	gitDiskEntries       = 1024
+	gitMaxEntries        = 1_000_000
+	gitMaxDepth          = 64
 )
 
-// checkoutTree 把提交 commit 的文件写到 dir（已经存在，里面只有 .git）。base 是检查剩余空间用的目录。
+// writeGuard 在检出和复制时定时检查 dir 所在的磁盘：每写 gitDiskBytes 字节或者每新建 gitDiskEntries 个条目查一次。
+type writeGuard struct {
+	dir     string
+	bytes   int64 // 上次检查以后写了多少字节
+	entries int   // 上次检查以后新建了多少个条目
+}
+
+// entry 记下即将新建一个文件、目录或符号链接。
+func (g *writeGuard) entry() error {
+	if g.entries++; g.entries < gitDiskEntries {
+		return nil
+	}
+	g.bytes, g.entries = 0, 0
+	return checkDisk(g.dir, 0)
+}
+
+// wrote 记下即将写入 n 字节。
+func (g *writeGuard) wrote(n int) error {
+	if g.bytes += int64(n); g.bytes < gitDiskBytes {
+		return nil
+	}
+	g.bytes, g.entries = 0, 0
+	return checkDisk(g.dir, 0)
+}
+
+// guardedReader 读之前先经过 writeGuard：复制时按读出的字节数检查磁盘。
+type guardedReader struct {
+	g *writeGuard
+	r io.Reader
+}
+
+func (r guardedReader) Read(b []byte) (int, error) {
+	n, err := r.r.Read(b)
+	if n > 0 {
+		if gerr := r.g.wrote(n); gerr != nil {
+			return 0, gerr
+		}
+	}
+	return n, err
+}
+
+// checkoutTree 把提交 commit 的文件写到 dir（已经存在，里面只有 .git），返回写出的文件的总大小。base 是检查剩余空间用的目录。
 //
 // 不用 go-git 自带的检出：它不看 ctx，也不检查磁盘。仓库可以很小、检出来却很大（一个压缩比很高的文件，
-// 在目录树里用很多个名字引用；或者目录树层层引用自己，文件数按指数增长），拉取时的磁盘检查拦不住。
-// 这里边写边检查磁盘、限制文件个数，ctx 取消时停下。写到一半失败时 dir 留给调用方删掉。
+// 在目录树里用很多个名字引用；或者目录树层层引用同一个子树，条目数按指数增长），拉取时的磁盘检查拦不住。
+// 这里边写边检查磁盘的剩余空间和 inode、限制条目个数和路径深度，ctx 取消时停下。写到一半失败时 dir 留给调用方删掉。
 //
 // 目录树是 git 服务器给的：名字逐段检查，写文件经 os.Root，不会跟着符号链接写到 dir 外面。
-func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Hash, dir, base string) error {
+func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Hash, dir, base string) (int64, error) {
 	c, err := repo.CommitObject(commit)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	tree, err := c.Tree()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer root.Close()
 	if err := checkDisk(base, 0); err != nil {
-		return err
+		return 0, err
 	}
-	var files int
-	var written int64 // 上次检查磁盘以后写了多少
+	g := &writeGuard{dir: base}
+	var entries int
+	var size int64
 	buf := make([]byte, 64<<10)
 	walker := object.NewTreeWalker(tree, true, nil)
 	defer walker.Close()
 	for {
 		name, e, err := walker.Next()
 		if errors.Is(err, io.EOF) {
-			return nil
+			return size, nil
 		}
 		if err != nil {
-			return err
+			return size, err
 		}
 		if err := ctx.Err(); err != nil {
-			return err
+			return size, err
 		}
 		if !validTreeName(e.Name) {
-			return fmt.Errorf("仓库里有不允许的文件名 %q", name)
+			return size, fmt.Errorf("仓库里有不允许的文件名 %q", name)
+		}
+		// 目录也算：每一级目录都占一个 inode，只有目录的目录树也能按指数增长。
+		if entries++; entries > gitMaxEntries {
+			return size, fmt.Errorf("仓库里的文件和目录超过 %d 个", gitMaxEntries)
+		}
+		if strings.Count(name, "/") >= gitMaxDepth {
+			return size, fmt.Errorf("仓库里的目录超过 %d 层", gitMaxDepth)
+		}
+		if err := g.entry(); err != nil {
+			return size, err
 		}
 		if e.Mode == filemode.Dir {
 			continue // 目录在写里面的文件时建，空目录不建
 		}
-		if files++; files > gitMaxFiles {
-			return fmt.Errorf("仓库里的文件超过 %d 个", gitMaxFiles)
-		}
 		if err := root.MkdirAll(path.Dir(name), 0o755); err != nil {
-			return err
+			return size, err
 		}
 		switch e.Mode {
 		case filemode.Submodule:
 			// 不拉取子模块，留一个空目录。
 			if err := root.Mkdir(name, 0o755); err != nil {
-				return err
+				return size, err
 			}
 			continue
 		case filemode.Regular, filemode.Deprecated, filemode.Executable, filemode.Symlink:
 		default:
-			return fmt.Errorf("仓库里的 %q 类型不支持", name)
+			return size, fmt.Errorf("仓库里的 %q 类型不支持", name)
 		}
 		blob, err := repo.BlobObject(e.Hash)
 		if err != nil {
-			return err
+			return size, err
 		}
 		r, err := blob.Reader()
 		if err != nil {
-			return err
+			return size, err
 		}
 		if e.Mode == filemode.Symlink {
 			target, err := io.ReadAll(io.LimitReader(r, maxLinkTarget+1))
 			r.Close()
 			if err != nil {
-				return err
+				return size, err
 			}
 			if len(target) == 0 || len(target) > maxLinkTarget {
-				return fmt.Errorf("仓库里的符号链接 %q 不正确", name)
+				return size, fmt.Errorf("仓库里的符号链接 %q 不正确", name)
 			}
 			if err := root.Symlink(string(target), name); err != nil {
-				return err
+				return size, err
 			}
 			continue
 		}
@@ -329,7 +383,7 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 		f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 		if err != nil {
 			r.Close()
-			return err
+			return size, err
 		}
 		err = func() error {
 			for {
@@ -338,15 +392,13 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 				}
 				n, rerr := r.Read(buf)
 				if n > 0 {
-					if written += int64(n); written >= gitDiskBytes {
-						written = 0
-						if err := checkDisk(base, 0); err != nil {
-							return err
-						}
+					if err := g.wrote(n); err != nil {
+						return err
 					}
 					if _, err := f.Write(buf[:n]); err != nil {
 						return err
 					}
+					size += int64(n)
 				}
 				if errors.Is(rerr, io.EOF) {
 					return nil
@@ -361,7 +413,7 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 			err = cerr
 		}
 		if err != nil {
-			return err
+			return size, err
 		}
 	}
 }
@@ -445,7 +497,8 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 	}
 	commit := head.Hash().String()
 	onLine("拉取到提交 " + commit[:12])
-	switch err := checkoutTree(pctx, repo, head.Hash(), p.checkoutDir(), p.root); {
+	size, err := checkoutTree(pctx, repo, head.Hash(), p.checkoutDir(), p.root)
+	switch {
 	case err == nil:
 	case ctx.Err() == nil && errors.Is(pctx.Err(), context.DeadlineExceeded):
 		return "", errors.New("拉取超过 30 分钟，已停止")
@@ -455,13 +508,25 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 		return "", fmt.Errorf("检出文件失败：%w", err)
 	}
 
-	if err := os.RemoveAll(filepath.Join(p.checkoutDir(), ".git")); err != nil {
+	if err := installCheckout(p, size, preserve, onLine); err != nil {
 		return "", err
 	}
-	if err := syncDir(p.checkoutDir(), p.dataDir(), preserve, onLine); err != nil {
-		return "", fmt.Errorf("更新文件: %w", err)
-	}
 	return commit, nil
+}
+
+// installCheckout 用检出目录里的文件（共 size 字节）替换 data/，保留 preserve 里的路径。
+// 文件要再复制一份：先确认放得下，免得清掉 data/ 的旧文件以后才发现磁盘不够；复制时也检查（见 syncDir）。
+func installCheckout(p containerPaths, size int64, preserve []string, onLine func(string)) error {
+	if err := os.RemoveAll(filepath.Join(p.checkoutDir(), ".git")); err != nil {
+		return err
+	}
+	if err := checkDisk(p.root, size); err != nil {
+		return err
+	}
+	if err := syncDir(p.checkoutDir(), p.dataDir(), preserve, onLine); err != nil {
+		return fmt.Errorf("更新文件: %w", err)
+	}
+	return nil
 }
 
 // preserved 判断相对路径是否属于保留路径（等于某个保留路径或在它里面）。

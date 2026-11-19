@@ -72,7 +72,8 @@ func (r *testRepo) commit(tree plumbing.Hash) plumbing.Hash {
 }
 
 func (r *testRepo) checkout(ctx context.Context, tree plumbing.Hash) error {
-	return checkoutTree(ctx, r.repo, r.commit(tree), r.dir, r.dir)
+	_, err := checkoutTree(ctx, r.repo, r.commit(tree), r.dir, r.dir)
+	return err
 }
 
 // written 是 dir 里检出的文件个数和总大小（不算 .git）。
@@ -179,9 +180,9 @@ func TestCheckoutTreeLowDisk(t *testing.T) {
 // 目录树层层引用同一个子树，文件数按指数增长：超过上限就停下。
 func TestCheckoutTreeTooManyFiles(t *testing.T) {
 	noDiskCheck(t)
-	prev := gitMaxFiles
-	t.Cleanup(func() { gitMaxFiles = prev })
-	gitMaxFiles = 100
+	prev := gitMaxEntries
+	t.Cleanup(func() { gitMaxEntries = prev })
+	gitMaxEntries = 100
 	r := newTestRepo(t)
 	level := func(mode filemode.FileMode, h plumbing.Hash) plumbing.Hash {
 		var entries []object.TreeEntry

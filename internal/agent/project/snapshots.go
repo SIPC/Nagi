@@ -182,6 +182,9 @@ func lowDisk(dir string) string {
 	if !errors.As(metrics.CheckDisk(dir, 0), &le) {
 		return ""
 	}
+	if le.Inodes > 0 {
+		return fmt.Sprintf("磁盘可用的 inode 不足（剩余 %d 个，共 %d 个），已跳过定时快照", le.FreeInodes, le.Inodes)
+	}
 	return fmt.Sprintf("磁盘剩余空间不足（剩余 %.1f GiB，共 %.1f GiB），已跳过定时快照", float64(le.Free)/(1<<30), float64(le.Total)/(1<<30))
 }
 
@@ -481,7 +484,7 @@ func restorePreserved(ctx context.Context, rep *snapshot.Repo, sid string, mp co
 		if err != nil {
 			return err
 		}
-		err = syncRoot(sub, src, nil, func(string) {})
+		err = syncRoot(sub, src, nil, func(string) {}, nil)
 		sub.Close()
 		if err != nil {
 			return err

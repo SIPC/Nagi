@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,6 +29,35 @@ func TestCheckDisk(t *testing.T) {
 	var le *LowDiskError
 	if err := CheckDisk("/", 0); !errors.As(err, &le) || le.Free != 1<<30 {
 		t.Fatalf("低于 2 GiB 应该拦: %v", err)
+	}
+}
+
+// 空间还很多、inode 快用完时也要拦；不限制 inode 个数的文件系统（总数报 0）不拦。
+func TestCheckDiskInodes(t *testing.T) {
+	defer func(f func(string) (int64, int64)) { diskSpace = f }(diskSpace)
+	defer func(f func(string) (int64, int64)) { diskInodes = f }(diskInodes)
+	diskSpace = func(string) (int64, int64) { return 100 << 30, 50 << 30 }
+	var inodes, free int64
+	diskInodes = func(string) (int64, int64) { return inodes, free }
+
+	if err := CheckDisk("/", 0); err != nil {
+		t.Fatalf("读不到 inode 个数时不应该拦: %v", err)
+	}
+	inodes, free = 1_000_000, 500_000
+	if err := CheckDisk("/", 0); err != nil {
+		t.Fatalf("inode 够: %v", err)
+	}
+	inodes, free = 1_000_000, 40_000
+	var le *LowDiskError
+	if err := CheckDisk("/", 0); !errors.As(err, &le) || le.FreeInodes != 40_000 || le.Inodes != 1_000_000 {
+		t.Fatalf("inode 低于 5%% 应该拦: %v", err)
+	}
+	inodes, free = 100_000, 9_000
+	if err := CheckDisk("/", 0); !errors.As(err, &le) {
+		t.Fatalf("inode 低于 %d 个应该拦: %v", MinFreeInodes, err)
+	}
+	if !strings.Contains(le.Error(), "inode") {
+		t.Fatalf("应该说明是 inode 不够: %q", le.Error())
 	}
 }
 
