@@ -98,8 +98,15 @@ fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, m
                 .graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin.Center }
                 .drawBehind {
                     val w = RailWidth.toPx()
-                    val rail = RoundRect(0f, 0f, w, size.height, CornerRadius(w / 2))
                     val rowTop = (RailPad + RailItem).toPx() + pos.value * step
+                    // 切到最上、最下一项时，底色回弹越出项目区，外框在那一侧按越出的距离撑开（最多 FRAME_MAX），
+                    // 回弹结束一起收回，和底部胶囊的两侧一样。中间几项的回弹在框内，外框不动。
+                    val maxOver = FRAME_MAX.toPx()
+                    val overTop = (maxOf(0f, -pos.value * step) * FRAME_FOLLOW).coerceAtMost(maxOver)
+                    val overBottom = (maxOf(0f, rowTop + RailItem.toPx() - (size.height - RailPad.toPx())) * FRAME_FOLLOW).coerceAtMost(maxOver)
+                    val railTop = -overTop
+                    val railBottom = size.height + overBottom
+                    val rail = RoundRect(0f, railTop, w, railBottom, CornerRadius(w / 2))
                     val grow = extra.toPx() * open
                     // 外框：胶囊本身，加上展开那一行往右鼓出的部分（比那一项上下各大 4），两者合成一个形状；
                     // 鼓出的部分和胶囊的接缝处用圆弧过渡，不留尖角。
@@ -110,7 +117,7 @@ fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, m
                     if (grow > 0.5f) {
                         frame.op(frame, Path().apply { addRoundRect(bulge) }, PathOperation.Union)
                         for (top in listOf(true, false)) {
-                            railFillet(w, size.height, bt, bb, w + grow, BulgeFillet.toPx(), top)?.let { frame.op(frame, it, PathOperation.Union) }
+                            railFillet(w, railTop, railBottom, bt, bb, w + grow, BulgeFillet.toPx(), top)?.let { frame.op(frame, it, PathOperation.Union) }
                         }
                     }
                     drawIntoCanvas { canvas ->
@@ -165,9 +172,9 @@ private val BulgeFillet = 14.dp
 /**
  * 接缝处的过渡（像素）：一段半径 [r] 的圆弧，一头和胶囊的右边（x = [w]）相切，一头和鼓出部分的上边或下边相切；
  * 刚开始展开、鼓出的还只是一段圆头时，和圆头相切。返回圆弧和接缝之间要补上的那一小块，接缝不在胶囊的直边上时返回 null。
- * [bt]、[bb] 是鼓出部分的上下边，[right] 是它的右边，[height] 是胶囊的高度。
+ * [bt]、[bb] 是鼓出部分的上下边，[right] 是它的右边，[railTop]、[railBottom] 是胶囊的上下边。
  */
-private fun railFillet(w: Float, height: Float, bt: Float, bb: Float, right: Float, r: Float, top: Boolean): Path? {
+private fun railFillet(w: Float, railTop: Float, railBottom: Float, bt: Float, bb: Float, right: Float, r: Float, top: Boolean): Path? {
     val radius = (bb - bt) / 2
     val cy = (bt + bb) / 2
     // 鼓出部分右边圆头的圆心；圆头左边是直边，圆弧落在直边上时圆心在 x = w + r 的正上（下）方。
@@ -180,7 +187,7 @@ private fun railFillet(w: Float, height: Float, bt: Float, bb: Float, right: Flo
     }
     val oy = if (top) cy - dy else cy + dy
     // 圆弧和胶囊右边的切点要在胶囊的直边上（避开上下两头的圆角）。
-    if (oy < w / 2 || oy > height - w / 2) return null
+    if (oy < railTop + w / 2 || oy > railBottom - w / 2) return null
     val ox = w + r
     // 和鼓出部分的切点：直边上就在圆心正下（上）方，圆头上就在两个圆心的连线上。
     val (tx, ty) = if (dx >= 0) ox to (if (top) oy + r else oy - r) else {

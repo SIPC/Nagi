@@ -65,8 +65,8 @@ private val IconSize = 22.dp
 private val IconLabelGap = 4.dp
 
 /** 底色回弹越出两端时，外框撑开的距离是越出距离的几倍，以及最多撑开多少。 */
-private const val FRAME_FOLLOW = 1f
-private val FRAME_MAX = 6.dp
+internal const val FRAME_FOLLOW = 1f
+internal val FRAME_MAX = 6.dp
 
 /** 选中底色的拖尾最长多少。 */
 private val TAIL_MAX = 20.dp
