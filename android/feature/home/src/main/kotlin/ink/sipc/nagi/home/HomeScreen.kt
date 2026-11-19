@@ -107,6 +107,9 @@ private const val ATTENTION_LIMIT = 5
 interface HomeActions {
     fun openAttention(item: Attention)
     fun openNodes(offlineOnly: Boolean)
+
+    /** 打开一个节点的页面（节点状态里点一个节点）。 */
+    fun openNode(id: String)
     fun openProjects(notRunningOnly: Boolean)
     fun update(item: Attention)
 }
@@ -486,7 +489,7 @@ private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: I
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         nodes.chunked(columns).forEach { group ->
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                group.forEach { n -> NodeCell(n, Modifier.weight(1f)) { actions.openNodes(offlineOnly = false) } }
+                group.forEach { n -> NodeCell(n, Modifier.weight(1f)) { actions.openNode(n.id) } }
                 // 最后一行只有一个时，空出另一半，宽度和上面的对齐。
                 repeat(columns - group.size) { Spacer(Modifier.weight(1f)) }
             }

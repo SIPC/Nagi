@@ -63,6 +63,7 @@ dependencies {
     implementation(project(":feature:home"))
     implementation(project(":feature:pairing"))
     implementation(project(":feature:settings"))
+    implementation(project(":feature:nodes"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
