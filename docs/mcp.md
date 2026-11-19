@@ -177,7 +177,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `rollback` | 回到某个版本，只回配置和文件。带 `restore_data` 时同时把数据恢复到这个版本被替换之前，要先预览、`confirm` 原样填版本号才执行 | `Rollback` |
 | `create_snapshot` | 立即做一次快照 | `CreateSnapshot` |
 | `delete_snapshot` | 删除定时、手动或部署前快照，版本文件不能删。和恢复一样分两步：不带 `confirm` 只返回预览，`confirm` 原样填快照 ID 才删除 | `ListSnapshots`、`DeleteSnapshot` |
-| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口）。HTTP 服务用它绑域名，部署过的容器改对外端口也用它（镜像表单和 compose 的 ports 只导入一次） | `SaveRoute` |
+| `save_route` | 新建或修改端口映射（域名、HTTPS、TCP/UDP、PROXY protocol、跨节点入口）。HTTP 服务用它绑域名；没有域名时用 `published_port` 开在节点端口上，以「节点地址:端口」访问，没有 HTTPS（`domains` 不接受 IP）。部署过的容器改对外端口也用它（镜像表单和 compose 的 ports 只导入一次） | `SaveRoute` |
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 开始依次同步到所有备份节点（或只同步 `backup_node`）。同步在源节点上进行、不限时，工具最多等 `wait_seconds`（默认 30，最多 600）后返回各自的状态和进度（`bytes_done`、`bytes_total`、`bytes_per_second`、`eta_seconds`、重试次数），没传完时说明仍在进行，之后用 `get_container` 查；`stop` 停止正在进行的同步，已传的文件留着，下次接着传（见 [snapshot.md](snapshot.md#同步的进度)） | `SyncBackup`、`StopBackupSync`、`GetProject` |
@@ -350,7 +350,7 @@ agent 常见的乱部署：单个服务也写 compose，密码这类值写死在
   - 配置放 Nagi 的变量（`env`、`env_secret`，compose 里写 `${NAME}`，或者共享变量）；普通配置可以写在 compose 里，但优先用变量；密钥（密码、令牌、密钥、连接串里的密码）绝不写死在 compose 里；不写 `.env`、`env_file`。
   - 数据放持久化目录（`volumes`）或相对路径、命名卷，都在容器目录下；不挂容器目录外的宿主机路径。
   - 数据库、缓存这类内部服务不写 `ports`：第一次部署时导入成映射、对外开放，不认 `host_ip`。
-  - HTTP 用 `save_route` 绑域名；部署过的容器改对外端口用 `save_route`，不改 ports（只导入一次）。
+  - HTTP 用 `save_route` 绑域名，没有域名时用 `published_port` 开在节点端口上；部署过的容器改对外端口用 `save_route`，不改 ports（只导入一次）。
   - 不用 `host.docker.internal`、`host-gateway`、`172.17.0.1`、局域网 IP 访问节点本机或局域网：新项目默认拦截（[出站限制](agent.md#出站限制)）。
   - 不用 `node_exec` 执行 `docker run`、`docker compose up/stop/rm`，不改容器目录里的 `compose.yml`、`override.yml`、`.env`。
   - 看每次 `add_container`、`update_container`、`deploy` 结果里的 `warnings`，改掉，或者告诉用户为什么保留。

@@ -222,7 +222,7 @@ func toolCreateProject(c *call, in CreateProjectArgs) (any, error) {
 // ---- 添加容器 ----
 
 type portArg struct {
-	Published uint32 `json:"published" jsonschema:"port opened to the outside on the node: on the first deploy it becomes a port mapping, on all addresses. Imported once; change it later with save_route. Containers in the project reach each other without ports, so databases and caches need none; for HTTP use save_route with domains"`
+	Published uint32 `json:"published" jsonschema:"port opened to the outside on the node: on the first deploy it becomes a port mapping, on all addresses. Imported once; change it later with save_route. Containers in the project reach each other without ports, so databases and caches need none; for HTTP use save_route, with domains or a published_port"`
 	Target    uint32 `json:"target" jsonschema:"port inside the container"`
 	Protocol  string `json:"protocol,omitempty" jsonschema:"tcp (default) or udp"`
 }
@@ -911,7 +911,7 @@ type RouteArgs struct {
 	Port      uint32   `json:"port,omitempty" jsonschema:"port inside the container (required for a new mapping)"`
 	Protocol  string   `json:"protocol,omitempty" jsonschema:"http (default), tcp, udp, or tcp+udp (both on the same public port, e.g. game servers)"`
 	Domains   []string `json:"domains,omitempty" jsonschema:"domains for http; HTTPS certificates are issued automatically"`
-	Published uint32   `json:"published_port,omitempty" jsonschema:"public port for tcp/udp"`
+	Published uint32   `json:"published_port,omitempty" jsonschema:"public port on the node: required for tcp/udp, and for http without domains (plain HTTP at <node address>:<port>); ignored for http with domains"`
 	HTTPOnly  *bool    `json:"http_only,omitempty" jsonschema:"serve plain HTTP without HTTPS"`
 	// 跨节点入口（见 docs/exposure.md#跨节点入口）。
 	EntryNodes   []string `json:"entry_nodes,omitempty" jsonschema:"also take traffic in on these nodes (names or IDs) besides the container's own node; replaces the list, [] clears it"`

@@ -533,6 +533,18 @@ func TestInstructionsDeploymentRules(t *testing.T) {
 	if !params(UpdateProjectArgs{})["internal_ports"] {
 		t.Error("update_project 没有参数 internal_ports")
 	}
+	// 没有域名时 HTTP 也能开在端口上：说明和指南都要写出 save_route 的 published_port，免得 agent 以为 HTTP 必须有域名。
+	if !params(RouteArgs{})["published_port"] {
+		t.Error("save_route 没有参数 published_port")
+	}
+	if !strings.Contains(text, "published_port") {
+		t.Error("服务说明应该写没有域名时用 published_port 开 HTTP")
+	}
+	for _, d := range docs {
+		if d.uri == "nagi://docs/deploy" && !strings.Contains(d.text, "published_port") {
+			t.Error("部署指南应该写没有域名时用 published_port 开 HTTP")
+		}
+	}
 	names := map[string]bool{}
 	for _, tl := range allTools {
 		names[tl.name] = true

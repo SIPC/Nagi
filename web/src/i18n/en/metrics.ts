@@ -37,4 +37,13 @@ export default {
   requestCount: "Requests",
   latency: "Latency",
   traffic: "Traffic",
+  connections: "Connections",
+  connectionCount: "Connections",
+  newConnections: "New",
+  failedConnections: "Failed",
+  failRate: "Failure rate",
+  failRateTitle: (n) => `Could not reach the container: ${n}`,
+  activeConnections: "Open",
+  activeTitle: "Average over the latest interval",
+  concurrentConnections: "Open connections",
 } satisfies typeof zh;

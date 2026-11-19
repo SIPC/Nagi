@@ -144,6 +144,10 @@ export const fmtMs = (v: number) => {
 };
 // 上万的次数用紧凑写法（1.9 万次、239.3K），统计格放得下。数字和单位分开交给文案拼，中文的单位和「次」连写。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
+// spanOf：时间从 t 开始、长 step 秒的点实际覆盖的秒数。节点按窗口里已经过去、且在查询范围内的部分算端口映射的速率
+// （见 docs/monitoring.md#存储），算合计时乘以这一段，不乘完整的步长：还没结束的最后一段、范围起点所在的第一段只算覆盖的部分。
+export const spanOf = (t: number, step: number, from: number, to: number) => Math.max(0, Math.min(t + step, to) - Math.max(t, from));
+
 // fmtErrorRate：错误率，没有请求时是「—」。
 export const fmtErrorRate = (errors: number, requests: number) => (requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—");
 
@@ -414,8 +418,8 @@ function MetricCells({ series, range, quiet }: { series: Map<string, Pt[]>; rang
 
 // ProjectMetrics：项目概览里的监控。各容器的占用在项目栏和容器页里看，这里只给所有容器的合计和各端口映射的请求情况。
 // 渲染在 Section 的网格里：分组标题和内容都是 Section 的直接子元素。
-// httpRoutes：项目的 http 端口映射，这段时间没有请求的也列出来（数字写「—」）。
-export function ProjectMetrics({ nodeIds, projectId, range, offline = [], httpRoutes = [] }: { nodeIds: string[]; projectId: string; range: MetricRange; offline?: string[]; httpRoutes?: string[] }) {
+// routes：项目的端口映射（l4 是 tcp/udp），这段时间没有请求或连接的也列出来（数字写「—」）。
+export function ProjectMetrics({ nodeIds, projectId, range, offline = [], routes: all = [] }: { nodeIds: string[]; projectId: string; range: MetricRange; offline?: string[]; routes?: { name: string; l4: boolean }[] }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
   if (nodeIds.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   if (q.isPending) return <MetricsSkeleton />;
@@ -432,7 +436,7 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [], httpRo
       byName.set(metric, [...(byName.get(metric) ?? []), s]);
     }
   }
-  // 一条映射可能有多个入口节点：请求数和流量相加，耗时取最慢的那个入口。
+  // 一条映射可能有多个入口节点：请求数、连接数和流量相加，耗时取最慢的那个入口。
   const routes = new Map(
     [...routeSeries].map(([path, byName]) => [
       path,
@@ -440,7 +444,7 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [], httpRo
     ]),
   );
   const total = new Map(cellOrder.filter((m) => byMetric.has(m)).map((m) => [m, sumSeries(byMetric.get(m)!)]));
-  const idle = httpRoutes.filter((name) => !routes.has(name));
+  const idle = all.filter((r) => !routes.has(r.name));
   if (total.size === 0 && routes.size === 0 && idle.length === 0) return <EmptyRow>{m.noData}</EmptyRow>;
   return (
     <>
@@ -451,18 +455,25 @@ export function ProjectMetrics({ nodeIds, projectId, range, offline = [], httpRo
           <MetricCells series={total} range={range} />
         </>
       )}
-      {[...routes.entries()].map(([name, data], i) => (
-        <RouteMetrics key={name} name={name} data={data} range={range} divided={i > 0 || total.size > 0} />
-      ))}
-      {idle.map((name, i) => (
-        <RouteMetrics key={name} name={name} data={noRouteData()} range={range} divided={i > 0 || routes.size > 0 || total.size > 0} empty />
-      ))}
+      {[...routes.entries()].map(([name, data], i) =>
+        data.has("conn") ? (
+          <L4RouteMetrics key={name} name={name} data={data} range={range} divided={i > 0 || total.size > 0} />
+        ) : (
+          <RouteMetrics key={name} name={name} data={data} range={range} divided={i > 0 || total.size > 0} />
+        ),
+      )}
+      {idle.map((r, i) => {
+        const divided = i > 0 || routes.size > 0 || total.size > 0;
+        return r.l4 ? <L4RouteMetrics key={r.name} name={r.name} data={noL4Data()} range={range} divided={divided} empty /> : <RouteMetrics key={r.name} name={r.name} data={noRouteData()} range={range} divided={divided} empty />;
+      })}
     </>
   );
 }
 
 // EmptyProjectMetrics：还没有容器时，概览照常排版但没有数据。
 const noRouteData = () => new Map<string, Pt[]>(["req", "2xx", "3xx", "4xx", "5xx", "lat", "p50", "p95", "p99", "in", "out"].map((n) => [n, []]));
+
+const noL4Data = () => new Map<string, Pt[]>(["conn", "fail", "active", "in", "out"].map((n) => [n, []]));
 
 export function EmptyProjectMetrics({ range }: { range: MetricRange }) {
   const none = (names: string[]) => new Map<string, Pt[]>(names.map((n) => [n, []]));
@@ -504,8 +515,9 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   const get = (m: string) => data.get(m) ?? [];
-  const sum = (m: string) => get(m).reduce((acc, [, v]) => acc + v * r.step, 0);
-  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * r.step]);
+  const span = (t: number) => spanOf(t, r.step, now - r.seconds, now);
+  const sum = (m: string) => get(m).reduce((acc, [t, v]) => acc + v * span(t), 0);
+  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * span(t)]);
 
   const requests = sum("req");
   const errors = sum("5xx");
@@ -538,10 +550,10 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
   const chart = (title: string, series: ChartSeries[], format: (v: number) => string, stacked = false) =>
     series.length > 0 && (
       <div className="grid min-w-0 content-start gap-3">
-        {/* 标题和图例分两行，三张图的图形对齐。 */}
+        {/* 标题和图例分两行，三张图的图形对齐。只有一条线时不写图例，留出同样的高度。 */}
         <div className="flex flex-col items-start gap-1">
           <span className="text-[13px] text-muted-foreground">{title}</span>
-          {series.length > 1 && <Legend series={series} />}
+          {series.length > 1 ? <Legend series={series} /> : <span aria-hidden className="h-4" />}
         </div>
         <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} stacked={stacked} quiet={quiet} />
       </div>
@@ -575,6 +587,69 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
           )}
           {chart(m.latency, pick(latencySeries, get), fmtMs)}
           {chart(m.traffic, pick(trafficSeries, get), fmtRate)}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---- 端口映射（tcp/udp）----
+
+const l4ConnSeries = [
+  { metric: "conn", label: m.newConnections, className: "text-muted-foreground" },
+  { metric: "fail", label: m.failedConnections, className: "text-destructive" },
+];
+
+// L4RouteMetrics：一条 tcp/udp 端口映射的连接情况（见 docs/monitoring.md#tcp--udp-统计）。没有状态码和耗时，
+// 汇总写连接数、失败率、当前连接和流量，三张图是连接数、并发连接和流量。UDP 按会话算连接。
+function L4RouteMetrics({ name, data, range, divided, empty }: { name: string; data: Map<string, Pt[]>; range: MetricRange; divided?: boolean; empty?: boolean }) {
+  const r = rangeOf(range);
+  const now = Date.now() / 1000;
+  const get = (m: string) => data.get(m) ?? [];
+  const span = (t: number) => spanOf(t, r.step, now - r.seconds, now);
+  const sum = (m: string) => get(m).reduce((acc, [t, v]) => acc + v * span(t), 0);
+  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * span(t)]);
+  const conns = sum("conn");
+  const fails = sum("fail");
+  const active = get("active").at(-1)?.[1];
+  const stats: { label: string; value: string; title?: string }[] = [
+    { label: m.connections, value: fmtCount(conns), title: m.requestsAvgTitle((conns / r.seconds).toFixed(2)) },
+    { label: m.failRate, value: fmtErrorRate(fails, conns), title: m.failRateTitle(fmtCount(fails)) },
+    { label: m.activeConnections, value: active === undefined ? "—" : Math.round(active).toLocaleString(locale), title: m.activeTitle },
+    { label: m.inboundTraffic, value: fmtBytes(sum("in")) },
+    { label: m.outboundTraffic, value: fmtBytes(sum("out")) },
+  ];
+  const chart = (title: string, series: ChartSeries[], format: (v: number) => string) => (
+    <div className="grid min-w-0 content-start gap-3">
+      <div className="flex flex-col items-start gap-1">
+        <span className="text-[13px] text-muted-foreground">{title}</span>
+        {series.length > 1 ? <Legend series={series} /> : <span aria-hidden className="h-4" />}
+      </div>
+      <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} />
+    </div>
+  );
+  const count = (v: number) => Math.round(v).toLocaleString(locale);
+  return (
+    <>
+      <div className={cn("font-medium", divided && "mt-2 border-t pt-6 max-md:pt-4")}>
+        {m.portMapping}{" "}
+        <span className="ml-1 font-mono text-[13px] font-normal text-muted-foreground">{name}</span>
+      </div>
+      <div className="grid gap-6">
+        <dl className="m-0 grid grid-cols-3 gap-8 max-md:gap-4 md:grid-cols-6">
+          {stats.map((s) => (
+            <div key={s.label} className="grid min-w-0 content-start gap-1" title={s.title}>
+              <dt className="text-muted-foreground">{s.label}</dt>
+              <dd className={cn("m-0", mcval)}>
+                <Roll value={empty ? "—" : s.value} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <div className="grid grid-cols-1 gap-8 max-md:gap-4 md:grid-cols-3">
+          {chart(m.connectionCount, l4ConnSeries.map((d) => ({ label: d.label, className: d.className, points: counts(d.metric) })), count)}
+          {chart(m.concurrentConnections, [{ label: m.concurrentConnections, className: "text-muted-foreground", points: get("active") }], count)}
+          {chart(m.traffic, trafficSeries.map((d) => ({ label: d.label, className: d.className, points: get(d.metric) })), fmtRate)}
         </div>
       </div>
     </>

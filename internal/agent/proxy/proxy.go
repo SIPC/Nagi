@@ -300,7 +300,8 @@ func buildFull(routes []Route, storage string, hasCert func(string) bool, direct
 			}
 			l4Servers[r.Protocol+"_"+strconv.Itoa(int(r.Published))] = obj{
 				"listen": []string{r.Protocol + "/:" + strconv.Itoa(int(r.Published))},
-				"routes": []obj{{"handle": []obj{h}}},
+				// 先经过 nagi_stats 统计连接和流量（见 l4stats.go）。
+				"routes": []obj{{"handle": []obj{{"handler": "nagi_stats", "route": r.Project + "/" + r.Name}, h}}},
 			}
 		}
 	}

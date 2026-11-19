@@ -38,7 +38,8 @@ var docs = []struct{ uri, name, title, text string }{
 - Ports: on the first deploy, ports (image form and compose) are imported as port mappings that Caddy opens to the
   outside on all of the node's addresses; host_ip is ignored, only ports bound to 127.0.0.1 or ::1 are not imported.
   They are imported once: change them later with save_route. Do not publish ports of internal services such as
-  databases. For HTTP, use a port mapping (save_route) with a domain: Nagi's Caddy serves it with automatic HTTPS.
+  databases. For HTTP, use a port mapping (save_route): with a domain, Nagi's Caddy serves it with automatic HTTPS;
+  without one, on a published_port as plain HTTP at <node address>:<port>.
 - Containers on other nodes are reached through proxies for TCP and unicast UDP. Ports not declared by the image
   (EXPOSE) or with ports/expose must be added to the project's internal_ports to be reachable from other nodes,
   as <container>:<port> or <service>.<group>:<port> (/udp for UDP).
@@ -101,8 +102,9 @@ when a configuration breaks them: fix it, or tell the user why it stays.
   On the first deploy, Nagi imports the ports of the image form and of compose as port mappings, served by Caddy and
   open to the outside on all of the node's addresses: host_ip is ignored. Only ports bound to a loopback address
   (127.0.0.1:5432:5432) are not imported.
-- Serve HTTP with save_route and a domain (automatic HTTPS). Ports 80 and 443 are reserved for domains, and ports that
-  clash with other mappings on the node are skipped.
+- Serve HTTP with save_route and a domain (automatic HTTPS). Without a domain (the user only has an IP), use
+  save_route with published_port instead: plain HTTP at <node address>:<port>, no HTTPS. domains does not accept IPs.
+  Ports 80 and 443 are reserved for domains, and ports that clash with other mappings on the node are skipped.
 - Ports are imported only once: after the first deploy, changing ports in the image form or compose does not change
   the mappings. Change public ports and domains with save_route.
 - Before retry_cert, check with check_routes that the domain's DNS points at the node: Let's Encrypt allows only a

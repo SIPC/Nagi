@@ -355,7 +355,12 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 			return
 		}
 		for _, r := range rows {
-			_ = c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: r.Value})
+			v := r.Value
+			// 速率序列：窗口里没有采样的时间算 0（见 rateSeries）。
+			if want := float64(bucket / Interval); rateSeries(r.Series) && float64(r.Samples) < want {
+				v *= float64(r.Samples) / want
+			}
+			_ = c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v})
 		}
 		c.lastDownsampledTo = to
 	}
@@ -363,18 +368,52 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 	_ = c.q.DeleteM5Before(ctx, now.Add(-keepM5).Unix())
 }
 
-// Query 查询以 prefix 开头的序列在一段时间内的数据。24 小时以内用 10 秒精度，更长用 5 分钟精度。
+// rateSeries 报告序列是不是端口映射按每秒速率记的计数：请求、各类状态码、连接、失败、流量。
+// 这些序列在有过请求或连接以后才开始记，之前没有采样。合并成一个点时把没有采样的时间当成 0：
+// 只平均有采样的部分再乘以时长，映射刚开始有流量的那一段会被放大（例如 1 分钟里的 17 个连接在 10 分钟的点里算成 170 个）。
+// 当前连接数（:active）和耗时不是速率，照常取平均。
+func rateSeries(name string) bool {
+	if !strings.HasPrefix(name, "r:") {
+		return false
+	}
+	switch name[strings.LastIndexByte(name, ':')+1:] {
+	case "req", "2xx", "3xx", "4xx", "5xx", "in", "out", "conn", "fail":
+		return true
+	}
+	return false
+}
+
+// Window 是一次查询的数据来源：精度（10 秒或 5 分钟）和数据覆盖的时间段 [From, To)。
+type Window struct {
+	Res      time.Duration
+	From, To time.Time
+}
+
+// expected 返回从 start 开始、长 step 秒的窗口里应有的采样数。
+func (w Window) expected(start, step int64) float64 {
+	from, to := max(start, w.From.Unix()), min(start+step, w.To.Unix())
+	if to <= from {
+		return 0
+	}
+	return float64(to-from) / w.Res.Seconds()
+}
+
+// rawSlack：查询刚好 24 小时（界面的「最近 24 小时」）时请求到节点已经过了一点时间，范围略超过 keepRaw，
+// 也用 10 秒精度。否则会用 5 分钟精度，最近不满 5 分钟的部分还没降采样，不算在内。
+const rawSlack = time.Minute
+
 // Aggregate 把每条序列按 step 合并：每个窗口一个点，时间取窗口起点。
-// 名字以 :p95、:p99 结尾的取窗口内的最大值（耗时的尖峰不被平均掉），其余取平均值。
-// step 不大于采样间隔时原样返回。points 须按时间排序（Query 的结果就是）。
-func Aggregate(data map[string][]Point, step time.Duration) map[string][]Point {
-	if step <= Interval {
+// 名字以 :p95、:p99 结尾的取窗口内的最大值（耗时的尖峰不被平均掉）；速率序列（rateSeries）按窗口里应有的采样数平均，
+// 没有采样的时间算 0；其余取平均值。step 不大于数据精度时原样返回。points 须按时间排序（Query 的结果就是）。
+func Aggregate(data map[string][]Point, step time.Duration, w Window) map[string][]Point {
+	if step <= w.Res {
 		return data
 	}
 	s := int64(step / time.Second)
 	out := make(map[string][]Point, len(data))
 	for name, points := range data {
 		useMax := strings.HasSuffix(name, ":p95") || strings.HasSuffix(name, ":p99")
+		rate := rateSeries(name)
 		var res []Point
 		var bucket int64
 		var sum, peak float64
@@ -386,6 +425,8 @@ func Aggregate(data map[string][]Point, step time.Duration) map[string][]Point {
 			v := sum / float64(n)
 			if useMax {
 				v = peak
+			} else if want := w.expected(bucket, s); rate && want > float64(n) {
+				v = sum / want
 			}
 			res = append(res, Point{Time: time.Unix(bucket, 0), Value: v})
 		}
@@ -405,27 +446,56 @@ func Aggregate(data map[string][]Point, step time.Duration) map[string][]Point {
 	return out
 }
 
+// Query 查询以 prefix 开头的序列在一段时间内的数据，见 QueryWindow。
 func (c *Collector) Query(ctx context.Context, prefix string, from, to time.Time) (map[string][]Point, error) {
+	data, _, err := c.QueryWindow(ctx, prefix, from, to)
+	return data, err
+}
+
+// QueryWindow 查询以 prefix 开头的序列在一段时间内的数据，同时返回数据的精度和覆盖的时间段（给 Aggregate 用）。
+// 24 小时以内用 10 秒精度，更长用 5 分钟精度。
+func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to time.Time) (map[string][]Point, Window, error) {
+	now := time.Now()
 	out := map[string][]Point{}
 	add := func(series string, ts int64, value float64) {
 		out[series] = append(out[series], Point{Time: time.Unix(ts, 0), Value: value})
 	}
-	if to.Sub(from) <= keepRaw && from.After(time.Now().Add(-keepRaw)) {
+	if to.Sub(from) <= keepRaw+rawSlack && from.After(now.Add(-keepRaw-rawSlack)) {
 		rows, err := c.q.QueryRaw(ctx, nodestore.QueryRawParams{Prefix: prefix, FromTs: from.Unix(), ToTs: to.Unix()})
 		if err != nil {
-			return nil, err
+			return nil, Window{}, err
 		}
 		for _, r := range rows {
 			add(r.Series, r.Ts, r.Value)
 		}
-		return out, nil
+		// 超过 keepRaw 的部分已经删掉了，不算在覆盖的时间段里。
+		return out, Window{Res: Interval, From: maxTime(from, now.Add(-keepRaw)), To: minTime(to, now)}, nil
 	}
 	rows, err := c.q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: prefix, FromTs: from.Unix(), ToTs: to.Unix()})
 	if err != nil {
-		return nil, err
+		return nil, Window{}, err
 	}
 	for _, r := range rows {
 		add(r.Series, r.Ts, r.Value)
 	}
-	return out, nil
+	// 5 分钟的点取窗口起点：覆盖起点不早于 from 的窗口，到 to 所在的窗口为止，且只有已经降采样的（留两个采样间隔的余量）。
+	first := from.Truncate(bucket)
+	if first.Before(from) {
+		first = first.Add(bucket)
+	}
+	return out, Window{Res: bucket, From: first, To: minTime(to.Truncate(bucket).Add(bucket), now.Add(-2*Interval).Truncate(bucket))}, nil
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }
