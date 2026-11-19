@@ -75,17 +75,7 @@ jobs:
           check-latest: true
           cache: false
 
-      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-test-rest-${{ hashFiles('go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            go-test-rest-${{ hashFiles('go.sum') }}-
-            go-test-rest-
-            go-test-
-
+      # 不恢复缓存：缓存是别的任务写的，被改过的模块源码可能让检查假通过。
       - name: Vulnerability check
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
@@ -113,11 +103,11 @@ jobs:
       # 不恢复 Go 和 pnpm 的缓存（见文件开头的说明）：模块按 go.sum、pnpm-lock.yaml 重新下载并核对。
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
-          version: 10
+          version: 10.33.0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 24
+          node-version: 24.14.1
 
       - name: Build web
         run: |
@@ -144,6 +134,8 @@ jobs:
           name: nagi-linux-${{ matrix.arch }}
           path: dist/nagi-linux-${{ matrix.arch }}
           retention-days: 1
+          # 同名的 artifact 先删掉再传：别的任务抢先用这个名字建的不会挡住真正的产物（内容另由 release 按 SHA-256 核对）。
+          overwrite: true
 
   # 安卓 App（docs/android.md）：和面板同一个版本号，用仓库 Secrets 里的签名密钥签名，产出 nagi-android.apk。
   # App 的自动更新从 releases/latest/download/nagi-android.apk 下载，文件名不要改。
@@ -200,8 +192,10 @@ jobs:
           name: nagi-android
           path: dist/nagi-android.apk
           retention-days: 1
+          overwrite: true
 
-  # 面板的测试、漏洞检查和编译都通过才发布；安卓 App 成功了就带上，失败或跳过也照常发布面板。
+  # 面板的测试、漏洞检查和编译都通过才发布。没配签名密钥时不带安卓 App；配了签名密钥时安卓 App 必须编译成功，
+  # 否则不发布（App 的自动更新会找不到这个版本的 APK），修好后重新运行。
   release:
     needs: [test, vuln, build, android]
     if: ${{ !cancelled() && needs.test.result == 'success' && needs.vuln.result == 'success' && needs.build.result == 'success' }}
@@ -232,6 +226,17 @@ jobs:
           path: dist
 
       # 下载到的文件要和编译任务自己算的 SHA-256 一致，多出来的文件也不行。
+      - name: Require APK
+        env:
+          HAS_KEY: ${{ secrets.NAGI_KEYSTORE_BASE64 != '' }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          SHA_APK: ${{ needs.android.outputs.sha }}
+        run: |
+          if [ "$HAS_KEY" = true ] && { [ "$ANDROID_RESULT" != success ] || [ -z "$SHA_APK" ]; }; then
+            echo "::error::已配置签名密钥，但安卓 App 没有编译成功（$ANDROID_RESULT），这次不发布"
+            exit 1
+          fi
+
       - name: Verify artifacts
         env:
           SHA_AMD64: ${{ needs.build.outputs.sha_amd64 }}
