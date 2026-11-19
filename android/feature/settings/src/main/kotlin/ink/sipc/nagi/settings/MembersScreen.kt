@@ -191,7 +191,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                 if (user.isSelf && user.admin && !pickedAdmin) {
                     dialog = "demote"
                 } else {
-                    action.run("save") { save() }
+                    action.run("save", passwordOnly = true) { save() }
                 }
             }, Modifier.fillMaxWidth(), enabled = changed, loading = action.busy == "save")
 
@@ -222,7 +222,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                     title = stringResource(R.string.member_demote_self), text = stringResource(R.string.member_demote_self_confirm, picked?.let { roleLabel(it.name, it.builtin) }.orEmpty()),
                     confirm = stringResource(R.string.member_demote_self), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "save",
                     onDismiss = { dialog = null },
-                    onConfirm = { action.run("save") { save(); dialog = null } },
+                    onConfirm = { action.run("save", passwordOnly = true) { save(); dialog = null } },
                 ) { ActionError(action) }
                 "password" -> {
                     var pw by remember { mutableStateOf("") }
@@ -233,7 +233,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                         busy = action.busy == "password", confirmEnabled = pw.length >= 8,
                         onDismiss = { dialog = null },
                         onConfirm = {
-                            action.run("password") {
+                            action.run("password", passwordOnly = true) {
                                 session.rpc { c, h -> c.settings.updateUser(UpdateUserRequest.newBuilder().setId(user.id).setPassword(pw).build(), h) }
                                 dialog = null
                                 users.reload()
@@ -251,7 +251,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                     confirm = stringResource(R.string.member_clear), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "totp",
                     onDismiss = { dialog = null },
                     onConfirm = {
-                        action.run("totp") {
+                        action.run("totp", passwordOnly = true) {
                             session.rpc { c, h -> c.settings.updateUser(UpdateUserRequest.newBuilder().setId(user.id).setClearTotp(true).build(), h) }
                             dialog = null
                             users.reload()
@@ -264,7 +264,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                     confirm = stringResource(R.string.member_clear), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "passkeys",
                     onDismiss = { dialog = null },
                     onConfirm = {
-                        action.run("passkeys") {
+                        action.run("passkeys", passwordOnly = true) {
                             session.rpc { c, h -> c.settings.updateUser(UpdateUserRequest.newBuilder().setId(user.id).setClearPasskeys(true).build(), h) }
                             dialog = null
                             users.reload()
@@ -334,7 +334,7 @@ fun MemberAddScreen(session: PanelSession, onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         NagiButton(stringResource(R.string.member_add), {
             val role = picked ?: return@NagiButton
-            action.run("add") {
+            action.run("add", passwordOnly = true) {
                 val req = CreateUserRequest.newBuilder().setUsername(username.trim()).setPassword(password).setScope(if (role.isAdmin) fullScope else scope)
                 if (role.legacy) req.setRole(role.builtin) else req.setRoleId(role.id)
                 session.rpc { c, h -> c.settings.createUser(req.build(), h) }
