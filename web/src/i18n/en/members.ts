@@ -62,7 +62,7 @@ export default {
     "node.root": ["Node terminal and files", "Same as root on the node"],
     "panel.members": ["Members", "Members, roles, groups and tags"],
     "panel.settings": ["Panel settings", "Panel name, domain, alert channels and updates"],
-    "panel.audit": ["Audit log", "All audit records and audit settings"],
+    "panel.audit": ["Audit log", "View, export and verify all audit records"],
     "panel.security": ["Security settings", "Secure entrance, session policy and administrator sign-in addresses"],
   },
   totpOn: "2FA on",
