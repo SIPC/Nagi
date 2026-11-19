@@ -315,3 +315,30 @@ func TestPanelViolationAuditSummary(t *testing.T) {
 		t.Fatalf("新的窗口里第一条应马上记：%d 条", n)
 	}
 }
+
+// 节点被移除时（Disconnect 之后 Forget）删掉按节点记的状态，断开的连接不会再把它建回来。
+func TestForgetDropsNodeState(t *testing.T) {
+	p := newSessionPanel(t)
+	s := p.connect(t)
+	if err := s.report(t); err != nil {
+		t.Fatal(err)
+	}
+	p.r.stateMu.Lock()
+	_, ok := p.r.states[p.nodeID]
+	p.r.stateMu.Unlock()
+	if !ok {
+		t.Fatal("上报以后应有节点的状态")
+	}
+	if err := p.q.RevokeNode(context.Background(), p.nodeID); err != nil {
+		t.Fatal(err)
+	}
+	p.r.Disconnect(p.nodeID)
+	p.r.Forget(p.nodeID)
+	waitClosed(t, "连接的 Handle ", s.closed)
+	p.r.stateMu.Lock()
+	n := len(p.r.states)
+	p.r.stateMu.Unlock()
+	if n != 0 {
+		t.Fatalf("移除以后还留着 %d 个节点的状态", n)
+	}
+}

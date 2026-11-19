@@ -95,9 +95,13 @@ func (a *activeAlerts) forget(nodeID string) {
 	delete(a.list, nodeID)
 }
 
-// Forget 去掉节点还没恢复的告警（节点被移除、撤销时），并通知订阅流。
+// Forget 去掉节点还没恢复的告警和按节点记的状态（见 nodeState）（节点被移除、撤销时），并通知订阅流。
+// 调用方先 Disconnect：断开的连接不再是当前连接，不会再写状态。
 func (r *Registry) Forget(nodeID string) {
 	r.alerts.forget(nodeID)
+	r.stateMu.Lock()
+	delete(r.states, nodeID)
+	r.stateMu.Unlock()
 	r.Changes.Bump()
 }
 

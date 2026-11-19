@@ -159,7 +159,7 @@ type Conn struct {
 
 // nodeState 是按节点 ID 记的状态。节点断开重连以后接着用：记在连接上的话，重连一次就有一份新的额度，
 // 写库的去重也从头算，同一个节点还能在新旧连接上各跑一个 OnReport。
-// 只有登记过的节点才有（Handle 先查库），每项很小（节点信息只记哈希），所以不清理。
+// 只有登记过的节点才有（Handle 先查库），每项很小（节点信息只记哈希）；节点被移除时删掉（见 Forget）。
 type nodeState struct {
 	mu sync.Mutex
 	// 上报的令牌桶（见 allowReport）：dropped、droppedLog 记被丢弃的次数和上次记日志的时间。
