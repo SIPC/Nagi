@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 )
@@ -94,8 +95,31 @@ func (m *Manager) warnAnonymousVolumes(ctx context.Context, instances []docker.I
 		if err != nil || len(dirs) == 0 {
 			continue
 		}
-		onLine(fmt.Sprintf("注意：容器 %s 的 %s 是镜像声明的数据目录，没有设为持久化目录，数据在 Docker 的匿名卷里，"+
-			"快照、备份、迁移和顶替都不包含它。在配置的「持久化目录」里加上 %s（compose 里挂到 ./volumes/ 下）后重新部署。",
-			c.Service, strings.Join(dirs, "、"), strings.Join(dirs, "、")))
+		for _, line := range anonymousVolumeLines(c.Service, dirs) {
+			onLine(line)
+		}
 	}
+}
+
+// anonymousVolumeLines 是匿名卷提醒的几行。目录由镜像声明（VOLUME），内容不可信：「注意：」这行只写数量和固定文字，
+// 面板把它收进 MCP 的 warnings；目录各占一行，加两个空格的缩进，面板不收（见 internal/server/mcp/ops.go 的 deployNotices），
+// 换行这类控制字符转义，不能另起一行冒充 Nagi 的提醒（审查报告 v0.35.0#9）。
+func anonymousVolumeLines(service string, dirs []string) []string {
+	lines := []string{fmt.Sprintf("注意：容器 %s 有 %d 个镜像声明的数据目录没有设为持久化目录，数据在 Docker 的匿名卷里，"+
+		"快照、备份、迁移和顶替都不包含。在配置的「持久化目录」里加上下面的目录（compose 里挂到 ./volumes/ 下）后重新部署：",
+		logSafe(service), len(dirs))}
+	for _, d := range dirs {
+		lines = append(lines, "  "+logSafe(d))
+	}
+	return lines
+}
+
+// logSafe 原样返回只有可见字符和空格的 s，否则加引号转义（换行、制表符这类变成 \n、\t）。
+func logSafe(s string) string {
+	for _, r := range s {
+		if r != ' ' && !unicode.IsGraphic(r) {
+			return strconv.QuoteToGraphic(s)
+		}
+	}
+	return s
 }
