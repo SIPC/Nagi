@@ -28,8 +28,10 @@ func TestReplicaOpenStream(t *testing.T) {
 		}
 		dones = append(dones, done)
 	}
-	if _, _, err := r.openStream(lockTestPID, "web", files); status.Code(err) != codes.ResourceExhausted {
-		t.Fatalf("超过 %d 条应该拒绝：%v", replicaStreamsMax, err)
+	// 拒绝时回的错误要让源节点当成连接断开、稍后接着传，而不是放弃这次同步：
+	// 源节点断开重连时旧流可能还没收尾，名额是暂时满的。
+	if _, _, err := r.openStream(lockTestPID, "web", files); status.Code(err) != codes.Unavailable || !connectionLost(err) {
+		t.Fatalf("超过 %d 条应该拒绝，并且源节点会重试：%v", replicaStreamsMax, err)
 	}
 	other, otherDone, err := r.openStream(lockTestPID, "db", "/replicas/y/files")
 	if err != nil || other == first {
