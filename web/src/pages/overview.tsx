@@ -226,7 +226,8 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
   const label = Math.min(128, Math.round(width * 0.24));
   const x0 = label;
   const x3 = width - label;
-  const x1 = x0 + Math.min(176, (x3 - x0) * 0.3);
+  // 两边的直线段一样长，交叉区在中间。
+  const x1 = x0 + Math.min(120, (x3 - x0) * 0.2);
   const x2 = x3 - Math.min(120, (x3 - x0) * 0.2);
   const cx = (x1 + x2) / 2;
 

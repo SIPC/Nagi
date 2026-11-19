@@ -294,7 +294,8 @@ fun SankeyChart(
         st.rightLabel = max(st.rightLabel, min(cap, rightNeed))
         val x0 = st.leftLabel
         val x3 = width - st.rightLabel
-        val x1 = x0 + min(176f, (x3 - x0) * 0.3f)
+        // 两边的直线段一样长（同网页），交叉区在中间。
+        val x1 = x0 + min(120f, (x3 - x0) * 0.2f)
         val x2 = x3 - min(120f, (x3 - x0) * 0.2f)
         val cx = (x1 + x2) / 2
         val nameMax = max(min(st.leftLabel, st.rightLabel) - 8, 40f)
