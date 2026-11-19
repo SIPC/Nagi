@@ -17,6 +17,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
 	"gopkg.in/yaml.v3"
@@ -391,6 +392,8 @@ func LoadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, dataDir
 	for _, v := range env {
 		mapping[v.GetKey()] = v.GetValue()
 	}
+	// 解析库加载时会把这个变量设成项目名（覆盖同名的变量），检查要用同一份变量。
+	mapping[consts.ComposeProjectName] = composeProject
 	if err := CheckComposePorts(text, mapping); err != nil {
 		return nil, err
 	}

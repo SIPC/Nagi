@@ -125,6 +125,14 @@ func (c *portCounter) entry(n *yaml.Node) int {
 		return 1
 	}
 	s := n.Value
+	// !!binary 的值解析库会先解码再读，这里也按解码后的内容算；解不了的按超过上限算。
+	if n.ShortTag() == "!!binary" {
+		b, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(s), ""))
+		if err != nil {
+			return MaxComposePorts + 1
+		}
+		s = string(b)
+	}
 	if c.env != nil && strings.Contains(s, "$") {
 		if v, err := template.Substitute(s, func(k string) (string, bool) {
 			v, ok := c.env[k]
