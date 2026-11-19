@@ -44,7 +44,7 @@ const (
 	// 面板
 	PermMembers  // 成员和角色
 	PermSettings // 面板设置和告警渠道
-	PermAudit    // 审计日志
+	PermAudit    // 审计日志：审计页，查询、导出、校验全部记录，录制回放
 	PermSecurity // 安全设置
 	permCount
 )
@@ -127,8 +127,9 @@ const (
 	ViewerRoleID   int64 = 3
 )
 
-// AdminOnlyPerms 暂时只给管理员：自定义角色和预置角色都不能勾（审计日志、安全设置）。检查的位置都已经按权限写好。
-var AdminOnlyPerms = PermsOf(PermAudit, PermSecurity)
+// AdminOnlyPerms 暂时只给管理员：自定义角色和预置角色都不能勾（安全设置）。检查的位置都已经按权限写好。
+// 审计日志（PermAudit）可以授予：预置的操作员、只读默认没有（见 docs/panel.md#成员和角色）。
+var AdminOnlyPerms = PermsOf(PermSecurity)
 
 // projectPerms 是项目的权限：勾了其中任何一项都要有「查看」。
 var projectPerms = PermsOf(PermView, PermConfig, PermLogs, PermControl, PermDeploy, PermTerminal, PermFilesRead, PermFilesWrite,
@@ -211,6 +212,9 @@ var selfProcedures = map[string]bool{
 	"/nagi.v1.AppService/ListApprovals": true, "/nagi.v1.AppService/Approve": true, "/nagi.v1.AppService/Elevate": true,
 	// 回复按权限清理（api 的 clean.go）：非管理员只拿到名称、版本，和绑了域名的备用面板。
 	"/nagi.v1.SettingsService/GetSettings": true, "/nagi.v1.SettingsService/GetStandbys": true,
+	// 审计查询：有「审计日志」时查全部；只有「查看」时只能查访问范围内一个项目的告警（项目设置里出站限制列出被记录的目标），
+	// 范围和清理规则和项目的事件一样；别的一律拒绝。处理函数里检查（api 的 audit_api.go）。
+	"/nagi.v1.SettingsService/ListAuditEvents": true,
 	// 版本号所有人都能看；force（让面板联网检查）只给管理员，处理函数里检查。
 	"/nagi.v1.SettingsService/CheckPanelUpdate": true, "/nagi.v1.SettingsService/GetPanelReleaseNotes": true,
 	// 自己的两步验证、通行密钥、登录设备和访问令牌。看、吊销别人的令牌只给管理员（处理函数里检查）。
@@ -249,8 +253,6 @@ var procedurePerms = map[string]Perm{
 	"/nagi.v1.ProjectService/ListVolumes": PermView,
 	// 监控：项目页看本项目容器的占用（前缀 c:<项目>/），节点页看节点整体的（另外要节点在范围内，api 的 scope.go）。
 	"/nagi.v1.NodeService/QueryNodeMetrics": PermView,
-	// 项目的审计记录（项目页的活动）。有「审计日志」时能看全部（api 的 audit_api.go）。
-	"/nagi.v1.SettingsService/ListAuditEvents": PermView, "/nagi.v1.SettingsService/GetAuditEvent": PermView,
 
 	"/nagi.v1.ProjectService/ListVersions": PermConfig, "/nagi.v1.ProjectService/ListDeployments": PermConfig,
 
@@ -346,12 +348,14 @@ var procedurePerms = map[string]Perm{
 	"/nagi.v1.SettingsService/TestAlertChannel": PermSettings, "/nagi.v1.SettingsService/UpdatePanel": PermSettings,
 	"/nagi.v1.SettingsService/GetUpdateStatus": PermSettings,
 
-	"/nagi.v1.SettingsService/ListActivity": PermAudit, "/nagi.v1.SettingsService/ExportAuditEvents": PermAudit,
+	"/nagi.v1.SettingsService/GetAuditEvent": PermAudit,
+	"/nagi.v1.SettingsService/ListActivity":  PermAudit, "/nagi.v1.SettingsService/ExportAuditEvents": PermAudit,
 	"/nagi.v1.SettingsService/VerifyAudit": PermAudit, "/nagi.v1.SettingsService/GetRecording": PermAudit,
-	"/nagi.v1.SettingsService/GetAuditSettings": PermAudit, "/nagi.v1.SettingsService/SetAuditSettings": PermAudit,
-	"/nagi.v1.SettingsService/TestAuditSink": PermAudit,
 
-	"/nagi.v1.SettingsService/SetEntrance": PermSecurity, "/nagi.v1.SettingsService/GetSessionPolicy": PermSecurity,
+	// 审计设置（终端录制、保留时间、外送目标、登录安全告警）归「安全设置」：只能看审计的人不能关掉录制、缩短保留时间或改外送去向。
+	"/nagi.v1.SettingsService/GetAuditSettings": PermSecurity, "/nagi.v1.SettingsService/SetAuditSettings": PermSecurity,
+	"/nagi.v1.SettingsService/TestAuditSink": PermSecurity,
+	"/nagi.v1.SettingsService/SetEntrance":   PermSecurity, "/nagi.v1.SettingsService/GetSessionPolicy": PermSecurity,
 	"/nagi.v1.SettingsService/SetSessionPolicy": PermSecurity, "/nagi.v1.SettingsService/GetAdminNetworks": PermSecurity,
 	"/nagi.v1.SettingsService/SetAdminNetworks": PermSecurity,
 }

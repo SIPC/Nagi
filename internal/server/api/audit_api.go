@@ -456,10 +456,26 @@ func (v auditViewer) canSee(e audit.Event) bool {
 	return false
 }
 
+// projectAlertsQuery 判断是不是只查一个项目的告警（项目设置里出站限制列出被记录的目标用）：没有「审计日志」时只能这样查，
+// 要有「查看」，内容和项目的事件一样（范围、清理规则见 auditViewer），其余的审计查询一律拒绝。
+func projectAlertsQuery(m *nagiv1.ListAuditEventsRequest) bool {
+	f := m.GetFilter()
+	return m.GetParentId() == 0 && f.GetProjectId() != "" && slices.Equal(f.GetCategories(), []string{audit.Alert})
+}
+
+// errNoAudit 是没有「审计日志」权限时审计接口的报错。
+func errNoAudit() error {
+	return connect.NewError(connect.CodePermissionDenied, i18n.New("没有「审计日志」权限"))
+}
+
 func (s *settingsService) ListAuditEvents(ctx context.Context, req *connect.Request[nagiv1.ListAuditEventsRequest]) (*connect.Response[nagiv1.ListAuditEventsResponse], error) {
 	v, err := s.auditViewer(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// 接口登记为所有成员都能调用（auth 的 perms.go），在这里按权限放行。
+	if !v.admin && (!auth.CurrentUser(ctx).Can(auth.PermView) || !projectAlertsQuery(req.Msg)) {
+		return nil, errNoAudit()
 	}
 	limit := int(req.Msg.GetLimit())
 	if limit <= 0 || limit > 200 {
@@ -498,6 +514,10 @@ func (s *settingsService) GetAuditEvent(ctx context.Context, req *connect.Reques
 	if err != nil {
 		return nil, err
 	}
+	// 接口登记在「审计日志」下（auth 的 perms.go），这里再挡一次。
+	if !v.admin {
+		return nil, errNoAudit()
+	}
 	row, err := s.view().Get(ctx, req.Msg.GetId())
 	if err != nil || !v.canSee(row) {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("记录不存在"))
@@ -526,14 +546,14 @@ func (s *settingsService) GetAuditEvent(ctx context.Context, req *connect.Reques
 // exportChunk 是导出时每次发送的大小。
 const exportChunk = 256 << 10
 
-// ExportAuditEvents 按筛选条件导出 JSON Lines，只有管理员能用（角色检查）。导出本身记一条 read 记录。
+// ExportAuditEvents 按筛选条件导出 JSON Lines，要「审计日志」（角色检查）。导出本身记一条 read 记录。
 func (s *settingsService) ExportAuditEvents(ctx context.Context, req *connect.Request[nagiv1.ExportAuditEventsRequest], stream *connect.ServerStream[nagiv1.ExportAuditEventsChunk]) error {
 	v, err := s.auditViewer(ctx)
 	if err != nil {
 		return err
 	}
 	if !v.admin {
-		return connect.NewError(connect.CodePermissionDenied, i18n.New("没有「审计日志」权限，不能导出审计记录"))
+		return errNoAudit()
 	}
 	f := v.filter(req.Msg.GetFilter())
 	var buf bytes.Buffer
@@ -703,7 +723,7 @@ func (a *API) RecordingEnabled(ctx context.Context) bool {
 	return err != nil || v != "0"
 }
 
-// GetRecording 回放终端录制。角色检查只放行管理员，高权限确认由 elevationCheck 检查；回放本身作为敏感查询记一条。
+// GetRecording 回放终端录制。角色检查要「审计日志」，高权限确认由 elevationCheck 检查；回放本身作为敏感查询记一条。
 func (s *settingsService) GetRecording(ctx context.Context, req *connect.Request[nagiv1.GetRecordingRequest], stream *connect.ServerStream[nagiv1.RecordingChunk]) error {
 	if s.Recordings == nil {
 		return connect.NewError(connect.CodeNotFound, i18n.New("录制不存在"))

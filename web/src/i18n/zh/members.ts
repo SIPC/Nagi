@@ -61,7 +61,7 @@ export default {
     "node.root": ["节点终端和文件", "等同节点的 root"],
     "panel.members": ["成员", "成员、角色、分组和标签"],
     "panel.settings": ["面板设置", "面板名称、域名、告警渠道、更新"],
-    "panel.audit": ["审计日志", "全部审计记录和审计设置"],
+    "panel.audit": ["审计日志", "查看、导出、校验全部审计记录"],
     "panel.security": ["安全设置", "安全入口、会话策略、管理员登录地址"],
   } as Record<string, [string, string]>,
   totpOn: "已开两步验证",
