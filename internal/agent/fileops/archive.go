@@ -101,7 +101,7 @@ func WriteArchive(ctx context.Context, src *os.Root, names []string, format stri
 	}
 	for _, name := range names {
 		base := filepath.ToSlash(filepath.Dir(name))
-		err := fs.WalkDir(src.FS(), filepath.ToSlash(name), func(p string, d fs.DirEntry, err error) error {
+		err := fs.WalkDir(RootFS(src), filepath.ToSlash(name), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				if p == filepath.ToSlash(name) {
 					return err
@@ -130,7 +130,7 @@ func WriteArchive(ctx context.Context, src *os.Root, names []string, format stri
 				o.Progress.file()
 				return add(entry, info, nil)
 			case info.Mode().IsRegular():
-				f, ok, err := openRegular(src, filepath.FromSlash(p), info)
+				f, ok, err := OpenRegular(src, filepath.FromSlash(p), info)
 				if err != nil || !ok {
 					o.Links++
 					return nil

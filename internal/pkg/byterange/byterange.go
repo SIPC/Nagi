@@ -71,9 +71,10 @@ func Skip(r io.Reader, start int64) error {
 }
 
 // Section 返回 r（从文件开头读）里 offset、length 指定的那一段，以及这一段是否存在；offset、length 都是 0 时是整个文件。
+// 无论哪种，都不读出超过 size 的部分：size 是之前看到的大小，文件可能已经变长，或者 r 读的已经不是那个文件。
 func Section(r io.Reader, offset, length, size int64) (io.Reader, bool, error) {
 	if offset == 0 && length == 0 {
-		return r, true, nil
+		return io.LimitReader(r, max(size, 0)), true, nil
 	}
 	start, n, ok := Resolve(offset, length, size)
 	if !ok {

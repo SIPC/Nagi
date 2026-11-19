@@ -9,6 +9,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/fileops"
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -117,7 +118,7 @@ func measureVolume(ctx context.Context, v *nagiv1.VolumeInfo) {
 	defer cancel()
 	var newest time.Time
 	stop := errors.New("stop")
-	err = fs.WalkDir(root.FS(), ".", func(_ string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(fileops.RootFS(root), ".", func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // 读不了的文件不计，不影响别的。
 		}

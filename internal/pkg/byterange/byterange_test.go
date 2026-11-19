@@ -1,6 +1,10 @@
 package byterange
 
-import "testing"
+import (
+	"io"
+	"strings"
+	"testing"
+)
 
 func TestParseResolve(t *testing.T) {
 	cases := []struct {
@@ -35,6 +39,38 @@ func TestParseResolve(t *testing.T) {
 		start, n, sat := Resolve(off, length, c.size)
 		if sat != c.satisfiable || (sat && (start != c.start || n != c.n)) {
 			t.Errorf("%q / %d：得到 %d+%d %v，应为 %d+%d %v", c.header, c.size, start, n, sat, c.start, c.n, c.satisfiable)
+		}
+	}
+}
+
+// Section 不读出超过 size 的部分，整个文件也一样（文件变长了，或者读的已经不是看到的那个文件）。
+func TestSectionLimitsToSize(t *testing.T) {
+	data := strings.Repeat("A", 100)
+	cases := []struct {
+		offset, length, size int64
+		want                 string
+		ok                   bool
+	}{
+		{0, 0, 10, data[:10], true},
+		{0, 0, 0, "", true},
+		{0, 0, 1000, data, true},
+		{5, 0, 10, data[5:10], true},
+		{-3, 0, 10, data[7:10], true},
+		{2, 50, 10, data[2:10], true},
+		{10, 0, 10, "", false},
+	}
+	for _, c := range cases {
+		r, ok, err := Section(strings.NewReader(data), c.offset, c.length, c.size)
+		if err != nil || ok != c.ok {
+			t.Errorf("%d+%d / %d：ok=%v err=%v", c.offset, c.length, c.size, ok, err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		got, _ := io.ReadAll(r)
+		if string(got) != c.want {
+			t.Errorf("%d+%d / %d：读出 %d 字节，应为 %d", c.offset, c.length, c.size, len(got), len(c.want))
 		}
 	}
 }

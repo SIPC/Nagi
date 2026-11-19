@@ -2,12 +2,10 @@ package fileops
 
 import (
 	"context"
-	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // CopyTree 把 src 里的 srcRel（文件或目录）复制成 dst 里的 dstRel，dstRel 不能已经存在，它的上级目录要已经存在。
@@ -44,7 +42,7 @@ func copyDir(ctx context.Context, src *os.Root, srcRel string, info fs.FileInfo,
 		return err
 	}
 	o.chown(dst, dstRel)
-	d, err := src.Open(srcRel)
+	d, err := OpenDir(src, srcRel)
 	if err != nil {
 		return err
 	}
@@ -72,26 +70,8 @@ func copyDir(ctx context.Context, src *os.Root, srcRel string, info fs.FileInfo,
 	return nil
 }
 
-// openRegular 经 root 打开普通文件，并核对打开的就是遍历时看到的那个（中途被换成符号链接时，打开的是链接指向的
-// 别的文件，这时跳过）。O_NONBLOCK：中途被换成管道时不会卡住。
-func openRegular(root *os.Root, rel string, info fs.FileInfo) (*os.File, bool, error) {
-	f, err := root.OpenFile(rel, os.O_RDONLY|oNonblock, 0)
-	if err != nil {
-		if errors.Is(err, syscall.ELOOP) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	cur, err := f.Stat()
-	if err != nil || !cur.Mode().IsRegular() || !os.SameFile(cur, info) {
-		f.Close()
-		return nil, false, err
-	}
-	return f, true, nil
-}
-
 func copyFile(src *os.Root, srcRel string, info fs.FileInfo, dst *os.Root, dstRel string, o *Options) error {
-	in, ok, err := openRegular(src, srcRel, info)
+	in, ok, err := OpenRegular(src, srcRel, info)
 	if err != nil {
 		return err
 	}

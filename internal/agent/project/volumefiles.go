@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/fileops"
 	"github.com/SIPC/nagi/internal/agent/snapshot"
 	"github.com/SIPC/nagi/internal/pkg/byterange"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -149,7 +150,7 @@ func (m *Manager) ListVolumeFiles(ctx context.Context, ref *nagiv1.VolumeFileRef
 		return nil, err
 	}
 	defer root.Close()
-	dir, err := root.Open(rel)
+	dir, err := fileops.OpenDir(root, rel)
 	if err != nil {
 		return nil, fileErr(err)
 	}
@@ -239,9 +240,13 @@ func (m *Manager) ReadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef,
 	name := downloadName(ref, rel)
 	switch {
 	case info.Mode().IsRegular():
-		f, err := root.Open(rel)
+		// 容器能在 Lstat 和打开之间把文件换成设备文件或管道，打开后要核对；发出的内容不超过 Lstat 看到的大小。
+		f, ok, err := fileops.OpenRegular(root, rel, info)
 		if err != nil {
 			return fileErr(err)
+		}
+		if !ok {
+			return invalid("文件已被修改")
 		}
 		defer f.Close()
 		return sendFile(f, name, info.Size(), info.ModTime(), ref.GetOffset(), ref.GetLength(), send)
@@ -386,8 +391,9 @@ func writeArchive(send func(*nagiv1.VolumeFileChunk) error, fill func(*tar.Write
 }
 
 // tarRootDir 把 root 里的目录 rel 写进 tar，路径相对 rel。只收目录和普通文件。
+// 容器能在遍历时把文件换掉：目录只按目录打开，文件经 fileops.OpenRegular 打开并核对，被换掉的跳过。
 func tarRootDir(ctx context.Context, root *os.Root, rel string, tw *tar.Writer) error {
-	return fs.WalkDir(root.FS(), filepath.ToSlash(rel), func(p string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(fileops.RootFS(root), filepath.ToSlash(rel), func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // 读不了的跳过，不让一个文件毁掉整个下载。
 		}
@@ -409,12 +415,12 @@ func tarRootDir(ctx context.Context, root *os.Root, rel string, tw *tar.Writer) 
 		case info.IsDir():
 			return tw.WriteHeader(&tar.Header{Name: sub + "/", Mode: int64(info.Mode().Perm()), ModTime: info.ModTime(), Typeflag: tar.TypeDir})
 		case info.Mode().IsRegular():
-			f, err := root.Open(filepath.FromSlash(p))
-			if err != nil {
+			f, ok, err := fileops.OpenRegular(root, filepath.FromSlash(p), info)
+			if err != nil || !ok {
 				return nil
 			}
 			defer f.Close()
-			// 边打包边有人写时，文件可能变长，只取打开时的大小，否则 tar 会报错。
+			// 边打包边有人写时，文件可能变长，只取遍历时的大小，否则 tar 会报错。
 			if err := tw.WriteHeader(&tar.Header{Name: sub, Mode: int64(info.Mode().Perm()), Size: info.Size(), ModTime: info.ModTime(), Typeflag: tar.TypeReg}); err != nil {
 				return err
 			}
@@ -559,17 +565,22 @@ func (c UploadCheck) verify(root *os.Root, rel string) error {
 	if c.CreateOnly {
 		return ErrFileExists
 	}
-	if !info.Mode().IsRegular() {
-		return ErrFileChanged
-	}
-	f, err := root.Open(rel)
+	// 拿着容器的锁，打开时不能卡住（换成了管道），也不能读到别的文件（换成了设备文件）。
+	f, ok, err := fileops.OpenRegular(root, rel, info)
 	if err != nil {
 		return fileErr(err)
 	}
+	if !ok {
+		return ErrFileChanged
+	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	n, err := io.Copy(h, io.LimitReader(f, info.Size()+1))
+	if err != nil {
 		return fileErr(err)
+	}
+	if n != info.Size() { // 读的时候变长或变短了
+		return ErrFileChanged
 	}
 	if !strings.EqualFold(hex.EncodeToString(h.Sum(nil)), c.ExpectedSHA256) {
 		return ErrFileChanged
