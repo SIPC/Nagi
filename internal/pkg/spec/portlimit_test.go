@@ -202,3 +202,38 @@ func TestValidateReasonablePorts(t *testing.T) {
 		t.Errorf("变量替换后超过上限应该拒绝：%v", err)
 	}
 }
+
+// 检查放行的 compose，解析库展开出的端口数不超过上限：检查和解析库替换变量、读端口的规则有出入时这里会失败。
+// 升级 compose-go、go-connections 以后先看这个测试。
+func TestPortCheckMatchesLoader(t *testing.T) {
+	big := "1-65535"
+	entries := []string{
+		`"8080:80"`, `"27015-27030:27015-27030/udp"`, `"${PORT:-8080}"`, `"8080:${PORT:-80}"`, `"${A:-1}:${B:-2}/tcp"`,
+		`"${R:-1-65535}"`, `"${R}:${R}"`, `"${A:-${B:-1-65535}}"`, `"$${A:-1-65535}"`, `"[::1]:1-65535:${P:-1-65535}"`,
+		`"${IP:-0.0.0.0}:1-65535:1-65535"`, `"+1-65535:+1-65535"`,
+		// 解析库自己加的变量。
+		`"${COMPOSE_PROJECT_NAME:+1-65535}"`, `"${COMPOSE_PROJECT_NAME:+10.0.0.1:1-65535:1-65535}"`, `"${COMPOSE_PROJECT_NAME:?x}"`,
+		`"${PWD:+1-65535}"`, `"${HOME:+1-65535}"`, `"${PATH:+1-65535}"`,
+		// 带标签的值：解析库解码以后再读。
+		`!!binary MS02NTUzNToxLTY1NTM1`, `!!binary "MS02NTUzNQ=="`, `!!binary JHtSfQ==`, `!!binary not-base64`, `!!str 1-65535`,
+	}
+	envs := [][]*nagiv1.EnvVar{nil, {{Key: "R", Value: big}}, {{Key: "B", Value: big}, {Key: "P", Value: big}}, {{Key: "COMPOSE_PROJECT_NAME", Value: ""}}}
+	for _, key := range []string{"ports", "expose"} {
+		for _, e := range entries {
+			for i, env := range envs {
+				text := "services:\n  web:\n    image: nginx\n    " + key + ":\n      - " + e + "\n"
+				p, err := LoadCompose(context.Background(), text, env, "/check", "check")
+				if err != nil {
+					continue
+				}
+				n := 0
+				for _, s := range p.Services {
+					n += len(s.Ports) + len(s.Expose)
+				}
+				if n > MaxComposePorts {
+					t.Errorf("%s: %s（变量组 %d）检查放行，解析出 %d 个端口", key, e, i, n)
+				}
+			}
+		}
+	}
+}
