@@ -110,6 +110,7 @@ var en = map[string]string{
 	"节点的证书请求无法解析":                         "The node's certificate request can't be read",
 	"证书请求中的公钥不属于此节点":                      "The public key in the certificate request doesn't belong to this node",
 	"这条控制连接已被替换或节点已移除":                    "This control connection was replaced, or the node was removed",
+	"上一次上报还在处理":                           "The previous report is still being processed",
 
 	// ---- 更新面板和节点 ----
 	"这是本地编译的版本，无法一键更新":                "This is a local build and can't be updated from the panel",

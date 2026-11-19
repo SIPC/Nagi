@@ -31,7 +31,10 @@ type sessionPanel struct {
 	node   tls.Certificate
 }
 
-func newSessionPanel(t *testing.T) *sessionPanel {
+func newSessionPanel(t *testing.T) *sessionPanel { return newSessionPanelDB(t, nil, false) }
+
+// newSessionPanelDB 和 newSessionPanel 一样，wrap 不为 nil 时数据库经它包一层（用来注入错误）；pending：节点还没批准。
+func newSessionPanelDB(t *testing.T, wrap func(store.DBTX) store.DBTX, pending bool) *sessionPanel {
 	t.Helper()
 	ctx := context.Background()
 	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "panel.db"), store.Migrations)
@@ -39,7 +42,11 @@ func newSessionPanel(t *testing.T) *sessionPanel {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	q := store.New(d)
+	var dbtx store.DBTX = d
+	if wrap != nil {
+		dbtx = wrap(d)
+	}
+	q := store.New(dbtx)
 	ca, err := tlsutil.NewCA("test")
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +66,11 @@ func newSessionPanel(t *testing.T) *sessionPanel {
 	if ncert, err = ca.SignCSR(csr, nodeID, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if err := q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: "n1", MeshKey: make([]byte, 32)}); err != nil {
+	var pend int64
+	if pending {
+		pend = 1
+	}
+	if err := q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: "n1", MeshKey: make([]byte, 32), Pending: pend}); err != nil {
 		t.Fatal(err)
 	}
 	return &sessionPanel{
