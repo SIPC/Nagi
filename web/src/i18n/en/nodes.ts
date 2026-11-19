@@ -153,6 +153,7 @@ export default {
     root: "Projects root",
     rootHint: "Absolute path",
     rootHelp: "New containers on this node default to <projects root>/<network name>/<container name>. Existing container directories don't change.",
+    rootElevate: "Changing the projects root creates directories and writes data on the node. Verify your identity first.",
   },
   replicaDir: {
     title: "Replica directory",

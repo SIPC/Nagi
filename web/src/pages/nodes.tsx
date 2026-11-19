@@ -1001,7 +1001,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
 
 // NodeSettings：节点「设置」标签。和设置页一样用设置行：一行状态加一个按钮，表单放进对话框（docs/ui.md「节点详情」）。
 function NodeSettings({ n }: { n: Node }) {
-  // 修改节点设置要「节点管理」，路径要「查看节点详情」，副本的存放位置要「节点终端和文件」。
+  // 修改节点设置要「节点管理」，路径要「查看节点详情」，项目根目录和副本的存放位置要「节点终端和文件」。
   const { can } = useRole();
   const isAdmin = can("node.manage");
   const details = can("node.details");
@@ -1024,7 +1024,7 @@ function NodeSettings({ n }: { n: Node }) {
         {/* 非管理员：有值的行只显示值、不放按钮；没有值可显示的行写原因（只有管理员能操作）。各行一致。 */}
         {details && (
         <SettingRow label={t.nodes.settings.root} help={t.nodes.settings.rootHelp} description={<span className="font-mono">{root}</span>}>
-          {isAdmin && (
+          {canRoot && (
             <Button variant="outline" onClick={() => setEditing("root")}>
               {t.common.actions.edit}
             </Button>
@@ -1154,6 +1154,7 @@ function RootForm({ nodeId, root, onDone }: { nodeId: string; root: string; onDo
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (value === root) return onDone();
+    if (!(await requireElevation(t.nodes.settings.rootElevate))) return;
     setBusy(true);
     setError("");
     try {

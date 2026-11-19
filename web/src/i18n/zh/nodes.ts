@@ -154,6 +154,7 @@ export default {
     root: "项目根目录",
     rootHint: "绝对路径",
     rootHelp: "新加入本节点的容器，默认目录为 <项目根目录>/<网络名>/<容器名>；已有容器的目录不变。",
+    rootElevate: "更改项目根目录会在节点上创建目录并写入数据，请先验证身份。",
   },
   replicaDir: {
     title: "副本目录",
