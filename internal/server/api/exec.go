@@ -40,7 +40,8 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	detail := strings.Join(command, " ")
 	fail := func(err error) (ExecResult, error) {
 		a.recordExec(ctx, start, detail, auditFailure(err), audit.Summary{})
-		return ExecResult{}, err
+		// 这里不经过 scopeCheck：返回给成员前同样把他看不到的节点换掉（容器可能在范围外的节点上）。
+		return ExecResult{}, a.scrubFor(ctx, u, i18n.FromContext(ctx), err)
 	}
 	switch {
 	case len(command) == 0:

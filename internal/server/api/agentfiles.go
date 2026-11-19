@@ -70,7 +70,8 @@ func (a *API) ReadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, lim
 	}
 	a.recordOperation(ctx, "/DownloadVolumeFile", ref, failure)
 	if err != nil && !errors.Is(err, ErrFileTooLarge) {
-		return nil, fromGRPC(err)
+		// 不经过 scopeCheck：返回前把成员看不到的节点换掉（审计里记的是原来的）。
+		return nil, fromGRPC(a.scrubFor(ctx, auth.CurrentUser(ctx), i18n.FromContext(ctx), err))
 	}
 	return data, err
 }
@@ -130,7 +131,7 @@ func (a *API) WriteVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, da
 	}
 	a.recordOperation(ctx, "/UploadVolumeFile", ref, failure)
 	if err != nil {
-		return fromGRPC(err)
+		return fromGRPC(a.scrubFor(ctx, auth.CurrentUser(ctx), i18n.FromContext(ctx), err))
 	}
 	return nil
 }

@@ -403,13 +403,29 @@ func nodeName(n *nagiv1.ListNodesResponse, id string) string {
 	return id
 }
 
+// findNode 按 ID 或名称找节点。名称不保证唯一（节点加入时取主机名，成员也能把自己的节点改成和范围外的节点同名）：
+// 有不止一台叫这个名称时不猜，要求改用 ID，免得操作落到另一台上（2026-11-19-834f027#3）。
 func findNode(n *nagiv1.ListNodesResponse, ref string) (*nagiv1.Node, error) {
+	var named []*nagiv1.Node
 	for _, x := range n.GetNodes() {
-		if x.GetId() == ref || strings.EqualFold(x.GetName(), ref) {
+		if x.GetId() == ref {
 			return x, nil
 		}
+		if strings.EqualFold(x.GetName(), ref) {
+			named = append(named, x)
+		}
 	}
-	return nil, fmt.Errorf("node %q not found", ref)
+	switch len(named) {
+	case 0:
+		return nil, fmt.Errorf("node %q not found", ref)
+	case 1:
+		return named[0], nil
+	}
+	ids := make([]string, len(named))
+	for i, x := range named {
+		ids[i] = x.GetId()
+	}
+	return nil, fmt.Errorf("%d nodes are named %q; pass the node ID instead (%s)", len(named), ref, strings.Join(ids, ", "))
 }
 
 // ---- 输出 ----

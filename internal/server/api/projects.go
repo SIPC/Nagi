@@ -68,6 +68,7 @@ func streamOp(ctx context.Context, out *connect.ServerStream[nagiv1.DeployEvent]
 	res := &nagiv1.DeployResult{Success: err == nil, Version: version}
 	if err != nil {
 		res.Error = errorText(i18n.FromContext(ctx), err)
+		noteStreamError(ctx, err)
 	}
 	return out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: res}})
 }

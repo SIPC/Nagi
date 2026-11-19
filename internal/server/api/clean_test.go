@@ -437,3 +437,15 @@ func TestScrubErrorByRef(t *testing.T) {
 		t.Error("管理员的报错不该改")
 	}
 }
+
+// MCP 调用的记录：有看不到的节点时，非管理员不看失败详情，参数里和节点有关的键去掉（2026-11-19-834f027#2）。
+func TestStripParamsNodeKeys(t *testing.T) {
+	in := `{"arguments":{"project":"web","node":"prod-9","backup_node":"prod-8","items":[{"target_node":"x","keep":1}]},"result_bytes":3}`
+	got := stripParams(in, func(k string) bool { return strings.Contains(strings.ToLower(k), "node") })
+	if strings.Contains(got, "prod-9") || strings.Contains(got, "prod-8") || strings.Contains(got, "target_node") {
+		t.Errorf("和节点有关的键应该去掉：%s", got)
+	}
+	if !strings.Contains(got, `"project":"web"`) || !strings.Contains(got, `"keep":1`) || !strings.Contains(got, "result_bytes") {
+		t.Errorf("别的键应该保留：%s", got)
+	}
+}
