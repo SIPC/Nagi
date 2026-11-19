@@ -8,6 +8,36 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.35.1
+
+### Improvements
+
+- Node violations detected by the panel get a summary entry when the combining period ends.
+- While in the foreground, the Android app extends the unlock period based on when it actually renews its token, and switching pages no longer restarts the timer.
+
+### Fixes
+
+- Fixed an issue where missing directories in a git repository resulted in incomplete deployments.
+- Fixed an issue where a container just redeployed to its original node could be stopped.
+- Fixed an issue where the failover holder could fail to renew its lease in some cases and be taken over by the standby.
+- Fixed an issue where hiding node names replaced ordinary words in deployment output.
+- Fixed an issue where syncing release notes removed the Android app signing certificate digest.
+- Fixed known vulnerabilities and improved security.
+
+### Behavior changes
+
+- Rolling back, or restoring a deployment, now requires verifying your identity when the target version has privileged configuration that differs from the running configuration. Members without the "Privileged configuration" permission cannot do this.
+- When a node runs low on free inodes, snapshots, uploads, replica sync, and git pulls stop.
+- Git pulls stop when the repository has more than 1,000,000 files and directories combined, paths deeper than 64 levels, or content under a symbolic link.
+- Consecutive spaces in node names are combined into one, unassigned characters are not allowed, and names that look alike are treated as duplicates. The first panel start after the update tidies up old names that do not follow these rules.
+- The command for adding a standby panel now passes the pairing code in the environment variable `NAGI_STANDBY`. `--standby` still works. The install script no longer installs versions earlier than v0.35.0 as a standby panel.
+- Project settings parameters in Audit and events are shown according to the member's permissions, and file entries are searched only by what the member can see.
+- When a member cannot see the standby node, the holder's sync time and failback status are no longer shown.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.35.1.
+
 ## v0.35.0
 
 ### New features
