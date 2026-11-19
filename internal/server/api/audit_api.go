@@ -98,12 +98,13 @@ func (v auditViewer) restrict(f *audit.Filter) {
 	// 参数和失败详情显示前要去掉别人的 IP、看不到的节点（见 view），搜索匹配的却是原文：
 	// 按有没有结果就能逐位试出被去掉的内容。所以非管理员的搜索不匹配这两列。
 	f.SearchFields = audit.SearchViewer
-	// 操作者、对象的名称里也可能是看不到的节点的名称：搜索的词和它们沾边（包含，或者是其中 3 个字符以上的一段）时
-	// 不匹配这两列。
+	// 有看不到的节点时，操作者、对象是节点的记录不按名称匹配：名称显示时会换成「其他节点」，按原文匹配的话，
+	// 用很短的词反复搜就能把名称一段一段拼出来。搜索的词里直接带着看不到的节点的名称或 ID 时，名称两列都不匹配。
+	f.SearchSkipNodes = len(v.hidden) > 0
 	q := strings.ToLower(strings.TrimSpace(f.Search))
 	for id, name := range v.hidden {
 		for _, h := range []string{strings.ToLower(name), id} {
-			if h != "" && q != "" && (strings.Contains(q, h) || len(q) >= 3 && strings.Contains(h, q)) {
+			if h != "" && strings.Contains(q, h) {
 				f.SearchFields = audit.SearchNoNames
 			}
 		}
