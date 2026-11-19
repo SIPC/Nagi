@@ -142,15 +142,23 @@ func (s *Service) HasUsers(ctx context.Context) (bool, error) {
 	return n > 0, err
 }
 
-// CreateUser 创建用户。
-func (s *Service) CreateUser(ctx context.Context, username, password, role string) (int64, error) {
+// CreateUser 创建用户，roleID 是 roles 表里的角色（AdminRoleID 是管理员）。
+func (s *Service) CreateUser(ctx context.Context, username, password string, roleID int64) (int64, error) {
 	hash, err := HashPassword(password)
 	if err != nil {
 		return 0, err
 	}
 	return s.q.CreateUser(ctx, store.CreateUserParams{
-		Username: username, PasswordHash: hash, CreatedAt: time.Now().Unix(), Role: role,
+		Username: username, PasswordHash: hash, CreatedAt: time.Now().Unix(), Role: UsersRole(roleID), RoleID: roleID,
 	})
+}
+
+// UsersRole 是 users.role 里存的值：管理员是 admin，其余是 member（权限看 role_id）。
+func UsersRole(roleID int64) string {
+	if roleID == AdminRoleID {
+		return RoleAdmin
+	}
+	return RoleMember
 }
 
 // ErrTOTPRequired 表示密码正确，但还需要两步验证码。
@@ -318,7 +326,14 @@ func (s *Service) Authenticate(ctx context.Context, token string) (string, error
 type User struct {
 	ID   int64
 	Name string
+	// Role 是 admin（管理员）或者给旧版本客户端看的角色名（LegacyRole：operator、viewer）。权限看 Perms。
 	Role string
+	// RoleID 是成员的角色（roles 表），Perms 是角色的权限（访问令牌是和令牌选项的交集，见 tokens.go）。管理员的 Perms 不用，
+	// 一律按全部权限（User.Can）。
+	RoleID int64
+	Perms  Perms
+	// NodesFollow：节点范围是「跟随项目」，只能看到范围内项目的容器所在的节点（见 docs/panel.md#访问范围）。
+	NodesFollow bool
 	// ElevatedUntil 是这个会话的高权限确认的到期时间（Unix 秒）。见 elevation.go。
 	ElevatedUntil int64
 	// LimitProjects、LimitNodes 表示只能访问指定的项目、节点（见 docs/panel.md#访问范围）。管理员不受限制。

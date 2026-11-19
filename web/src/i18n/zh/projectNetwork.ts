@@ -27,6 +27,7 @@ export default {
     check: {
       dnsOk: "解析正确",
       dnsMismatch: (addresses: string) => `解析到 ${addresses}，与入口节点不符；使用 CDN 时可忽略`,
+      dnsMismatchHidden: "与入口节点不符；使用 CDN 时可忽略",
       dnsUnresolved: "域名未解析",
       dnsUnknown: "节点离线或是内网地址，无法比对解析结果",
       certObtained: (expires?: string) => (expires ? `证书已签发，${expires} 到期` : "证书已签发"),

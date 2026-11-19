@@ -76,17 +76,12 @@ func (s *Service) TokenUser(ctx context.Context, token, ip string) (User, store.
 		_ = s.q.TouchAccessToken(ctx, t.ID, now.Unix(), ip, client)
 	}
 	s.checkTokenNetwork(ctx, t, row.Username, ip, client)
-	u := User{
-		ID: row.ID, Name: row.Username, Role: row.Role,
-		LimitProjects: row.AllProjects == 0, LimitNodes: row.AllNodes == 0,
-		TokenID: t.ID, Via: "mcp:" + t.Name,
-		// 只读成员本来就不能修改、不能打开终端，令牌上的选项也不放开。
-		AllowWrite: t.AllowWrite && row.Role != RoleViewer,
-		AllowExec:  t.AllowExec && row.Role != RoleViewer,
-		// 节点命令等于节点的 root，只给管理员；成员被降级后令牌上的这一项随之失效。
-		AllowNodeExec: t.AllowNodeExec && row.Role == RoleAdmin,
-		// 管理面板同样只给管理员。
-		AllowPanel: t.AllowPanel && row.Role == RoleAdmin,
+	perms, err := s.q.RolePerms(ctx, row.RoleID)
+	if err != nil {
+		return User{}, t, err
 	}
+	u := User{ID: row.ID, Name: row.Username, TokenID: t.ID, Via: "mcp:" + t.Name}
+	u.applyRole(row.Role, row.RoleID, perms, row.AllProjects, row.AllNodes, row.NodesFollow)
+	u.applyToken(t.AllowWrite, t.AllowExec, t.AllowNodeExec, t.AllowPanel)
 	return u, t, nil
 }

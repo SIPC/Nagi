@@ -260,7 +260,13 @@ func (s *Service) GetAppPairing(ctx context.Context, ip, code string) (PairingUs
 		return PairingUser{}, err
 	}
 	result = outcomeNeutral
-	return PairingUser{ID: row.ID, Username: row.Username, DisplayName: row.DisplayName, Role: row.Role, Avatar: row.Avatar}, nil
+	perms, err := s.q.RolePerms(ctx, row.RoleID)
+	if err != nil {
+		return PairingUser{}, err
+	}
+	var u User
+	u.applyRole(row.Role, row.RoleID, perms, row.AllProjects, row.AllNodes, row.NodesFollow)
+	return PairingUser{ID: row.ID, Username: row.Username, DisplayName: row.DisplayName, Role: u.Role, Avatar: row.Avatar}, nil
 }
 
 // AppKeyProof 是一把密钥的公钥（SPKI）和证明证书链。
@@ -740,8 +746,9 @@ func (s *Service) AppTokenUser(ctx context.Context, token, ip string) (User, err
 	if d.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
 		return User{}, i18n.New("管理员只能从允许的地址登录")
 	}
-	return User{ID: d.UserID, Name: d.Username, Role: d.Role, LimitProjects: d.AllProjects == 0, LimitNodes: d.AllNodes == 0,
-		Via: audit.ViaApp, DeviceID: d.ID, DeviceName: d.Name}, nil
+	u := User{ID: d.UserID, Name: d.Username, Via: audit.ViaApp, DeviceID: d.ID, DeviceName: d.Name}
+	u.applyRole(d.Role, d.RoleID, d.Perms, d.AllProjects, d.AllNodes, d.NodesFollow)
+	return u, nil
 }
 
 // knownAppToken 判断令牌是面板发过的（不管有没有过期）。

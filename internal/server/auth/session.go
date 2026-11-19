@@ -375,8 +375,9 @@ func (s *Service) authenticate(ctx context.Context, token string, info RequestIn
 }
 
 func userOf(st store.SessionState) User {
-	return User{ID: st.UserID, Name: st.Username, Role: st.Role, ElevatedUntil: st.ElevatedUntil, ElevatedBy: st.ElevatedBy,
-		LimitProjects: st.AllProjects == 0, LimitNodes: st.AllNodes == 0, SessionID: st.ID}
+	u := User{ID: st.UserID, Name: st.Username, ElevatedUntil: st.ElevatedUntil, ElevatedBy: st.ElevatedBy, SessionID: st.ID}
+	u.applyRole(st.Role, st.RoleID, st.Perms, st.AllProjects, st.AllNodes, st.NodesFollow)
+	return u
 }
 
 func randomChallenge() string {

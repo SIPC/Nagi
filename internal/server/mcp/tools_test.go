@@ -40,16 +40,12 @@ func TestToolDeclarations(t *testing.T) {
 			if !exists(p) {
 				t.Errorf("工具 %s 用到的接口 %s 不存在", tl.name, p)
 			}
-			role := auth.RoleOperator
-			if tl.adminOnly {
-				role = auth.RoleAdmin
+			// 用到的接口都要登记了权限（见 auth/perms.go），工具按它们给不给（permitted）。
+			if auth.ProcedureAccess(p) == "" {
+				t.Errorf("工具 %s 用到的接口 %s 没有登记权限", tl.name, p)
 			}
-			if !auth.Allowed(role, p) {
-				t.Errorf("工具 %s 用到的接口 %s %s 不能调用", tl.name, p, role)
-			}
-			// 管理员专用的接口，工具也要声明为管理员专用。
-			if !tl.adminOnly && !auth.Allowed(auth.RoleOperator, p) {
-				t.Errorf("工具 %s 用到只有管理员能调用的接口 %s，要声明 adminOnly", tl.name, p)
+			if !auth.Allowed(auth.PresetUser(auth.RoleAdmin), p) {
+				t.Errorf("工具 %s 用到的接口 %s 管理员不能调用", tl.name, p)
 			}
 			if !auth.TokenAllowed(readOnly, p) {
 				writes++
@@ -128,7 +124,7 @@ func TestAllowedFor(t *testing.T) {
 	for _, tl := range allTools {
 		byName[tl.name] = tl
 	}
-	op := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true}
+	op := auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true}
 	admin := auth.User{Role: auth.RoleAdmin, TokenID: 1}
 	cases := []struct {
 		tool    string
@@ -139,10 +135,15 @@ func TestAllowedFor(t *testing.T) {
 		{"deploy", op, false, true},
 		{"deploy", op, true, false},
 		{"exec", op, false, false},
-		{"restore_snapshot", auth.User{Role: auth.RoleOperator, TokenID: 1}, false, false},
+		{"restore_snapshot", auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1}, false, false},
 		{"inspect_node_storage", op, false, false},
 		{"inspect_node_storage", admin, false, true},
-		{"list_snapshots", auth.User{Role: auth.RoleViewer, TokenID: 1}, false, true},
+		// 预置的只读没有快照权限。
+		{"list_snapshots", auth.User{Role: auth.RoleViewer, Perms: auth.PresetViewer, TokenID: 1}, false, false},
+		{"list_snapshots", auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1}, false, true},
+		// 预置的操作员没有高可用：顶替的工具不在列表里。
+		{"set_failover", op, false, false},
+		{"set_failover", withToken(auth.MemberWith(2, auth.PresetOperator|auth.PermsOf(auth.PermHA))), false, true},
 	}
 	for _, c := range cases {
 		if got := byName[c.tool].allowedFor(c.u, c.standby); got != c.want {
@@ -287,9 +288,9 @@ func TestNewToolsAllowedFor(t *testing.T) {
 	nodeAdminRead := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowExec: true, AllowNodeExec: true}
 	admin := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true}
 	adminRead := auth.User{Role: auth.RoleAdmin, TokenID: 1}
-	op := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true, AllowExec: true}
-	opNoExec := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true}
-	viewer := auth.User{Role: auth.RoleViewer, TokenID: 1}
+	op := auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true, AllowExec: true}
+	opNoExec := auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true}
+	viewer := auth.User{Role: auth.RoleViewer, Perms: auth.PresetViewer, TokenID: 1}
 	cases := []struct {
 		tool    string
 		u       auth.User
@@ -316,8 +317,9 @@ func TestNewToolsAllowedFor(t *testing.T) {
 		{"get_node_mirrors", op, false, false},
 		{"get_node", viewer, false, true},
 		{"check_mesh", viewer, false, true},
-		{"list_versions", viewer, false, true},
-		{"set_alert_rules", op, false, true},
+		{"list_versions", viewer, false, false},
+		{"list_versions", op, false, true},
+		{"set_alert_rules", op, false, false},
 		{"set_alert_rules", viewer, false, false},
 		{"set_node_alert_rules", op, false, false},
 		{"move_files", op, false, true},
@@ -400,7 +402,7 @@ func TestPanelToolsAllowedFor(t *testing.T) {
 	full := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowPanel: true}
 	read := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowPanel: true}
 	noPanel := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
-	op := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true, AllowPanel: true}
+	op := auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true, AllowPanel: true}
 	cases := []struct {
 		tool    string
 		u       auth.User
@@ -418,9 +420,9 @@ func TestPanelToolsAllowedFor(t *testing.T) {
 		{"update_alert_channels", noPanel, false, false},
 		{"update_panel", full, false, true},
 		{"list_members", read, false, true},
-		{"get_project_order", auth.User{Role: auth.RoleViewer, TokenID: 1}, false, true},
-		{"set_project_order", auth.User{Role: auth.RoleViewer, TokenID: 1}, false, false},
-		{"set_project_order", auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true}, false, true},
+		{"get_project_order", auth.User{Role: auth.RoleViewer, Perms: auth.PresetViewer, TokenID: 1}, false, true},
+		{"set_project_order", auth.User{Role: auth.RoleViewer, Perms: auth.PresetViewer, TokenID: 1}, false, false},
+		{"set_project_order", auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true}, false, true},
 	}
 	for _, c := range cases {
 		tl, ok := byName[c.tool]
@@ -437,8 +439,8 @@ func TestPanelToolsAllowedFor(t *testing.T) {
 		if uses != tl.panel {
 			t.Errorf("工具 %s：用到设置接口 %v，声明 panel %v", tl.name, uses, tl.panel)
 		}
-		if tl.panel && (tl.scope() != "nagi:admin" || !tl.adminOnly) {
-			t.Errorf("工具 %s 要只给管理员，OAuth 范围是 nagi:admin", tl.name)
+		if tl.panel && tl.scope() != "nagi:admin" {
+			t.Errorf("工具 %s 的 OAuth 范围要是 nagi:admin", tl.name)
 		}
 	}
 }
@@ -525,4 +527,10 @@ func TestInstructionsDeploymentRules(t *testing.T) {
 			}
 		}
 	}
+}
+
+// withToken 把成员换成一个勾了「可修改」的访问令牌。
+func withToken(u auth.User) auth.User {
+	u.TokenID, u.AllowWrite = 1, true
+	return u
 }

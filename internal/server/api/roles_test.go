@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -21,9 +22,18 @@ func secretProject() *nagiv1.Project {
 	}
 }
 
+// redactFor 按成员的权限清理回复（范围是全部），和 scopeCheck 里一样。
+func redactFor(u auth.User, msg any) {
+	var x *access
+	if !u.IsAdmin() {
+		x = &access{perms: u.Perms, names: map[string]string{}}
+	}
+	(&API{}).filterReply(context.Background(), x, msg)
+}
+
 func TestRedactViewerProject(t *testing.T) {
 	res := &nagiv1.ListProjectsResponse{Projects: []*nagiv1.ProjectSummary{{Project: secretProject()}}}
-	redactFor(auth.User{ID: 2, Role: auth.RoleViewer}, res)
+	redactFor(auth.User{ID: 2, Role: auth.RoleViewer, Perms: auth.PresetViewer}, res)
 	p := res.Projects[0].Project
 	c := p.Containers[0]
 	if c.Name != "web" {
@@ -40,7 +50,7 @@ func TestRedactViewerProject(t *testing.T) {
 func TestRedactKeepsForOperatorAndAdmin(t *testing.T) {
 	for _, role := range []string{auth.RoleOperator, auth.RoleAdmin} {
 		p := secretProject()
-		redactFor(auth.User{ID: 1, Role: role}, p)
+		redactFor(auth.PresetUser(role), p)
 		if p.Containers[0].Config == nil || p.Containers[0].DeployKey == "" {
 			t.Errorf("%s 应该能看到配置和密钥", role)
 		}
@@ -50,7 +60,7 @@ func TestRedactKeepsForOperatorAndAdmin(t *testing.T) {
 func TestRedactMasterKeyPath(t *testing.T) {
 	for role, want := range map[string]string{auth.RoleAdmin: "/k", auth.RoleOperator: "", auth.RoleViewer: ""} {
 		res := &nagiv1.GetSettingsResponse{Settings: &nagiv1.PanelSettings{MasterKeyPath: "/k"}}
-		redactFor(auth.User{ID: 1, Role: role}, res)
+		redactFor(auth.PresetUser(role), res)
 		if got := res.Settings.MasterKeyPath; got != want {
 			t.Errorf("%s：路径 = %q，应为 %q", role, got, want)
 		}

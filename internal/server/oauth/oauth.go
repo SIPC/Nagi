@@ -240,19 +240,20 @@ func (s *Server) Approve(ctx context.Context, u auth.User, req *nagiv1.OAuthRequ
 	} else if n >= MaxTokens {
 		return "", i18n.Errorf("访问令牌已达上限（%d 个），请先吊销不再使用的令牌", MaxTokens)
 	}
-	if u.Role == auth.RoleViewer {
-		g.Write, g.Exec = false, false
+	// 令牌的选项不能超过成员的权限（和个人访问令牌一样）。
+	if !u.Can(auth.PermTerminal) {
+		g.Exec = false
 	}
-	// 节点终端等于节点的 root：只有管理员能授权，而且要同时允许执行命令（和个人访问令牌一样）。
-	if g.Node && u.Role != auth.RoleAdmin {
-		return "", i18n.New("只有管理员能创建可在节点上执行命令的令牌")
+	// 节点终端等于节点的 root：要「节点终端和文件」权限，而且要同时允许执行命令。
+	if g.Node && !u.Can(auth.PermNodeRoot) {
+		return "", i18n.New("没有「节点终端和文件」权限，不能创建可在节点上执行命令的令牌")
 	}
 	if g.Node && !g.Exec {
 		return "", i18n.New("允许节点终端时须同时允许执行命令")
 	}
-	// 管理面板同样只有管理员能授权。
-	if g.Panel && u.Role != auth.RoleAdmin {
-		return "", i18n.New("只有管理员能创建可以管理面板的令牌")
+	// 管理面板要有面板的权限。
+	if g.Panel && u.EffectivePerms()&auth.PanelPerms == 0 {
+		return "", i18n.New("没有面板的权限，不能创建可以管理面板的令牌")
 	}
 	code := randomHex(32)
 	s.mu.Lock()

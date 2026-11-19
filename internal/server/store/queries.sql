@@ -30,11 +30,11 @@ DELETE FROM settings WHERE key = ?;
 SELECT count(*) FROM users;
 
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)
+INSERT INTO users (username, password_hash, created_at, role, role_id) VALUES (?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: SetUserRole :exec
-UPDATE users SET role = ? WHERE id = ?;
+UPDATE users SET role = ?, role_id = ? WHERE id = ?;
 
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = ?;

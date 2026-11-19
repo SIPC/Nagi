@@ -272,7 +272,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		ctx, cancel := context.WithCancel(auth.WithRequest(auth.WithUser(r.Context(), u), r))
 		defer cancel()
 		ip := auth.RequestIP(r.RemoteAddr, r.Header)
-		if u.Role != auth.RoleAdmin {
+		if a.nodeRootAllowed(ctx, u, nodeID) != nil {
 			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, "当前账号没有权限执行这个操作", true)
 			http.Error(w, i18n.Sprintf(lang, "当前账号没有权限执行这个操作"), http.StatusForbidden)
 			return
@@ -325,7 +325,10 @@ func (a *API) NodeShellHandler() http.Handler {
 		lastActive := newActivityClock()
 		go a.watchSession(ctx, token, u, func(cur auth.User) error {
 			switch {
-			case cur.Role != auth.RoleAdmin:
+			case a.nodeRootAllowed(ctx, cur, nodeID) != nil:
+				if ctx.Err() != nil {
+					return nil
+				}
 				return errRoleChanged
 			case time.Since(began) > nodeShellMaxAge:
 				return i18n.New("已达到最长使用时间（12 小时），连接已断开")
@@ -407,7 +410,7 @@ func (a *API) NodeFileHandler() http.Handler {
 			}
 			a.recordNodeAccess(ctx, action, nodeID, detail, failure != "")
 		}
-		if u.Role != auth.RoleAdmin {
+		if a.nodeRootAllowed(ctx, u, nodeID) != nil {
 			record("当前账号没有权限执行这个操作")
 			fail(http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
 			return
@@ -529,4 +532,20 @@ func (a *API) NodeFileHandler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]int64{"size": res.GetSize()})
 	})
+}
+
+// nodeRootAllowed 是节点终端和文件（等于节点的 root）的检查：要「节点终端和文件」权限，节点要在访问范围内。
+// 不走 Connect 的入口（节点终端、节点文件的上传下载、直连下载、MCP 的节点命令）都用它。
+func (a *API) nodeRootAllowed(ctx context.Context, u auth.User, nodeID string) error {
+	if !u.Can(auth.PermNodeRoot) {
+		return errNoPermission
+	}
+	x, err := a.loadAccess(ctx, u)
+	if err != nil {
+		return err
+	}
+	if !x.node(nodeID) {
+		return nodeNotFound()
+	}
+	return nil
 }

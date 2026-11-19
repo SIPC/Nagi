@@ -15,15 +15,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// 操作员不能借容器配置拿到节点的 root（见 docs/node-access.md#操作员不能借-compose-拿到节点-root）。
-// 管理员不受这些限制。
+// 没有「特权配置」权限的成员不能借容器配置拿到节点的 root（见 docs/node-access.md#操作员不能借-compose-拿到节点-root）。
+// 管理员和有这项权限的成员不受这些限制。
 
 func operatorLimited(ctx context.Context) bool {
-	return auth.CurrentUser(ctx).Role != auth.RoleAdmin
+	return !auth.CurrentUser(ctx).Can(auth.PermPrivileged)
 }
 
 func adminOnlyConfig(reasons []string) error {
-	return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("以下配置仅管理员可保存：%s", privilegeReasons(reasons)))
+	return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("以下配置需要「特权配置」权限：%s", privilegeReasons(reasons)))
 }
 
 // privilegeReasons 是 spec.PrivilegeReasons 的结果，显示时把面板自己的字段换成界面上的名称（compose 的写法照原样）。
@@ -121,9 +121,9 @@ func sameVars(a, b *nagiv1.ContainerConfig) bool {
 }
 
 // checkPrivilegedEntry：容器部署的配置有特权（以特权运行、挂载主机目录等）时，进入容器就等于拿到节点的 root，
-// 终端和执行命令只有管理员能用。role 是当前的角色（打开着的终端重查时传重新读出的）。
-func (a *API) checkPrivilegedEntry(ctx context.Context, role, projectID, container string) error {
-	if role == auth.RoleAdmin {
+// 终端和执行命令要「特权配置」权限。u 是当前的成员（打开着的终端重查时传重新读出的）。
+func (a *API) checkPrivilegedEntry(ctx context.Context, u auth.User, projectID, container string) error {
+	if u.Can(auth.PermPrivileged) {
 		return nil
 	}
 	cfg, err := a.Projects.RunningConfig(ctx, projectID, container)
@@ -136,12 +136,12 @@ func (a *API) checkPrivilegedEntry(ctx context.Context, role, projectID, contain
 	return nil
 }
 
-var errPrivilegedEntry = i18n.New("特权容器仅限管理员进入")
+var errPrivilegedEntry = i18n.New("进入特权容器需要「特权配置」权限")
 
 // checkPrivilegedWrite：同样的道理，往特权容器的卷和容器目录里写文件（上传、MCP 写文件）只给管理员，
 // 容器会以 root 运行这些文件。
-func (a *API) checkPrivilegedWrite(ctx context.Context, role, projectID, container string) error {
-	if err := a.checkPrivilegedEntry(ctx, role, projectID, container); errors.Is(err, errPrivilegedEntry) {
+func (a *API) checkPrivilegedWrite(ctx context.Context, u auth.User, projectID, container string) error {
+	if err := a.checkPrivilegedEntry(ctx, u, projectID, container); errors.Is(err, errPrivilegedEntry) {
 		return errPrivilegedWrite
 	} else if err != nil {
 		return err
@@ -149,7 +149,7 @@ func (a *API) checkPrivilegedWrite(ctx context.Context, role, projectID, contain
 	return nil
 }
 
-var errPrivilegedWrite = i18n.New("特权容器的文件仅限管理员修改")
+var errPrivilegedWrite = i18n.New("修改特权容器的文件需要「特权配置」权限")
 
 // errTokenNoExec：访问令牌没有勾「执行命令」时不能改容器里的文件（能执行命令本来就能读写容器里的文件，
 // 反过来，没有这个权限的令牌也不能借文件接口往容器里放它会运行的东西，见 docs/mcp.md#权限）。
@@ -162,7 +162,10 @@ func (a *API) checkVolumeWrite(ctx context.Context, projectID, container string)
 	if u.TokenID != 0 && !u.AllowExec {
 		return errTokenNoExec
 	}
-	return a.checkPrivilegedWrite(ctx, u.Role, projectID, container)
+	if !u.Can(auth.PermFilesWrite) {
+		return errNoPermission
+	}
+	return a.checkPrivilegedWrite(ctx, u, projectID, container)
 }
 
 // checkOperatorSharedEnv：有特权的容器引用的共享变量，操作员不能改（和容器自己的变量一样，见 checkOperatorConfig）。
@@ -187,7 +190,7 @@ func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID s
 			same := !spec.SharedEnvChanged(cfg, c.GetName(), p.GetSettings().GetSharedEnv(), vars) ||
 				p.GetHasSharedEnvDraft() && !spec.SharedEnvChanged(cfg, c.GetName(), p.GetSharedEnvDraft(), vars)
 			if !same {
-				return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("容器 %s 有特权，它引用的共享变量仅管理员可修改", c.GetName()))
+				return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("容器 %s 有特权，修改它引用的共享变量需要「特权配置」权限", c.GetName()))
 			}
 		}
 	}
@@ -216,5 +219,5 @@ func (s *projectService) checkOperatorDir(ctx context.Context, nodeID, dir strin
 	if root != "." && root != "/" && path.IsAbs(root) && strings.HasPrefix(clean, root+"/") {
 		return nil
 	}
-	return connect.NewError(connect.CodePermissionDenied, i18n.New("项目根目录以外的容器目录仅管理员可设置"))
+	return connect.NewError(connect.CodePermissionDenied, i18n.New("项目根目录以外的容器目录需要「特权配置」权限"))
 }

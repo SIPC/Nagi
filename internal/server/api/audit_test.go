@@ -102,7 +102,7 @@ func actions(events []*nagiv1.AuditEvent) string {
 func TestAuditRecordsAndFilters(t *testing.T) {
 	h := newAuditHarness(t)
 	ctx := context.Background()
-	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.RoleAdmin); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
 	// 登录失败：同一 IP 第一次单独记一条，之后只计数。

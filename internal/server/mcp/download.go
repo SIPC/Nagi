@@ -32,11 +32,11 @@ const (
 func init() {
 	ln := nagiv1connect.NodeServiceListNodesProcedure
 	allTools = append(allTools,
-		def(tool{name: "get_download_link", title: "Get download link", exec: true, adminOnly: true,
+		def(tool{name: "get_download_link", title: "Get download link", exec: true,
 			description: "Administrators only, with the run-commands permission. Get a link to download a file or directory (directories as .tar.gz) of a container volume straight from its node, for another machine or a download manager: an HTTPS link valid for 5 minutes when the node has an IP certificate; otherwise, when the node only has the encrypted HTTP fallback, a command that downloads and decrypts it, for Linux/macOS (curl + openssl) and for Windows (PowerShell). The command contains the decryption key, so it ends up in this conversation: only hand it to the user. Fails when the node's direct download is off or unavailable; use read_file for small files. Recorded like a download.",
 			procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure}},
 			toolGetDownloadLink),
-		def(tool{name: "get_node_download_link", title: "Get node download link", exec: true, nodeExec: true, adminOnly: true,
+		def(tool{name: "get_node_download_link", title: "Get node download link", exec: true, nodeExec: true,
 			description: "Administrators with the node terminal permission only. Like get_download_link, for a file or directory on a node's file system (the paths read_node_file can read). The command for the encrypted HTTP fallback contains the decryption key and ends up in this conversation.",
 			procedures:  []string{ln}},
 			toolGetNodeDownloadLink),

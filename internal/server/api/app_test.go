@@ -25,7 +25,7 @@ func TestPasswordElevationListed(t *testing.T) {
 func TestAppProcedureRoles(t *testing.T) {
 	for _, p := range []string{nagiv1connect.AppServiceInfoProcedure, nagiv1connect.AppServiceLogoutProcedure} {
 		for _, role := range []string{auth.RoleAdmin, auth.RoleOperator, auth.RoleViewer} {
-			if !auth.Allowed(role, p) {
+			if !auth.Allowed(auth.PresetUser(role), p) {
 				t.Errorf("%s 不能调用 %s", role, p)
 			}
 		}

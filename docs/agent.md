@@ -286,7 +286,7 @@ docker compose -p nagi-<项目 ID>-<容器名> \
 
 节点页的「镜像」标签管理节点上的 Docker 镜像（`internal/agent/nodeimages.go`，面板只转发：`internal/server/api/nodeimages.go`）：列出、删除、一键清理、拉取。
 
-- **只有管理员**：`ListNodeImages` 登记在 `adminReads`，删除、清理、拉取是 `NodeService` 的修改，默认只给管理员。操作员、只读成员看不到这个标签。备用面板上可以查看，按钮置灰（节点的 `ListImages` 在 `readOnlyRPCs` 里）。访问令牌（MCP）也只给管理员的：查看不用额外权限，删除、清理、拉取要勾「可修改」（见 [mcp.md](mcp.md#节点镜像)）。
+- **要「节点镜像」权限**（见 [panel.md](panel.md#权限)，预置角色都没有）：查看、删除、清理、拉取都登记在 `auth/perms.go`。没有权限的成员看不到这个标签。备用面板上可以查看，按钮置灰（节点的 `ListImages` 在 `readOnlyRPCs` 里）。访问令牌（MCP）也只给管理员的：查看不用额外权限，删除、清理、拉取要勾「可修改」（见 [mcp.md](mcp.md#节点镜像)）。
 - **删除和清理要先做高权限确认**（`DeleteNodeImages`、`PruneNodeImages` 登记在 `elevationRequired`）：会删掉节点上的东西，和节点文件一样多验证一次身份，15 分钟内不再询问。界面在确认框之后、发出请求之前验证。访问令牌做不了交互式的确认，管理员的、勾了「可修改」的令牌调用时算确认过（`auth.User.ElevatedFor`，见 [mcp.md](mcp.md#高权限确认)），MCP 工具改用预览和确认码。拉取镜像不删任何东西，不要求确认。
 - **列表**：每个镜像的标签、ID、大小（悬停是只属于它的大小）、创建时间、使用它的容器（包括已停止的；Nagi 的容器写项目和容器名，项目内网代理单独标出，其余写 Docker 里的容器名），以及 Nagi 需要它的原因：
   - **已部署的版本**：本节点上容器的配置缓存里部署时记下的镜像（`ContainerSpec.images`，带摘要或镜像 ID），以及镜像表单填的镜像（按标签，部署中途刚拉下、还没记进版本的也算）。容器已停止、甚至 Docker 里的容器被删了，镜像也保留，否则启动或回滚时要重新拉。

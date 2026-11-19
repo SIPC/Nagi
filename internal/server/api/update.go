@@ -11,6 +11,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/release"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -114,7 +115,9 @@ func (s *settingsService) CheckPanelUpdate(ctx context.Context, req *connect.Req
 		out.Unsupported = i18n.Localize(i18n.FromContext(ctx), err)
 		return connect.NewResponse(out), nil
 	}
-	c, err := s.updates.getChecked(ctx, req.Msg.GetForce(), release.ProxyFor(s.Panel.DataDir))
+	// 让面板马上联网检查（force）只给管理员（C2）；其他成员拿到的是缓存的结果。
+	force := req.Msg.GetForce() && auth.CurrentUser(ctx).IsAdmin()
+	c, err := s.updates.getChecked(ctx, force, release.ProxyFor(s.Panel.DataDir))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
 	}

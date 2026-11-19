@@ -79,14 +79,27 @@ func (s *projectService) ListProjects(ctx context.Context, _ *connect.Request[na
 
 func (s *projectService) CreateProject(ctx context.Context, req *connect.Request[nagiv1.CreateProjectRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
-	// 出站限制：非管理员新建项目时只能用默认值（拦截、不放行），和 UpdateProjectSettings 的规则一样。
-	if e := m.GetSettings().GetEgress(); e != nil && auth.CurrentUser(ctx).Role != auth.RoleAdmin {
+	// 新建项目时，没有相应权限的设置一律用默认值（和 UpdateProjectSettings 的规则一样）。
+	if st := m.GetSettings(); st != nil {
+		u := auth.CurrentUser(ctx)
+		if !u.Can(auth.PermAlerts) {
+			st.AlertRules = nil
+		}
+		if !u.Can(auth.PermSnapshots) {
+			st.SnapshotIntervalMinutes, st.SnapshotLimit, st.SnapshotSchedule = 0, 0, nil
+		}
+		if !u.Can(auth.PermNetwork) {
+			st.InternalPorts = nil
+		}
+	}
+	// 出站限制：没有「网络和域名」权限时只能用默认值（拦截、不放行）。
+	if e := m.GetSettings().GetEgress(); e != nil && !auth.CurrentUser(ctx).Can(auth.PermNetwork) {
 		clean, err := spec.CleanEgress(e)
 		if err != nil {
 			return nil, toConnect(err)
 		}
 		if !spec.EgressEqual(clean, &nagiv1.Egress{Mode: spec.EgressBlock}) {
-			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能修改出站限制"))
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("没有「网络和域名」权限，不能修改出站限制"))
 		}
 	}
 	cr := projects.CreateRequest{Name: m.GetName(), NetworkName: m.GetNetworkName(), Settings: m.GetSettings()}
@@ -116,19 +129,14 @@ func (s *projectService) GetProject(ctx context.Context, req *connect.Request[na
 
 func (s *projectService) UpdateProjectSettings(ctx context.Context, req *connect.Request[nagiv1.UpdateProjectSettingsRequest]) (*connect.Response[nagiv1.Project], error) {
 	m := req.Msg
-	// 出站限制（见 docs/agent.md#出站限制）：放行等于扩大权限，和特权配置一样只有管理员能改。
-	if e := m.GetSettings().GetEgress(); e != nil && auth.CurrentUser(ctx).Role != auth.RoleAdmin {
+	// 项目设置里没有相应权限的部分（告警规则、快照、内部端口和出站限制）保持原样：这些字段在回复里本来就去掉了，
+	// 界面送回来的是空的，不能当作清空。
+	if u := auth.CurrentUser(ctx); !u.IsAdmin() && m.GetSettings() != nil {
 		cur, err := s.Projects.Get(ctx, m.GetProjectId())
 		if err != nil {
 			return nil, toConnect(err)
 		}
-		clean, err := spec.CleanEgress(e)
-		if err != nil {
-			return nil, toConnect(err)
-		}
-		if !spec.EgressEqual(clean, cur.GetProject().GetSettings().GetEgress()) {
-			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能修改出站限制"))
-		}
+		keepSettings(u, m.Settings, cur.GetProject().GetSettings())
 	}
 	p, err := s.Projects.UpdateSettings(ctx, m.GetProjectId(), m.GetBaseRevision(), m.GetName(), m.GetNetworkName(), m.GetSettings())
 	if err != nil {
@@ -253,7 +261,10 @@ func (s *projectService) StreamLogs(ctx context.Context, req *connect.Request[na
 		u := auth.CurrentUser(ctx)
 		procedure := req.Spec().Procedure
 		go s.watchSession(ctx, token, u, func(cur auth.User) error {
-			return s.containerAccess(ctx, cur, m.GetProjectId(), func(role string) bool { return auth.Allowed(role, procedure) })
+			if !auth.Allowed(cur, procedure) {
+				return errRoleChanged
+			}
+			return s.containerAccess(ctx, cur, m.GetProjectId(), auth.PermLogs)
 		}, func(err error) {
 			stopped.Store(&err)
 			cancel()
@@ -301,8 +312,8 @@ func (s *projectService) SetBackupNodes(ctx context.Context, req *connect.Reques
 	// 指定副本的存放位置会在节点上建目录、写数据，只有管理员能做，而且要先做高权限确认（见 docs/snapshot.md#副本的存放位置）。
 	if slices.ContainsFunc(slices.Collect(maps.Values(m.GetReplicaDirs())), func(d string) bool { return strings.TrimSpace(d) != "" }) {
 		u := auth.CurrentUser(ctx)
-		if u.Role != auth.RoleAdmin {
-			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("只有管理员能指定副本的存放位置"))
+		if !u.Can(auth.PermNodeRoot) {
+			return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("指定副本的存放位置需要「节点终端和文件」权限"))
 		}
 		// 和单独修改存放位置同一条规则（访问令牌见 auth.User.ElevatedFor）。
 		if !u.ElevatedFor(nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure) {
@@ -542,4 +553,20 @@ func (s *projectService) LogoutRegistry(ctx context.Context, req *connect.Reques
 func (s *projectService) CheckImages(ctx context.Context, req *connect.Request[nagiv1.ProjectRef]) (*connect.Response[nagiv1.CheckImagesResponse], error) {
 	list, err := s.Projects.CheckImages(ctx, req.Msg.GetProjectId())
 	return reply(&nagiv1.CheckImagesResponse{Updates: list}, err)
+}
+
+// keepSettings 把成员没有权限改的项目设置换回现在的值（见 UpdateProjectSettings）。
+func keepSettings(u auth.User, next, cur *nagiv1.ProjectSettings) {
+	if cur == nil {
+		cur = &nagiv1.ProjectSettings{}
+	}
+	if !u.Can(auth.PermAlerts) {
+		next.AlertRules = cur.GetAlertRules()
+	}
+	if !u.Can(auth.PermSnapshots) {
+		next.SnapshotIntervalMinutes, next.SnapshotLimit, next.SnapshotSchedule = cur.GetSnapshotIntervalMinutes(), cur.GetSnapshotLimit(), cur.GetSnapshotSchedule()
+	}
+	if !u.Can(auth.PermNetwork) {
+		next.InternalPorts, next.Egress = cur.GetInternalPorts(), cur.GetEgress()
+	}
 }

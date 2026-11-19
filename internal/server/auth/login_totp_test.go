@@ -28,7 +28,7 @@ func TestLoginTOTPLimitedPerAccount(t *testing.T) {
 	defer d.Close()
 	q := store.New(d)
 	s := New(q, plainSealer{})
-	id, err := s.CreateUser(ctx, "admin", "correct horse", RoleAdmin)
+	id, err := s.CreateUser(ctx, "admin", "correct horse", AdminRoleID)
 	if err != nil {
 		t.Fatal(err)
 	}

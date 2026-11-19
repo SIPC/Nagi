@@ -65,6 +65,7 @@ export default {
     help: "When a browser downloads a file from this node, it first tries to download directly from the node, bypassing the panel and the node network, and falls back to the panel if it can't connect. The node gets a Let's Encrypt certificate for its public IP (valid 6 days, renewed automatically). Port 443 must be reachable from the internet and not used by another program. Without a certificate, the node uses encrypted HTTP instead: file menus offer a download command that downloads with curl and decrypts locally with OpenSSL.",
     confirm: "Turn off direct download? Files downloaded from this node will then go through the panel.",
     ready: (address) => `Available (${address})`,
+    readyHidden: "Available",
     pending: "Getting a certificate",
     noAddress: "No public address, downloads go through the panel",
     failed: (error) => `Unavailable: ${error}`,

@@ -49,7 +49,8 @@ function useSaveEgress(project: Project) {
 }
 
 export function EgressSection({ project }: { project: Project }) {
-  const { isAdmin } = useRole();
+  // 出站限制归「网络和域名」。
+  const isAdmin = useRole().can("project.network");
   const m = t.projectSettings.egress;
   const mode = modeOf(project);
   const allow = project.settings?.egress?.allow ?? [];

@@ -59,7 +59,7 @@ func newLinkHarness(t *testing.T) *linkHarness {
 	}
 	for _, q := range []string{
 		`INSERT INTO users (id, username, password_hash, created_at, role, all_projects, all_nodes) VALUES (1, 'ad', 'x', 0, 'admin', 1, 1)`,
-		`INSERT INTO users (id, username, password_hash, created_at, role, all_projects, all_nodes) VALUES (2, 'op', 'x', 0, 'operator', 0, 0)`,
+		`INSERT INTO users (id, username, password_hash, created_at, role, role_id, all_projects, all_nodes) VALUES (2, 'op', 'x', 0, 'member', 2, 0, 0)`,
 		`INSERT INTO projects (id, name, network_name, revision, created_at, settings) VALUES ('p1', 'one', 'one', 1, 0, x'')`,
 		`INSERT INTO user_projects (user_id, project_id) VALUES (2, 'p1')`,
 		`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n1', 'a', 0, x'01')`,
@@ -243,7 +243,7 @@ func TestDownloadLinkRecheck(t *testing.T) {
 	cases := map[string]func(h *linkHarness, token string){
 		"退出登录":   func(h *linkHarness, token string) { h.a.Auth.Logout(context.Background(), token) },
 		"删除用户":   func(h *linkHarness, _ string) { h.exec(`DELETE FROM users WHERE id = 2`) },
-		"降为只读":   func(h *linkHarness, _ string) { h.exec(`UPDATE users SET role = 'viewer' WHERE id = 2`) },
+		"降为只读":   func(h *linkHarness, _ string) { h.exec(`UPDATE users SET role_id = 3 WHERE id = 2`) },
 		"移出项目范围": func(h *linkHarness, _ string) { h.exec(`DELETE FROM user_projects`) },
 		"要求重新验证": func(h *linkHarness, _ string) { h.exec(`UPDATE sessions SET reverify = 'tls_changed'`) },
 	}
@@ -269,7 +269,7 @@ func TestDownloadLinkNode(t *testing.T) {
 		t.Fatalf("节点文件：%d %q", rec.Code, h.opens)
 	}
 	// 管理员降为操作员后不能再用。
-	h.exec(`UPDATE users SET role = 'operator' WHERE id = 1`)
+	h.exec(`UPDATE users SET role = 'member', role_id = 2 WHERE id = 1`)
 	if rec := h.get(url); rec.Code != http.StatusForbidden {
 		t.Errorf("降权后：%d", rec.Code)
 	}
@@ -280,7 +280,7 @@ func TestDownloadLinkNode(t *testing.T) {
 		t.Errorf("操作员：%d", rec.Code)
 	}
 	// 备用面板上不能下载节点文件，卷文件照常。
-	h.exec(`UPDATE users SET role = 'admin' WHERE id = 1`)
+	h.exec(`UPDATE users SET role = 'admin', role_id = 1 WHERE id = 1`)
 	url = h.issue(admin, downloadClaims{Kind: linkKindNode, Node: "n1", Path: "/etc/hosts"})
 	h.a.Panel.Standby = &standby.Client{Info: &standby.Info{}}
 	if rec := h.get(url); rec.Code != http.StatusServiceUnavailable {

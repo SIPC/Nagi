@@ -1,8 +1,9 @@
+import { useRole } from "@/components/role";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { errorMessage, nodeClient, projectClient } from "@/lib/api";
+import { errorMessage, orOther, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
@@ -54,7 +55,8 @@ function addRate(rates: MeshRates, node: string, name: string, value: number, ke
     inc(rates[relay[1] as "rx" | "tx"], node, value);
     return;
   }
-  const m = /^m:([0-9a-f]+):(rx|tx)$/.exec(name);
+  // m:other 是到看不到的节点的流量合在一起（见 docs/panel.md#访问范围）：只从对外流量里扣，不画到哪个节点。
+  const m = /^m:([0-9a-f]+|other):(rx|tx)$/.exec(name);
   if (!m) return;
   const dir = m[2] as "rx" | "tx";
   const peer = keys.peers.get(m[1]);
@@ -217,7 +219,7 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
   const rows = merged.rows;
   const flows = merged.flows;
   const order = new Map(rows.map((r, i) => [r.id, i]));
-  const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? id;
+  const nameOf = (id: string) => rows.find((r) => r.id === id)?.name ?? orOther(id);
   const isOffline = (id: string) => rows.some((r) => r.id === id && r.offline);
   const top = [...flows].sort((a, b) => b.rate - a.rate)[0];
 
@@ -611,6 +613,9 @@ export function OverviewPage() {
   const r = metricRanges.find((x) => x.value === range)!;
 
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: refresh });
+  // 没有「查看节点」时节点的数据一律不显示：节点数、流量和下面的节点区块（面板也不返回节点）。添加节点只给管理员。
+  const { can, isAdmin } = useRole();
+  const canNodes = can("node.view");
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), refetchInterval: refresh });
   const all = (nodes.data?.nodes ?? []).filter((n) => !n.pending);
   const online = all.filter((n) => n.online);
@@ -784,7 +789,7 @@ export function OverviewPage() {
     if (points.length > 1 && (count.get(points[points.length - 1][0]) ?? 0) < (count.get(points[points.length - 2][0]) ?? 0)) points.pop();
     return points;
   };
-  const nameOf = (id: string) => (id === panelRow ? o.flow.panel : (all.find((n) => n.id === id)?.name ?? id));
+  const nameOf = (id: string) => (id === panelRow ? o.flow.panel : (all.find((n) => n.id === id)?.name ?? orOther(id)));
   const pairTotals = new Map<string, number>();
   for (const b of buckets.values()) for (const [k, v] of b.pairs) inc(pairTotals, k, v);
   const pairKeys = [...pairTotals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
@@ -846,7 +851,7 @@ export function OverviewPage() {
         title={o.title}
         description={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            {nodes.isSuccess && <span className="flex [&>span]:leading-5">{health}</span>}
+            {canNodes && nodes.isSuccess && <span className="flex [&>span]:leading-5">{health}</span>}
             <span>{o.updates}</span>
           </span>
         }
@@ -855,20 +860,24 @@ export function OverviewPage() {
       {projects.error && !projects.data && <QueryError className="mb-6" error={errorMessage(projects.error)} onRetry={() => projects.refetch()} />}
       {/* 列数固定，不留单独掉行的一个：宽屏 6 列，窄一些时 3 列。 */}
       <div className="grid grid-cols-3 gap-4 lg:grid-cols-6 lg:gap-x-8 max-md:grid-cols-2">
-        <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />
+        {canNodes && <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />}
         <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
         <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />
-        <Stat label={o.stats.extIn} help={o.stats.estimated} value={ready ? inValue : dash} n={extIn} unit={ready ? inUnit : undefined} />
-        <Stat label={o.stats.extOut} help={o.stats.estimated} value={ready ? outValue : dash} n={extOut} unit={ready ? outUnit : undefined} />
-        <Stat label={o.stats.mesh} help={o.stats.meshTitle} value={sample ? meshValue : dash} n={meshTotal} unit={sample ? meshUnit : undefined} />
+        {canNodes && (
+          <>
+            <Stat label={o.stats.extIn} help={o.stats.estimated} value={ready ? inValue : dash} n={extIn} unit={ready ? inUnit : undefined} />
+            <Stat label={o.stats.extOut} help={o.stats.estimated} value={ready ? outValue : dash} n={extOut} unit={ready ? outUnit : undefined} />
+            <Stat label={o.stats.mesh} help={o.stats.meshTitle} value={sample ? meshValue : dash} n={meshTotal} unit={sample ? meshUnit : undefined} />
+          </>
+        )}
       </div>
 
-      {noNodes ? (
+      {!canNodes ? null : noNodes ? (
         <div className="mt-6 border-t pt-6">
           <Empty
             title={o.noNodes.title}
             action={
-              <ButtonLink to="/nodes" search={{ add: true }}>{o.noNodes.action}</ButtonLink>
+              isAdmin && <ButtonLink to="/nodes" search={{ add: true }}>{o.noNodes.action}</ButtonLink>
             }
           >
             {o.noNodes.text}

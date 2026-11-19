@@ -35,15 +35,16 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
-		if !auth.CanOperate(u.Role) {
-			fail(http.StatusForbidden, i18n.New("当前账号没有权限执行这个操作"))
+		// 上传的文件随后由部署用上（Deploy 的 use_upload），要「部署」权限。
+		if !u.Can(auth.PermDeploy) {
+			fail(http.StatusForbidden, errNoPermission)
 			return
 		}
 		if err := a.projectAllowed(r.Context(), u, r.URL.Query().Get("project")); err != nil {
 			fail(http.StatusNotFound, err)
 			return
 		}
-		if err := a.checkPrivilegedWrite(r.Context(), u.Role, r.URL.Query().Get("project"), r.URL.Query().Get("container")); err != nil {
+		if err := a.checkPrivilegedWrite(r.Context(), u, r.URL.Query().Get("project"), r.URL.Query().Get("container")); err != nil {
 			fail(http.StatusForbidden, err)
 			return
 		}

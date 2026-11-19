@@ -1,3 +1,4 @@
+import { WriteGate } from "@/components/perm";
 import { useState } from "react";
 import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,16 +24,36 @@ import { containerLabel } from "@/pages/project-containers";
 
 // 「设置」标签页：基本设置、共享变量、部署记录、删除项目。
 
+// 每块要的权限（见 internal/server/auth/perms.go）：没有的不显示；基本设置都能看，改要「项目管理」。
 export function SettingsTab({ project }: { project: Project }) {
+  const { can } = useRole();
   return (
     <div>
-      <GeneralSettings project={project} />
-      <SnapshotScheduleSection project={project} />
-      <AlertRulesSection project={project} />
-      <EgressSection key={project.revision} project={project} />
-      <SharedEnv project={project} />
-      <Deployments project={project} />
-      <DeleteProject project={project} />
+      <WriteGate allowed={can("project.manage")}>
+        <GeneralSettings project={project} />
+      </WriteGate>
+      {can("project.snapshots") && (
+        <WriteGate allowed={can("project.manage")}>
+          <SnapshotScheduleSection project={project} />
+        </WriteGate>
+      )}
+      {can("project.alerts") && (
+        <WriteGate allowed={can("project.manage")}>
+          <AlertRulesSection project={project} />
+        </WriteGate>
+      )}
+      {can("project.network") && (
+        <WriteGate allowed={can("project.manage")}>
+          <EgressSection key={project.revision} project={project} />
+        </WriteGate>
+      )}
+      {can("project.config") && (
+        <WriteGate allowed={can("project.deploy")}>
+          <SharedEnv project={project} />
+          <Deployments project={project} />
+        </WriteGate>
+      )}
+      {can("project.manage") && <DeleteProject project={project} />}
     </div>
   );
 }
@@ -156,7 +177,8 @@ function TextSettingDialog({
 // GeneralSettings：名称、网络名、分组，一项一行，「编辑」打开对话框。
 function GeneralSettings({ project }: { project: Project }) {
   const m = t.projectSettings.general;
-  const { isAdmin } = useRole();
+  // 分组归「成员」权限。
+  const isAdmin = useRole().can("panel.members");
   const update = useUpdateSettings(project);
   const [editing, setEditing] = useState<"name" | "network" | "group" | null>(null);
   const close = () => setEditing(null);
@@ -321,7 +343,8 @@ function ScheduleDialog({ project, onClose }: { project: Project; onClose: () =>
 function SharedEnv({ project }: { project: Project }) {
   const m = t.projectSettings.sharedEnv;
   const queryClient = useQueryClient();
-  const { isViewer } = useRole();
+  const { can } = useRole();
+  const isViewer = !can("project.config");
   const [sharedEnv, setSharedEnv] = useState(envToText(project.hasSharedEnvDraft ? project.sharedEnvDraft : project.settings?.sharedEnv));
   // 编辑器只在挂载时读一次内容，放弃草稿后换一个 key 让它重新读。
   const [editorKey, setEditorKey] = useState(0);
@@ -444,7 +467,7 @@ function SharedEnv({ project }: { project: Project }) {
 // 接口每次提交完整的设置，其余设置照原样带上；保存后项目重新加载，换 key 让表单的起点跟着更新。
 function AlertRulesSection({ project }: { project: Project }) {
   const queryClient = useQueryClient();
-  const { isViewer } = useRole();
+  const isViewer = !useRole().can("project.manage");
   const s = project.settings;
   return (
     <Section title={t.alerts.rules} help={t.alerts.projectRulesHelp}>

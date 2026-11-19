@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { errorMessage, knownNodes, nodeClient, projectClient } from "@/lib/api";
+import { errorMessage, orOther, knownNodes, nodeClient, projectClient } from "@/lib/api";
 import { t } from "@/i18n";
 import { useRun } from "@/components/run";
 import { confirmAction } from "@/components/confirm";
@@ -72,9 +72,10 @@ export function ServicePage({ projectId, container: name, service, view, onView 
 function ServiceDetail({ project, container, service, list, view: viewProp, onView }: { project: Project; container: Container; service: string; list: ServiceStatus[]; view: ServiceView; onView: (v: ServiceView) => void }) {
   const s = t.service;
   const d = t.projectContainers.detail;
-  const { isViewer } = useRole();
-  // 只读角色没有终端，直接打开这个地址时显示概览。
-  const view = isViewer && viewProp === "terminal" ? "overview" : viewProp;
+  const { can } = useRole();
+  // 没有相应权限的标签不显示，直接打开这些地址时显示概览。
+  const allowed: Record<ServiceView, boolean> = { overview: true, logs: can("project.logs"), terminal: can("project.terminal"), metrics: true };
+  const view = allowed[viewProp] ? viewProp : "overview";
   const { run, busy, output, hasOutput } = useRun(project.id);
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const node = knownNodes(nodes.data).find((n) => n.id === container.nodeId);
@@ -109,7 +110,7 @@ function ServiceDetail({ project, container, service, list, view: viewProp, onVi
           </span>
         }
         actions={
-          deployed && (
+          deployed && can("project.control") && (
             <>
               {running || !nodeOnline ? (
                 <Button
@@ -153,20 +154,15 @@ function ServiceDetail({ project, container, service, list, view: viewProp, onVi
         className="mb-6 max-md:mb-4"
         value={view}
         onChange={onView}
-        items={[
-          { value: "overview", label: s.tabs.overview },
-          { value: "logs", label: s.tabs.logs },
-          ...(isViewer ? [] : [{ value: "terminal" as const, label: s.tabs.terminal }]),
-          { value: "metrics", label: s.tabs.metrics },
-        ]}
+        items={serviceTabs.filter((v) => allowed[v]).map((v) => ({ value: v, label: s.tabs[v] }))}
       />
       <Slide id={view} index={serviceTabs.indexOf(view)}>
         {hasOutput && <div className="mb-6">{output}</div>}
-        {view === "overview" && <ServiceOverview project={project} container={container} service={service} list={list} offline={!nodeOnline} nodeName={node?.name ?? container.nodeId} />}
+        {view === "overview" && <ServiceOverview project={project} container={container} service={service} list={list} offline={!nodeOnline} nodeName={node?.name ?? orOther(container.nodeId)} />}
         {view === "logs" && (
           <Logs projectId={project.id} container={container.name} services={[service]} containers={list.map((x) => x.containerId).filter(Boolean).join(",")} fixed={service} />
         )}
-        {view === "terminal" && !isViewer && <TerminalView projectId={project.id} container={container.name} services={runningNames} />}
+        {view === "terminal" && <TerminalView projectId={project.id} container={container.name} services={runningNames} />}
         {view === "metrics" && <ServiceMetrics project={project} container={container} service={service} />}
       </Slide>
     </>

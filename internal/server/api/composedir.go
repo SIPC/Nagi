@@ -44,8 +44,8 @@ func filepathToSlash(p string) string {
 
 // composeDir 读取节点上的现有目录，返回导入后的容器组配置和给用户看的预览。
 func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.ContainerConfig, *nagiv1.ComposeDirPreview, error) {
-	if auth.CurrentUser(ctx).Role != auth.RoleAdmin {
-		return nil, nil, connect.NewError(connect.CodePermissionDenied, i18n.New("当前账号没有权限执行这个操作"))
+	if err := a.nodeRootAllowed(ctx, auth.CurrentUser(ctx), nodeID); err != nil {
+		return nil, nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 	conn, err := a.Nodes.Get(nodeID)
 	if err != nil {

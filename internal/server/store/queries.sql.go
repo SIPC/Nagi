@@ -280,7 +280,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)
+INSERT INTO users (username, password_hash, created_at, role, role_id) VALUES (?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -289,6 +289,7 @@ type CreateUserParams struct {
 	PasswordHash string
 	CreatedAt    int64
 	Role         string
+	RoleID       int64
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, error) {
@@ -297,6 +298,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (int64, 
 		arg.PasswordHash,
 		arg.CreatedAt,
 		arg.Role,
+		arg.RoleID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -606,16 +608,17 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (GetSessionR
 }
 
 const setUserRole = `-- name: SetUserRole :exec
-UPDATE users SET role = ? WHERE id = ?
+UPDATE users SET role = ?, role_id = ? WHERE id = ?
 `
 
 type SetUserRoleParams struct {
-	Role string
-	ID   int64
+	Role   string
+	RoleID int64
+	ID     int64
 }
 
 func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error {
-	_, err := q.db.ExecContext(ctx, setUserRole, arg.Role, arg.ID)
+	_, err := q.db.ExecContext(ctx, setUserRole, arg.Role, arg.RoleID, arg.ID)
 	return err
 }
 
@@ -892,7 +895,7 @@ func (q *Queries) GetStandbyPanelByServerFP(ctx context.Context, serverFp string
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes FROM users WHERE id = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes, role_id, nodes_follow FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -911,12 +914,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Avatar,
 		&i.AllProjects,
 		&i.AllNodes,
+		&i.RoleID,
+		&i.NodesFollow,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes FROM users WHERE username = ?
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes, role_id, nodes_follow FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -935,6 +940,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Avatar,
 		&i.AllProjects,
 		&i.AllNodes,
+		&i.RoleID,
+		&i.NodesFollow,
 	)
 	return i, err
 }
@@ -1666,7 +1673,7 @@ func (q *Queries) ListUserProjects(ctx context.Context, userID int64) ([]string,
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes FROM users ORDER BY id
+SELECT id, username, password_hash, created_at, totp_secret, totp_last_step, language, role, display_name, avatar, all_projects, all_nodes, role_id, nodes_follow FROM users ORDER BY id
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -1691,6 +1698,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Avatar,
 			&i.AllProjects,
 			&i.AllNodes,
+			&i.RoleID,
+			&i.NodesFollow,
 		); err != nil {
 			return nil, err
 		}

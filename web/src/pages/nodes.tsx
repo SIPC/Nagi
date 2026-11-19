@@ -293,7 +293,7 @@ async function approve(n: Node) {
 export type NodesView = "cards" | MapLayer;
 
 export function NodesPage({
-  view,
+  view: requestedView,
   onView,
   tags: tagFilter,
   onTags,
@@ -309,7 +309,10 @@ export function NodesPage({
 }) {
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
-  const { isAdmin } = useRole();
+  const { isAdmin, can } = useRole();
+  // 高可用视图画的是顶替和备份，要相应的权限（面板的回复里也没有）；添加节点、移交只给管理员。
+  const canHA = can("project.ha") || can("project.backup");
+  const view: NodesView = requestedView === "ha" && !canHA ? "cards" : requestedView;
   const status = useUpdateStatus(isAdmin);
   const [dialog, setDialog] = useState<"add" | "handover" | "tags" | null>(openAdd && isAdmin ? "add" : null);
   useEffect(() => {
@@ -377,7 +380,7 @@ export function NodesPage({
                   items={[
                     { value: "cards", label: t.nodes.views.cards },
                     { value: "network", label: t.nodes.views.network },
-                    { value: "ha", label: t.nodes.views.ha },
+                    ...(canHA ? [{ value: "ha" as const, label: t.nodes.views.ha }] : []),
                   ]}
                 />
               </div>
@@ -394,11 +397,13 @@ export function NodesPage({
                 {canceling ? t.nodes.upgrade.canceling : t.nodes.upgrade.cancel}
               </Button>
             )}
-            <Button onClick={() => setDialog("add")}>
-              <Plus />
-              {t.nodes.addNode}
-            </Button>
-            {list.length > 0 && (
+            {isAdmin && (
+              <Button onClick={() => setDialog("add")}>
+                <Plus />
+                {t.nodes.addNode}
+              </Button>
+            )}
+            {isAdmin && list.length > 0 && (
               <Menu
                 items={[
                   ...(isAdmin && tags.length > 0 ? [{ label: t.labels.manageTags, onSelect: () => setDialog("tags") }] : []),
@@ -418,13 +423,15 @@ export function NodesPage({
         <Empty
           title={t.nodes.empty}
           action={
-            <Button onClick={() => setDialog("add")}>
-              <Plus />
-              {t.nodes.addNode}
-            </Button>
+            isAdmin && (
+              <Button onClick={() => setDialog("add")}>
+                <Plus />
+                {t.nodes.addNode}
+              </Button>
+            )
           }
         >
-          {t.nodes.addNodeDescription}
+          {isAdmin && t.nodes.addNodeDescription}
         </Empty>
       ) : (
         <Slide id={view} index={["cards", "network", "ha"].indexOf(view)}>
@@ -562,7 +569,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
   useEffect(() => {
     if (tab === "terminal") setShellOpened(true);
   }, [tab]);
-  const { isAdmin: canSeeUpgrades } = useRole();
+  const { isAdmin: canSeeUpgrades, can } = useRole();
   const status = useUpdateStatus(canSeeUpgrades);
   const panelVersion = usePanelVersion();
   const navigate = useNavigate();
@@ -587,11 +594,25 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       </>
     );
   }
-  // 节点访问只给管理员，备用面板上也不能用（见 docs/node-access.md）。
-  const showAccess = canSeeUpgrades && !readOnlyPanel;
-  // 镜像只给管理员（备用面板上只能查看），旧版本的节点没有这个功能，不显示标签（见 docs/agent.md#节点镜像）。
-  const showImages = canSeeUpgrades && !!n.info?.imageOps;
-  const tabs = nodeTabs.filter((x) => (showAccess || (x.value !== "terminal" && x.value !== "files")) && (showImages || x.value !== "images" || tab === "images"));
+  // 节点访问要「节点终端和文件」，备用面板上也不能用（见 docs/node-access.md）。
+  const showAccess = can("node.root") && !readOnlyPanel;
+  // 镜像要「节点镜像」（备用面板上只能查看），旧版本的节点没有这个功能，不显示标签（见 docs/agent.md#节点镜像）。
+  const showImages = can("node.images") && !!n.info?.imageOps;
+  // 其余标签：副本归「备份」，信任的面板只给管理员，设置要「节点管理」或「查看节点详情」。
+  const tabAllowed: Record<NodeTab, boolean> = {
+    metrics: true,
+    containers: true,
+    mesh: true,
+    terminal: showAccess,
+    files: showAccess,
+    images: showImages,
+    replicas: can("project.backup"),
+    panels: canSeeUpgrades,
+    settings: can("node.manage") || can("node.details"),
+  };
+  const tabs = nodeTabs.filter((x) => tabAllowed[x.value]);
+  const canManage = can("node.manage");
+  const details = can("node.details");
   const accessBlock = nodeAccessBlock(n);
   // 手机上进入文件页后，标题栏换成返回、目录名、更多（docs/ui.md）。
   const browsing = tab === "files" && showAccess && n.online && !accessBlock;
@@ -621,8 +642,9 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
         }
         meta={
           <>
-            <span>{n.address || n.id}</span>
-            {n.info && (
+            {/* 地址只给管理员；系统和版本要「查看节点详情」。 */}
+            {n.address && <span>{n.address}</span>}
+            {n.info && details && (
               <>
                 <span>{`${n.info.os}/${n.info.arch}`}</span>
                 {nodeSpec(n.info) && <span title={nodeSpecTitle(n.info, n.usage)}>{nodeSpec(n.info)}</span>}
@@ -644,14 +666,16 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
           </>
         }
         actions={
-          <Menu
-            items={[
-              { label: t.nodes.rename.action, onSelect: () => setRenaming(true) },
-              ...(canSeeUpgrades ? [{ label: t.labels.editTags, onSelect: () => setEditingTags(true) }] : []),
-              ...(canSeeUpgrades ? [{ label: n.isolated ? t.nodes.isolation.unisolate : t.nodes.isolation.isolate, onSelect: () => toggleIsolation(n, () => nodes.refetch()), danger: !n.isolated }] : []),
-              { label: t.nodes.removeNode, onSelect: remove, danger: true },
-            ]}
-          />
+          (canManage || can("panel.members")) && (
+            <Menu
+              items={[
+                ...(canManage ? [{ label: t.nodes.rename.action, onSelect: () => setRenaming(true) }] : []),
+                ...(can("panel.members") ? [{ label: t.labels.editTags, onSelect: () => setEditingTags(true) }] : []),
+                ...(canManage ? [{ label: n.isolated ? t.nodes.isolation.unisolate : t.nodes.isolation.isolate, onSelect: () => toggleIsolation(n, () => nodes.refetch()), danger: !n.isolated }] : []),
+                ...(canManage ? [{ label: t.nodes.removeNode, onSelect: remove, danger: true }] : []),
+              ]}
+            />
+          )
         }
       />
       <Dialog open={renaming} onClose={() => setRenaming(false)} title={t.nodes.rename.title} description={t.nodes.rename.description}>
@@ -682,7 +706,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               tone="warning"
               title={t.common.status.pendingApproval}
               actions={
-                <Button
+                canManage && <Button
                   onClick={async () => {
                     if (await approve(n)) nodes.refetch();
                   }}
@@ -704,10 +728,8 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
             <Slide id={tab} index={tabs.findIndex((x) => x.value === tab)}>
               {tab === "containers" ? (
                 <NodeContainers nodeId={n.id} online={n.online} />
-              ) : (tab === "terminal" || tab === "files") && !showAccess ? (
+              ) : !tabAllowed[tab] ? (
                 <Notice title={t.nodeAccess.gate.adminOnly} />
-              ) : tab === "images" && !canSeeUpgrades ? (
-                <Notice title={t.nodeImages.adminOnly} />
               ) : !n.online ? (
                 <Notice title={t.nodes.offlineTitle}>{t.nodes.offlineNotice}</Notice>
               ) : tab === "terminal" || tab === "files" ? (
@@ -968,7 +990,11 @@ function AddNode({ onClose }: { onClose: () => void }) {
 
 // NodeSettings：节点「设置」标签。和设置页一样用设置行：一行状态加一个按钮，表单放进对话框（docs/ui.md「节点详情」）。
 function NodeSettings({ n }: { n: Node }) {
-  const { isAdmin } = useRole();
+  // 修改节点设置要「节点管理」，路径要「查看节点详情」，副本的存放位置要「节点终端和文件」。
+  const { can } = useRole();
+  const isAdmin = can("node.manage");
+  const details = can("node.details");
+  const canRoot = can("node.root");
   const reclaim = useRun("");
   const moving = useRun("");
   const [editing, setEditing] = useState<"root" | "replicaDir" | "mirrors" | "alerts" | null>(null);
@@ -985,6 +1011,7 @@ function NodeSettings({ n }: { n: Node }) {
     <>
       <SettingRows>
         {/* 非管理员：有值的行只显示值、不放按钮；没有值可显示的行写原因（只有管理员能操作）。各行一致。 */}
+        {details && (
         <SettingRow label={t.nodes.settings.root} help={t.nodes.settings.rootHelp} description={<span className="font-mono">{root}</span>}>
           {isAdmin && (
             <Button variant="outline" onClick={() => setEditing("root")}>
@@ -992,6 +1019,8 @@ function NodeSettings({ n }: { n: Node }) {
             </Button>
           )}
         </SettingRow>
+        )}
+        {details && (
         <SettingRow
           label={t.nodes.replicaDir.title}
           help={t.nodes.replicaDir.help}
@@ -1009,13 +1038,14 @@ function NodeSettings({ n }: { n: Node }) {
             </span>
           }
         >
-          {isAdmin && n.info?.replicaDirs && (
+          {canRoot && n.info?.replicaDirs && (
             <Button variant="outline" disabled={moving.busy || !n.online} onClick={() => setEditing("replicaDir")}>
               {moving.busy && <Spinner />}
               {t.common.actions.edit}
             </Button>
           )}
         </SettingRow>
+        )}
         <SettingRow
           label={t.nodes.mirrors.title}
           help={t.nodes.mirrors.description}

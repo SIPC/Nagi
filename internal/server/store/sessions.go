@@ -36,17 +36,24 @@ type SessionState struct {
 	Role             string
 	AllProjects      int64
 	AllNodes         int64
+	// RoleID、Perms（角色的权限名称，逗号分隔）、NodesFollow：见 docs/panel.md#成员和角色。
+	RoleID      int64
+	Perms       string
+	NodesFollow int64
 }
+
+// RolePermsColumn 是读出用户 u 的角色权限（逗号分隔）的子查询。
+const RolePermsColumn = `COALESCE((SELECT group_concat(rp.permission) FROM role_permissions rp WHERE rp.role_id = u.role_id), '')`
 
 const sessionColumns = `s.id, s.token_hash, s.user_id, s.created_at, s.expires_at, s.elevated_until, s.elevated_ip, s.elevated_by, s.rotated_at,
 	s.challenge, s.challenge_at, s.public_key, s.key_until, s.user_agent, s.last_ip, s.last_seen, s.tls_fp, s.nets, s.reverify,
-	s.reverify_failures, u.username, u.role, u.all_projects, u.all_nodes`
+	s.reverify_failures, u.username, u.role, u.all_projects, u.all_nodes, u.role_id, u.nodes_follow, ` + RolePermsColumn
 
 func scanSession(r interface{ Scan(...any) error }) (SessionState, error) {
 	var s SessionState
 	err := r.Scan(&s.ID, &s.TokenHash, &s.UserID, &s.CreatedAt, &s.ExpiresAt, &s.ElevatedUntil, &s.ElevatedIP, &s.ElevatedBy, &s.RotatedAt,
 		&s.Challenge, &s.ChallengeAt, &s.PublicKey, &s.KeyUntil, &s.UserAgent, &s.LastIP, &s.LastSeen, &s.TLSFP, &s.Nets, &s.Reverify,
-		&s.ReverifyFailures, &s.Username, &s.Role, &s.AllProjects, &s.AllNodes)
+		&s.ReverifyFailures, &s.Username, &s.Role, &s.AllProjects, &s.AllNodes, &s.RoleID, &s.NodesFollow, &s.Perms)
 	return s, err
 }
 

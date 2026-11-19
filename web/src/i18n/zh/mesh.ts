@@ -64,6 +64,7 @@ export default {
     help: "浏览器下载这个节点上的文件时，先尝试直接从节点下载，不经面板和节点网络；连不上时自动经面板下载。节点为自己的公网 IP 申请 Let's Encrypt 证书（6 天有效、自动续期），要求 443 端口能从公网访问、没有被其他程序占用。申请不到证书时改用加密 HTTP：文件菜单提供下载命令，用 curl 下载，再用 OpenSSL 在本地解密。",
     confirm: "关闭直连下载？之后从这个节点下载文件都经面板传输。",
     ready: (address: string) => `可直连（${address}）`,
+    readyHidden: "可直连",
     pending: "正在申请证书",
     noAddress: "没有公网地址，经面板下载",
     failed: (error: string) => `不可直连：${error}`,

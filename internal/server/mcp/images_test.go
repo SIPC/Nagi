@@ -20,7 +20,7 @@ func TestNodeImageToolsAllowed(t *testing.T) {
 	}
 	read := auth.User{Role: auth.RoleAdmin, TokenID: 1}
 	write := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true}
-	operator := auth.User{Role: auth.RoleOperator, TokenID: 1, AllowWrite: true, AllowExec: true}
+	operator := auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true, AllowExec: true}
 	for _, name := range []string{"list_node_images", "delete_node_images", "prune_node_images", "pull_node_image"} {
 		tl, ok := byName[name]
 		if !ok {

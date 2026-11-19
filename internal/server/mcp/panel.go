@@ -23,7 +23,7 @@ import (
 
 func init() {
 	panel := func(t tool) tool {
-		t.panel, t.adminOnly = true, true
+		t.panel = true
 		return t
 	}
 	allTools = append(allTools,

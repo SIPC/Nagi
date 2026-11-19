@@ -13,6 +13,8 @@
     known = JSON.parse(read("nagi.standbys") || "null");
   } catch {}
   const standbys = known && Array.isArray(known.standbys) ? known.standbys : [];
+  // 不是管理员（只记绑了域名的备用面板，见 src/lib/offline.ts）：没有备用面板时提示联系管理员。
+  const member = !!(known && known.member);
 
   const theme = read("theme");
   const dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
@@ -25,6 +27,7 @@
       title: "此面板暂时无法访问",
       withStandby: "面板所在的机器可能已离线。可以转到备用面板继续查看。",
       noStandby: "面板所在的机器可能已离线，恢复后此页面会自动刷新。",
+      noStandbyMember: "面板所在的机器可能已离线，请联系管理员。恢复后此页面会自动刷新。",
       copy: "复制",
       copied: "已复制",
       open: "打开",
@@ -35,6 +38,7 @@
       title: "This panel is unavailable",
       withStandby: "The panel's machine may be offline. You can continue on a standby panel.",
       noStandby: "The panel's machine may be offline. This page reloads when it comes back.",
+      noStandbyMember: "The panel's machine may be offline. Contact your administrator. This page reloads when it comes back.",
       copy: "Copy",
       copied: "Copied",
       open: "Open",
@@ -45,7 +49,7 @@
 
   const $ = (id) => document.getElementById(id);
   $("title").textContent = m.title;
-  $("text").textContent = standbys.length > 0 ? m.withStandby : m.noStandby;
+  $("text").textContent = standbys.length > 0 ? m.withStandby : member ? m.noStandbyMember : m.noStandby;
   $("retry").textContent = m.retry;
   $("retry").addEventListener("click", () => location.reload());
 

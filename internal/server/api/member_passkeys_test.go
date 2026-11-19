@@ -16,10 +16,10 @@ import (
 func TestMemberPasskeysCleared(t *testing.T) {
 	h := newAuditHarness(t)
 	ctx := context.Background()
-	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.RoleAdmin); err != nil {
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	bob, err := h.a.Auth.CreateUser(ctx, "bob", "bob-password-1", auth.RoleOperator)
+	bob, err := h.a.Auth.CreateUser(ctx, "bob", "bob-password-1", auth.OperatorRoleID)
 	if err != nil {
 		t.Fatal(err)
 	}

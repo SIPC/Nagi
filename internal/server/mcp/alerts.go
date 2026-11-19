@@ -28,7 +28,7 @@ func init() {
 			procedures: []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure,
 				nagiv1connect.ProjectServiceUpdateProjectSettingsProcedure, nagiv1connect.ProjectServiceSetContainerAlertRulesProcedure}},
 			toolSetAlertRules),
-		def(tool{name: "set_node_alert_rules", title: "Set node alert rules", write: true, idempotent: true, adminOnly: true,
+		def(tool{name: "set_node_alert_rules", title: "Set node alert rules", write: true, idempotent: true,
 			description: "Administrators only. Change a node's alert rules: memory, disk, offline, certificate expiry and CPU. Only the fields passed change. Takes effect immediately.",
 			procedures:  []string{nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.NodeServiceSetNodeAlertRulesProcedure}},
 			toolSetNodeAlertRules),

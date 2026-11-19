@@ -24,7 +24,7 @@ func TestReplicaDirToolsAllowed(t *testing.T) {
 	operator := full
 	operator.Role = auth.RoleOperator
 	for _, tl := range replicaDirTools {
-		if !tl.write || !tl.nodeExec || !tl.adminOnly || tl.scope() != "nagi:node" {
+		if !tl.write || !tl.nodeExec || tl.scope() != "nagi:node" {
 			t.Errorf("%s 的权限声明不对", tl.name)
 		}
 		if !slicesContains(allTools, tl.name) {

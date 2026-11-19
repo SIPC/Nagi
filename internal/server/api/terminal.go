@@ -34,7 +34,7 @@ func (a *API) TerminalHandler() http.Handler {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
 			return
 		}
-		if !auth.CanOperate(u.Role) {
+		if !u.Can(auth.PermTerminal) {
 			http.Error(w, i18n.Sprintf(lang, "当前账号没有权限执行这个操作"), http.StatusForbidden)
 			return
 		}
@@ -64,7 +64,7 @@ func (a *API) TerminalHandler() http.Handler {
 			Service:   q.Get("service"),
 			Size:      &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)},
 		}
-		if err := a.checkPrivilegedEntry(ctx, u.Role, start.ProjectId, start.Container); err != nil {
+		if err := a.checkPrivilegedEntry(ctx, u, start.ProjectId, start.Container); err != nil {
 			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
 			fail(i18n.Localize(lang, err))
 			return
@@ -96,10 +96,10 @@ func (a *API) TerminalHandler() http.Handler {
 
 		// 定时重查：踢出登录、降权、移出项目范围之后要断开。管理员降为操作员时，特权容器的终端也要断开。
 		go a.watchSession(ctx, token, u, func(cur auth.User) error {
-			if err := a.containerAccess(ctx, cur, start.ProjectId, auth.CanOperate); err != nil {
+			if err := a.containerAccess(ctx, cur, start.ProjectId, auth.PermTerminal); err != nil {
 				return err
 			}
-			if err := a.checkPrivilegedEntry(ctx, cur.Role, start.ProjectId, start.Container); errors.Is(err, errPrivilegedEntry) {
+			if err := a.checkPrivilegedEntry(ctx, cur, start.ProjectId, start.Container); errors.Is(err, errPrivilegedEntry) {
 				return err
 			}
 			return nil
@@ -161,9 +161,9 @@ func (a *API) watchSession(ctx context.Context, token string, u auth.User, check
 	}
 }
 
-// containerAccess 重查用户还能不能进入项目的容器：角色和项目范围。
-func (a *API) containerAccess(ctx context.Context, cur auth.User, projectID string, allowed func(role string) bool) error {
-	if !allowed(cur.Role) {
+// containerAccess 重查用户还能不能进入项目的容器：权限和项目范围。
+func (a *API) containerAccess(ctx context.Context, cur auth.User, projectID string, need auth.Perm) error {
+	if !cur.Can(need) {
 		return errRoleChanged
 	}
 	if err := a.projectAllowed(ctx, cur, projectID); err != nil {

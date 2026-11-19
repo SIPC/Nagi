@@ -165,7 +165,7 @@ func (s *setupService) Setup(ctx context.Context, req *connect.Request[nagiv1.Se
 	if utf8.RuneCountInString(req.Msg.GetPassword()) < 8 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("密码至少 8 个字符"))
 	}
-	userID, err := s.Auth.CreateUser(ctx, username, req.Msg.GetPassword(), auth.RoleAdmin)
+	userID, err := s.Auth.CreateUser(ctx, username, req.Msg.GetPassword(), auth.AdminRoleID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.Lo
 
 func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeRequest]) (*connect.Response[nagiv1.MeResponse], error) {
 	u := auth.CurrentUser(ctx)
-	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role}
+	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role, Permissions: u.EffectivePerms().Names()}
 	if u.Elevated() {
 		resp.ElevatedUntil = timestamppb.New(time.Unix(u.ElevatedUntil, 0))
 	}
@@ -222,6 +222,13 @@ func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeReques
 		resp.DisplayName = row.DisplayName
 		resp.Avatar = row.Avatar
 		resp.AvatarType = avatarType(row.Avatar)
+		resp.RoleId = row.RoleID
+		if r, err := s.Q.GetRole(ctx, row.RoleID); err == nil {
+			resp.RoleName, resp.RoleBuiltin = r.Name, r.Builtin
+		}
+		if !u.IsAdmin() {
+			resp.Scope, _ = userScopeOf(ctx, s.Q, row)
+		}
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -406,6 +413,9 @@ func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv
 
 // QueryNodeMetrics 查询节点上的监控数据，监控数据存在节点本地。
 func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request[nagiv1.QueryNodeMetricsRequest]) (*connect.Response[nagiv1.QueryMetricsResponse], error) {
+	if req.Msg.GetNodeId() == "" {
+		return s.hiddenNodeMetrics(ctx, req.Msg)
+	}
 	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, err)
@@ -649,4 +659,53 @@ func (s *nodeService) setIsolated(ctx context.Context, m *nagiv1.IsolateNodeRequ
 	}
 	s.notify(ctx, "isolate", title, "")
 	return connect.NewResponse(&nagiv1.IsolateNodeResponse{}), nil
+}
+
+// hiddenNodeMetrics：项目页查本项目容器的占用（前缀 c:<项目 ID>/ 这类），容器在成员看不到的节点上时，回复里没有节点 ID，
+// 界面不填节点。这时查项目的容器所在的、成员看不到的节点，序列合在一起返回（访问范围见 scope.go 的 checkMetricsRequest，
+// 回复照常经过 filterMetrics，只剩这个项目的序列）。不说是哪台节点，离线、出错的节点跳过。
+func (s *nodeService) hiddenNodeMetrics(ctx context.Context, m *nagiv1.QueryNodeMetricsRequest) (*connect.Response[nagiv1.QueryMetricsResponse], error) {
+	kind, rest, _ := strings.Cut(m.GetPrefix(), ":")
+	project, ok := metricProject(rest)
+	if kind == "node" || kind == "m" || !ok {
+		return nil, nodeNotFound()
+	}
+	x, err := s.loadAccess(ctx, auth.CurrentUser(ctx))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.Q.ContainerNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 容器所在的节点，加上端口映射的入口节点（请求统计记在收到请求的节点上）。
+	var ids []string
+	for _, r := range rows {
+		if r.ProjectID == project {
+			ids = append(ids, r.NodeID)
+		}
+	}
+	if routes, err := s.Q.ListRoutes(ctx, project); err == nil {
+		for _, r := range routes {
+			ids = append(ids, projects.RouteProto(r).GetEntryNodes()...)
+		}
+	}
+	out := &nagiv1.QueryMetricsResponse{}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if seen[id] || x.node(id) {
+			continue
+		}
+		seen[id] = true
+		conn, err := s.Nodes.Get(id)
+		if err != nil {
+			continue
+		}
+		res, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{Prefix: m.GetPrefix(), From: m.GetFrom(), To: m.GetTo(), Step: m.GetStep()})
+		if err != nil {
+			continue
+		}
+		out.Series = append(out.Series, res.GetSeries()...)
+	}
+	return connect.NewResponse(out), nil
 }

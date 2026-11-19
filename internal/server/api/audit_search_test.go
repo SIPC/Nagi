@@ -16,7 +16,7 @@ func TestAuditSearchHiddenFields(t *testing.T) {
 	h := newAuditHarness(t)
 	ctx := context.Background()
 	for _, u := range []struct{ name, role string }{{"admin", auth.RoleAdmin}, {"viewer", auth.RoleViewer}, {"op", auth.RoleOperator}} {
-		if _, err := h.a.Auth.CreateUser(ctx, u.name, u.name+"-password-1", u.role); err != nil {
+		if _, err := h.a.Auth.CreateUser(ctx, u.name, u.name+"-password-1", auth.BuiltinRoleID(u.role)); err != nil {
 			t.Fatal(err)
 		}
 	}
