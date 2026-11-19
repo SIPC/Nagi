@@ -28,6 +28,8 @@ class Access(
         const val PROJECT_VIEW = "project.view"
         const val PROJECT_DEPLOY = "project.deploy"
         const val PROJECT_ADDRESSES = "project.addresses"
+        const val PROJECT_HA = "project.ha"
+        const val PROJECT_BACKUP = "project.backup"
         const val NODE_VIEW = "node.view"
         const val NODE_MANAGE = "node.manage"
         const val NODE_DETAILS = "node.details"
@@ -40,7 +42,7 @@ class Access(
         private val legacyViewer = setOf(PROJECT_VIEW, "project.logs", NODE_VIEW)
         private val legacyOperator = legacyViewer + setOf(
             "project.config", "project.control", PROJECT_DEPLOY, "project.terminal", "project.files.read", "project.files.write",
-            "project.snapshots", "project.backup", "project.ha", "project.migrate", "project.network", PROJECT_ADDRESSES,
+            "project.snapshots", PROJECT_BACKUP, PROJECT_HA, "project.migrate", "project.network", PROJECT_ADDRESSES,
             "project.alerts", "project.registries", "project.manage",
         )
 
