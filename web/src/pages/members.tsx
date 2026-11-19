@@ -1,10 +1,10 @@
 // 成员：面板的账号和角色。要「成员」权限。
-import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
+import { withElevation } from "@/components/elevate";
 import { avatarSrc, UserAvatar } from "@/components/account";
 import { Alert, Button, Check, checkListClass, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
 import type { PanelUser, Role } from "@/gen/nagi/v1/api_pb";
@@ -249,7 +249,7 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
   const picked = roles.data?.roles.find((r) => r.id === roleId);
   const isAdmin = picked ? picked.builtin === "admin" : user.roleBuiltin === "admin";
   const save = useMutation({
-    mutationFn: () => settingsClient.updateUser({ id: user.id, roleId: roleId === user.roleId ? 0n : roleId, scope: isAdmin ? undefined : scope }),
+    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, roleId: roleId === user.roleId ? 0n : roleId, scope: isAdmin ? undefined : scope }), t.members.elevate),
     onSuccess: onDone,
   });
   return (
@@ -291,7 +291,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   const isAdmin = roles.data?.roles.find((r) => r.id === roleId)?.builtin === "admin";
   const [scope, setScope] = useState(defaultScope);
   const add = useMutation({
-    mutationFn: () => settingsClient.createUser({ username, password, roleId, scope: isAdmin ? fullScope : scope }),
+    mutationFn: () => withElevation(() => settingsClient.createUser({ username, password, roleId, scope: isAdmin ? fullScope : scope }), t.members.elevate),
     onSuccess: () => {
       toast.success(t.members.added(username));
       onDone();
@@ -329,20 +329,10 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   );
 }
 
-// 重置别人的密码、清除两步验证和通行密钥是换掉登录凭据：面板要求先用密码或验证码验证身份（手机上的确认不算）。
-async function withElevation<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (!isElevationRequired(err) || !(await requireElevation(t.members.elevate, { suggestTotp: false, passwordOnly: true }))) throw err;
-    return fn();
-  }
-}
-
 function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: () => void; onCancel: () => void }) {
   const [password, setPassword] = useState("");
   const reset = useMutation({
-    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, password })),
+    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, password }), t.members.elevateCredentials, { suggestTotp: false, passwordOnly: true }),
     onSuccess: () => {
       toast.success(user.passkeys.length > 0 ? t.members.passwordResetPasskeys(user.username) : t.members.passwordReset(user.username));
       onDone();
@@ -447,7 +437,7 @@ export function MembersCard() {
                             onSelect: async () => {
                               const msg = u.passkeys.length > 0 ? t.members.clearTotpPasskeysConfirm(u.username) : t.members.clearTotpConfirm(u.username);
                               if (await confirmAction(msg, { action: t.members.clearTotp, danger: true }))
-                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearTotp: true })));
+                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.members.elevateCredentials, { suggestTotp: false, passwordOnly: true }));
                             },
                           },
                         ]
@@ -459,7 +449,7 @@ export function MembersCard() {
                             onSelect: async () => {
                               const keys = t.common.list(u.passkeys.map((p) => p.name));
                               if (await confirmAction(t.members.clearPasskeysConfirm(u.username, keys), { action: t.members.clearPasskeys, danger: true }))
-                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true })));
+                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true }), t.members.elevateCredentials, { suggestTotp: false, passwordOnly: true }));
                             },
                           },
                         ]

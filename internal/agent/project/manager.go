@@ -88,6 +88,8 @@ type Manager struct {
 
 	restarts managedRestarts
 	images   imageUpdates
+	// due 记着正在运行定时快照和维护的容器（见 SnapshotDue）。
+	due dueRuns
 }
 
 // NewManager 创建容器管理器。

@@ -6,6 +6,7 @@ import { capitalize, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Alert, Button, Dialog, DialogActions, EmptyRow, HelpTip, List, Notice, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, Status, CodeBlock } from "@/components/ui";
 import { confirmAction, notify } from "@/components/confirm";
+import { withElevation } from "@/components/elevate";
 
 // 「备用面板」区块（见 docs/standby.md）：主面板上列出备用面板、生成配对码；备用面板上显示自己的同步状态。
 
@@ -22,7 +23,7 @@ export function PromoteButton({ variant = "outline", onError }: { variant?: "out
     setBusy(true);
     onError("");
     try {
-      await settingsClient.promoteStandby({});
+      await withElevation(() => settingsClient.promoteStandby({}), t.standby.promote.elevate);
       await notify(t.standby.promote.done);
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
@@ -94,7 +95,7 @@ export function StandbyCard() {
     setBusy(true);
     setError("");
     try {
-      const res = await settingsClient.createStandbyCode({});
+      const res = await withElevation(() => settingsClient.createStandbyCode({}), t.standby.dialog.elevate);
       setCode({ code: res.code, expires: toDate(res.expiresAt) });
     } catch (err) {
       setError(errorMessage(err));

@@ -107,6 +107,11 @@ func participants(cfg *nagiv1.FailoverConfig) [][]byte {
 	return [][]byte{cfg.GetA().GetKey(), cfg.GetB().GetKey()}
 }
 
+// isParticipant 判断 key 是不是这份顶替设置的参与者（A 或 B）。只有参与者能持有租约。
+func isParticipant(cfg *nagiv1.FailoverConfig, key []byte) bool {
+	return len(key) > 0 && slices.ContainsFunc(participants(cfg), func(k []byte) bool { return bytes.Equal(k, key) })
+}
+
 // checkControl 判断能不能手动操作容器。设置了顶替的容器：停止了会被代管重启或另一个节点拉起，所以不能停止；
 // 启动和重启只能在持有租约时做，否则可能和另一个节点上的容器同时运行。
 func (a *agent) checkControl(projectID, container string, action nagiv1.ContainerAction) error {
@@ -386,10 +391,12 @@ func (a *agent) collect(ctx context.Context, others []*nagiv1.FailoverParticipan
 			}
 			mu.Lock()
 			defer mu.Unlock()
+			// 回复里的持有方不是参与者时不算更高的轮次：被攻破的见证人回复「持有方是任意公钥 X」，
+			// 本节点会撤掉容器、把 X 登记成副本的源节点（v0.35.0#23）。
 			if resp.GetGranted() {
 				r.granted++
 				r.grantedBy = append(r.grantedBy, m.GetKey())
-			} else if resp.GetEpoch() > epoch && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()) {
+			} else if resp.GetEpoch() > epoch && isParticipant(cfg, resp.GetHolder()) && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()) {
 				r.higher = resp
 			}
 		}(m)
@@ -852,6 +859,11 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	cfg := st.cfg
 	f.mu.Unlock()
 	pid, name := cfg.GetProjectId(), cfg.GetContainer()
+	// 新的持有方只能是参与者：不是的话不撤容器、不改副本的源节点（collect 已经滤掉，这里再核对一次）。
+	if !isParticipant(cfg, holder) {
+		a.log.Warn("新的持有方不是这份顶替的参与者，忽略", "project", pid, "container", name, "epoch", epoch)
+		return
+	}
 	holderName := participantName(cfg, holder)
 	a.log.Warn("容器已被顶替，本节点转为热备", "project", pid, "container", name, "holder", holderName, "epoch", epoch)
 	// 热备恢复时用的配置：本节点缓存的这份（目录是本节点上的）。

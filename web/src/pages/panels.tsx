@@ -5,6 +5,7 @@ import type { Project } from "@/gen/nagi/v1/common_pb";
 import { Alert, Button, Check, checkListClass, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowsSkeleton, Section, Spinner, Status } from "@/components/ui";
 import { t } from "@/i18n";
 import { confirmAction } from "@/components/confirm";
+import { withElevation } from "@/components/elevate";
 
 // ---- 移交给其他面板 ----
 
@@ -49,7 +50,7 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
     setError("");
     const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
     try {
-      const res = await nodeClient.handoverNodes({ nodeIds: selected, invite: code });
+      const res = await withElevation(() => nodeClient.handoverNodes({ nodeIds: selected, invite: code }), t.panels.handover.elevate);
       setResults(res.results.map((r) => ({ name: name(r.nodeId), ok: !r.error, error: r.error })));
       setSelected([]);
     } catch (err) {

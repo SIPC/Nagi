@@ -19,7 +19,7 @@ func TestRolesAPI(t *testing.T) {
 	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	_, sc := h.login("admin", "admin-password-1")
+	_, sc := h.loginElevated("admin", "admin-password-1")
 
 	// 新建：前提的权限自动补上，只给管理员的权限不能勾。
 	r, err := sc.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "看日志", Permissions: []string{"project.logs"}}))
@@ -90,7 +90,7 @@ func TestMemberManagerLimits(t *testing.T) {
 	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	_, admin := h.login("admin", "admin-password-1")
+	_, admin := h.loginElevated("admin", "admin-password-1")
 	mgr, err := admin.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "管成员", Permissions: []string{"panel.members", "project.view", "project.logs"}}))
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestMemberManagerLimits(t *testing.T) {
 		Scope: &nagiv1.UserScope{AllProjects: true, NodesFollow: true}})); err != nil {
 		t.Fatal(err)
 	}
-	_, sc := h.login("mgr", "mgr-password-1")
+	_, sc := h.loginElevated("mgr", "mgr-password-1")
 	if _, err := sc.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "多", Permissions: []string{"project.deploy"}})); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Errorf("不能授予自己没有的权限：%v", err)
 	}
@@ -143,7 +143,7 @@ func TestMemberManagerScope(t *testing.T) {
 	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
 		t.Fatal(err)
 	}
-	_, admin := h.login("admin", "admin-password-1")
+	_, admin := h.loginElevated("admin", "admin-password-1")
 	mgrRole, err := admin.CreateRole(ctx, connect.NewRequest(&nagiv1.CreateRoleRequest{Name: "管成员", Permissions: []string{"panel.members", "project.view", "project.logs"}}))
 	if err != nil {
 		t.Fatal(err)
@@ -238,8 +238,8 @@ func TestLastAdminRace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, s1 := h.login("admin", "admin-password-1")
-	_, s2 := h.login("admin2", "admin-password-2")
+	_, s1 := h.loginElevated("admin", "admin-password-1")
+	_, s2 := h.loginElevated("admin2", "admin-password-2")
 	for i := 0; i < 5; i++ {
 		done := make(chan struct{}, 2)
 		go func() {

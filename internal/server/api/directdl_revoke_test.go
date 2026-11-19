@@ -35,7 +35,7 @@ func TestRevokeRotatesDirectKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, sc := h.login("admin", "admin-password-1")
+	_, sc := h.loginElevated("admin", "admin-password-1")
 
 	// expect 做一件事，等后台换完，检查换了没有。
 	expect := func(name string, want bool, do func() error) {

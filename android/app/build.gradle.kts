@@ -57,6 +57,7 @@ android {
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
+    testImplementation(libs.junit)
     implementation(project(":core:ui"))
     implementation(project(":core:data"))
     implementation(project(":feature:home"))

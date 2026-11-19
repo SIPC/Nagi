@@ -5,6 +5,7 @@ export default {
     confirm: "Promote this panel to primary? Nodes will only accept changes from this panel. Don't promote while the primary panel is still running, or the two panels' changes will conflict.",
     done: "Promoted to primary panel. The panel is restarting and this page will reload automatically.",
     button: "Promote to primary",
+    elevate: "Verify your identity to promote this panel.",
   },
   connected: "Connected",
   disconnected: "Not connected",
@@ -29,6 +30,7 @@ export default {
     title: "Add standby panel",
     description: "Run this command on the standby panel's machine.",
     done: "Done",
+    elevate: "Verify your identity to generate a pairing code. You won't be asked again for 15 minutes.",
     notice: "The data directory must be empty. The pairing code is valid for 1 hour and can be used once. Once started, the standby panel connects to this panel, starts syncing and appears in the list.",
   },
   down: {

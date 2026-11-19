@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
@@ -25,6 +26,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -79,8 +81,10 @@ type Registry struct {
 	OnIsolate func(ctx context.Context)
 	iso       isolation
 
-	mu       sync.RWMutex
-	conns    map[string]*Conn
+	mu    sync.RWMutex
+	conns map[string]*Conn
+	// sessions 是每个节点所有还没断开的控制连接（包括已被替换、正在断开的），移除节点时全部断开。
+	sessions map[string]map[*Conn]struct{}
 	mesh     *mesh.Mesh
 	meshName string
 	witness  *witness
@@ -144,6 +148,21 @@ type Conn struct {
 	directSent bool
 	// directPush：同一时间只告诉节点一次密钥（连上时的和换密钥的可能同时），两边最后的密钥一样。
 	directPush sync.Mutex
+
+	// 上报的限制（见 allowReport）：reporting 是正在处理的上报，reportTokens、reportAt 是令牌桶，
+	// dropped、droppedLog 记被丢弃的次数和上次记日志的时间。
+	reporting    atomic.Bool
+	reportTokens float64
+	reportAt     time.Time
+	dropped      int
+	droppedLog   time.Time
+	// seenInfo、seenAt：上次写进数据库的节点信息和时间（见 touch）。
+	seenInfo []byte
+	seenAt   time.Time
+	// syncMu 保护 syncing、syncNext：同一个节点同时只跑一个 OnReport，跑的时候来的上报只留最新的一份（见 runOnReport）。
+	syncMu   sync.Mutex
+	syncing  bool
+	syncNext *nagiv1.ReportRequest
 }
 
 // Pending 返回节点是否在等管理员批准。
@@ -209,7 +228,7 @@ func (r *Registry) PatchBackup(nodeID, projectID, container string, st *nagiv1.B
 
 // NewRegistry 创建节点注册表。
 func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer, ca *tlsutil.CA) *Registry {
-	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}}
+	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}, sessions: map[string]map[*Conn]struct{}{}}
 }
 
 // NodeCertValidity 是节点客户端证书的有效期。节点在到期前 30 天内连上面板时自动续期。
@@ -270,8 +289,8 @@ func (r *Registry) Approve(ctx context.Context, nodeID string) error {
 		c.mu.Unlock()
 		r.updateMesh()
 		go r.pushAlertConfig(context.Background(), c, nil)
-		if r.OnReport != nil && c.LastReport() != nil {
-			go r.OnReport(c, c.LastReport())
+		if last := c.LastReport(); last != nil {
+			r.runOnReport(c, last)
 		}
 	}
 	r.Changes.Bump()
@@ -303,14 +322,139 @@ func (r *Registry) Rename(ctx context.Context, nodeID, name string) error {
 	return nil
 }
 
-// Disconnect 断开节点的当前连接（例如节点被移除时）。
+// Disconnect 断开节点所有的控制连接（例如节点被移除时）。之后这个节点的调用一律拒绝，直到它重新连上。
 func (r *Registry) Disconnect(nodeID string) {
-	r.mu.RLock()
-	c, ok := r.conns[nodeID]
-	r.mu.RUnlock()
-	if ok && c.close != nil {
-		c.close()
+	r.mu.Lock()
+	all := make([]*Conn, 0, len(r.sessions[nodeID])+1)
+	for c := range r.sessions[nodeID] {
+		all = append(all, c)
 	}
+	if c, ok := r.conns[nodeID]; ok {
+		if _, listed := r.sessions[nodeID][c]; !listed {
+			all = append(all, c)
+		}
+		delete(r.conns, nodeID)
+	}
+	r.mu.Unlock()
+	for _, c := range all {
+		if c.close != nil {
+			c.close()
+		}
+	}
+	r.Changes.Bump()
+}
+
+// current 判断 c 是不是节点当前的控制连接。被替换或已经断开的连接上的调用一律拒绝。
+func (r *Registry) current(c *Conn) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.conns[c.NodeID] == c
+}
+
+var errStale = status.Error(codes.Unavailable, "这条控制连接已被替换或节点已移除")
+
+// onlyCurrent 返回只放行节点当前控制连接上的调用的拦截器。
+func (r *Registry) onlyCurrent(c *Conn) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			if !r.current(c) {
+				return nil, errStale
+			}
+			return handler(ctx, req)
+		}, func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			if !r.current(c) {
+				return errStale
+			}
+			return handler(srv, ss)
+		}
+}
+
+// 面板接受节点调用的限制。节点只开一个 gRPC 客户端连接（见 tunnel.Serve 的通道上限），
+// 同时进行的调用通常不超过 5 个（上报、mesh 中转、告警、越权上报、续期），超出的在节点那边排队。
+// 消息大小沿用 gRPC 的默认上限：上报里每个容器一项，大小随容器数增长，改小了容器多的节点会每次上报都失败。
+const (
+	maxRecvMsgSize       = 4 << 20
+	maxConcurrentStreams = 16
+	// 节点每 15 秒上报一次，正常的连接不会空闲这么久。
+	maxConnectionIdle = 5 * time.Minute
+)
+
+// 待批准节点同时在线的控制连接上限（见 addSession）。多次接入码每用一次就多一个待批准的节点身份，
+// 每个身份各有一条控制连接和它的通道、流配额；不限制时持有接入码的一方能按身份数叠加占用面板的资源。
+// 已批准的节点不受影响。
+const (
+	maxPendingSessions  = 16
+	maxPendingPerSource = 4
+	pendingSourceV6Bits = 64
+)
+
+// pendingSource 是按来源计数时的来源：IPv4 按地址，IPv6 按 /64（一台机器通常能用整个 /64）。
+func pendingSource(a netip.Addr) netip.Prefix {
+	if a.Is6() && !a.Is4In6() {
+		p, _ := a.Prefix(pendingSourceV6Bits)
+		return p
+	}
+	p, _ := a.Unmap().Prefix(32)
+	return p
+}
+
+// pendingFull 判断 c（待批准）能不能再登记：别的待批准节点的连接已经到了全局或同一来源的上限就不能。
+// 同一个节点的旧连接不算，它会被这条连接替换。调用方持有 r.mu。
+func (r *Registry) pendingFull(c *Conn) bool {
+	src := pendingSource(c.remote)
+	total, same := 0, 0
+	for id, set := range r.sessions {
+		if id == c.NodeID {
+			continue
+		}
+		for x := range set {
+			x.mu.RLock()
+			pending, remote := x.pending, x.remote
+			x.mu.RUnlock()
+			if !pending {
+				continue
+			}
+			total++
+			if pendingSource(remote) == src {
+				same++
+			}
+		}
+	}
+	return total >= maxPendingSessions || same >= maxPendingPerSource
+}
+
+// addSession 登记节点的一条控制连接，返回被它替换的旧连接。待批准节点的连接超过上限时不登记，ok 为 false。调用方持有 r.mu。
+func (r *Registry) addSession(c *Conn) (old *Conn, ok bool) {
+	if c.Pending() && r.pendingFull(c) {
+		return nil, false
+	}
+	if r.conns == nil {
+		r.conns = map[string]*Conn{}
+	}
+	if r.sessions == nil {
+		r.sessions = map[string]map[*Conn]struct{}{}
+	}
+	if r.sessions[c.NodeID] == nil {
+		r.sessions[c.NodeID] = map[*Conn]struct{}{}
+	}
+	r.sessions[c.NodeID][c] = struct{}{}
+	old = r.conns[c.NodeID]
+	r.conns[c.NodeID] = c
+	return old, true
+}
+
+// removeSession 去掉节点的一条控制连接，返回它是不是当时的当前连接。
+func (r *Registry) removeSession(c *Conn) (wasCurrent bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.sessions[c.NodeID], c)
+	if len(r.sessions[c.NodeID]) == 0 {
+		delete(r.sessions, c.NodeID)
+	}
+	if r.conns[c.NodeID] == c {
+		delete(r.conns, c.NodeID)
+		return true
+	}
+	return false
 }
 
 // Online 判断节点是否在线。
@@ -355,24 +499,51 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	if ap, err := netip.ParseAddrPort(conn.RemoteAddr().String()); err == nil {
 		c.remote = ap.Addr().Unmap()
 	}
-	srv := grpc.NewServer()
-	nagiv1.RegisterPanelServiceServer(srv, &panelService{r: r, conn: c})
-	go tunnel.Serve(sess, srv)
-	defer srv.Stop()
-
-	cc, err := tunnel.Dial(sess)
+	cc, err := tunnel.Dial(sess) // 不马上建立连接，第一次调用时才打开通道
 	if err != nil {
 		return
 	}
 	defer cc.Close()
 	c.Agent = nagiv1.NewAgentServiceClient(cc)
 
+	// 先登记成当前连接再开始处理节点的调用：节点连上后马上就会上报，不是当前连接的调用会被拒绝。
+	// 同一个节点的旧连接立即断开：被攻破的节点不能留着旧连接，在移除以后继续调用面板。
+	// 待批准节点的连接超过上限时拒绝这条新连接（不动已有的连接）。
 	r.mu.Lock()
-	if old, ok := r.conns[nodeID]; ok && old != c {
-		r.log.Info("节点重新连接，替换旧连接", "node", nodeID)
-	}
-	r.conns[nodeID] = c
+	old, ok := r.addSession(c)
 	r.mu.Unlock()
+	if !ok {
+		r.log.Warn("待批准的节点连接过多，拒绝新连接", "node", nodeID, "remote", conn.RemoteAddr())
+		return
+	}
+	defer func() {
+		r.removeSession(c)
+		r.Changes.Bump()
+		r.updateMesh()
+	}()
+	if old != nil {
+		r.log.Info("节点重新连接，断开旧连接", "node", nodeID)
+		if old.close != nil {
+			old.close()
+		}
+	}
+	// 登记以后再查一次：上面查过以后、登记之前移除的节点，Disconnect 断不到这条连接。
+	if !r.stillEnrolled(ctx, nodeID) {
+		r.log.Warn("拒绝未知或已移除的节点", "node", nodeID, "remote", conn.RemoteAddr())
+		return
+	}
+
+	unary, streamGuard := r.onlyCurrent(c)
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(unary), grpc.ChainStreamInterceptor(streamGuard),
+		grpc.MaxRecvMsgSize(maxRecvMsgSize),
+		grpc.MaxConcurrentStreams(maxConcurrentStreams),
+		grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: maxConnectionIdle}),
+	)
+	nagiv1.RegisterPanelServiceServer(srv, &panelService{r: r, conn: c})
+	go tunnel.Serve(sess, srv)
+	defer srv.Stop()
+
 	r.Changes.Bump()
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
 
@@ -381,30 +552,134 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	case <-ctx.Done():
 	}
 
-	r.mu.Lock()
-	if r.conns[nodeID] == c {
-		delete(r.conns, nodeID)
-	}
-	r.mu.Unlock()
-	r.Changes.Bump()
-	r.updateMesh()
 	if ctx.Err() == nil {
-		r.touch(context.Background(), nodeID, c.LastReport())
+		r.touch(context.Background(), c, c.LastReport(), true)
 	}
 	r.log.Info("节点已断开", "node", nodeID)
 }
 
-// touch 更新节点的最后在线时间和节点信息。
-func (r *Registry) touch(ctx context.Context, nodeID string, report *nagiv1.ReportRequest) {
+// enrollRetry 是登记以后复查节点时，数据库出错后等多久再查一次。
+var enrollRetry = 200 * time.Millisecond
+
+// stillEnrolled 复查节点还在、没有被移除。只有节点不存在或已吊销时返回 false；数据库临时出错时重试一次，
+// 不然新连接登记时已经断开了旧连接，一次读库失败就会让节点两条连接都没了。重试也失败时拒绝。
+func (r *Registry) stillEnrolled(ctx context.Context, nodeID string) bool {
+	for attempt := 0; ; attempt++ {
+		node, err := r.q.GetNode(ctx, nodeID)
+		switch {
+		case err == nil:
+			return node.Revoked == 0
+		case errors.Is(err, sql.ErrNoRows):
+			return false
+		case attempt > 0 || ctx.Err() != nil:
+			r.log.Error("读取节点失败", "node", nodeID, "err", err)
+			return false
+		}
+		r.log.Warn("读取节点失败，稍后重试", "node", nodeID, "err", err)
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(enrollRetry):
+		}
+	}
+}
+
+// touchInterval：节点信息没变时，最后在线时间最多这么久写一次库（连接断开时总会写）。
+// 在线节点的状态看连接，最后在线时间只在离线以后用到。
+const touchInterval = time.Minute
+
+// touch 更新节点的最后在线时间和节点信息。节点信息没变、离上次写库不到 touchInterval 时不写，force 时总写。
+func (r *Registry) touch(ctx context.Context, c *Conn, report *nagiv1.ReportRequest, force bool) {
 	var info []byte
 	if report != nil && report.Node != nil {
-		info, _ = proto.Marshal(report.Node)
+		info, _ = proto.MarshalOptions{Deterministic: true}.Marshal(report.Node)
 	}
+	now := time.Now()
+	c.mu.Lock()
+	if !force && c.seenInfo != nil && bytes.Equal(info, c.seenInfo) && now.Sub(c.seenAt) < touchInterval {
+		c.mu.Unlock()
+		return
+	}
+	c.seenInfo, c.seenAt = info, now
+	if c.seenInfo == nil {
+		c.seenInfo = []byte{}
+	}
+	c.mu.Unlock()
 	if err := r.q.UpdateNodeSeen(ctx, store.UpdateNodeSeenParams{
-		LastSeen: time.Now().Unix(), Info: info, ID: nodeID,
+		LastSeen: now.Unix(), Info: info, ID: c.NodeID,
 	}); err != nil {
-		r.log.Warn("更新节点状态失败", "node", nodeID, "err", err)
+		r.log.Warn("更新节点状态失败", "node", c.NodeID, "err", err)
+		c.mu.Lock()
+		c.seenInfo = nil // 下次再写
+		c.mu.Unlock()
 	}
+}
+
+// 节点上报的限制（见 v0.35.0#13）。节点每 15 秒上报一次；容器状态变了、备份同步有进度（每 5 秒）时马上再报，
+// 相邻两次至少隔 300 毫秒。令牌桶能攒 reportBurst 次，每 reportRefill 补一次：正常节点远远用不完，
+// 不停上报的节点每秒最多处理一次，超出的丢弃（回复空的结果，不断开连接）。
+const (
+	reportBurst  = 30
+	reportRefill = time.Second
+	// maxNodeInfoSize 是上报里节点信息的大小上限，超过的不采用（沿用上一次的）。正常的节点信息只有几百字节。
+	maxNodeInfoSize = 64 << 10
+	// maxHostnameLen 是主机名的长度上限（DNS 名称最长 253 个字符，Linux 主机名最长 64 个）。
+	maxHostnameLen = 253
+	// droppedLogInterval：丢弃上报时最多这么久记一次日志。
+	droppedLogInterval = time.Minute
+)
+
+// allowReport 从令牌桶里取一次上报的额度。没有额度时 ok 为 false；该记日志时 logDropped 是这段时间丢弃的次数。
+func (c *Conn) allowReport(now time.Time) (ok bool, logDropped int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.reportAt.IsZero() {
+		c.reportTokens = reportBurst
+	} else {
+		c.reportTokens = min(reportBurst, c.reportTokens+float64(now.Sub(c.reportAt))/float64(reportRefill))
+	}
+	c.reportAt = now
+	if c.reportTokens >= 1 {
+		c.reportTokens--
+		return true, 0
+	}
+	c.dropped++
+	if now.Sub(c.droppedLog) >= droppedLogInterval {
+		n := c.dropped
+		c.dropped, c.droppedLog = 0, now
+		return false, n
+	}
+	return false, 0
+}
+
+// runOnReport 调用 OnReport（不阻塞）。同一个节点同时只跑一个：跑的时候来的上报只留最新的一份，跑完接着用它再跑一次。
+// 连接已被替换或断开时，留下的那份不再跑。
+func (r *Registry) runOnReport(c *Conn, req *nagiv1.ReportRequest) {
+	if r.OnReport == nil {
+		return
+	}
+	c.syncMu.Lock()
+	if c.syncing {
+		c.syncNext = req
+		c.syncMu.Unlock()
+		return
+	}
+	c.syncing = true
+	c.syncMu.Unlock()
+	go func() {
+		for req != nil {
+			r.OnReport(c, req)
+			c.syncMu.Lock()
+			req, c.syncNext = c.syncNext, nil
+			if req != nil && !r.current(c) {
+				req = nil
+			}
+			if req == nil {
+				c.syncing = false
+			}
+			c.syncMu.Unlock()
+		}
+	}()
 }
 
 // panelService 实现 PanelService，处理某个节点的上报。
@@ -415,6 +690,22 @@ type panelService struct {
 }
 
 func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*nagiv1.ReportResponse, error) {
+	// 节点一条连接上的上报是一次接一次的，不会同时有两个。
+	if !p.conn.reporting.CompareAndSwap(false, true) {
+		return nil, status.Error(codes.ResourceExhausted, "上一次上报还在处理")
+	}
+	defer p.conn.reporting.Store(false)
+	if ok, n := p.conn.allowReport(time.Now()); !ok {
+		if n > 0 {
+			p.r.log.Warn("节点上报过于频繁，丢弃", "node", p.conn.NodeID, "dropped", n)
+		}
+		return &nagiv1.ReportResponse{}, nil
+	}
+	// 节点信息过大或主机名过长：不采用，沿用上一次的。节点信息每次变了都要写库。
+	if n := req.GetNode(); n != nil && (len(n.GetHostname()) > maxHostnameLen || proto.Size(n) > maxNodeInfoSize) {
+		p.r.log.Warn("节点上报的节点信息过大，不采用", "node", p.conn.NodeID, "size", proto.Size(n))
+		req.Node = p.conn.LastReport().GetNode()
+	}
 	// 上报的直连地址要转给所有节点，先整理好再存：每次上报都要给所有节点重算成员列表。
 	if m := req.GetMesh(); m != nil {
 		eps, ok := cleanEndpoints(m.GetEndpoints())
@@ -455,7 +746,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	}
 	p.r.updateMesh()
 
-	p.r.touch(ctx, p.conn.NodeID, req)
+	p.r.touch(ctx, p.conn, req, false)
 	p.r.Changes.Bump()
 	// 节点认的主面板不是本面板时，Behind 去核实（本面板可能已经落后）；这次不补推配置，
 	// 但回复照常带上主备信息：节点可能只是还没收到本面板的新任期。
@@ -464,7 +755,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 	}
 	// 被隔离的节点的上报只记录、不采用（见 docs/mesh.md#隔离）。
 	if !pending && accepts && p.r.OnReport != nil && !p.r.Isolated(ctx, p.conn.NodeID) {
-		go p.r.OnReport(p.conn, req)
+		p.r.runOnReport(p.conn, req)
 	}
 	if pending {
 		return &nagiv1.ReportResponse{}, nil

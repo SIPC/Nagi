@@ -9,6 +9,9 @@ on:
     paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # mesh 的测试单独一个任务：它的测试并行运行、很占 CPU，和别的包（agent 里按时间判定的端到端测试）挤在一台机器上会互相拖慢。
   test:
@@ -18,16 +21,18 @@ jobs:
       matrix:
         shard: [mesh, rest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       # 用 1.26 的最新补丁版本编译，带上标准库的安全修复；go.mod 里的版本只是最低要求。
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
           check-latest: true
           cache: false
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -49,7 +54,7 @@ jobs:
       # 检查依赖和标准库里会被调用到的已知漏洞。
       - name: Vulnerability check
         if: matrix.shard == 'rest'
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
   build:
     runs-on: ubuntu-latest
@@ -57,15 +62,17 @@ jobs:
       matrix:
         arch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26'
           check-latest: true
           cache: false
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/go/pkg/mod

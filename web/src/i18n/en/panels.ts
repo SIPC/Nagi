@@ -18,6 +18,7 @@ export default {
     finish: "Done",
     codeRequired: "Enter the invite code",
     nodesRequired: "Select the nodes to hand over",
+    elevate: "Verify your identity to hand over nodes.",
   },
   nodePanels: {
     title: "Trusted panels",

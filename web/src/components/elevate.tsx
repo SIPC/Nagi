@@ -28,6 +28,16 @@ export async function requireElevation(description?: string, options: { suggestT
   });
 }
 
+// withElevation 调用接口；面板要求先验证身份时弹框，验证后重试一次。
+export async function withElevation<T>(call: () => Promise<T>, description: string, options: { suggestTotp?: boolean; passwordOnly?: boolean } = {}): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    if (!isElevationRequired(err) || !(await requireElevation(description, options))) throw err;
+    return call();
+  }
+}
+
 // isElevationRequired：接口因为确认过期而拒绝。
 export function isElevationRequired(err: unknown): boolean {
   return err instanceof ConnectError && err.code === Code.PermissionDenied && err.metadata.get("X-Nagi-Elevation") === "required";

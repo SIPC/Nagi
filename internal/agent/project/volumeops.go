@@ -347,12 +347,11 @@ func openVolumeArchive(root *os.Root, rel string) (*os.File, *fileops.Archive, e
 	if !info.Mode().IsRegular() {
 		return nil, nil, invalid("该路径不是普通文件")
 	}
-	f, err := root.Open(rel)
+	f, ok, err := fileops.OpenRegular(root, rel, info)
 	if err != nil {
 		return nil, nil, fileErr(err)
 	}
-	if cur, err := f.Stat(); err != nil || !os.SameFile(cur, info) {
-		f.Close()
+	if !ok {
 		return nil, nil, invalid("文件已被修改")
 	}
 	a, err := fileops.OpenArchive(f, filepath.Base(rel))
@@ -515,7 +514,7 @@ func (m *Manager) ListVolumeDirSizes(ctx context.Context, req *nagiv1.VolumeDirS
 	}
 	defer release()
 	out := &nagiv1.DirSizesResponse{}
-	for _, d := range fileops.DirSizes(ctx, root.FS(), slash(rel), names, timeout, maxEntries, req.GetMaxBytes(), nil) {
+	for _, d := range fileops.DirSizes(ctx, fileops.RootFS(root), slash(rel), names, timeout, maxEntries, req.GetMaxBytes(), nil) {
 		if !d.Dir {
 			continue
 		}

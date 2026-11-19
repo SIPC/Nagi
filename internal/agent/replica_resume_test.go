@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
@@ -28,7 +29,7 @@ type recvTestServer struct {
 }
 
 func (s *recvTestServer) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
-	return receiveReplica(stream, func(string, string) (string, func(), error) { return s.files, func() {}, nil })
+	return receiveReplica(stream, func(string, string) (string, *metrics.DiskGuard, func(), error) { return s.files, nil, func() {}, nil })
 }
 
 func startRecvServer(t *testing.T) (string, func() (*grpc.ClientConn, error)) {

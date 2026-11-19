@@ -79,10 +79,57 @@ type replicas struct {
 	denied       func(real string) bool
 	// stateDir 是副本快照仓库的连接配置和缓存，副本删除、换了位置时一起删掉。
 	stateDir func(projectID, container string) string
-	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。
-	locks map[string]*sync.RWMutex
+	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。只在有请求用着（包括等着拿锁）时留在这里，
+	// 用完就删：没通过鉴权的请求（随便填的项目 ID 和容器名）不会让它一直变大。
+	locks map[string]*replicaLock
 	// syncing 记着每个副本正在同步的源节点和它最近一次请求的时间（见 claim）。
 	syncing map[string]replicaSync
+	// streams 是每个副本正在接收的 ReplicaPut 流（见 openStream），没有流时删掉。
+	streams map[string]*replicaStreams
+}
+
+// replicaStreams 是一个副本正在接收的流：n 条，共用 guard 检查磁盘。
+type replicaStreams struct {
+	n     int
+	guard *metrics.DiskGuard
+}
+
+// replicaStreamsMax 是同一个副本同时最多接收几条 ReplicaPut 流（源节点开 syncStreams 条，断开重连时旧流可能还没收尾）。
+const replicaStreamsMax = 8
+
+// openStream 在 ReplicaPut 鉴权通过以后占一个名额，返回这个副本所有流共用的磁盘检查和流结束时调用的 done。
+// 共用一个检查：每条流各建一个的话，被攻破的源节点同时开很多条流，每条先写一点过了第一次检查，
+// 再各写将近 DiskCheckEvery，就能把磁盘写满（v0.35.0#19）。调用时拿着副本的锁，files 是副本现在的 files 目录。
+func (r *replicas) openStream(projectID, container, files string) (*metrics.DiskGuard, func(), error) {
+	id := projectID + "-" + container
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.streams == nil {
+		r.streams = map[string]*replicaStreams{}
+	}
+	st := r.streams[id]
+	if st == nil {
+		st = &replicaStreams{}
+		r.streams[id] = st
+	}
+	if st.n >= replicaStreamsMax {
+		return nil, nil, status.Error(codes.ResourceExhausted, "同步这个副本的连接过多，稍后重试")
+	}
+	// 副本移动以后（移动拿着写锁，那时没有流）目录变了，换一个新的检查。
+	if st.guard == nil || st.guard.Dir != files {
+		st.guard = &metrics.DiskGuard{Dir: files}
+	}
+	st.n++
+	var once sync.Once
+	return st.guard, func() {
+		once.Do(func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if st.n--; st.n == 0 && r.streams[id] == st {
+				delete(r.streams, id)
+			}
+		})
+	}, nil
 }
 
 type replicaSync struct {
@@ -153,33 +200,50 @@ func (r *replicas) root(projectID, container string) (string, error) {
 	return filepath.Join(base, id), nil
 }
 
+// replicaLock 是一个副本的锁。refs 等由 replicas.mu 保护。
+type replicaLock struct {
+	sync.RWMutex
+	refs int // 用着这把锁（拿着或者等着）的请求数，减到 0 时从 replicas.locks 里删掉
+}
+
 func (r *replicas) lock(projectID, container string) func() {
-	l := r.lockOf(projectID, container)
+	l, done := r.lockOf(projectID, container)
 	l.Lock()
-	return l.Unlock
+	return func() { l.Unlock(); done() }
 }
 
 // rlock 是接收文件时加的锁：同一次同步的几条流（见 syncStreams）各写各的文件，可以同时拿；
 // 提交、恢复等要改整个副本的操作用 lock，等它们都结束。
 func (r *replicas) rlock(projectID, container string) func() {
-	l := r.lockOf(projectID, container)
+	l, done := r.lockOf(projectID, container)
 	l.RLock()
-	return l.RUnlock
+	return func() { l.RUnlock(); done() }
 }
 
-func (r *replicas) lockOf(projectID, container string) *sync.RWMutex {
+// lockOf 返回副本的锁和用完后调用的 done（放开锁以后调用）。最后一个用着的请求 done 时从 locks 里删掉。
+func (r *replicas) lockOf(projectID, container string) (*replicaLock, func()) {
 	id := projectID + "-" + container
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.locks == nil {
-		r.locks = map[string]*sync.RWMutex{}
+		r.locks = map[string]*replicaLock{}
 	}
 	l := r.locks[id]
 	if l == nil {
-		l = &sync.RWMutex{}
+		l = &replicaLock{}
 		r.locks[id] = l
 	}
-	return l
+	l.refs++
+	var once sync.Once
+	return l, func() {
+		once.Do(func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if l.refs--; l.refs == 0 && r.locks[id] == l {
+				delete(r.locks, id)
+			}
+		})
+	}
 }
 
 // load 读取副本的登记信息和恢复用的配置。
@@ -579,22 +643,28 @@ const replicaPutMax = 6 * time.Hour
 
 // ReplicaPut 接收源节点同步来的文件。不限大小（快照仓库可以很大），但磁盘剩余空间不够时停下（见 metrics.CheckDisk）。
 func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
-	return receiveReplica(stream, func(projectID, container string) (string, func(), error) {
+	return receiveReplica(stream, func(projectID, container string) (string, *metrics.DiskGuard, func(), error) {
 		if _, err := replicaID(projectID, container); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		unlock := s.a.replicas.rlock(projectID, container)
 		files, err := s.authorizeReplica(stream.Context(), projectID, container, true)
 		if err != nil {
 			unlock()
-			return "", nil, err
+			return "", nil, nil, err
 		}
-		return files, unlock, nil
+		guard, done, err := s.a.replicas.openStream(projectID, container, files)
+		if err != nil {
+			unlock()
+			return "", nil, nil, err
+		}
+		return files, guard, func() { done(); unlock() }, nil
 	})
 }
 
-// receiveReplica 是 ReplicaPut 的实现。authorize 在收到第一块时核对调用方、拿副本的锁，返回副本的 files 目录和释放锁的函数。
-func receiveReplica(stream nagiv1.MeshService_ReplicaPutServer, authorize func(projectID, container string) (string, func(), error)) error {
+// receiveReplica 是 ReplicaPut 的实现。authorize 在收到第一块时核对调用方、拿副本的锁，返回副本的 files 目录、
+// 这个副本的流共用的磁盘检查（nil 时这条流自己建一个）和释放锁的函数。
+func receiveReplica(stream nagiv1.MeshService_ReplicaPutServer, authorize func(projectID, container string) (string, *metrics.DiskGuard, func(), error)) error {
 	var (
 		files, path string
 		// root 是副本的 files 目录：写入都经过它，副本里被换成指向外面的符号链接时拒绝，不会写到别处（见 openReplicaFiles）。
@@ -687,13 +757,15 @@ func receiveReplica(stream nagiv1.MeshService_ReplicaPutServer, authorize func(p
 			return err
 		}
 		if files == "" {
-			if files, unlock, err = authorize(c.GetProjectId(), c.GetContainer()); err != nil {
+			if files, guard, unlock, err = authorize(c.GetProjectId(), c.GetContainer()); err != nil {
 				return err
 			}
 			if root, err = openReplicaFiles(files); err != nil {
 				return err
 			}
-			guard = &metrics.DiskGuard{Dir: files}
+			if guard == nil {
+				guard = &metrics.DiskGuard{Dir: files}
+			}
 		}
 		if c.GetPath() != path {
 			if err := finish(); err != nil {

@@ -8,6 +8,52 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.35.0
+
+### New features
+
+- Custom roles are supported. Permissions decide what each member can view and do, managed in "Settings → Members". Nodes and addresses outside a member's access scope are hidden from non-administrators.
+- Identity can be confirmed on a phone. After adding a phone, identity verification and the second step of signing in can be completed in the Android app.
+- Upgrading nodes and updating the panel show download progress, speed, and the download address.
+- The panel name can be changed in "Settings → Panel access".
+- The Android app's home adds a live traffic chart and node status, and its settings can manage your account, members, alerts, standby panels, and more, showing entries according to the member's permissions. Tablets use a two-column layout.
+- Adding a phone checks whether its attestation certificate has been revoked by Google. If the certificate of an added phone is revoked, it is marked in the member's signed-in devices in "Members" and an alert is sent.
+- MCP adds a deployment guide and warns about discouraged practices when saving and deploying containers.
+
+### Improvements
+
+- The home overview no longer waits for slow nodes, and traffic data appears shortly after.
+- The QR code for adding a phone is simpler and larger, and the app scans it faster.
+- The Android app shows the last data first when opened, with smoother animations and adding flow.
+- Sync status appears immediately after clicking "Sync now" or "Stop sync".
+
+### Fixes
+
+- Fixed an issue where some Xiaomi phones could not be added.
+- Fixed an issue where the Android app crashed when a node reported abnormal values or a member uploaded an oversized avatar.
+- Fixed known vulnerabilities and improved security.
+
+### Behavior changes
+
+- The preset Operator role no longer includes backup, high availability, migration, network and domains, alert rules, registries, or project management. Edit the role if needed.
+- Changing a node's projects root requires the "Node terminal and files" permission and verifying your identity first.
+- Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
+- Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
+- Creating or editing members, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity. Resetting a member's password, clearing a member's two-step verification or passkeys, and the last three accept only a password or verification code.
+- The node install command now passes the join token in an environment variable. If you use sudo, run `sudo -i` first. Old commands still work.
+- Each invite code can add up to 20 nodes, and up to 20 nodes can be handed over at a time. Nodes with the same name get a number added automatically.
+- Node join notifications show the source address, and multiple joins with the same invite code in a short time are combined into one notification.
+- Terminals opened in the Android app are disconnected after the unlock duration has passed.
+- Pairing links on web pages no longer open the Android app, and the app no longer accepts external pairing links after a panel has been added. The app's content is hidden in recent tasks.
+- The panel no longer accepts avatars larger than 1024 pixels on either side.
+
+### Upgrade notes
+
+- Upgrade nodes to v0.35.0 to fix security issues on nodes. Later node upgrades will also show download progress.
+- After updating the panel, update the Android app to v0.35.0.
+- Port mappings previously imported from compose and bound only to a local address are still publicly exposed. Check them in the container's "Network" tab.
+- If untrusted containers have run on a node, we recommend replacing the keys and passwords stored on it.
+
 ## v0.34.0
 
 ### New features

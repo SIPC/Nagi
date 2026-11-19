@@ -533,7 +533,7 @@ private fun NodeCell(n: NodeStat, modifier: Modifier, onClick: () -> Unit) {
 @Composable
 private fun Ring(label: String, icon: ImageVector, fraction: Double?) {
     val c = NagiTheme.colors
-    val f = fraction?.coerceIn(0.0, 1.0)
+    val f = fraction?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)
     val color = when {
         f == null -> c.mutedForeground
         f >= 0.9 -> c.destructive

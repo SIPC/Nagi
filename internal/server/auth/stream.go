@@ -9,8 +9,9 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 )
 
-// StreamUser 给长时间打开的流（首页的订阅流，见 docs/android.md#订阅流）每一轮重查调用者，返回成员当前的角色和访问范围。
+// StreamUser 给长时间打开的流（日志流，见 docs/panel.md#会话）每一轮重查调用者，返回成员当前的角色和访问范围。
 // 拦截器只在打开流时查一次，之后降低角色、缩小访问范围、令牌过期都不会反映到 ctx 里的用户上。
+// App 打开的终端不用它（令牌过期就断开终端会丢掉里面的进程），按设备记录重查，见 DeviceUser。
 //
 //   - App（u.DeviceID 不为空）：按请求头里的 App 令牌重查，和拦截器一样：令牌还在、没过期、网段没变，设备记录还在，
 //     管理员还要从允许的地址来。令牌过期（10 分钟）或网段变了返回带 Nagi-App-Retoken 的 unauthenticated，

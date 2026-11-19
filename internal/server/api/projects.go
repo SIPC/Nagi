@@ -256,16 +256,26 @@ func (s *projectService) RestoreDeployment(ctx context.Context, req *connect.Req
 	})
 }
 
+// logStream 是从节点读日志的流。
+type logStream interface {
+	Recv() (*nagiv1.LogLine, error)
+}
+
+// logStreamFor 向容器所在的节点打开日志流。测试里换成假的节点。
+var logStreamFor = func(s *projectService, ctx context.Context, m *nagiv1.StreamLogsApiRequest) (logStream, error) {
+	return s.Projects.Logs(ctx, m.GetProjectId(), m.GetContainer(), m.GetService(), m.GetTail(), m.GetFollow())
+}
+
 func (s *projectService) StreamLogs(ctx context.Context, req *connect.Request[nagiv1.StreamLogsApiRequest], out *connect.ServerStream[nagiv1.LogLine]) error {
 	m := req.Msg
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	// 浏览器打开的日志流定时重查：踢出登录、降权、移出项目范围之后断开。MCP 在进程内调用，没有会话，只取一段就结束。
+	// 浏览器和 App 打开的日志流定时重查：踢出登录、退出手机、降权、移出项目范围之后断开；App 的令牌过期时也断开，
+	// App 换新令牌重新打开（见 watchSession）。MCP 在进程内调用，没有会话，只取一段就结束。
 	var stopped atomic.Pointer[error]
-	if token := auth.SessionToken(req.Header()); token != "" {
-		u := auth.CurrentUser(ctx)
+	if u := auth.CurrentUser(ctx); auth.SessionToken(req.Header()) != "" || u.DeviceID != "" {
 		procedure := req.Spec().Procedure
-		go s.watchSession(ctx, token, u, func(cur auth.User) error {
+		go s.watchSession(ctx, u, req.Header(), appByToken, func(cur auth.User) error {
 			if !auth.Allowed(cur, procedure) {
 				return errRoleChanged
 			}
@@ -275,7 +285,7 @@ func (s *projectService) StreamLogs(ctx context.Context, req *connect.Request[na
 			cancel()
 		})
 	}
-	stream, err := s.Projects.Logs(ctx, m.GetProjectId(), m.GetContainer(), m.GetService(), m.GetTail(), m.GetFollow())
+	stream, err := logStreamFor(s, ctx, m)
 	if err != nil {
 		return toConnect(err)
 	}
@@ -283,6 +293,10 @@ func (s *projectService) StreamLogs(ctx context.Context, req *connect.Request[na
 		line, err := stream.Recv()
 		if err != nil {
 			if p := stopped.Load(); p != nil {
+				// App 的令牌要重新换取：原样返回（带 Nagi-App-Retoken），App 换新令牌后重新打开。
+				if ce := new(connect.Error); errors.As(*p, &ce) {
+					return ce
+				}
 				return connect.NewError(connect.CodePermissionDenied, *p)
 			}
 			if errors.Is(err, io.EOF) || ctx.Err() != nil {

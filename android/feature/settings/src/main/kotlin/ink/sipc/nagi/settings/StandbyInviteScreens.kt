@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,8 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
     var removing by remember { mutableStateOf<StandbyPanel?>(null) }
     var promoting by remember { mutableStateOf(false) }
     var promoted by remember { mutableStateOf(false) }
+    // 打开、关上确认框时清掉上一次的错误，免得别的操作的错误写进这个确认框。
+    LaunchedEffect(removing, promoting) { action.error = null }
     SubPage(stringResource(R.string.standby), onBack, actions = {
         if (st.value?.isStandby == false) {
             NagiIconButton(NagiIcons.Plus, stringResource(R.string.standby_add), {
@@ -126,7 +129,7 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
                     st.reload()
                 }
             },
-        )
+        ) { ActionError(action) }
     }
     if (promoting) {
         NagiDialog(
@@ -140,7 +143,7 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
                     promoted = true
                 }
             },
-        )
+        ) { ActionError(action) }
     }
 }
 

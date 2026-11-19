@@ -8,7 +8,7 @@ import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormBody,
 import { create } from "@bufbuild/protobuf";
 import { AuditSinkHeaderSchema, AuditSinkSchema, type AuditSettings, type AuditSink, type SessionPolicy } from "@/gen/nagi/v1/api_pb";
 import { errorMessage, settingsClient, toDate } from "@/lib/api";
-import { isElevationRequired, requireElevation } from "@/components/elevate";
+import { isElevationRequired, requireElevation, withElevation } from "@/components/elevate";
 import { confirmAction } from "@/components/confirm";
 import { formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -26,16 +26,6 @@ export function PanelSecurityCard() {
       <SessionSection />
     </>
   );
-}
-
-// withElevation 调用接口；面板要求先验证身份时弹框，验证后重试一次。
-async function withElevation<T>(call: () => Promise<T>, description: string): Promise<T> {
-  try {
-    return await call();
-  } catch (err) {
-    if (!isElevationRequired(err) || !(await requireElevation(description))) throw err;
-    return call();
-  }
 }
 
 // withOption：设置里存的值不在选项里时（例如以后改过选项）也显示出来。

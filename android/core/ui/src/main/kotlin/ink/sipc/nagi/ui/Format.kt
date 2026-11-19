@@ -12,7 +12,8 @@ private val sizeUnits = listOf("B", "KB", "MB", "GB", "TB")
 private val rateUnits = listOf("B/s", "KB/s", "MB/s", "GB/s", "TB/s")
 
 private fun sizeParts(value: Double, units: List<String>, decimalsBelow: Double): Pair<String, String> {
-    var v = value
+    // NaN、Inf、负数（节点乱报）当 0。
+    var v = if (value.isFinite() && value > 0) value else 0.0
     var i = 0
     while (v >= 1000 && i < units.size - 1) {
         v /= 1024

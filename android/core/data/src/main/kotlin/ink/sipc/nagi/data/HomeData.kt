@@ -107,7 +107,16 @@ private const val ROUTE_EVERY_MS = 60_000L
 private val meshSeries = Regex("^m:([0-9a-f]+|other):(rx|tx)$")
 private val relaySeries = Regex("^m:relay:(rx|tx)$")
 
-private fun MetricSeries.latest(): Double? = valuesList.lastOrNull()
+/** 节点上报的数（速率、占用、容量）最大到这里，再大当作这个数：1 PB/s，正常不会到。 */
+internal const val MAX_METRIC = 1e15
+
+/**
+ * 节点上报的数原样经面板转发，被攻破的节点能填 NaN、Inf 或负数（v0.35.0#16），进到图表会让首页崩溃。
+ * 一律先过这里：不是有限的正数当 0，太大的截到 [MAX_METRIC]（加起来也不会溢出成 Inf）。
+ */
+internal fun metric(v: Double): Double = if (v.isFinite() && v > 0) minOf(v, MAX_METRIC) else 0.0
+
+private fun MetricSeries.latest(): Double? = valuesList.lastOrNull()?.let(::metric)
 
 private fun ago(seconds: Long): Timestamp = Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 - seconds).build()
 
@@ -195,7 +204,7 @@ internal class HomeLoader(private val session: PanelSession) {
             }
         }.awaitAll().filterNotNull()
         val totals = HashMap<String, Double>()
-        for (list in parts) for (s in list) totals[s.name] = (totals[s.name] ?: 0.0) + s.valuesList.sumOf { it * ROUTE_STEP }
+        for (list in parts) for (s in list) totals[s.name] = (totals[s.name] ?: 0.0) + s.valuesList.sumOf { metric(it) * ROUTE_STEP }
         totals.also { routeTotals = it; routeTotalsAt = System.currentTimeMillis() }
     }
 
@@ -316,8 +325,8 @@ internal class HomeLoader(private val session: PanelSession) {
             val status = if (n.pending) "pending" else if (n.online) "online" else "offline"
             if (!n.online || n.pending) return@map NodeStat(n.id, n.name, status, containers = n.containers)
             val u = n.usage
-            val diskTotal = u.disksList.sumOf { it.totalBytes.toDouble() }.takeIf { it > 0 } ?: n.info.diskBytes.toDouble()
-            val diskUsed = if (u.disksCount > 0) u.disksList.sumOf { it.usedBytes.toDouble() } else u.disk / 100 * diskTotal
+            val diskTotal = u.disksList.sumOf { metric(it.totalBytes.toDouble()) }.takeIf { it > 0 } ?: metric(n.info.diskBytes.toDouble())
+            val diskUsed = if (u.disksCount > 0) u.disksList.sumOf { metric(it.usedBytes.toDouble()) } else metric(u.disk) / 100 * diskTotal
             var rx: Double? = null
             var tx: Double? = null
             rates[n.id]?.net?.forEach { s ->
@@ -326,7 +335,7 @@ internal class HomeLoader(private val session: PanelSession) {
                     "node:net_tx" -> tx = s.latest()
                 }
             }
-            NodeStat(n.id, n.name, status, u.cpu, n.info.cpus, u.memory, n.info.memoryBytes.toDouble(), diskUsed, diskTotal, rx, tx, n.containers)
+            NodeStat(n.id, n.name, status, metric(u.cpu), n.info.cpus, metric(u.memory), metric(n.info.memoryBytes.toDouble()), diskUsed, diskTotal, rx, tx, n.containers)
         }
         return HomeOverview(
             attention = attention,
@@ -398,7 +407,7 @@ internal class HomeLoader(private val session: PanelSession) {
                     else -> continue
                 }
                 s.timesList.forEachIndexed { i, t ->
-                    val v = s.getValues(i)
+                    val v = metric(s.getValues(i))
                     if (dir == "rx") drx[t] = (drx[t] ?: 0.0) + v
                     else {
                         dtx[t] = (dtx[t] ?: 0.0) + v
@@ -409,7 +418,7 @@ internal class HomeLoader(private val session: PanelSession) {
             val seen = HashSet<Long>()
             for (s in net) {
                 s.timesList.forEachIndexed { i, t ->
-                    val v = s.getValues(i)
+                    val v = metric(s.getValues(i))
                     when (s.name) {
                         "node:net_rx" -> rx[t] = (rx[t] ?: 0.0) + maxOf(0.0, v - (drx[t] ?: 0.0))
                         "node:net_tx" -> tx[t] = (tx[t] ?: 0.0) + maxOf(0.0, v - (dtx[t] ?: 0.0))

@@ -76,6 +76,10 @@ var passwordElevation = map[string]bool{
 	"/nagi.v1.SettingsService/BeginPasskeyRegistration": true,
 	"/nagi.v1.SettingsService/BeginTOTP":                true,
 	"/nagi.v1.AuthService/CreateAppPairing":             true,
+	// 备用面板的配对码会交出主密钥和数据库；移交节点、提升备用面板会让别的面板接管所有节点。
+	"/nagi.v1.SettingsService/CreateStandbyCode": true,
+	"/nagi.v1.NodeService/HandoverNodes":         true,
+	"/nagi.v1.SettingsService/PromoteStandby":    true,
 }
 
 // PasswordElevationProcedures 列出 passwordElevation 里的接口（测试用）。
@@ -137,6 +141,10 @@ var tokenScopeAdmin = map[string]tokenNeed{
 func TokenAllowed(u User, procedure string) bool {
 	parts := strings.Split(strings.TrimPrefix(procedure, "/"), "/")
 	if len(parts) != 2 {
+		return false
+	}
+	// 只认密码确认的接口令牌一律算不上确认过，直接拒绝（例如 NodeService 的 HandoverNodes）。
+	if passwordElevation[procedure] {
 		return false
 	}
 	if parts[0] != "nagi.v1.ProjectService" && parts[0] != "nagi.v1.NodeService" {

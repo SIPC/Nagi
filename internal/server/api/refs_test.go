@@ -22,7 +22,7 @@ import (
 // 确实不返回给成员的（告警标题、只有管理员能调的接口、节点加入）登记在 plainNodeNames 里。
 func TestNodeNamesInErrorsAreRefs(t *testing.T) {
 	plainNodeNames := []string{
-		"已加入",               // 告警标题
+		"已从 %s 加入",          // 告警标题
 		"用接入码加入，等待批准",       // 告警标题
 		"已被隔离",              // 告警标题
 		"已解除隔离",             // 告警标题

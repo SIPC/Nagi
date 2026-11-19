@@ -1,6 +1,7 @@
 package project
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/go-git/go-git/v5"
@@ -122,24 +124,106 @@ func guardClone(opts *git.CloneOptions) {
 	}
 }
 
-// lineWriter 把 git 的进度输出按行转发。
+// maxProgressLine 是 git 进度输出一行最多转发多少字节，超过的截断。
+const maxProgressLine = 4 << 10
+
+// lineWriter 把 git 的进度输出按行转发。进度是 git 服务器发来的：只在新写入的部分找换行，一行超过 maxProgressLine
+// 就截断发出、丢掉到换行为止的其余部分。不换行的数据不会让缓冲一直变大、每次从头重新扫描（v0.35.0#21）。
 type lineWriter struct {
 	onLine func(string)
 	buf    []byte
+	skip   bool // 这一行已经截断发出，丢掉到换行为止的部分
 }
 
 func (w *lineWriter) Write(b []byte) (int, error) {
-	w.buf = append(w.buf, b...)
-	for {
-		i := strings.IndexAny(string(w.buf), "\r\n")
+	n := len(b)
+	for len(b) > 0 {
+		i := bytes.IndexAny(b, "\r\n")
 		if i < 0 {
-			return len(b), nil
+			w.add(b)
+			break
 		}
-		if line := strings.TrimSpace(string(w.buf[:i])); line != "" {
-			w.onLine(line)
+		w.add(b[:i])
+		if !w.skip {
+			w.emit(false)
 		}
-		w.buf = w.buf[i+1:]
+		w.buf, w.skip = w.buf[:0], false
+		b = b[i+1:]
 	}
+	return n, nil
+}
+
+// add 把一行的一部分放进缓冲，满了 maxProgressLine 就截断发出。
+func (w *lineWriter) add(b []byte) {
+	if w.skip {
+		return
+	}
+	if room := maxProgressLine - len(w.buf); len(b) >= room {
+		w.buf = append(w.buf, b[:room]...)
+		w.emit(true)
+		w.buf, w.skip = w.buf[:0], true
+		return
+	}
+	w.buf = append(w.buf, b...)
+}
+
+func (w *lineWriter) emit(clipped bool) {
+	line := strings.TrimSpace(strings.ToValidUTF8(string(w.buf), ""))
+	if line == "" {
+		return
+	}
+	if clipped {
+		line += "…"
+	}
+	w.onLine(line)
+}
+
+// gitPullTimeout 是从 git 拉取的最长时间（和拉取镜像一样，文案里写的是 30 分钟，改的话一起改）。
+var gitPullTimeout = 30 * time.Minute
+
+// gitDiskEvery 是拉取期间多久检查一次磁盘剩余空间：go-git 自己写文件，没法每次写入前检查，就定时查。
+var gitDiskEvery = 2 * time.Second
+
+// checkDisk 检查磁盘剩余空间，测试时替换。
+var checkDisk = metrics.CheckDisk
+
+// guardedClone 运行 clone，开始前和进行中定时检查 dir 所在磁盘的剩余空间，不够了就取消：恶意的 git 服务器
+// 发一个无穷大的 packfile 时不会写满磁盘（v0.35.0#21）。总时长由调用方的 ctx 限制（见 pull）。
+func guardedClone(ctx context.Context, dir string, clone func(ctx context.Context) error) error {
+	if err := checkDisk(dir, 0); err != nil {
+		return err
+	}
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var low error
+	stop := make(chan struct{})
+	watched := make(chan struct{})
+	go func() {
+		defer close(watched)
+		t := time.NewTicker(gitDiskEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-cctx.Done():
+				return
+			case <-t.C:
+				if err := checkDisk(dir, 0); err != nil {
+					low = err
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	err := clone(cctx)
+	close(stop)
+	<-watched // 之后读 low 不用加锁
+	if err != nil && low != nil {
+		return low
+	}
+	return err
 }
 
 // pull 从 git 拉取文件替换容器的 data/，保留 preserve 里的路径。返回拉取到的提交。
@@ -168,11 +252,18 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 		opts.Auth = auth
 	}
 	guardClone(opts)
+	// 拉取（包括按标签再试一次）的总时长有上限：恶意的 git 服务器一直慢慢发数据时，不会一直占着容器的锁（v0.35.0#21）。
+	pctx, cancel := context.WithTimeout(ctx, gitPullTimeout)
+	defer cancel()
 	ref := strings.TrimSpace(src.GetGitRef())
-	clone := func(name plumbing.ReferenceName) (*git.Repository, error) {
+	clone := func(name plumbing.ReferenceName) (repo *git.Repository, err error) {
 		os.RemoveAll(p.checkoutDir())
 		opts.ReferenceName = name
-		return git.PlainCloneContext(ctx, p.checkoutDir(), false, opts)
+		err = guardedClone(pctx, p.root, func(ctx context.Context) (err error) {
+			repo, err = git.PlainCloneContext(ctx, p.checkoutDir(), false, opts)
+			return err
+		})
+		return repo, err
 	}
 	var repo *git.Repository
 	if ref == "" {
@@ -180,6 +271,14 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 	} else if repo, err = clone(plumbing.NewBranchReferenceName(ref)); err != nil {
 		// 不是分支，再按标签试一次。
 		repo, err = clone(plumbing.NewTagReferenceName(ref))
+	}
+	var low *metrics.LowDiskError
+	switch {
+	case err == nil:
+	case ctx.Err() == nil && errors.Is(pctx.Err(), context.DeadlineExceeded):
+		return "", errors.New("拉取超过 30 分钟，已停止")
+	case errors.As(err, &low):
+		return "", err
 	}
 	if err != nil {
 		if spec.IsSSHURL(url) {

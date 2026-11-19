@@ -61,6 +61,8 @@ type Service struct {
 	// onHolderChanged 换掉 holderChanged 的默认做法，witnessReport 换掉取见证人节点上报的做法，测试用。
 	onHolderChanged func(pid, name string, register bool)
 	witnessReport   func(nodeID string) *nagiv1.ReportRequest
+	// onForeignReport 换掉 foreignReport 记越权的做法，测试用。
+	onForeignReport func(nodeID, container string)
 	Q               *store.Queries
 	Sealer          *sealer.Sealer
 	Nodes           *nodes.Registry
@@ -96,6 +98,8 @@ type Service struct {
 	backupReports map[string]backupReport
 	// oldSyncs：面板在后台等旧版本的源节点同步完的（容器，备份节点），"项目 ID/容器名/节点 ID"，见 waitOldSync。
 	oldSyncs map[string]bool
+	// retired：让原节点停掉已换到别的节点的容器的时间（"节点 ID/项目 ID/容器名"），见 retireMoved。
+	retired map[string]time.Time
 }
 
 type backupReport struct {

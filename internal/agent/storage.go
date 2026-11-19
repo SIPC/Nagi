@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/fileops"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -83,7 +84,7 @@ func dirBytes(ctx context.Context, dir string) (total int64, partial bool) {
 	defer root.Close()
 	stop := errors.New("stop")
 	files := 0
-	err = fs.WalkDir(root.FS(), ".", func(_ string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(fileops.RootFS(root), ".", func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // 读不了的文件不计。
 		}

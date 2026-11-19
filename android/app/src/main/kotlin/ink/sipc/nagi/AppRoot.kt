@@ -141,6 +141,8 @@ fun AppRoot(graph: AppGraph, lock: AppLock, pendingPair: MutableStateFlow<Pairin
     val session by graph.session.collectAsState()
     val locked by lock.locked.collectAsState()
     var removed by rememberSaveable { mutableStateOf(false) }
+    // 有面板时不留着外部链接：否则退出这台手机后会自动打开这个旧链接的确认页（v0.34.0-b L4）。
+    LaunchedEffect(session) { if (session != null) pendingPair.value = null }
     val reduced = isReducedMotion()
     // 添加流程、解锁、四个标签之间换的是整页：新的一页淡入并从 98% 放大到原大小，旧的一页先淡出，不硬切。
     // 每一页带着自己的会话，淡出的那一页（例如刚退出）不会读到已经没有的会话。
@@ -225,7 +227,9 @@ private fun PairingFlow(graph: AppGraph, pendingPair: MutableStateFlow<PairingUr
     LaunchedEffect(pending) {
         val uri = pending ?: return@LaunchedEffect
         pendingPair.value = null
-        vm.open(uri)
+        // 只在欢迎页接收外部链接：扫码页、确认页打开期间来的不理，别的 App 不能悄悄把确认页换成别的面板（v0.34.0-b L4）。
+        if (!acceptsPairLinkOn(nav.currentDestination?.route)) return@LaunchedEffect
+        vm.open(uri, external = true)
         nav.navigate("confirm") { launchSingleTop = true }
     }
     val reduced = isReducedMotion()

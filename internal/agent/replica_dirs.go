@@ -827,17 +827,19 @@ var replicaLockWait = time.Minute
 // lockWithin 在 wait 之内拿到副本的锁，拿不到时返回「同步进行中」。不排队等写锁：排队的写锁会挡住后来的读锁，
 // 一条不结束的流就能让这个副本所有的同步都停下。
 func (r *replicas) lockWithin(ctx context.Context, projectID, container string, wait time.Duration) (func(), error) {
-	l := r.lockOf(projectID, container)
+	l, done := r.lockOf(projectID, container)
 	deadline := time.Now().Add(wait)
 	for {
 		if l.TryLock() {
-			return l.Unlock, nil
+			return func() { l.Unlock(); done() }, nil
 		}
 		if time.Now().After(deadline) {
+			done()
 			return nil, status.Error(codes.Aborted, "副本同步进行中，请稍后重试")
 		}
 		select {
 		case <-ctx.Done():
+			done()
 			return nil, status.Error(codes.Canceled, "移动副本时节点正在退出，已取消")
 		case <-time.After(100 * time.Millisecond):
 		}

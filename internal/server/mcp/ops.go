@@ -56,9 +56,11 @@ var deployNotices = []*regexp.Regexp{
 }
 
 // 部署结果里最多放多少条提醒、每条最多多少个字符（git 服务器不换行就能把一行做得很大）。
+// maxOutputLineLen 是进度通知和 last_output 里每行最多多少个字符：旧版本的节点不截断 git 服务器发来的进度（v0.35.0#21）。
 const (
 	maxDeployNotices   = 20
 	maxDeployNoticeLen = 300
+	maxOutputLineLen   = 1000
 )
 
 func deployNotice(line string) bool {
@@ -68,12 +70,56 @@ func deployNotice(line string) bool {
 	return slices.ContainsFunc(deployNotices, func(re *regexp.Regexp) bool { return re.MatchString(line) })
 }
 
-// clipNotice 把提醒截到 maxDeployNoticeLen 个字符，截掉的部分用 … 表示。
+// clipNotice 把提醒截到 maxDeployNoticeLen 个字符，截掉的部分用 … 表示；换行这类控制字符换成空格。
 func clipNotice(line string) string {
-	if utf8.RuneCountInString(line) <= maxDeployNoticeLen {
+	line = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return ' '
+		}
+		return r
+	}, line)
+	return clipLine(line, maxDeployNoticeLen)
+}
+
+// clipLine 把一行截到 n 个字符，截掉的部分用 … 表示。不把整行转成 []rune：行可能很大。
+func clipLine(line string, n int) string {
+	if len(line) <= n {
 		return line
 	}
-	return string([]rune(line)[:maxDeployNoticeLen]) + "…"
+	count := 0
+	for i := range line {
+		if count == n {
+			return line[:i] + "…"
+		}
+		count++
+	}
+	return line
+}
+
+// 节点的匿名卷提醒（internal/agent/project/startwatch.go 的 anonymousVolumeLines）。数据目录是镜像声明的，内容不可信：
+// 节点只在「注意：」这行写服务名、数量和固定文字，目录放在下面缩进的行里（审查报告 v0.35.0#9）。
+// 旧版节点把目录写在这一行中间（「注意：容器 web 的 /data 是镜像声明的数据目录…」），镜像能借此在提醒里塞任意文字，
+// 所以「注意：容器 」开头的行必须和新格式一字不差，否则换成面板自己的固定文字，只留服务名。
+var (
+	anonVolumeNotice = regexp.MustCompile(`^注意：容器 [A-Za-z0-9][A-Za-z0-9._-]* 有 \d{1,4} 个镜像声明的数据目录没有设为持久化目录，` +
+		`数据在 Docker 的匿名卷里，快照、备份、迁移和顶替都不包含。在配置的「持久化目录」里加上下面的目录（compose 里挂到 \./volumes/ 下）后重新部署：$`)
+	anonVolumeService = regexp.MustCompile(`^注意：容器 ([A-Za-z0-9][A-Za-z0-9._-]*) [的有] `)
+)
+
+// noticeOf 判断部署日志的一行是不是 Nagi 的提醒，是的话返回放进 warnings 的文字。
+func noticeOf(line string) (string, bool) {
+	if !deployNotice(line) {
+		return "", false
+	}
+	if strings.HasPrefix(line, "注意：容器 ") && !anonVolumeNotice.MatchString(line) {
+		who := "有容器"
+		if m := anonVolumeService.FindStringSubmatch(line); m != nil {
+			who = "容器 " + m[1] + " 有"
+		}
+		return "注意：" + who + "镜像声明的数据目录没有设为持久化目录，数据在 Docker 的匿名卷里，快照、备份、迁移和顶替都不包含。" +
+			"目录见部署日志，在配置的「持久化目录」里加上它们后重新部署。", true
+	}
+	return clipNotice(line), true
 }
 
 // follow 跟着一个流式操作（部署、启停、回滚、快照），把输出作为进度通知发给客户端，等到结果。
@@ -95,7 +141,7 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 		for stream.Receive() {
 			switch e := stream.Msg().Event.(type) {
 			case *nagiv1.DeployEvent_Output:
-				ch <- item{line: e.Output}
+				ch <- item{line: clipLine(e.Output, maxOutputLineLen)}
 			case *nagiv1.DeployEvent_Result:
 				ch <- item{result: e.Result}
 			}
@@ -131,10 +177,8 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 			}
 			n++
 			tail = append(tail, it.line)
-			if deployNotice(it.line) && len(warnings) < maxDeployNotices {
-				if w := clipNotice(it.line); !slices.Contains(warnings, w) {
-					warnings = append(warnings, w)
-				}
+			if w, ok := noticeOf(it.line); ok && len(warnings) < maxDeployNotices && !slices.Contains(warnings, w) {
+				warnings = append(warnings, w)
 			}
 			if len(tail) > 50 {
 				tail = tail[len(tail)-50:]

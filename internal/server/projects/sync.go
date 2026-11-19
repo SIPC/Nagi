@@ -247,11 +247,15 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 // retireMoved 处理节点上报、但面板上已经换到别的节点的容器（原节点离线时在备份节点上恢复了，或者重新部署到了其他节点）：
 // 让这个节点停止并删除它，目录改名保留。正在操作的项目跳过（例如迁移进行到一半，面板还没改所在节点）。
 // 面板上没有这个项目的不动：可能是换了面板、项目还没拼回来。
+//
+// 拿着项目锁只做核对，收集好要退役的容器、释放锁以后再调用节点：上报的节点可能被攻破，它报一个不属于它的容器、
+// 收到删除请求不回应，就能把它知道 ID 的项目的锁一直占着，部署、改配置、迁移都被拖住（v0.35.0#15）。
 func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*nagiv1.ContainerStatus, rows []store.Container) {
 	here := map[string]bool{}
 	for _, r := range rows {
 		here[r.ProjectID+"/"+r.Name] = true
 	}
+	var retire []*nagiv1.ContainerStatus
 	for _, cs := range reported {
 		if here[cs.GetProjectId()+"/"+cs.GetName()] {
 			continue
@@ -277,14 +281,83 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 		}
 		// 拿到锁以后再确认一次。
 		if row, err = s.container(ctx, cs.GetProjectId(), cs.GetName()); err == nil && row.NodeID != c.NodeID {
-			_, err = c.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: cs.GetProjectId(), Container: cs.GetName(), Retire: true})
-			if err != nil {
-				s.Log.Warn("让原节点停止已换到其他节点的容器失败", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID, "err", err)
-			} else {
-				s.Log.Info("原节点上的容器已停止，目录改名保留", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID)
-			}
+			retire = append(retire, cs)
 		}
 		l.Unlock()
+	}
+	for _, cs := range retire {
+		key := c.NodeID + "/" + cs.GetProjectId() + "/" + cs.GetName()
+		switch s.retireState(key, time.Now()) {
+		case retireSettling:
+			continue
+		case retireRepeated:
+			// 刚让它停掉的容器又报上来：正常节点停掉以后就不再上报，这是节点在报不属于它的容器。
+			s.foreignReport(ctx, c, cs.GetProjectId(), cs.GetName())
+			continue
+		}
+		_, err := c.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: cs.GetProjectId(), Container: cs.GetName(), Retire: true})
+		if err != nil {
+			s.Log.Warn("让原节点停止已换到其他节点的容器失败", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID, "err", err)
+			continue
+		}
+		s.markRetired(key, time.Now())
+		s.Log.Info("原节点上的容器已停止，目录改名保留", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID)
+	}
+}
+
+// 让原节点停掉已换到别的节点的容器以后：retireSettle 之内又报上来的不管（那次上报可能是停掉之前发出的），
+// 之后、retireMemory 之内又报上来的记一条越权、不再调用节点；过了 retireMemory 当作新的一次，再让它停一次。
+const (
+	retireSettle = 30 * time.Second
+	retireMemory = 10 * time.Minute
+)
+
+type retireStatus int
+
+const (
+	retireNew retireStatus = iota
+	retireSettling
+	retireRepeated
+)
+
+// retireState 返回节点（key 是 节点/项目/容器）上报的这个容器最近有没有让它停过。
+func (s *Service) retireState(key string, now time.Time) retireStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	at, ok := s.retired[key]
+	switch {
+	case !ok || now.Sub(at) >= retireMemory:
+		return retireNew
+	case now.Sub(at) < retireSettle:
+		return retireSettling
+	}
+	return retireRepeated
+}
+
+// markRetired 记下节点已经停掉了这个容器，顺便删掉过期的记录。
+func (s *Service) markRetired(key string, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.retired == nil {
+		s.retired = map[string]time.Time{}
+	}
+	for k, at := range s.retired {
+		if now.Sub(at) >= retireMemory {
+			delete(s.retired, k)
+		}
+	}
+	s.retired[key] = now
+}
+
+// foreignReport 记一条越权：节点上报了不属于它、刚让它停掉的容器。
+func (s *Service) foreignReport(ctx context.Context, c *nodes.Conn, projectID, name string) {
+	s.Log.Warn("节点上报了不属于它的容器", "project", projectID, "container", name, "node", c.NodeID)
+	if s.onForeignReport != nil {
+		s.onForeignReport(c.NodeID, projectID+"/"+name)
+		return
+	}
+	if s.Nodes != nil {
+		s.Nodes.PanelViolation(ctx, c, "report_foreign_container", projectID+"/"+name)
 	}
 }
 

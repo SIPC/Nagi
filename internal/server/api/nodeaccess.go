@@ -86,6 +86,15 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure: true,
 	// 项目根目录：同上，而且「容器目录要在根目录内」的限制以它为准。
 	nagiv1connect.NodeServiceSetNodeProjectsRootProcedure: true,
+	// 备用面板的配对码、把节点移交给别的面板、提升备用面板：配对会交出主密钥和数据库，移交和提升会让别的面板
+	// 接管所有节点（见 docs/panel.md）。只认密码或验证码做的确认（auth.passwordElevation）。
+	nagiv1connect.SettingsServiceCreateStandbyCodeProcedure: true,
+	nagiv1connect.NodeServiceHandoverNodesProcedure:         true,
+	nagiv1connect.SettingsServicePromoteStandbyProcedure:    true,
+	// 新建成员、修改成员（角色、访问范围、重置密码、清除两步验证和通行密钥）：拿到会话的人不能借它给自己
+	// 建一个知道密码的管理员，再用这个密码通过高权限确认。
+	nagiv1connect.SettingsServiceCreateUserProcedure: true,
+	nagiv1connect.SettingsServiceUpdateUserProcedure: true,
 }
 
 // needsElevation 判断这次调用要不要先做高权限确认。访问令牌按 auth.User.ElevatedFor 的规则（见 docs/mcp.md#高权限确认）。
@@ -269,7 +278,6 @@ func (a *API) recordNodeShellOpen(ctx context.Context, nodeID, ip, recordingID s
 func (a *API) NodeShellHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
-		token := auth.SessionToken(r.Header)
 		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
@@ -331,7 +339,7 @@ func (a *API) NodeShellHandler() http.Handler {
 
 		// 定时重查：踢出登录、降权之后要断开；太久没有动静、用了太久也断开。
 		lastActive := newActivityClock()
-		go a.watchSession(ctx, token, u, func(cur auth.User) error {
+		go a.watchSession(ctx, u, r.Header, appByDevice, func(cur auth.User) error {
 			switch {
 			case a.nodeRootAllowed(ctx, cur, nodeID) != nil:
 				if ctx.Err() != nil {

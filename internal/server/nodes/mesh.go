@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"math"
 	"net/netip"
 	"slices"
 	"sync"
@@ -163,6 +164,20 @@ func (r *Registry) meshConfig(to *Conn) *nagiv1.MeshConfig {
 // maxNodeRelays 是每对节点最多给几个中转节点：第一个不通时节点自己换下一个，都不通再经面板。
 const maxNodeRelays = 2
 
+// 节点上报的直连延迟（毫秒）夹到这个范围里。被攻破的节点报负数、NaN、极小的延迟，能把自己排成所有节点对的第一中转。
+const (
+	minReportedRTT = 0.1
+	maxReportedRTT = 10000
+)
+
+// cleanRTT 整理节点上报的直连延迟：不是有限数时 ok 为 false（这条直连不采用），其余夹到 [minReportedRTT, maxReportedRTT]。
+func cleanRTT(ms float64) (float64, bool) {
+	if math.IsNaN(ms) || math.IsInf(ms, 0) {
+		return 0, false
+	}
+	return min(max(ms, minReportedRTT), maxReportedRTT), true
+}
+
 // withRelays 给成员列表里和 to 直连不通的节点挑中转节点（见 docs/mesh.md#经节点中转）。按各节点上报的直连情况算，
 // 不改 list 里原来的条目。
 func (r *Registry) withRelays(to *Conn, list []*nagiv1.MeshPeer) []*nagiv1.MeshPeer {
@@ -184,7 +199,7 @@ func (r *Registry) withRelays(to *Conn, list []*nagiv1.MeshPeer) []*nagiv1.MeshP
 		if links[a] == nil {
 			links[a] = map[mesh.Key]float64{}
 		}
-		if old, ok := links[a][b]; !ok || rtt < old {
+		if old, ok := links[a][b]; !ok || rtt > old {
 			links[a][b] = rtt
 		}
 	}
@@ -202,10 +217,14 @@ func (r *Registry) withRelays(to *Conn, list []*nagiv1.MeshPeer) []*nagiv1.MeshP
 			if i >= maxReportedRaw {
 				break
 			}
+			rtt, ok := cleanRTT(d.GetRttMs())
+			if !ok {
+				continue
+			}
 			if p, err := mesh.ParseKey(d.GetPublicKey()); err == nil && p != k {
-				// 任一端报了直连就算通，两端报的延迟取小的。
-				link(k, p, d.GetRttMs())
-				link(p, k, d.GetRttMs())
+				// 任一端报了直连就算通；两端都报时延迟取大的，一端虚报得低也压不下另一端报的。
+				link(k, p, rtt)
+				link(p, k, rtt)
 			}
 		}
 	}

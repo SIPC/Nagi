@@ -2,13 +2,17 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/release"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
 const panelScript = "../../../scripts/install.sh"
@@ -79,5 +83,67 @@ func TestInstallScriptsSyntax(t *testing.T) {
 		if out, err := exec.Command(sh, "-n", f).CombinedOutput(); err != nil {
 			t.Errorf("%s 语法错误：%v\n%s", f, err, out)
 		}
+	}
+}
+
+// v0.35.0#10：令牌用环境变量 NAGI_TOKEN 传给安装脚本和 nagi enroll，不出现在进程参数里；旧命令的 --token 仍然认。
+// 脚本读完就清掉环境变量，不传给 Docker 安装脚本等子进程。
+func TestInstallScriptTokenFromEnv(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	// 共用代码换成打印读到的令牌后退出，只跑参数解析这一段。
+	var buf bytes.Buffer
+	if err := installScript.Execute(&buf, map[string]string{
+		"Panel": "203.0.113.10:34567", "Fingerprint": "sha256//abc=", "Version": "v0.1.0",
+		"Base": "https://example.invalid", "Shared": `printf 'token=%s env=%s\n' "$TOKEN" "${NAGI_TOKEN-unset}"; exit 0`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	script := buf.String()
+	if strings.Contains(script, `--token "$TOKEN"`) || !strings.Contains(script, `NAGI_TOKEN="$TOKEN" "$BIN" enroll `) {
+		t.Error("调用 nagi enroll 时应该用环境变量传令牌")
+	}
+	run := func(env []string, args ...string) (string, error) {
+		cmd := exec.Command(sh, append([]string{"-s", "--"}, args...)...)
+		cmd.Stdin = strings.NewReader(script)
+		for _, kv := range os.Environ() {
+			if !strings.HasPrefix(kv, "NAGI_") {
+				cmd.Env = append(cmd.Env, kv)
+			}
+		}
+		cmd.Env = append(cmd.Env, env...)
+		out, err := cmd.CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	if out, err := run([]string{"NAGI_TOKEN=tok-env"}); err != nil || out != "token=tok-env env=unset" {
+		t.Errorf("环境变量传令牌：%q %v", out, err)
+	}
+	if out, err := run([]string{"NAGI_TOKEN=tok-env"}, "--download-url", "https://mirror.example"); err != nil || out != "token=tok-env env=unset" {
+		t.Errorf("环境变量传令牌，命令末尾追加选项：%q %v", out, err)
+	}
+	if out, err := run(nil, "--token", "tok-arg"); err != nil || out != "token=tok-arg env=unset" {
+		t.Errorf("旧命令的 --token：%q %v", out, err)
+	}
+	if out, err := run(nil); err == nil || !strings.Contains(out, "NAGI_TOKEN") {
+		t.Errorf("没有令牌时应该报错：%q %v", out, err)
+	}
+}
+
+// v0.35.0#10：面板生成的安装命令用环境变量传令牌，末尾的 -s -- 让用户能接着追加选项。
+func TestEnrollCommandTokenInEnv(t *testing.T) {
+	h := newAuditHarness(t)
+	h.a.Panel.Fingerprint, h.a.Panel.Port = "sha256//abc=", 34567
+	h.a.Panel.NewEnrollToken = func(context.Context) (string, time.Time, error) {
+		return "tok123", time.Now().Add(time.Hour), nil
+	}
+	res, err := (&nodeService{h.a}).CreateEnrollCommand(context.Background(), connect.NewRequest(&nagiv1.CreateEnrollCommandRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := res.Msg.GetCommand()
+	if !strings.HasSuffix(cmd, "/install.sh | NAGI_TOKEN=tok123 sh -s --") || strings.Contains(cmd, "--token") {
+		t.Errorf("安装命令应该用环境变量传令牌：%s", cmd)
 	}
 }
