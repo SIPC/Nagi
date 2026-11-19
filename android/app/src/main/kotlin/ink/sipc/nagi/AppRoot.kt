@@ -84,6 +84,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import ink.sipc.nagi.ui.EmptyState
 import ink.sipc.nagi.ui.NagiTransitions
+import ink.sipc.nagi.ui.SlidingSelection
+import ink.sipc.nagi.ui.rememberSelectionState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInVertically
 import androidx.compose.ui.platform.LocalDensity
@@ -569,9 +571,13 @@ private fun SettingsPanes(
 ) {
     val detail = rememberNavController()
     val entry by detail.currentBackStackEntryAsState()
+    val selection = rememberSelectionState()
+    val slide = rememberPaneSlide()
     Row(Modifier.fillMaxSize()) {
-        Box(Modifier.width(360.dp).fillMaxHeight()) {
+        // 左边菜单选中的底色从上一项滑过去；右边换内容时跟着同方向滑入（选下面的一项，新内容从下面进来）。
+        SlidingSelection(selection, Modifier.width(360.dp).fillMaxHeight()) {
             menu(entry?.destination?.route) { route ->
+                slide.forward = selection.isBelowSelected(route)
                 // 换一项时清掉右边原来的页面栈，不叠在一起。
                 detail.navigate(route) {
                     popUpTo(detail.graph.id) { inclusive = true }
@@ -582,13 +588,29 @@ private fun SettingsPanes(
         Box(Modifier.width(1.dp).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).background(NagiTheme.colors.border))
         // 右边一栏在主顶部栏下面，子页自己的顶部栏（返回、标题）不再留状态栏的高度。
         Box(Modifier.weight(1f).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).consumeWindowInsets(WindowInsets.statusBars)) {
+            // 换左边的一项：同方向滑入；在右边进下一级、返回：淡入淡出。
             NavHost(
                 detail, startDestination = SettingsRoutes.PROFILE,
-                enterTransition = { fadeIn(tween(Motion.FADE_IN)) }, exitTransition = { fadeOut(tween(100)) },
+                enterTransition = { if (selection.has(targetState.destination.route)) slide.enter() else fadeIn(tween(Motion.FADE_IN)) },
+                exitTransition = { if (selection.has(targetState.destination.route)) slide.exit() else fadeOut(tween(100)) },
                 popEnterTransition = { fadeIn(tween(Motion.FADE_IN)) }, popExitTransition = { fadeOut(tween(100)) },
             ) { pages(detail) }
         }
     }
+}
+
+/** 宽屏两栏里右边换内容的方向：左边选的是下面的一项时往下（新内容从下面进来）。 */
+private class PaneSlide(val inPx: Int, val outPx: Int, val reduced: Boolean) {
+    var forward = true
+    fun enter() = NagiTransitions.tabEnter(forward, inPx, reduced, vertical = true)
+    fun exit() = NagiTransitions.tabExit(forward, outPx, reduced, vertical = true)
+}
+
+@Composable
+private fun rememberPaneSlide(): PaneSlide {
+    val density = LocalDensity.current
+    val reduced = isReducedMotion()
+    return remember(density, reduced) { PaneSlide(with(density) { 32.dp.roundToPx() }, with(density) { 16.dp.roundToPx() }, reduced) }
 }
 
 /** 宽屏节点页右边一栏的第一页（选中的节点）。 */
@@ -619,13 +641,17 @@ private fun NodesPanes(
         "nodes/ha" -> "ha"
         else -> null
     }
+    val selection = rememberSelectionState()
+    val slide = rememberPaneSlide()
     val open = { id: String ->
+        slide.forward = selection.isBelowSelected(id)
         pick(id)
         detail.popBackStack(NODE_DETAIL, inclusive = false)
         Unit
     }
     Row(Modifier.fillMaxSize()) {
-        Box(Modifier.width(360.dp).fillMaxHeight()) {
+        // 左边选中的一行底色从上一行滑过去；右边换节点时跟着同方向滑入。
+        SlidingSelection(selection, Modifier.width(360.dp).fillMaxHeight()) {
             list(if (view == null) shown else null, open, { detail.navigate("nodes/add") { launchSingleTop = true } }, { r ->
                 detail.navigate(r) {
                     popUpTo(NODE_DETAIL)
@@ -641,10 +667,10 @@ private fun NodesPanes(
                 popEnterTransition = { fadeIn(tween(Motion.FADE_IN)) }, popExitTransition = { fadeOut(tween(100)) },
             ) {
                 page(NODE_DETAIL) {
-                    // 换一个节点时淡入淡出，不从右边滑进来。
+                    // 换一个节点时跟左边列表同方向滑入（选下面的节点，新内容从下面进来）。
                     AnimatedContent(
                         targetState = shown,
-                        transitionSpec = { fadeIn(tween(Motion.FADE_IN)) togetherWith fadeOut(tween(100)) },
+                        transitionSpec = { slide.enter() togetherWith slide.exit() },
                         label = "node",
                     ) { id ->
                         when {

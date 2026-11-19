@@ -23,7 +23,7 @@
 - `PillNav(items, selected, onSelect, orientation, header)`：悬浮的胶囊导航，横向（`PillOrientation.Horizontal`，底部）和竖向（`Vertical`，宽屏 600 dp 以上时竖在左侧 88 宽一栏的左下角）是同一个组件：外框、底色（`pillBackground`）、选中底色的滑动和拖尾、两端跟随回弹、长按放大和拖动切换（`PillGestures.kt`）都共用，改样式两个方向一起变。横向时选中的一项写出名称、宽度不跳变；竖向只有图标，拖动时选中的一项向右展开写出名称。`header` 放在各项前面、不可点（竖向放 logo）。`PillNavItem(icon, label, badge)`，`badge` 是红点。组件只画胶囊本身，位置由调用方定；底部时页面要留 `Dimens.bottomFade` 的空白，胶囊后面不加渐隐。
 - `NagiTopBar(fade = true)`：内容从顶部栏下面滚过时用，顶部栏自己画背景，最下面 20 渐变成透明。内容铺满整页，上内边距是状态栏加 `Dimens.topBarHeight`。
 - `UnderlineTabs(options, selected, onSelect)`：下划线样式的选择项（时间范围、视图），放在 `SectionHeader` 的右边。只换数据，不滑动下面的内容。网页对应的是 `Tabs` 的下划线样式。
-- `PageTabs(options, selected, onSelect)`：页内标签（节点页的监控、容器，以后容器页的概览、日志……）。高 40，标签之间 24，下面一条横贯整页的细线（伸进页面左右的边距，所以放在页面内容的内边距外面，文字自己按 20 缩进），选中的一项加粗，下面 2 的下划线从上一项滑过去。
+- `PageTabs(options, selected, onSelect)`：页内标签（节点页的监控、容器，以后容器页的概览、日志……）。高 40，标签之间 24，下面一条横贯整页的细线（伸进页面左右的边距，所以放在页面内容的内边距外面，文字自己按 20 缩进），选中的一项加粗，下面 2 的下划线从上一项滑过去。下面的内容用 `PageTabContent(selected) { }` 包住，换标签时跟标签同方向滑入。
 
 ## 按钮
 
@@ -37,7 +37,7 @@
 
 ## 列表行
 
-可点的行一律用 `Modifier.rowClickable(onClick)`，不直接用 `clickable`：按下的底色左右各宽出 12（`RowInset`），圆角 8，内容位置不变。
+可点的行一律用 `Modifier.rowClickable(onClick)`，不直接用 `clickable`：按下的底色左右各宽出 12（`RowInset`），圆角 8，内容位置不变。选中的一行传 `highlight`；列表外面包了 `SlidingSelection(rememberSelectionState())` 时再给每行一个 `selectionKey`，选中的底色由外面画，换一行时从上一行滑过去，这些行不再有按下的底色（宽屏设置菜单、节点列表）。`SelectionState.isBelowSelected(key)` 告诉右边的内容该往哪个方向滑。
 
 - `ListRow(title, detail, dot, density, onClick, trailing)`：一行列表项。
   - `dot`：左边的状态点颜色（`success` 正常、`warning` 注意、`destructive` 严重、`info` 提示），两行时和第一行对齐。

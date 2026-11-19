@@ -43,9 +43,9 @@ fun SettingsGroup(title: String?, modifier: Modifier = Modifier, content: @Compo
 
 /** SettingsRow：一行设置，左边名称，右边当前值（灰色）和「›」，点了进下一级。 */
 @Composable
-fun SettingsRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, value: String? = null, selected: Boolean = false) {
+fun SettingsRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, value: String? = null, selected: Boolean = false, selectionKey: Any? = null) {
     Row(
-        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) NagiTheme.colors.muted else null).heightIn(min = Dimens.rowHeight),
+        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) NagiTheme.colors.muted else null, selectionKey = selectionKey).heightIn(min = Dimens.rowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, style = NagiTheme.type.body, color = NagiTheme.colors.foreground, modifier = Modifier.weight(1f))
@@ -89,7 +89,8 @@ fun ActionRow(title: String, modifier: Modifier = Modifier, description: String?
             if (!description.isNullOrEmpty()) Text(description, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
         }
         Spacer(Modifier.width(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+        // 并排按钮之间 12（docs/android.md 视觉「间距」）。
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
 

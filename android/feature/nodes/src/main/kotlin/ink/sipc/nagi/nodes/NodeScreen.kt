@@ -1,6 +1,5 @@
 package ink.sipc.nagi.nodes
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -66,6 +65,7 @@ import ink.sipc.nagi.ui.NagiTextField
 import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.NagiTopBar
 import ink.sipc.nagi.ui.PageTabs
+import ink.sipc.nagi.ui.PageTabContent
 import ink.sipc.nagi.ui.Roll
 import ink.sipc.nagi.ui.SectionDivider
 import ink.sipc.nagi.ui.SectionHeader
@@ -220,34 +220,28 @@ private fun NodeBody(list: NodesViewModel, n: Node, access: Access, actions: Nod
         Spacer(Modifier.height(12.dp))
         PageTabs(labels, tabs.indexOf(tab), { tab = tabs[it] }, Modifier.fillMaxWidth())
     }
-    // 终端和文件铺满标签以下的高度（自己滚动），其余的标签和标题一起滚动。
-    if (tab == NodeTab.TERMINAL || tab == NodeTab.FILES) {
-        Column(Modifier.fillMaxSize()) {
-            header()
-            val blocked = nodeAccessBlock(n)
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    !n.online -> OfflineNote()
-                    blocked != null -> blocked()
-                    tab == NodeTab.TERMINAL -> TerminalTab(list.repo.session, n, shellCwd)
-                    else -> FilesTab(list.repo.session, n, onTerminal = { shellCwd = it; tab = NodeTab.TERMINAL }, showMessage = list::message)
-                }
-            }
-        }
-        return
-    }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+    // 标题和标签固定在上面，换标签时下面的内容跟标签同方向滑入。终端和文件铺满标签以下的高度（自己滚动），其余的标签自己滚动。
+    Column(Modifier.fillMaxSize()) {
         header()
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = { fadeIn(tween(Motion.FADE_IN, easing = Motion.Enter)) togetherWith fadeOut(tween(100, easing = Motion.Exit)) },
-            label = "node-tab",
-        ) { t ->
-            Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.pageHorizontal)) {
-                when (t) {
-                    NodeTab.CONTAINERS -> ContainersTab(vm, n, actions)
-                    NodeTab.IMAGES -> ImagesTab(list, n.id, n.name)
-                    else -> MetricsTab(vm, n, access)
+        PageTabContent(tabs.indexOf(tab), Modifier.weight(1f).fillMaxWidth()) { i ->
+            val t = tabs.getOrElse(i) { NodeTab.METRICS }
+            if (t == NodeTab.TERMINAL || t == NodeTab.FILES) {
+                val blocked = nodeAccessBlock(n)
+                Box(Modifier.fillMaxSize()) {
+                    when {
+                        !n.online -> OfflineNote()
+                        blocked != null -> blocked()
+                        t == NodeTab.TERMINAL -> TerminalTab(list.repo.session, n, shellCwd)
+                        else -> FilesTab(list.repo.session, n, onTerminal = { shellCwd = it; tab = NodeTab.TERMINAL }, showMessage = list::message)
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.pageHorizontal).padding(bottom = 24.dp)) {
+                    when (t) {
+                        NodeTab.CONTAINERS -> ContainersTab(vm, n, actions)
+                        NodeTab.IMAGES -> ImagesTab(list, n.id, n.name)
+                        else -> MetricsTab(vm, n, access)
+                    }
                 }
             }
         }

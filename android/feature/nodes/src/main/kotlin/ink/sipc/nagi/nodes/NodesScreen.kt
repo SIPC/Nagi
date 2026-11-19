@@ -194,7 +194,7 @@ private fun NodeRow(
     val usage = n.usageInfo()
     // 和首页的节点状态同一种写法：第一行名称，第二行状态、地址和容器数，右边是 CPU、内存、磁盘三个占用环。
     Row(
-        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) c.muted else null).heightIn(min = Dimens.rowHeightTwoLine).padding(vertical = 8.dp),
+        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) c.muted else null, selectionKey = n.id).heightIn(min = Dimens.rowHeightTwoLine).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.align(Alignment.Top).padding(top = 7.dp)) { StatusDot(nodeDot(n)) }
