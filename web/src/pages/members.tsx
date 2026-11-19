@@ -1,4 +1,5 @@
 // 成员：面板的账号和角色。要「成员」权限。
+import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -328,10 +329,20 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   );
 }
 
+// 重置别人的密码、清除两步验证和通行密钥是换掉登录凭据：面板要求先用密码或验证码验证身份（手机上的确认不算）。
+async function withElevation<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isElevationRequired(err) || !(await requireElevation(t.members.elevate, { suggestTotp: false, passwordOnly: true }))) throw err;
+    return fn();
+  }
+}
+
 function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: () => void; onCancel: () => void }) {
   const [password, setPassword] = useState("");
   const reset = useMutation({
-    mutationFn: () => settingsClient.updateUser({ id: user.id, password }),
+    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, password })),
     onSuccess: () => {
       toast.success(user.passkeys.length > 0 ? t.members.passwordResetPasskeys(user.username) : t.members.passwordReset(user.username));
       onDone();
@@ -427,7 +438,8 @@ export function MembersCard() {
                     { label: t.members.editAccess, onSelect: () => setEditing(u) },
                     // 看、吊销别人的访问令牌只给管理员。
                     ...(isAdmin ? [{ label: t.tokens.title, onSelect: () => setTokensOf(u), readOnlyOk: true }] : []),
-                    { label: t.members.resetPassword, onSelect: () => setResetting(u) },
+                    // 自己的密码在「账号安全」里改（要旧密码）。
+                    ...(!u.isSelf ? [{ label: t.members.resetPassword, onSelect: () => setResetting(u) }] : []),
                     ...(u.totpEnabled && !u.isSelf
                       ? [
                           {
@@ -435,7 +447,7 @@ export function MembersCard() {
                             onSelect: async () => {
                               const msg = u.passkeys.length > 0 ? t.members.clearTotpPasskeysConfirm(u.username) : t.members.clearTotpConfirm(u.username);
                               if (await confirmAction(msg, { action: t.members.clearTotp, danger: true }))
-                                call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }));
+                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearTotp: true })));
                             },
                           },
                         ]
@@ -447,7 +459,7 @@ export function MembersCard() {
                             onSelect: async () => {
                               const keys = t.common.list(u.passkeys.map((p) => p.name));
                               if (await confirmAction(t.members.clearPasskeysConfirm(u.username, keys), { action: t.members.clearPasskeys, danger: true }))
-                                call(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true }));
+                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true })));
                             },
                           },
                         ]

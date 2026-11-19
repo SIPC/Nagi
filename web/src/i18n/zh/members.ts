@@ -71,6 +71,7 @@ export default {
   you: "当前账号",
   editAccess: "编辑权限",
   resetPassword: "重置密码",
+  elevate: "更改成员的登录凭据前需验证身份。验证后 15 分钟内无需再次验证。",
   passwordReset: (name: string) => `已重置 ${name} 的密码，该账号已在所有设备退出登录`,
   clearTotp: "清除两步验证",
   clearTotpConfirm: (name: string) => `清除 ${name} 的两步验证？此后该账号只用密码即可登录。`,

@@ -311,8 +311,11 @@ var procedurePerms = map[string]Perm{
 	"/nagi.v1.NodeService/RenameNode": PermNodeManage, "/nagi.v1.NodeService/UpgradeNode": PermNodeManage,
 	"/nagi.v1.NodeService/CancelNodeUpgrade": PermNodeManage,
 	"/nagi.v1.NodeService/GetNodeMirrors":    PermNodeManage, "/nagi.v1.NodeService/SetNodeMirrors": PermNodeManage,
-	"/nagi.v1.NodeService/ReclaimNodeSnapshots": PermNodeManage, "/nagi.v1.NodeService/SetNodeProjectsRoot": PermNodeManage,
-	"/nagi.v1.NodeService/GetNodeStorage": PermNodeManage, "/nagi.v1.NodeService/AdoptNodeContainer": PermNodeManage,
+	"/nagi.v1.NodeService/ReclaimNodeSnapshots": PermNodeManage,
+	// 项目根目录决定节点以 root 在哪里建目录、写 compose 和数据，也是「容器目录要在根目录内」这条限制的依据：
+	// 能改它就等于节点的 root（2026-11-19-87c02b5#4）。要「节点终端和文件」，并先做高权限确认。
+	"/nagi.v1.NodeService/SetNodeProjectsRoot": PermNodeRoot,
+	"/nagi.v1.NodeService/GetNodeStorage":      PermNodeManage, "/nagi.v1.NodeService/AdoptNodeContainer": PermNodeManage,
 	"/nagi.v1.NodeService/AdoptStaleProject": PermNodeManage, "/nagi.v1.NodeService/ConfirmPendingHA": PermNodeManage,
 	"/nagi.v1.NodeService/SetNodeAlertRules": PermNodeManage, "/nagi.v1.NodeService/IsolateNode": PermNodeManage,
 	"/nagi.v1.NodeService/UnisolateNode": PermNodeManage, "/nagi.v1.NodeService/DeleteNodeReplica": PermNodeManage,

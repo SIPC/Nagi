@@ -75,16 +75,19 @@ func (q *Queries) RenameRole(ctx context.Context, id int64, name string) error {
 }
 
 // SetRolePermissions 换掉角色的全部权限。
+// 在一个事务里：中途出错时不留下只有一部分权限的角色。
 func (q *Queries) SetRolePermissions(ctx context.Context, id int64, perms []string) error {
-	if _, err := q.db.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = ?`, id); err != nil {
-		return err
-	}
-	for _, p := range perms {
-		if _, err := q.db.ExecContext(ctx, `INSERT OR IGNORE INTO role_permissions (role_id, permission) VALUES (?, ?)`, id, p); err != nil {
+	return q.inTx(ctx, func(q *Queries) error {
+		if _, err := q.db.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = ?`, id); err != nil {
 			return err
 		}
-	}
-	return nil
+		for _, p := range perms {
+			if _, err := q.db.ExecContext(ctx, `INSERT OR IGNORE INTO role_permissions (role_id, permission) VALUES (?, ?)`, id, p); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // DeleteRole 删除没有成员在用的自定义角色，返回删掉的行数（有成员在用、是预置角色时为 0）。

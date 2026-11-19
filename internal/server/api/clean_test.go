@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"google.golang.org/protobuf/proto"
 	"slices"
 	"sort"
 	"strings"
@@ -344,5 +345,42 @@ func TestScrubNodeIDs(t *testing.T) {
 	got := a.scrubNodeIDs(context.Background(), x, `{"node_id":"n2","backup_node_ids":["n2","n1"]}`)
 	if got != `{"node_id":"","backup_node_ids":["","n1"]}` {
 		t.Errorf("参数：%s", got)
+	}
+}
+
+// 回复里的 NodeInfo、NodeUsage 是节点上报的缓存（api.go 的 node 直接挂上 conn.LastReport() 里的指针），
+// 清理回复不能改到它（2026-11-19-87c02b5#1）。
+func TestCleanKeepsSharedReport(t *testing.T) {
+	a := cleanTest(t)
+	info := &nagiv1.NodeInfo{Hostname: "host-a", Os: "linux", Version: "0.34", ProjectsRoot: "/srv", ReplicaDir: "/r",
+		DirectDownload: &nagiv1.DirectDownload{Address: "203.0.113.1"}}
+	usage := &nagiv1.NodeUsage{Disks: []*nagiv1.DiskUsage{{Mount: "/data", TotalBytes: 10}}}
+	wantInfo, wantUsage := proto.Clone(info), proto.Clone(usage)
+	m := &nagiv1.ListNodesResponse{Nodes: []*nagiv1.Node{{Id: "n1", Name: "a", Online: true, Info: info, Usage: usage}}}
+	a.filterReply(context.Background(), memberAccess(auth.PresetOperator), m)
+	if len(m.Nodes) != 1 || m.Nodes[0].Info.Hostname != "" || m.Nodes[0].Usage.Disks[0].Mount != "" {
+		t.Fatalf("回复应该清理过：%v", m)
+	}
+	if !proto.Equal(info, wantInfo) || !proto.Equal(usage, wantUsage) {
+		t.Errorf("清理回复改到了共用的上报：%v %v", info, usage)
+	}
+}
+
+// 文字清理的边角（2026-11-19-87c02b5#17）：末尾是 IPv4 的 IPv6、带 zone 的 IPv6。
+func TestScrubEdges(t *testing.T) {
+	for in, want := range map[string]string{
+		"dial ::ffff:203.0.113.7: refused": "dial …: refused",
+		"dial 203.0.113.7:443 failed":      "dial …:443 failed",
+		"dial [2001:db8::1]:443 failed":    "dial …:443 failed",
+		"at 12:30:45 done":                 "at 12:30:45 done",
+	} {
+		if got := scrubIPs(in); got != want {
+			t.Errorf("scrubIPs(%q) = %q，想要 %q", in, got, want)
+		}
+	}
+	for addr, want := range map[string]bool{"panel.example.com": true, "fe80::1%eth0": false, "[fe80::1%eth0]:9443": false, "203.0.113.7:9443": false} {
+		if got := hostAddress(addr); got != want {
+			t.Errorf("hostAddress(%q) = %v", addr, got)
+		}
 	}
 }

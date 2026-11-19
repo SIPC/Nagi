@@ -311,6 +311,8 @@ var (
 	SearchAll      = []string{"action", "actor_name", "target_name", "client", "params", "error", "ip"}
 	SearchOperator = []string{"action", "actor_name", "target_name", "client", "params", "error"}
 	SearchViewer   = []string{"action", "actor_name", "target_name", "client"}
+	// SearchNoNames：搜索的词和查看者看不到的节点的名称沾边时，连名称也不匹配。
+	SearchNoNames = []string{"action", "client"}
 )
 
 func (f Filter) where() (string, []any) {

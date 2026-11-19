@@ -165,8 +165,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `add_container` | 用镜像或 compose 添加容器，节点默认和网页一样选项目里容器最多的在线节点；默认不部署，要部署时传 `deploy` 或再调用 `deploy`。镜像表单的端口第一次部署时导入成映射、对外开放（不认 `host_ip`，只导入一次），项目里的容器互相访问不需要。添加时就能用 `env_secret` 把变量标为密钥，容器组可以带 `service_env`。照常保存，结果里带 `warnings`（见[给 agent 的说明](#给-agent-的说明)） | `AddContainer`、`Deploy` |
 | `update_container` | 修改配置存为草稿，覆盖网页上容器配置的所有项：镜像、启动命令、端口、持久化目录、工作目录、资源限制、健康检查，或整份 compose；容器变量（设置、删除、标为密钥）、容器组的服务级环境变量；git 来源、保留路径、有无状态、部署依赖。返回改了哪些，不部署。带 `expected_revision`（`get_container` 返回的修订号）时，期间被别人改过就拒绝。`add_container` 也接受同样的配置项。结果里带 `warnings`：只检查这次改到的部分（新的 compose、改了的端口、这次设置的变量值、镜像和有无状态），只改变量时不重复提醒 compose 原有的写法 | `SaveDraft` |
 | `set_display_name` | 修改容器的显示名称 | `SetContainerDisplayName` |
-| `set_project_group` | 只给管理员：把项目放进分组（新名称即新建），或移出分组。会改变成员的访问范围（见 [panel.md#分组和标签](panel.md#分组和标签)） | `SetProjectGroup` |
-| `set_node_tags` | 只给管理员：替换节点的标签（最多 10 个） | `SetNodeTags` |
+| `set_project_group` | 只给管理员，令牌要勾「管理面板」（分组决定成员的访问范围）：把项目放进分组（新名称即新建），或移出分组。会改变成员的访问范围（见 [panel.md#分组和标签](panel.md#分组和标签)） | `SetProjectGroup` |
+| `set_node_tags` | 只给管理员，令牌要勾「管理面板」（标签决定成员的访问范围）：替换节点的标签（最多 10 个） | `SetNodeTags` |
 | `set_snapshot_schedule` | 给容器单独设置定时快照（开关、间隔或每天定时），或改回用项目的。有备份节点或顶替的容器关掉定时快照时，结果的 `warnings` 提醒（备份节点在每次定时快照后同步）；`set_backup_node` 添加备份节点时同样检查 | `SetContainerSnapshotSchedule` |
 | `discard_draft` | 丢弃草稿 | `DiscardDraft` |
 | `deploy` | 部署一个或多个容器（有草稿的用草稿）。过程中用进度通知推送部署事件，结束后返回结果和失败时的最后 50 行输出；超过 10 分钟返回「仍在进行」，之后用 `get_container` 查。`expected_revisions` 同上；`wait_healthy_seconds`（最多 300）在部署成功后等容器运行、有健康检查的变成 healthy，不健康或停了算不通过，只回报，不自动回滚；没有健康检查的服务在 `health.note` 里注明只确认了在运行。`apply_shared_env` 先让共享变量的草稿生效，不指定容器时只生效、不部署。成功和失败都返回 `warnings`：部署日志里面板和节点自己写的提醒行（以「注意：」「警告：」开头的，端口导入和没导入的，保留路径覆盖了上传内容的；只收哪些行见[安全](#安全)），以及部署前就能看出的（有共享变量草稿却没带 `apply_shared_env`，git 来源从没拉取过却没带 `pull_git`） | `Deploy`、`GetProject` |
@@ -240,7 +240,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `approve_node` | 批准用接入码加入、在等批准的节点。预览给出节点报告的主机名、地址、系统、版本（标明是节点报告的，不可信），提醒接入码可能泄露 | 节点名 | `ApproveNode` |
 | `remove_node` | 让面板忘记节点；节点上还有容器时接口拒绝 | 节点名 | `RemoveNode` |
 | `set_node_mirrors` | 替换节点的镜像加速地址（写 `/etc/docker/daemon.json`，再让 Docker 重新加载配置，不重启容器；重新加载不了时要重启 Docker 才用） | — | `SetNodeMirrors` |
-| `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器 | — | `SetNodeProjectsRoot` |
+| `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器。等于节点的 root（节点以 root 在根目录下建目录、写数据），令牌要勾「节点终端」 | — | `SetNodeProjectsRoot` |
 | `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转、关闭直连下载、设置 HTTPS 不能用时加密 HTTP 下载的端口（`direct_http_port`，0 是默认的 80，见 [agent.md](agent.md#加密-http-下载)），只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
 | `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
 | `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本，用 `check_panel_update` 看各节点的阶段和下载进度；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |

@@ -65,6 +65,10 @@ func TestRevokeRotatesDirectKeys(t *testing.T) {
 	expect("提升角色", false, update(&nagiv1.UpdateUserRequest{Id: bob, Role: auth.RoleOperator}))
 	expect("降低角色", true, update(&nagiv1.UpdateUserRequest{Id: bob, Role: auth.RoleViewer}))
 	expect("修改访问范围", true, update(&nagiv1.UpdateUserRequest{Id: bob, Scope: &nagiv1.UserScope{AllNodes: true}}))
+	// 重置密码要先用密码做高权限确认。
+	if _, err := h.db.ExecContext(ctx, `UPDATE sessions SET elevated_until = ?, elevated_by = 'password'`, time.Now().Add(time.Hour).Unix()); err != nil {
+		t.Fatal(err)
+	}
 	expect("重置密码", true, update(&nagiv1.UpdateUserRequest{Id: bob, Password: "bob-new-password-2"}))
 
 	// 自己撤销另一个登录设备。

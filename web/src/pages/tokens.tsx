@@ -313,7 +313,7 @@ export function OAuthAuthorizePage() {
         return await authClient.approveOAuth(req);
       } catch (err) {
         // 允许授权前要先再验证一次身份。
-        if (!isElevationRequired(err) || !(await requireElevation(t.tokens.oauth.elevate))) throw err;
+        if (!isElevationRequired(err) || !(await requireElevation(t.tokens.oauth.elevate, { passwordOnly: true }))) throw err;
         return authClient.approveOAuth(req);
       }
     },

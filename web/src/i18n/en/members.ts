@@ -72,6 +72,7 @@ export default {
   you: "You",
   editAccess: "Edit access",
   resetPassword: "Reset password",
+  elevate: "Verify your identity before changing a member's sign-in credentials. It stays valid for 15 minutes.",
   passwordReset: (name) => `Password reset for ${name}. The account has been signed out on all devices`,
   clearTotp: "Clear 2FA",
   clearTotpConfirm: (name) => `Clear 2FA for ${name}? The account can then sign in with just a password.`,

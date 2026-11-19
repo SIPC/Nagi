@@ -119,7 +119,10 @@ func TestAuditRecordsAndFilters(t *testing.T) {
 	}
 	// 失败的操作也记：重复的用户名。
 	_, _ = sc.CreateUser(ctx, connect.NewRequest(&nagiv1.CreateUserRequest{Username: "bob", Password: secret, Role: auth.RoleOperator}))
-	// 重置成员的密码（id 为 2 的是 bob）。
+	// 重置成员的密码（id 为 2 的是 bob），要先用密码做高权限确认。
+	if _, err := h.db.ExecContext(ctx, `UPDATE sessions SET elevated_until = ?, elevated_by = 'password'`, time.Now().Add(time.Hour).Unix()); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := sc.UpdateUser(ctx, connect.NewRequest(&nagiv1.UpdateUserRequest{Id: 2, Role: auth.RoleOperator, Password: secret})); err != nil {
 		t.Fatal(err)
 	}

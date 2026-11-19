@@ -281,3 +281,46 @@ func TestAppElevate(t *testing.T) {
 		t.Error("退出手机后确认应该作废")
 	}
 }
+
+// 项目分组和节点标签决定成员的访问范围：令牌要勾「管理面板」才能改（2026-11-19-87c02b5#15）。
+func TestTokenScopeAdminNeedsPanel(t *testing.T) {
+	for _, p := range []string{"/nagi.v1.ProjectService/SetProjectGroup", "/nagi.v1.NodeService/SetNodeTags"} {
+		if TokenAllowed(User{TokenID: 1, AllowWrite: true}, p) {
+			t.Errorf("%s：只勾「可修改」的令牌不该能调用", p)
+		}
+		if !TokenAllowed(User{TokenID: 1, AllowWrite: true, AllowPanel: true}, p) {
+			t.Errorf("%s：勾了「管理面板」和「可修改」的令牌应该能调用", p)
+		}
+	}
+}
+
+// 别处发起的登录请求顶不掉成员自己这边的，也占不掉他的额度（2026-11-19-87c02b5#12）。
+func TestPhoneApprovalSources(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := WithMeta(context.Background(), Meta{IP: approvalIP, UserAgent: chromeUA})
+	keys := newAppKeys()
+	device := h.pairSoftware("op", keys)
+	phone := h.appUserOf(device, keys)
+	op, _ := h.q.GetUserByUsername(ctx, "op")
+	if err := h.q.SetTOTP(ctx, store.SetTOTPParams{TotpSecret: base64.StdEncoding.EncodeToString([]byte("JBSWY3DPEHPK3PXP")), ID: op.ID}); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const other = "203.0.113.50"
+	for i := 0; i < approvalPerWindow+2; i++ {
+		_, _ = h.s.BeginLoginApproval(ctx, other, "op", "correct horse")
+	}
+	if st, _, err := h.s.CompleteLoginApproval(ctx, approvalIP, mine.Ticket); err != nil || st != ApprovalPending {
+		t.Fatalf("自己的请求被别处的顶掉了：%q %v", st, err)
+	}
+	if n := len(h.s.AppApprovals(phone)); n != 2 {
+		t.Errorf("手机上应该看到两个来源各一个请求，实际 %d 个", n)
+	}
+	// 别处的额度用完了，自己这边照常能发起。
+	if _, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse"); err != nil {
+		t.Errorf("自己这边的额度不该被占掉：%v", err)
+	}
+}

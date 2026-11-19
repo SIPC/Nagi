@@ -131,7 +131,11 @@ func (s *projectService) UpdateProjectSettings(ctx context.Context, req *connect
 	m := req.Msg
 	// 项目设置里没有相应权限的部分（告警规则、快照、内部端口和出站限制）保持原样：这些字段在回复里本来就去掉了，
 	// 界面送回来的是空的，不能当作清空。
-	if u := auth.CurrentUser(ctx); !u.IsAdmin() && m.GetSettings() != nil {
+	// 请求里不带 settings 时也一样（不带等于全部回到默认值，没有权限的部分同样要保持原样，2026-11-19-87c02b5#13）。
+	if u := auth.CurrentUser(ctx); !u.IsAdmin() {
+		if m.Settings == nil {
+			m.Settings = &nagiv1.ProjectSettings{}
+		}
 		cur, err := s.Projects.Get(ctx, m.GetProjectId())
 		if err != nil {
 			return nil, toConnect(err)

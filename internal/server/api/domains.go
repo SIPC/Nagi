@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"errors"
+	"github.com/SIPC/nagi/internal/server/auth"
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -154,6 +156,29 @@ func (s *projectService) CheckDomains(ctx context.Context, req *connect.Request[
 	}
 	out := &nagiv1.CheckDomainsResponse{}
 	routes := req.Msg.GetRoutes()
+	// 没有「查看访问地址」的成员只能检查已经保存的映射里的域名：否则提交任意域名（解析到自己选的地址），
+	// 按「正确 / 不符」就能在一个网段里比对出入口节点的 IP（2026-11-19-87c02b5#14）。
+	if u := auth.CurrentUser(ctx); !u.Can(auth.PermAddresses) {
+		saved := map[string]bool{}
+		if p, err := s.Projects.Get(ctx, req.Msg.GetProjectId()); err == nil {
+			for _, r := range p.GetProject().GetRoutes() {
+				for _, d := range r.GetDomains() {
+					saved[r.GetName()+"\x00"+strings.ToLower(d)] = true
+				}
+			}
+		}
+		kept := make([]*nagiv1.Exposure, 0, len(routes))
+		for _, in := range routes {
+			ok := true
+			for _, d := range in.GetDomains() {
+				ok = ok && saved[in.GetName()+"\x00"+strings.ToLower(d)]
+			}
+			if ok {
+				kept = append(kept, in)
+			}
+		}
+		routes = kept
+	}
 	if len(routes) > maxCheckRoutes {
 		routes = routes[:maxCheckRoutes]
 	}

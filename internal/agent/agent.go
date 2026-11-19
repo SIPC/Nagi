@@ -852,8 +852,18 @@ func (a *agent) setProjectsRoot(root string) error {
 	if root == "" || !strings.HasPrefix(root, "/") || filepath.Clean(root) == "/" {
 		return project.ErrInvalidArgument
 	}
+	// 系统目录不能当项目根目录：节点以 root 在根目录下建目录、写 compose 和数据。
+	clean := filepath.Clean(root)
+	for _, sys := range systemDirs {
+		if clean == sys || strings.HasPrefix(clean, sys+"/") {
+			return project.ErrInvalidArgument
+		}
+	}
 	return os.WriteFile(filepath.Join(a.cfg.DataDir, "identity", "projects-root"), []byte(filepath.Clean(root)+"\n"), 0o644)
 }
+
+// systemDirs 是不能当项目根目录的系统目录（包括它们下面的目录）。
+var systemDirs = []string{"/etc", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/usr", "/boot", "/proc", "/sys", "/dev", "/run"}
 
 func trustedFingerprints(panels []trustedPanel) []string {
 	out := make([]string, 0, len(panels))

@@ -87,7 +87,7 @@ type appState struct {
 	// 手机确认（见 approval.go）：approvals 是等确认的请求，approvalTimes 是每个成员最近发起的时间（限制频率），
 	// elevated 是手机做过的高权限确认（设备 ID → 到期时间和 IP）。
 	approvals     map[string]*approval
-	approvalTimes map[int64][]time.Time
+	approvalTimes map[string][]time.Time
 	elevated      map[string]appElevation
 }
 

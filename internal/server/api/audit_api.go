@@ -30,6 +30,8 @@ type auditViewer struct {
 	// x 是查看者的访问范围（管理员为 nil），scrub 去掉文字里他看不到的节点名（A7）。
 	x     *access
 	scrub func(string) string
+	// hidden 是他看不到的节点：ID → 名称。筛选和搜索不能借它们探出这些节点（2026-11-19-87c02b5#10）。
+	hidden map[string]string
 }
 
 // auditViewer：管理员和有「审计日志」权限的成员看全部记录；其他成员只看范围内项目的记录，没有「查看配置」时不看参数和失败详情。
@@ -47,6 +49,12 @@ func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 	}
 	v.x = x
 	v.scrub = func(s string) string { return a.scrubNodes(ctx, x, a.scrubNodeIDs(ctx, x, s)) }
+	v.hidden = map[string]string{}
+	for id, name := range a.nodeNames(ctx, x) {
+		if !x.node(id) {
+			v.hidden[id] = name
+		}
+	}
 	if x != nil && x.projects != nil {
 		ids := []string{}
 		for id := range x.projects {
@@ -68,6 +76,10 @@ func (v auditViewer) filter(f *nagiv1.AuditFilter) audit.Filter {
 	if !v.admin && out.NodeID != "" && !v.x.node(out.NodeID) {
 		out.NodeID = "-"
 	}
+	// 操作者是看不到的节点时同样按查不到处理。
+	if _, ok := v.hidden[out.ActorID]; ok && !v.admin {
+		out.ActorID = "-"
+	}
 	if f.GetFrom() != nil {
 		out.From = f.GetFrom().AsTime()
 	}
@@ -83,9 +95,18 @@ func (v auditViewer) restrict(f *audit.Filter) {
 	if v.admin {
 		return
 	}
-	f.SearchFields = audit.SearchOperator
-	if v.viewer {
-		f.SearchFields = audit.SearchViewer
+	// 参数和失败详情显示前要去掉别人的 IP、看不到的节点（见 view），搜索匹配的却是原文：
+	// 按有没有结果就能逐位试出被去掉的内容。所以非管理员的搜索不匹配这两列。
+	f.SearchFields = audit.SearchViewer
+	// 操作者、对象的名称里也可能是看不到的节点的名称：搜索的词和它们沾边（包含，或者是其中 3 个字符以上的一段）时
+	// 不匹配这两列。
+	q := strings.ToLower(strings.TrimSpace(f.Search))
+	for id, name := range v.hidden {
+		for _, h := range []string{strings.ToLower(name), id} {
+			if h != "" && q != "" && (strings.Contains(q, h) || len(q) >= 3 && strings.Contains(h, q)) {
+				f.SearchFields = audit.SearchNoNames
+			}
+		}
 	}
 	if v.projects != nil {
 		f.Projects = v.projects
