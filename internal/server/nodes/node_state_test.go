@@ -191,7 +191,7 @@ func TestSourceIgnoresReport(t *testing.T) {
 	}
 }
 
-// 面板发现的越权写审计也合并：同一个节点的同一种越权 10 分钟内只记第一条，之后的条数写进下一条。
+// 面板发现的越权写审计也合并：同一个节点的同一种越权 10 分钟内只马上记第一条，之后的条数在窗口结束时写进汇总。
 func TestPanelViolationAuditCoalesced(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -232,13 +232,86 @@ func TestPanelViolationAuditCoalesced(t *testing.T) {
 	if n, _ := count(); n != 3 {
 		t.Fatalf("别的种类和别的节点应各记一条，共 %d 条", n)
 	}
-	// 窗口过了以后再记一条，带上没记的条数。
-	r.iso.mu.Lock()
-	r.iso.audits["x\x00report_foreign_container"].at = time.Now().Add(-violationAlertWindow)
-	r.iso.mu.Unlock()
-	r.PanelViolation(ctx, c, "report_foreign_container", "p/again")
+	// 窗口结束时补一条汇总，写明没记的条数；之后再越权，重新马上记。
+	r.flushViolationAudit("x\x00report_foreign_container", "x", "report_foreign_container")
 	n, last := count()
 	if n != 4 || !strings.Contains(last, `"suppressed":"499"`) {
-		t.Fatalf("窗口过后应再记一条并写明没记的条数：%d 条，%s", n, last)
+		t.Fatalf("窗口结束时应补一条汇总并写明没记的条数：%d 条，%s", n, last)
+	}
+	r.PanelViolation(ctx, c, "report_foreign_container", "p/again")
+	if n, _ := count(); n != 5 {
+		t.Fatalf("新的窗口里第一条应马上记：%d 条", n)
+	}
+}
+
+// 窗口结束时补一条汇总：节点之后不再越权，没记的条数也进审计；窗口里只有一条的不补。窗口结束后表里的项删掉，
+// 再越权时重新马上记。
+func TestPanelViolationAuditSummary(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	d, err := db.OpenMigrated(ctx, filepath.Join(dir, "panel.db"), store.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	log, err := audit.Open(ctx, filepath.Join(dir, "audit.db"), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	r := NewRegistry(store.New(d), slog.New(slog.DiscardHandler), nil, nil)
+	r.Audit = log
+	const window = 500 * time.Millisecond
+	r.iso.auditWindow = window
+	list := func() []audit.Event {
+		rows, _ := log.List(ctx, audit.Filter{Limit: 100})
+		var out []audit.Event
+		for _, e := range rows {
+			if e.Category == audit.Security && e.Action == "violation" {
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+	start := time.Now()
+	c := &Conn{NodeID: "x", name: "attacker"}
+	for i := range 20 {
+		r.PanelViolation(ctx, c, "report_foreign_container", fmt.Sprintf("p/c%d", i))
+	}
+	r.PanelViolation(ctx, &Conn{NodeID: "y", name: "other"}, "report_foreign_container", "p/c")
+	if time.Since(start) >= window {
+		t.Skip("机器太慢，窗口在测试里提前结束了")
+	}
+	if n := len(list()); n != 2 {
+		t.Fatalf("窗口里应只马上记 2 条，记了 %d 条", n)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for len(list()) < 3 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(window / 2) // y 的窗口也已结束：只有一条，不补汇总
+	got := list()
+	if len(got) != 3 {
+		t.Fatalf("窗口结束时应补 1 条汇总，共 %d 条", len(got))
+	}
+	var summary *audit.Event
+	for i := range got {
+		if strings.Contains(got[i].Params, "suppressed") {
+			summary = &got[i]
+		}
+	}
+	if summary == nil || summary.ActorID != "x" || summary.ActorName != "attacker" ||
+		!strings.Contains(summary.Params, `"suppressed":"19"`) || !strings.Contains(summary.Params, `"detail":"p/c19"`) {
+		t.Fatalf("汇总应写明没记的条数和最后一条的详情：%+v", summary)
+	}
+	r.iso.mu.Lock()
+	left := len(r.iso.audits)
+	r.iso.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("窗口结束后表里还有 %d 项", left)
+	}
+	r.PanelViolation(ctx, c, "report_foreign_container", "p/again")
+	if n := len(list()); n != 4 {
+		t.Fatalf("新的窗口里第一条应马上记：%d 条", n)
 	}
 }

@@ -29,14 +29,16 @@ type isolation struct {
 	nodes  map[string][]byte
 	// windows 是每个发起方 10 分钟的告警窗口。
 	windows map[string]time.Time
-	// audits 是面板发现的越权写审计的窗口（见 PanelViolation）。
+	// audits 是面板发现的越权写审计的窗口（见 PanelViolation），窗口结束时删掉。
 	audits map[string]*violationAudit
+	// auditWindow 是审计合并的时长，测试里改短；为 0 时用 violationAlertWindow。
+	auditWindow time.Duration
 }
 
-// violationAudit 是一个节点的一种越权最近一次写审计的时间，和之后没有写的次数。
+// violationAudit 是一个节点的一种越权在窗口内没有写审计的次数，以及其中最后一条的节点名称和详情（写进窗口结束时的汇总）。
 type violationAudit struct {
-	at         time.Time
-	suppressed int
+	suppressed   int
+	name, detail string
 }
 
 func (r *Registry) isolatedNodes(ctx context.Context) map[string][]byte {
@@ -241,49 +243,64 @@ func (r *Registry) allowViolations(nodeID string, n int) int {
 	return ok
 }
 
-// allowViolationAudit 判断面板发现的这条越权要不要写审计：同一个节点的同一种越权 violationAlertWindow 内只写第一条，
-// 之后的只计数，suppressed 是上次写了以后没有写的条数。
-func (r *Registry) allowViolationAudit(nodeID, method string, now time.Time) (ok bool, suppressed int) {
+// allowViolationAudit 判断面板发现的这条越权要不要马上写审计：同一个节点的同一种越权，窗口（violationAlertWindow）里
+// 只写第一条，之后的只计数，记下最后一条的节点名称和详情。窗口结束时有没写的，补一条汇总（见 flushViolationAudit），
+// 不用等下一次越权：节点不再越权时，没写的条数也要进审计。
+// 表里的项在窗口结束时删掉；键是登记过的节点和面板定的几种越权，不会无限变多。
+func (r *Registry) allowViolationAudit(nodeID, method, name, detail string) bool {
 	key := nodeID + "\x00" + method
 	r.iso.mu.Lock()
 	defer r.iso.mu.Unlock()
 	if a := r.iso.audits[key]; a != nil {
-		if now.Sub(a.at) < violationAlertWindow {
-			a.suppressed++
-			return false, 0
-		}
-		suppressed = a.suppressed
-		a.at, a.suppressed = now, 0
-		return true, suppressed
+		a.suppressed++
+		a.name, a.detail = name, detail
+		return false
 	}
 	if r.iso.audits == nil {
 		r.iso.audits = map[string]*violationAudit{}
 	}
-	// 过期的窗口删掉，表不能一直变大。
-	if len(r.iso.audits) >= maxViolationWindows {
-		for k, a := range r.iso.audits {
-			if now.Sub(a.at) >= violationAlertWindow {
-				delete(r.iso.audits, k)
-			}
-		}
+	r.iso.audits[key] = &violationAudit{}
+	window := r.iso.auditWindow
+	if window == 0 {
+		window = violationAlertWindow
 	}
-	r.iso.audits[key] = &violationAudit{at: now}
-	return true, 0
+	time.AfterFunc(window, func() { r.flushViolationAudit(key, nodeID, method) })
+	return true
 }
 
-// PanelViolation 记一条面板自己发现的越权（伪造面板指纹、乱报地址超限、代发告警超限等），标为「面板发现」。
-// 节点能让面板不停地发现同一种越权（例如每次上报都带上一批不属于它的容器），所以审计和告警一样合并：
-// 同一个节点的同一种越权 10 分钟内只记第一条，之后的条数写进下一条的 suppressed。
-func (r *Registry) PanelViolation(ctx context.Context, c *Conn, method, detail string) {
-	record, suppressed := r.allowViolationAudit(c.NodeID, method, time.Now())
+// flushViolationAudit 结束一个审计窗口：窗口里有没写的越权时，写一条汇总，suppressed 是没写的条数，
+// detail 是其中最后一条的详情。
+func (r *Registry) flushViolationAudit(key, nodeID, method string) {
+	r.iso.mu.Lock()
+	a := r.iso.audits[key]
+	delete(r.iso.audits, key)
+	r.iso.mu.Unlock()
+	if a == nil || a.suppressed == 0 {
+		return
+	}
+	r.recordPanelViolation(context.Background(), nodeID, a.name, method, a.detail, a.suppressed)
+}
+
+// recordPanelViolation 写一条面板发现的越权的审计；suppressed 大于 0 时是窗口结束时的汇总。
+func (r *Registry) recordPanelViolation(ctx context.Context, nodeID, name, method, detail string, suppressed int) {
+	if r.Audit == nil {
+		return
+	}
 	fields := map[string]string{"reporter": "panel", "method": method, "detail": detail}
 	if suppressed > 0 {
 		fields["suppressed"] = strconv.Itoa(suppressed)
 	}
 	params, _ := json.Marshal(fields)
-	if r.Audit != nil && record {
-		r.Audit.Record(ctx, audit.Event{Category: audit.Security, Action: "violation", ActorType: audit.ActorNode, ActorID: c.NodeID,
-			ActorName: c.Name(), Via: audit.ViaNode, Params: string(params), Result: audit.ResultDenied})
+	r.Audit.Record(ctx, audit.Event{Category: audit.Security, Action: "violation", ActorType: audit.ActorNode, ActorID: nodeID,
+		ActorName: name, Via: audit.ViaNode, Params: string(params), Result: audit.ResultDenied})
+}
+
+// PanelViolation 记一条面板自己发现的越权（伪造面板指纹、乱报地址超限、代发告警超限等），标为「面板发现」。
+// 节点能让面板不停地发现同一种越权（例如每次上报都带上一批不属于它的容器），所以审计和告警一样合并：
+// 同一个节点的同一种越权 10 分钟内只马上记第一条，之后的只计数，到 10 分钟时补一条汇总（suppressed 是没记的条数）。
+func (r *Registry) PanelViolation(ctx context.Context, c *Conn, method, detail string) {
+	if r.allowViolationAudit(c.NodeID, method, c.Name(), detail) {
+		r.recordPanelViolation(ctx, c.NodeID, c.Name(), method, detail, 0)
 	}
 	r.violationAlert(ctx, "violation:"+c.NodeID, i18n.Errorf("节点 %s 疑似被攻破", c.Name()).Error(), []string{i18n.New("面板发现").Error() + "：" + method}, 0)
 }
