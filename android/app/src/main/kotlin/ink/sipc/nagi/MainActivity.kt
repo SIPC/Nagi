@@ -10,7 +10,9 @@ import androidx.activity.SystemBarStyle
 import android.graphics.Color
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -45,6 +47,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // 最近任务里不留首页的截图：超过解锁时长后，拿到手机的人打开最近任务能看到上次离开时的告警、节点、流量，
+        // 解锁页挡的就是这些（安全审查 v0.34.0-b L5）。Android 13 起系统直接不截；更早的版本见 onPause。
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         // 重建（切换语言、旋转、进程被回收后恢复）时拿到的还是最初的 intent，不再处理，旧链接不会再打开一次确认页。
         if (savedInstanceState == null) handle(intent)
         val app = application as NagiApplication
@@ -65,6 +70,28 @@ class MainActivity : FragmentActivity() {
             }
         }
         keepAlive(app)
+    }
+
+    /** onPause 时为最近任务加上的 FLAG_SECURE（页面自己设的不算），onResume 时只去掉这个。 */
+    private var recentsSecure = false
+
+    // Android 13 以前没有 setRecentsScreenshotEnabled：离开前台时加上 FLAG_SECURE，最近任务里的截图是空白，回来再去掉，
+    // 平时照常能截屏。
+    override fun onPause() {
+        val secure = WindowManager.LayoutParams.FLAG_SECURE
+        if (Build.VERSION.SDK_INT < 33 && window.attributes.flags and secure == 0) {
+            window.addFlags(secure)
+            recentsSecure = true
+        }
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (recentsSecure) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            recentsSecure = false
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
