@@ -28,16 +28,24 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### Fixes
 
 - Fixed an issue where some Xiaomi phones could not be added.
-- Fixed several security issues involving snapshots and volume file downloads, phone attestation certificates, the security entrance, permission scope on the home page and in logs, node control connections, node alerts, and compose ports.
+- Fixed an issue where the Android app crashed when a node reported abnormal values or a member uploaded an oversized avatar.
+- Fixed several security issues involving snapshots and volume file downloads, phone attestation certificates, the security entrance, permission scope on the home page, in logs, and in terminals, node control connections and reports, adding nodes, replica sync, failover, git pulls, upgrade downloads, deployment notices, node alerts, compose ports, and the release workflow.
 
 ### Behavior changes
 
 - Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
 - Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
+- Creating or editing members, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity. The last three accept only a password or verification code.
+- The node install command now passes the join token in an environment variable. If you use sudo, run `sudo -i` first. Old commands still work.
+- Each invite code can add up to 20 nodes, and up to 20 nodes can be handed over at a time. Nodes with the same name get a number added automatically.
+- Node join notifications show the source address, and multiple joins with the same invite code in a short time are combined into one notification.
+- Terminals opened in the Android app are disconnected after the unlock duration has passed.
+- Pairing links on web pages no longer open the Android app, and the app no longer accepts external pairing links after a panel has been added. The app's content is hidden in recent tasks.
+- The panel no longer accepts avatars larger than 1024 pixels on either side.
 
 ### Upgrade notes
 
-- Upgrade nodes to v0.35.0 to fix security issues in snapshots and volume file downloads. Later node upgrades will also show download progress.
+- Upgrade nodes to v0.35.0 to fix security issues on nodes. Later node upgrades will also show download progress.
 - After updating the panel, update the Android app to v0.35.0.
 - Port mappings previously imported from compose and bound only to a local address are still publicly exposed. Check them in the container's "Network" tab.
 - In earlier versions, containers could read files on the node through snapshots and downloads. If untrusted containers have run on a node, replace the keys and passwords stored on it.
