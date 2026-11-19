@@ -43,14 +43,14 @@ func yamuxConfig() *yamux.Config {
 	return cfg
 }
 
-// Server 在面板一端把连接包装成 yamux 会话。
+// Server 在面板一端把连接包装成 yamux 会话。对方发来的 ping 超出频率时断开（见 pingGuard）。
 func Server(conn net.Conn) (*yamux.Session, error) {
-	return yamux.Server(conn, yamuxConfig())
+	return yamux.Server(newPingGuard(conn), yamuxConfig())
 }
 
-// Client 在节点一端把连接包装成 yamux 会话。
+// Client 在节点一端把连接包装成 yamux 会话。对方发来的 ping 超出频率时断开（见 pingGuard）。
 func Client(conn net.Conn) (*yamux.Session, error) {
-	return yamux.Client(conn, yamuxConfig())
+	return yamux.Client(newPingGuard(conn), yamuxConfig())
 }
 
 // Serve 在会话上运行 gRPC 服务端，处理对方打开的通道，直到会话关闭。
