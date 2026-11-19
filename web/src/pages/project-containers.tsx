@@ -67,7 +67,7 @@ import { useUnsaved } from "@/components/unsaved";
 import { EnvEditor, type EnvMode } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
 import { WriteGate } from "@/components/perm";
-import { useRole } from "@/components/role";
+import { canProjectSettings, useRole } from "@/components/role";
 import { actionLabel } from "@/pages/audit";
 
 // 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
@@ -135,7 +135,7 @@ export function useProjectActions(project: Project, imageUpdates: ImageUpdate[])
           items={[
             ...(changed.length > 0 ? [{ label: pc.table.deployAll, disabled: busy, onSelect: () => deploy(project.containers) }] : []),
             { label: pc.table.addContainer, onSelect: () => navigate({ to: "/projects/$projectId/add", params: { projectId: project.id } }) },
-            { label: t.project.sections.settings, onSelect: () => navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { tab: "settings" } }) },
+            ...(canProjectSettings(can) ? [{ label: t.project.sections.settings, onSelect: () => navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { tab: "settings" } }) }] : []),
           ]}
         />
       </>
@@ -160,6 +160,7 @@ export function ContainersTab({
 }) {
   const { range, picker } = useRange();
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const canDeploy = useRole().can("project.deploy");
 
   // 还没有容器：监控照常排版但没有数据，模糊处理，上面写「暂无容器」。模糊加在内容上，边缘自然淡出，不会有截止线。
   if (project.containers.length === 0) {
@@ -172,10 +173,12 @@ export function ContainersTab({
         </div>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center">
           <h2 className="text-base font-semibold">{t.projectContainers.add.noContainers}</h2>
-          <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }}>
-            <Plus />
-            {t.projectContainers.table.addContainer}
-          </ButtonLink>
+          {canDeploy && (
+            <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }}>
+              <Plus />
+              {t.projectContainers.table.addContainer}
+            </ButtonLink>
+          )}
         </div>
       </div>
     );
@@ -260,6 +263,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
   const pc = t.projectContainers;
   const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
   const nodeOf = (id: string) => knownNodes(nodes.data).find((n) => n.id === id);
+  const canDeploy = useRole().can("project.deploy");
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const targets = project.containers.filter((m) => checked[m.name]);
   const usage = containerUsage(useProjectMetrics(project.id, projectMetricNodes(project)).data);
@@ -271,6 +275,7 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
       title={pc.table.title}
       help={pc.table.help}
       actions={
+        canDeploy &&
         project.containers.length > 1 &&
         targets.length > 0 && (
           // 窄屏上页头已有主按钮，这里用次要按钮，同一区域不出现两个主按钮。
@@ -304,8 +309,9 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
             <Row
               key={m.name}
               className="relative"
-              // 只有一个容器时没有批量部署，不显示勾选框。
+              // 只有一个容器、或者没有部署权限时没有批量部署，不显示勾选框。
               icon={
+                canDeploy &&
                 project.containers.length > 1 && (
                   <span className="relative z-10 flex">
                     <Checkbox aria-label={pc.table.select(m.name)} checked={!!checked[m.name]} onCheckedChange={(v) => setChecked({ ...checked, [m.name]: v === true })} />
@@ -335,12 +341,14 @@ function ContainerList({ project, services, deploy, busy }: { project: Project; 
           );
         })}
       </List>
-      <div>
-        <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }} variant="outline">
-          <Plus />
-          {pc.table.addContainer}
-        </ButtonLink>
-      </div>
+      {canDeploy && (
+        <div>
+          <ButtonLink to="/projects/$projectId/add" params={{ projectId: project.id }} variant="outline">
+            <Plus />
+            {pc.table.addContainer}
+          </ButtonLink>
+        </div>
+      )}
     </Section>
   );
 }
@@ -982,7 +990,7 @@ function Overview({ project, container, services }: { project: Project; containe
               }
             />
           )}
-          <KvItem mono className="col-span-2" k={o.directory} v={container.dir} />
+          {container.dir && <KvItem mono className="col-span-2" k={o.directory} v={container.dir} />}
           {container.config?.projectDir && <KvItem mono className="col-span-2" k={o.projectDir} v={container.config.projectDir} />}
         </div>
       </Section>

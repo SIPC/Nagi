@@ -1,4 +1,4 @@
-import { useRole } from "@/components/role";
+import { canProjectSettings, useRole } from "@/components/role";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
@@ -57,8 +57,10 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
   const nodeIds = [...new Set(p.containers.map((c) => c.nodeId))];
   const { actions, deploy, busy, output, hasOutput } = useProjectActions(p, imageUpdates);
   // 网络要「网络和域名」：没有时不显示这一块（面板的回复里也没有映射）。
-  const canNetwork = useRole().can("project.network");
-  if (tab === "network" && !canNetwork) tab = "containers";
+  const role = useRole();
+  const canNetwork = role.can("project.network");
+  const canSettings = canProjectSettings(role.can);
+  if ((tab === "network" && !canNetwork) || (tab === "settings" && !canSettings)) tab = "containers";
 
   return (
     <>
@@ -106,7 +108,7 @@ function ProjectBody({ p, services, imageUpdates, tab, onTab }: { p: NonNullable
         items={[
           { value: "containers", label: t.project.sections.overview },
           ...(canNetwork ? [{ value: "network" as const, label: t.project.sections.network, count: p.routes.length }] : []),
-          { value: "settings", label: t.project.sections.settings },
+          ...(canSettings ? [{ value: "settings" as const, label: t.project.sections.settings }] : []),
         ]}
       />
       {tab === "containers" && <ContainersTab project={p} services={services} deploy={deploy} busy={busy} output={output} hasOutput={hasOutput} />}
@@ -352,9 +354,11 @@ export function MobileProjectNav({ projectId }: { projectId: string }) {
           {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs tabular-nums text-muted-foreground" />}
         </Link>
       )}
-      <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} className={item(onSection && tab === "settings")}>
-        {t.project.sections.settings}
-      </Link>
+      {canProjectSettings(can) && (
+        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} className={item(onSection && tab === "settings")}>
+          {t.project.sections.settings}
+        </Link>
+      )}
     </nav>
   );
 }
@@ -510,9 +514,11 @@ function ProjectColumn({
             {p.routes.length > 0 && <Roll value={String(p.routes.length)} className="ml-auto text-xs leading-5 tabular-nums text-muted-foreground" />}
           </Link>
         )}
-        <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} data-active={section("settings") || undefined} className={cn(item, !can("project.network") && "mt-2", !section("settings") && idle)}>
-          {t.project.sections.settings}
-        </Link>
+        {canProjectSettings(can) && (
+          <Link to="/projects/$projectId" params={{ projectId: p.id }} search={{ tab: "settings" }} data-active={section("settings") || undefined} className={cn(item, !can("project.network") && "mt-2", !section("settings") && idle)}>
+            {t.project.sections.settings}
+          </Link>
+        )}
       </nav>
     </div>
   );

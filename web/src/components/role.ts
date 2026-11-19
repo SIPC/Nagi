@@ -115,3 +115,7 @@ export const projectWritePerms: Permission[] = [
   "project.manage",
 ];
 export const nodeWritePerms: Permission[] = ["node.manage", "node.images", "node.root"];
+
+// canProjectSettings：项目设置里有自己能看的部分（基本设置要「项目管理」，其余各节要相应的权限），否则不显示「设置」。
+export const canProjectSettings = (can: Can) =>
+  (["project.manage", "project.snapshots", "project.alerts", "project.network", "project.config"] as Permission[]).some((p) => can(p));

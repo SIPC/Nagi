@@ -293,7 +293,7 @@ async function approve(n: Node) {
 export type NodesView = "cards" | MapLayer;
 
 export function NodesPage({
-  view,
+  view: requestedView,
   onView,
   tags: tagFilter,
   onTags,
@@ -309,7 +309,10 @@ export function NodesPage({
 }) {
   const nodes = useNodeList();
   const panelVersion = usePanelVersion();
-  const { isAdmin } = useRole();
+  const { isAdmin, can } = useRole();
+  // 高可用视图画的是顶替和备份，要相应的权限（面板的回复里也没有）；添加节点、移交只给管理员。
+  const canHA = can("project.ha") || can("project.backup");
+  const view: NodesView = requestedView === "ha" && !canHA ? "cards" : requestedView;
   const status = useUpdateStatus(isAdmin);
   const [dialog, setDialog] = useState<"add" | "handover" | "tags" | null>(openAdd && isAdmin ? "add" : null);
   useEffect(() => {
@@ -377,7 +380,7 @@ export function NodesPage({
                   items={[
                     { value: "cards", label: t.nodes.views.cards },
                     { value: "network", label: t.nodes.views.network },
-                    { value: "ha", label: t.nodes.views.ha },
+                    ...(canHA ? [{ value: "ha" as const, label: t.nodes.views.ha }] : []),
                   ]}
                 />
               </div>
@@ -394,11 +397,13 @@ export function NodesPage({
                 {canceling ? t.nodes.upgrade.canceling : t.nodes.upgrade.cancel}
               </Button>
             )}
-            <Button onClick={() => setDialog("add")}>
-              <Plus />
-              {t.nodes.addNode}
-            </Button>
-            {list.length > 0 && (
+            {isAdmin && (
+              <Button onClick={() => setDialog("add")}>
+                <Plus />
+                {t.nodes.addNode}
+              </Button>
+            )}
+            {isAdmin && list.length > 0 && (
               <Menu
                 items={[
                   ...(isAdmin && tags.length > 0 ? [{ label: t.labels.manageTags, onSelect: () => setDialog("tags") }] : []),
@@ -418,13 +423,15 @@ export function NodesPage({
         <Empty
           title={t.nodes.empty}
           action={
-            <Button onClick={() => setDialog("add")}>
-              <Plus />
-              {t.nodes.addNode}
-            </Button>
+            isAdmin && (
+              <Button onClick={() => setDialog("add")}>
+                <Plus />
+                {t.nodes.addNode}
+              </Button>
+            )
           }
         >
-          {t.nodes.addNodeDescription}
+          {isAdmin && t.nodes.addNodeDescription}
         </Empty>
       ) : (
         <Slide id={view} index={["cards", "network", "ha"].indexOf(view)}>
