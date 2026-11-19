@@ -200,7 +200,7 @@ var allTools = []tool{
 			nagiv1connect.ProjectServiceStopBackupSyncProcedure}},
 		toolSyncBackup),
 	def(tool{name: "save_route", title: "Save port mapping", write: true,
-		description: "Create or change a port mapping: HTTP with domains and automatic HTTPS, or TCP/UDP on a published port. Pass name to change an existing one. Takes effect immediately. This is how to serve HTTP and how to change a deployed container's public ports: ports in the image form or compose are imported only on the first deploy. Check DNS with check_routes before retry_cert.",
+		description: "Create or change a port mapping: HTTP with domains and automatic HTTPS, HTTP without a domain on a published port (plain HTTP at <node address>:<port>), or TCP/UDP on a published port. Pass name to change an existing one. Takes effect immediately. This is how to serve HTTP and how to change a deployed container's public ports: ports in the image form or compose are imported only on the first deploy. Check DNS with check_routes before retry_cert.",
 		procedures:  []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure, nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.ProjectServiceSaveRouteProcedure}},
 		toolSaveRoute),
 	def(tool{name: "delete_route", title: "Delete port mapping", write: true, destructive: true,
