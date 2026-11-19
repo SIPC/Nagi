@@ -2048,7 +2048,10 @@ type DeleteContainerRequest struct {
 	// 同时删除容器目录（数据会删掉）。
 	DeleteDir bool `protobuf:"varint,3,opt,name=delete_dir,json=deleteDir,proto3" json:"delete_dir,omitempty"`
 	// 容器已经在别的节点上恢复（原节点离线时）：目录改名为 <目录>.replaced-<时间> 保留。
-	Retire        bool `protobuf:"varint,4,opt,name=retire,proto3" json:"retire,omitempty"`
+	Retire bool `protobuf:"varint,4,opt,name=retire,proto3" json:"retire,omitempty"`
+	// 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+	// 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+	Revision      int64 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2109,6 +2112,13 @@ func (x *DeleteContainerRequest) GetRetire() bool {
 		return x.Retire
 	}
 	return false
+}
+
+func (x *DeleteContainerRequest) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
 }
 
 type DeleteContainerResponse struct {
@@ -8588,14 +8598,15 @@ const file_nagi_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"files_from\x18\x05 \x01(\x03R\tfilesFrom\x12*\n" +
 	"\x11restore_data_from\x18\x06 \x01(\x03R\x0frestoreDataFrom\x12)\n" +
-	"\x10previous_version\x18\a \x01(\x03R\x0fpreviousVersion\"\x8c\x01\n" +
+	"\x10previous_version\x18\a \x01(\x03R\x0fpreviousVersion\"\xa8\x01\n" +
 	"\x16DeleteContainerRequest\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x1c\n" +
 	"\tcontainer\x18\x02 \x01(\tR\tcontainer\x12\x1d\n" +
 	"\n" +
 	"delete_dir\x18\x03 \x01(\bR\tdeleteDir\x12\x16\n" +
-	"\x06retire\x18\x04 \x01(\bR\x06retire\"\x19\n" +
+	"\x06retire\x18\x04 \x01(\bR\x06retire\x12\x1a\n" +
+	"\brevision\x18\x05 \x01(\x03R\brevision\"\x19\n" +
 	"\x17DeleteContainerResponse\"\x88\x01\n" +
 	"\x17ControlContainerRequest\x12\x1d\n" +
 	"\n" +

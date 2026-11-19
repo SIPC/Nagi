@@ -188,6 +188,47 @@ public  final class DeleteContainerRequest extends
     retire_ = false;
   }
 
+  public static final int REVISION_FIELD_NUMBER = 5;
+  private long revision_;
+  /**
+   * <pre>
+   * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+   * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+   * </pre>
+   *
+   * <code>int64 revision = 5 [json_name = "revision"];</code>
+   * @return The revision.
+   */
+  @java.lang.Override
+  public long getRevision() {
+    return revision_;
+  }
+  /**
+   * <pre>
+   * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+   * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+   * </pre>
+   *
+   * <code>int64 revision = 5 [json_name = "revision"];</code>
+   * @param value The revision to set.
+   */
+  private void setRevision(long value) {
+    
+    revision_ = value;
+  }
+  /**
+   * <pre>
+   * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+   * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+   * </pre>
+   *
+   * <code>int64 revision = 5 [json_name = "revision"];</code>
+   */
+  private void clearRevision() {
+
+    revision_ = 0L;
+  }
+
   public static ink.sipc.nagi.proto.v1.DeleteContainerRequest parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -463,6 +504,49 @@ public  final class DeleteContainerRequest extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+     * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+     * </pre>
+     *
+     * <code>int64 revision = 5 [json_name = "revision"];</code>
+     * @return The revision.
+     */
+    @java.lang.Override
+    public long getRevision() {
+      return instance.getRevision();
+    }
+    /**
+     * <pre>
+     * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+     * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+     * </pre>
+     *
+     * <code>int64 revision = 5 [json_name = "revision"];</code>
+     * @param value The revision to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRevision(long value) {
+      copyOnWrite();
+      instance.setRevision(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+     * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+     * </pre>
+     *
+     * <code>int64 revision = 5 [json_name = "revision"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRevision() {
+      copyOnWrite();
+      instance.clearRevision();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.DeleteContainerRequest)
   }
   @java.lang.Override
@@ -483,10 +567,11 @@ public  final class DeleteContainerRequest extends
             "container_",
             "deleteDir_",
             "retire_",
+            "revision_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007\u0004\u0007";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0007\u0004\u0007\u0005\u0002";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

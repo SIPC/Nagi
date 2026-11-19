@@ -270,7 +270,9 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 			s.foreignReport(ctx, c, cs.GetProjectId(), cs.GetName())
 			continue
 		}
-		_, err := c.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: cs.GetProjectId(), Container: cs.GetName(), Retire: true})
+		// 带上核对的是哪一份（节点上报的修订号）：核对以后、调用之前容器又部署到了这个节点时，节点上的比它新，节点拒绝。
+		// 旧版本节点不认这个字段，照旧停掉。
+		_, err := c.Agent.DeleteContainer(ctx, &nagiv1.DeleteContainerRequest{ProjectId: cs.GetProjectId(), Container: cs.GetName(), Retire: true, Revision: cs.GetRevision()})
 		if err != nil {
 			s.Log.Warn("让原节点停止已换到其他节点的容器失败", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID, "err", err)
 			continue

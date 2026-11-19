@@ -651,6 +651,11 @@ func (m *Manager) Delete(ctx context.Context, projectID, container string, delet
 	if err != nil {
 		return err
 	}
+	return m.deleteLocked(ctx, projectID, container, c, deleteDir, onLine)
+}
+
+// deleteLocked 是 Delete 拿到容器的锁、读到缓存 c 以后的部分。
+func (m *Manager) deleteLocked(ctx context.Context, projectID, container string, c *Cached, deleteDir bool, onLine func(string)) error {
 	if err := m.down(ctx, c.Spec, onLine); err != nil {
 		return err
 	}

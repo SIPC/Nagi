@@ -128,12 +128,18 @@ func (s *agentService) DeployContainer(req *nagiv1.DeployContainerRequest, strea
 }
 
 func (s *agentService) DeleteContainer(ctx context.Context, req *nagiv1.DeleteContainerRequest) (*nagiv1.DeleteContainerResponse, error) {
+	// 退役请求已经过时（容器又部署到了本节点）时，不打断这一份到备份节点的同步。Retire 在锁里还会再核对一次。
+	if rev := req.GetRevision(); req.GetRetire() && rev > 0 {
+		if c, err := s.projects.Get(ctx, req.GetProjectId(), req.GetContainer()); err == nil && c.Spec.GetRevision() > rev {
+			return nil, toStatus(project.ErrRetireStale)
+		}
+	}
 	// 先停下到备份节点的同步，删除成功后再去掉它们的状态（删除失败时容器还在，状态留着）。
 	s.node.stopBackupSyncs(req.GetProjectId(), req.GetContainer())
 	var err error
 	if req.GetRetire() {
 		var dir string
-		if dir, err = s.projects.Retire(ctx, req.GetProjectId(), req.GetContainer(), func(string) {}); err == nil {
+		if dir, err = s.projects.Retire(ctx, req.GetProjectId(), req.GetContainer(), req.GetRevision(), func(string) {}); err == nil {
 			s.node.log.Info("容器已在其他节点上恢复，停止并保留目录", "project", req.GetProjectId(), "container", req.GetContainer(), "dir", dir)
 		}
 	} else {
@@ -393,6 +399,8 @@ func toStatus(err error) error {
 		return status.Error(codes.Canceled, err.Error())
 	case errors.As(err, new(*metrics.LowDiskError)):
 		return status.Error(codes.ResourceExhausted, err.Error())
+	case errors.Is(err, project.ErrRetireStale):
+		return status.Error(codes.FailedPrecondition, err.Error())
 	}
 	return status.Error(codes.Internal, err.Error())
 }

@@ -408,6 +408,9 @@ message DeleteContainerRequest {
   bool delete_dir = 3;
   // 容器已经在别的节点上恢复（原节点离线时）：目录改名为 <目录>.replaced-<时间> 保留。
   bool retire = 4;
+  // 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+  // 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+  int64 revision = 5;
 }
 
 message DeleteContainerResponse {}

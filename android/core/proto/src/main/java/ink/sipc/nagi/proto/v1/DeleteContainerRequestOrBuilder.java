@@ -53,4 +53,15 @@ public interface DeleteContainerRequestOrBuilder extends
    * @return The retire.
    */
   boolean getRetire();
+
+  /**
+   * <pre>
+   * 退役时面板核对过的修订号（节点上报的那份）。节点上缓存的比它新（核对以后容器又部署到了这个节点）时不停止，
+   * 返回 FailedPrecondition。0 表示不核对（旧版本面板、不是退役）。
+   * </pre>
+   *
+   * <code>int64 revision = 5 [json_name = "revision"];</code>
+   * @return The revision.
+   */
+  long getRevision();
 }

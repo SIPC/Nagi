@@ -246,14 +246,26 @@ func (m *Manager) MigrateResume(ctx context.Context, projectID, container string
 	return m.Start(ctx, c.Spec, onLine)
 }
 
+// ErrRetireStale 是退役请求过时了：节点上缓存的配置比面板核对时的新（核对以后容器又部署到了本节点）。
+var ErrRetireStale = errors.New("容器在本节点上的配置比面板核对时新，没有停止")
+
 // Retire 处理已经在别的节点上恢复的容器（原节点离线时恢复或重新部署的）：停止并删除它，
 // 目录改名为 <目录>.replaced-<时间> 保留，由用户决定要不要从里面找回数据。
-func (m *Manager) Retire(ctx context.Context, projectID, container string, onLine func(string)) (string, error) {
+//
+// revision 是面板核对时这个容器的修订号（节点上报的那份），大于 0 时核对：缓存的比它新，说明面板核对以后
+// 又把容器部署或推到了本节点，这一份不能停，返回 ErrRetireStale。核对、删除和改名都在容器的锁里，中间插不进部署。
+func (m *Manager) Retire(ctx context.Context, projectID, container string, revision int64, onLine func(string)) (string, error) {
+	l := m.lock(projectID, container)
+	l.Lock()
+	defer l.Unlock()
 	c, err := m.Get(ctx, projectID, container)
 	if err != nil {
 		return "", err
 	}
-	if err := m.Delete(ctx, projectID, container, false, onLine); err != nil {
+	if revision > 0 && c.Spec.GetRevision() > revision {
+		return "", ErrRetireStale
+	}
+	if err := m.deleteLocked(ctx, projectID, container, c, false, onLine); err != nil {
 		return "", err
 	}
 	dir := c.Spec.GetDir()
