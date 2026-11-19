@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"google.golang.org/protobuf/proto"
 	"slices"
@@ -447,5 +448,40 @@ func TestStripParamsNodeKeys(t *testing.T) {
 	}
 	if !strings.Contains(got, `"project":"web"`) || !strings.Contains(got, `"keep":1`) || !strings.Contains(got, "result_bytes") {
 		t.Errorf("别的键应该保留：%s", got)
+	}
+}
+
+// 被截断的参数：head 里是原文，按键名去不掉，整段不给（2026-11-19-c8e87dd#2）。
+func TestStripParamsTruncated(t *testing.T) {
+	long := `{"arguments":{"node":"prod-9","volumes":"` + strings.Repeat("x", audit.MaxParams) + `"}}`
+	stored := audit.TruncateParams(long)
+	if !strings.Contains(stored, "prod-9") {
+		t.Fatal("测试数据：截断后的参数里应该还有节点名称")
+	}
+	got := stripAddressParams(stored)
+	if strings.Contains(got, "prod-9") || !strings.Contains(got, `"truncated":true`) {
+		t.Errorf("截断的原文不该给：%s", got)
+	}
+	// 嵌在 arguments 里的也一样（MCP 的记录截两次）。
+	nested := `{"arguments":` + stored + `,"result_bytes":3}`
+	if got := stripAddressParams(nested); strings.Contains(got, "prod-9") || !strings.Contains(got, "result_bytes") {
+		t.Errorf("嵌套的截断：%s", got)
+	}
+}
+
+// 项目事件页和审计页一样：有看不到的节点时，MCP 调用的记录不给失败详情（2026-11-19-c8e87dd#1）。
+func TestMCPRecordFailureHidden(t *testing.T) {
+	e := audit.Event{Category: audit.MCP, Action: "mcp:deploy", Result: audit.ResultFailed, Error: "节点 prod-9 离线", TargetType: "tool"}
+	ident := func(s string) string { return s }
+	member := auditViewer{x: memberAccess(auth.PresetOperator), scrub: ident, refs: ident, hidden: map[string]string{"n9": "prod-9"}}
+	if got := member.activityEntry(e, auditNames{}); strings.Contains(got.GetDetail(), "prod-9") {
+		t.Errorf("项目事件页：%q", got.GetDetail())
+	}
+	if got := member.entry(e, auditNames{}); got.GetError() != "" {
+		t.Errorf("审计页：%q", got.GetError())
+	}
+	admin := auditViewer{admin: true, scrub: ident, refs: ident}
+	if got := admin.activityEntry(e, auditNames{}); !strings.Contains(got.GetDetail(), "prod-9") {
+		t.Errorf("管理员照常看到：%q", got.GetDetail())
 	}
 }
