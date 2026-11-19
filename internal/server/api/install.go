@@ -12,11 +12,15 @@ import (
 // installScript 是节点安装脚本，由面板填入自己的地址、公钥指纹和版本后提供下载。
 // nagi 从和面板同一版本的 GitHub Release（或 --download-url 指定的镜像）下载并按 SHA256SUMS 校验，
 // 面板不提供二进制。令牌只用于加入，不会写进服务配置。
+// 令牌用环境变量 NAGI_TOKEN 传（安装命令是 curl … | NAGI_TOKEN=<令牌> sh -s --），不出现在进程参数里：
+// 安装要几分钟，同一台机器上的任何用户都能读别的进程的参数（/proc/<pid>/cmdline），环境变量只有 root 能读。
+// 旧面板生成的命令用 --token，仍然认。
 // 没有 Docker 时自动安装，并把 nagi 注册为命令（见 sharedScript）。
 var installScript = template.Must(template.New("install").Parse(`#!/bin/sh
 # Nagi 节点安装脚本，由面板生成。
 #
-#   --token <令牌>          加入令牌（面板复制的命令里已带上）
+#   NAGI_TOKEN=<令牌>       加入令牌，用环境变量传（面板复制的命令里已带上，不出现在进程参数里）；
+#                          旧的 --token <令牌> 仍然可用
 #   --download-url <地址>   从镜像下载 nagi-linux-<架构> 和 SHA256SUMS（无法访问 GitHub 时），
 #                          也可用环境变量 NAGI_DOWNLOAD_URL 指定；之后在面板上一键升级也从这里下载
 #   --docker-mirror <名称>  自动安装 Docker 时使用的软件源镜像：Aliyun 或 AzureChinaCloud
@@ -28,7 +32,9 @@ FINGERPRINT="{{.Fingerprint}}"
 PANEL_VERSION="{{.Version}}"
 BIN=/usr/local/bin/nagi
 DATA_DIR=/var/lib/nagi
-TOKEN=""
+TOKEN="${NAGI_TOKEN:-}"
+# 读完就清掉，不传给 Docker 安装脚本等子进程；加入时再只传给 nagi enroll。
+unset NAGI_TOKEN
 DOCKER_MIRROR=""
 DOWNLOAD_URL="${NAGI_DOWNLOAD_URL:-}"
 
@@ -46,7 +52,7 @@ while [ $# -gt 0 ]; do
     *) fail "未知参数 $1" ;;
   esac
 done
-[ -n "$TOKEN" ] || fail "缺少 --token"
+[ -n "$TOKEN" ] || fail "缺少加入令牌（环境变量 NAGI_TOKEN），请在面板上重新复制安装命令"
 case "$DOWNLOAD_URL" in "" | http://* | https://*) ;; *) fail "--download-url 须以 http:// 或 https:// 开头" ;; esac
 if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
@@ -78,7 +84,7 @@ fi
 install -m 0755 "$TMP/nagi" "$BIN"
 link_command
 
-"$BIN" enroll --server "$PANEL" --fingerprint "$FINGERPRINT" --token "$TOKEN" --data-dir "$DATA_DIR"
+NAGI_TOKEN="$TOKEN" "$BIN" enroll --server "$PANEL" --fingerprint "$FINGERPRINT" --data-dir "$DATA_DIR"
 # 用了镜像或加速代理时记下来，面板上一键升级时节点也从这里下载（见 internal/agent/upgrade.go）。
 if [ -n "$DOWNLOAD_URL" ]; then
   mkdir -p "$DATA_DIR/identity"

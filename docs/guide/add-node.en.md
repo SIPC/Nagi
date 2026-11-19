@@ -19,7 +19,7 @@ Before you start, make sure the new server meets the [requirements](../../README
 
    Each install command can be used once and is valid for 1 hour. To add several servers, generate a command for each one.
 
-4. Run the command as root on the new server.
+4. Run the command as root on the new server. If you use sudo, run `sudo -i` first, then paste the command.
 
    The script downloads the same nagi version as the panel from GitHub Releases and verifies its SHA-256. If Docker isn't installed, the script installs it.
 

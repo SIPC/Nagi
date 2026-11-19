@@ -555,12 +555,13 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 	s.Audit.Record(ctx, audit.Event{Category: audit.Operation, Action: "Enroll", ActorType: audit.ActorNode, ActorID: nodeID,
 		ActorName: req.Msg.GetHostname(), Via: audit.ViaNode, IP: ip, TargetType: "node", TargetID: nodeID, TargetName: s.nodeName(ctx, nodeID)})
 	if s.Panel != nil && s.Panel.Standby == nil {
-		title := i18n.Errorf("节点 %s 已加入", s.nodeName(ctx, nodeID)).Error()
+		// 来源地址写在标题里：令牌被别人抢先用掉时，管理员一眼能看出加入的不是自己的机器。
+		title := i18n.Errorf("节点 %s 已从 %s 加入", s.nodeName(ctx, nodeID), ip).Error()
 		if pending != 0 {
-			title = i18n.Errorf("节点 %s 用接入码加入，等待批准", s.nodeName(ctx, nodeID)).Error()
+			title = i18n.Errorf("节点 %s 从 %s 用接入码加入，等待批准", s.nodeName(ctx, nodeID), ip).Error()
 		}
 		go s.Nodes.PanelAlert(context.WithoutCancel(ctx), &nagiv1.Alert{Key: "security:enroll:" + nodeID, Title: title,
-			Message: i18n.Errorf("地址：%s", ip).Error(), Time: timestamppb.Now()})
+			Message: i18n.Errorf("地址：%s，节点 ID：%s", ip, nodeID).Error(), Time: timestamppb.Now()})
 	}
 	return connect.NewResponse(&nagiv1.EnrollResponse{
 		NodeId: nodeID, Certificate: cert.Raw, CaCertificate: s.CA.Cert.Raw,

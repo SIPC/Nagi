@@ -78,17 +78,18 @@ nagi panel remove <地址或指纹>      # 移除最后一个面板需要 --forc
 
    ```
    curl --pinnedpubkey "sha256//<面板公钥指纹>" -k https://<地址:端口>/install.sh \
-     | sh -s -- --token <令牌>
+     | NAGI_TOKEN=<令牌> sh -s --
    ```
 
    面板是自签证书，所以用 `-k` 跳过 CA 校验，真正的校验靠 `--pinnedpubkey` 钉住面板公钥，中间人无法冒充。
-2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root。没有 Docker 时用官方脚本 get.docker.com 自动安装（`--docker-mirror Aliyun` 等传给它的 `--mirror`），compose 插件缺失或低于 2.24 时单独安装（先用包管理器的 `docker-compose-plugin`，不行再从 GitHub 下载到 `/usr/local/lib/docker/cli-plugins`）；这部分与面板安装脚本 `scripts/install.sh` 共用（`install.go` 的 `sharedScript`，有测试检查两边一致）。然后从和面板同一版本的 GitHub Release 下载 `nagi-linux-<架构>`，按同一处的 `SHA256SUMS` 校验（下载和校验也在共用代码里，`download_nagi`），安装到 `/usr/local/bin/nagi` 并在 `/usr/bin` 下建链接、安装 bash 补全，执行 `nagi enroll` 完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。
+   令牌用环境变量 `NAGI_TOKEN` 传给脚本，脚本再用环境变量传给 `nagi enroll`，不出现在进程参数里：安装要几分钟，同一台机器上的任何用户都能读别的进程的参数（`/proc/<pid>/cmdline`），抢先用令牌加入自己的机器；环境变量只有 root 能读。脚本读完就清掉这个变量，不传给 Docker 安装脚本等子进程。旧面板生成的 `sh -s -- --token <令牌>` 和 `nagi enroll --token` 仍然能用。末尾的 `-s --` 让用户能接着追加 `--download-url` 等选项。
+2. **安装脚本检查环境并下载 nagi**：`/install.sh` 由面板动态生成，写好了面板地址和公钥指纹。脚本检查是否为 Linux、root。没有 Docker 时用官方脚本 get.docker.com 自动安装（`--docker-mirror Aliyun` 等传给它的 `--mirror`），compose 插件缺失或低于 2.24 时单独安装（先用包管理器的 `docker-compose-plugin`，不行再从 GitHub 下载到 `/usr/local/lib/docker/cli-plugins`）；这部分与面板安装脚本 `scripts/install.sh` 共用（`install.go` 的 `sharedScript`，有测试检查两边一致）。然后从和面板同一版本的 GitHub Release 下载 `nagi-linux-<架构>`，按同一处的 `SHA256SUMS` 校验（下载和校验也在共用代码里，`download_nagi`），安装到 `/usr/local/bin/nagi` 并在 `/usr/bin` 下建链接、安装 bash 补全，执行 `nagi enroll`（令牌在环境变量里）完成加入，再安装为 systemd 服务（`nagi agent`）。令牌只用于加入，不写进服务配置。没有 systemd 时提示用户自行运行。
    - **面板不提供二进制**：节点安装和一键升级都从 GitHub Release（或镜像）下载。面板不是正式版本（本地编译的 `dev`）时从最新发布的版本下载，脚本提示版本不一致。v0.1.0 的节点一键升级要从面板下载，v0.28.0 起面板不再提供，这样的节点要在节点上重新执行安装脚本升级。
    - **镜像**：无法访问 GitHub 时在安装命令末尾加 `--download-url <地址>`（或环境变量 `NAGI_DOWNLOAD_URL`），该地址下要有 `nagi-linux-<架构>` 和 `SHA256SUMS`。脚本把它记在 `<节点目录>/identity/download-url`，之后一键升级也只从这里下载。
    - **加速代理**：检测到中国大陆网络时经 GitHub 加速代理下载，用上的代理记在 `<节点目录>/identity/github-proxy`。一键升级先经它下载，不行再直接连 GitHub、依次换内置的代理，成功的记下来；能连上 GitHub 时代理的文件都要和 GitHub 上的 `SHA256SUMS` 一致（见 [panel.md](panel.md#更新面板)）。
 3. **agent 在本地生成两对密钥**：身份密钥和 WireGuard 密钥。私钥都不离开节点。mesh 地址由 WireGuard 公钥直接算出，不需要分配（见 [mesh.md](mesh.md#地址)）。
 4. **agent 调用面板的 Enroll 接口**，提交令牌、身份公钥（CSR）和 WireGuard 公钥。
-5. **面板先校验请求**（证书签名请求的签名、WireGuard 公钥没有被别的节点用过），**再校验令牌并作废**，然后签发证书，返回节点 ID、证书和 CA。节点 ID 由节点的身份公钥算出，写在证书里；节点连上来时面板核对证书里的 ID 和证书的公钥对得上，拿着 CA 私钥（例如被移除的备用面板）也冒充不了已有的节点。用安装命令（一次性令牌）加入的节点直接可用；用接入码加入的要批准（见[接入码](#接入码)）。
+5. **面板先校验请求**（证书签名请求的签名、WireGuard 公钥没有被别的节点用过），**再校验令牌并作废**，然后签发证书，返回节点 ID、证书和 CA。节点 ID 由节点的身份公钥算出，写在证书里；节点连上来时面板核对证书里的 ID 和证书的公钥对得上，拿着 CA 私钥（例如被移除的备用面板）也冒充不了已有的节点。用安装命令（一次性令牌）加入的节点直接可用；用接入码加入的要批准（见[接入码](#接入码)）。节点加入的通知在标题里写来源地址，正文写节点 ID：令牌被别人抢先用掉时，管理员能看出加入的不是自己的机器。
    - 面板记下节点的 WireGuard 公钥。节点之后上报的 mesh 信息里公钥不一致就不采用：一个节点不能冒用别的节点的公钥，抢走它经面板的中转。
 6. **agent 写入信任列表**，启动 WireGuard，与面板建立长连接。之后每次上报时面板在响应里返回 mesh 成员列表，其他节点下次上报（最多 15 秒）就知道新节点了。
 

@@ -148,13 +148,14 @@ func agentCmd() *cobra.Command {
 			defer cancel()
 			cfg.Version = version
 			cfg.Logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+			cfg.Token = tokenFromEnv(cfg.Token)
 			return agent.Run(ctx, cfg)
 		},
 	}
 	cmd.Flags().StringVar(&cfg.DataDir, "data-dir", "/var/lib/nagi", "数据目录")
 	cmd.Flags().StringVar(&cfg.Panel, "server", "", "面板地址，例如 203.0.113.10:34567（首次加入时需要）")
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹（首次加入时需要）")
-	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌（首次加入时需要）")
+	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌（首次加入时需要；建议改用环境变量 "+tokenEnv+"）")
 	cmd.Flags().BoolVar(&cfg.DisableProxy, "no-proxy", false, "不启动 Caddy（仅用于开发）")
 	cmd.Flags().Uint16Var(&cfg.MeshPort, "mesh-port", 0, "mesh 的 UDP 端口（默认首次启动时随机选择并记住）")
 	return cmd
@@ -168,14 +169,27 @@ func enrollCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := signalContext()
 			defer cancel()
+			cfg.Token = tokenFromEnv(cfg.Token)
 			return agent.Enroll(ctx, cfg)
 		},
 	}
 	cmd.Flags().StringVar(&cfg.DataDir, "data-dir", "/var/lib/nagi", "数据目录")
 	cmd.Flags().StringVar(&cfg.Panel, "server", "", "面板地址，例如 203.0.113.10:34567")
 	cmd.Flags().StringVar(&cfg.Fingerprint, "fingerprint", "", "面板公钥指纹")
-	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌")
+	cmd.Flags().StringVar(&cfg.Token, "token", "", "一次性加入令牌（建议改用环境变量 "+tokenEnv+"）")
 	return cmd
+}
+
+// tokenEnv 是传加入令牌的环境变量。进程参数同一台机器上的任何用户都能读到（/proc/<pid>/cmdline），
+// 环境变量只有同一用户和 root 能读，所以安装脚本用它把令牌传给 nagi enroll。
+const tokenEnv = "NAGI_TOKEN"
+
+// tokenFromEnv 返回加入令牌：命令行给了 --token（旧的安装脚本、手动执行）就用它，否则读环境变量 NAGI_TOKEN。
+func tokenFromEnv(flag string) string {
+	if flag != "" {
+		return flag
+	}
+	return strings.TrimSpace(os.Getenv(tokenEnv))
 }
 
 // linkProxyCmd 是项目内网和项目连接的代理容器里运行的程序，由节点创建，不用手动运行。
