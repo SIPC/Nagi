@@ -687,27 +687,15 @@ func (a *API) visibleNames(ctx context.Context, x *access) map[string]bool {
 // scrubNodes 把文字里看不到的节点名换成「其他节点」（A7）。只换完整的名称：前后不是字母、数字、-、_、.。
 // 看得到的节点里有同名的不换。看不到的节点的 ID 也去掉（节点没有名称时报错里写的是 ID）。
 func (a *API) scrubNodes(ctx context.Context, x *access, s string) string {
-	return a.scrubNodesExcept(ctx, x, s, "")
-}
-
-// scrubNodesExcept 和 scrubNodes 一样，但 given 里出现过的名称和 ID 不换：那是请求的人自己写的，他本来就知道。
-// 清理报错时用：有的报错会把请求里的文字写回来，要是照样替换，填一个猜的名称、看报错里它有没有被换掉，
-// 就能确认有没有叫这个名字的节点（2026-11-19-402545d#1）。
-func (a *API) scrubNodesExcept(ctx context.Context, x *access, s, given string) string {
 	if s == "" || x == nil {
 		return s
 	}
-	for id := range a.nodeNames(ctx, x) {
-		if !x.node(id) && strings.Contains(s, id) && !strings.Contains(given, id) {
-			s = strings.ReplaceAll(s, id, "")
-		}
-	}
+	s = a.scrubNodeIDs(ctx, x, s)
 	visible := a.visibleNames(ctx, x)
 	names := a.hiddenNames(ctx, x)
 	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
 	for _, n := range names {
-		// 请求里要是完整的一个词才算自己写的（「db」不能因为请求里有「db-prod」就不换）。
-		if !visible[n] && replaceWord(given, n, "") == given {
+		if !visible[n] {
 			s = replaceWord(s, n, otherNode(ctx))
 		}
 	}

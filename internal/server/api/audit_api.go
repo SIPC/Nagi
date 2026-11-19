@@ -30,6 +30,8 @@ type auditViewer struct {
 	// x 是查看者的访问范围（管理员为 nil），scrub 去掉文字里他看不到的节点名（A7）。
 	x     *access
 	scrub func(string) string
+	// other 是「其他节点」按界面语言的文字。
+	other string
 	// hidden 是他看不到的节点：ID → 名称。筛选和搜索不能借它们探出这些节点（2026-11-19-87c02b5#10）。
 	hidden map[string]string
 }
@@ -48,7 +50,11 @@ func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 		return v, err
 	}
 	v.x = x
-	v.scrub = func(s string) string { return a.scrubNodes(ctx, x, a.scrubNodeIDs(ctx, x, s)) }
+	// 参数、报错里只去掉看不到的节点的 ID（随机的 32 位十六进制，猜不出来）。节点的名称不在文字里找着换：
+	// 对象名称、参数是成员自己能写的，照着换的话，建一个名称是猜测词的容器、看审计里它有没有变成「其他节点」，
+	// 就能确认有没有这台节点（2026-11-19-7b50402#3）。操作者、对象是节点的记录按类型和 ID 换（见 entry）。
+	v.scrub = func(s string) string { return a.scrubNodeIDs(ctx, x, s) }
+	v.other = otherNode(ctx)
 	v.hidden = map[string]string{}
 	for id, name := range a.nodeNames(ctx, x) {
 		if !x.node(id) {
@@ -99,16 +105,8 @@ func (v auditViewer) restrict(f *audit.Filter) {
 	// 按有没有结果就能逐位试出被去掉的内容。所以非管理员的搜索不匹配这两列。
 	f.SearchFields = audit.SearchViewer
 	// 有看不到的节点时，操作者、对象是节点的记录不按名称匹配：名称显示时会换成「其他节点」，按原文匹配的话，
-	// 用很短的词反复搜就能把名称一段一段拼出来。搜索的词里直接带着看不到的节点的名称或 ID 时，名称两列都不匹配。
+	// 用很短的词反复搜就能把名称一段一段拼出来。别的记录照常按名称匹配，不看搜索的词是什么。
 	f.SearchSkipNodes = len(v.hidden) > 0
-	q := strings.ToLower(strings.TrimSpace(f.Search))
-	for id, name := range v.hidden {
-		for _, h := range []string{strings.ToLower(name), id} {
-			if h != "" && strings.Contains(q, h) {
-				f.SearchFields = audit.SearchNoNames
-			}
-		}
-	}
 	if v.projects != nil {
 		f.Projects = v.projects
 	} else {
@@ -153,14 +151,15 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 			// 操作失败的详情可能带着配置里的内容（compose 报错等），参数里也有配置，没有「查看配置」时只看结果。
 			out.Error, out.Params = "", ""
 		}
-		// 看不到的节点：目标、操作者（告警由节点发出）、报错和参数里的节点名都换成「其他节点」（A7）；参数里的地址去掉（B9）。
+		// 看不到的节点（A7）：对象、操作者（告警由节点发出）是节点的，按类型和 ID 判断，整个名称换成「其他节点」；
+		// 别的名称、报错和参数里只去掉节点的 ID。参数里的地址去掉（B9）。
 		if e.TargetType == "node" && !v.x.node(e.TargetID) {
-			out.TargetId, out.TargetName = "", ""
+			out.TargetId, out.TargetName = "", v.other
 		}
-		out.ActorName, out.TargetName, out.Error = v.scrub(out.ActorName), v.scrub(out.TargetName), v.scrub(out.Error)
 		if e.ActorType == "node" && !v.x.node(e.ActorID) {
-			out.ActorId = ""
+			out.ActorId, out.ActorName = "", v.other
 		}
+		out.Error = v.scrub(out.Error)
 		out.Params = v.scrub(stripAddressParams(out.Params))
 	}
 	return out

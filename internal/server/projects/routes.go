@@ -135,7 +135,7 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 	}
 	for _, id := range failoverNodes(c) {
 		if conn, err := s.Nodes.Peek(id); err == nil && !conn.LastReport().GetNode().GetCrossNodeEntry() {
-			return invalid("节点 %s 版本过低，升级后才能作为跨节点入口", s.NodeName(ctx, id))
+			return invalid("节点 %s 版本过低，升级后才能作为跨节点入口", s.NodeRef(ctx, id))
 		}
 	}
 	for _, id := range r.GetEntryNodes() {
@@ -176,9 +176,9 @@ func (s *Service) checkRouteNodes(ctx context.Context, c store.Container, r *nag
 	for _, id := range ids {
 		if conn, err := s.Nodes.Peek(id); err == nil && !conn.LastReport().GetNode().GetProxyProtocol() {
 			if r.GetProxyProtocol() {
-				return invalid("节点 %s 版本过低，升级后才能使用 PROXY protocol", s.NodeName(ctx, id))
+				return invalid("节点 %s 版本过低，升级后才能使用 PROXY protocol", s.NodeRef(ctx, id))
 			}
-			return invalid("节点 %s 版本过低，升级后才能作为同时开 TCP 和 UDP 的入口节点", s.NodeName(ctx, id))
+			return invalid("节点 %s 版本过低，升级后才能作为同时开 TCP 和 UDP 的入口节点", s.NodeRef(ctx, id))
 		}
 	}
 	return nil

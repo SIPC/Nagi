@@ -38,9 +38,9 @@ type OfflineError struct {
 	name func() string
 }
 
-// NewOfflineError 返回节点 name 离线的错误。
-func NewOfflineError(name string) OfflineError {
-	return OfflineError{ID: name, name: func() string { return name }}
+// NewOfflineError 返回节点离线的错误：id 是节点 ID，name 是显示的名称。
+func NewOfflineError(id, name string) OfflineError {
+	return OfflineError{ID: id, name: func() string { return name }}
 }
 
 func (e OfflineError) Name() string {
@@ -53,6 +53,15 @@ func (e OfflineError) Error() string        { return "节点 " + e.Name() + " �
 func (e OfflineError) Is(target error) bool { return target == ErrOffline }
 func (e OfflineError) Localize(l i18n.Lang) string {
 	return i18n.Sprintf(l, "节点 %s 离线", e.Name())
+}
+
+// Redact 按查看的人换掉节点的名称（见 i18n.Redact）。
+func (e OfflineError) Redact(hide func(i18n.Ref) (string, bool)) (error, bool) {
+	name, ok := hide(i18n.NodeRef(e.ID, e.Name()))
+	if !ok {
+		return e, false
+	}
+	return OfflineError{ID: e.ID, name: func() string { return name }}, true
 }
 
 // ErrPending 表示节点是用接入码加入的，还没有批准。

@@ -447,7 +447,7 @@ func (s *nodeService) GetNodeStorage(ctx context.Context, req *connect.Request[n
 	}
 	resp, err := conn.Agent.GetStorage(ctx, &nagiv1.GetStorageRequest{})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低，升级后才能查看磁盘明细", s.nodeName(ctx, req.Msg.GetNodeId())))
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低，升级后才能查看磁盘明细", s.nodeRef(ctx, req.Msg.GetNodeId())))
 	} else if err != nil {
 		return nil, fromGRPC(err)
 	}

@@ -36,7 +36,7 @@ func (s *Service) backupSources(ctx context.Context, c store.Container) (store.N
 		return source, nil, err
 	}
 	if len(source.MeshKey) == 0 {
-		return source, nil, invalid("节点 %s 还没有加入节点网络", source.Name)
+		return source, nil, invalid("节点 %s 还没有加入节点网络", i18n.NodeRef(source.ID, source.Name))
 	}
 	var extra [][]byte
 	if cfg := failoverOf(c); cfg != nil {
@@ -121,7 +121,7 @@ func (s *Service) checkBackupNodes(ctx context.Context, c store.Container, cfg *
 	if len(list) > 1 {
 		for _, id := range sources {
 			if !s.supportsMultiBackup(ctx, id) {
-				return invalid("节点 %s 版本过低，只能设置一个备份节点，请先升级节点", s.NodeName(ctx, id))
+				return invalid("节点 %s 版本过低，只能设置一个备份节点，请先升级节点", s.NodeRef(ctx, id))
 			}
 		}
 	}
@@ -129,7 +129,7 @@ func (s *Service) checkBackupNodes(ctx context.Context, c store.Container, cfg *
 	if cfg != nil {
 		for _, id := range list {
 			if !s.supportsMultiBackup(ctx, id) {
-				return invalid("备份节点 %s 版本过低，不能和顶替同时使用，请先升级节点", s.NodeName(ctx, id))
+				return invalid("备份节点 %s 版本过低，不能和顶替同时使用，请先升级节点", s.NodeRef(ctx, id))
 			}
 		}
 	}
@@ -201,7 +201,7 @@ func (s *Service) SetBackupNodes(ctx context.Context, projectID, name string, li
 			return nil, err
 		}
 		if err := s.registerBackup(ctx, target, p, c, dirOf[id]); err != nil {
-			return nil, i18n.Errorf("备份节点 %s 未能登记副本：%w", s.NodeName(ctx, id), s.nodeErr(ctx, id, nodeMessage(err)))
+			return nil, i18n.Errorf("备份节点 %s 未能登记副本：%w", s.NodeRef(ctx, id), s.nodeErr(ctx, id, nodeMessage(err)))
 		}
 	}
 	// 记下新加的备份节点单独指定的存放位置；去掉的备份节点的记录删掉。
@@ -257,7 +257,7 @@ func (s *Service) backupList(ctx context.Context, c store.Container, ids ...stri
 	}
 	for _, id := range ids {
 		if !slices.Contains(list, id) {
-			return nil, invalid("节点 %s 不是容器 %s 的备份节点", s.NodeName(ctx, id), c.Name)
+			return nil, invalid("节点 %s 不是容器 %s 的备份节点", s.NodeRef(ctx, id), c.Name)
 		}
 	}
 	if len(ids) > 0 {
@@ -360,7 +360,7 @@ func (s *Service) stopBackupSync(ctx context.Context, projectID, name, nodeID st
 		return err
 	}
 	if !s.supportsAsyncSync(c.NodeID) {
-		return invalid("节点 %s 版本过低，不能停止同步，请先升级节点", s.NodeName(ctx, c.NodeID))
+		return invalid("节点 %s 版本过低，不能停止同步，请先升级节点", s.NodeRef(ctx, c.NodeID))
 	}
 	ctx, cancel := context.WithTimeout(ctx, syncStartTimeout)
 	defer cancel()
@@ -422,7 +422,7 @@ func (s *Service) pickBackupNode(ctx context.Context, c store.Container, nodeID 
 	}
 	if nodeID != "" {
 		if !slices.Contains(list, nodeID) {
-			return "", invalid("节点 %s 不是容器 %s 的备份节点", s.NodeName(ctx, nodeID), c.Name)
+			return "", invalid("节点 %s 不是容器 %s 的备份节点", s.NodeRef(ctx, nodeID), c.Name)
 		}
 		return nodeID, nil
 	}

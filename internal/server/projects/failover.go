@@ -54,7 +54,7 @@ func (s *Service) participant(ctx context.Context, nodeID, dir string) (*nagiv1.
 		return nil, notFoundError{i18n.New("节点不存在")}
 	}
 	if len(n.MeshKey) != 32 {
-		return nil, invalid("节点 %s 还没有加入节点网络", n.Name)
+		return nil, invalid("节点 %s 还没有加入节点网络", i18n.NodeRef(n.ID, n.Name))
 	}
 	return &nagiv1.FailoverParticipant{Key: n.MeshKey, NodeId: n.ID, Name: n.Name, Dir: dir}, nil
 }
@@ -112,7 +112,7 @@ func (s *Service) SetFailover(ctx context.Context, req SetFailoverRequest) (*nag
 	// 备份节点可以和顶替同时设置，但顶替节点不能同时是备份节点：两套同步会写同一个副本目录。
 	if backups := store.BackupNodes(c); len(backups) > 0 {
 		if slices.Contains(backups, bID) {
-			return nil, invalid("节点 %s 是这个容器的备份节点，请先从备份节点里去掉它再设为顶替节点", s.NodeName(ctx, bID))
+			return nil, invalid("节点 %s 是这个容器的备份节点，请先从备份节点里去掉它再设为顶替节点", s.NodeRef(ctx, bID))
 		}
 		cfg := &nagiv1.FailoverConfig{A: &nagiv1.FailoverParticipant{NodeId: aID}, B: &nagiv1.FailoverParticipant{NodeId: bID}}
 		if err := s.checkBackupNodes(ctx, c, cfg, backups); err != nil {

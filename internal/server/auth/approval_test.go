@@ -359,3 +359,40 @@ func TestPhoneApprovalFullKeepsExisting(t *testing.T) {
 		t.Fatalf("已经确认的请求被别处的顶掉了：%q %v", st, err)
 	}
 }
+
+// 拒绝掉的请求不占名额；登录的请求占满了也不挡高权限确认（2026-11-19-7b50402#4）。
+func TestPhoneApprovalDeniedFreesSlot(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := WithMeta(context.Background(), Meta{IP: approvalIP, UserAgent: chromeUA})
+	keys := newAppKeys()
+	device := h.pairSoftware("op", keys)
+	phone := h.appUserOf(device, keys)
+	web := h.login("op", RequestInfo{IP: approvalIP, UserAgent: chromeUA})
+	op, _ := h.q.GetUserByUsername(ctx, "op")
+	if err := h.q.SetTOTP(ctx, store.SetTOTPParams{TotpSecret: base64.StdEncoding.EncodeToString([]byte("JBSWY3DPEHPK3PXP")), ID: op.ID}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < approvalMaxPending; i++ {
+		if _, err := h.s.BeginLoginApproval(ctx, fmt.Sprintf("203.0.%d.9", 100+i), "op", "correct horse"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse"); connect.CodeOf(err) != connect.CodeResourceExhausted {
+		t.Fatalf("别的来源占满时：%v", err)
+	}
+	// 高权限确认是另一种，不受登录请求影响。
+	if _, err := h.s.BeginElevateApproval(ctx, approvalIP, web); err != nil {
+		t.Errorf("登录请求占满不该挡住高权限确认：%v", err)
+	}
+	// 手机上把登录请求都拒绝掉以后，名额空出来。
+	for _, a := range h.s.AppApprovals(phone) {
+		if a.Kind == ApprovalLogin {
+			if err := h.s.AppApprove(ctx, approvalIP, phone, AppApprovalRequest{ID: a.ID, Deny: true}, appHosts); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse"); err != nil {
+		t.Errorf("拒绝以后应该能发起：%v", err)
+	}
+}
