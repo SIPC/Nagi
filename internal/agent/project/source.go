@@ -316,6 +316,14 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 	defer walker.Close()
 	for {
 		name, e, err := walker.Next()
+		if errors.Is(err, io.EOF) && name != "" {
+			// 取不到子树对象时 go-git 也返回 io.EOF，带着那个目录的名字（正常遍历完时名字是空的）。
+			// 不能当作遍历完：后面的文件都没写，照样部署的话 data/ 里的旧文件还会被删掉。
+			if _, terr := repo.TreeObject(e.Hash); terr != nil {
+				return size, fmt.Errorf("读取仓库里的目录 %q：%w", name, terr)
+			}
+			return size, fmt.Errorf("读取仓库里的目录 %q 失败", name)
+		}
 		if errors.Is(err, io.EOF) {
 			return size, nil
 		}
