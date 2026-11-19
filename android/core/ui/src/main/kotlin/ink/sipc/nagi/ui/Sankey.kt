@@ -121,8 +121,16 @@ private class SankeySpec(
 private val WideSpec = SankeySpec(compact = false, strokeScale = 0.24, strokeMax = Double.MAX_VALUE, groupGap = 24f, lineGap = 2f, minRow = 40f, top = 50f, labelRatio = 0.24f, nameTop = 24f)
 private val CompactSpec = SankeySpec(compact = true, strokeScale = 0.18, strokeMax = 20.0, groupGap = 12f, lineGap = 2f, minRow = 36f, top = 40f, labelRatio = 0.28f, nameTop = 22f)
 
-/** 线宽只表示大致大小，准确数字点线看。 */
-private fun SankeySpec.strokeOf(rate: Double): Float = max(2.0, min(strokeMax, sqrt(rate / 1024) * strokeScale)).toFloat()
+/** 线宽的上限（dp）：网页的取值不限线宽，速率大得离谱时（例如节点乱报）也不让一条线高到画不出来。 */
+private const val STROKE_CAP = 400.0
+
+/** 线宽只表示大致大小，准确数字点线看。速率不是有限的正数时按最细的画（v0.35.0#16）。 */
+private fun SankeySpec.strokeOf(rate: Double): Float =
+    if (!rate.isFinite() || rate <= 0) 2f else max(2.0, min(min(strokeMax, STROKE_CAP), sqrt(rate / 1024) * strokeScale)).toFloat()
+
+/** 速率来自节点上报，可能是 NaN、Inf 或负数：NaN、Inf 的路径不画，负数当 0（v0.35.0#16）。 */
+internal fun finiteFlows(flows: List<SankeyFlow>): List<SankeyFlow> =
+    flows.filter { it.rate.isFinite() }.map { if (it.rate < 0) it.copy(rate = 0.0) else it }
 
 private fun flowKey(f: SankeyFlow) = "${f.from}|${f.to}|${f.kind}"
 
@@ -154,6 +162,7 @@ fun SankeyChart(
     var settled by remember { mutableIntStateOf(0) }
     check(settled >= 0)
 
+    @Suppress("NAME_SHADOWING") val flows = finiteFlows(flows)
     // 断流的路径留 HOLD_MS（速率记 0）。在按视图筛选之前算，否则切走的路径会被当成断流留下来。
     val nowMs = System.currentTimeMillis()
     for (f in flows) st.held[flowKey(f)] = f to nowMs

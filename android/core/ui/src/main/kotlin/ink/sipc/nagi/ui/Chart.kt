@@ -98,7 +98,8 @@ fun LineChart(
                 }
             }
         Canvas(Modifier.fillMaxWidth().height(height).then(input)) {
-            val max = series.maxOfOrNull { it.values.maxOrNull() ?: 0f } ?: 0f
+            // 不是有限的数（节点乱报，v0.35.0#16）不参与最大值，画在底部。
+            val max = series.maxOfOrNull { s -> s.values.filter { it.isFinite() }.maxOrNull() ?: 0f } ?: 0f
             val stroke = 1.5.dp.toPx()
             // 上下各留半个线宽，线贴边时不被裁掉
             val top = stroke / 2
@@ -108,7 +109,7 @@ fun LineChart(
                 val v = line.values
                 if (v.size < 2) continue
                 val dx = size.width / (v.size - 1)
-                val ys = FloatArray(v.size) { i -> if (max > 0f) bottom - (v[i].coerceAtLeast(0f) / max) * span else bottom }
+                val ys = FloatArray(v.size) { i -> if (max > 0f && v[i].isFinite()) bottom - (v[i].coerceAtLeast(0f) / max) * span else bottom }
                 drawPath(
                     monotonePath(dx, ys),
                     line.color,
@@ -210,7 +211,7 @@ fun ChartLegend(items: List<Pair<String, Color>>, modifier: Modifier = Modifier)
 // UsageBar：细的横向条，muted 底。用在流量最大的映射（品牌色）和占用。长度变化过渡 220ms。
 @Composable
 fun UsageBar(fraction: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 3.dp) {
-    val f by animateFloatAsState(fraction.coerceIn(0f, 1f), barSpec(), label = "usage")
+    val f by animateFloatAsState(if (fraction.isFinite()) fraction.coerceIn(0f, 1f) else 0f, barSpec(), label = "usage")
     val shape = RoundedCornerShape(2.dp)
     Box(modifier.fillMaxWidth().height(height).clip(shape).background(NagiTheme.colors.muted)) {
         if (f > 0f) Box(Modifier.fillMaxWidth(f).fillMaxHeight().clip(shape).background(color))
