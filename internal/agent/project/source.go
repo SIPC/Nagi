@@ -288,7 +288,8 @@ func (r guardedReader) Read(b []byte) (int, error) {
 // 在目录树里用很多个名字引用；或者目录树层层引用同一个子树，条目数按指数增长），拉取时的磁盘检查拦不住。
 // 这里边写边检查磁盘的剩余空间和 inode、限制条目个数和路径深度，ctx 取消时停下。写到一半失败时 dir 留给调用方删掉。
 //
-// 目录树是 git 服务器给的：名字逐段检查，写文件经 os.Root，不会跟着符号链接写到 dir 外面。
+// 目录树是 git 服务器给的：名字逐段检查，写文件经 os.Root，不会跟着符号链接写到 dir 外面；
+// 也不顺着仓库里的符号链接往下写（和 git 一样），所以写不进 dir 里的 .git。
 func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Hash, dir, base string) (int64, error) {
 	c, err := repo.CommitObject(commit)
 	if err != nil {
@@ -307,6 +308,7 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 		return 0, err
 	}
 	g := &writeGuard{dir: base}
+	links := map[string]bool{} // 已经写出的符号链接
 	var entries int
 	var size int64
 	buf := make([]byte, 64<<10)
@@ -335,6 +337,12 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 		}
 		if err := g.entry(); err != nil {
 			return size, err
+		}
+		// 上级目录是仓库里的符号链接时拒绝：顺着它写，会写到链接指向的地方（例如指向 .git 的链接，能往 .git 里加文件）。
+		for p := path.Dir(name); p != "."; p = path.Dir(p) {
+			if links[p] {
+				return size, fmt.Errorf("仓库里的 %q 在符号链接 %q 下面", name, p)
+			}
 		}
 		if e.Mode == filemode.Dir {
 			continue // 目录在写里面的文件时建，空目录不建
@@ -373,6 +381,7 @@ func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Has
 			if err := root.Symlink(string(target), name); err != nil {
 				return size, err
 			}
+			links[name] = true
 			continue
 		}
 		mode := os.FileMode(0o644)
