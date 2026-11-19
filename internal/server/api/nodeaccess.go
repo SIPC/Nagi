@@ -92,7 +92,7 @@ var elevationRequired = map[string]bool{
 	nagiv1connect.NodeServiceHandoverNodesProcedure:         true,
 	nagiv1connect.SettingsServicePromoteStandbyProcedure:    true,
 	// 新建成员、修改成员（角色、访问范围、重置密码、清除两步验证和通行密钥）：拿到会话的人不能借它给自己
-	// 建一个知道密码的管理员，再用这个密码通过高权限确认。
+	// 建一个知道密码的管理员，再用这个密码通过高权限确认。同样只认密码或验证码做的确认（auth.passwordElevation）。
 	nagiv1connect.SettingsServiceCreateUserProcedure: true,
 	nagiv1connect.SettingsServiceUpdateUserProcedure: true,
 }

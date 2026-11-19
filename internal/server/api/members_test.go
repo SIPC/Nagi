@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -264,6 +266,72 @@ func TestLastAdminRace(t *testing.T) {
 			if err := h.a.Q.SetUserRole(ctx, store.SetUserRoleParams{Role: auth.UsersRole(auth.AdminRoleID), RoleID: auth.AdminRoleID, ID: id}); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+}
+
+// 新建成员、修改成员只认密码或验证码做的高权限确认：只在手机上确认过的会话不能新建管理员、改角色，
+// 也不能重置别人的密码、清除两步验证和通行密钥。
+func TestMemberChangesNeedPasswordElevation(t *testing.T) {
+	h := newAuditHarness(t)
+	ctx := context.Background()
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
+		t.Fatal(err)
+	}
+	bob, err := h.a.Auth.CreateUser(ctx, "bob", "bob-password-1", auth.ViewerRoleID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, sc := h.login("admin", "admin-password-1")
+	elevate := func(by string) {
+		t.Helper()
+		if _, err := h.db.ExecContext(ctx, `UPDATE sessions SET elevated_until = ?, elevated_by = ?`, time.Now().Add(time.Hour).Unix(), by); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls := []struct {
+		name string
+		call func() error
+	}{
+		{"新建管理员", func() error {
+			_, err := sc.CreateUser(ctx, connect.NewRequest(&nagiv1.CreateUserRequest{Username: "eve", Password: "eve-password-1", RoleId: auth.AdminRoleID}))
+			return err
+		}},
+		{"改成管理员", func() error {
+			_, err := sc.UpdateUser(ctx, connect.NewRequest(&nagiv1.UpdateUserRequest{Id: bob, RoleId: auth.AdminRoleID}))
+			return err
+		}},
+		{"重置密码", func() error {
+			_, err := sc.UpdateUser(ctx, connect.NewRequest(&nagiv1.UpdateUserRequest{Id: bob, Password: "new-password-42"}))
+			return err
+		}},
+		{"清除两步验证", func() error {
+			_, err := sc.UpdateUser(ctx, connect.NewRequest(&nagiv1.UpdateUserRequest{Id: bob, ClearTotp: true}))
+			return err
+		}},
+		{"清除通行密钥", func() error {
+			_, err := sc.UpdateUser(ctx, connect.NewRequest(&nagiv1.UpdateUserRequest{Id: bob, ClearPasskeys: true}))
+			return err
+		}},
+	}
+	denied := func(err error) bool {
+		var ce *connect.Error
+		return errors.As(err, &ce) && ce.Code() == connect.CodePermissionDenied && ce.Meta().Get(elevationHeader) == "required"
+	}
+	for _, by := range []string{"", auth.ElevatedByApp} {
+		if by != "" {
+			elevate(by)
+		}
+		for _, c := range calls {
+			if err := c.call(); !denied(err) {
+				t.Errorf("确认方式 %q，%s：应该要求验证身份，得到 %v", by, c.name, err)
+			}
+		}
+	}
+	elevate(auth.ElevatedByPassword)
+	for _, c := range calls {
+		if err := c.call(); err != nil {
+			t.Errorf("用密码确认后，%s：%v", c.name, err)
 		}
 	}
 }

@@ -593,9 +593,9 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 	if err := s.manageable(ctx, u); err != nil {
 		return nil, err
 	}
-	// 重置密码、清除两步验证和通行密钥是换掉登录凭据（2026-11-19-87c02b5#6）：
-	// 自己的不能在这里改（改密码要旧密码，两步验证和通行密钥在账号安全里，各自要验证）；别人的要先用密码或验证码
-	// 做高权限确认，手机上的确认不算。访问令牌做不了交互式的确认，照旧按令牌的选项（「管理面板」）。
+	// 重置密码、清除两步验证和通行密钥是换掉登录凭据：自己的不能在这里改（改密码要旧密码，两步验证和通行密钥
+	// 在账号安全里，各自要验证）；别人的要先用密码或验证码做高权限确认，手机上的确认不算。整个接口已经只认
+	// 密码或验证码做的确认（auth.passwordElevation，访问令牌调不到），这里再查一次作为兜底。
 	if m.GetPassword() != "" || m.GetClearTotp() || m.GetClearPasskeys() {
 		cur := auth.CurrentUser(ctx)
 		if u.ID == cur.ID {

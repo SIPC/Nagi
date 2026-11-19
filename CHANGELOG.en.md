@@ -39,7 +39,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Changing a node's projects root requires the "Node terminal and files" permission and verifying your identity first.
 - Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
 - Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
-- Creating or editing members, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity. Resetting a member's password, clearing a member's two-step verification or passkeys, and the last three accept only a password or verification code.
+- Creating or editing members, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity, with a password or verification code only.
 - The node install command now passes the join token in an environment variable. If you use sudo, run `sudo -i` first. Old commands still work.
 - Each invite code can add up to 20 nodes, and up to 20 nodes can be handed over at a time. Nodes with the same name get a number added automatically.
 - Node join notifications show the source address, and multiple joins with the same invite code in a short time are combined into one notification.

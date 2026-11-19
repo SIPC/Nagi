@@ -70,7 +70,7 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
     SubPage(stringResource(R.string.standby), onBack, actions = {
         if (st.value?.isStandby == false) {
             NagiIconButton(NagiIcons.Plus, stringResource(R.string.standby_add), {
-                action.run("code") { code = session.rpc { c, h -> c.settings.createStandbyCode(CreateStandbyCodeRequest.getDefaultInstance(), h) }.code }
+                action.run("code", passwordOnly = true) { code = session.rpc { c, h -> c.settings.createStandbyCode(CreateStandbyCodeRequest.getDefaultInstance(), h) }.code }
             })
         }
     }) {
@@ -137,7 +137,7 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
             confirm = stringResource(R.string.standby_promote), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "promote",
             onDismiss = { promoting = false },
             onConfirm = {
-                action.run("promote") {
+                action.run("promote", passwordOnly = true) {
                     session.rpc { c, h -> c.settings.promoteStandby(PromoteStandbyRequest.getDefaultInstance(), h) }
                     promoting = false
                     promoted = true

@@ -86,7 +86,8 @@ internal class Action(private val scope: CoroutineScope, private val elevationTe
         private set
     var error by mutableStateOf<String?>(null)
 
-    fun run(key: String, block: suspend () -> Unit) {
+    /** [passwordOnly]：面板只认密码或验证码做的高权限确认的操作，手机上的确认不算，不弹系统验证框，直接提示到网页上做。 */
+    fun run(key: String, passwordOnly: Boolean = false, block: suspend () -> Unit) {
         if (busy != null) return
         busy = key
         error = null
@@ -99,7 +100,7 @@ internal class Action(private val scope: CoroutineScope, private val elevationTe
                 // 要先做高权限确认：弹系统验证框，确认后再做一次。确认了面板还是要求验证的，是只认密码或验证码的操作
                 // （给自己留登录凭据的），请到网页上做。
                 try {
-                    if (elevate == null) {
+                    if (elevate == null || passwordOnly) {
                         error = elevationText
                     } else if (elevate.invoke()) {
                         block()

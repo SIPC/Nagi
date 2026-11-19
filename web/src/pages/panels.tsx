@@ -50,7 +50,7 @@ export function HandOver({ nodes, onClose }: { nodes: { id: string; name: string
     setError("");
     const name = (id: string) => nodes.find((n) => n.id === id)?.name ?? id;
     try {
-      const res = await withElevation(() => nodeClient.handoverNodes({ nodeIds: selected, invite: code }), t.panels.handover.elevate);
+      const res = await withElevation(() => nodeClient.handoverNodes({ nodeIds: selected, invite: code }), t.panels.handover.elevate, { passwordOnly: true });
       setResults(res.results.map((r) => ({ name: name(r.nodeId), ok: !r.error, error: r.error })));
       setSelected([]);
     } catch (err) {

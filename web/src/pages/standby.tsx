@@ -23,7 +23,7 @@ export function PromoteButton({ variant = "outline", onError }: { variant?: "out
     setBusy(true);
     onError("");
     try {
-      await withElevation(() => settingsClient.promoteStandby({}), t.standby.promote.elevate);
+      await withElevation(() => settingsClient.promoteStandby({}), t.standby.promote.elevate, { passwordOnly: true });
       await notify(t.standby.promote.done);
       setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
@@ -95,7 +95,7 @@ export function StandbyCard() {
     setBusy(true);
     setError("");
     try {
-      const res = await withElevation(() => settingsClient.createStandbyCode({}), t.standby.dialog.elevate);
+      const res = await withElevation(() => settingsClient.createStandbyCode({}), t.standby.dialog.elevate, { passwordOnly: true });
       setCode({ code: res.code, expires: toDate(res.expiresAt) });
     } catch (err) {
       setError(errorMessage(err));

@@ -249,7 +249,7 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
   const picked = roles.data?.roles.find((r) => r.id === roleId);
   const isAdmin = picked ? picked.builtin === "admin" : user.roleBuiltin === "admin";
   const save = useMutation({
-    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, roleId: roleId === user.roleId ? 0n : roleId, scope: isAdmin ? undefined : scope }), t.members.elevate),
+    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, roleId: roleId === user.roleId ? 0n : roleId, scope: isAdmin ? undefined : scope }), t.members.elevate, { passwordOnly: true }),
     onSuccess: onDone,
   });
   return (
@@ -291,7 +291,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   const isAdmin = roles.data?.roles.find((r) => r.id === roleId)?.builtin === "admin";
   const [scope, setScope] = useState(defaultScope);
   const add = useMutation({
-    mutationFn: () => withElevation(() => settingsClient.createUser({ username, password, roleId, scope: isAdmin ? fullScope : scope }), t.members.elevate),
+    mutationFn: () => withElevation(() => settingsClient.createUser({ username, password, roleId, scope: isAdmin ? fullScope : scope }), t.members.elevate, { passwordOnly: true }),
     onSuccess: () => {
       toast.success(t.members.added(username));
       onDone();

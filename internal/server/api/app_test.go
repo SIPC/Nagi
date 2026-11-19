@@ -50,31 +50,28 @@ func TestAppProcedureRoles(t *testing.T) {
 	}
 }
 
-// v0.35.0#8：备用面板的配对码、移交节点、提升备用面板只认密码确认；新建、修改成员要先确认。
+// 备用面板的配对码、移交节点、提升备用面板、新建和修改成员只认密码或验证码做的确认，手机上的确认不算。
 // 访问令牌一律不行；备用面板上能做高权限确认（提升前要做）。
 func TestPanelTakeoverNeedsElevation(t *testing.T) {
 	passwordOnly := []string{nagiv1connect.SettingsServiceCreateStandbyCodeProcedure,
-		nagiv1connect.NodeServiceHandoverNodesProcedure, nagiv1connect.SettingsServicePromoteStandbyProcedure}
-	members := []string{nagiv1connect.SettingsServiceCreateUserProcedure, nagiv1connect.SettingsServiceUpdateUserProcedure}
+		nagiv1connect.NodeServiceHandoverNodesProcedure, nagiv1connect.SettingsServicePromoteStandbyProcedure,
+		nagiv1connect.SettingsServiceCreateUserProcedure, nagiv1connect.SettingsServiceUpdateUserProcedure}
 	plain := auth.User{ID: 1, Role: auth.RoleAdmin}
-	app := auth.User{ID: 1, Role: auth.RoleAdmin, DeviceID: "d", ElevatedUntil: 1 << 40, ElevatedBy: "app-key"}
+	app := auth.User{ID: 1, Role: auth.RoleAdmin, DeviceID: "d", ElevatedUntil: 1 << 40, ElevatedBy: auth.ElevatedByApp}
+	password := auth.User{ID: 1, Role: auth.RoleAdmin, ElevatedUntil: 1 << 40, ElevatedBy: auth.ElevatedByPassword}
 	full := auth.User{ID: 1, Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true, AllowPanel: true}
-	for _, p := range append(passwordOnly, members...) {
+	for _, p := range passwordOnly {
 		if !needsElevation(plain, p) {
 			t.Errorf("%s：没做确认的会话应该要确认", p)
 		}
 		if auth.TokenAllowed(full, p) {
 			t.Errorf("%s：访问令牌不能调用", p)
 		}
-	}
-	for _, p := range passwordOnly {
 		if !needsElevation(app, p) {
-			t.Errorf("%s：App 确认密钥做的确认不算", p)
+			t.Errorf("%s：手机上做的确认不算", p)
 		}
-	}
-	for _, p := range members {
-		if needsElevation(app, p) {
-			t.Errorf("%s：App 确认过应该放行", p)
+		if needsElevation(password, p) {
+			t.Errorf("%s：用密码确认过应该放行", p)
 		}
 	}
 	if !readOnlyProcedure(nagiv1connect.AuthServiceElevateProcedure) {

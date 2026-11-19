@@ -80,6 +80,9 @@ var passwordElevation = map[string]bool{
 	"/nagi.v1.SettingsService/CreateStandbyCode": true,
 	"/nagi.v1.NodeService/HandoverNodes":         true,
 	"/nagi.v1.SettingsService/PromoteStandby":    true,
+	// 新建成员、修改成员：新建一个自己知道密码的管理员、把成员改成管理员，同样是给自己留下登录凭据。
+	"/nagi.v1.SettingsService/CreateUser": true,
+	"/nagi.v1.SettingsService/UpdateUser": true,
 }
 
 // PasswordElevationProcedures 列出 passwordElevation 里的接口（测试用）。
