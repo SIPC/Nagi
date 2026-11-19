@@ -245,6 +245,10 @@ func (a *API) checkMetricsRequest(ctx context.Context, x *access, m *nagiv1.Quer
 	if kind == "node" || kind == "m" || !ok || !x.project(project) {
 		return nodeNotFound()
 	}
+	// 没填节点：查这个项目的容器所在的、成员看不到的节点（api.go 的 hiddenNodeMetrics）。
+	if m.GetNodeId() == "" {
+		return nil
+	}
 	rows, err := a.Q.ContainerNodes(ctx)
 	if err != nil {
 		return err

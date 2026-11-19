@@ -141,7 +141,7 @@ var cleanedFields = map[string]string{
 	"nagi.v1.AuditEvent.actor_name":               "去掉看不到的节点名（audit_api.go）",
 	"nagi.v1.AuditEvent.target_id":                "看不到的节点清空（audit_api.go）",
 	"nagi.v1.AuditEvent.target_name":              "去掉看不到的节点名（audit_api.go）",
-	"nagi.v1.AuditEvent.params":                   "非管理员去掉地址类参数（B9）和看不到的节点（audit_api.go）",
+	"nagi.v1.AuditEvent.params":                   "非管理员去掉地址类参数（B9），看不到的节点的 ID 和名称（audit_api.go）",
 	"nagi.v1.AuditEvent.error":                    "去掉看不到的节点名（audit_api.go）",
 	"nagi.v1.LoginSession.ip":                     "保留：本人的登录设备",
 	"nagi.v1.LoginSession.last_ip":                "保留：本人的登录设备",
@@ -615,6 +615,19 @@ func (a *API) hiddenNames(ctx context.Context, x *access) []string {
 		}
 	}
 	return out
+}
+
+// scrubNodeIDs 去掉文字（例如审计的参数）里成员看不到的节点 ID（A7）。节点 ID 是固定长度的十六进制，按原样替换。
+func (a *API) scrubNodeIDs(ctx context.Context, x *access, s string) string {
+	if s == "" {
+		return s
+	}
+	for id := range a.nodeNames(ctx, x) {
+		if !x.node(id) && strings.Contains(s, id) {
+			s = strings.ReplaceAll(s, id, "")
+		}
+	}
+	return s
 }
 
 // visibleNames 是成员看得到的节点的名称。

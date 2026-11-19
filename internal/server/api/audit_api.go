@@ -46,7 +46,7 @@ func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 		return v, err
 	}
 	v.x = x
-	v.scrub = func(s string) string { return a.scrubNodes(ctx, x, s) }
+	v.scrub = func(s string) string { return a.scrubNodes(ctx, x, a.scrubNodeIDs(ctx, x, s)) }
 	if x != nil && x.projects != nil {
 		ids := []string{}
 		for id := range x.projects {

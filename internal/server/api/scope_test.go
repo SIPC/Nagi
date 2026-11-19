@@ -101,6 +101,10 @@ func TestScopeCheckRequest(t *testing.T) {
 		// 范围外节点上本项目容器的占用可以查，别的不行；容器不在那台节点上时和节点不存在一样（A8）。
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:p1/"}, 0},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n3", Prefix: "c:p1/"}, connect.CodeNotFound},
+		// 没填节点（容器在看不到的节点上）：只能查范围内项目的序列。
+		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{Prefix: "c:p1/"}, 0},
+		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{Prefix: "c:p2/"}, connect.CodeNotFound},
+		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{Prefix: "node:"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:p2/"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{2}}, connect.CodeNotFound},

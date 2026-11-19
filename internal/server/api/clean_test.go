@@ -336,3 +336,13 @@ func protoregistryFind(name string) (protoreflect.MessageDescriptor, error) {
 	}
 	return md, nil
 }
+
+// 审计参数里看不到的节点 ID 去掉（A7）。
+func TestScrubNodeIDs(t *testing.T) {
+	a := cleanTest(t)
+	x := memberAccess(auth.PresetOperator)
+	got := a.scrubNodeIDs(context.Background(), x, `{"node_id":"n2","backup_node_ids":["n2","n1"]}`)
+	if got != `{"node_id":"","backup_node_ids":["","n1"]}` {
+		t.Errorf("参数：%s", got)
+	}
+}
