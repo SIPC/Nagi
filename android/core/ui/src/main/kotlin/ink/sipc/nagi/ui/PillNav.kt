@@ -1,6 +1,14 @@
 package ink.sipc.nagi.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
@@ -255,9 +263,24 @@ fun PillNav(
                 }
             }
             // 竖向展开时的名称：在选中那一项的图标右边，跟着那一项上下走，后半段才变清楚。
+            // 拖动中换了一项时，名称跟着拖动的方向滑入：往下拖从下面进来、旧的往上出去，往上拖相反（同跳字的曲线和时长）。
             if (open > 0.01f) {
-                Text(
-                    label, style = labelStyle, color = c.foreground, maxLines = 1, softWrap = false,
+                AnimatedContent(
+                    targetState = selected,
+                    transitionSpec = {
+                        val down = targetState > initialState
+                        if (reduced) {
+                            fadeIn(tween(Motion.FADE_IN)) togetherWith fadeOut(tween(100))
+                        } else {
+                            (slideInVertically(tween(Motion.ROLL, easing = Motion.Enter)) { h -> if (down) h else -h } +
+                                fadeIn(tween(Motion.ROLL, easing = Motion.Enter))) togetherWith
+                                (slideOutVertically(tween(Motion.ROLL, easing = Motion.Enter)) { h -> if (down) -h else h } +
+                                    fadeOut(tween(Motion.ROLL / 2, easing = Motion.Exit))) using
+                                SizeTransform(clip = true) { _, _ -> tween(Motion.ROLL, easing = Motion.Enter) }
+                        }
+                    },
+                    contentAlignment = Alignment.CenterStart,
+                    label = "label",
                     modifier = Modifier
                         .offset {
                             val r = slider.rect(bounds.rects, vertical = true) ?: return@offset IntOffset.Zero
@@ -267,7 +290,9 @@ fun PillNav(
                         }
                         .graphicsLayer { alpha = open * open }
                         .clearAndSetSemantics {},
-                )
+                ) { i ->
+                    Text(items.getOrNull(i)?.label.orEmpty(), style = labelStyle, color = c.foreground, maxLines = 1, softWrap = false)
+                }
             }
         }
     }
