@@ -172,27 +172,49 @@ class SlidingIndicator internal constructor(
     /** 上一帧画出来的位置。 */
     internal var drawn: Rect? = null
 
-    /** 按目标项当前的位置算出指示器的左右边；bounds 里还没有目标项时返回 null。 */
-    fun rect(bounds: Map<Int, Rect>): Rect? {
+    /**
+     * 按目标项当前的位置算出指示器的位置；bounds 里还没有目标项时返回 null。
+     * [vertical] 为 true 时沿上下滑（竖向的胶囊），否则沿左右。
+     */
+    fun rect(bounds: Map<Int, Rect>, vertical: Boolean = false): Rect? {
         val b = bounds[toState.value] ?: return null
         val a = start ?: b
-        val movingRight = b.center.x >= a.center.x
         // 朝移动方向的边用快的进度，另一条边用慢的。
-        val pLeft = if (movingRight) trail.value else lead.value
-        val pRight = if (movingRight) lead.value else trail.value
-        val r = Rect(lerp(a.left, b.left, pLeft), b.top, lerp(a.right, b.right, pRight), b.bottom)
+        val r = if (vertical) {
+            val movingDown = b.center.y >= a.center.y
+            val pTop = if (movingDown) trail.value else lead.value
+            val pBottom = if (movingDown) lead.value else trail.value
+            Rect(b.left, lerp(a.top, b.top, pTop), b.right, lerp(a.bottom, b.bottom, pBottom))
+        } else {
+            val movingRight = b.center.x >= a.center.x
+            val pLeft = if (movingRight) trail.value else lead.value
+            val pRight = if (movingRight) lead.value else trail.value
+            Rect(lerp(a.left, b.left, pLeft), b.top, lerp(a.right, b.right, pRight), b.bottom)
+        }
         drawn = r
         return r
     }
 
     /**
      * 拖尾：滑动时跟在指示器后面的一小段，由比两条边都慢的进度（ghostSpring）算出，最长 [maxLength]，
-     * 到位时缩回没有。返回拖尾的左右边（只在指示器后面那一侧）；没在滑动时返回 null。[r] 是这一帧的 [rect]。
+     * 到位时缩回没有。返回拖尾沿滑动方向的两端（只在指示器后面那一侧）；没在滑动时返回 null。[r] 是这一帧的 [rect]。
      */
-    fun tail(bounds: Map<Int, Rect>, r: Rect, maxLength: Float): Pair<Float, Float>? {
+    fun tail(bounds: Map<Int, Rect>, r: Rect, maxLength: Float, vertical: Boolean = false): Pair<Float, Float>? {
         val b = bounds[toState.value] ?: return null
         val a = start ?: return null
         if (ghost.value >= 1f) return null
+        if (vertical) {
+            val movingDown = b.center.y >= a.center.y
+            return if (movingDown) {
+                val end = lerp(a.top, b.top, ghost.value)
+                val from = maxOf(end, r.top - maxLength)
+                if (from >= r.top - 0.5f) null else from to r.top + r.width / 2
+            } else {
+                val end = lerp(a.bottom, b.bottom, ghost.value)
+                val to = minOf(end, r.bottom + maxLength)
+                if (to <= r.bottom + 0.5f) null else r.bottom - r.width / 2 to to
+            }
+        }
         val movingRight = b.center.x >= a.center.x
         return if (movingRight) {
             val end = lerp(a.left, b.left, ghost.value)

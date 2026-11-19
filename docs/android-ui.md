@@ -20,9 +20,8 @@
 
 - `NagiTopBar(title, onTitleClick, showChevron, actions)`：一级页面的顶栏，标题能点时（切换面板）后面带「⌄」。右边放 `NagiIconButton`。
 - `NagiBackTopBar(title, onBack, subtitle, actions)`：二级页面的顶栏，返回、标题，后面可以跟一段等宽的副标题。
-- `PillNav(items, selected, onSelect)`：底部悬浮的胶囊导航，宽度不跳变，可以长按拖动切换；`PillNavItem(icon, label, badge)`，`badge` 是红点。页面底部要留 `Dimens.bottomFade` 的空白，胶囊后面不加渐隐。
+- `PillNav(items, selected, onSelect, orientation, header)`：悬浮的胶囊导航，横向（`PillOrientation.Horizontal`，底部）和竖向（`Vertical`，宽屏 600 dp 以上时竖在左侧 88 宽一栏的左下角）是同一个组件：外框、底色（`pillBackground`）、选中底色的滑动和拖尾、两端跟随回弹、长按放大和拖动切换（`PillGestures.kt`）都共用，改样式两个方向一起变。横向时选中的一项写出名称、宽度不跳变；竖向只有图标，拖动时选中的一项向右展开写出名称。`header` 放在各项前面、不可点（竖向放 logo）。`PillNavItem(icon, label, badge)`，`badge` 是红点。组件只画胶囊本身，位置由调用方定；底部时页面要留 `Dimens.bottomFade` 的空白，胶囊后面不加渐隐。
 - `NagiTopBar(fade = true)`：内容从顶部栏下面滚过时用，顶部栏自己画背景，最下面 20 渐变成透明。内容铺满整页，上内边距是状态栏加 `Dimens.topBarHeight`。
-- `PillRail(items, selected, onSelect)`：宽屏（600 dp 以上）时代替 `PillNav`，竖在左侧 88 宽一栏的左下角：最上面是 logo，下面四个图标，选中的一项在图标下面写名称，底色从上一项滑过去。长按拖动和 `PillNav` 共用 `PillGestures.kt`（`rememberPillDrag`、`PillLongPress`、`Modifier.pillDrag`）。
 - `UnderlineTabs(options, selected, onSelect)`：下划线样式的选择项（时间范围、视图），放在 `SectionHeader` 的右边。只换数据，不滑动下面的内容。网页对应的是 `Tabs` 的下划线样式。
 
 ## 按钮

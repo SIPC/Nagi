@@ -19,7 +19,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.statusBarsPadding
-import ink.sipc.nagi.ui.PillRail
+import ink.sipc.nagi.ui.PillOrientation
+import ink.sipc.nagi.ui.NagiLogo
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavController
 import androidx.compose.ui.platform.LocalConfiguration
@@ -419,7 +420,7 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                 val me = info?.displayName?.ifEmpty { null } ?: info?.username ?: session.panel.displayName.ifEmpty { session.panel.username }
                 PanelBadge(panel.title, me, info?.avatar?.toByteArray()) { sheet = true }
                 Spacer(Modifier.weight(1f))
-                PillRail(navItems, tab.ordinal, selectTab)
+                PillNav(navItems, tab.ordinal, selectTab, orientation = PillOrientation.Vertical, header = { NagiLogo(Modifier.size(28.dp)) })
             }
         }
         NavHost(
@@ -474,7 +475,12 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                     }
                     Column(Modifier.align(Alignment.BottomCenter)) {
                         SnackbarHost(snackbar) { Snackbar(it, containerColor = NagiTheme.colors.primary, contentColor = NagiTheme.colors.primaryForeground) }
-                        if (!wide) PillNav(navItems, selected = tab.ordinal, onSelect = selectTab)
+                        if (!wide) {
+                            // 底部居中，离手势条 12。
+                            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
+                                PillNav(navItems, selected = tab.ordinal, onSelect = selectTab)
+                            }
+                        }
                     }
                 }
             }
