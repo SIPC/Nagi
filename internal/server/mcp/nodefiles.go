@@ -349,7 +349,7 @@ func toolDeleteNodeFile(c *call, in NodeConfirmPathArgs) (any, error) {
 		return nil, err
 	}
 	if e == nil {
-		return nil, fmt.Errorf("%s does not exist on node %s", p, n.GetName())
+		return nil, nodeErrorf("%s does not exist on node %s", p, nodeRef(n))
 	}
 	what := "file"
 	switch {
@@ -652,9 +652,9 @@ func toolIsolateNode(c *call, in IsolateArgs) (any, error) {
 	}
 	if in.Undo != n.GetIsolated() {
 		if in.Undo {
-			return nil, fmt.Errorf("node %s is not isolated", n.GetName())
+			return nil, nodeErrorf("node %s is not isolated", nodeRef(n))
 		}
-		return nil, fmt.Errorf("node %s is already isolated", n.GetName())
+		return nil, nodeErrorf("node %s is already isolated", nodeRef(n))
 	}
 	if in.Confirm != n.GetName() {
 		text := fmt.Sprintf("node %s is cut off now: other nodes drop it from the mesh, its containers lose access to other projects and nodes, and no one relays for it. Containers on it keep running but cannot reach other nodes. Every member gets an alert.", n.GetName())

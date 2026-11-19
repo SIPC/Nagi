@@ -267,10 +267,26 @@ func (c *call) findPeer(st *nagiv1.MeshStatus, ref string) (*nagiv1.MeshPeerStat
 		}
 		key = res.Msg.GetPublicKey()
 	}
+	// 公钥（面板自己的，或者直接写的）只对得上一个；按名称对上不止一个时不猜，要求改用公钥。
+	var named []*nagiv1.MeshPeerStatus
 	for _, p := range st.GetPeers() {
-		if key != nil && bytes.Equal(p.GetPublicKey(), key) || strings.EqualFold(p.GetName(), ref) || hex.EncodeToString(p.GetPublicKey()) == ref {
+		if key != nil && bytes.Equal(p.GetPublicKey(), key) || hex.EncodeToString(p.GetPublicKey()) == ref {
 			return p, nil
 		}
+		if key == nil && strings.EqualFold(p.GetName(), ref) {
+			named = append(named, p)
+		}
+	}
+	switch len(named) {
+	case 1:
+		return named[0], nil
+	case 0:
+	default:
+		keys := make([]string, len(named))
+		for i, p := range named {
+			keys[i] = hex.EncodeToString(p.GetPublicKey())
+		}
+		return nil, fmt.Errorf("%d peers are named %q; pass the peer's public key (hex) instead (%s)", len(named), ref, strings.Join(keys, ", "))
 	}
 	names := []string{}
 	for _, p := range st.GetPeers() {
@@ -412,7 +428,7 @@ func toolApproveNode(c *call, in NodeConfirmArgs) (any, error) {
 		return nil, err
 	}
 	if !n.GetPending() {
-		return nil, fmt.Errorf("node %s is not waiting for approval", n.GetName())
+		return nil, nodeErrorf("node %s is not waiting for approval", nodeRef(n))
 	}
 	if in.Confirm != n.GetName() {
 		i := n.GetInfo()
@@ -661,7 +677,7 @@ func toolRemoveNodePanel(c *call, in RemovePanelArgs) (any, error) {
 	}
 	i := slices.IndexFunc(res.Msg.GetPanels(), func(p *nagiv1.TrustedPanel) bool { return p.GetFingerprint() == in.Fingerprint })
 	if i < 0 {
-		return nil, fmt.Errorf("node %s does not trust a panel with this fingerprint", n.GetName())
+		return nil, nodeErrorf("node %s does not trust a panel with this fingerprint", nodeRef(n))
 	}
 	p := res.Msg.GetPanels()[i]
 	if in.Confirm != in.Fingerprint {
@@ -697,7 +713,7 @@ func toolDeleteNodeReplica(c *call, in NodeContainerArgs) (any, error) {
 		return r.GetReplica().GetProjectId() == in.ProjectID && r.GetReplica().GetContainer() == in.Container
 	})
 	if i < 0 {
-		return nil, fmt.Errorf("node %s keeps no replica of %s in project %s", n.GetName(), in.Container, in.ProjectID)
+		return nil, nodeErrorf("node %s keeps no replica of %s in project %s", nodeRef(n), in.Container, in.ProjectID)
 	}
 	r := res.Msg.GetReplicas()[i]
 	if r.GetInUse() {
@@ -721,7 +737,7 @@ func toolAdoptContainer(c *call, in NodeContainerArgs) (any, error) {
 	if !slices.ContainsFunc(n.GetUnknownContainers(), func(u *nagiv1.UnknownContainer) bool {
 		return u.GetProjectId() == in.ProjectID && u.GetContainer() == in.Container
 	}) {
-		return nil, fmt.Errorf("node %s does not report an unknown container %s in project %s (see get_node)", n.GetName(), in.Container, in.ProjectID)
+		return nil, nodeErrorf("node %s does not report an unknown container %s in project %s (see get_node)", nodeRef(n), in.Container, in.ProjectID)
 	}
 	if _, err := c.h.clients.nodes.AdoptNodeContainer(c.ctx, connect.NewRequest(&nagiv1.AdoptNodeContainerRequest{NodeId: n.GetId(), ProjectId: in.ProjectID, Container: in.Container})); err != nil {
 		return nil, err
@@ -742,7 +758,7 @@ func toolAdoptStaleProject(c *call, in StaleProjectArgs) (any, error) {
 	}
 	i := slices.IndexFunc(n.GetStaleProjects(), func(s *nagiv1.StaleProject) bool { return s.GetProjectId() == in.ProjectID })
 	if i < 0 {
-		return nil, fmt.Errorf("node %s does not report project %s as changed elsewhere (see get_node)", n.GetName(), in.ProjectID)
+		return nil, nodeErrorf("node %s does not report project %s as changed elsewhere (see get_node)", nodeRef(n), in.ProjectID)
 	}
 	name := n.GetStaleProjects()[i].GetProjectName()
 	if in.Confirm != name {

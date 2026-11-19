@@ -42,6 +42,7 @@ mesh 上的上传下载接口要自己检查调用方：公钥必须属于节点
 - `include`、`extends` 引用文件，`build`，指定了 driver 的 volume，`external` 的 volume 和网络，指定了 `name` 的 volume 和网络（不加 compose 项目的前缀，节点上有同名的就直接用它）
 - 顶层 `networks` 里 `bridge` 以外的 `driver`、`driver_opts`、`ipam`：macvlan、ipvlan 让容器直接接入节点所在的局域网，流量不经过宿主机的 forward 链，[出站限制](agent.md#出站限制)管不到；`driver_opts` 能指定宿主机的网桥（`com.docker.network.bridge.name`），`ipam` 能指定和局域网重叠的网段
 - 上面这些字段的值里有变量：变量的值操作员能改
+- 从节点缓存收进来的配置同样检查：把节点上面板不认识的容器加入项目（`AdoptNodeContainer`）时，配置是节点说的，没有经过保存时的检查；节点被攻破或者缓存被改过的话，收进来的特权容器之后可以迁移、恢复到别的节点上。所以没有「特权配置」的成员收不进带上面这些内容、或者容器目录在项目根目录以外的容器（检查的是实际收进来的那一份缓存，`api` 的 `adoptCheck`）；以节点为准重建项目（`AdoptStaleProject`）换掉的是整个项目，一律要「特权配置」
 
 容器目录里的路径可能是容器写的、或者从 git 仓库同步来的符号链接，所以部署时和代管重启前节点还会检查：挂载的源路径和 `env_file`、`secrets`、`configs` 的文件在容器目录以下不能经过符号链接，否则拒绝部署。
 

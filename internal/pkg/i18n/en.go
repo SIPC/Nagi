@@ -961,6 +961,7 @@ var en = map[string]string{
 	"进入特权容器需要「特权配置」权限":               "Entering a privileged container needs the Privileged configuration permission",
 	"容器 %s 有特权，修改它引用的共享变量需要「特权配置」权限": "Container %s is privileged. Changing the shared variables it uses needs the Privileged configuration permission",
 	"项目根目录以外的容器目录需要「特权配置」权限":         "A container directory outside the projects root needs the Privileged configuration permission",
+	"以节点为准重建项目需要「特权配置」权限":            "Rebuilding a project from a node needs the Privileged configuration permission",
 	"指定副本的存放位置需要「节点终端和文件」权限":         "Choosing where replicas are stored needs the Node terminal and files permission",
 	"没有「网络和域名」权限，不能修改出站限制":           "Changing outbound limits needs the Network and domains permission",
 	"没有「审计日志」权限，不能导出审计记录":            "Exporting audit records needs the Audit log permission",

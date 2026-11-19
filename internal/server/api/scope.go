@@ -28,6 +28,8 @@ type access struct {
 	nodes    map[string]bool
 	// names 是全部节点的 ID → 名称（清理回复里的节点名用），按需读出。
 	names map[string]string
+	// words 是节点在文字里的各种叫法（见 nodeWords），按需读出。
+	words *nodeWords
 }
 
 func (x *access) project(id string) bool { return x == nil || x.projects == nil || x.projects[id] }
@@ -490,5 +492,8 @@ func (a *API) scrubFor(ctx context.Context, u auth.User, lang i18n.Lang, err err
 	if aerr != nil {
 		return aerr
 	}
-	return a.scrubError(i18n.WithLang(ctx, lang), x, err)
+	out := a.scrubError(i18n.WithLang(ctx, lang), x, err)
+	// MCP 的工具直接调这些入口：记下换之前带引用的那一份，工具的记录用它（见 failurenotes.go）。
+	noteFailure(ctx, out, err)
+	return out
 }

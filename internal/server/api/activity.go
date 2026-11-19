@@ -391,6 +391,8 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		raw := &rawError{}
 		res, err := next(context.WithValue(ctx, rawErrorKey{}, raw), req)
 		procedure := req.Spec().Procedure
+		// MCP 工具在进程内调用时，记下这次失败带引用的文字（见 failurenotes.go）；不记审计的查询也要。
+		noteFailure(ctx, err, raw.or(err))
 		// 修改成功后通知订阅流（见 overview.go）：部署、操作的结果、配置的修改。
 		if err == nil && activityRecorded(procedure) {
 			if l.a.Nodes != nil {
@@ -429,13 +431,16 @@ func (l activityLog) WrapStreamingClient(next connect.StreamingClientFunc) conne
 
 func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		raw := &rawError{}
 		if !activityRecorded(conn.Spec().Procedure) {
-			return next(ctx, conn)
+			err := next(context.WithValue(ctx, rawErrorKey{}, raw), conn)
+			noteFailure(ctx, err, raw.or(err))
+			return err
 		}
 		start := time.Now()
-		w := &activityConn{StreamingHandlerConn: conn}
-		raw := &rawError{}
+		w := &activityConn{StreamingHandlerConn: conn, ctx: ctx, raw: raw}
 		err := next(context.WithValue(ctx, rawErrorKey{}, raw), w)
+		noteFailure(ctx, err, raw.or(err))
 		if err == nil && w.probe {
 			return nil
 		}
@@ -463,6 +468,9 @@ type activityConn struct {
 	failure string
 	// probe：文件操作只返回了同名的名字，什么都没改（见 conflictProbe）。
 	probe bool
+	// ctx、raw 用来在结果发出去之前记下失败带引用的文字（MCP 工具要用，见 failurenotes.go）。
+	ctx context.Context
+	raw *rawError
 }
 
 // conflictProbe 判断回复是不是文件操作的同名探测：没有指定同名的处理方式时，节点发现同名就只返回名字，
@@ -492,6 +500,9 @@ func (c *activityConn) Send(m any) error {
 	if ev, ok := m.(*nagiv1.DeployEvent); ok {
 		if r := ev.GetResult(); r != nil && !r.GetSuccess() {
 			c.failure = r.GetError()
+			if c.raw != nil && c.raw.stream != nil {
+				noteFailureText(c.ctx, c.failure, c.raw.stream)
+			}
 		}
 	}
 	return c.StreamingHandlerConn.Send(m)

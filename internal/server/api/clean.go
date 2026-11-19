@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"google.golang.org/protobuf/proto"
 	"net"
 	"regexp"
@@ -15,6 +16,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/store"
 )
 
 // 按权限和访问范围清理回复（见 docs/panel.md#成员和角色、#访问范围）。所有服务（ProjectService、NodeService、
@@ -39,7 +41,7 @@ var cleanedFields = map[string]string{
 	"nagi.v1.Container.backup_replica_dirs":   "要备份权限；看不到的节点去掉",
 	"nagi.v1.Container.failover_witness_self": "要高可用权限",
 	"nagi.v1.Container.deploy_key":            "要查看配置",
-	"nagi.v1.Container.webhook_token":         "要查看配置",
+	"nagi.v1.Container.webhook_token":         "要部署（拿到它不用登录就能触发部署）",
 	"nagi.v1.BackupStatus.target_node_id":     "看不到的清空",
 	"nagi.v1.BackupStatus.target_name":        "看不到的清空",
 	"nagi.v1.BackupStatus.last_error":         "去掉看不到的节点名",
@@ -78,7 +80,7 @@ var cleanedFields = map[string]string{
 	"nagi.v1.DeployResult.error":              "去掉看不到的节点名",
 	"nagi.v1.ActivityEntry.actor":             "去掉看不到的节点名（告警的发出节点）",
 	"nagi.v1.ActivityEntry.target":            "去掉看不到的节点名",
-	"nagi.v1.ActivityEntry.detail":            "去掉看不到的节点名",
+	"nagi.v1.ActivityEntry.detail":            "要查看配置和做这个操作要的权限；看不到的节点按引用换；出站告警的 IP:端口要查看访问地址（audit_api.go）",
 	"nagi.v1.ListVolumesResponse.volumes":     "保留：容器自己的卷",
 	"nagi.v1.VolumeInfo.host_path":            "要查看节点详情",
 	"nagi.v1.ImageUpdate.current_digest":      "保留",
@@ -141,9 +143,9 @@ var cleanedFields = map[string]string{
 	"nagi.v1.AuditEvent.ip":                       "非管理员清空（audit_api.go）",
 	"nagi.v1.AuditEvent.actor_name":               "去掉看不到的节点名（audit_api.go）",
 	"nagi.v1.AuditEvent.target_id":                "看不到的节点清空（audit_api.go）",
-	"nagi.v1.AuditEvent.target_name":              "去掉看不到的节点名（audit_api.go）",
-	"nagi.v1.AuditEvent.params":                   "非管理员去掉地址类参数（B9），看不到的节点的 ID 和名称（audit_api.go）",
-	"nagi.v1.AuditEvent.error":                    "去掉看不到的节点名（audit_api.go）",
+	"nagi.v1.AuditEvent.target_name":              "看不到的节点换掉；文件路径要文件权限（audit_api.go）",
+	"nagi.v1.AuditEvent.params":                   "要查看配置和做这个操作要的权限；去掉地址类参数（B9）、看不到的节点的 ID、出站告警的 IP:端口（audit_api.go）",
+	"nagi.v1.AuditEvent.error":                    "要查看配置和做这个操作要的权限；看不到的节点按引用换（audit_api.go）",
 	"nagi.v1.LoginSession.ip":                     "保留：本人的登录设备",
 	"nagi.v1.AppApproval.ip":                      "保留：发起本人账号的确认请求的地址，用来认出不是自己发起的",
 	"nagi.v1.LoginSession.last_ip":                "保留：本人的登录设备",
@@ -348,6 +350,17 @@ func (a *API) cleanContainer(ctx context.Context, x *access, c *nagiv1.Container
 	if !x.can(auth.PermConfig) {
 		c.Config, c.Draft, c.DeployKey, c.WebhookToken, c.Dir = nil, nil, "", "", ""
 	}
+	// webhook 的地址不用登录：拿到令牌就能让容器拉取并部署，所以要「部署」权限才给。
+	if !x.can(auth.PermDeploy) {
+		c.WebhookToken = ""
+	}
+	// 热备节点：顶替的 A、B 里不是容器所在节点的那个（下面会清掉看不到的节点的 ID，先记下）。
+	standby := ""
+	for _, p := range []*nagiv1.FailoverParticipant{c.GetFailover().GetA(), c.GetFailover().GetB()} {
+		if id := p.GetNodeId(); id != "" && id != c.GetNodeId() {
+			standby = id
+		}
+	}
 	if !x.node(c.GetNodeId()) {
 		c.NodeId, c.Dir = "", ""
 	}
@@ -377,6 +390,11 @@ func (a *API) cleanContainer(ctx context.Context, x *access, c *nagiv1.Container
 		c.Failover, c.FailoverHolder, c.FailoverStandby, c.FailoverWitnessSelf = nil, nil, nil, false
 	} else {
 		a.cleanFailover(x, c.GetFailover())
+		// 热备的状态是热备节点自己上报的，节点离线时没有：看不到这台节点的成员据此就知道它在不在线。
+		// 所以看不到时不给；只在它等着确认顶替时保留（成员要据此确认，这时热备必然在线）。
+		if !x.node(standby) && !c.GetFailoverStandby().GetPendingConfirm() {
+			c.FailoverStandby = nil
+		}
 		for _, st := range []*nagiv1.FailoverStatus{c.GetFailoverHolder(), c.GetFailoverStandby()} {
 			a.cleanFailoverStatus(ctx, x, st)
 		}
@@ -438,7 +456,8 @@ func (a *API) cleanFailoverStatus(ctx context.Context, x *access, st *nagiv1.Fai
 		if owner := a.meshNodes(ctx)[hex.EncodeToString(st.GetHolderKey())]; owner == "" || !x.node(owner) {
 			st.HolderKey, st.HolderName = nil, ""
 		}
-	} else if slices.Contains(a.hiddenNames(ctx, x), st.GetHolderName()) {
+	} else if slices.Contains(a.nodeWords(ctx, x).hidden, st.GetHolderName()) {
+		// 记的是设置顶替时的名称，节点后来改了名也要认得。
 		st.HolderName = ""
 	}
 	st.LastError = scrubIPs(a.scrubNodes(ctx, x, st.GetLastError()))
@@ -645,15 +664,109 @@ func (a *API) nodeNames(ctx context.Context, x *access) map[string]string {
 	return x.names
 }
 
-// hiddenNames 是成员看不到的节点的名称。
-func (a *API) hiddenNames(ctx context.Context, x *access) []string {
-	var out []string
-	for id, name := range a.nodeNames(ctx, x) {
-		if !x.node(id) && name != "" {
-			out = append(out, name)
-		}
+// nodeWords 是节点在文字里可能出现的叫法：现在的名称、改名前用过的名称、节点上报的主机名。
+// 来自节点的文字（部署输出、同步和顶替的报错）里写的可能是其中任何一个。
+type nodeWords struct {
+	// hidden 是成员看不到的节点的叫法，长的在前。
+	hidden []string
+	// visible 是他看得到的节点的叫法。
+	visible map[string]bool
+}
+
+// SettingFormerNodeNames 记着节点改名前用过的名称：JSON，节点 ID → 名称列表（见 rememberNodeName）。
+const SettingFormerNodeNames = "node_former_names"
+
+// maxFormerNames 是每台节点最多记几个用过的名称，超出时丢掉最早的。
+const maxFormerNames = 8
+
+// formerNodeNames 读出各节点改名前用过的名称。
+func (a *API) formerNodeNames(ctx context.Context) map[string][]string {
+	out := map[string][]string{}
+	if v, err := a.Q.GetSetting(ctx, SettingFormerNodeNames); err == nil && v != "" {
+		_ = json.Unmarshal([]byte(v), &out)
 	}
 	return out
+}
+
+// rememberNodeName 在节点改名时记下原来的名称：以前的部署输出、同步和顶替的报错里写的还是它，
+// 对看不到这台节点的成员要照样换掉（见 scrubNodes）。已经移除的节点的记录顺手清掉。
+func (a *API) rememberNodeName(ctx context.Context, nodeID, old string) {
+	if old == "" {
+		return
+	}
+	names := a.formerNodeNames(ctx)
+	if rows, err := a.Q.ListNodes(ctx); err == nil {
+		exists := map[string]bool{}
+		for _, r := range rows {
+			exists[r.ID] = true
+		}
+		for id := range names {
+			if !exists[id] {
+				delete(names, id)
+			}
+		}
+	}
+	list := slices.DeleteFunc(names[nodeID], func(n string) bool { return n == old })
+	list = append(list, old)
+	if len(list) > maxFormerNames {
+		list = list[len(list)-maxFormerNames:]
+	}
+	names[nodeID] = list
+	b, err := json.Marshal(names)
+	if err == nil {
+		err = a.Q.SetSetting(ctx, store.SetSettingParams{Key: SettingFormerNodeNames, Value: string(b)})
+	}
+	if err != nil {
+		a.Log.Warn("记下节点原来的名称失败", "node", nodeID, "err", err)
+	}
+}
+
+// nodeWords 读出节点的各种叫法，按成员看不看得到分开（每次请求只读一次）。
+func (a *API) nodeWords(ctx context.Context, x *access) *nodeWords {
+	if x.words != nil {
+		return x.words
+	}
+	w := &nodeWords{visible: map[string]bool{}}
+	x.words = w
+	rows, err := a.Q.ListNodes(ctx)
+	if err != nil {
+		return w
+	}
+	former := a.formerNodeNames(ctx)
+	hidden := map[string]bool{}
+	for _, r := range rows {
+		words := append([]string{r.Name}, former[r.ID]...)
+		// 主机名：在线的节点取最近一次上报的，另外加上数据库里存的那份（节点断开时存下）。
+		if a.Nodes != nil {
+			if c, err := a.Nodes.Peek(r.ID); err == nil {
+				words = append(words, c.LastReport().GetNode().GetHostname())
+			}
+		}
+		var info nagiv1.NodeInfo
+		if len(r.Info) > 0 && proto.Unmarshal(r.Info, &info) == nil {
+			words = append(words, info.GetHostname())
+		}
+		for _, word := range words {
+			switch {
+			// localhost 不算：它在部署输出里到处都是，也说明不了是哪台节点。
+			case word == "" || strings.EqualFold(word, "localhost"):
+			case x.node(r.ID):
+				w.visible[word] = true
+			default:
+				hidden[word] = true
+			}
+		}
+	}
+	for word := range hidden {
+		w.hidden = append(w.hidden, word)
+	}
+	sort.Slice(w.hidden, func(i, j int) bool {
+		if len(w.hidden[i]) != len(w.hidden[j]) {
+			return len(w.hidden[i]) > len(w.hidden[j])
+		}
+		return w.hidden[i] < w.hidden[j]
+	})
+	return w
 }
 
 // scrubNodeIDs 去掉文字（例如审计的参数）里成员看不到的节点 ID（A7）。节点 ID 是固定长度的十六进制，按原样替换。
@@ -681,17 +794,16 @@ func (a *API) visibleNames(ctx context.Context, x *access) map[string]bool {
 }
 
 // scrubNodes 把文字里看不到的节点名换成「其他节点」（A7）。只换完整的名称：前后不是字母、数字、-、_、.。
-// 看得到的节点里有同名的不换。看不到的节点的 ID 也去掉（节点没有名称时报错里写的是 ID）。
+// 改名前用过的名称、节点的主机名同样换（见 nodeWords）。看得到的节点里有同名的不换。
+// 看不到的节点的 ID 也去掉（节点没有名称时报错里写的是 ID）。
 func (a *API) scrubNodes(ctx context.Context, x *access, s string) string {
 	if s == "" || x == nil {
 		return s
 	}
 	s = a.scrubNodeIDs(ctx, x, s)
-	visible := a.visibleNames(ctx, x)
-	names := a.hiddenNames(ctx, x)
-	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
-	for _, n := range names {
-		if !visible[n] {
+	w := a.nodeWords(ctx, x)
+	for _, n := range w.hidden {
+		if !w.visible[n] {
 			s = replaceWord(s, n, otherNode(ctx))
 		}
 	}

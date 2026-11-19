@@ -143,7 +143,7 @@ func TestEnrollCommandTokenInEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := res.Msg.GetCommand()
-	if !strings.HasSuffix(cmd, "/install.sh | NAGI_TOKEN=tok123 sh -s --") || strings.Contains(cmd, "--token") {
+	if !strings.HasSuffix(cmd, `" | NAGI_TOKEN=tok123 sh -s --`) || strings.Contains(cmd, "--token") || strings.Contains(cmd, "k=tok123") {
 		t.Errorf("安装命令应该用环境变量传令牌：%s", cmd)
 	}
 }

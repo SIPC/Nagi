@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"net/http"
 	"text/template"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/release"
+	"github.com/SIPC/nagi/internal/server/auth"
 )
 
 // installScript 是节点安装脚本，由面板填入自己的地址、公钥指纹和版本后提供下载。
@@ -293,12 +295,26 @@ download_nagi() {
 
 # <<< 共用代码结束`
 
-// InstallHandler 提供 GET /install.sh。
+// installKey 是安装命令里取安装脚本用的钥匙（/install.sh?k=…），由加入令牌的哈希算出：拿到它的人取得到脚本，
+// 但算不回令牌，不能用它加入节点。令牌本身不放进地址：curl 的参数别的用户读得到（见 installScript）。
+func installKey(tokenHash string) string {
+	return auth.HashToken("nagi-install:" + tokenHash)[:32]
+}
+
+// InstallHandler 提供 GET /install.sh?k=<钥匙>。
 func (a *API) InstallHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 只在有可用的加入令牌（刚生成了安装命令或接入码）时提供。安装脚本里有面板地址和指纹，
-		// 一直公开的话，开了安全入口也能被扫描器认出这是 Nagi 面板。
-		if n, err := a.Q.CountActiveEnrollTokens(r.Context(), time.Now().Unix()); err != nil || n == 0 {
+		// 安装脚本里有面板地址和指纹：非管理员不该看到面板的 IP，开了安全入口时扫描的人也不该从这里认出面板。
+		// 所以只给带着钥匙的请求，钥匙对应一个还能用的一次性加入令牌（刚生成的安装命令里带着）；其余一律 404。
+		k := r.URL.Query().Get("k")
+		hashes, err := a.Q.ActiveInstallTokens(r.Context(), time.Now().Unix())
+		ok := false
+		for _, h := range hashes {
+			if subtle.ConstantTimeCompare([]byte(installKey(h)), []byte(k)) == 1 {
+				ok = true
+			}
+		}
+		if err != nil || !ok {
 			http.NotFound(w, r)
 			return
 		}

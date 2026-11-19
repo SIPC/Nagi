@@ -423,13 +423,20 @@ func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv
 	if err != nil {
 		return nil, err
 	}
+	old := ""
 	for _, row := range rows {
+		if row.ID == id {
+			old = row.Name
+		}
 		if row.ID != id && row.Name == name && x.node(row.ID) {
 			return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("已有名为 %s 的节点", name))
 		}
 	}
 	if err := s.Nodes.Rename(ctx, id, name); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	if old != name {
+		s.rememberNodeName(ctx, id, old)
 	}
 	return connect.NewResponse(&nagiv1.RenameNodeResponse{}), nil
 }
@@ -647,7 +654,7 @@ func isStatus(err error) bool {
 }
 
 func (s *nodeService) AdoptNodeContainer(ctx context.Context, req *connect.Request[nagiv1.AdoptNodeContainerRequest]) (*connect.Response[nagiv1.AdoptNodeContainerResponse], error) {
-	if err := s.Projects.AdoptContainer(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId(), req.Msg.GetContainer()); err != nil {
+	if err := s.Projects.AdoptContainer(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId(), req.Msg.GetContainer(), s.adoptCheck(ctx, req.Msg.GetNodeId())); err != nil {
 		return nil, toConnect(err)
 	}
 	return connect.NewResponse(&nagiv1.AdoptNodeContainerResponse{}), nil
@@ -661,6 +668,9 @@ func (s *nodeService) ConfirmPendingHA(ctx context.Context, req *connect.Request
 }
 
 func (s *nodeService) AdoptStaleProject(ctx context.Context, req *connect.Request[nagiv1.AdoptStaleProjectRequest]) (*connect.Response[nagiv1.AdoptStaleProjectResponse], error) {
+	if operatorLimited(ctx) {
+		return nil, errAdoptStale()
+	}
 	if err := s.Projects.AdoptStaleProject(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId()); err != nil {
 		return nil, toConnect(err)
 	}

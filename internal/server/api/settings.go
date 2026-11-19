@@ -164,14 +164,14 @@ func (s *settingsService) SetPanelDomain(ctx context.Context, req *connect.Reque
 }
 
 // CreateEnrollCommand 生成添加节点的安装命令。令牌用环境变量传给安装脚本，不出现在进程参数里（见 installScript）；
-// 末尾的 -s -- 让用户能接着追加 --download-url 等选项。
+// 末尾的 -s -- 让用户能接着追加 --download-url 等选项。安装脚本只给带着钥匙的请求（见 installKey）。
 func (s *nodeService) CreateEnrollCommand(ctx context.Context, _ *connect.Request[nagiv1.CreateEnrollCommandRequest]) (*connect.Response[nagiv1.CreateEnrollCommandResponse], error) {
 	token, expires, err := s.Panel.NewEnrollToken(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cmd := fmt.Sprintf(`curl -fsS --pinnedpubkey "%s" -k https://%s/install.sh | NAGI_TOKEN=%s sh -s --`,
-		s.Panel.Fingerprint, s.Panel.PublicHostPort(ctx), token)
+	cmd := fmt.Sprintf(`curl -fsS --pinnedpubkey "%s" -k "https://%s/install.sh?k=%s" | NAGI_TOKEN=%s sh -s --`,
+		s.Panel.Fingerprint, s.Panel.PublicHostPort(ctx), installKey(auth.HashToken(token)), token)
 	return connect.NewResponse(&nagiv1.CreateEnrollCommandResponse{Command: cmd, ExpiresAt: timestamppb.New(expires)}), nil
 }
 

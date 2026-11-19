@@ -120,6 +120,28 @@ func sameVars(a, b *nagiv1.ContainerConfig) bool {
 	return true
 }
 
+// adoptCheck 是把节点缓存里的容器收进项目时的检查（AdoptNodeContainer）：配置是节点说的，没有经过保存时的
+// checkOperatorConfig。没有「特权配置」权限的成员不能收进带特权内容的配置、项目根目录以外的容器目录：
+// 节点被攻破（或者有人改了它的缓存）时，收进来的特权容器之后可以迁移、恢复到别的节点上，等于拿到那些节点的 root。
+// 检查的是实际要收进来的那一份（由 projects.AdoptContainer 在读到缓存以后调用）。有这项权限时返回 nil。
+func (a *API) adoptCheck(ctx context.Context, nodeID string) func(*nagiv1.ContainerSpec) error {
+	if !operatorLimited(ctx) {
+		return nil
+	}
+	return func(sp *nagiv1.ContainerSpec) error {
+		if reasons, _ := spec.PrivilegeReasons(sp.GetConfig(), sp.GetName()); len(reasons) > 0 {
+			return adminOnlyConfig(reasons)
+		}
+		return (&projectService{a}).checkOperatorDir(ctx, nodeID, sp.GetDir())
+	}
+}
+
+// errAdoptStale：以节点为准重建项目会用节点缓存里的配置换掉面板上的整个项目，换进来什么由节点决定，
+// 逐项检查不了（项目在别的节点上的容器之后也按各自的缓存拼回），所以整个操作要「特权配置」权限。
+func errAdoptStale() error {
+	return connect.NewError(connect.CodePermissionDenied, i18n.New("以节点为准重建项目需要「特权配置」权限"))
+}
+
 // checkPrivilegedEntry：容器部署的配置有特权（以特权运行、挂载主机目录等）时，进入容器就等于拿到节点的 root，
 // 终端和执行命令要「特权配置」权限。u 是当前的成员（打开着的终端重查时传重新读出的）。
 func (a *API) checkPrivilegedEntry(ctx context.Context, u auth.User, projectID, container string) error {

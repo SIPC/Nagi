@@ -564,7 +564,8 @@ func (s *Service) AdoptStaleProject(ctx context.Context, nodeID, projectID strin
 }
 
 // AdoptContainer 管理员确认后，按节点缓存里的配置把这个容器加入项目（所在节点就是这个节点）。
-func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name string) error {
+// check 不为 nil 时，对读到的那份配置先调用它，返回错误就不加入（调用的成员能不能收进这样的配置，见 api 的 adoptCheck）。
+func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name string, check func(*nagiv1.ContainerSpec) error) error {
 	l := s.lock(projectID)
 	l.Lock()
 	defer l.Unlock()
@@ -592,6 +593,11 @@ func (s *Service) AdoptContainer(ctx context.Context, nodeID, projectID, name st
 	}
 	if sp == nil {
 		return invalid("节点上已没有该容器")
+	}
+	if check != nil {
+		if err := check(sp); err != nil {
+			return err
+		}
 	}
 	var fo *nagiv1.FailoverStatus
 	for _, st := range cache.GetFailovers() {
