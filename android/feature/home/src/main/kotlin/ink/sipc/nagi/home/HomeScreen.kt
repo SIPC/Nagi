@@ -218,7 +218,8 @@ fun HomeContent(
                                     TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
                                     if (s.overview.nodes.isNotEmpty()) {
                                         SectionDivider()
-                                        NodesSection(s.overview.nodes, actions)
+                                        // 竖屏也两个一行，内容区太窄（340 以下）时才一个一行。
+                                        NodesSection(s.overview.nodes, actions, columns = if (this@BoxWithConstraints.maxWidth >= 340.dp) 2 else 1)
                                     }
                                 }
                             }
