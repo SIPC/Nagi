@@ -61,7 +61,9 @@ private val RailItem = 56.dp
 private val RailGap = 4.dp
 private val RailPad = 4.dp
 private val IconSize = 22.dp
-private val LabelGap = 6.dp
+private val LabelGap = 9.dp
+// 名称右边到底色边缘的距离：比图标左边的留白窄 3，名称在图标右边的空当里看起来居中。
+private val LabelEnd = 14.dp
 
 @Composable
 fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -79,14 +81,14 @@ fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, m
     val scale = drag.scale()
     // 展开的进度：0 只有图标，1 底色伸长、名称完整显示。和胶囊里每一项的展开同一条弹簧。
     val open by animateFloatAsState(if (drag.dragging && !reduced) 1f else 0f, if (reduced) snap() else Motion.itemSpring(), label = "open")
-    // 展开后多出来的宽度：名称从图标右边 LabelGap 处开始，名称右边留的和图标左边到底色边缘一样宽（两边对称），
+    // 展开后多出来的宽度：名称从图标右边 LabelGap 处开始，名称右边留 LabelEnd，
     // 减去原来那一项已有的宽度。按当前选中的名称算，名称变了宽度跟着过渡。
     val measurer = rememberTextMeasurer()
     val labelStyle = NagiTheme.type.bodyMedium
     val label = items.getOrNull(selected)?.label.orEmpty()
     val labelWidth = with(density) { measurer.measure(label, labelStyle, maxLines = 1).size.width.toDp() }
     val iconInset = (RailItem - IconSize) / 2
-    val extraTarget = iconInset + IconSize + LabelGap + labelWidth + iconInset - RailItem
+    val extraTarget = iconInset + IconSize + LabelGap + labelWidth + LabelEnd - RailItem
     val extra by androidx.compose.animation.core.animateDpAsState(extraTarget, if (reduced) snap() else Motion.itemSpring(), label = "extra")
     val shadowColor = if (dark) 0x80000000.toInt() else 0x14000000
 
@@ -158,7 +160,7 @@ fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, m
 }
 
 /** 鼓出的部分和胶囊接缝处的圆弧半径。 */
-private val BulgeFillet = 10.dp
+private val BulgeFillet = 14.dp
 
 /**
  * 接缝处的过渡（像素）：一段半径 [r] 的圆弧，一头和胶囊的右边（x = [w]）相切，一头和鼓出部分的上边或下边相切；
