@@ -27,6 +27,8 @@ data class ConfirmState(
     val error: String? = null,
     /** 查询配对码时连不上面板（不是面板返回的错误）。 */
     val unreachable: Boolean = false,
+    /** 二维码来自别的 App 发来的链接（不是在 App 里扫的），确认页提醒核对。 */
+    val external: Boolean = false,
     val done: Boolean = false,
 )
 
@@ -41,9 +43,9 @@ class PairingViewModel(private val graph: AppGraph, private val onPaired: () -> 
     val deviceLabel: String get() = graph.pairing.deviceLabel()
 
     /** 扫到（或从链接打开）二维码以后查询配对码。 */
-    fun open(uri: PairingUri) {
+    fun open(uri: PairingUri, external: Boolean = false) {
         if (_state.value.uri == uri && (_state.value.info != null || _state.value.loading)) return
-        _state.value = ConfirmState(uri = uri, loading = true)
+        _state.value = ConfirmState(uri = uri, loading = true, external = external)
         lookup()
     }
 

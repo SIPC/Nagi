@@ -37,7 +37,11 @@ import ink.sipc.nagi.ui.NagiButton
 import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.SkeletonRows
 
-/** 确认添加（s5 第 2 张）：已按二维码里的指纹校验了面板证书，显示面板、成员、地址、指纹和这台手机。 */
+/**
+ * 确认添加（s5 第 2 张）：已按二维码里的指纹校验了面板证书，显示面板、成员、地址、指纹和这台手机。
+ * 面板名称、成员和头像是对方面板返回的，二维码可能是别人的（安全审查 v0.34.0-b L4）：注明来自这个地址的面板，
+ * 不显示二维码里没有核对过的域名；从别的 App 的链接打开时另外提醒。
+ */
 @Composable
 fun ConfirmScreen(vm: PairingViewModel, onBack: () -> Unit, onDone: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -140,11 +144,16 @@ private fun ConfirmBody(s: ConfirmState, info: ink.sipc.nagi.proto.v1.GetPairing
             NagiButton(stringResource(R.string.retry), vm::retry, variant = ButtonVariant.Outline)
         }
         info != null -> {
+            if (s.external) {
+                Text(stringResource(R.string.confirm_external), style = NagiTheme.type.body, color = NagiTheme.colors.warningText)
+                Spacer(Modifier.height(16.dp))
+            }
             Member(info.displayName.ifEmpty { info.username }, roleLabel(info.role), info.avatar.toByteArray())
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.confirm_from_panel), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+            Spacer(Modifier.height(16.dp))
             val uri = s.uri!!
             KeyValueRow(stringResource(R.string.confirm_address), uri.address, mono = true)
-            if (uri.domain.isNotEmpty()) KeyValueRow(stringResource(R.string.confirm_domain), uri.domain, mono = true)
             KeyValueRow(stringResource(R.string.confirm_fingerprint), shortFingerprint(s.fingerprint ?: uri.fingerprint), mono = true)
             KeyValueRow(stringResource(R.string.confirm_phone), vm.deviceLabel, mono = false)
         }
