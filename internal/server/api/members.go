@@ -25,6 +25,17 @@ import (
 
 const maxRoleName = 32
 
+// maxRoles 是角色的数量上限（含预置的）。
+const maxRoles = 50
+
+// reservedRoleNames 是预置角色在界面上显示的名称（各语言）：预置角色的名称为空时界面显示这些，自定义角色不能叫这些名字，
+// 预置角色也不能改成另一个预置角色的名字，免得选角色时认错。值是这个名字属于哪个预置角色。
+var reservedRoleNames = map[string]string{
+	"管理员": auth.RoleAdmin, "admin": auth.RoleAdmin, "administrator": auth.RoleAdmin,
+	"操作员": "operator", "operator": "operator",
+	"只读": "viewer", "只读成员": "viewer", "viewer": "viewer", "read-only": "viewer", "read only": "viewer", "readonly": "viewer",
+}
+
 func roleProto(r store.Role) *nagiv1.Role {
 	perms := r.Permissions
 	if r.Builtin == auth.RoleAdmin {
@@ -64,14 +75,19 @@ func (s *settingsService) ListRoles(ctx context.Context, _ *connect.Request[nagi
 	return connect.NewResponse(out), nil
 }
 
-// checkRoleInput 检查角色的名称和权限，返回整理过的名称和权限。
-func (s *settingsService) checkRoleInput(ctx context.Context, id int64, name string, names []string, requireName bool) (string, auth.Perms, error) {
+// checkRoleInput 检查角色的名称和权限，返回整理过的名称和权限。builtin 是这个角色的预置标记（新建和自定义角色为空）。
+func (s *settingsService) checkRoleInput(ctx context.Context, id int64, builtin, name string, names []string, requireName bool) (string, auth.Perms, error) {
 	name = strings.TrimSpace(name)
 	if requireName && name == "" {
 		return "", 0, connect.NewError(connect.CodeInvalidArgument, i18n.New("请填写角色名称"))
 	}
-	if utf8.RuneCountInString(name) > maxRoleName || strings.ContainsFunc(name, unicode.IsControl) {
+	// 控制字符和看不见的格式字符（零宽空格之类）不要：两个名字看起来一样。
+	invisible := func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
+	if utf8.RuneCountInString(name) > maxRoleName || strings.ContainsFunc(name, invisible) {
 		return "", 0, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("角色名称最多 %d 个字符", maxRoleName))
+	}
+	if owner, ok := reservedRoleNames[strings.ToLower(name)]; ok && owner != builtin {
+		return "", 0, connect.NewError(connect.CodeAlreadyExists, i18n.New("角色名称已被使用"))
 	}
 	if name != "" {
 		taken, err := s.Q.RoleNameTaken(ctx, name, id)
@@ -99,9 +115,16 @@ func (s *settingsService) checkRoleInput(ctx context.Context, id int64, name str
 }
 
 func (s *settingsService) CreateRole(ctx context.Context, req *connect.Request[nagiv1.CreateRoleRequest]) (*connect.Response[nagiv1.Role], error) {
-	name, perms, err := s.checkRoleInput(ctx, 0, req.Msg.GetName(), req.Msg.GetPermissions(), true)
+	s.membersMu.Lock()
+	defer s.membersMu.Unlock()
+	name, perms, err := s.checkRoleInput(ctx, 0, "", req.Msg.GetName(), req.Msg.GetPermissions(), true)
 	if err != nil {
 		return nil, err
+	}
+	if all, err := s.Q.ListRoles(ctx); err != nil {
+		return nil, err
+	} else if len(all) >= maxRoles {
+		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.Errorf("角色最多 %d 个", maxRoles))
 	}
 	id, err := s.Q.CreateRole(ctx, name, time.Now().Unix())
 	if err != nil {
@@ -119,7 +142,9 @@ func (s *settingsService) CreateRole(ctx context.Context, req *connect.Request[n
 
 func roleNotFound() error { return connect.NewError(connect.CodeNotFound, i18n.New("角色不存在")) }
 
-// editableRole 读出要修改或删除的角色：管理员角色不能改；不是管理员的成员不能改权限比自己多的角色。
+// editableRole 读出要修改或删除的角色：管理员角色不能改。不是管理员的成员不能改权限比自己多的角色，不能改预置角色
+// （所有面板的成员都可能在用），也不能改有他管不了的成员（管理员、权限或访问范围比他大）在用的角色：
+// 否则改一下角色的权限，那些成员就在更大的范围里得到这些权限。
 func (s *settingsService) editableRole(ctx context.Context, id int64) (store.Role, error) {
 	r, err := s.Q.GetRole(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -130,19 +155,37 @@ func (s *settingsService) editableRole(ctx context.Context, id int64) (store.Rol
 	if r.Builtin == auth.RoleAdmin {
 		return r, connect.NewError(connect.CodeFailedPrecondition, i18n.New("管理员角色不能修改"))
 	}
-	if u := auth.CurrentUser(ctx); !u.IsAdmin() && rolePerms(r)&^u.Perms != 0 {
+	u := auth.CurrentUser(ctx)
+	if u.IsAdmin() {
+		return r, nil
+	}
+	if rolePerms(r)&^u.Perms != 0 {
 		return r, connect.NewError(connect.CodePermissionDenied, i18n.New("这个角色的权限比你多，不能修改"))
+	}
+	if r.Builtin != "" {
+		return r, connect.NewError(connect.CodePermissionDenied, i18n.New("预置角色只有管理员能修改"))
+	}
+	users, err := s.Q.ListUsers(ctx)
+	if err != nil {
+		return r, err
+	}
+	for _, m := range users {
+		if m.RoleID == r.ID && s.manageable(ctx, m) != nil {
+			return r, connect.NewError(connect.CodePermissionDenied, i18n.New("有你不能管理的成员在用这个角色，不能修改"))
+		}
 	}
 	return r, nil
 }
 
 func (s *settingsService) UpdateRole(ctx context.Context, req *connect.Request[nagiv1.UpdateRoleRequest]) (*connect.Response[nagiv1.Role], error) {
 	m := req.Msg
+	s.membersMu.Lock()
+	defer s.membersMu.Unlock()
 	r, err := s.editableRole(ctx, m.GetId())
 	if err != nil {
 		return nil, err
 	}
-	name, perms, err := s.checkRoleInput(ctx, r.ID, m.GetName(), m.GetPermissions(), false)
+	name, perms, err := s.checkRoleInput(ctx, r.ID, r.Builtin, m.GetName(), m.GetPermissions(), false)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +215,8 @@ func (s *settingsService) UpdateRole(ctx context.Context, req *connect.Request[n
 }
 
 func (s *settingsService) DeleteRole(ctx context.Context, req *connect.Request[nagiv1.DeleteRoleRequest]) (*connect.Response[nagiv1.DeleteRoleResponse], error) {
+	s.membersMu.Lock()
+	defer s.membersMu.Unlock()
 	r, err := s.editableRole(ctx, req.Msg.GetId())
 	if err != nil {
 		return nil, err
@@ -204,10 +249,36 @@ func (s *settingsService) ListUsers(ctx context.Context, _ *connect.Request[nagi
 		return nil, err
 	}
 	out := &nagiv1.ListUsersResponse{}
+	me := auth.CurrentUser(ctx)
+	var x *access
+	var mine *nagiv1.UserScope
+	if !me.IsAdmin() {
+		// 不是管理员：别的成员的范围里，自己看不到的项目、节点、分组和标签不给（2026-11-19-87c02b5#11）。
+		if x, err = s.loadAccess(ctx, me); err != nil {
+			return nil, err
+		}
+		own, err := s.Q.GetUserByID(ctx, me.ID)
+		if err != nil {
+			return nil, err
+		}
+		if mine, err = s.userScope(ctx, own); err != nil {
+			return nil, err
+		}
+	}
 	for _, r := range rows {
 		scope, err := s.userScope(ctx, r)
 		if err != nil {
 			return nil, err
+		}
+		if mine != nil {
+			scope.ProjectIds = slices.DeleteFunc(scope.ProjectIds, func(id string) bool { return !x.project(id) })
+			scope.NodeIds = slices.DeleteFunc(scope.NodeIds, func(id string) bool { return !x.nodeInScope(id) })
+			if !mine.GetAllProjects() {
+				scope.ProjectGroups = slices.DeleteFunc(scope.ProjectGroups, func(g string) bool { return !slices.Contains(mine.GetProjectGroups(), g) })
+			}
+			if !mine.GetAllNodes() {
+				scope.NodeTags = slices.DeleteFunc(scope.NodeTags, func(t string) bool { return !slices.Contains(mine.GetNodeTags(), t) })
+			}
 		}
 		role := roles[r.RoleID]
 		out.Users = append(out.Users, &nagiv1.PanelUser{
@@ -272,6 +343,10 @@ func (s *settingsService) checkScope(ctx context.Context, sc *nagiv1.UserScope) 
 	if sc.NodeTags, err = cleanLabels(sc.GetNodeTags(), maxScopeList); err != nil {
 		return err
 	}
+	// 不是管理员的先核对范围：不存在的和范围外的报同一个错，不能借报错探出项目、节点存不存在（2026-11-19-87c02b5#14）。
+	if err := s.scopeWithin(ctx, sc); err != nil {
+		return err
+	}
 	if !sc.GetAllProjects() {
 		for _, id := range sc.GetProjectIds() {
 			if _, err := s.Q.GetProject(ctx, id); errors.Is(err, sql.ErrNoRows) {
@@ -290,7 +365,7 @@ func (s *settingsService) checkScope(ctx context.Context, sc *nagiv1.UserScope) 
 			}
 		}
 	}
-	return s.scopeWithin(ctx, sc)
+	return nil
 }
 
 // scopeWithin：不是管理员的成员给别人设的范围不能超过自己的。
@@ -331,7 +406,8 @@ func (s *settingsService) scopeWithin(ctx context.Context, sc *nagiv1.UserScope)
 	case mine.GetAllNodes():
 	case mine.GetNodesFollow():
 		// 跟随项目：项目范围已经在自己的范围内，跟随项目也就不会超出；指定的节点要是自己看得到的。
-		if sc.GetAllNodes() {
+		// 节点标签不能给：带标签的节点不一定是自己看得到的，以后打上这个标签的也会进范围（2026-11-19-87c02b5#3）。
+		if sc.GetAllNodes() || len(sc.GetNodeTags()) > 0 {
 			return outside
 		}
 	default:
@@ -429,7 +505,8 @@ func (s *settingsService) requestedRole(ctx context.Context, roleID int64, legac
 	return r, nil
 }
 
-// manageable：不是管理员的成员不能管理管理员，也不能管理权限比自己多的成员。
+// manageable：不是管理员的成员不能管理管理员，也不能管理权限或访问范围比自己大的成员：否则给他换成自己的角色、
+// 重置密码再登录进去，就在更大的范围里得到自己的权限（2026-11-19-87c02b5#2）。
 func (s *settingsService) manageable(ctx context.Context, target store.User) error {
 	u := auth.CurrentUser(ctx)
 	if u.IsAdmin() {
@@ -445,6 +522,16 @@ func (s *settingsService) manageable(ctx context.Context, target store.User) err
 	if rolePerms(r)&^u.Perms != 0 {
 		return connect.NewError(connect.CodePermissionDenied, i18n.New("这个成员的权限比你多，不能管理"))
 	}
+	if target.ID == u.ID {
+		return nil
+	}
+	sc, err := s.userScope(ctx, target)
+	if err != nil {
+		return err
+	}
+	if s.scopeWithin(ctx, sc) != nil {
+		return connect.NewError(connect.CodePermissionDenied, i18n.New("这个成员的访问范围比你大，不能管理"))
+	}
 	return nil
 }
 
@@ -454,6 +541,8 @@ func (s *settingsService) CreateUser(ctx context.Context, req *connect.Request[n
 	if username == "" || len([]rune(username)) > 32 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("用户名不能为空，且不超过 32 个字符"))
 	}
+	s.membersMu.Lock()
+	defer s.membersMu.Unlock()
 	role, err := s.requestedRole(ctx, m.GetRoleId(), m.GetRole())
 	if err != nil {
 		return nil, err
@@ -495,12 +584,26 @@ func (s *settingsService) lastAdmin(ctx context.Context, u store.User) (bool, er
 
 func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[nagiv1.UpdateUserRequest]) (*connect.Response[nagiv1.UpdateUserResponse], error) {
 	m := req.Msg
+	s.membersMu.Lock()
+	defer s.membersMu.Unlock()
 	u, err := s.Q.GetUserByID(ctx, m.GetId())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("成员不存在"))
 	}
 	if err := s.manageable(ctx, u); err != nil {
 		return nil, err
+	}
+	// 重置密码、清除两步验证和通行密钥是换掉登录凭据（2026-11-19-87c02b5#6）：
+	// 自己的不能在这里改（改密码要旧密码，两步验证和通行密钥在账号安全里，各自要验证）；别人的要先用密码或验证码
+	// 做高权限确认，手机上的确认不算。访问令牌做不了交互式的确认，照旧按令牌的选项（「管理面板」）。
+	if m.GetPassword() != "" || m.GetClearTotp() || m.GetClearPasskeys() {
+		cur := auth.CurrentUser(ctx)
+		if u.ID == cur.ID {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("自己的密码、两步验证和通行密钥请在「账号安全」里修改"))
+		}
+		if cur.TokenID == 0 && !(cur.Elevated() && cur.ElevatedBy == auth.ElevatedByPassword) {
+			return nil, elevationError()
+		}
 	}
 	// 降低角色、重置密码、修改访问范围都可能撤销这个成员已有的权限：之后换掉直连下载的密钥，
 	// 让他已经拿到的链接立即失效（见 revokeDirectLinks）。中途出错时已经改了的部分也算。
@@ -599,6 +702,8 @@ func (s *settingsService) DeleteUser(ctx context.Context, req *connect.Request[n
 	if id == auth.CurrentUser(ctx).ID {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("不能删除当前登录的账号"))
 	}
+	s.membersMu.Lock()
+	defer s.membersMu.Unlock()
 	u, err := s.Q.GetUserByID(ctx, id)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("成员不存在"))

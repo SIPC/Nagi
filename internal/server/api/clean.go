@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"google.golang.org/protobuf/proto"
 	"net"
 	"regexp"
 	"slices"
@@ -184,6 +185,21 @@ func (a *API) filterReply(ctx context.Context, x *access, msg any) {
 	if x == nil {
 		return
 	}
+	m, ok := msg.(proto.Message)
+	if !ok {
+		return
+	}
+	// 回复里有的子消息是别处共用的：节点上报的缓存（NodeInfo、NodeUsage、备份和顶替的状态）直接挂在回复上。
+	// 就地清理会把缓存也清空，管理员和面板内部在下一次上报之前读到的都是空值。所以清理的是一份副本，再换回回复里：
+	// Reset 只丢掉回复自己的字段（不动共用的子消息），Merge 把清理过的副本深拷贝进去。
+	c := proto.Clone(m)
+	a.cleanReply(ctx, x, c)
+	proto.Reset(m)
+	proto.Merge(m, c)
+}
+
+// cleanReply 就地清理一份回复。只由 filterReply 对副本调用。
+func (a *API) cleanReply(ctx context.Context, x *access, msg any) {
 	switch m := msg.(type) {
 	case *nagiv1.ListProjectsResponse:
 		kept := m.Projects[:0]
@@ -225,6 +241,25 @@ func (a *API) filterReply(ctx context.Context, x *access, msg any) {
 		m.Replicas = kept
 	case *nagiv1.CheckDomainsResponse:
 		a.cleanDomains(ctx, x, m)
+	case *nagiv1.ListDeploymentsResponse:
+		// 部署失败的原因里可能有看不到的节点名（节点离线之类）。
+		for _, d := range m.GetDeployments() {
+			d.Error = a.scrubNodes(ctx, x, d.GetError())
+		}
+	case *nagiv1.NodeImages:
+		// 同一台节点上范围外项目的容器也在用镜像：不给项目和容器的名称，只留「有别的在用」（2026-11-19-87c02b5#11）。
+		for _, img := range m.GetImages() {
+			for _, u := range img.GetUsers() {
+				if u.GetProjectId() != "" && !x.project(u.GetProjectId()) {
+					u.Name, u.ProjectId, u.ProjectName, u.Container, u.Service = "", "", "", "", ""
+				}
+			}
+			for _, h := range img.GetHolds() {
+				if h.GetProjectId() != "" && !x.project(h.GetProjectId()) {
+					h.ProjectId, h.ProjectName, h.Container = "", "", ""
+				}
+			}
+		}
 	case *nagiv1.DeployEvent:
 		if out := m.GetOutput(); out != "" {
 			m.Event = &nagiv1.DeployEvent_Output{Output: a.scrubNodes(ctx, x, out)}
@@ -286,6 +321,11 @@ func (a *API) cleanProject(ctx context.Context, x *access, p *nagiv1.Project) {
 	}
 	for _, r := range p.GetRoutes() {
 		r.EntryNodes = hideNodeIDs(x, r.GetEntryNodes())
+		// 映射出错的原因里可能有节点名和地址。
+		r.Error = a.scrubNodes(ctx, x, r.GetError())
+		if !x.can(auth.PermAddresses) {
+			r.Error = scrubIPs(r.Error)
+		}
 	}
 	if !x.can(auth.PermAlerts) && p.Settings != nil {
 		p.Settings.AlertRules = nil
@@ -371,7 +411,7 @@ func (a *API) cleanBackupStatus(ctx context.Context, x *access, b *nagiv1.Backup
 	if !x.node(b.GetTargetNodeId()) {
 		b.TargetNodeId, b.TargetName = "", ""
 	}
-	b.LastError, b.RetryError = a.scrubNodes(ctx, x, b.GetLastError()), a.scrubNodes(ctx, x, b.GetRetryError())
+	b.LastError, b.RetryError = scrubIPs(a.scrubNodes(ctx, x, b.GetLastError())), scrubIPs(a.scrubNodes(ctx, x, b.GetRetryError()))
 }
 
 func (a *API) cleanFailover(x *access, f *nagiv1.FailoverConfig) {
@@ -405,7 +445,7 @@ func (a *API) cleanFailoverStatus(ctx context.Context, x *access, st *nagiv1.Fai
 	} else if slices.Contains(a.hiddenNames(ctx, x), st.GetHolderName()) {
 		st.HolderName = ""
 	}
-	st.LastError = a.scrubNodes(ctx, x, st.GetLastError())
+	st.LastError = scrubIPs(a.scrubNodes(ctx, x, st.GetLastError()))
 }
 
 // filterNodes 只留看得到的节点。节点上的容器数只算范围内的项目；不认识的容器、旧项目的名称只给管理员（C5）。
@@ -589,7 +629,9 @@ func hostAddress(addr string) bool {
 		addr = h
 	}
 	addr = strings.Trim(addr, "[]")
-	return addr != "" && net.ParseIP(addr) == nil && strings.ContainsFunc(addr, unicode.IsLetter)
+	// 带 zone 的 IPv6（fe80::1%eth0）也是 IP。
+	ip, _, _ := strings.Cut(addr, "%")
+	return addr != "" && net.ParseIP(ip) == nil && strings.ContainsFunc(addr, unicode.IsLetter)
 }
 
 // ---- 文字里的节点名和 IP ----
@@ -643,11 +685,12 @@ func (a *API) visibleNames(ctx context.Context, x *access) map[string]bool {
 }
 
 // scrubNodes 把文字里看不到的节点名换成「其他节点」（A7）。只换完整的名称：前后不是字母、数字、-、_、.。
-// 看得到的节点里有同名的不换。
+// 看得到的节点里有同名的不换。看不到的节点的 ID 也去掉（节点没有名称时报错里写的是 ID）。
 func (a *API) scrubNodes(ctx context.Context, x *access, s string) string {
-	if s == "" {
+	if s == "" || x == nil {
 		return s
 	}
+	s = a.scrubNodeIDs(ctx, x, s)
 	visible := a.visibleNames(ctx, x)
 	names := a.hiddenNames(ctx, x)
 	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
@@ -685,7 +728,8 @@ func replaceWord(s, old, repl string) string {
 	}
 }
 
-var ipPattern = regexp.MustCompile(`\[?(?:\d{1,3}\.){3}\d{1,3}\]?|\[?(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\]?`)
+// IPv4、IPv6（含 ::ffff:1.2.3.4 这种末尾是 IPv4 的写法）。
+var ipPattern = regexp.MustCompile(`\[?(?:[0-9a-fA-F]{0,4}:){2,7}(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9a-fA-F]{0,4})\]?|\[?(?:\d{1,3}\.){3}\d{1,3}\]?`)
 
 // scrubIPs 去掉文字里的 IP 地址（证书失败、直连下载出错的原因里可能有节点的地址）。
 func scrubIPs(s string) string {

@@ -164,7 +164,8 @@ func (s *authService) ApproveOAuth(ctx context.Context, req *connect.Request[nag
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("有效期不能超过 10 年"))
 	}
 	// 授权签发的和个人令牌一样是长期有效的凭据，同样要先做高权限确认（见 docs/mcp.md#个人访问令牌）。拒绝不用。
-	if m.GetAllow() && !auth.CurrentUser(ctx).Elevated() {
+	// 和生成个人令牌一样只认密码或验证码做的确认，手机上的确认不算（见 docs/android.md#高权限确认和重新验证）。
+	if u := auth.CurrentUser(ctx); m.GetAllow() && !(u.Elevated() && u.ElevatedBy == auth.ElevatedByPassword) {
 		return nil, elevationError()
 	}
 	redirect, err := s.OAuth.Approve(ctx, auth.CurrentUser(ctx), m.GetRequest(), s.Auth.IssuerOf(ctx), m.GetAllow(), m.GetDays(),

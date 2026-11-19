@@ -43,7 +43,14 @@ func TestMemberPasskeysCleared(t *testing.T) {
 		t.Fatal("没有 bob")
 		return 0
 	}
-	_, sc := h.login("admin", "admin-password-1")
+	ac, sc := h.login("admin", "admin-password-1")
+	// 重置密码、清除两步验证和通行密钥要先用密码做高权限确认。
+	if _, err := sc.UpdateUser(ctx, connect.NewRequest(&nagiv1.UpdateUserRequest{Id: bob, ClearPasskeys: true})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("没有确认时应该拒绝：%v", err)
+	}
+	if _, err := ac.Elevate(ctx, connect.NewRequest(&nagiv1.ElevateRequest{Password: "admin-password-1"})); err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct {
 		name string
 		req  *nagiv1.UpdateUserRequest

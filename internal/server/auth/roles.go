@@ -63,6 +63,8 @@ var tokenElevated = map[string]tokenNeed{
 	"/nagi.v1.NodeService/ConfirmPendingHA": needNode,
 	// 副本的存放位置：让节点以 root 在任意位置建目录、写数据（见 docs/snapshot.md#副本的存放位置）。
 	"/nagi.v1.NodeService/SetNodeReplicaDir": needNode, "/nagi.v1.ProjectService/SetBackupReplicaDir": needNode,
+	// 项目根目录：同样是让节点以 root 在指定位置建目录、写数据。
+	"/nagi.v1.NodeService/SetNodeProjectsRoot": needNode,
 	// 删除、清理节点上的镜像（见 docs/agent.md#节点镜像）：节点拒绝删有容器在用、Nagi 需要的，只要「可修改」。
 	"/nagi.v1.NodeService/DeleteNodeImages": needWrite, "/nagi.v1.NodeService/PruneNodeImages": needWrite,
 }
@@ -124,6 +126,12 @@ var tokenAccount = map[string]tokenNeed{
 	"/nagi.v1.SettingsService/ListUsers":   panelRead,
 }
 
+// tokenScopeAdmin：项目分组和节点标签决定成员的访问范围，属于面板管理，令牌要勾「管理面板」和「可修改」
+// （2026-11-19-87c02b5#15）。不要高权限确认，所以不在 tokenElevated 里。
+var tokenScopeAdmin = map[string]tokenNeed{
+	"/nagi.v1.ProjectService/SetProjectGroup": panelWrite, "/nagi.v1.NodeService/SetNodeTags": panelWrite,
+}
+
 // TokenAllowed 判断访问令牌（MCP）能不能调用接口：项目和节点的接口，没勾「可修改」时只能查询（见 docs/mcp.md#权限），
 // tokenElevated 里的按那里要求的选项；别的服务只有 tokenAccount 里的。角色的限制另由 Allowed 检查。
 func TokenAllowed(u User, procedure string) bool {
@@ -136,6 +144,9 @@ func TokenAllowed(u User, procedure string) bool {
 		return ok && need.metBy(u)
 	}
 	if need, ok := tokenElevated[procedure]; ok {
+		return need.metBy(u)
+	}
+	if need, ok := tokenScopeAdmin[procedure]; ok {
 		return need.metBy(u)
 	}
 	return u.AllowWrite || isRead(parts[1])

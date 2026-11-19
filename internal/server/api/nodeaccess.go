@@ -84,6 +84,8 @@ var elevationRequired = map[string]bool{
 	// 设置备份节点时指定存放位置也要确认，在 SetBackupNodes 里检查。
 	nagiv1connect.NodeServiceSetNodeReplicaDirProcedure:      true,
 	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure: true,
+	// 项目根目录：同上，而且「容器目录要在根目录内」的限制以它为准。
+	nagiv1connect.NodeServiceSetNodeProjectsRootProcedure: true,
 }
 
 // needsElevation 判断这次调用要不要先做高权限确认。访问令牌按 auth.User.ElevatedFor 的规则（见 docs/mcp.md#高权限确认）。

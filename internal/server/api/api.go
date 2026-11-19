@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -49,6 +50,10 @@ const SettingSetupToken = "setup_token"
 
 // API 汇总所有 Connect 接口的实现。
 type API struct {
+	// membersMu：成员和角色的修改一个一个来。检查（角色还在不在、是不是最后一个管理员、范围有没有超出）和写入之间
+	// 不能插进别的修改，否则能造出指向已删角色的成员、把管理员删光（2026-11-19-87c02b5#7、#8）。
+	membersMu sync.Mutex
+
 	Q        *store.Queries
 	Auth     *auth.Service
 	Nodes    *nodes.Registry

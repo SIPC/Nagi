@@ -46,6 +46,7 @@ var tokenElevationRules = map[string]string{
 	nagiv1connect.NodeServiceConfirmPendingHAProcedure:             "node+write",
 	nagiv1connect.NodeServiceSetNodeReplicaDirProcedure:            "node+write",
 	nagiv1connect.ProjectServiceSetBackupReplicaDirProcedure:       "node+write",
+	nagiv1connect.NodeServiceSetNodeProjectsRootProcedure:          "node+write",
 	nagiv1connect.NodeServiceDeleteNodeImagesProcedure:             "write",
 	nagiv1connect.NodeServicePruneNodeImagesProcedure:              "write",
 	// 添加手机：令牌一律不行（也不在 tokenAccount 里）。

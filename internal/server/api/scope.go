@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"slices"
 	"strings"
 
@@ -396,7 +397,7 @@ func (s scopeCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			s.a.afterCall(ctx, x, procedure, res.Any())
 			s.a.filterReply(ctx, x, res.Any())
 		}
-		return res, err
+		return res, s.a.scrubError(ctx, x, err)
 	}
 }
 
@@ -413,7 +414,7 @@ func (s scopeCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) conn
 		if x == nil {
 			return next(ctx, conn)
 		}
-		return next(ctx, &scopedConn{StreamingHandlerConn: conn, ctx: ctx, a: s.a, x: x})
+		return s.a.scrubError(ctx, x, next(ctx, &scopedConn{StreamingHandlerConn: conn, ctx: ctx, a: s.a, x: x}))
 	}
 }
 
@@ -435,4 +436,25 @@ func (c *scopedConn) Receive(msg any) error {
 func (c *scopedConn) Send(msg any) error {
 	c.a.filterReply(c.ctx, c.x, msg)
 	return c.StreamingHandlerConn.Send(msg)
+}
+
+// scrubError 清理接口的报错：非管理员看不到的节点的名称和 ID 不能出现在报错里（「节点 xx 离线」之类，
+// 2026-11-19-87c02b5#9）。没有要换的内容时原样返回（保留错误码、响应头和可以按语言翻译的原文）。
+func (a *API) scrubError(ctx context.Context, x *access, err error) error {
+	if x == nil || err == nil {
+		return err
+	}
+	text := errorText(i18n.FromContext(ctx), err)
+	clean := a.scrubNodes(ctx, x, text)
+	if clean == text {
+		return err
+	}
+	out := connect.NewError(connect.CodeOf(err), errors.New(clean))
+	var ce *connect.Error
+	if errors.As(err, &ce) {
+		for k, v := range ce.Meta() {
+			out.Meta()[k] = v
+		}
+	}
+	return out
 }

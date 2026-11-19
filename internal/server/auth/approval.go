@@ -45,6 +45,8 @@ const (
 	approvalWindow    = 10 * time.Minute
 	approvalPerWindow = 10
 	approvalCodeTries = 3
+	// 每个成员同时等确认的请求最多这么多个（不同来源各一个）。
+	approvalMaxPending = 4
 
 	approvalPurpose   = "nagi-app-approve"
 	appElevatePurpose = "nagi-app-elevate"
@@ -102,19 +104,41 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 	defer s.app.mu.Unlock()
 	if s.app.approvals == nil {
 		s.app.approvals = map[string]*approval{}
-		s.app.approvalTimes = map[int64][]time.Time{}
+		s.app.approvalTimes = map[string][]time.Time{}
 	}
-	for id, old := range s.app.approvals {
-		if now.After(old.expires) || (old.userID == a.userID && old.kind == a.kind) {
-			delete(s.app.approvals, id)
-		}
-	}
-	times := slices.DeleteFunc(s.app.approvalTimes[a.userID], func(t time.Time) bool { return now.Sub(t) > approvalWindow })
+	// 限额按「成员、种类、来源」分开算：别处的人（知道密码）发起再多，占不掉成员自己这边的额度，
+	// 登录和高权限确认也互不影响。被限额拒绝时不动已有的请求。
+	key := strconv.FormatInt(a.userID, 10) + "|" + a.kind + "|" + LimitKey(a.ip)
+	times := slices.DeleteFunc(s.app.approvalTimes[key], func(t time.Time) bool { return now.Sub(t) > approvalWindow })
 	if len(times) >= approvalPerWindow {
-		s.app.approvalTimes[a.userID] = times
+		s.app.approvalTimes[key] = times
 		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("发起得太频繁，请稍后重试"))
 	}
-	s.app.approvalTimes[a.userID] = append(times, now)
+	// 同一个成员、同一种、同一个来源的旧请求作废；别的来源发起的留着，手机上一起列出来，由成员按来源和数字认
+	// （否则别处的人能把成员自己正在等的请求顶掉）。每个成员同时最多 approvalMaxPending 个，满了丢最早的。
+	var mine []*approval
+	for id, old := range s.app.approvals {
+		switch {
+		case now.After(old.expires):
+			delete(s.app.approvals, id)
+		case old.userID == a.userID && old.kind == a.kind && LimitKey(old.ip) == LimitKey(a.ip):
+			delete(s.app.approvals, id)
+		case old.userID == a.userID:
+			mine = append(mine, old)
+		}
+	}
+	if len(mine) >= approvalMaxPending {
+		slices.SortFunc(mine, func(x, y *approval) int { return x.created.Compare(y.created) })
+		for _, old := range mine[:len(mine)-approvalMaxPending+1] {
+			delete(s.app.approvals, old.id)
+		}
+	}
+	for k, ts := range s.app.approvalTimes {
+		if len(ts) == 0 || now.Sub(ts[len(ts)-1]) > approvalWindow {
+			delete(s.app.approvalTimes, k)
+		}
+	}
+	s.app.approvalTimes[key] = append(times, now)
 	s.app.approvals[a.id] = a
 	return a, nil
 }
