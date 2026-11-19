@@ -25,6 +25,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -70,8 +71,10 @@ type Registry struct {
 	OnIsolate func(ctx context.Context)
 	iso       isolation
 
-	mu       sync.RWMutex
-	conns    map[string]*Conn
+	mu    sync.RWMutex
+	conns map[string]*Conn
+	// sessions 是每个节点所有还没断开的控制连接（包括已被替换、正在断开的），移除节点时全部断开。
+	sessions map[string]map[*Conn]struct{}
 	mesh     *mesh.Mesh
 	meshName string
 	witness  *witness
@@ -200,7 +203,7 @@ func (r *Registry) PatchBackup(nodeID, projectID, container string, st *nagiv1.B
 
 // NewRegistry 创建节点注册表。
 func NewRegistry(q *store.Queries, log *slog.Logger, s *sealer.Sealer, ca *tlsutil.CA) *Registry {
-	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}}
+	return &Registry{q: q, log: log, sealer: s, ca: ca, conns: map[string]*Conn{}, sessions: map[string]map[*Conn]struct{}{}}
 }
 
 // NodeCertValidity 是节点客户端证书的有效期。节点在到期前 30 天内连上面板时自动续期。
@@ -294,14 +297,92 @@ func (r *Registry) Rename(ctx context.Context, nodeID, name string) error {
 	return nil
 }
 
-// Disconnect 断开节点的当前连接（例如节点被移除时）。
+// Disconnect 断开节点所有的控制连接（例如节点被移除时）。之后这个节点的调用一律拒绝，直到它重新连上。
 func (r *Registry) Disconnect(nodeID string) {
-	r.mu.RLock()
-	c, ok := r.conns[nodeID]
-	r.mu.RUnlock()
-	if ok && c.close != nil {
-		c.close()
+	r.mu.Lock()
+	all := make([]*Conn, 0, len(r.sessions[nodeID])+1)
+	for c := range r.sessions[nodeID] {
+		all = append(all, c)
 	}
+	if c, ok := r.conns[nodeID]; ok {
+		if _, listed := r.sessions[nodeID][c]; !listed {
+			all = append(all, c)
+		}
+		delete(r.conns, nodeID)
+	}
+	r.mu.Unlock()
+	for _, c := range all {
+		if c.close != nil {
+			c.close()
+		}
+	}
+	r.Changes.Bump()
+}
+
+// current 判断 c 是不是节点当前的控制连接。被替换或已经断开的连接上的调用一律拒绝。
+func (r *Registry) current(c *Conn) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.conns[c.NodeID] == c
+}
+
+var errStale = status.Error(codes.Unavailable, "这条控制连接已被替换或节点已移除")
+
+// onlyCurrent 返回只放行节点当前控制连接上的调用的拦截器。
+func (r *Registry) onlyCurrent(c *Conn) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			if !r.current(c) {
+				return nil, errStale
+			}
+			return handler(ctx, req)
+		}, func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			if !r.current(c) {
+				return errStale
+			}
+			return handler(srv, ss)
+		}
+}
+
+// 面板接受节点调用的限制。节点只开一个 gRPC 客户端连接（见 tunnel.Serve 的通道上限），
+// 同时进行的调用通常不超过 5 个（上报、mesh 中转、告警、越权上报、续期），超出的在节点那边排队。
+// 消息大小沿用 gRPC 的默认上限：上报里每个容器一项，大小随容器数增长，改小了容器多的节点会每次上报都失败。
+const (
+	maxRecvMsgSize       = 4 << 20
+	maxConcurrentStreams = 16
+	// 节点每 15 秒上报一次，正常的连接不会空闲这么久。
+	maxConnectionIdle = 5 * time.Minute
+)
+
+// addSession 登记节点的一条控制连接，返回被它替换的旧连接。调用方持有 r.mu。
+func (r *Registry) addSession(c *Conn) (old *Conn) {
+	if r.conns == nil {
+		r.conns = map[string]*Conn{}
+	}
+	if r.sessions == nil {
+		r.sessions = map[string]map[*Conn]struct{}{}
+	}
+	if r.sessions[c.NodeID] == nil {
+		r.sessions[c.NodeID] = map[*Conn]struct{}{}
+	}
+	r.sessions[c.NodeID][c] = struct{}{}
+	old = r.conns[c.NodeID]
+	r.conns[c.NodeID] = c
+	return old
+}
+
+// removeSession 去掉节点的一条控制连接，返回它是不是当时的当前连接。
+func (r *Registry) removeSession(c *Conn) (wasCurrent bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.sessions[c.NodeID], c)
+	if len(r.sessions[c.NodeID]) == 0 {
+		delete(r.sessions, c.NodeID)
+	}
+	if r.conns[c.NodeID] == c {
+		delete(r.conns, c.NodeID)
+		return true
+	}
+	return false
 }
 
 // Online 判断节点是否在线。
@@ -346,24 +427,46 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	if ap, err := netip.ParseAddrPort(conn.RemoteAddr().String()); err == nil {
 		c.remote = ap.Addr().Unmap()
 	}
-	srv := grpc.NewServer()
-	nagiv1.RegisterPanelServiceServer(srv, &panelService{r: r, conn: c})
-	go tunnel.Serve(sess, srv)
-	defer srv.Stop()
-
-	cc, err := tunnel.Dial(sess)
+	cc, err := tunnel.Dial(sess) // 不马上建立连接，第一次调用时才打开通道
 	if err != nil {
 		return
 	}
 	defer cc.Close()
 	c.Agent = nagiv1.NewAgentServiceClient(cc)
 
+	// 先登记成当前连接再开始处理节点的调用：节点连上后马上就会上报，不是当前连接的调用会被拒绝。
+	// 同一个节点的旧连接立即断开：被攻破的节点不能留着旧连接，在移除以后继续调用面板。
 	r.mu.Lock()
-	if old, ok := r.conns[nodeID]; ok && old != c {
-		r.log.Info("节点重新连接，替换旧连接", "node", nodeID)
-	}
-	r.conns[nodeID] = c
+	old := r.addSession(c)
 	r.mu.Unlock()
+	defer func() {
+		r.removeSession(c)
+		r.Changes.Bump()
+		r.updateMesh()
+	}()
+	if old != nil {
+		r.log.Info("节点重新连接，断开旧连接", "node", nodeID)
+		if old.close != nil {
+			old.close()
+		}
+	}
+	// 登记以后再查一次：上面查过以后、登记之前移除的节点，Disconnect 断不到这条连接。
+	if node, err := r.q.GetNode(ctx, nodeID); err != nil || node.Revoked != 0 {
+		r.log.Warn("拒绝未知或已移除的节点", "node", nodeID, "remote", conn.RemoteAddr())
+		return
+	}
+
+	unary, streamGuard := r.onlyCurrent(c)
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(unary), grpc.ChainStreamInterceptor(streamGuard),
+		grpc.MaxRecvMsgSize(maxRecvMsgSize),
+		grpc.MaxConcurrentStreams(maxConcurrentStreams),
+		grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionIdle: maxConnectionIdle}),
+	)
+	nagiv1.RegisterPanelServiceServer(srv, &panelService{r: r, conn: c})
+	go tunnel.Serve(sess, srv)
+	defer srv.Stop()
+
 	r.Changes.Bump()
 	r.log.Info("节点已连接", "node", nodeID, "remote", conn.RemoteAddr())
 
@@ -372,13 +475,6 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	case <-ctx.Done():
 	}
 
-	r.mu.Lock()
-	if r.conns[nodeID] == c {
-		delete(r.conns, nodeID)
-	}
-	r.mu.Unlock()
-	r.Changes.Bump()
-	r.updateMesh()
 	if ctx.Err() == nil {
 		r.touch(context.Background(), nodeID, c.LastReport())
 	}
