@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -49,7 +50,7 @@ func (s *benchServer) ReplicaManifest(context.Context, *nagiv1.ReplicaManifestRe
 }
 
 func (s *benchServer) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
-	return receiveReplica(stream, func(string, string) (string, func(), error) { return s.files, func() {}, nil })
+	return receiveReplica(stream, func(string, string) (string, *metrics.DiskGuard, func(), error) { return s.files, nil, func() {}, nil })
 }
 
 func (s *benchServer) ReplicaCommit(context.Context, *nagiv1.ReplicaCommitRequest) (*nagiv1.ReplicaCommitResponse, error) {

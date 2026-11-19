@@ -3,6 +3,9 @@ package metrics
 import (
 	"bytes"
 	"errors"
+	"io"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -52,5 +55,44 @@ func TestDiskGuard(t *testing.T) {
 	}
 	if buf.Len() != 64<<20 {
 		t.Fatalf("拦下的那次不应该写入: %d", buf.Len())
+	}
+}
+
+// v0.35.0#19：几路并发写共用一个 DiskGuard 时写入量合在一起算：8 路各写 16 MiB（共 128 MiB），
+// 合计写满 64 MiB 后重新检查并拦下。各用各的检查时每路都只在第一次写时检查，全部能写完。
+func TestDiskGuardShared(t *testing.T) {
+	defer func(f func(string) (int64, int64)) { diskSpace = f }(diskSpace)
+	var mu sync.Mutex
+	calls := 0
+	diskSpace = func(string) (int64, int64) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls++
+		if calls == 1 {
+			return 100 << 30, 10 << 30
+		}
+		return 100 << 30, 1 << 30 // 第一次检查以后磁盘满了
+	}
+
+	g := &DiskGuard{Dir: "/"}
+	chunk := make([]byte, 1<<20)
+	var wg sync.WaitGroup
+	var written, blocked atomic.Int64
+	for range 8 {
+		wg.Go(func() {
+			w := g.Writer(io.Discard)
+			for range 16 {
+				if _, err := w.Write(chunk); err != nil {
+					blocked.Add(1)
+					return
+				}
+				written.Add(int64(len(chunk)))
+			}
+		})
+	}
+	wg.Wait()
+	// 合计只能写 64 MiB，最多 4 路写完，其余的被拦下。
+	if blocked.Load() < 4 || written.Load() != DiskCheckEvery {
+		t.Fatalf("合计写满 %d 后应该全部拦下：写了 %d，拦下 %d 路", DiskCheckEvery, written.Load(), blocked.Load())
 	}
 }

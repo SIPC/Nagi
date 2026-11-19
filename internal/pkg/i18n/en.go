@@ -735,6 +735,7 @@ var en = map[string]string{
 	"请填写请求头 %s 的值（接收地址变了时要重新填写）": "Enter a value for header %s (required again when the receiver address changes)",
 	"已在同步": "Already syncing",
 	"另一个节点正在同步这个副本，稍后重试":                      "Another node is syncing this replica. Try again later",
+	"同步这个副本的连接过多，稍后重试":                        "Too many connections are syncing this replica. Try again later",
 	"这次同步要删掉副本里 %d 个文件中的 %d 个，只接受容器所在节点的这种同步": "This sync would delete most of the replica (%d files, %d to delete). Only the node running the container can do that",
 	"日志外送已修改": "Audit log forwarding changed",
 	"上一小时 %d 个 IP 因登录失败次数过多被限速，共失败 %d 次": "In the last hour, %d IPs were rate-limited after too many failed sign-ins (%d failures)",
