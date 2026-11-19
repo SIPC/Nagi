@@ -550,10 +550,10 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
   const chart = (title: string, series: ChartSeries[], format: (v: number) => string, stacked = false) =>
     series.length > 0 && (
       <div className="grid min-w-0 content-start gap-3">
-        {/* 标题和图例分两行，三张图的图形对齐。 */}
+        {/* 标题和图例分两行，三张图的图形对齐。只有一条线时不写图例，留出同样的高度。 */}
         <div className="flex flex-col items-start gap-1">
           <span className="text-[13px] text-muted-foreground">{title}</span>
-          {series.length > 1 && <Legend series={series} />}
+          {series.length > 1 ? <Legend series={series} /> : <span aria-hidden className="h-4" />}
         </div>
         <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} stacked={stacked} quiet={quiet} />
       </div>
@@ -623,7 +623,7 @@ function L4RouteMetrics({ name, data, range, divided, empty }: { name: string; d
     <div className="grid min-w-0 content-start gap-3">
       <div className="flex flex-col items-start gap-1">
         <span className="text-[13px] text-muted-foreground">{title}</span>
-        {series.length > 1 && <Legend series={series} />}
+        {series.length > 1 ? <Legend series={series} /> : <span aria-hidden className="h-4" />}
       </div>
       <TimeChart series={series} from={now - r.seconds} to={now} step={r.step} format={format} />
     </div>
