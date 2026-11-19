@@ -28,7 +28,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### Fixes
 
 - Fixed an issue where some Xiaomi phones could not be added.
-- Fixed several security issues involving phone attestation certificates, the security entrance, permission scope on the home page, node alerts, and compose ports.
+- Fixed several security issues involving snapshots and volume file downloads, phone attestation certificates, the security entrance, permission scope on the home page and in logs, node control connections, node alerts, and compose ports.
 
 ### Behavior changes
 
@@ -37,8 +37,10 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Upgrade notes
 
+- Upgrade nodes to v0.35.0 to fix security issues in snapshots and volume file downloads. Later node upgrades will also show download progress.
 - After updating the panel, update the Android app to v0.35.0.
-- Upgrade nodes to v0.35.0 to see download progress in later node upgrades.
+- Port mappings previously imported from compose and bound only to a local address are still publicly exposed. Check them in the container's "Network" tab.
+- In earlier versions, containers could read files on the node through snapshots and downloads. If untrusted containers have run on a node, replace the keys and passwords stored on it.
 
 ## v0.34.0
 
