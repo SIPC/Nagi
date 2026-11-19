@@ -43,7 +43,7 @@ func TestMemberPasskeysCleared(t *testing.T) {
 		t.Fatal("没有 bob")
 		return 0
 	}
-	_, sc := h.login("admin", "admin-password-1")
+	_, sc := h.loginElevated("admin", "admin-password-1")
 	for _, c := range []struct {
 		name string
 		req  *nagiv1.UpdateUserRequest

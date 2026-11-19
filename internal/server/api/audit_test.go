@@ -81,6 +81,16 @@ func (h *auditHarness) login(username, password string) (nagiv1connect.AuthServi
 	return ac, sc
 }
 
+// loginElevated 登录并做高权限确认（新建、修改成员要先确认）。
+func (h *auditHarness) loginElevated(username, password string) (nagiv1connect.AuthServiceClient, nagiv1connect.SettingsServiceClient) {
+	h.t.Helper()
+	ac, sc := h.login(username, password)
+	if _, err := ac.Elevate(context.Background(), connect.NewRequest(&nagiv1.ElevateRequest{Password: password})); err != nil {
+		h.t.Fatal(err)
+	}
+	return ac, sc
+}
+
 func (h *auditHarness) list(sc nagiv1connect.SettingsServiceClient, f *nagiv1.AuditFilter) []*nagiv1.AuditEvent {
 	h.t.Helper()
 	res, err := sc.ListAuditEvents(context.Background(), connect.NewRequest(&nagiv1.ListAuditEventsRequest{Filter: f, Limit: 200}))
@@ -110,7 +120,7 @@ func TestAuditRecordsAndFilters(t *testing.T) {
 	for range 3 {
 		_, _ = ac.Login(ctx, connect.NewRequest(&nagiv1.LoginRequest{Username: "admin", Password: "wrong-password"}))
 	}
-	_, sc := h.login("admin", "admin-password-1")
+	_, sc := h.loginElevated("admin", "admin-password-1")
 
 	// 新增成员：请求里的密码不能出现在参数里。
 	const secret = "Very-Secret-Password-42"

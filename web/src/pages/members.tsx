@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/confirm";
+import { withElevation } from "@/components/elevate";
 import { avatarSrc, UserAvatar } from "@/components/account";
 import { Alert, Button, Check, checkListClass, Collapse, Dialog, DialogActions, EmptyRow, Field, Input, List, QueryError, Row, RowMenu, RowsSkeleton, Section, Segmented, Select, Spinner, Status } from "@/components/ui";
 import type { PanelUser } from "@/gen/nagi/v1/api_pb";
@@ -215,7 +216,7 @@ function EditAccess({ user, onDone, onCancel }: { user: PanelUser; onDone: () =>
   const [role, setRole] = useState(user.role);
   const [scope, setScope] = useState(() => scopeOf(user));
   const save = useMutation({
-    mutationFn: () => settingsClient.updateUser({ id: user.id, role: role === user.role ? "" : role, scope: role === "admin" ? undefined : scope }),
+    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, role: role === user.role ? "" : role, scope: role === "admin" ? undefined : scope }), t.members.elevate),
     onSuccess: onDone,
   });
   return (
@@ -254,7 +255,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
   const [role, setRole] = useState<string>("operator");
   const [scope, setScope] = useState(fullScope);
   const add = useMutation({
-    mutationFn: () => settingsClient.createUser({ username, password, role, scope: role === "admin" ? fullScope : scope }),
+    mutationFn: () => withElevation(() => settingsClient.createUser({ username, password, role, scope: role === "admin" ? fullScope : scope }), t.members.elevate),
     onSuccess: () => {
       toast.success(t.members.added(username));
       onDone();
@@ -297,7 +298,7 @@ function AddMember({ onDone, onCancel }: { onDone: () => void; onCancel: () => v
 function ResetPassword({ user, onDone, onCancel }: { user: PanelUser; onDone: () => void; onCancel: () => void }) {
   const [password, setPassword] = useState("");
   const reset = useMutation({
-    mutationFn: () => settingsClient.updateUser({ id: user.id, password }),
+    mutationFn: () => withElevation(() => settingsClient.updateUser({ id: user.id, password }), t.members.elevate),
     onSuccess: () => {
       toast.success(user.passkeys.length > 0 ? t.members.passwordResetPasskeys(user.username) : t.members.passwordReset(user.username));
       onDone();
@@ -395,7 +396,7 @@ export function MembersCard() {
                             onSelect: async () => {
                               const msg = u.passkeys.length > 0 ? t.members.clearTotpPasskeysConfirm(u.username) : t.members.clearTotpConfirm(u.username);
                               if (await confirmAction(msg, { action: t.members.clearTotp, danger: true }))
-                                call(() => settingsClient.updateUser({ id: u.id, clearTotp: true }));
+                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearTotp: true }), t.members.elevate));
                             },
                           },
                         ]
@@ -407,7 +408,7 @@ export function MembersCard() {
                             onSelect: async () => {
                               const keys = t.common.list(u.passkeys.map((p) => p.name));
                               if (await confirmAction(t.members.clearPasskeysConfirm(u.username, keys), { action: t.members.clearPasskeys, danger: true }))
-                                call(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true }));
+                                call(() => withElevation(() => settingsClient.updateUser({ id: u.id, clearPasskeys: true }), t.members.elevate));
                             },
                           },
                         ]

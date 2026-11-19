@@ -17,6 +17,7 @@ export default {
     finish: "完成",
     codeRequired: "填写接入码",
     nodesRequired: "选择要移交的节点",
+    elevate: "移交节点前需验证身份。",
   },
   nodePanels: {
     title: "信任的面板",

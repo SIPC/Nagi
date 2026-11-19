@@ -26,6 +26,7 @@ export default {
   showAllSessions: (n) => `Show all (${n})`,
   you: "You",
   editAccess: "Edit access",
+  elevate: "Verify your identity to add or change members. You won't be asked again for 15 minutes.",
   resetPassword: "Reset password",
   passwordReset: (name) => `Password reset for ${name}. The account has been signed out on all devices`,
   clearTotp: "Clear 2FA",

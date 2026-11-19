@@ -25,6 +25,7 @@ export default {
   showAllSessions: (n: number) => `显示全部（${n}）`,
   you: "当前账号",
   editAccess: "编辑权限",
+  elevate: "添加或修改成员前需验证身份。验证后 15 分钟内无需再次验证。",
   resetPassword: "重置密码",
   passwordReset: (name: string) => `已重置 ${name} 的密码，该账号已在所有设备退出登录`,
   clearTotp: "清除两步验证",

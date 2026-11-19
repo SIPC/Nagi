@@ -50,6 +50,12 @@ var tokenElevationRules = map[string]string{
 	nagiv1connect.NodeServicePruneNodeImagesProcedure:              "write",
 	// 添加手机：令牌一律不行（也不在 tokenAccount 里）。
 	nagiv1connect.AuthServiceCreateAppPairingProcedure: "",
+	// 备用面板、移交节点、成员：令牌一律不行。
+	nagiv1connect.SettingsServiceCreateStandbyCodeProcedure: "",
+	nagiv1connect.NodeServiceHandoverNodesProcedure:         "",
+	nagiv1connect.SettingsServicePromoteStandbyProcedure:    "",
+	nagiv1connect.SettingsServiceCreateUserProcedure:        "",
+	nagiv1connect.SettingsServiceUpdateUserProcedure:        "",
 }
 
 // 每个要确认的接口都按上表判断：各种令牌（勾的选项、角色）能不能调用、算不算确认过；网页的会话只看有没有做过确认。
