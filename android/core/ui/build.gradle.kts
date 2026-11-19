@@ -27,5 +27,8 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    // 终端：Termux 的解析和绘制（Apache 2.0），连接由 App 自己接（见 Terminal.kt）。
+    api(libs.termux.terminal.emulator)
+    implementation(libs.termux.terminal.view)
     testImplementation(libs.junit)
 }

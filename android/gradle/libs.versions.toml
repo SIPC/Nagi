@@ -15,6 +15,7 @@ coroutines = "1.11.0"
 fragment = "1.8.9"
 coreKtx = "1.17.0"
 junit = "4.13.2"
+termux = "v0.118.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -43,6 +44,8 @@ connect-javalite = { module = "com.connectrpc:connect-kotlin-google-javalite-ext
 protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobuf" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
+termux-terminal-view = { module = "com.github.termux.termux-app:terminal-view", version.ref = "termux" }
+termux-terminal-emulator = { module = "com.github.termux.termux-app:terminal-emulator", version.ref = "termux" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
