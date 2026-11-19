@@ -174,12 +174,19 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 		out.Params = v.scrub(stripAddressParams(out.Params))
 		// MCP 调用的记录：失败详情是工具返回的文字，参数是工具的原始参数（节点可以按名称写），都没有标记。
 		// 有看不到的节点时不给失败详情，参数里和节点有关的键去掉；它下面的接口调用记录带着按标记换过的详情。
-		if e.Category == audit.MCP && len(v.hidden) > 0 {
+		if v.hideMCP(e) {
 			out.Error = ""
 			out.Params = stripParams(out.Params, func(k string) bool { return strings.Contains(strings.ToLower(k), "node") || addressParam(k) })
 		}
 	}
 	return out
+}
+
+// hideMCP：这条是 MCP 调用的记录，而且查看者有看不到的节点。这类记录的失败详情是工具返回的普通文字，
+// 参数是工具的原始参数（节点可以按名称写），都没有标记，可能写着他看不到的节点的名称：审计页和项目事件页都
+// 不给失败详情（它下面的接口调用记录带着按标记换过的），参数里和节点有关的键去掉。
+func (v auditViewer) hideMCP(e audit.Event) bool {
+	return !v.admin && e.Category == audit.MCP && len(v.hidden) > 0
 }
 
 // addressParam 判断审计参数的键是不是地址类的（B9）：issued_ip、ip、address、endpoint 这些。
@@ -205,6 +212,12 @@ func stripParams(params string, drop func(key string) bool) string {
 	strip = func(v any) any {
 		switch t := v.(type) {
 		case map[string]any:
+			// 太长被截断的参数（audit.TruncateParams）：head 是原文的开头，是一段字符串，里面的键去不掉，整段不给。
+			if t["truncated"] == true {
+				if _, ok := t["head"].(string); ok {
+					delete(t, "head")
+				}
+			}
 			for k, x := range t {
 				if drop(k) {
 					delete(t, k)
@@ -356,6 +369,10 @@ func (v auditViewer) activityEntry(e audit.Event, names auditNames) *nagiv1.Acti
 	e.Error = v.refs(e.Error)
 	if !v.admin {
 		e.Error = v.scrub(e.Error)
+		// MCP 调用的记录不给失败详情，和审计页一样（见 hideMCP）。
+		if v.hideMCP(e) {
+			e.Error = ""
+		}
 		if e.ActorType == "node" && !v.x.node(e.ActorID) {
 			e.ActorName = v.other
 		}
