@@ -96,6 +96,7 @@ internal class Action(private val scope: CoroutineScope, private val elevationTe
                 throw e
             } catch (e: ElevationRequiredException) {
                 // App 还不能做高权限确认（AppService.Elevate 还没有做），这一项先在网页上操作。
+                // 配对备用面板、提升为主面板、新建和修改成员也要确认（v0.35.0#8），旧面板不要求时照常完成。
                 error = elevationText
             } catch (e: Exception) {
                 error = e.message.orEmpty()

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -120,6 +121,8 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
     val users = rememberLoad { session.rpc { c, h -> c.settings.listUsers(ListUsersRequest.getDefaultInstance(), h) }.usersList }
     val action = rememberAction()
     var dialog by remember { mutableStateOf<String?>(null) }
+    // 打开、关上确认框时清掉上一次的错误，免得别的操作的错误写进这个确认框。
+    LaunchedEffect(dialog) { action.error = null }
     val u = users.value?.firstOrNull { it.id == id }
     SubPage(u?.let { it.displayName.ifEmpty { it.username } } ?: stringResource(R.string.members), onBack) {
         ActionError(action)
@@ -181,7 +184,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                     confirm = stringResource(R.string.member_demote_self), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "save",
                     onDismiss = { dialog = null },
                     onConfirm = { action.run("save") { saveAccess(session, user, role, scope); dialog = null; users.reload() } },
-                )
+                ) { ActionError(action) }
                 "password" -> {
                     var pw by remember { mutableStateOf("") }
                     NagiDialog(
@@ -215,7 +218,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                             users.reload()
                         }
                     },
-                )
+                ) { ActionError(action) }
                 "passkeys" -> NagiDialog(
                     title = stringResource(R.string.member_clear_passkeys),
                     text = stringResource(R.string.member_clear_passkeys_confirm, name, user.passkeysList.joinToString("、") { it.name }),
@@ -228,7 +231,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                             users.reload()
                         }
                     },
-                )
+                ) { ActionError(action) }
                 "delete" -> NagiDialog(
                     title = stringResource(R.string.member_delete), text = stringResource(R.string.member_delete_confirm, name),
                     confirm = stringResource(R.string.delete), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "delete",
@@ -240,7 +243,7 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                             onBack()
                         }
                     },
-                )
+                ) { ActionError(action) }
             }
         }
     }
