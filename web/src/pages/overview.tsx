@@ -424,26 +424,28 @@ function Sankey({ rows: allRows, flows: allFlows, view }: { rows: SankeyRow[]; f
           </div>
         </div>
       )}
-      {/* 读屏：图只有一句总结，具体路径在表格里。 */}
-      <table className="sr-only">
-        <caption>{o.flow.caption}</caption>
-        <thead>
-          <tr>
-            <th>{o.flow.from}</th>
-            <th>{o.flow.to}</th>
-            <th>{o.flow.rate}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {flows.map((f) => (
-            <tr key={`${f.from}|${f.to}|${f.kind}`}>
-              <td>{nameOf(f.from)}</td>
-              <td>{nameOf(f.to)}</td>
-              <td>{fmtRate(f.rate)}</td>
+      {/* 读屏：图只有一句总结，具体路径在表格里。sr-only 加在外层：表格不受 height 和 overflow 限制，直接加会把页面撑高。 */}
+      <div className="sr-only">
+        <table>
+          <caption>{o.flow.caption}</caption>
+          <thead>
+            <tr>
+              <th>{o.flow.from}</th>
+              <th>{o.flow.to}</th>
+              <th>{o.flow.rate}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {flows.map((f) => (
+              <tr key={`${f.from}|${f.to}|${f.kind}`}>
+                <td>{nameOf(f.from)}</td>
+                <td>{nameOf(f.to)}</td>
+                <td>{fmtRate(f.rate)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

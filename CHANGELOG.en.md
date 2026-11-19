@@ -42,7 +42,11 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Access tokens need "Panel administration" selected to change project groups and node tags.
 - Pulling from a git repository is limited to 30 minutes and stops when the node runs low on disk space or the repository has more than 1,000,000 files.
 - Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
-- Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
+- Compose files whose ports and expose entries add up to more than 1,000 after expanding ranges can no longer be saved or deployed.
+- Snapshots are no longer created when a source directory is a symbolic link.
+- Scheduled snapshots and snapshot repository maintenance are limited to 6 hours.
+- A node's projects root cannot be set to a system directory such as `/etc`, `/usr`, or `/run`.
+- Your own password can no longer be reset in "Members". Change it in "Account security".
 - Creating or editing members and roles, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity, with a password or verification code only.
 - Deleting members and roles requires verifying your identity.
 - Saving or deploying privileged configuration, opening a terminal in a privileged container, and changing files in a privileged container require verifying your identity.
@@ -50,6 +54,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Parameters and failure details in Audit are shown only to members with permission for that action, and webhook URLs only to members with the "Deploy" permission.
 - The node install command now passes the join token in an environment variable. If you use sudo, run `sudo -i` first.
 - Each invite code can add up to 20 nodes, and up to 20 nodes can be handed over at a time. Nodes with the same name get a number added automatically, and node names cannot contain invisible characters.
+- Up to 16 nodes awaiting approval can be connected at a time, and up to 4 from the same source address. The rest connect after approval.
 - In MCP, nodes that share a name must be specified by node ID.
 - Node join notifications show the source address, and multiple joins with the same invite code in a short time are combined into one notification.
 - Terminals opened in the Android app are disconnected after the unlock duration has passed.
@@ -63,6 +68,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - After updating the panel, update the Android app to v0.35.0.
 - Node install commands generated before the update and not yet run must be generated again.
 - Check port mappings previously imported from compose in the container's "Network" tab.
+- Compose files with more than 1,000 ports must be saved again with fewer ports.
 - If untrusted containers have run on a node, we recommend replacing the keys and passwords stored on it.
 
 ## v0.34.0
