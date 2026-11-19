@@ -50,7 +50,7 @@ func TestWatchSession(t *testing.T) {
 		done := make(chan error, 1)
 		go func() {
 			defer cancel()
-			a.watchSession(ctx, token, u, func(cur auth.User) error {
+			a.watchSession(ctx, u, nil, appByDevice, func(cur auth.User) error {
 				return a.containerAccess(ctx, cur, "p1", allowed)
 			}, func(err error) { done <- err })
 			close(done)

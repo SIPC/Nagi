@@ -261,7 +261,6 @@ func (a *API) recordNodeShellOpen(ctx context.Context, nodeID, ip, recordingID s
 func (a *API) NodeShellHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
-		token := auth.SessionToken(r.Header)
 		u, err := a.Auth.RequestUser(r)
 		if err != nil {
 			http.Error(w, i18n.Sprintf(lang, "请先登录"), http.StatusUnauthorized)
@@ -323,7 +322,7 @@ func (a *API) NodeShellHandler() http.Handler {
 
 		// 定时重查：踢出登录、降权之后要断开；太久没有动静、用了太久也断开。
 		lastActive := newActivityClock()
-		go a.watchSession(ctx, token, u, func(cur auth.User) error {
+		go a.watchSession(ctx, u, r.Header, appByDevice, func(cur auth.User) error {
 			switch {
 			case cur.Role != auth.RoleAdmin:
 				return errRoleChanged

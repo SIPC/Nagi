@@ -730,9 +730,16 @@ func (s *Service) AppTokenUser(ctx context.Context, token, ip string) (User, err
 	if _, network := Network(ip); network != t.network {
 		return User{}, &ErrAppRetoken{Reason: "network"}
 	}
-	d, err := s.q.AppDeviceByID(ctx, t.deviceID)
+	return s.DeviceUser(ctx, t.deviceID, ip)
+}
+
+// DeviceUser 按设备记录返回手机所属的成员（角色和访问范围按成员当前的设置）：设备记录还在（没有被退出，
+// 成员没有被删除、没有改密码），管理员还要从允许的地址来。不看令牌。AppTokenUser 核对完令牌后用它；
+// App 打开的终端也用它定时重查（见 docs/android.md#换取令牌）。
+func (s *Service) DeviceUser(ctx context.Context, deviceID, ip string) (User, error) {
+	d, err := s.q.AppDeviceByID(ctx, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
-		s.dropDeviceTokens(t.deviceID)
+		s.dropDeviceTokens(deviceID)
 		return User{}, errDeviceNotFound
 	} else if err != nil {
 		return User{}, err
