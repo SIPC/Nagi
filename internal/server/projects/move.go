@@ -28,7 +28,7 @@ func (s *Service) targetNode(ctx context.Context, nodeID string) (*nodes.Conn, s
 		return nil, n, s.nodeErr(ctx, nodeID, err)
 	}
 	if len(n.MeshKey) == 0 {
-		return nil, n, invalid("节点 %s 还没有加入节点网络", n.Name)
+		return nil, n, invalid("节点 %s 还没有加入节点网络", i18n.NodeRef(n.ID, n.Name))
 	}
 	return conn, n, nil
 }
@@ -68,7 +68,7 @@ func (s *Service) checkPlacement(ctx context.Context, conn *nodes.Conn, p store.
 			return nil, err
 		}
 		if r.GetProxyProtocol() && !r.GetNoLocalEntry() && !conn.LastReport().GetNode().GetProxyProtocol() {
-			return nil, invalid("节点 %s 版本过低，升级后才能使用 PROXY protocol", s.NodeName(ctx, conn.NodeID))
+			return nil, invalid("节点 %s 版本过低，升级后才能使用 PROXY protocol", s.NodeRef(ctx, conn.NodeID))
 		}
 	}
 	sp.Dir = dir
@@ -236,7 +236,7 @@ func (s *Service) Migrate(ctx context.Context, projectID, name, nodeID, dir stri
 		return err
 	}
 	if len(sourceNode.MeshKey) == 0 {
-		return invalid("节点 %s 还没有加入节点网络", sourceNode.Name)
+		return invalid("节点 %s 还没有加入节点网络", i18n.NodeRef(sourceNode.ID, sourceNode.Name))
 	}
 	target, targetNode, err := s.targetNode(ctx, nodeID)
 	if err != nil {

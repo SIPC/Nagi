@@ -496,7 +496,7 @@ func (s *nodeService) CancelNodeUpgrade(ctx context.Context, req *connect.Reques
 func (a *API) cancelNodeInstall(ctx context.Context, id string) error {
 	conn, err := a.Nodes.Get(id)
 	if err != nil {
-		return i18n.Errorf("节点 %s 离线，无法取消升级", a.nodeName(ctx, id))
+		return i18n.Errorf("节点 %s 离线，无法取消升级", a.nodeRef(ctx, id))
 	}
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -505,11 +505,11 @@ func (a *API) cancelNodeInstall(ctx context.Context, id string) error {
 	case codes.OK, codes.NotFound:
 		return nil
 	case codes.Unimplemented:
-		return i18n.Errorf("节点 %s 版本过低，无法取消正在进行的下载，请等待完成或超时", a.nodeName(ctx, id))
+		return i18n.Errorf("节点 %s 版本过低，无法取消正在进行的下载，请等待完成或超时", a.nodeRef(ctx, id))
 	case codes.FailedPrecondition:
-		return i18n.Errorf("节点 %s 已替换为新版本，正在重启，无法取消", a.nodeName(ctx, id))
+		return i18n.Errorf("节点 %s 已替换为新版本，正在重启，无法取消", a.nodeRef(ctx, id))
 	}
-	return i18n.Detail(i18n.Errorf("无法连接节点 %s，未能取消升级，请稍后重试", a.nodeName(ctx, id)), err)
+	return i18n.Detail(i18n.Errorf("无法连接节点 %s，未能取消升级，请稍后重试", a.nodeRef(ctx, id)), err)
 }
 
 func newUpdateState(target, from, phase string) *updateState {

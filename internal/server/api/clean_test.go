@@ -4,6 +4,8 @@ import (
 	"connectrpc.com/connect"
 	"context"
 	"errors"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/server/nodes"
 	"google.golang.org/protobuf/proto"
 	"slices"
 	"sort"
@@ -387,34 +389,56 @@ func TestScrubEdges(t *testing.T) {
 	}
 }
 
-// 报错里看不到的节点名换成「其他节点」，但请求里自己写了的词不换：否则填一个猜的名称、看它有没有被换掉，
-// 就能确认有没有这台节点（2026-11-19-402545d#1）。
-func TestScrubErrorNoOracle(t *testing.T) {
+// 报错里的节点只按引用换（i18n.Redact）：面板生成的「节点 xx 离线」这类报错，看不到的节点换成「其他节点」；
+// 请求的人写进报错的文字不管怎么写都不换，所以不能借「换没换」探出有没有某个名称的节点
+// （2026-11-19-7b50402#1、#2）。
+func TestScrubErrorByRef(t *testing.T) {
 	a := cleanTest(t)
 	ctx := context.Background()
 	x := memberAccess(auth.PresetOperator)
-	hidden := a.hiddenNames(ctx, x)
-	if len(hidden) == 0 {
+	names := a.nodeNames(ctx, x)
+	hiddenID, hiddenName := "", ""
+	for id, n := range names {
+		if !x.node(id) && n != "" {
+			hiddenID, hiddenName = id, n
+		}
+	}
+	if hiddenID == "" {
 		t.Fatal("测试数据里应该有看不到的节点")
 	}
-	name := hidden[0]
-	offline := connect.NewError(connect.CodeUnavailable, errors.New("节点 "+name+" 离线"))
-	offline.Meta().Set("X-Test", "kept")
-	got := a.scrubError(ctx, x, offline, `{"projectId":"p1"}`)
-	if !strings.Contains(got.Error(), "节点 其他节点 离线") || connect.CodeOf(got) != connect.CodeUnavailable {
-		t.Errorf("节点名应该换掉、错误码保留：%v", got)
+	text := func(err error) string { return errorText(i18n.FromContext(ctx), err) }
+	// 面板生成的报错：按引用换，错误码和响应头保留。
+	gen := connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低", i18n.NodeRef(hiddenID, hiddenName)))
+	gen.Meta().Set("X-Test", "kept")
+	got := a.scrubError(ctx, x, gen)
+	if text(got) != "节点 其他节点 版本过低" || connect.CodeOf(got) != connect.CodeFailedPrecondition {
+		t.Errorf("面板生成的报错：%q %v", text(got), connect.CodeOf(got))
 	}
 	var ce *connect.Error
 	if !errors.As(got, &ce) || ce.Meta().Get("X-Test") != "kept" {
 		t.Error("响应头应该保留")
 	}
-	// 请求里写了这个词：有没有这台节点，报错都一样。
-	echo := connect.NewError(connect.CodeInvalidArgument, errors.New("权限 "+name+" 不存在"))
-	if got := a.scrubError(ctx, x, echo, `{"permissions":["`+name+`"]}`); !strings.Contains(got.Error(), "权限 "+name+" 不存在") {
-		t.Errorf("请求里自己写的词不该换：%v", got)
+	// 节点离线的错误，包在别的报错里也一样；errors.Is 照常能认。
+	off := nodes.NewOfflineError(hiddenID, hiddenName)
+	wrapped := connect.NewError(connect.CodeUnavailable, i18n.Errorf("同步失败：%w", off))
+	got = a.scrubError(ctx, x, wrapped)
+	if text(got) != "同步失败：节点 其他节点 离线" || !errors.Is(got, nodes.ErrOffline) {
+		t.Errorf("节点离线：%q", text(got))
 	}
-	// 请求里只是别的词的一部分，不算写了。
-	if got := a.scrubError(ctx, x, offline, `{"name":"`+name+`-prod"}`); strings.Contains(got.Error(), "节点 "+name+" 离线") {
-		t.Errorf("只是别的词的一部分时照样要换：%v", got)
+	// 看得到的节点不换。
+	visible := connect.NewError(connect.CodeUnavailable, nodes.NewOfflineError("n1", names["n1"]))
+	if got := a.scrubError(ctx, x, visible); text(got) != "节点 "+names["n1"]+" 离线" {
+		t.Errorf("看得到的节点不该换：%q", text(got))
+	}
+	// 请求的人写进报错的文字：整词、跟在换行后面、和别的词放在一起，都原样返回。
+	for _, typed := range []string{hiddenName, "x" + string(rune(10)) + hiddenName, "a1 " + hiddenName + " c"} {
+		echo := connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("权限 %s 不存在", typed))
+		if got := a.scrubError(ctx, x, echo); got != error(echo) {
+			t.Errorf("请求里写的 %q 不该让报错被改：%q", typed, text(got))
+		}
+	}
+	// 管理员不换。
+	if got := a.scrubError(ctx, nil, gen); got != error(gen) {
+		t.Error("管理员的报错不该改")
 	}
 }

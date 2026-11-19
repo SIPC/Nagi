@@ -744,6 +744,12 @@ func (s *Service) agent(ctx context.Context, nodeID string) (nagiv1.AgentService
 	return conn.Agent, nil
 }
 
+// NodeRef 是报错里提到节点时用的引用：文字里是名称，另外带着 ID，返回给成员前可以按他看不看得到这台节点换掉
+// 名称（api 的 scrubError）。生成报错时用它，不要直接拼名称。
+func (s *Service) NodeRef(ctx context.Context, nodeID string) i18n.Ref {
+	return i18n.NodeRef(nodeID, s.NodeName(ctx, nodeID))
+}
+
 func (s *Service) NodeName(ctx context.Context, nodeID string) string {
 	if n, err := s.Q.GetNode(ctx, nodeID); err == nil {
 		return n.Name

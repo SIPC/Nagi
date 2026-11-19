@@ -54,7 +54,7 @@ func (s *Service) ListVolumes(ctx context.Context, projectID, name string) (*nag
 	}
 	out, err := agent.ListVolumes(ctx, &nagiv1.ContainerRef{ProjectId: projectID, Container: name})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, i18n.Errorf("节点 %s 版本过低，升级后才能查看存储", s.NodeName(ctx, c.NodeID))
+		return nil, i18n.Errorf("节点 %s 版本过低，升级后才能查看存储", s.NodeRef(ctx, c.NodeID))
 	}
 	return out, err
 }
@@ -145,7 +145,7 @@ func (s *Service) DeleteSnapshot(ctx context.Context, projectID, name, snapshotI
 	}
 	_, err = agent.DeleteSnapshot(ctx, &nagiv1.RestoreSnapshotRequest{ProjectId: projectID, Container: name, SnapshotId: snapshotID})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, i18n.Errorf("节点 %s 版本过低，升级后才能删除快照", s.NodeName(ctx, c.NodeID))
+		return nil, i18n.Errorf("节点 %s 版本过低，升级后才能删除快照", s.NodeRef(ctx, c.NodeID))
 	} else if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func (s *Service) ControlContainer(ctx context.Context, projectID, name string, 
 	}
 	_, err = recvResult(stream.Recv, out)
 	if status.Code(err) == codes.Unimplemented {
-		return i18n.Errorf("节点 %s 版本过低，升级后才能启动、停止或重启容器", s.NodeName(ctx, c.NodeID))
+		return i18n.Errorf("节点 %s 版本过低，升级后才能启动、停止或重启容器", s.NodeRef(ctx, c.NodeID))
 	}
 	return err
 }
@@ -211,7 +211,7 @@ func (s *Service) ControlService(ctx context.Context, projectID, name, service s
 	}
 	_, err = recvResult(stream.Recv, out)
 	if status.Code(err) == codes.Unimplemented {
-		return i18n.Errorf("节点 %s 版本过低，升级后才能单独启动、停止或重启服务", s.NodeName(ctx, c.NodeID))
+		return i18n.Errorf("节点 %s 版本过低，升级后才能单独启动、停止或重启服务", s.NodeRef(ctx, c.NodeID))
 	}
 	return err
 }

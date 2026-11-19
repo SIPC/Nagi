@@ -228,6 +228,11 @@ func nodeAccessError(err error) error {
 
 // ---- 活动记录 ----
 
+// nodeRef 是报错里提到节点时用的引用（见 projects.Service.NodeRef）。
+func (a *API) nodeRef(ctx context.Context, nodeID string) i18n.Ref {
+	return i18n.NodeRef(nodeID, a.nodeName(ctx, nodeID))
+}
+
 // nodeName 返回节点在面板上显示的名称。
 func (a *API) nodeName(ctx context.Context, nodeID string) string {
 	if n, err := a.Q.GetNode(ctx, nodeID); err == nil && n.Name != "" {

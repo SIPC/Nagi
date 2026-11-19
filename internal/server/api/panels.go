@@ -157,7 +157,7 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 	}
 	for _, id := range ids {
 		if _, err := s.agent(id); err != nil {
-			return nil, connect.NewError(connect.CodeUnavailable, i18n.Errorf("节点 %s 离线，无法移交", s.Projects.NodeName(ctx, id)))
+			return nil, connect.NewError(connect.CodeUnavailable, i18n.Errorf("节点 %s 离线，无法移交", s.Projects.NodeRef(ctx, id)))
 		}
 	}
 	// 移交按整个项目：项目相关的节点必须一起移交，免得项目被拆到两个面板上。

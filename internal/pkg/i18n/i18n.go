@@ -313,3 +313,68 @@ func patternsFor(l Lang, cat map[string]string) []pattern {
 	}{cat, list}
 	return list
 }
+
+// Ref 是错误文字里提到的一个对象（现在只有节点）：格式化时就是它的名称，另外带着 ID。
+// 面板生成报错时把节点作为 Ref 传给 Errorf，之后可以按查看的人换掉名称（见 Redact），不用在整段文字里找名称。
+type Ref struct{ Kind, ID, Name string }
+
+func (r Ref) String() string { return r.Name }
+
+// NodeRef 是对一个节点的引用。
+func NodeRef(id, name string) Ref { return Ref{Kind: "node", ID: id, Name: name} }
+
+// Redactor 是能把自己提到的对象换个名称的错误（例如节点离线的错误）。没有要换的返回 false。
+type Redactor interface {
+	Redact(hide func(Ref) (string, bool)) (error, bool)
+}
+
+// Redact 把 err 里提到的对象换掉名称：hide 返回 (新的名称, true) 的换。返回换过的错误，以及有没有换。
+// 只认结构上的引用：Errorf 的参数里的 Ref、参数里的错误、Detail、实现了 Redactor 的错误，以及只是加了类型的包装
+// （文字和里面的错误完全相同）。不在文字里找名称：请求的人自己写进报错的文字怎么写都不会被换，也就不能借
+// 「换没换」探出有没有某个名称的对象。
+func Redact(err error, hide func(Ref) (string, bool)) (error, bool) {
+	switch e := err.(type) {
+	case nil:
+		return nil, false
+	case Redactor:
+		return e.Redact(hide)
+	case *Error:
+		if e.literal {
+			return err, false
+		}
+		args := make([]any, len(e.args))
+		changed := false
+		for i, a := range e.args {
+			args[i] = a
+			switch v := a.(type) {
+			case Ref:
+				if name, ok := hide(v); ok {
+					args[i], changed = name, true
+				}
+			case error:
+				if r, ok := Redact(v, hide); ok {
+					args[i], changed = r, true
+				}
+			}
+		}
+		if !changed {
+			return err, false
+		}
+		return Errorf(e.format, args...), true
+	case detailed:
+		// cause 只留给日志，文字里会附在后面：err 换过时一起换，换不了的就不带了。
+		r, changed := Redact(e.err, hide)
+		c, cc := Redact(e.cause, hide)
+		if !changed && !cc {
+			return err, false
+		}
+		return detailed{r, c}, true
+	}
+	// 只是加了类型的包装：换里面的。
+	if u, ok := err.(interface{ Unwrap() error }); ok {
+		if inner := u.Unwrap(); inner != nil && inner.Error() == err.Error() {
+			return Redact(inner, hide)
+		}
+	}
+	return err, false
+}

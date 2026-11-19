@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"slices"
 	"strings"
 
@@ -15,7 +15,6 @@ import (
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/projects"
 	"github.com/SIPC/nagi/internal/server/store"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -398,7 +397,7 @@ func (s scopeCheck) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			s.a.afterCall(ctx, x, procedure, res.Any())
 			s.a.filterReply(ctx, x, res.Any())
 		}
-		return res, s.a.scrubError(ctx, x, err, requestText(req.Any()))
+		return res, s.a.scrubError(ctx, x, err)
 	}
 }
 
@@ -415,8 +414,7 @@ func (s scopeCheck) WrapStreamingHandler(next connect.StreamingHandlerFunc) conn
 		if x == nil {
 			return next(ctx, conn)
 		}
-		sc := &scopedConn{StreamingHandlerConn: conn, ctx: ctx, a: s.a, x: x}
-		return s.a.scrubError(ctx, x, next(ctx, sc), sc.given)
+		return s.a.scrubError(ctx, x, next(ctx, &scopedConn{StreamingHandlerConn: conn, ctx: ctx, a: s.a, x: x}))
 	}
 }
 
@@ -426,16 +424,11 @@ type scopedConn struct {
 	ctx context.Context
 	a   *API
 	x   *access
-	// given 是收到的请求的文字（见 scrubError）。
-	given string
 }
 
 func (c *scopedConn) Receive(msg any) error {
 	if err := c.StreamingHandlerConn.Receive(msg); err != nil {
 		return err
-	}
-	if len(c.given) < maxGivenText {
-		c.given += requestText(msg)
 	}
 	return c.a.checkRequest(c.ctx, c.x, c.Spec().Procedure, msg)
 }
@@ -445,40 +438,33 @@ func (c *scopedConn) Send(msg any) error {
 	return c.StreamingHandlerConn.Send(msg)
 }
 
-// scrubError 清理接口的报错：非管理员看不到的节点的名称和 ID 不能出现在报错里（「节点 xx 离线」之类，
-// 2026-11-19-87c02b5#9）。没有要换的内容时原样返回（保留错误码、响应头和可以按语言翻译的原文）。
-// given 是请求的文字：请求里自己写了的名称不换（见 scrubNodesExcept）。
-func (a *API) scrubError(ctx context.Context, x *access, err error, given string) error {
+// scrubError 清理接口的报错：非管理员看不到的节点的名称不能出现在报错里（「节点 xx 离线」之类）。
+// 只按引用换（i18n.Redact）：面板生成报错时把节点作为带 ID 的引用传进去（NodeRef、nodeRef、nodes.OfflineError），
+// 这里按 ID 判断看不看得到，看不到的换成「其他节点」。不在文字里找名称：请求里的文字被写回报错时怎么写都不会被换，
+// 所以不能借「换没换」探出有没有某个名称的节点（2026-11-19-7b50402#1、#2）。
+// 没有要换的时原样返回（保留错误码、响应头和可以按语言翻译的原文）。
+func (a *API) scrubError(ctx context.Context, x *access, err error) error {
 	if x == nil || err == nil {
 		return err
 	}
-	text := errorText(i18n.FromContext(ctx), err)
-	clean := a.scrubNodesExcept(ctx, x, text, given)
-	if clean == text {
-		return err
+	hide := func(r i18n.Ref) (string, bool) {
+		if r.Kind == "node" && !x.node(r.ID) {
+			return otherNode(ctx), true
+		}
+		return "", false
 	}
-	out := connect.NewError(connect.CodeOf(err), errors.New(clean))
 	var ce *connect.Error
 	if errors.As(err, &ce) {
+		inner, changed := i18n.Redact(ce.Unwrap(), hide)
+		if !changed {
+			return err
+		}
+		out := connect.NewError(ce.Code(), inner)
 		for k, v := range ce.Meta() {
 			out.Meta()[k] = v
 		}
+		return out
 	}
+	out, _ := i18n.Redact(err, hide)
 	return out
-}
-
-// maxGivenText 是流式接口记下的请求文字的上限。
-const maxGivenText = 1 << 20
-
-// requestText 是请求的文字（JSON），用来判断报错里的词是不是请求的人自己写的。
-func requestText(msg any) string {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return ""
-	}
-	b, err := protojson.Marshal(m)
-	if err != nil {
-		return ""
-	}
-	return string(b)
 }

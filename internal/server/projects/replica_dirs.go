@@ -32,7 +32,7 @@ func (s *Service) SupportsReplicaDirs(ctx context.Context, nodeID string) bool {
 
 // errOldNodeReplicaDir 是节点不支持选择副本存放位置时的错误。
 func (s *Service) errOldNodeReplicaDir(ctx context.Context, nodeID string) error {
-	return invalid("节点 %s 版本过低，升级后才能选择副本的存放位置", s.NodeName(ctx, nodeID))
+	return invalid("节点 %s 版本过低，升级后才能选择副本的存放位置", s.NodeRef(ctx, nodeID))
 }
 
 // nodeMessage 把节点返回的 gRPC 错误换成只有文字的错误（去掉 "rpc error: code = ..."），包进面板的说明里时按语言翻译。
@@ -110,7 +110,7 @@ func (s *Service) SetBackupReplicaDir(ctx context.Context, projectID, name, node
 		return err
 	}
 	if !slices.Contains(store.BackupNodes(c), nodeID) {
-		return invalid("节点 %s 不是容器 %s 的备份节点", s.NodeName(ctx, nodeID), name)
+		return invalid("节点 %s 不是容器 %s 的备份节点", s.NodeRef(ctx, nodeID), name)
 	}
 	conn, err := s.Nodes.Get(nodeID)
 	if err != nil {

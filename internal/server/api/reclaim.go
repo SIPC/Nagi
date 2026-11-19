@@ -42,7 +42,7 @@ func (s *nodeService) ReclaimNodeSnapshots(ctx context.Context, req *connect.Req
 		case errors.Is(err, io.EOF):
 			return 0, i18n.New("节点没有返回结果，请升级节点后重试")
 		case status.Code(err) == codes.Unimplemented:
-			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能清理快照仓库", s.nodeName(ctx, req.Msg.GetNodeId()))
+			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能清理快照仓库", s.nodeRef(ctx, req.Msg.GetNodeId()))
 		}
 		return 0, err
 	})
@@ -59,7 +59,7 @@ func (s *nodeService) SetNodeReplicaDir(ctx context.Context, req *connect.Reques
 			return 0, err
 		}
 		if !conn.LastReport().GetNode().GetReplicaDirs() {
-			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能选择副本的存放位置", s.nodeName(ctx, nodeID))
+			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能选择副本的存放位置", s.nodeRef(ctx, nodeID))
 		}
 		stream, err := conn.Agent.SetReplicaDir(context.WithoutCancel(ctx), &nagiv1.SetReplicaDirRequest{Dir: strings.TrimSpace(req.Msg.GetDir())})
 		for err == nil {
@@ -81,7 +81,7 @@ func (s *nodeService) SetNodeReplicaDir(ctx context.Context, req *connect.Reques
 		case errors.Is(err, io.EOF):
 			return 0, i18n.New("节点没有返回结果，请升级节点后重试")
 		case status.Code(err) == codes.Unimplemented:
-			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能选择副本的存放位置", s.nodeName(ctx, nodeID))
+			return 0, i18n.Errorf("节点 %s 版本过低，升级后才能选择副本的存放位置", s.nodeRef(ctx, nodeID))
 		}
 		return 0, err
 	})

@@ -53,7 +53,7 @@ func (a *API) composeDir(ctx context.Context, nodeID, dir string) (*nagiv1.Conta
 	}
 	res, err := conn.Agent.InspectComposeDir(ctx, &nagiv1.InspectComposeDirRequest{Path: dir})
 	if status.Code(err) == codes.Unimplemented {
-		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低，升级后才能导入现有目录", a.nodeName(ctx, nodeID)))
+		return nil, nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过低，升级后才能导入现有目录", a.nodeRef(ctx, nodeID)))
 	} else if err != nil {
 		return nil, nil, fromGRPC(err)
 	}

@@ -29,7 +29,7 @@ func HashToken(token string) string {
 // nodeErr 把节点离线的错误换成带节点名称的（errors.Is 照样能识别为 nodes.ErrOffline）。
 func (s *Service) nodeErr(ctx context.Context, nodeID string, err error) error {
 	if errors.Is(err, nodes.ErrOffline) {
-		return nodes.NewOfflineError(s.NodeName(ctx, nodeID))
+		return nodes.NewOfflineError(nodeID, s.NodeName(ctx, nodeID))
 	}
 	return err
 }

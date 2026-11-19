@@ -125,7 +125,9 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 			delete(s.app.approvals, id)
 		case old.userID == a.userID && old.kind == a.kind && LimitKey(old.ip) == LimitKey(a.ip):
 			same = append(same, id)
-		case old.userID == a.userID:
+		case old.userID == a.userID && old.kind == a.kind && (old.status == ApprovalPending || old.status == ApprovalApproved):
+			// 只算同一种、还在等确认或者确认了还没取走的：拒绝掉的、输错作废的不占名额，
+			// 登录的请求再多也不挡高权限确认（2026-11-19-7b50402#4）。
 			others++
 		}
 	}
