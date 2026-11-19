@@ -71,7 +71,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Fixes
 
-- Fixed several security issues involving compose privilege checks, alert channels, upgrade downloads and direct download links.
+- Fixed known vulnerabilities and improved security.
 
 ### Behavior changes
 
@@ -102,7 +102,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### Fixes
 
 - Fixed an issue where a background browser tab or multiple open tabs could falsely report a session key signature mismatch and ask to verify again.
-- Fixed several security issues involving container directories, replica locations and node images.
+- Fixed known vulnerabilities and improved security.
 
 ### Upgrade notes
 
@@ -160,7 +160,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Fixes an issue where having several tabs open caused a session key signature mismatch.
 - Fixes an issue where the egress restriction blocked containers from reaching domains on their own node.
 - Fixes an issue where changing project links or migrating a container reported unauthorized requests between nodes.
-- Fixes several security issues in log forwarding, sessions, passkeys, egress restriction, replica sync and standby panels.
+- Fixed known vulnerabilities and improved security.
 
 ### Behavior changes
 
@@ -212,18 +212,14 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Fixes
 
-- Fixes an issue where a compromised node could use a project restored from its cache to run a privileged configuration on another node. Failover settings and backup nodes restored from a node's cache now take effect only after an administrator confirms them on the container's "High availability" tab.
-- Fixes an issue where operators could run commands with privileges through compose lifecycle hooks.
-- Fixes an issue where the failure limits for sign-in, identity verification, password changes and turning off two-step verification could be bypassed.
-- Fixes an issue where the activity log could be pushed out by large numbers of invalid requests. Security-related entries are now kept separately.
-- Fixes an issue where partial file downloads weren't recorded in the activity log.
-- Fixes an issue where some addresses still revealed the panel when the security entrance was on.
+- Fixed known vulnerabilities and improved security.
 - Fixes an issue where overlapping syncs of the same container could corrupt the copy on a backup or standby node.
 - Fixes an issue where syncing from a newer node to an older node could fail.
 
 ### Behavior changes
 
 - Sign-in from one IP is limited after 10 failures, and the count resets an hour after the last failure.
+- Failover settings and backup nodes restored from a node's cache now take effect only after an administrator confirms them on the container's "High availability" tab.
 
 ### Upgrade notes
 
@@ -355,15 +351,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Fixes
 
-- Fixes an issue where operators could change the existing directory when reusing an admin's configuration and gain root on the node.
-- Fixes an issue where operators could place a container directory outside the target node's projects root.
-- Fixes an issue where env_file, secrets, and configs files and mounted directories referenced by compose could point to other files on the node through symbolic links.
-- Fixes an issue where a compromised node could make the panel clear and rebuild a project.
-- Fixes an issue where a node reporting many addresses could make every node's connection to the panel drop repeatedly.
-- Fixes an issue where a removed panel could still read node data and transfer files for a short time.
-- Fixes an issue where certain network packets could make a node exit.
-- Fixes an issue where other nodes could keep the speed test busy.
-- Fixes an issue where concurrent refreshes of an MCP access token could all succeed.
+- Fixed known vulnerabilities and improved security.
 - Fixes an issue where concurrent MCP writes to the same file could overwrite each other.
 
 ### Behavior changes
@@ -465,7 +453,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Fixes
 
-- Fixes an issue where error messages for failed alerts included the Telegram bot token.
+- Fixed known vulnerabilities and improved security.
 - Fixes an issue where an invalid snapshot interval or snapshot limit in project settings was replaced with the default value.
 - Fixes an issue where some English text was too long and wrapped.
 
@@ -481,10 +469,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Fixes
 
-- Fixes an issue where a node restoring a replica received from another node could write files outside the container directory.
-- Fixes an issue where the panel, when restoring projects from node caches, could link two unrelated projects based on data reported by a node.
-- Fixes an issue where operators could attach a container to the containers, volumes or networks of other projects.
-- Fixes an issue where members limited to certain nodes could set nodes outside their scope as entry nodes.
+- Fixed known vulnerabilities and improved security.
 
 ### Behavior changes
 
