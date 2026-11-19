@@ -95,6 +95,10 @@ type Registry struct {
 	// violations 是节点上报的越权记录的时间，限制每个节点能写多少条（见 ReportViolations）。
 	violations map[string][]time.Time
 
+	// states 是按节点 ID 记的状态（见 nodeState），跨控制连接保留。
+	stateMu sync.Mutex
+	states  map[string]*nodeState
+
 	// Changes 通知订阅流有变化（见 changes.go）。
 	Changes Changes
 	alerts  activeAlerts
@@ -149,20 +153,43 @@ type Conn struct {
 	// directPush：同一时间只告诉节点一次密钥（连上时的和换密钥的可能同时），两边最后的密钥一样。
 	directPush sync.Mutex
 
-	// 上报的限制（见 allowReport）：reporting 是正在处理的上报，reportTokens、reportAt 是令牌桶，
-	// dropped、droppedLog 记被丢弃的次数和上次记日志的时间。
-	reporting    atomic.Bool
+	// reporting 是这条连接上正在处理的上报。上报的额度、写库去重、OnReport 的排队按节点记（见 nodeState）。
+	reporting atomic.Bool
+}
+
+// nodeState 是按节点 ID 记的状态。节点断开重连以后接着用：记在连接上的话，重连一次就有一份新的额度，
+// 写库的去重也从头算，同一个节点还能在新旧连接上各跑一个 OnReport。
+// 只有登记过的节点才有（Handle 先查库），每项很小（节点信息只记哈希），所以不清理。
+type nodeState struct {
+	mu sync.Mutex
+	// 上报的令牌桶（见 allowReport）：dropped、droppedLog 记被丢弃的次数和上次记日志的时间。
 	reportTokens float64
 	reportAt     time.Time
 	dropped      int
 	droppedLog   time.Time
-	// seenInfo、seenAt：上次写进数据库的节点信息和时间（见 touch）。
-	seenInfo []byte
+	// seen、seenInfo、seenAt：上次写进数据库的节点信息（SHA-256）和时间（见 touch）。
+	seen     bool
+	seenInfo [sha256.Size]byte
 	seenAt   time.Time
-	// syncMu 保护 syncing、syncNext：同一个节点同时只跑一个 OnReport，跑的时候来的上报只留最新的一份（见 runOnReport）。
-	syncMu   sync.Mutex
+	// 同一个节点同时只跑一个 OnReport，跑的时候来的上报只留最新的一份和它所在的连接（见 runOnReport）。
 	syncing  bool
+	syncConn *Conn
 	syncNext *nagiv1.ReportRequest
+}
+
+// state 返回节点的状态，没有时新建。
+func (r *Registry) state(nodeID string) *nodeState {
+	r.stateMu.Lock()
+	defer r.stateMu.Unlock()
+	if r.states == nil {
+		r.states = map[string]*nodeState{}
+	}
+	st := r.states[nodeID]
+	if st == nil {
+		st = &nodeState{}
+		r.states[nodeID] = st
+	}
+	return st
 }
 
 // Pending 返回节点是否在等管理员批准。
@@ -552,7 +579,8 @@ func (r *Registry) Handle(ctx context.Context, conn *tls.Conn) {
 	case <-ctx.Done():
 	}
 
-	if ctx.Err() == nil {
+	// 被替换的旧连接不写：它的节点信息是旧的，最后在线时间由新连接记。
+	if ctx.Err() == nil && r.current(c) {
 		r.touch(context.Background(), c, c.LastReport(), true)
 	}
 	r.log.Info("节点已断开", "node", nodeID)
@@ -584,40 +612,51 @@ func (r *Registry) stillEnrolled(ctx context.Context, nodeID string) bool {
 	}
 }
 
-// touchInterval：节点信息没变时，最后在线时间最多这么久写一次库（连接断开时总会写）。
-// 在线节点的状态看连接，最后在线时间只在离线以后用到。
-const touchInterval = time.Minute
+// touchInterval：节点信息没变时，最后在线时间最多这么久写一次库。在线节点的状态看连接，最后在线时间只在离线以后用到。
+// closeTouchInterval：连接断开时也记一次最后在线时间，但离上次写库不到这么久就不写，反复重连的节点不能每次都写库。
+const (
+	touchInterval      = time.Minute
+	closeTouchInterval = 5 * time.Second
+)
 
-// touch 更新节点的最后在线时间和节点信息。节点信息没变、离上次写库不到 touchInterval 时不写，force 时总写。
-func (r *Registry) touch(ctx context.Context, c *Conn, report *nagiv1.ReportRequest, force bool) {
+// touch 更新节点的最后在线时间和节点信息。节点信息没变、离上次写库不到 touchInterval 时不写；
+// closing（连接断开）时间隔改成 closeTouchInterval，这条连接上没有上报过就不写（没有新的内容，写了会清掉库里的节点信息）。
+// 去重按节点记，不随连接重置。
+func (r *Registry) touch(ctx context.Context, c *Conn, report *nagiv1.ReportRequest, closing bool) {
+	if closing && report == nil {
+		return
+	}
 	var info []byte
 	if report != nil && report.Node != nil {
 		info, _ = proto.MarshalOptions{Deterministic: true}.Marshal(report.Node)
 	}
+	sum := sha256.Sum256(info)
+	gap := touchInterval
+	if closing {
+		gap = closeTouchInterval
+	}
 	now := time.Now()
-	c.mu.Lock()
-	if !force && c.seenInfo != nil && bytes.Equal(info, c.seenInfo) && now.Sub(c.seenAt) < touchInterval {
-		c.mu.Unlock()
+	st := r.state(c.NodeID)
+	st.mu.Lock()
+	if st.seen && sum == st.seenInfo && now.Sub(st.seenAt) < gap {
+		st.mu.Unlock()
 		return
 	}
-	c.seenInfo, c.seenAt = info, now
-	if c.seenInfo == nil {
-		c.seenInfo = []byte{}
-	}
-	c.mu.Unlock()
+	st.seen, st.seenInfo, st.seenAt = true, sum, now
+	st.mu.Unlock()
 	if err := r.q.UpdateNodeSeen(ctx, store.UpdateNodeSeenParams{
 		LastSeen: now.Unix(), Info: info, ID: c.NodeID,
 	}); err != nil {
 		r.log.Warn("更新节点状态失败", "node", c.NodeID, "err", err)
-		c.mu.Lock()
-		c.seenInfo = nil // 下次再写
-		c.mu.Unlock()
+		st.mu.Lock()
+		st.seen = false // 下次再写
+		st.mu.Unlock()
 	}
 }
 
-// 节点上报的限制（见 v0.35.0#13）。节点每 15 秒上报一次；容器状态变了、备份同步有进度（每 5 秒）时马上再报，
+// 节点上报的限制。节点每 15 秒上报一次；容器状态变了、备份同步有进度（每 5 秒）时马上再报，
 // 相邻两次至少隔 300 毫秒。令牌桶能攒 reportBurst 次，每 reportRefill 补一次：正常节点远远用不完，
-// 不停上报的节点每秒最多处理一次，超出的丢弃（回复空的结果，不断开连接）。
+// 不停上报的节点每秒最多处理一次，超出的丢弃（回复空的结果，不断开连接）。额度按节点记，重连不会补满。
 const (
 	reportBurst  = 30
 	reportRefill = time.Second
@@ -630,54 +669,56 @@ const (
 )
 
 // allowReport 从令牌桶里取一次上报的额度。没有额度时 ok 为 false；该记日志时 logDropped 是这段时间丢弃的次数。
-func (c *Conn) allowReport(now time.Time) (ok bool, logDropped int) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.reportAt.IsZero() {
-		c.reportTokens = reportBurst
+func (s *nodeState) allowReport(now time.Time) (ok bool, logDropped int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reportAt.IsZero() {
+		s.reportTokens = reportBurst
 	} else {
-		c.reportTokens = min(reportBurst, c.reportTokens+float64(now.Sub(c.reportAt))/float64(reportRefill))
+		s.reportTokens = min(reportBurst, s.reportTokens+float64(now.Sub(s.reportAt))/float64(reportRefill))
 	}
-	c.reportAt = now
-	if c.reportTokens >= 1 {
-		c.reportTokens--
+	s.reportAt = now
+	if s.reportTokens >= 1 {
+		s.reportTokens--
 		return true, 0
 	}
-	c.dropped++
-	if now.Sub(c.droppedLog) >= droppedLogInterval {
-		n := c.dropped
-		c.dropped, c.droppedLog = 0, now
+	s.dropped++
+	if now.Sub(s.droppedLog) >= droppedLogInterval {
+		n := s.dropped
+		s.dropped, s.droppedLog = 0, now
 		return false, n
 	}
 	return false, 0
 }
 
-// runOnReport 调用 OnReport（不阻塞）。同一个节点同时只跑一个：跑的时候来的上报只留最新的一份，跑完接着用它再跑一次。
-// 连接已被替换或断开时，留下的那份不再跑。
+// runOnReport 调用 OnReport（不阻塞）。同一个节点同时只跑一个，按节点 ID 算，不管上报来自哪条连接：
+// 跑的时候来的上报只留最新的一份，跑完接着用它再跑一次。留下的那份所在的连接已被替换或断开时不再跑。
 func (r *Registry) runOnReport(c *Conn, req *nagiv1.ReportRequest) {
 	if r.OnReport == nil {
 		return
 	}
-	c.syncMu.Lock()
-	if c.syncing {
-		c.syncNext = req
-		c.syncMu.Unlock()
+	st := r.state(c.NodeID)
+	st.mu.Lock()
+	if st.syncing {
+		st.syncConn, st.syncNext = c, req
+		st.mu.Unlock()
 		return
 	}
-	c.syncing = true
-	c.syncMu.Unlock()
+	st.syncing = true
+	st.mu.Unlock()
 	go func() {
 		for req != nil {
 			r.OnReport(c, req)
-			c.syncMu.Lock()
-			req, c.syncNext = c.syncNext, nil
+			st.mu.Lock()
+			c, req = st.syncConn, st.syncNext
+			st.syncConn, st.syncNext = nil, nil
 			if req != nil && !r.current(c) {
 				req = nil
 			}
 			if req == nil {
-				c.syncing = false
+				st.syncing = false
 			}
-			c.syncMu.Unlock()
+			st.mu.Unlock()
 		}
 	}()
 }
@@ -695,7 +736,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		return nil, status.Error(codes.ResourceExhausted, "上一次上报还在处理")
 	}
 	defer p.conn.reporting.Store(false)
-	if ok, n := p.conn.allowReport(time.Now()); !ok {
+	if ok, n := p.r.state(p.conn.NodeID).allowReport(time.Now()); !ok {
 		if n > 0 {
 			p.r.log.Warn("节点上报过于频繁，丢弃", "node", p.conn.NodeID, "dropped", n)
 		}
@@ -829,6 +870,13 @@ func (r *Registry) PushPanelDomain(string) {
 // 主备面板时别的面板自带的节点也连着本面板，面板域名不能推给它（那台机器的 Caddy 反代的是那个面板）。
 func (c *Conn) ownEmbedded(req *nagiv1.ReportRequest) bool {
 	return req.GetNode().GetEmbedded() && c.remote.IsLoopback()
+}
+
+// Source 返回面板看到的这条连接的来源地址；从本机连来（或者没有地址）时 ok 为 false。
+// 只看连接本身，不看节点上报的内容：节点自称是面板自带的，也改不了显示的来源。
+func (c *Conn) Source() (addr netip.Addr, ok bool) {
+	ip := c.Remote()
+	return ip, ip.IsValid() && !ip.IsLoopback()
 }
 
 // OwnEmbedded 判断这是不是本面板自带的节点（和本面板在同一台机器上）。

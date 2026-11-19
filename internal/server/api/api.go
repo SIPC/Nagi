@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"connectrpc.com/connect"
@@ -407,12 +406,12 @@ func (s *nodeService) ApproveNode(ctx context.Context, req *connect.Request[nagi
 // 节点离线时也能改。
 func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv1.RenameNodeRequest]) (*connect.Response[nagiv1.RenameNodeResponse], error) {
 	id := req.Msg.GetNodeId()
-	name := strings.TrimSpace(req.Msg.GetName())
-	if name == "" || utf8.RuneCountInString(name) > 64 {
+	name := strings.TrimSpace(strings.Map(plainSpace, req.Msg.GetName()))
+	if name == "" || utf8.RuneCountInString(name) > maxNodeName {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能为空，且不超过 64 个字符"))
 	}
-	if strings.ContainsFunc(name, unicode.IsControl) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能包含控制字符"))
+	if strings.ContainsFunc(name, invisibleRune) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能包含控制字符或不可见字符"))
 	}
 	rows, err := s.Q.ListNodes(ctx)
 	if err != nil {
@@ -468,9 +467,10 @@ func (s *nodeService) GetNodeStorage(ctx context.Context, req *connect.Request[n
 	return connect.NewResponse(resp), nil
 }
 
-// nodeAddress 返回在线节点的地址：面板看到的来源 IP，面板自带的节点用面板的对外地址。
+// nodeAddress 返回在线节点的地址：面板看到的来源 IP，从本机连来的节点（面板自带的）用面板的对外地址。
+// 不看节点上报的内容：待批准节点的详情靠这个地址辨认机器。
 func (a *API) nodeAddress(ctx context.Context, conn *nodes.Conn) string {
-	if ip := conn.Remote(); ip.IsValid() && !ip.IsLoopback() && !conn.LastReport().GetNode().GetEmbedded() {
+	if ip, ok := conn.Source(); ok {
 		return ip.String()
 	}
 	return a.Panel.PublicAddress(ctx)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,14 @@ type isolation struct {
 	nodes  map[string][]byte
 	// windows 是每个发起方 10 分钟的告警窗口。
 	windows map[string]time.Time
+	// audits 是面板发现的越权写审计的窗口（见 PanelViolation）。
+	audits map[string]*violationAudit
+}
+
+// violationAudit 是一个节点的一种越权最近一次写审计的时间，和之后没有写的次数。
+type violationAudit struct {
+	at         time.Time
+	suppressed int
 }
 
 func (r *Registry) isolatedNodes(ctx context.Context) map[string][]byte {
@@ -232,10 +241,47 @@ func (r *Registry) allowViolations(nodeID string, n int) int {
 	return ok
 }
 
+// allowViolationAudit 判断面板发现的这条越权要不要写审计：同一个节点的同一种越权 violationAlertWindow 内只写第一条，
+// 之后的只计数，suppressed 是上次写了以后没有写的条数。
+func (r *Registry) allowViolationAudit(nodeID, method string, now time.Time) (ok bool, suppressed int) {
+	key := nodeID + "\x00" + method
+	r.iso.mu.Lock()
+	defer r.iso.mu.Unlock()
+	if a := r.iso.audits[key]; a != nil {
+		if now.Sub(a.at) < violationAlertWindow {
+			a.suppressed++
+			return false, 0
+		}
+		suppressed = a.suppressed
+		a.at, a.suppressed = now, 0
+		return true, suppressed
+	}
+	if r.iso.audits == nil {
+		r.iso.audits = map[string]*violationAudit{}
+	}
+	// 过期的窗口删掉，表不能一直变大。
+	if len(r.iso.audits) >= maxViolationWindows {
+		for k, a := range r.iso.audits {
+			if now.Sub(a.at) >= violationAlertWindow {
+				delete(r.iso.audits, k)
+			}
+		}
+	}
+	r.iso.audits[key] = &violationAudit{at: now}
+	return true, 0
+}
+
 // PanelViolation 记一条面板自己发现的越权（伪造面板指纹、乱报地址超限、代发告警超限等），标为「面板发现」。
+// 节点能让面板不停地发现同一种越权（例如每次上报都带上一批不属于它的容器），所以审计和告警一样合并：
+// 同一个节点的同一种越权 10 分钟内只记第一条，之后的条数写进下一条的 suppressed。
 func (r *Registry) PanelViolation(ctx context.Context, c *Conn, method, detail string) {
-	params, _ := json.Marshal(map[string]string{"reporter": "panel", "method": method, "detail": detail})
-	if r.Audit != nil {
+	record, suppressed := r.allowViolationAudit(c.NodeID, method, time.Now())
+	fields := map[string]string{"reporter": "panel", "method": method, "detail": detail}
+	if suppressed > 0 {
+		fields["suppressed"] = strconv.Itoa(suppressed)
+	}
+	params, _ := json.Marshal(fields)
+	if r.Audit != nil && record {
 		r.Audit.Record(ctx, audit.Event{Category: audit.Security, Action: "violation", ActorType: audit.ActorNode, ActorID: c.NodeID,
 			ActorName: c.Name(), Via: audit.ViaNode, Params: string(params), Result: audit.ResultDenied})
 	}

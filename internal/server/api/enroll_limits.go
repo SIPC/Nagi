@@ -28,14 +28,30 @@ const (
 	enrollAlertNames = 10
 )
 
-// enrollName 把节点加入时提交的主机名变成节点名称：去掉控制字符，最多 64 个字符（和 RenameNode 的规则一样）；
-// 是空的用节点 ID。和别的节点重名时加后缀 -2、-3……，不拒绝，免得正常的加入失败。
+// invisibleRune 判断字符是不是不显示出来、或者会改变显示方式的：控制字符、格式字符（零宽空格、双向控制符）、
+// 行和段分隔符、私用区和代理区的字符、变体选择符、其他默认不显示的字符（韩文填充符之类）、盲文空格。
+// 节点名称里不能有：带着它们的名字和另一个名字看起来一样，却不算重名。
+func invisibleRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp, unicode.Co, unicode.Cs,
+		unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point) || r == '\u2800' || r == utf8.RuneError
+}
+
+// plainSpace 把各种空格（不换行空格、全角空格等）换成普通空格，它们看起来一样。
+func plainSpace(r rune) rune {
+	if unicode.Is(unicode.Zs, r) {
+		return ' '
+	}
+	return r
+}
+
+// enrollName 把节点加入时提交的主机名变成节点名称：去掉控制字符和不可见字符，各种空格换成普通空格，
+// 最多 64 个字符（和 RenameNode 的规则一样）；是空的用节点 ID。和别的节点重名时加后缀 -2、-3……，不拒绝，免得正常的加入失败。
 func enrollName(hostname, nodeID string, taken func(string) bool) string {
 	name := strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || r == utf8.RuneError {
+		if invisibleRune(r) {
 			return -1
 		}
-		return r
+		return plainSpace(r)
 	}, hostname))
 	name = truncateRunes(name, maxNodeName)
 	if name == "" {

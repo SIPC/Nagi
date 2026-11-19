@@ -1,0 +1,244 @@
+package nodes
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/netip"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/db"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
+	"github.com/SIPC/nagi/internal/server/store"
+)
+
+// 上报的额度和写库的去重按节点记：节点每次连上就发一批内容不同的上报、然后断开重连，
+// 写库的次数不随重连的次数增加。
+func TestReconnectKeepsReportLimits(t *testing.T) {
+	var fdb *faultDB
+	p := newSessionPanelDB(t, func(d store.DBTX) store.DBTX { fdb = &faultDB{DBTX: d}; return fdb }, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	const reconnects = 10
+	var prev *nodeSession
+	for i := range reconnects {
+		s := p.connect(t)
+		for j := range reportBurst + 1 {
+			// 主面板写别的面板：面板不下发告警配置（测试里没有 agent）。
+			req := &nagiv1.ReportRequest{Primary: "other", Node: &nagiv1.NodeInfo{Hostname: fmt.Sprintf("h-%d-%d", i, j)}}
+			if _, err := s.panel.Report(ctx, req); err != nil {
+				t.Fatalf("第 %d 条连接的第 %d 次上报：%v", i+1, j+1, err)
+			}
+		}
+		if prev != nil {
+			waitClosed(t, "旧连接", prev.closed)
+		}
+		prev = s
+	}
+	prev.sess.Close()
+	waitClosed(t, "最后一条连接", prev.closed)
+	// 攒着的 30 次，加上测试期间每秒补的一次、断开时可能写的一次。
+	limit := reportBurst + int(time.Since(start)/reportRefill) + 2
+	if w, _ := fdb.counts(); w > limit {
+		t.Fatalf("重连 %d 次写了 %d 次库，最多应是 %d 次", reconnects, w, limit)
+	}
+
+	// 断开以后再连上、不上报就断开：不写库，库里的节点信息还在。
+	before, _ := fdb.counts()
+	s := p.connect(t)
+	deadline := time.Now().Add(5 * time.Second)
+	for !p.r.Online(p.nodeID) {
+		if time.Now().After(deadline) {
+			t.Fatal("节点没有连上")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s.sess.Close()
+	waitClosed(t, "没有上报的连接", s.closed)
+	if after, _ := fdb.counts(); after != before {
+		t.Fatalf("没有上报的连接断开时不应写库：%d → %d", before, after)
+	}
+	n, err := p.q.GetNode(context.Background(), p.nodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(n.Info) == 0 {
+		t.Fatal("库里的节点信息被清掉了")
+	}
+}
+
+// 断开时写库也去重：内容没变、刚写过就不写；过了间隔才再记一次最后在线时间。新连接沿用旧连接的去重。
+func TestTouchOnClose(t *testing.T) {
+	p, fdb := reportPanel(t)
+	ctx := context.Background()
+	report := &nagiv1.ReportRequest{Node: &nagiv1.NodeInfo{Hostname: "h"}}
+	p.r.touch(ctx, p.conn, report, false)
+	p.r.touch(ctx, p.conn, report, true)
+	other := &Conn{NodeID: "n", name: "n"}
+	p.r.touch(ctx, other, report, false)
+	p.r.touch(ctx, other, report, true)
+	if w, _ := fdb.counts(); w != 1 {
+		t.Fatalf("内容没变、刚写过，应只写一次库：%d", w)
+	}
+	st := p.r.state("n")
+	st.mu.Lock()
+	st.seenAt = time.Now().Add(-closeTouchInterval)
+	st.mu.Unlock()
+	p.r.touch(ctx, other, report, false)
+	if w, _ := fdb.counts(); w != 1 {
+		t.Fatalf("没断开时一分钟内不重复写：%d", w)
+	}
+	p.r.touch(ctx, other, report, true)
+	if w, _ := fdb.counts(); w != 2 {
+		t.Fatalf("断开时过了间隔应记一次最后在线时间：%d", w)
+	}
+}
+
+// 同一个节点同时只跑一个 OnReport，新旧连接合起来算：旧连接上的还没跑完时，新连接的上报排着，跑完再跑。
+func TestOnReportOnePerNode(t *testing.T) {
+	r := NewRegistry(nil, slog.Default(), nil, nil)
+	gate := make(chan struct{})
+	var running, maxRunning atomic.Int32
+	var mu sync.Mutex
+	var got []string
+	r.OnReport = func(c *Conn, req *nagiv1.ReportRequest) {
+		n := running.Add(1)
+		for {
+			m := maxRunning.Load()
+			if n <= m || maxRunning.CompareAndSwap(m, n) {
+				break
+			}
+		}
+		<-gate
+		mu.Lock()
+		got = append(got, c.name+":"+req.GetNode().GetHostname())
+		mu.Unlock()
+		running.Add(-1)
+	}
+	req := func(h string) *nagiv1.ReportRequest {
+		return &nagiv1.ReportRequest{Node: &nagiv1.NodeInfo{Hostname: h}}
+	}
+	waitFor := func(what string, cond func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for !cond() {
+			if time.Now().After(deadline) {
+				t.Fatalf("等不到%s", what)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	add := func(name string) *Conn {
+		c := &Conn{NodeID: "n", name: name}
+		r.mu.Lock()
+		r.addSession(c)
+		r.mu.Unlock()
+		return c
+	}
+
+	// 反复重连，每条连接上都来一次上报：第一条上的正在跑，其余的都排着，只留最新的一份。
+	first := add("c0")
+	r.runOnReport(first, req("a"))
+	waitFor("第一次开始", func() bool { return running.Load() == 1 })
+	for i := 1; i <= 5; i++ {
+		r.runOnReport(add(fmt.Sprintf("c%d", i)), req("b"))
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := running.Load(); n != 1 {
+		t.Fatalf("重连以后同一个节点同时跑着 %d 个 OnReport", n)
+	}
+	gate <- struct{}{} // c0:a
+	gate <- struct{}{} // c5:b
+	waitFor("跑完", func() bool {
+		st := r.state("n")
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		return !st.syncing
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(got, ",") != "c0:a,c5:b" || maxRunning.Load() != 1 {
+		t.Fatalf("应依次跑 c0:a、c5:b，同时最多一个：%v max=%d", got, maxRunning.Load())
+	}
+}
+
+// 来源地址只看连接：节点自称是面板自带的，显示的仍是它连来的地址；本面板自带的节点要真的从本机连来。
+func TestSourceIgnoresReport(t *testing.T) {
+	embedded := &nagiv1.ReportRequest{Node: &nagiv1.NodeInfo{Embedded: true}}
+	remote := &Conn{NodeID: "n", remote: netip.MustParseAddr("203.0.113.9"), report: embedded}
+	if ip, ok := remote.Source(); !ok || ip.String() != "203.0.113.9" {
+		t.Fatalf("自称自带的节点应显示它连来的地址：%v %v", ip, ok)
+	}
+	if remote.OwnEmbedded() {
+		t.Fatal("不是从本机连来的节点不算本面板自带的")
+	}
+	local := &Conn{NodeID: "n", remote: netip.MustParseAddr("127.0.0.1"), report: embedded}
+	if _, ok := local.Source(); ok {
+		t.Fatal("从本机连来的节点没有对外的来源地址")
+	}
+	if !local.OwnEmbedded() {
+		t.Fatal("从本机连来的自带节点应算本面板自带的")
+	}
+	if _, ok := (&Conn{NodeID: "n"}).Source(); ok {
+		t.Fatal("没有地址时不应返回来源")
+	}
+}
+
+// 面板发现的越权写审计也合并：同一个节点的同一种越权 10 分钟内只记第一条，之后的条数写进下一条。
+func TestPanelViolationAuditCoalesced(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	d, err := db.OpenMigrated(ctx, filepath.Join(dir, "panel.db"), store.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	log, err := audit.Open(ctx, filepath.Join(dir, "audit.db"), slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	r := NewRegistry(store.New(d), slog.New(slog.DiscardHandler), nil, nil)
+	r.Audit = log
+	c := &Conn{NodeID: "x", name: "attacker"}
+	count := func() (n int, last string) {
+		rows, _ := log.List(ctx, audit.Filter{Limit: 5000})
+		for _, e := range rows {
+			if e.Category == audit.Security && e.Action == "violation" {
+				if n == 0 || strings.Contains(e.Params, "suppressed") {
+					last = e.Params
+				}
+				n++
+			}
+		}
+		return n, last
+	}
+	for i := range 500 {
+		r.PanelViolation(ctx, c, "report_foreign_container", fmt.Sprintf("p/c%d", i))
+	}
+	if n, _ := count(); n != 1 {
+		t.Fatalf("同一种越权应只记一条，记了 %d 条", n)
+	}
+	// 别的种类、别的节点各记各的。
+	r.PanelViolation(ctx, c, "relay_alert_limit", "")
+	r.PanelViolation(ctx, &Conn{NodeID: "y", name: "other"}, "report_foreign_container", "p/c")
+	if n, _ := count(); n != 3 {
+		t.Fatalf("别的种类和别的节点应各记一条，共 %d 条", n)
+	}
+	// 窗口过了以后再记一条，带上没记的条数。
+	r.iso.mu.Lock()
+	r.iso.audits["x\x00report_foreign_container"].at = time.Now().Add(-violationAlertWindow)
+	r.iso.mu.Unlock()
+	r.PanelViolation(ctx, c, "report_foreign_container", "p/again")
+	n, last := count()
+	if n != 4 || !strings.Contains(last, `"suppressed":"499"`) {
+		t.Fatalf("窗口过后应再记一条并写明没记的条数：%d 条，%s", n, last)
+	}
+}
