@@ -50,6 +50,7 @@ var en = map[string]string{
 	"显示名称不能超过 32 个字符":                      "Display name must be at most 32 characters",
 	"头像不能超过 256 KB":                        "Avatar must be at most 256 KB",
 	"头像只能是 PNG、JPEG 或 WebP 图片":             "Avatar must be a PNG, JPEG, or WebP image",
+	"头像的宽和高不能超过 1024 像素":                   "Avatar can't be larger than 1024 × 1024 pixels",
 	"密码至少 8 个字符":                           "Password must be at least 8 characters",
 	"用户名或密码不正确":                            "Incorrect username or password",
 	"请输入两步验证码":                             "Enter your two-factor authentication code",

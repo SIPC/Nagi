@@ -298,6 +298,11 @@ func (s *authService) UpdateProfile(ctx context.Context, req *connect.Request[na
 		avatar = []byte{} // 列不能为 NULL。
 	} else if avatarType(avatar) == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("头像只能是 PNG、JPEG 或 WebP 图片"))
+	} else if w, h, err := avatarSize(avatar); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("头像只能是 PNG、JPEG 或 WebP 图片"))
+	} else if w > maxAvatarSide || h > maxAvatarSide {
+		// 文件小、尺寸大的图在 App 里解出来上百 MB（v0.35.0#17）。界面上传前会缩到 128，正常用不会遇到。
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("头像的宽和高不能超过 1024 像素"))
 	}
 	if err := s.Q.SetUserProfile(ctx, store.SetUserProfileParams{DisplayName: name, Avatar: avatar, ID: auth.CurrentUser(ctx).ID}); err != nil {
 		return nil, err
