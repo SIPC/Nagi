@@ -60,8 +60,8 @@
 
 ## 图表
 
-- `LineChart(series, height, xLabels, tipTime, tipFormat)`：监控折线图，平滑曲线，不画网格和纵轴；`ChartLine(values, color, label)`。对外流量用 `brand`，节点之间用 `mutedForeground`。默认高 112。给了 `tipTime` 时可以看某一刻的数值：点一下看、再点收起，长按后左右拖动逐个看，接鼠标时悬浮就看；对准的时刻画竖的虚线，提示写时间和每条线的数值（靠右对齐），过了一半放到左边。
-- `SankeyChart(rows, flows, view, texts)`：流量桑基图，和网页概览的「实时流量」同一套布局和动效。`SankeyRow` 是一行（节点、`SANKEY_EXTERNAL` 外部网络、面板），`SankeyFlow` 是一条路径（`FlowKind.External` 品牌色、`FlowKind.Mesh` 灰色，`relay` 画成虚线）；`view`（`SankeyView`）只决定显示哪些，`flows` 传全部，切换时图不重建、平滑换位。点一下线显示速率，接鼠标时悬浮就显示。
+- `LineChart(series, height, xLabels, tipTime, tipFormat)`：监控折线图，平滑曲线，不画网格和纵轴；`ChartLine(values, color, label)`。对外流量用 `brand`，节点之间用 `mutedForeground`。默认高 112。给了 `tipTime` 时可以看某一刻的数值：点一下看、再点收起，长按后左右拖动逐个看，接鼠标、触控板或用触控笔时悬浮就看；对准的时刻画竖的虚线，提示写时间和每条线的数值（靠右对齐），过了一半放到左边。
+- `SankeyChart(rows, flows, view, texts)`：流量桑基图，和网页概览的「实时流量」同一套布局和动效。`SankeyRow` 是一行（节点、`SANKEY_EXTERNAL` 外部网络、面板），`SankeyFlow` 是一条路径（`FlowKind.External` 品牌色、`FlowKind.Mesh` 灰色，`relay` 画成虚线）；`view`（`SankeyView`）只决定显示哪些，`flows` 传全部，切换时图不重建、平滑换位。点一下线显示速率，接鼠标、触控板或用触控笔时悬浮就显示。
 - `Modifier.mouseHover(onMove, onExit)`：只认鼠标（含触控板）的悬浮，手指照常点按、长按。图表的悬浮提示都用它。
 - `ChartLegend(items)`：图例，放在图上面。
 - `UsageBar(fraction, color, height)`：用量条，长度变化有过渡。

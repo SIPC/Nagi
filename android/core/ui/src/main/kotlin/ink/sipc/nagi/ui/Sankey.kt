@@ -307,7 +307,7 @@ fun SankeyChart(
         }
 
         Canvas(
-            // 手指点一下看那条线；接鼠标时悬浮就看，移出收起。
+            // 手指点一下看那条线；接鼠标、触控板或用触控笔时悬浮就看，移出收起。
             Modifier.fillMaxWidth().height(height.dp)
                 .mouseHover(onMove = { pos -> hit(Offset(pos.x / density.density, pos.y / density.density)) }, onExit = { selected = null })
                 .pointerInput(Unit) {
