@@ -737,18 +737,41 @@ func (s *Service) AppTokenUser(ctx context.Context, token, ip string) (User, err
 // 成员没有被删除、没有改密码），管理员还要从允许的地址来。不看令牌。AppTokenUser 核对完令牌后用它；
 // App 打开的终端也用它定时重查（见 docs/android.md#换取令牌）。
 func (s *Service) DeviceUser(ctx context.Context, deviceID, ip string) (User, error) {
+	u, _, err := s.deviceUser(ctx, deviceID, ip)
+	return u, err
+}
+
+// ErrAppLocked 表示手机已经超过解锁时长，或者签名失败次数到了上限（见 UnlockedDeviceUser）。
+var ErrAppLocked = i18n.New("App 已锁定，请解锁后重新连接")
+
+// UnlockedDeviceUser 和 DeviceUser 一样，另外要求手机还在解锁时长内：距上次解锁不超过解锁时长（每次换取令牌
+// 都会往后延，见 AppToken），签名失败次数没到上限。App 打开的终端按它重查：App 退到后台、锁屏以后不再换取令牌，
+// 超过解锁时长终端就断开，和换取令牌的要求一致（见 docs/android.md#换取令牌）。不满足时返回 ErrAppLocked。
+func (s *Service) UnlockedDeviceUser(ctx context.Context, deviceID, ip string) (User, error) {
+	u, d, err := s.deviceUser(ctx, deviceID, ip)
+	if err != nil {
+		return User{}, err
+	}
+	unlock := time.Duration(s.AppUnlockMinutes(ctx)) * time.Minute
+	if d.SigFailures >= appSigFailLimit || time.Since(time.Unix(d.LastUnlockAt, 0)) > unlock {
+		return User{}, ErrAppLocked
+	}
+	return u, nil
+}
+
+func (s *Service) deviceUser(ctx context.Context, deviceID, ip string) (User, store.AppDeviceUser, error) {
 	d, err := s.q.AppDeviceByID(ctx, deviceID)
 	if errors.Is(err, sql.ErrNoRows) {
 		s.dropDeviceTokens(deviceID)
-		return User{}, errDeviceNotFound
+		return User{}, d, errDeviceNotFound
 	} else if err != nil {
-		return User{}, err
+		return User{}, d, err
 	}
 	if d.Role == RoleAdmin && !s.adminAllowed(ctx, ip) {
-		return User{}, i18n.New("管理员只能从允许的地址登录")
+		return User{}, d, i18n.New("管理员只能从允许的地址登录")
 	}
 	return User{ID: d.UserID, Name: d.Username, Role: d.Role, LimitProjects: d.AllProjects == 0, LimitNodes: d.AllNodes == 0,
-		Via: audit.ViaApp, DeviceID: d.ID, DeviceName: d.Name}, nil
+		Via: audit.ViaApp, DeviceID: d.ID, DeviceName: d.Name}, d, nil
 }
 
 // knownAppToken 判断令牌是面板发过的（不管有没有过期）。

@@ -29,6 +29,8 @@ var en = map[string]string{
 	"无法连接节点，请稍后重试":              "Can't reach the node. Try again later",
 	"无法连接容器所在的节点，请稍后重试":         "Can't reach the container's node. Try again later",
 	"登录已过期，连接已断开":               "Disconnected because your session expired",
+	"App 已超过解锁时长，连接已断开":         "Disconnected because the app has been locked for too long",
+	"App 已锁定，请解锁后重新连接":          "The app is locked. Unlock it and connect again",
 	"权限已变更，连接已断开":               "Disconnected because your permissions changed",
 	"已达到最长使用时间（12 小时），连接已断开":    "Disconnected after reaching the 12-hour limit",
 	"空闲超过 1 小时，连接已断开":           "Disconnected after 1 hour of inactivity",

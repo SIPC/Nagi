@@ -154,6 +154,11 @@ func TestWatchSessionApp(t *testing.T) {
 		{"终端：改密码（退出全部手机）", appByDevice, func(setup) { exec(`DELETE FROM app_devices WHERE user_id = ?`, op) }, errSessionExpired},
 		{"终端：降为只读", appByDevice, func(setup) { exec(`UPDATE users SET role = 'viewer' WHERE id = ?`, op) }, errRoleChanged},
 		{"终端：移出项目范围", appByDevice, func(setup) { exec(`DELETE FROM user_projects`) }, errRoleChanged},
+		// v0.35.0-fix#2：App 退到后台、锁屏以后不再换取令牌，超过解锁时长断开；签名失败次数到上限也断开。
+		{"终端：超过解锁时长", appByDevice, func(s setup) {
+			exec(`UPDATE app_devices SET last_unlock_at = ? WHERE id = ?`, time.Now().Add(-16*time.Minute).Unix(), s.u.DeviceID)
+		}, errAppLocked},
+		{"终端：签名失败次数到上限", appByDevice, func(s setup) { exec(`UPDATE app_devices SET sig_failures = 5 WHERE id = ?`, s.u.DeviceID) }, errAppLocked},
 		{"日志：退出手机", appByToken, func(s setup) { exec(`DELETE FROM app_devices WHERE id = ?`, s.u.DeviceID) }, errSessionExpired},
 		{"日志：降为只读", appByToken, func(setup) { exec(`UPDATE users SET role = 'viewer' WHERE id = ?`, op) }, errRoleChanged},
 		{"日志：移出项目范围", appByToken, func(setup) { exec(`DELETE FROM user_projects`) }, errRoleChanged},
@@ -195,6 +200,19 @@ func TestWatchSessionApp(t *testing.T) {
 	t.Cleanup(func() { _, _ = a.Auth.SetAdminNetworks(bg, nil, "192.0.2.1") })
 	if err := <-watch(at(ip), s, appByDevice, 5*time.Second); !errors.Is(err, errSessionExpired) {
 		t.Errorf("管理员不在允许的地址时终端应断开：%v", err)
+	}
+
+	// v0.35.0-fix#2：按设备重查的终端从打开起最长用到会话设置的「最长登录时间」，和网页会话一致。
+	s = reset()
+	if _, err := a.recheckCaller(at(ip), s.u, nil, appByDevice, time.Now().Add(-auth.DefaultSessionPolicy.MaxAge+time.Hour)); err != nil {
+		t.Errorf("还没到最长登录时间的终端不该断开：%v", err)
+	}
+	if _, err := a.recheckCaller(at(ip), s.u, nil, appByDevice, time.Now().Add(-auth.DefaultSessionPolicy.MaxAge-time.Minute)); !errors.Is(err, errSessionExpired) {
+		t.Errorf("超过最长登录时间的终端应断开：%v", err)
+	}
+	exec(`INSERT INTO settings (key, value) VALUES (?, '2')`, auth.SettingSessionMaxAge)
+	if _, err := a.recheckCaller(at(ip), s.u, nil, appByDevice, time.Now().Add(-3*time.Hour)); !errors.Is(err, errSessionExpired) {
+		t.Errorf("最长登录时间改成 2 小时以后，打开 3 小时的终端应断开：%v", err)
 	}
 }
 
