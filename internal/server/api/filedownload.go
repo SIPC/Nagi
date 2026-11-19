@@ -30,7 +30,7 @@ func (d fileDownload) serve(w http.ResponseWriter, r *http.Request) {
 		Open: d.open,
 		Record: func(err error) {
 			if err != nil {
-				d.record(activityFailure(err))
+				d.record(auditFailure(err))
 			} else {
 				d.record("")
 			}

@@ -66,7 +66,7 @@ func (a *API) ReadVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, lim
 	data, err := a.readVolumeFile(ctx, ref, limit)
 	failure := ""
 	if err != nil {
-		failure = activityFailure(err)
+		failure = auditFailure(err)
 	}
 	a.recordOperation(ctx, "/DownloadVolumeFile", ref, failure)
 	if err != nil && !errors.Is(err, ErrFileTooLarge) {
@@ -126,7 +126,7 @@ func (a *API) WriteVolumeFile(ctx context.Context, ref *nagiv1.VolumeFileRef, da
 	err := a.writeVolumeFile(ctx, &nagiv1.VolumeUploadChunk{Ref: ref, ExpectedSha256: expectedSHA256, CreateOnly: createOnly}, data)
 	failure := ""
 	if err != nil {
-		failure = activityFailure(err)
+		failure = auditFailure(err)
 	}
 	a.recordOperation(ctx, "/UploadVolumeFile", ref, failure)
 	if err != nil {

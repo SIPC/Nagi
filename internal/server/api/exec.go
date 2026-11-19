@@ -39,7 +39,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	// 命令本身记在详情里：活动记录要能看出 agent 在容器里做过什么。
 	detail := strings.Join(command, " ")
 	fail := func(err error) (ExecResult, error) {
-		a.recordExec(ctx, start, detail, activityFailure(err), audit.Summary{})
+		a.recordExec(ctx, start, detail, auditFailure(err), audit.Summary{})
 		return ExecResult{}, err
 	}
 	switch {

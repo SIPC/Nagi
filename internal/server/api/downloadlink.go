@@ -159,6 +159,15 @@ type sourceError struct {
 func (e *sourceError) Error() string { return e.err.Error() }
 func (e *sourceError) Unwrap() error { return e.err }
 
+// Redact 换掉里面提到的对象的名称，状态码不变（见 i18n.Redact）。
+func (e *sourceError) Redact(hide func(i18n.Ref) (string, bool)) (error, bool) {
+	inner, ok := i18n.Redact(e.err, hide)
+	if !ok {
+		return e, false
+	}
+	return &sourceError{e.code, inner}, true
+}
+
 func sourceCode(err error) int {
 	var se *sourceError
 	if errors.As(err, &se) {
@@ -317,7 +326,7 @@ func (a *API) DownloadLinkHandler() http.Handler {
 		fail := func(code int, err error) {
 			h.Set("Content-Type", "application/json")
 			w.WriteHeader(code)
-			_ = json.NewEncoder(w).Encode(map[string]string{"message": errorText(lang, err)})
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": errorText(lang, a.scrubFor(ctx, u, lang, err))})
 		}
 
 		var src fileSource

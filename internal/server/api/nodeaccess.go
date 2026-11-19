@@ -317,7 +317,7 @@ func (a *API) NodeShellHandler() http.Handler {
 			}}})
 		}
 		if err != nil {
-			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, activityFailure(err), true)
+			a.recordNodeAccess(ctx, "OpenNodeShell", nodeID, auditFailure(err), true)
 			fail(terminalError(lang, err))
 			return
 		}
@@ -502,7 +502,7 @@ func (a *API) NodeFileHandler() http.Handler {
 			err = stream.Send(&nagiv1.NodeFileUploadChunk{Ref: ref, Confirmed: q.Get("confirmed") == "1"})
 		}
 		if err != nil {
-			record(activityFailure(err))
+			record(auditFailure(err))
 			fail(http.StatusBadGateway, err)
 			return
 		}
@@ -525,14 +525,14 @@ func (a *API) NodeFileHandler() http.Handler {
 					fail(http.StatusRequestEntityTooLarge, i18n.New("单个文件不能超过 8 GB"))
 					return
 				}
-				record(activityFailure(rerr))
+				record(auditFailure(rerr))
 				fail(http.StatusBadRequest, rerr)
 				return
 			}
 		}
 		res, err := stream.CloseAndRecv()
 		if err != nil {
-			record(activityFailure(err))
+			record(auditFailure(err))
 			fail(http.StatusBadRequest, err)
 			return
 		}

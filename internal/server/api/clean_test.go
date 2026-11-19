@@ -294,7 +294,7 @@ func TestCleanSettingsAndStandbys(t *testing.T) {
 	}
 }
 
-// 部署输出、事件、副本里看不到的节点名换成「其他节点」（A6、A7）。
+// 部署输出、副本里看不到的节点名换成「其他节点」（A6、A7）。事件按引用换，见 TestActivityByRef。
 func TestScrubNodeNames(t *testing.T) {
 	a := cleanTest(t)
 	ctx := context.Background()
@@ -303,11 +303,6 @@ func TestScrubNodeNames(t *testing.T) {
 	a.filterReply(ctx, x, ev)
 	if got := ev.GetOutput(); got != "迁移到 其他节点 完成，a 上的容器已停止，b-2 不受影响" {
 		t.Errorf("部署输出：%s", got)
-	}
-	act := &nagiv1.ListActivityResponse{Entries: []*nagiv1.ActivityEntry{{Actor: "b", Detail: "节点 b 离线"}}}
-	a.filterReply(ctx, x, act)
-	if e := act.Entries[0]; e.Actor != "其他节点" || e.Detail != "节点 其他节点 离线" {
-		t.Errorf("事件：%v", e)
 	}
 	rep := &nagiv1.ListNodeReplicasResponse{Replicas: []*nagiv1.NodeReplica{
 		{Replica: &nagiv1.Replica{ProjectId: "p1", SourceNodeId: "n2", SourceName: "b", Dir: "/r/p1"}},

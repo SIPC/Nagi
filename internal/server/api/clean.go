@@ -267,10 +267,6 @@ func (a *API) cleanReply(ctx context.Context, x *access, msg any) {
 		if r := m.GetResult(); r != nil {
 			r.Error = a.scrubNodes(ctx, x, r.GetError())
 		}
-	case *nagiv1.ListActivityResponse:
-		for _, e := range m.GetEntries() {
-			e.Actor, e.Target, e.Detail = a.scrubNodes(ctx, x, e.GetActor()), a.scrubNodes(ctx, x, e.GetTarget()), a.scrubNodes(ctx, x, e.GetDetail())
-		}
 	case *nagiv1.ListVolumesResponse:
 		if !x.can(auth.PermNodeDetails) {
 			for _, v := range m.GetVolumes() {

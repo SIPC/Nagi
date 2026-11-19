@@ -7,6 +7,8 @@ package i18n
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
@@ -329,8 +331,8 @@ type Redactor interface {
 }
 
 // Redact 把 err 里提到的对象换掉名称：hide 返回 (新的名称, true) 的换。返回换过的错误，以及有没有换。
-// 只认结构上的引用：Errorf 的参数里的 Ref、参数里的错误、Detail、实现了 Redactor 的错误，以及只是加了类型的包装
-// （文字和里面的错误完全相同）。不在文字里找名称：请求的人自己写进报错的文字怎么写都不会被换，也就不能借
+// 只认结构上的引用：Errorf 的参数里的 Ref、参数里的错误、Detail、实现了 Redactor 的错误、只是加了类型的包装
+// （文字和里面的错误完全相同）和 errors.Join 连起来的错误。fmt.Errorf 包着的不认：带引用的错误用 Errorf 包。不在文字里找名称：请求的人自己写进报错的文字怎么写都不会被换，也就不能借
 // 「换没换」探出有没有某个名称的对象。
 func Redact(err error, hide func(Ref) (string, bool)) (error, bool) {
 	switch e := err.(type) {
@@ -370,11 +372,87 @@ func Redact(err error, hide func(Ref) (string, bool)) (error, bool) {
 		}
 		return detailed{r, c}, true
 	}
-	// 只是加了类型的包装：换里面的。
+	// 只是加了类型的包装：换里面的。要保留自己类型的包装实现 Redactor（例如 spec 的参数错误）。
 	if u, ok := err.(interface{ Unwrap() error }); ok {
 		if inner := u.Unwrap(); inner != nil && inner.Error() == err.Error() {
 			return Redact(inner, hide)
 		}
 	}
+	// errors.Join 连起来的几个错误：逐个换，再连回去。
+	if u, ok := err.(interface{ Unwrap() []error }); ok {
+		inner := u.Unwrap()
+		if joined := errors.Join(inner...); joined != nil && joined.Error() == err.Error() {
+			out := make([]error, len(inner))
+			changed := false
+			for i, e := range inner {
+				r, ok := Redact(e, hide)
+				out[i], changed = r, changed || ok
+			}
+			if changed {
+				return errors.Join(out...), true
+			}
+		}
+	}
 	return err, false
+}
+
+// 引用写进文字时的标记：markOpen 类型:ID markSep 名称 markClose。用控制字符，名称和 ID 里不会有。
+const (
+	markOpen  = "\x02"
+	markSep   = "\x1f"
+	markClose = "\x03"
+)
+
+var markStrip = strings.NewReplacer(markOpen, "", markSep, "", markClose, "")
+
+// Marked 把一个错误拼成文字，其中的引用写成标记：文字要存下来、以后给不同的人看时用（审计的失败详情），
+// 显示时用 RenderRefs 按查看的人换成名称。render 拿到 hide 以后自己调 Redact 并取出文字。
+// 文字里原有的标记字符去掉：只有真正的引用才会成为标记，请求的人自己写不出来。
+func Marked(render func(hide func(Ref) (string, bool)) string) string {
+	var nonce [8]byte
+	_, _ = rand.Read(nonce[:])
+	tag := "\x00" + hex.EncodeToString(nonce[:]) + ":"
+	var refs []Ref
+	s := render(func(r Ref) (string, bool) {
+		refs = append(refs, r)
+		return tag + strconv.Itoa(len(refs)-1) + "\x00", true
+	})
+	s = markStrip.Replace(s)
+	for i, r := range refs {
+		mark := markOpen + markStrip.Replace(r.Kind) + ":" + markStrip.Replace(r.ID) + markSep + markStrip.Replace(r.Name) + markClose
+		s = strings.ReplaceAll(s, tag+strconv.Itoa(i)+"\x00", mark)
+	}
+	return s
+}
+
+// RenderRefs 把 Marked 写的文字里的标记换成 name 返回的文字。没有标记的文字原样返回；
+// 被截断的标记（存的时候有长度上限）连同后面的内容去掉。
+func RenderRefs(s string, name func(Ref) string) string {
+	if !strings.Contains(s, markOpen) {
+		return s
+	}
+	var b strings.Builder
+	for {
+		i := strings.Index(s, markOpen)
+		if i < 0 {
+			b.WriteString(s)
+			break
+		}
+		b.WriteString(s[:i])
+		rest := s[i+len(markOpen):]
+		j := strings.Index(rest, markClose)
+		if j < 0 {
+			break
+		}
+		head, label, _ := strings.Cut(rest[:j], markSep)
+		kind, id, _ := strings.Cut(head, ":")
+		b.WriteString(name(Ref{Kind: kind, ID: id, Name: label}))
+		s = rest[j+len(markClose):]
+	}
+	return b.String()
+}
+
+// PlainRefs 把标记换成记下的名称。
+func PlainRefs(s string) string {
+	return RenderRefs(s, func(r Ref) string { return r.Name })
 }

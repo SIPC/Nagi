@@ -453,18 +453,42 @@ func (a *API) scrubError(ctx context.Context, x *access, err error) error {
 		}
 		return "", false
 	}
-	var ce *connect.Error
-	if errors.As(err, &ce) {
-		inner, changed := i18n.Redact(ce.Unwrap(), hide)
-		if !changed {
-			return err
-		}
-		out := connect.NewError(ce.Code(), inner)
-		for k, v := range ce.Meta() {
-			out.Meta()[k] = v
-		}
-		return out
+	out, changed := redactError(err, hide)
+	if changed {
+		// 审计里记的是原来的报错（带引用的标记，显示时再按查看的人换，见 auditFailure）。
+		noteRawError(ctx, err)
 	}
-	out, _ := i18n.Redact(err, hide)
 	return out
+}
+
+// redactError 对接口的报错调 i18n.Redact：Connect 错误换里面的，错误码、details 和响应头不变。
+func redactError(err error, hide func(i18n.Ref) (string, bool)) (error, bool) {
+	var ce *connect.Error
+	if !errors.As(err, &ce) {
+		return i18n.Redact(err, hide)
+	}
+	inner, changed := i18n.Redact(ce.Unwrap(), hide)
+	if !changed {
+		return err, false
+	}
+	out := connect.NewError(ce.Code(), inner)
+	for _, d := range ce.Details() {
+		out.AddDetail(d)
+	}
+	for k, v := range ce.Meta() {
+		out.Meta()[k] = v
+	}
+	return out, true
+}
+
+// scrubFor 给不走 Connect 的入口（终端、上传、卷文件、下载链接）清理报错，规则和 scrubError 一样。
+func (a *API) scrubFor(ctx context.Context, u auth.User, lang i18n.Lang, err error) error {
+	if err == nil {
+		return nil
+	}
+	x, aerr := a.loadAccess(ctx, u)
+	if aerr != nil {
+		return aerr
+	}
+	return a.scrubError(i18n.WithLang(ctx, lang), x, err)
 }

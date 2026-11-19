@@ -32,6 +32,8 @@ type auditViewer struct {
 	scrub func(string) string
 	// other 是「其他节点」按界面语言的文字。
 	other string
+	// refs 把失败详情里的引用标记（见 auditFailure）换成名称，查看者看不到的节点换成「其他节点」。
+	refs func(string) string
 	// hidden 是他看不到的节点：ID → 名称。筛选和搜索不能借它们探出这些节点（2026-11-19-87c02b5#10）。
 	hidden map[string]string
 }
@@ -40,7 +42,7 @@ type auditViewer struct {
 func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 	u := auth.CurrentUser(ctx)
 	v := auditViewer{admin: u.Can(auth.PermAudit), viewer: !u.Can(auth.PermConfig), userID: strconv.FormatInt(u.ID, 10),
-		session: audit.SessionTag(u.SessionID), scrub: func(s string) string { return s }}
+		session: audit.SessionTag(u.SessionID), scrub: func(s string) string { return s }, refs: i18n.PlainRefs}
 	if v.admin {
 		return v, nil
 	}
@@ -55,6 +57,15 @@ func (a *API) auditViewer(ctx context.Context) (auditViewer, error) {
 	// 就能确认有没有这台节点（2026-11-19-7b50402#3）。操作者、对象是节点的记录按类型和 ID 换（见 entry）。
 	v.scrub = func(s string) string { return a.scrubNodeIDs(ctx, x, s) }
 	v.other = otherNode(ctx)
+	other := v.other
+	v.refs = func(s string) string {
+		return i18n.RenderRefs(s, func(r i18n.Ref) string {
+			if r.Kind == "node" && !x.node(r.ID) {
+				return other
+			}
+			return r.Name
+		})
+	}
 	v.hidden = map[string]string{}
 	for id, name := range a.nodeNames(ctx, x) {
 		if !x.node(id) {
@@ -138,7 +149,7 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 		ActorId: e.ActorID, ActorName: e.ActorName, Via: e.Via, TokenId: e.TokenID, TokenName: names.tokens[e.TokenID],
 		Client: e.Client, Session: e.Session, Ip: e.IP, UserAgent: e.UserAgent, ProjectId: e.ProjectID,
 		ProjectName: names.projects[e.ProjectID], TargetType: e.TargetType, TargetId: e.TargetID, TargetName: e.TargetName,
-		Params: e.Params, Result: e.Result, Error: e.Error, DurationMs: e.DurationMS, ParentId: e.ParentID,
+		Params: e.Params, Result: e.Result, Error: v.refs(e.Error), DurationMs: e.DurationMS, ParentId: e.ParentID,
 		RecordingId: e.RecordingID,
 	}
 	if !v.admin {
@@ -330,8 +341,19 @@ func (s *settingsService) ExportAuditEvents(ctx context.Context, req *connect.Re
 
 // ---- 原来的活动记录接口：改为查询审计库，返回格式不变 ----
 
-// activityEntry 把审计记录转成原来的活动记录格式。
-func activityEntry(e audit.Event, names auditNames) *nagiv1.ActivityEntry {
+// activityEntry 把审计记录转成原来的活动记录格式。节点和审计页一样按引用换（见 entry）：操作者、对象是
+// 查看者看不到的节点时换成「其他节点」，失败详情里的引用按标记换；不在文字里找名称。
+func (v auditViewer) activityEntry(e audit.Event, names auditNames) *nagiv1.ActivityEntry {
+	e.Error = v.refs(e.Error)
+	if !v.admin {
+		e.Error = v.scrub(e.Error)
+		if e.ActorType == "node" && !v.x.node(e.ActorID) {
+			e.ActorName = v.other
+		}
+		if e.TargetType == "node" && !v.x.node(e.TargetID) {
+			e.TargetName = v.other
+		}
+	}
 	kind := "operation"
 	if e.Category == audit.Alert {
 		kind = "alert"
@@ -395,6 +417,10 @@ func (s *projectService) projectEvents(ctx context.Context, f audit.Filter) (*co
 	}
 	f.Categories = []string{audit.Operation, audit.Session, audit.Alert, audit.MCP, audit.Security}
 	f.TopLevel = false
+	v, err := s.auditViewer(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.view().List(ctx, f)
 	if err != nil {
 		return nil, err
@@ -403,7 +429,7 @@ func (s *projectService) projectEvents(ctx context.Context, f audit.Filter) (*co
 	names := s.auditNames(ctx)
 	out := &nagiv1.ListActivityResponse{}
 	for _, r := range rows {
-		e := activityEntry(r, names)
+		e := v.activityEntry(r, names)
 		// 操作失败的详情可能带着配置里的内容（compose 报错等），只读角色只看结果。
 		if viewer && e.Kind == "operation" {
 			e.Detail = ""
@@ -425,6 +451,10 @@ func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request
 	case "operation":
 		f.Categories = []string{audit.Operation, audit.Read, audit.MCP, audit.Session, audit.Login, audit.Security}
 	}
+	v, err := s.auditViewer(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.view().List(ctx, f)
 	if err != nil {
 		return nil, err
@@ -432,7 +462,7 @@ func (s *settingsService) ListActivity(ctx context.Context, req *connect.Request
 	names := s.auditNames(ctx)
 	out := &nagiv1.ListActivityResponse{}
 	for _, r := range rows {
-		out.Entries = append(out.Entries, activityEntry(r, names))
+		out.Entries = append(out.Entries, v.activityEntry(r, names))
 	}
 	return connect.NewResponse(out), nil
 }

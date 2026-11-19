@@ -148,10 +148,10 @@ func (s *Service) checkEntries(ctx context.Context, c store.Container, old *stor
 		}
 		info := conn.LastReport().GetNode()
 		if !info.GetCrossNodeEntry() {
-			return invalid("节点 %s 版本过低，升级后才能作为跨节点入口", n.Name)
+			return invalid("节点 %s 版本过低，升级后才能作为跨节点入口", i18n.NodeRef(n.ID, n.Name))
 		}
 		if info.GetProxyDisabled() {
-			return invalid("节点 %s 没有启动 Caddy，无法作为入口节点", n.Name)
+			return invalid("节点 %s 没有启动 Caddy，无法作为入口节点", i18n.NodeRef(n.ID, n.Name))
 		}
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		_, err = conn.Agent.CheckPorts(cctx, &nagiv1.CheckPortsRequest{Routes: spec.SplitRoute(r)})

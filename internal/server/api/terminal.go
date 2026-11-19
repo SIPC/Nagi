@@ -65,20 +65,20 @@ func (a *API) TerminalHandler() http.Handler {
 			Size:      &nagiv1.TerminalSize{Cols: uint32(cols), Rows: uint32(rows)},
 		}
 		if err := a.checkPrivilegedEntry(ctx, u, start.ProjectId, start.Container); err != nil {
-			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
+			a.recordOperation(ctx, "/OpenTerminal", start, auditFailure(err))
 			fail(i18n.Localize(lang, err))
 			return
 		}
 		nodeID, err := a.Projects.Locate(ctx, q.Get("project"), q.Get("container"))
 		if err != nil {
-			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
-			fail(i18n.Localize(lang, err))
+			a.recordOperation(ctx, "/OpenTerminal", start, auditFailure(err))
+			fail(i18n.Localize(lang, a.scrubFor(ctx, u, lang, err)))
 			return
 		}
 		conn, err := a.Nodes.Get(nodeID)
 		if err != nil {
-			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
-			fail(i18n.Localize(lang, err))
+			a.recordOperation(ctx, "/OpenTerminal", start, auditFailure(err))
+			fail(i18n.Localize(lang, a.scrubFor(ctx, u, lang, err)))
 			return
 		}
 		stream, err := conn.Agent.Exec(ctx)
@@ -86,7 +86,7 @@ func (a *API) TerminalHandler() http.Handler {
 			err = stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Start{Start: start}})
 		}
 		if err != nil {
-			a.recordOperation(ctx, "/OpenTerminal", start, activityFailure(err))
+			a.recordOperation(ctx, "/OpenTerminal", start, auditFailure(err))
 			fail(terminalError(lang, err))
 			return
 		}

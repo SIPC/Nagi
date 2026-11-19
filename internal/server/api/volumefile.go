@@ -25,7 +25,10 @@ const maxVolumeUpload = 8 << 30
 func (a *API) VolumeFileHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := requestLang(r)
+		// who 是登录以后的成员：报错里他看不到的节点换成「其他节点」。
+		var who auth.User
 		fail := func(code int, err error) {
+			err = a.scrubFor(r.Context(), who, lang, err)
 			msg := errorText(lang, err)
 			if isStatus(err) {
 				switch status.Code(err) {
@@ -44,6 +47,7 @@ func (a *API) VolumeFileHandler() http.Handler {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
+		who = u
 		// 下载要「文件查看」，上传等修改另由 checkVolumeWrite 检查「文件修改」。
 		if !u.Can(auth.PermFilesRead) {
 			fail(http.StatusForbidden, errNoPermission)
@@ -137,12 +141,12 @@ func (a *API) VolumeFileHandler() http.Handler {
 		}
 		stream, err := client.VolumeUpload(ctx)
 		if err != nil {
-			a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(err))
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, auditFailure(err))
 			fail(http.StatusBadGateway, err)
 			return
 		}
 		if err := stream.Send(&nagiv1.VolumeUploadChunk{Ref: ref}); err != nil {
-			a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(err))
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, auditFailure(err))
 			fail(http.StatusBadGateway, err)
 			return
 		}
@@ -165,14 +169,14 @@ func (a *API) VolumeFileHandler() http.Handler {
 					fail(http.StatusRequestEntityTooLarge, i18n.New("单个文件不能超过 8 GB"))
 					return
 				}
-				a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(rerr))
+				a.recordOperation(ctx, "/UploadVolumeFile", ref, auditFailure(rerr))
 				fail(http.StatusBadRequest, rerr)
 				return
 			}
 		}
 		res, err := stream.CloseAndRecv()
 		if err != nil {
-			a.recordOperation(ctx, "/UploadVolumeFile", ref, activityFailure(err))
+			a.recordOperation(ctx, "/UploadVolumeFile", ref, auditFailure(err))
 			fail(http.StatusBadRequest, err)
 			return
 		}

@@ -24,7 +24,7 @@ import (
 func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, timeout time.Duration) (ExecResult, error) {
 	u := auth.CurrentUser(ctx)
 	fail := func(err error) (ExecResult, error) {
-		a.recordNodeExec(ctx, nodeID, command, activityFailure(err), audit.Summary{})
+		a.recordNodeExec(ctx, nodeID, command, auditFailure(err), audit.Summary{})
 		return ExecResult{}, err
 	}
 	switch {

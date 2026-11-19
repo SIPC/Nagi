@@ -274,7 +274,7 @@ func (r *Registry) NodeMeshKey(nodeID string) (mesh.Key, error) {
 	defer c.mu.RUnlock()
 	k, err := mesh.ParseKey(c.mesh.GetPublicKey())
 	if err != nil {
-		return mesh.Key{}, i18n.Errorf("节点 %s 还没有加入节点网络", c.name)
+		return mesh.Key{}, i18n.Errorf("节点 %s 还没有加入节点网络", i18n.NodeRef(c.NodeID, c.name))
 	}
 	return k, nil
 }

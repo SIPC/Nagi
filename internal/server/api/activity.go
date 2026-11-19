@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -272,6 +273,34 @@ func errorResult(err error) string {
 	return audit.ResultFailed
 }
 
+// rawError 让 activityLog 拿到清理之前的报错：scopeCheck 在里面一层，返回给成员的报错已经把他看不到的节点
+// 换成了「其他节点」，审计里要记原来的。
+type rawError struct{ err error }
+
+type rawErrorKey struct{}
+
+func noteRawError(ctx context.Context, err error) {
+	if h, ok := ctx.Value(rawErrorKey{}).(*rawError); ok {
+		h.err = err
+	}
+}
+
+func (h *rawError) or(err error) error {
+	if h.err != nil {
+		return h.err
+	}
+	return err
+}
+
+// auditFailure 是记进审计的失败详情：报错里提到的节点写成带 ID 的标记（i18n.Marked），显示时按查看的人
+// 换成名称或「其他节点」（auditViewer.refs），不用在文字里找名称。
+func auditFailure(err error) string {
+	return i18n.Marked(func(hide func(i18n.Ref) (string, bool)) string {
+		out, _ := redactError(err, hide)
+		return activityFailure(out)
+	})
+}
+
 // activityFailure 取错误本身的说明，去掉 RPC 错误码的前缀。
 func activityFailure(err error) string {
 	var ce *connect.Error
@@ -347,7 +376,8 @@ func (l activityLog) skip(ctx context.Context, procedure string, req proto.Messa
 func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		start := time.Now()
-		res, err := next(ctx, req)
+		raw := &rawError{}
+		res, err := next(context.WithValue(ctx, rawErrorKey{}, raw), req)
 		procedure := req.Spec().Procedure
 		// 修改成功后通知订阅流（见 overview.go）：部署、操作的结果、配置的修改。
 		if err == nil && activityRecorded(procedure) {
@@ -365,7 +395,7 @@ func (l activityLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		result, failure := audit.ResultOK, ""
 		var extra map[string]any
 		if err != nil {
-			result, failure = errorResult(err), activityFailure(err)
+			result, failure = errorResult(err), auditFailure(raw.or(err))
 		} else if extra = batchSummary(msg, res.Any()); extra != nil {
 			// 批量操作（删除、清理镜像）：参数里记下成功、跳过、失败的数量和实际删除的前几项，再列出失败的几项。
 			// 每一项都失败时记为失败；部分成功仍记为成功。
@@ -392,7 +422,8 @@ func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) con
 		}
 		start := time.Now()
 		w := &activityConn{StreamingHandlerConn: conn}
-		err := next(ctx, w)
+		raw := &rawError{}
+		err := next(context.WithValue(ctx, rawErrorKey{}, raw), w)
 		if err == nil && w.probe {
 			return nil
 		}
@@ -401,7 +432,7 @@ func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) con
 			result = audit.ResultFailed
 		}
 		if err != nil {
-			result, failure = errorResult(err), activityFailure(err)
+			result, failure = errorResult(err), auditFailure(raw.or(err))
 		}
 		l.a.recordCall(ctx, conn.Spec().Procedure, w.req, result, failure, time.Since(start))
 		return err
