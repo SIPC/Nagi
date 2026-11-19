@@ -79,8 +79,9 @@ type replicas struct {
 	denied       func(real string) bool
 	// stateDir 是副本快照仓库的连接配置和缓存，副本删除、换了位置时一起删掉。
 	stateDir func(projectID, container string) string
-	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。
-	locks map[string]*sync.RWMutex
+	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。只在有请求用着（包括等着拿锁）时留在这里，
+	// 用完就删：没通过鉴权的请求（随便填的项目 ID 和容器名）不会让它一直变大。
+	locks map[string]*replicaLock
 	// syncing 记着每个副本正在同步的源节点和它最近一次请求的时间（见 claim）。
 	syncing map[string]replicaSync
 }
@@ -153,33 +154,50 @@ func (r *replicas) root(projectID, container string) (string, error) {
 	return filepath.Join(base, id), nil
 }
 
+// replicaLock 是一个副本的锁。refs 等由 replicas.mu 保护。
+type replicaLock struct {
+	sync.RWMutex
+	refs int // 用着这把锁（拿着或者等着）的请求数，减到 0 时从 replicas.locks 里删掉
+}
+
 func (r *replicas) lock(projectID, container string) func() {
-	l := r.lockOf(projectID, container)
+	l, done := r.lockOf(projectID, container)
 	l.Lock()
-	return l.Unlock
+	return func() { l.Unlock(); done() }
 }
 
 // rlock 是接收文件时加的锁：同一次同步的几条流（见 syncStreams）各写各的文件，可以同时拿；
 // 提交、恢复等要改整个副本的操作用 lock，等它们都结束。
 func (r *replicas) rlock(projectID, container string) func() {
-	l := r.lockOf(projectID, container)
+	l, done := r.lockOf(projectID, container)
 	l.RLock()
-	return l.RUnlock
+	return func() { l.RUnlock(); done() }
 }
 
-func (r *replicas) lockOf(projectID, container string) *sync.RWMutex {
+// lockOf 返回副本的锁和用完后调用的 done（放开锁以后调用）。最后一个用着的请求 done 时从 locks 里删掉。
+func (r *replicas) lockOf(projectID, container string) (*replicaLock, func()) {
 	id := projectID + "-" + container
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.locks == nil {
-		r.locks = map[string]*sync.RWMutex{}
+		r.locks = map[string]*replicaLock{}
 	}
 	l := r.locks[id]
 	if l == nil {
-		l = &sync.RWMutex{}
+		l = &replicaLock{}
 		r.locks[id] = l
 	}
-	return l
+	l.refs++
+	var once sync.Once
+	return l, func() {
+		once.Do(func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if l.refs--; l.refs == 0 && r.locks[id] == l {
+				delete(r.locks, id)
+			}
+		})
+	}
 }
 
 // load 读取副本的登记信息和恢复用的配置。
