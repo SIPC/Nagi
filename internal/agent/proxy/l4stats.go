@@ -61,17 +61,18 @@ func (o *observerT) l4Open(route string) *l4Counter {
 }
 
 // takeL4 把 tcp/udp 规则的计数合进 out 并清零。没有连接、也没有新计数的规则删掉（规则可能已经删除）。调用方持有 o.mu。
+// 先取 active：为 0 时没有连接在用这份计数（新连接要先拿锁），之后清零的值不会再变，删掉不丢计数。
 func (o *observerT) takeL4(out map[string]RouteStats) {
 	for k, c := range o.l4 {
 		s := out[k]
 		s.L4 = true
+		s.Active = int(c.active.Load())
 		s.Conns += int(c.conns.Swap(0))
 		s.Fails += int(c.fails.Swap(0))
 		s.BytesIn += c.in.Swap(0)
 		s.BytesOut += c.out.Swap(0)
-		s.Active = int(c.active.Load())
 		out[k] = s
-		if s.Active == 0 && s.Conns == 0 && s.BytesIn == 0 && s.BytesOut == 0 {
+		if s.Active == 0 && s.Conns == 0 && s.Fails == 0 && s.BytesIn == 0 && s.BytesOut == 0 {
 			delete(o.l4, k)
 		}
 	}
