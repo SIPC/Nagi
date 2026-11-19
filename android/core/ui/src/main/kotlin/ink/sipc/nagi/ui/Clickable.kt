@@ -2,6 +2,7 @@ package ink.sipc.nagi.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,7 @@ fun Modifier.rowClickable(
     enabled: Boolean = true,
     inset: Dp = RowInset,
     highlight: Color? = null,
+    onLongClick: (() -> Unit)? = null,
 ): Modifier = this
     // 量的时候左右各多给 inset，摆的时候往左挪 inset，报给外面的宽度还是原来的。
     .layout { measurable, constraints ->
@@ -39,5 +41,9 @@ fun Modifier.rowClickable(
     .clip(RoundedCornerShape(8.dp))
     // 选中的一行（宽屏设置页左边的菜单）一直有底色，范围和按下的底色一样。
     .then(if (highlight != null) Modifier.background(highlight) else Modifier)
-    .clickable(enabled = enabled, role = role, onClick = onClick)
+    // 长按打开这一行的操作或进入多选（docs/android.md「长按」）。
+    .then(
+        if (onLongClick != null) Modifier.combinedClickable(enabled = enabled, role = role, onLongClick = onLongClick, onClick = onClick)
+        else Modifier.clickable(enabled = enabled, role = role, onClick = onClick),
+    )
     .padding(horizontal = inset)
