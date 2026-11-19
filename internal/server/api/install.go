@@ -52,7 +52,7 @@ while [ $# -gt 0 ]; do
     *) fail "未知参数 $1" ;;
   esac
 done
-[ -n "$TOKEN" ] || fail "缺少加入令牌（环境变量 NAGI_TOKEN），请在面板上重新复制安装命令"
+[ -n "$TOKEN" ] || fail "缺少加入令牌（环境变量 NAGI_TOKEN）。请以 root 执行面板上复制的安装命令：不要在 sh 前加 sudo（sudo 不传环境变量），先执行 sudo -i 再粘贴"
 case "$DOWNLOAD_URL" in "" | http://* | https://*) ;; *) fail "--download-url 须以 http:// 或 https:// 开头" ;; esac
 if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
@@ -78,6 +78,7 @@ detect_cn
 ensure_docker
 
 download_nagi
+` + enrollVersionCheck + `
 if [ "$NEW_VERSION" != "$PANEL_VERSION" ]; then
   say "注意：下载的 nagi 是 $NEW_VERSION，面板是 $PANEL_VERSION。加入后可在面板的「节点」页升级到一致。"
 fi
@@ -120,6 +121,13 @@ else
 fi
 say "已注册 nagi 命令，例如 nagi panel list 查看信任的面板（更多命令：nagi --help）。"
 `))
+
+// enrollVersionCheck 在下载到的 nagi 太旧时停下并说明原因：v0.35.0 之前的 nagi enroll 不读环境变量里的令牌，
+// 照常执行只会报缺少令牌。--download-url 指向的镜像没更新时会遇到。
+const enrollVersionCheck = `case "$NEW_VERSION" in
+  v0.[0-9].* | v0.[12][0-9].* | v0.3[0-4].*)
+    fail "下载到的 nagi 是 $NEW_VERSION，低于 v0.35.0，无法加入这个面板。请更新 --download-url 指向的镜像后重试" ;;
+esac`
 
 // sharedScript 是节点安装脚本和面板安装脚本（scripts/install.sh）共用的函数：自动安装 Docker 和 compose 插件、
 // 把 nagi 注册为命令。面板安装脚本在 GitHub 上单独提供，只能复制一份；TestSharedScript 检查两边一致。
