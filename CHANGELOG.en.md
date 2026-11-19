@@ -8,7 +8,11 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## v0.35.1
+## v0.36.0
+
+### New features
+
+- The "Audit log" permission can be granted to other roles. Members with it can view, export, and verify all audit records.
 
 ### Improvements
 
@@ -33,10 +37,11 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - The command for adding a standby panel now passes the pairing code in the environment variable `NAGI_STANDBY`. `--standby` still works. The install script no longer installs versions earlier than v0.35.0 as a standby panel.
 - Project settings parameters in Audit and events are shown according to the member's permissions, and file entries are searched only by what the member can see.
 - When a member cannot see the standby node, the holder's sync time and failback status are no longer shown.
+- Members without the "Audit log" permission no longer see the Audit page. Project and container events are shown as before.
 
 ### Upgrade notes
 
-- Upgrade nodes to v0.35.1.
+- Upgrade nodes to v0.36.0.
 
 ## v0.35.0
 

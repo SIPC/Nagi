@@ -8,7 +8,11 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## v0.35.1
+## v0.36.0
+
+### 新功能
+
+- 支持将「审计日志」权限授予其他角色，有此权限的成员可以查看、导出和校验全部审计记录。
 
 ### 改进
 
@@ -33,10 +37,11 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - 添加备用面板的命令改为用环境变量 `NAGI_STANDBY` 传递配对码，`--standby` 仍可使用。安装脚本不再安装 v0.35.0 之前的版本作为备用面板。
 - 审计和事件中项目设置的参数按成员的权限显示，文件记录按成员能看到的内容搜索。
 - 成员看不到热备节点时，不再显示持有方的同步时间和切回状态。
+- 没有「审计日志」权限的成员不再显示审计页，项目和容器的事件照常显示。
 
 ### 升级说明
 
-- 需将节点升级到 v0.35.1。
+- 需将节点升级到 v0.36.0。
 
 ## v0.35.0
 
