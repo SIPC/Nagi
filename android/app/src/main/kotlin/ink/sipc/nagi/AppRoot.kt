@@ -2,6 +2,8 @@ package ink.sipc.nagi
 
 import ink.sipc.nagi.pairing.ApprovalPrompts
 import ink.sipc.nagi.nodes.AddNodeScreen
+import ink.sipc.nagi.nodes.HaScreen
+import ink.sipc.nagi.nodes.MeshScreen
 import ink.sipc.nagi.nodes.NodeActions
 import ink.sipc.nagi.nodes.NodeScreen
 import ink.sipc.nagi.nodes.NodesContent
@@ -433,7 +435,7 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
 
     // 节点的各个二级页面。窄屏时在主导航里一页一页推进去；宽屏时在节点页右边的那一栏里（[n] 是那一栏自己的导航，
     // 第一页是 NodesPanes 里的节点详情）。
-    fun NavGraphBuilder.nodePages(n: NavController, onRemoved: () -> Unit) {
+    fun NavGraphBuilder.nodePages(n: NavController, openNode: (String) -> Unit = { n.navigate("node/$it") }, onRemoved: () -> Unit) {
         val back: () -> Unit = { n.popBackStack() }
         val nodeActions = object : NodeActions {
             override fun back() { n.popBackStack() }
@@ -442,6 +444,8 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
         }
         page("node/{id}") { entry -> NodeScreen(nodes, entry.arguments?.getString("id").orEmpty(), nodeActions) }
         page("nodes/add") { AddNodeScreen(nodes.repo, onBack = back, onDone = { nodes.refresh(); back() }) }
+        page("nodes/mesh") { MeshScreen(nodes, session, onBack = back, openNode = openNode) }
+        page("nodes/ha") { HaScreen(nodes, session, onBack = back, openNode = openNode, openContainer = { p, c -> n.navigate("container/$p/$c") }) }
     }
     val nodesState by nodes.list.collectAsStateWithLifecycle()
     val canAddNode = nodes.accessOf(nodesState)?.isAdmin == true
@@ -496,11 +500,17 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                             Tab.HOME -> HomeContent(home, actions, contentPadding, showMessage, homeList)
                             Tab.PROJECTS -> Placeholder()
                             Tab.NODES -> if (wide) {
-                                NodesPanes(contentPadding, nodes, pickedNode, { pickedNode = it }, pages = { n -> nodePages(n) { pickedNode = null; n.popBackStack(NODE_DETAIL, inclusive = false) } }) { selected, open, add ->
-                                    NodesContent(nodes, contentPadding, onOpen = open, onAdd = add, showMessage = showMessage, listState = nodesList, selected = selected, header = true)
+                                NodesPanes(contentPadding, nodes, pickedNode, { pickedNode = it }, pages = { n, open -> nodePages(n, open) { pickedNode = null; n.popBackStack(NODE_DETAIL, inclusive = false) } }) { selected, open, add, go, view ->
+                                    NodesContent(
+                                        nodes, contentPadding, onOpen = open, onAdd = add, showMessage = showMessage, listState = nodesList,
+                                        selected = selected, header = true, onMesh = { go("nodes/mesh") }, onHa = { go("nodes/ha") }, view = view,
+                                    )
                                 }
                             } else {
-                                NodesContent(nodes, contentPadding, onOpen = { nav.navigate("node/$it") }, onAdd = { nav.navigate("nodes/add") }, showMessage = showMessage, listState = nodesList)
+                                NodesContent(
+                                    nodes, contentPadding, onOpen = { nav.navigate("node/$it") }, onAdd = { nav.navigate("nodes/add") }, showMessage = showMessage, listState = nodesList,
+                                    onMesh = { nav.navigate("nodes/mesh") }, onHa = { nav.navigate("nodes/ha") },
+                                )
                             }
                             Tab.SETTINGS -> if (wide) {
                                 SettingsPanes(contentPadding, pages = { n -> settingsPages(n) }) { detail, open ->
@@ -594,20 +604,34 @@ private fun NodesPanes(
     vm: NodesViewModel,
     picked: String?,
     pick: (String?) -> Unit,
-    pages: NavGraphBuilder.(NavController) -> Unit,
-    list: @Composable (selected: String?, open: (String) -> Unit, add: () -> Unit) -> Unit,
+    pages: NavGraphBuilder.(NavController, (String) -> Unit) -> Unit,
+    list: @Composable (selected: String?, open: (String) -> Unit, add: () -> Unit, go: (String) -> Unit, view: String?) -> Unit,
 ) {
     val detail = rememberNavController()
     val state by vm.list.collectAsStateWithLifecycle()
     val ids = (state as? Polled.Ready)?.value?.nodes?.map { it.id }.orEmpty()
     // 选中的节点不在了（被移除）时看第一个。
     val shown = picked?.takeIf { it in ids } ?: ids.firstOrNull()
+    val route = detail.currentBackStackEntryAsState().value?.destination?.route
+    // 右边是节点网络或高可用时，左边那一行有底色，节点不高亮。
+    val view = when (route) {
+        "nodes/mesh" -> "mesh"
+        "nodes/ha" -> "ha"
+        else -> null
+    }
+    val open = { id: String ->
+        pick(id)
+        detail.popBackStack(NODE_DETAIL, inclusive = false)
+        Unit
+    }
     Row(Modifier.fillMaxSize()) {
         Box(Modifier.width(360.dp).fillMaxHeight()) {
-            list(shown, { id ->
-                pick(id)
-                detail.popBackStack(NODE_DETAIL, inclusive = false)
-            }, { detail.navigate("nodes/add") { launchSingleTop = true } })
+            list(if (view == null) shown else null, open, { detail.navigate("nodes/add") { launchSingleTop = true } }, { r ->
+                detail.navigate(r) {
+                    popUpTo(NODE_DETAIL)
+                    launchSingleTop = true
+                }
+            }, view)
         }
         Box(Modifier.width(1.dp).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).background(NagiTheme.colors.border))
         Box(Modifier.weight(1f).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).consumeWindowInsets(WindowInsets.statusBars)) {
@@ -634,7 +658,7 @@ private fun NodesPanes(
                         }
                     }
                 }
-                pages(detail)
+                pages(detail, open)
                 page("container/{project}/{name}") { entry -> ContainerPlaceholder(entry.arguments?.getString("name").orEmpty()) { detail.popBackStack() } }
             }
         }

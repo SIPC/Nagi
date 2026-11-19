@@ -50,6 +50,8 @@ import ink.sipc.nagi.ui.NagiIconButton
 import ink.sipc.nagi.ui.NagiIcons
 import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.Roll
+import ink.sipc.nagi.ui.SectionDivider
+import ink.sipc.nagi.ui.SettingsRow
 import ink.sipc.nagi.ui.SkeletonRows
 import ink.sipc.nagi.ui.StatusDot
 import ink.sipc.nagi.ui.UsageRing
@@ -75,6 +77,10 @@ fun NodesContent(
     listState: LazyListState = rememberLazyListState(),
     selected: String? = null,
     header: Boolean = false,
+    onMesh: () -> Unit = {},
+    onHa: () -> Unit = {},
+    /** 宽屏右边正在看的是节点网络（mesh）还是高可用（ha），那一行有底色。 */
+    view: String? = null,
 ) {
     val state by vm.list.collectAsStateWithLifecycle()
     val approving by vm.approving.collectAsStateWithLifecycle()
@@ -123,6 +129,17 @@ fun NodesContent(
                             onClick = { onOpen(n.id) }, onApprove = { confirm = n },
                             modifier = Modifier.animateItem(fadeInSpec = tween(Motion.FADE_IN, easing = Motion.Enter), fadeOutSpec = null).padding(horizontal = Dimens.pageHorizontal),
                         )
+                    }
+                }
+                // 列表下面是节点网络和高可用（网页节点页的「网络」「高可用」视图）：手机上是列表，宽屏画拓扑图。
+                // 高可用画的是顶替和备份，要相应的权限（和网页一样）。
+                if (list.access.can(Access.NODE_VIEW) && list.nodes.isNotEmpty()) item(key = "views") {
+                    Column(Modifier.padding(horizontal = Dimens.pageHorizontal)) {
+                        SectionDivider()
+                        SettingsRow(stringResource(R.string.mesh_title), onMesh, selected = view == "mesh")
+                        if (list.access.can(Access.PROJECT_HA) || list.access.can(Access.PROJECT_BACKUP)) {
+                            SettingsRow(stringResource(R.string.ha_title), onHa, selected = view == "ha")
+                        }
                     }
                 }
             }
