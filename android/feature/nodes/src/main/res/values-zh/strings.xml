@@ -147,4 +147,36 @@
     <string name="minutes_ago">%1$d 分钟前</string>
     <string name="hours_ago">%1$d 小时前</string>
     <string name="days_ago">%1$d 天前</string>
+    <!-- 节点网络和高可用（MeshScreen、HaScreen、NodeMap），文案同网页的 nodes.map、nodes.ha、nodes.latency、mesh。 -->
+    <string name="map_panel">面板</string>
+    <string name="map_direct">直连</string>
+    <string name="map_relay">中转</string>
+    <string name="map_none">不可达</string>
+    <string name="map_last_seen">最后在线 %1$s</string>
+    <string name="map_never_seen">从未在线</string>
+    <string name="map_usage">CPU %1$s · 内存 %2$s</string>
+    <string name="map_open_node">查看节点</string>
+    <string name="map_path_direct">UDP 直连</string>
+    <string name="map_path_link">控制连接</string>
+    <string name="map_path_node_relay">UDP 经节点中转</string>
+    <string name="map_path_udp_relay">UDP 经面板中转</string>
+    <string name="map_path_tls_relay">TLS 经面板中转</string>
+    <string name="map_path_none">不可达</string>
+    <string name="mesh_title">节点网络</string>
+    <string name="mesh_count_nodes">%1$d 个节点</string>
+    <string name="mesh_count_links">%1$d 条连接</string>
+    <string name="mesh_count_issues">%1$d 条未直连</string>
+    <string name="mesh_issues">未直连的连接</string>
+    <string name="mesh_direct_links">直连的连接</string>
+    <string name="mesh_no_links">暂无连接</string>
+    <string name="mesh_via_node">经 %1$s 中转</string>
+    <string name="mesh_reason_symmetric">%1$s 和 %2$s 都在 NAT 后面，%3$s 的 NAT 按目的地更换端口，无法打洞。在任一端放行或转发 UDP 端口后可直连。</string>
+    <string name="mesh_reason_no_address">%1$s 没有可尝试直连的地址。</string>
+    <string name="mesh_reason_one_way">%2$s 能收到 %1$s 的包，%1$s 收不到 %2$s 的包。检查 %1$s 的防火墙是否放行 UDP 端口 %3$d。</string>
+    <string name="mesh_reason_no_reply">双方的探测包都没有到达对方。检查两端是否放行 UDP 端口（%1$s %2$d，%3$s %4$d）。</string>
+    <string name="mesh_latency_title">节点间延迟</string>
+    <string name="mesh_latency_hint">点选一格查看延迟历史。</string>
+    <string name="mesh_direction">%1$s → %2$s</string>
+    <string name="mesh_pair">%1$s ↔ %2$s</string>
+    <string name="mesh_history_empty">暂无延迟数据</string>
 </resources>

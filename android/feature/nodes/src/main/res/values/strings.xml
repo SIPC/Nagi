@@ -147,4 +147,36 @@
     <string name="minutes_ago">%1$d min ago</string>
     <string name="hours_ago">%1$d h ago</string>
     <string name="days_ago">%1$d d ago</string>
+    <!-- Node network and high availability (MeshScreen, HaScreen, NodeMap), same copy as the web. -->
+    <string name="map_panel">Panel</string>
+    <string name="map_direct">Direct</string>
+    <string name="map_relay">Relayed</string>
+    <string name="map_none">Unreachable</string>
+    <string name="map_last_seen">Last seen %1$s</string>
+    <string name="map_never_seen">Never seen</string>
+    <string name="map_usage">CPU %1$s · Memory %2$s</string>
+    <string name="map_open_node">View node</string>
+    <string name="map_path_direct">Direct UDP</string>
+    <string name="map_path_link">Control connection</string>
+    <string name="map_path_node_relay">UDP via node</string>
+    <string name="map_path_udp_relay">Relayed via panel (UDP)</string>
+    <string name="map_path_tls_relay">Relayed via panel (TLS)</string>
+    <string name="map_path_none">Unreachable</string>
+    <string name="mesh_title">Node network</string>
+    <string name="mesh_count_nodes">%1$d nodes</string>
+    <string name="mesh_count_links">%1$d connections</string>
+    <string name="mesh_count_issues">%1$d indirect</string>
+    <string name="mesh_issues">Indirect connections</string>
+    <string name="mesh_direct_links">Direct connections</string>
+    <string name="mesh_no_links">No connections</string>
+    <string name="mesh_via_node">Relayed via %1$s</string>
+    <string name="mesh_reason_symmetric">%1$s and %2$s are both behind NAT, and %3$s changes ports per destination, so hole punching fails. Allow or forward the UDP port on either end to connect directly.</string>
+    <string name="mesh_reason_no_address">%1$s has no address to try for a direct connection.</string>
+    <string name="mesh_reason_one_way">%2$s receives packets from %1$s, but %1$s doesn\'t receive packets from %2$s. Check that %1$s\'s firewall allows UDP port %3$d.</string>
+    <string name="mesh_reason_no_reply">Neither end\'s probes reach the other. Check that both ends allow their UDP port (%1$s %2$d, %3$s %4$d).</string>
+    <string name="mesh_latency_title">Latency between nodes</string>
+    <string name="mesh_latency_hint">Select a cell to see the latency history.</string>
+    <string name="mesh_direction">%1$s → %2$s</string>
+    <string name="mesh_pair">%1$s ↔ %2$s</string>
+    <string name="mesh_history_empty">No latency data</string>
 </resources>
