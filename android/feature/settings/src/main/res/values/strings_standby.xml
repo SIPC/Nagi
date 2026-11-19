@@ -3,6 +3,8 @@
 <resources>
     <string name="remove">Remove</string>
     <string name="standby_add">Add standby panel</string>
+    <string name="standby_add_on_web">Add standby panels on the web.</string>
+    <string name="standby_promote_on_web">Promote this panel on the web.</string>
     <string name="standby_empty">No standby panels</string>
     <string name="standby_list_help">Standby panels connect to this panel on the panel port and share its CA and master key. They are read-only; all edits happen on the primary panel.</string>
     <string name="standby_status_help">This is a standby panel that syncs the primary panel in real time. After it is promoted, other standby panels sync from it instead; the old primary becomes a standby when it recovers, and changes it made in its last seconds may be lost.</string>

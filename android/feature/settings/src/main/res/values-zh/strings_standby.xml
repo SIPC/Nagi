@@ -4,6 +4,8 @@
     <string name="remove">移除</string>
     <string name="standby_add">添加备用面板</string>
     <string name="standby_empty">暂无备用面板</string>
+    <string name="standby_add_on_web">添加备用面板请在网页上操作。</string>
+    <string name="standby_promote_on_web">提升为主面板请在网页上操作。</string>
     <string name="standby_list_help">备用面板经面板端口连接本面板，与本面板共用 CA 和主密钥。备用面板为只读，所有编辑在主面板上进行。</string>
     <string name="standby_status_help">本面板是备用面板，实时同步主面板的数据。提升为主面板后，其他备用面板改为从本面板同步；原主面板恢复后自动降为备用面板，它最后数秒内未同步的改动会丢失。</string>
     <string name="standby_primary">主面板</string>

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,11 +50,13 @@ import ink.sipc.nagi.ui.NagiIconButton
 import ink.sipc.nagi.ui.NagiTextField
 import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.SettingsGroup
+import ink.sipc.nagi.ui.SkeletonRows
 import ink.sipc.nagi.ui.UnderlineTabs
 import ink.sipc.nagi.ui.rowClickable
 
 // 成员（要「成员」权限，和网页 pages/members.tsx 一样）：列表，点一个成员进去改角色和访问范围、重置密码、清除两步验证和通行密钥、删除；
 // 右上角加成员。角色从面板的角色列表里选（见 docs/panel.md#成员和角色），新建和编辑角色只在网页上做。
+// 添加和修改成员面板只认密码或验证码做的确认（v0.35.0 起），手机上做不了：这样的面板上只能查看和删除，写明在网页上操作。
 // 访问范围在手机上按项目、节点逐个勾选；网页上按分组、标签选的照样保留，在这里不改动它们。
 
 /**
@@ -117,9 +120,11 @@ private fun scopeText(u: PanelUser): String {
 @Composable
 fun MembersScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> Unit) {
     val users = rememberLoad { session.rpc { c, h -> c.settings.listUsers(ListUsersRequest.getDefaultInstance(), h) }.usersList }
+    val webOnly = rememberWebOnly(session)
     SubPage(stringResource(R.string.members), onBack, actions = {
-        NagiIconButton(NagiIcons.Plus, stringResource(R.string.member_add), { open(SettingsRoutes.MEMBER_ADD) })
+        if (webOnly == false) NagiIconButton(NagiIcons.Plus, stringResource(R.string.member_add), { open(SettingsRoutes.MEMBER_ADD) })
     }) {
+        if (webOnly == true) Note(stringResource(R.string.members_on_web))
         Loaded(users) { list ->
             if (list.isEmpty()) Note(stringResource(R.string.members_empty))
             list.forEach { u ->
@@ -146,12 +151,13 @@ fun MembersScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> U
     }
 }
 
-/** 一个成员：角色和访问范围（保存），重置密码、清除两步验证和通行密钥、删除。 */
+/** 一个成员：角色和访问范围（保存），重置密码、清除两步验证和通行密钥、删除。只能在网页上修改的面板上，角色和访问范围只读，只留删除。 */
 @Composable
 fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
     val users = rememberLoad { session.rpc { c, h -> c.settings.listUsers(ListUsersRequest.getDefaultInstance(), h) }.usersList }
     val roles = rememberLoad { loadRoles(session) }
     val action = rememberAction()
+    val webOnly = rememberWebOnly(session)
     var dialog by remember { mutableStateOf<String?>(null) }
     // 打开、关上确认框时清掉上一次的错误，免得别的操作的错误写进这个确认框。
     LaunchedEffect(dialog) { action.error = null }
@@ -179,34 +185,53 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                     )
                 }
             }
-            SettingsGroup(stringResource(R.string.member_role)) {
-                Loaded(roles, rows = 3) { list -> RolePick(list, picked?.id) { pickedId = it } }
+            if (webOnly == null) {
+                SkeletonRows(3, Modifier.padding(top = 24.dp))
+                return@Loaded
             }
-            if (!pickedAdmin) ScopeFields(session, scope, legacy) { scope = it }
-            Spacer(Modifier.height(16.dp))
+            if (webOnly) {
+                SettingsGroup(null) {
+                    ActionRow(stringResource(R.string.member_role), description = roleLabel(user.roleName, user.roleBuiltin, user.role))
+                    ActionRow(stringResource(R.string.member_scope), description = scopeText(user))
+                    if (user.passkeysCount > 0) {
+                        ActionRow(stringResource(R.string.passkeys), description = stringResource(R.string.member_passkey_count, user.passkeysCount))
+                    }
+                }
+                Note(stringResource(R.string.member_on_web))
+            } else {
+                SettingsGroup(stringResource(R.string.member_role)) {
+                    Loaded(roles, rows = 3) { list -> RolePick(list, picked?.id) { pickedId = it } }
+                }
+                if (!pickedAdmin) ScopeFields(session, scope, legacy) { scope = it }
+                Spacer(Modifier.height(16.dp))
+            }
             val roleChanged = picked != null && picked.id != current?.id
             val changed = roleChanged || (!pickedAdmin && scope != (user.scope.takeIf { user.hasScope() } ?: fullScope))
             val save: suspend () -> Unit = { saveAccess(session, user, picked.takeIf { roleChanged }, pickedAdmin, scope); users.reload() }
-            NagiButton(stringResource(R.string.save), {
-                if (user.isSelf && user.admin && !pickedAdmin) {
-                    dialog = "demote"
-                } else {
-                    action.run("save", passwordOnly = true) { save() }
-                }
-            }, Modifier.fillMaxWidth(), enabled = changed, loading = action.busy == "save")
-
-            SettingsGroup(null) {
-                ActionRow(stringResource(R.string.member_reset_password)) {
-                    NagiButton(stringResource(R.string.member_reset_password), { dialog = "password" }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
-                }
-                if (user.totpEnabled) {
-                    ActionRow(stringResource(R.string.member_clear_totp)) {
-                        NagiButton(stringResource(R.string.member_clear), { dialog = "totp" }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+            if (!webOnly) {
+                NagiButton(stringResource(R.string.save), {
+                    if (user.isSelf && user.admin && !pickedAdmin) {
+                        dialog = "demote"
+                    } else {
+                        action.run("save", passwordOnly = true) { save() }
                     }
-                }
-                if (user.passkeysCount > 0) {
-                    ActionRow(stringResource(R.string.member_clear_passkeys), description = stringResource(R.string.member_passkey_count, user.passkeysCount)) {
-                        NagiButton(stringResource(R.string.member_clear), { dialog = "passkeys" }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+                }, Modifier.fillMaxWidth(), enabled = changed, loading = action.busy == "save")
+            }
+
+            if (!webOnly || !user.isSelf) SettingsGroup(null) {
+                if (!webOnly) {
+                    ActionRow(stringResource(R.string.member_reset_password)) {
+                        NagiButton(stringResource(R.string.member_reset_password), { dialog = "password" }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+                    }
+                    if (user.totpEnabled) {
+                        ActionRow(stringResource(R.string.member_clear_totp)) {
+                            NagiButton(stringResource(R.string.member_clear), { dialog = "totp" }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+                        }
+                    }
+                    if (user.passkeysCount > 0) {
+                        ActionRow(stringResource(R.string.member_clear_passkeys), description = stringResource(R.string.member_passkey_count, user.passkeysCount)) {
+                            NagiButton(stringResource(R.string.member_clear), { dialog = "passkeys" }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+                        }
                     }
                 }
                 if (!user.isSelf) {

@@ -14,6 +14,11 @@ class Access(
     val roleName: String = "",
     /** admin、operator、viewer，自定义角色为空。 */
     val roleBuiltin: String = "",
+    /**
+     * 添加和修改成员、添加备用面板、提升为主面板在这个面板上只认密码或验证码做的高权限确认（v0.35.0 起），手机上做不了：
+     * 入口做成只读或隐藏，写明在网页上操作。更早的面板照常能做。
+     */
+    val webOnlyChanges: Boolean = false,
 ) {
     val isAdmin: Boolean get() = role == "admin"
 
@@ -44,7 +49,19 @@ class Access(
                 info.role == "operator" -> legacyOperator
                 else -> legacyViewer
             }
-            return Access(info.role, perms, info.roleName, info.roleBuiltin.ifEmpty { if (legacy) info.role else "" })
+            return Access(info.role, perms, info.roleName, info.roleBuiltin.ifEmpty { if (legacy) info.role else "" }, passwordOnlyChanges(info.version))
+        }
+
+        /**
+         * 按面板的版本号判断（功能列表里没有对应的项）：v0.35.0 及以后为 true。认不出的版本号（开发构建的 dev、ci）
+         * 按当前代码算；没有版本号时按旧面板算，操作照常显示，面板拒绝时再提示。
+         */
+        internal fun passwordOnlyChanges(version: String): Boolean {
+            if (version.isEmpty()) return false
+            val m = Regex("""^v?(\d+)\.(\d+)""").find(version) ?: return true
+            val major = m.groupValues[1].toIntOrNull() ?: return true
+            val minor = m.groupValues[2].toIntOrNull() ?: return true
+            return major > 0 || minor >= 35
         }
     }
 }

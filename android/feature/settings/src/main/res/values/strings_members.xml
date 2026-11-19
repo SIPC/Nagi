@@ -48,4 +48,7 @@
     <string name="role_permission_count">%1$d permissions</string>
     <string name="role_not_grantable">Includes permissions you do not have</string>
     <string name="roles_on_web">Create and edit roles on the web.</string>
+    <string name="member_scope">Access scope</string>
+    <string name="members_on_web">Add and edit members on the web.</string>
+    <string name="member_on_web">Change the role, access scope, password, two-step verification, and passkeys on the web.</string>
 </resources>
