@@ -6,7 +6,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Text
@@ -80,6 +82,61 @@ fun UnderlineTabs(
                     color = color,
                     maxLines = 1,
                 )
+            }
+        }
+    }
+}
+
+// PageTabs：页内标签（节点页的监控、容器，容器页的概览、日志……）。高 40，标签之间 24，下面一条横贯整页的细线
+// （伸进页面左右的边距），选中的一项是主文字色加 500 字重，下面一条 2 的下划线压在细线上，从上一项滑过去。
+// 放在页面内容里时，[modifier] 不要带左右内边距：组件自己按 Dimens.pageHorizontal 排文字。
+@Composable
+fun PageTabs(
+    options: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = NagiTheme.colors
+    val bounds = remember { mutableStateMapOf<Int, Rect>() }
+    val slider = rememberSlidingIndicator(selected)
+    val line = c.foreground
+    val border = c.border
+    Row(
+        modifier = modifier
+            .height(40.dp)
+            .drawBehind {
+                val px = 1.dp.toPx()
+                drawRect(border, Offset(0f, size.height - px), Size(size.width, px))
+            }
+            .padding(horizontal = Dimens.pageHorizontal)
+            .drawBehind {
+                // 在内边距里面画：和各项的位置（相对于这一层）用同一个坐标。
+                val r = slider.rect(bounds) ?: return@drawBehind
+                val h = 2.dp.toPx()
+                drawRect(line, Offset(r.left, size.height - h), Size(r.width, h))
+            }
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEachIndexed { i, label ->
+            val on = i == selected
+            val color by animateColorAsState(if (on) c.foreground else c.mutedForeground, tween(150), label = "page-tab")
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .onPlaced { bounds[i] = Rect(it.positionInParent(), it.size.toSize()) }
+                    .selectable(
+                        selected = on,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Tab,
+                        onClick = { if (!on) onSelect(i) },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, style = NagiTheme.type.body.copy(fontWeight = if (on) FontWeight.Medium else FontWeight.Normal), color = color, maxLines = 1)
             }
         }
     }

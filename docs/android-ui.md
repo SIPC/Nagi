@@ -24,6 +24,7 @@
 - `NagiTopBar(fade = true)`：内容从顶部栏下面滚过时用，顶部栏自己画背景，最下面 20 渐变成透明。内容铺满整页，上内边距是状态栏加 `Dimens.topBarHeight`。
 - `PillRail(items, selected, onSelect)`：宽屏（600 dp 以上）时代替 `PillNav`，竖在左侧 88 宽一栏的左下角：最上面是 logo，下面四个图标，选中的一项在图标下面写名称，底色从上一项滑过去。长按拖动和 `PillNav` 共用 `PillGestures.kt`（`rememberPillDrag`、`PillLongPress`、`Modifier.pillDrag`）。
 - `UnderlineTabs(options, selected, onSelect)`：下划线样式的选择项（时间范围、视图），放在 `SectionHeader` 的右边。只换数据，不滑动下面的内容。网页对应的是 `Tabs` 的下划线样式。
+- `PageTabs(options, selected, onSelect)`：页内标签（节点页的监控、容器，以后容器页的概览、日志……）。高 40，标签之间 24，下面一条横贯整页的细线（伸进页面左右的边距，所以放在页面内容的内边距外面，文字自己按 20 缩进），选中的一项加粗，下面 2 的下划线从上一项滑过去。
 
 ## 按钮
 
