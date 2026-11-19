@@ -3,6 +3,7 @@ package nodes
 import (
 	"crypto/rand"
 	"fmt"
+	"math"
 	"net/netip"
 	"slices"
 	"testing"
@@ -105,5 +106,55 @@ func TestPickRelays(t *testing.T) {
 	}
 	if got := pickRelays(links, relayOK, cn, jp); len(got) != 0 {
 		t.Fatalf("CN 到 JP 没有和两端都直连的节点（LA 和 JP 不直连）：%v", got)
+	}
+}
+
+// v0.35.0#14：被攻破的节点虚报直连延迟（负数、NaN、极小），不能把自己排成第一中转。
+// 延迟夹到 [0.1, 10000]，不是有限数的直连不采用；两端都报时取大的。
+func TestWithRelaysDistrustsReportedRTT(t *testing.T) {
+	a, b, h, x := mesh.PublicKey(randKey()), mesh.PublicKey(randKey()), mesh.PublicKey(randKey()), mesh.PublicKey(randKey())
+	direct := func(k mesh.Key, rtt float64) *nagiv1.MeshDirect {
+		return &nagiv1.MeshDirect{PublicKey: k[:], RttMs: rtt}
+	}
+	conn := func(id string, k mesh.Key, directs ...*nagiv1.MeshDirect) *Conn {
+		return &Conn{NodeID: id, mesh: &nagiv1.MeshInfo{PublicKey: k[:], Relay: true, Directs: directs}}
+	}
+	relaysFor := func(r *Registry) []mesh.Key {
+		out := r.withRelays(r.conns["a"], []*nagiv1.MeshPeer{{PublicKey: b[:]}})
+		var keys []mesh.Key
+		for _, rk := range out[0].GetRelays() {
+			keys = append(keys, mesh.Key(rk))
+		}
+		return keys
+	}
+	// A、B 之间不直连；H 和两端直连（各 50 毫秒）；X 和两端也直连（A、B 报 100 毫秒），但 X 自己报 -1e12。
+	r := &Registry{conns: map[string]*Conn{
+		"a": conn("a", a, direct(h, 50), direct(x, 100)),
+		"b": conn("b", b, direct(h, 50), direct(x, 100)),
+		"h": conn("h", h, direct(a, 50), direct(b, 50)),
+		"x": conn("x", x, direct(a, -1e12), direct(b, -1e12)),
+	}}
+	if got := relaysFor(r); len(got) != 2 || got[0] != h || got[1] != x {
+		t.Fatalf("虚报负延迟的节点不应排在前面：%v", got)
+	}
+	// 只有 X 自己报、延迟是 NaN 或无穷：这条直连不采用，X 不能做中转。
+	r.conns["a"] = conn("a", a, direct(h, 50))
+	r.conns["b"] = conn("b", b, direct(h, 50))
+	for _, bad := range []float64{math.NaN(), math.Inf(-1), math.Inf(1)} {
+		r.conns["x"] = conn("x", x, direct(a, bad), direct(b, bad))
+		if got := relaysFor(r); len(got) != 1 || got[0] != h {
+			t.Fatalf("延迟 %v 的直连不应采用：%v", bad, got)
+		}
+	}
+	// 只有一端报的直连照常采用，延迟夹到下限，不会是负数。
+	r.conns["x"] = conn("x", x, direct(a, -5), direct(b, 0))
+	if got := relaysFor(r); len(got) != 2 || got[0] != x {
+		t.Fatalf("只有一端报的直连应照常采用：%v", got)
+	}
+	if v, ok := cleanRTT(-5); !ok || v != minReportedRTT {
+		t.Fatalf("负数应夹到 %v：%v", minReportedRTT, v)
+	}
+	if v, ok := cleanRTT(1e9); !ok || v != maxReportedRTT {
+		t.Fatalf("过大的应夹到 %v：%v", maxReportedRTT, v)
 	}
 }
