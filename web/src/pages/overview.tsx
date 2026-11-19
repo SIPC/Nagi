@@ -816,7 +816,9 @@ export function OverviewPage() {
     .flatMap((s) =>
       (s.project?.routes ?? []).map((route) => {
         const key = (m: string) => totals?.get(`r:${s.project!.id}/${route.name}:${m}`) ?? 0;
-        return { project: s.project!, route, req: key("req"), err: key("5xx"), in: key("in"), out: key("out") };
+        // tcp/udp 的映射没有请求，写连接数和连不上容器的比例。
+        const l4 = route.protocol !== "http";
+        return { project: s.project!, route, req: key(l4 ? "conn" : "req"), err: key(l4 ? "fail" : "5xx"), in: key("in"), out: key("out") };
       }),
     )
     .filter((x) => x.req > 0 || x.in + x.out > 0)

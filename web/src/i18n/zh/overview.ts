@@ -67,11 +67,11 @@ export default {
   },
   routes: {
     title: "流量最大的端口映射",
-    help: "最近 24 小时的合计，仅统计 HTTP 映射；错误率为 5xx 响应占比。",
+    help: "最近 24 小时的合计。HTTP 映射统计请求，错误率为 5xx 响应占比；TCP、UDP 映射统计连接，错误率为连不上容器的占比。",
     mapping: "映射",
     project: "项目",
     container: "容器",
-    requests: "请求",
+    requests: "请求/连接",
     errorRate: "错误率",
     inbound: "入站",
     outbound: "出站",

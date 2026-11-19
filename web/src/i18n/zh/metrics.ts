@@ -37,4 +37,13 @@ export default {
   requestCount: "请求数",
   latency: "耗时",
   traffic: "流量",
+  connections: "连接",
+  connectionCount: "连接数",
+  newConnections: "新连接",
+  failedConnections: "失败",
+  failRate: "失败率",
+  failRateTitle: (n: string) => `连不上容器 ${n}`,
+  activeConnections: "当前连接",
+  activeTitle: "最近一个时段的平均值",
+  concurrentConnections: "并发连接",
 };

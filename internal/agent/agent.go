@@ -755,26 +755,39 @@ func (a *agent) domainProject(ctx context.Context, domain string) string {
 	return ""
 }
 
-// routeMetrics 把 Caddy 统计的请求转成监控序列。有过请求的规则，之后没有请求时记 0，
-// 超过一天没有请求就不再记录（规则可能已经删除）。
+// routeMetrics 把 Caddy 统计的请求和连接转成监控序列。有过请求（tcp/udp 是连接）的规则，之后没有时记 0，
+// 超过一天没有就不再记录（规则可能已经删除）。
 func routeMetrics() metrics.Source {
-	lastActive := map[string]time.Time{}
+	type seen struct {
+		at time.Time
+		l4 bool
+	}
+	lastActive := map[string]seen{}
 	return func(elapsed float64) map[string]float64 {
 		now := time.Now()
 		stats := proxy.TakeStats()
 		for k, s := range stats {
-			if s.Requests > 0 {
-				lastActive[k] = now
+			if s.Requests > 0 || s.Conns > 0 || s.Active > 0 {
+				lastActive[k] = seen{now, s.L4}
 			}
 		}
 		out := map[string]float64{}
 		for k, t := range lastActive {
-			if now.Sub(t) > 24*time.Hour {
+			if now.Sub(t.at) > 24*time.Hour {
 				delete(lastActive, k)
 				continue
 			}
 			s := stats[k]
 			prefix := "r:" + k + ":"
+			// tcp/udp：新连接、连不上容器的次数、收发字节是每秒速率，active 是当前连接数（见 docs/monitoring.md#tcp--udp-统计）。
+			if t.l4 {
+				out[prefix+"conn"] = float64(s.Conns) / elapsed
+				out[prefix+"fail"] = float64(s.Fails) / elapsed
+				out[prefix+"active"] = float64(s.Active)
+				out[prefix+"in"] = float64(s.BytesIn) / elapsed
+				out[prefix+"out"] = float64(s.BytesOut) / elapsed
+				continue
+			}
 			out[prefix+"req"] = float64(s.Requests) / elapsed
 			out[prefix+"2xx"] = float64(s.Classes[2]) / elapsed
 			out[prefix+"3xx"] = float64(s.Classes[3]) / elapsed

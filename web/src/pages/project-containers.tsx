@@ -190,7 +190,7 @@ export function ContainersTab({
       {hasOutput && <div className="mb-6">{output}</div>}
       <ContainerList project={project} services={services} deploy={deploy} busy={busy} />
       <Section className="xl:mt-0 xl:border-t-0 xl:pt-0" title={t.projectContainers.monitoring} actions={picker}>
-        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, knownNodes(nodes.data))} httpRoutes={project.routes.filter((r) => r.protocol === "http").map((r) => r.name)} />
+        <ProjectMetrics projectId={project.id} nodeIds={[...new Set(projectMetricNodes(project))]} range={range} offline={offlineNodeNames(project.containers, knownNodes(nodes.data))} routes={project.routes.map((r) => ({ name: r.name, l4: r.protocol !== "http" }))} />
       </Section>
     </div>
   );
