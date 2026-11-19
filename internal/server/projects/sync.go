@@ -248,44 +248,19 @@ func (s *Service) Sync(c *nodes.Conn, req *nagiv1.ReportRequest) {
 // 让这个节点停止并删除它，目录改名保留。正在操作的项目跳过（例如迁移进行到一半，面板还没改所在节点）。
 // 面板上没有这个项目的不动：可能是换了面板、项目还没拼回来。
 //
-// 拿着项目锁只做核对，收集好要退役的容器、释放锁以后再调用节点：上报的节点可能被攻破，它报一个不属于它的容器、
-// 收到删除请求不回应，就能把它知道 ID 的项目的锁一直占着，部署、改配置、迁移都被拖住（v0.35.0#15）。
+// 拿着项目锁只做核对，释放锁以后再调用节点：上报的节点可能被攻破，它报一个不属于它的容器、
+// 收到删除请求不回应，就能把它知道 ID 的项目的锁一直占着，部署、改配置、迁移都被拖住。
+// 核对一个、调用一个，不一次核对完再逐个调用：调用可能各要十几秒，这期间排在后面的容器可能被迁回或部署到这个节点，
+// 按早先核对的结果去停，停掉的就是刚部署的那一份。
 func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*nagiv1.ContainerStatus, rows []store.Container) {
 	here := map[string]bool{}
 	for _, r := range rows {
 		here[r.ProjectID+"/"+r.Name] = true
 	}
-	var retire []*nagiv1.ContainerStatus
 	for _, cs := range reported {
-		if here[cs.GetProjectId()+"/"+cs.GetName()] {
+		if here[cs.GetProjectId()+"/"+cs.GetName()] || !s.shouldRetire(ctx, c, cs) {
 			continue
 		}
-		row, err := s.container(ctx, cs.GetProjectId(), cs.GetName())
-		if err != nil || row.NodeID == c.NodeID {
-			continue
-		}
-		// 设置了顶替的容器由节点之间的租约决定谁运行，被顶替的一方自己会退位。
-		if cfg := failoverOf(row); cfg != nil && isParticipant(cfg, c.NodeID) {
-			continue
-		}
-		l := s.lock(cs.GetProjectId())
-		if !l.TryLock() {
-			continue
-		}
-		// 项目刚从节点缓存拼回，而这个节点上的这份比拼回的那份新（例如容器在备份节点上恢复过，
-		// 拼回时先报上来的是旧的原节点）：换成这一份，旧的那份等它的节点下次上报时停掉。
-		if p, perr := s.project(ctx, cs.GetProjectId()); perr == nil && recentlyRebuilt(p) && err == nil && cs.GetRevision() > row.Revision {
-			s.preferNewerCopy(ctx, c, row)
-			l.Unlock()
-			continue
-		}
-		// 拿到锁以后再确认一次。
-		if row, err = s.container(ctx, cs.GetProjectId(), cs.GetName()); err == nil && row.NodeID != c.NodeID {
-			retire = append(retire, cs)
-		}
-		l.Unlock()
-	}
-	for _, cs := range retire {
 		key := c.NodeID + "/" + cs.GetProjectId() + "/" + cs.GetName()
 		switch s.retireState(key, time.Now()) {
 		case retireSettling:
@@ -303,6 +278,32 @@ func (s *Service) retireMoved(ctx context.Context, c *nodes.Conn, reported []*na
 		s.markRetired(key, time.Now())
 		s.Log.Info("原节点上的容器已停止，目录改名保留", "project", cs.GetProjectId(), "container", cs.GetName(), "node", c.NodeID)
 	}
+}
+
+// shouldRetire 拿着项目锁核对节点 c 上报的容器是不是已经换到了别的节点、该让 c 停掉。读的是此刻的记录，返回时锁已释放。
+func (s *Service) shouldRetire(ctx context.Context, c *nodes.Conn, cs *nagiv1.ContainerStatus) bool {
+	row, err := s.container(ctx, cs.GetProjectId(), cs.GetName())
+	if err != nil || row.NodeID == c.NodeID {
+		return false
+	}
+	// 设置了顶替的容器由节点之间的租约决定谁运行，被顶替的一方自己会退位。
+	if cfg := failoverOf(row); cfg != nil && isParticipant(cfg, c.NodeID) {
+		return false
+	}
+	l := s.lock(cs.GetProjectId())
+	if !l.TryLock() {
+		return false
+	}
+	defer l.Unlock()
+	// 项目刚从节点缓存拼回，而这个节点上的这份比拼回的那份新（例如容器在备份节点上恢复过，
+	// 拼回时先报上来的是旧的原节点）：换成这一份，旧的那份等它的节点下次上报时停掉。
+	if p, perr := s.project(ctx, cs.GetProjectId()); perr == nil && recentlyRebuilt(p) && cs.GetRevision() > row.Revision {
+		s.preferNewerCopy(ctx, c, row)
+		return false
+	}
+	// 拿到锁以后再确认一次。
+	row, err = s.container(ctx, cs.GetProjectId(), cs.GetName())
+	return err == nil && row.NodeID != c.NodeID
 }
 
 // 让原节点停掉已换到别的节点的容器以后：retireSettle 之内又报上来的不管（那次上报可能是停掉之前发出的），
