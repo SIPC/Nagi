@@ -321,6 +321,15 @@ on_exit() {
   fi
 }
 
+# standby_version_check 在要装的 nagi（$1，版本号）太旧时停下：v0.35.0 之前的 nagi 不读环境变量 NAGI_STANDBY 里的配对码，
+# 照常安装会在空的数据目录里初始化成一个新的主面板。版本的匹配和节点安装脚本的 enrollVersionCheck 一样。
+standby_version_check() {
+  case "$1" in
+    v0.[0-9].* | v0.[12][0-9].* | v0.3[0-4].*)
+      fail "要安装的 nagi 是 $1，低于 v0.35.0，不能用这个脚本安装备用面板。请改用该版本的安装脚本 https://github.com/$REPO/releases/download/$1/install.sh，或更新 --download-url 指向的镜像后重试" ;;
+  esac
+}
+
 TMP=$(mktemp -d)
 trap 'on_exit $?' EXIT
 trap 'exit 130' INT TERM HUP
@@ -368,7 +377,10 @@ else
   say "当前版本 $OLD_VERSION，本次更新到 $TARGET"
 fi
 
+# 备用面板：--version 指定了旧版本时下载前就停下，镜像里的版本要下载后才知道。
+[ -z "$STANDBY" ] || [ -z "$TARGET" ] || standby_version_check "$TARGET"
 download_nagi
+[ -z "$STANDBY" ] || standby_version_check "$NEW_VERSION"
 
 install -m 0755 "$TMP/nagi" "$BIN"
 link_command

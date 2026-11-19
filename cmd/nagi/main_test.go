@@ -218,6 +218,40 @@ write_unit() { echo "write_unit $*" >>"$DATA_DIR/calls"; }
 	}
 }
 
+// 安装备用面板时，要装的 nagi 低于 v0.35.0（不读环境变量里的配对码，会装成一个新的主面板）就停下并说明原因，
+// 其余版本照常继续；下载以后按下载到的版本再查一次（镜像里的版本要下载后才知道）。
+func TestInstallScriptStandbyOldNagi(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	check := installScriptFunc(t, "standby_version_check")
+	run := func(version string) (string, error) {
+		script := "REPO=SIPC/Nagi\nfail() { printf '%s\\n' \"$*\"; exit 1; }\n" + check + "standby_version_check \"$V\"\n"
+		cmd := exec.Command(sh, "-euc", script)
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "V=" + version}
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	for _, v := range []string{"v0.1.0", "v0.9.3", "v0.10.0", "v0.28.0", "v0.34.0", "v0.34.2"} {
+		if out, err := run(v); err == nil || !strings.Contains(out, v) || !strings.Contains(out, "releases/download/"+v+"/install.sh") {
+			t.Errorf("%s 应该停下并说明：%v %s", v, err, out)
+		}
+	}
+	for _, v := range []string{"v0.35.0", "v0.35.1", "v0.40.0", "v0.100.0", "v1.0.0", "v1.3.4", "dev"} {
+		if out, err := run(v); err != nil {
+			t.Errorf("%s 应该继续：%v %s", v, err, out)
+		}
+	}
+	b, err := os.ReadFile("../../scripts/install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "\ndownload_nagi\n[ -z \"$STANDBY\" ] || standby_version_check \"$NEW_VERSION\"\n") {
+		t.Error("安装脚本应该在下载 nagi 之后按下载到的版本检查")
+	}
+}
+
 // 网页、App 给出的命令和使用文档默认用环境变量传配对码，不写成 --standby <码>。
 func TestStandbyCommandsUseEnv(t *testing.T) {
 	for _, f := range []string{
