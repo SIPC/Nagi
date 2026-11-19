@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -73,6 +74,9 @@ type API struct {
 	origins originDenials
 	// directRot：正在给节点换直连下载的密钥（见 revokeDirectLinks）。
 	directRot directRotation
+	// enrollAlerts 合并同一个接入码的加入通知；enrollNames 让同时加入的节点不会撞名（见 enroll_limits.go）。
+	enrollAlerts enrollAlerts
+	enrollNames  sync.Mutex
 }
 
 // Mount 把所有接口挂到 mux 上。
@@ -514,13 +518,15 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 	}
 
 	now := time.Now().Unix()
+	tokenHash := auth.HashToken(req.Msg.GetToken())
 	multiUse, err := s.Q.UseEnrollToken(ctx, store.UseEnrollTokenParams{
 		UsedAt:    sql.NullInt64{Int64: now, Valid: true},
-		TokenHash: auth.HashToken(req.Msg.GetToken()),
+		TokenHash: tokenHash,
 		ExpiresAt: now,
+		Uses:      inviteMaxUses,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("加入令牌已失效（已使用或已过期），请在面板上重新生成加入命令"))
+		return nil, connect.NewError(connect.CodePermissionDenied, i18n.New("加入令牌已失效（已使用、已过期或接入码已达到加入次数上限），请在面板上重新生成"))
 	} else if err != nil {
 		return nil, err
 	}
@@ -534,11 +540,19 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 			return nil, err
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
-		name := strings.TrimSpace(req.Msg.GetHostname())
-		if name == "" {
-			name = nodeID
+		// 名称按 RenameNode 的规则处理，重名时加后缀（见 enrollName）。挑名字和建节点在一把锁里，同时加入的不会撞名。
+		s.enrollNames.Lock()
+		rows, err := s.Q.ListNodes(ctx)
+		if err == nil {
+			taken := make(map[string]bool, len(rows))
+			for _, row := range rows {
+				taken[row.Name] = true
+			}
+			name := enrollName(req.Msg.GetHostname(), nodeID, func(n string) bool { return taken[n] })
+			err = s.Q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: name, CreatedAt: now, MeshKey: meshKey, Pending: pending})
 		}
-		if err := s.Q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: name, CreatedAt: now, MeshKey: meshKey, Pending: pending}); err != nil {
+		s.enrollNames.Unlock()
+		if err != nil {
 			return nil, err
 		}
 	} else {
@@ -549,19 +563,28 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	s.Log.Info("节点已加入", "node", nodeID, "hostname", req.Msg.GetHostname())
+	// 日志和审计里的主机名也去掉控制字符、截短（节点提交的内容不可信）。
+	hostname := enrollName(req.Msg.GetHostname(), nodeID, func(string) bool { return false })
+	s.Log.Info("节点已加入", "node", nodeID, "hostname", hostname)
 	// 节点加入记进审计并通知（见 docs/audit.md#安全告警）。加入命令是管理员生成的，加入本身由节点发起，没有登录的成员。
 	ip := auth.RequestIP(req.Peer().Addr, req.Header())
+	name := s.nodeName(ctx, nodeID)
 	s.Audit.Record(ctx, audit.Event{Category: audit.Operation, Action: "Enroll", ActorType: audit.ActorNode, ActorID: nodeID,
-		ActorName: req.Msg.GetHostname(), Via: audit.ViaNode, IP: ip, TargetType: "node", TargetID: nodeID, TargetName: s.nodeName(ctx, nodeID)})
+		ActorName: hostname, Via: audit.ViaNode, IP: ip, TargetType: "node", TargetID: nodeID, TargetName: name})
 	if s.Panel != nil && s.Panel.Standby == nil {
 		// 来源地址写在标题里：令牌被别人抢先用掉时，管理员一眼能看出加入的不是自己的机器。
-		title := i18n.Errorf("节点 %s 已从 %s 加入", s.nodeName(ctx, nodeID), ip).Error()
+		title := i18n.Errorf("节点 %s 已从 %s 加入", name, ip).Error()
 		if pending != 0 {
-			title = i18n.Errorf("节点 %s 从 %s 用接入码加入，等待批准", s.nodeName(ctx, nodeID), ip).Error()
+			title = i18n.Errorf("节点 %s 从 %s 用接入码加入，等待批准", name, ip).Error()
 		}
-		go s.Nodes.PanelAlert(context.WithoutCancel(ctx), &nagiv1.Alert{Key: "security:enroll:" + nodeID, Title: title,
-			Message: i18n.Errorf("地址：%s，节点 ID：%s", ip, nodeID).Error(), Time: timestamppb.Now()})
+		alert := &nagiv1.Alert{Key: "security:enroll:" + nodeID, Title: title,
+			Message: i18n.Errorf("地址：%s，节点 ID：%s", ip, nodeID).Error(), Time: timestamppb.Now()}
+		// 接入码能反复用：同一个接入码的通知合并（见 enrollAlerts），免得拿到接入码的人刷告警渠道。
+		if multiUse == 0 || s.enrollAlerts.add(tokenHash, name+"（"+ip+"）", func(count int, names []string) {
+			s.Nodes.PanelAlert(context.Background(), inviteAlert(tokenHash, count, names))
+		}) {
+			go s.Nodes.PanelAlert(context.WithoutCancel(ctx), alert)
+		}
 	}
 	return connect.NewResponse(&nagiv1.EnrollResponse{
 		NodeId: nodeID, Certificate: cert.Raw, CaCertificate: s.CA.Cert.Raw,

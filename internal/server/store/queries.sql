@@ -77,8 +77,9 @@ DELETE FROM sessions WHERE expires_at < ?;
 INSERT INTO enroll_tokens (token_hash, created_at, expires_at) VALUES (?, ?, ?);
 
 -- name: UseEnrollToken :one
+-- 接入码（multi_use）有加入次数上限：uses 达到上限后不能再用。
 UPDATE enroll_tokens SET used_at = ?, uses = uses + 1
-WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1)
+WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR (multi_use = 1 AND uses < ?))
 RETURNING multi_use;
 
 -- name: CreateInvite :exec

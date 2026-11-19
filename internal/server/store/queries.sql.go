@@ -2373,7 +2373,7 @@ func (q *Queries) UpsertRoute(ctx context.Context, arg UpsertRouteParams) error 
 
 const useEnrollToken = `-- name: UseEnrollToken :one
 UPDATE enroll_tokens SET used_at = ?, uses = uses + 1
-WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR multi_use = 1)
+WHERE token_hash = ? AND expires_at > ? AND (used_at IS NULL OR (multi_use = 1 AND uses < ?))
 RETURNING multi_use
 `
 
@@ -2381,10 +2381,17 @@ type UseEnrollTokenParams struct {
 	UsedAt    sql.NullInt64
 	TokenHash string
 	ExpiresAt int64
+	Uses      int64
 }
 
+// 接入码（multi_use）有加入次数上限：uses 达到上限后不能再用。
 func (q *Queries) UseEnrollToken(ctx context.Context, arg UseEnrollTokenParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, useEnrollToken, arg.UsedAt, arg.TokenHash, arg.ExpiresAt)
+	row := q.db.QueryRowContext(ctx, useEnrollToken,
+		arg.UsedAt,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.Uses,
+	)
 	var multi_use int64
 	err := row.Scan(&multi_use)
 	return multi_use, err

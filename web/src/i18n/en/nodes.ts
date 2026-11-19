@@ -108,6 +108,8 @@ export default {
     hint: (hostname) => `Hostname: ${hostname}`,
   },
   pendingNotice: "This node joined with an invite code, which anyone could use if it leaked. Approve it once you've confirmed it's your machine; until then it can't be viewed or managed.",
+  pendingId: "Node ID",
+  pendingAddress: "Source address",
   offlineTitle: "Node offline",
   noContainers: "No containers",
   offlineNotice: "Only the container list is available while the node is offline.",

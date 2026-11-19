@@ -692,6 +692,17 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               }
             >
               {t.nodes.pendingNotice}
+              {/* 节点 ID 和来源地址：同名的待批准节点靠它们分清哪台是自己的机器。 */}
+              <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+                <dt>{t.nodes.pendingId}</dt>
+                <dd className="break-all font-mono text-[13px]">{n.id}</dd>
+                {n.address && (
+                  <>
+                    <dt>{t.nodes.pendingAddress}</dt>
+                    <dd className="break-all font-mono text-[13px]">{n.address}</dd>
+                  </>
+                )}
+              </dl>
             </Notice>
           )}
               </NodeNotices>

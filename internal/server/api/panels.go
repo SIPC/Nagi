@@ -155,6 +155,10 @@ func (s *nodeService) HandoverNodes(ctx context.Context, req *connect.Request[na
 	if len(ids) == 0 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("请选择要移交的节点"))
 	}
+	// 新面板上一个接入码最多加入 inviteMaxUses 次，多了的节点会加入失败。
+	if len(ids) > inviteMaxUses {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.Errorf("一次最多移交 %d 个节点，请分批移交，每批使用新的接入码", inviteMaxUses))
+	}
 	for _, id := range ids {
 		if _, err := s.agent(id); err != nil {
 			return nil, connect.NewError(connect.CodeUnavailable, i18n.Errorf("节点 %s 离线，无法移交", s.Projects.NodeName(ctx, id)))

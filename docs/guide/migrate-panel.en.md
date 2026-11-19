@@ -15,7 +15,7 @@ Before you start, [install the panel](install.en.md) on the new server.
      <img src="../assets/guide/invite.en.png" alt="The invite code on the Receive nodes page">
    </picture>
 
-   The invite code is valid for 1 hour and can be used by several nodes.
+   The invite code is valid for 1 hour and can be used by up to 20 nodes. To move more nodes, hand them over in batches and generate a new invite code for each batch.
 
 3. In the sidebar of the old panel, click **Nodes**, click the **More actions** button (⋯) in the upper-right corner of the page, then choose **Hand over to another panel**.
 
