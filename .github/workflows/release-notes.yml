@@ -41,6 +41,11 @@ jobs:
               failed=1
               continue
             fi
+            # 发布时追加在正文末尾的安卓 App 签名证书摘要不在更新日志里，同步时照原样保留。
+            cert="$(grep -o '安卓 App 签名证书 SHA-256：`[0-9A-Fa-f:]*`' current.md | head -1)"
+            if [ -n "$cert" ]; then
+              printf '\n\n%s\n' "$cert" >> notes.md
+            fi
             [ "$(cat current.md)" = "$(cat notes.md)" ] && continue
             if retry gh release edit "$tag" --notes-file notes.md > /dev/null; then
               echo "updated $tag"
