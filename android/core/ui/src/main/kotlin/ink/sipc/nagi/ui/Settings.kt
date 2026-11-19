@@ -89,7 +89,8 @@ fun ActionRow(title: String, modifier: Modifier = Modifier, description: String?
             if (!description.isNullOrEmpty()) Text(description, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
         }
         Spacer(Modifier.width(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+        // 并排按钮之间 12（docs/android.md 视觉「间距」）。
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
 
