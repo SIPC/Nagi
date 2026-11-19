@@ -64,7 +64,7 @@ func portWarnings(ports []spec.PortUse, o adviceOpts) []string {
 		out = append(out, fmt.Sprintf("host_ip is ignored for %s: the port mapping opens the port on all of the node's addresses. Only loopback addresses (127.0.0.1, ::1) keep a port unpublished.", strings.Join(hostIP, ", ")))
 	}
 	if len(reserved) > 0 {
-		out = append(out, fmt.Sprintf("Published ports 80 and 443 are reserved for domains, so %s is skipped. Serve HTTP with save_route and domains instead.", strings.Join(reserved, ", ")))
+		out = append(out, fmt.Sprintf("Published ports 80 and 443 are reserved for domains, so %s is skipped. Serve HTTP with save_route instead: with domains, or without them on another published_port.", strings.Join(reserved, ", ")))
 	}
 	if o.deployed && o.oldPorts != nil && !slices.Equal(slices.Sorted(slices.Values(keys)), slices.Sorted(slices.Values(o.oldPorts))) {
 		out = append(out, "This container has been deployed, so its ports were already imported as port mappings: changed ports here are not imported again. Change public ports and domains with save_route.")

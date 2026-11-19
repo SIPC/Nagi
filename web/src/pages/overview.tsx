@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, orOther, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
-import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
+import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, spanOf, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status, Table, Td, Th } from "@/components/ui";
@@ -702,9 +702,10 @@ export function OverviewPage() {
     queryFn: async () => {
       const parts = await Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "r:", from: ago(86400), step: BigInt(routeStep) }).catch(() => null)));
       const totals = new Map<string, number>();
+      const end = Date.now() / 1000;
       for (const p of parts) {
         for (const s of p?.series ?? []) {
-          inc(totals, s.name, s.values.reduce((sum, v) => sum + v * routeStep, 0));
+          inc(totals, s.name, s.values.reduce((sum, v, i) => sum + v * spanOf(Number(s.times[i]), routeStep, end - 86400, end), 0));
         }
       }
       return totals;
@@ -818,7 +819,9 @@ export function OverviewPage() {
     .flatMap((s) =>
       (s.project?.routes ?? []).map((route) => {
         const key = (m: string) => totals?.get(`r:${s.project!.id}/${route.name}:${m}`) ?? 0;
-        return { project: s.project!, route, req: key("req"), err: key("5xx"), in: key("in"), out: key("out") };
+        // tcp/udp 的映射没有请求，写连接数和连不上容器的比例。
+        const l4 = route.protocol !== "http";
+        return { project: s.project!, route, req: key(l4 ? "conn" : "req"), err: key(l4 ? "fail" : "5xx"), in: key("in"), out: key("out") };
       }),
     )
     .filter((x) => x.req > 0 || x.in + x.out > 0)

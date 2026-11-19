@@ -29,7 +29,7 @@ func init() {
 // logRouteKey 是每条 http 规则在访问日志里追加的字段，值为 "<项目 ID>/<规则名>"。
 const logRouteKey = "nagi_route"
 
-// RouteStats 是一条规则在一段时间内的请求统计。
+// RouteStats 是一条规则在一段时间内的请求统计。http 规则记请求，tcp/udp 规则（L4）记连接（见 l4stats.go）。
 type RouteStats struct {
 	Requests int
 	Errors   int // 5xx 响应数
@@ -39,8 +39,13 @@ type RouteStats struct {
 	Seconds float64
 	// Classes 是各类状态码的响应数，下标是状态码的百位（1xx～5xx）。
 	Classes  [6]int
-	BytesIn  int64 // 请求体字节数
-	BytesOut int64 // 响应体字节数
+	BytesIn  int64 // 请求体字节数；tcp/udp 是从客户端收到的字节数
+	BytesOut int64 // 响应体字节数；tcp/udp 是发给客户端的字节数
+	// L4 表示这是 tcp/udp 规则：Conns 是新连接数（UDP 按会话），Fails 是其中连不上容器的，Active 是取统计时的连接数。
+	L4     bool
+	Conns  int
+	Fails  int
+	Active int
 	// Durations 是耗时的样本（秒），用来算分位数。请求太多时只留 maxSamples 个，等概率抽样。
 	Durations []float64
 }
@@ -62,10 +67,11 @@ func (s *RouteStats) Percentile(q float64) float64 {
 type observerT struct {
 	mu     sync.Mutex
 	stats  map[string]*RouteStats
+	l4     map[string]*l4Counter
 	onCert func(domain string, err error)
 }
 
-var observer = &observerT{stats: map[string]*RouteStats{}}
+var observer = &observerT{stats: map[string]*RouteStats{}, l4: map[string]*l4Counter{}}
 
 // TakeStats 返回上次调用以来每条规则的请求统计，键是 "<项目 ID>/<规则名>"。
 func TakeStats() map[string]RouteStats {
@@ -76,6 +82,7 @@ func TakeStats() map[string]RouteStats {
 		out[k] = *v
 	}
 	observer.stats = map[string]*RouteStats{}
+	observer.takeL4(out)
 	return out
 }
 

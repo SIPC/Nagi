@@ -67,11 +67,11 @@ export default {
   },
   routes: {
     title: "Top port mappings by traffic",
-    help: "Totals for the last 24 hours, HTTP mappings only. Error rate is the share of 5xx responses.",
+    help: "Totals for the last 24 hours. HTTP mappings count requests, and the error rate is the share of 5xx responses. TCP and UDP mappings count connections, and the error rate is the share that could not reach the container.",
     mapping: "Mapping",
     project: "Project",
     container: "Container",
-    requests: "Requests",
+    requests: "Requests/conns",
     errorRate: "Error rate",
     inbound: "In",
     outbound: "Out",

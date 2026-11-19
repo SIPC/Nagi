@@ -244,11 +244,9 @@ function SpeedSummary({ run }: { run: SpeedRun }) {
   return <span title={t.mesh.speedLast}>{ratePair(a.up!, a.down!)}</span>;
 }
 
-// ratePair：↑ 31.9 ↓ 31.5 MB/s，单位一样时只写一次。
+// ratePair：↑ 31.9 MB/s ↓ 31.5 MB/s，两边都写单位，免得前一个数看着没有单位。
 export function ratePair(up: number, down: number) {
-  const [u, uu] = fmtRate(up).split(" ");
-  const [d, du] = fmtRate(down).split(" ");
-  return uu === du ? `↑ ${u} ↓ ${d} ${du}` : `↑ ${u} ${uu} ↓ ${d} ${du}`;
+  return `↑ ${fmtRate(up)} ↓ ${fmtRate(down)}`;
 }
 
 // useSeconds：测速进行中时每秒刷新一次，显示已经测了几秒。
