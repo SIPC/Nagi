@@ -153,4 +153,14 @@ public interface UserScopeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeTagsBytes(int index);
+
+  /**
+   * <pre>
+   * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+   * </pre>
+   *
+   * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+   * @return The nodesFollow.
+   */
+  boolean getNodesFollow();
 }

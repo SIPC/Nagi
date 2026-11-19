@@ -32,7 +32,7 @@ import kotlinx.coroutines.delay
 // 更新在面板上进行，离开这一页不影响；面板重启时连接会断开，App 自己重连。
 
 @Composable
-internal fun PanelUpdateSection(session: PanelSession) {
+internal fun PanelUpdateSection(session: PanelSession, canCheck: Boolean) {
     val check = rememberLoad { session.rpc { c, h -> c.settings.checkPanelUpdate(CheckPanelUpdateRequest.getDefaultInstance(), h) } }
     val status = rememberLoad { session.rpc { c, h -> c.settings.getUpdateStatus(GetUpdateStatusRequest.getDefaultInstance(), h) } }
     val action = rememberAction()
@@ -63,7 +63,7 @@ internal fun PanelUpdateSection(session: PanelSession) {
                 NagiButton(stringResource(R.string.update_action), { confirming = true }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
             }
             else -> ActionRow(stringResource(R.string.update_up_to_date), description = listOfNotNull(checked, source).joinToString(" · ")) {
-                NagiButton(stringResource(R.string.update_check), {
+                if (canCheck) NagiButton(stringResource(R.string.update_check), {
                     action.run("check") { check.value = session.rpc { c, h -> c.settings.checkPanelUpdate(CheckPanelUpdateRequest.newBuilder().setForce(true).build(), h) } }
                 }, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = action.busy == "check")
             }

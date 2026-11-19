@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -548,4 +549,85 @@ func (a *API) nodeRootAllowed(ctx context.Context, u auth.User, nodeID string) e
 		return nodeNotFound()
 	}
 	return nil
+}
+
+// ---- 手机确认（见 docs/android.md#手机确认）----
+
+func (s *authService) BeginPhoneApproval(ctx context.Context, req *connect.Request[nagiv1.BeginPhoneApprovalRequest]) (*connect.Response[nagiv1.PhoneApproval], error) {
+	a, err := s.Auth.BeginElevateApproval(ctx, auth.RequestIP(req.Peer().Addr, req.Header()), auth.SessionToken(req.Header()))
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.PhoneApproval{Id: a.ID, Code: a.Code, ExpiresAt: timestamppb.New(a.Expires)}), nil
+}
+
+func (s *authService) GetPhoneApproval(ctx context.Context, req *connect.Request[nagiv1.GetPhoneApprovalRequest]) (*connect.Response[nagiv1.GetPhoneApprovalResponse], error) {
+	status, until, err := s.Auth.ElevateApprovalStatus(ctx, auth.RequestIP(req.Peer().Addr, req.Header()), auth.SessionToken(req.Header()), req.Msg.GetId())
+	if err != nil {
+		return nil, err
+	}
+	out := &nagiv1.GetPhoneApprovalResponse{Status: status}
+	if !until.IsZero() {
+		out.ElevatedUntil = timestamppb.New(until)
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *authService) BeginLoginApproval(ctx context.Context, req *connect.Request[nagiv1.BeginLoginApprovalRequest]) (*connect.Response[nagiv1.PhoneApproval], error) {
+	a, err := s.Auth.BeginLoginApproval(ctx, auth.RequestIP(req.Peer().Addr, req.Header()), strings.TrimSpace(req.Msg.GetUsername()), req.Msg.GetPassword())
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.PhoneApproval{Id: a.ID, Code: a.Code, Ticket: a.Ticket, ExpiresAt: timestamppb.New(a.Expires)}), nil
+}
+
+func (s *authService) CompleteLoginApproval(ctx context.Context, req *connect.Request[nagiv1.CompleteLoginApprovalRequest]) (*connect.Response[nagiv1.CompleteLoginApprovalResponse], error) {
+	status, cookie, err := s.Auth.CompleteLoginApproval(ctx, auth.RequestIP(req.Peer().Addr, req.Header()), req.Msg.GetTicket())
+	if err != nil {
+		return nil, err
+	}
+	resp := connect.NewResponse(&nagiv1.CompleteLoginApprovalResponse{Status: status})
+	if cookie != nil {
+		resp.Header().Set("Set-Cookie", cookie.String())
+	}
+	return resp, nil
+}
+
+func (s *appService) ListApprovals(ctx context.Context, _ *connect.Request[nagiv1.AppListApprovalsRequest]) (*connect.Response[nagiv1.AppListApprovalsResponse], error) {
+	u, err := appUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &nagiv1.AppListApprovalsResponse{}
+	for _, a := range s.Auth.AppApprovals(u) {
+		out.Approvals = append(out.Approvals, &nagiv1.AppApproval{Id: a.ID, Kind: a.Kind, Ip: a.IP, Agent: a.Agent,
+			CreatedAt: timestamppb.New(a.Created), ExpiresAt: timestamppb.New(a.Expires)})
+	}
+	return connect.NewResponse(out), nil
+}
+
+func (s *appService) Approve(ctx context.Context, req *connect.Request[nagiv1.AppApproveRequest]) (*connect.Response[nagiv1.AppApproveResponse], error) {
+	u, err := appUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m := req.Msg
+	if err := s.Auth.AppApprove(ctx, s.ip(ctx), u, auth.AppApprovalRequest{ID: m.GetId(), Code: m.GetCode(), Host: m.GetHost(), Deny: m.GetDeny(),
+		Signature: m.GetSignature()}, s.appHosts(ctx)); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.AppApproveResponse{}), nil
+}
+
+func (s *appService) Elevate(ctx context.Context, req *connect.Request[nagiv1.AppElevateRequest]) (*connect.Response[nagiv1.AppElevateResponse], error) {
+	u, err := appUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m := req.Msg
+	until, err := s.Auth.AppElevate(ctx, s.ip(ctx), u, m.GetChallenge(), m.GetHost(), m.GetSignature(), s.appHosts(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.AppElevateResponse{ElevatedUntil: timestamppb.New(until)}), nil
 }

@@ -56,6 +56,18 @@ const (
 	AuthServiceMeProcedure = "/nagi.v1.AuthService/Me"
 	// AuthServiceElevateProcedure is the fully-qualified name of the AuthService's Elevate RPC.
 	AuthServiceElevateProcedure = "/nagi.v1.AuthService/Elevate"
+	// AuthServiceBeginPhoneApprovalProcedure is the fully-qualified name of the AuthService's
+	// BeginPhoneApproval RPC.
+	AuthServiceBeginPhoneApprovalProcedure = "/nagi.v1.AuthService/BeginPhoneApproval"
+	// AuthServiceGetPhoneApprovalProcedure is the fully-qualified name of the AuthService's
+	// GetPhoneApproval RPC.
+	AuthServiceGetPhoneApprovalProcedure = "/nagi.v1.AuthService/GetPhoneApproval"
+	// AuthServiceBeginLoginApprovalProcedure is the fully-qualified name of the AuthService's
+	// BeginLoginApproval RPC.
+	AuthServiceBeginLoginApprovalProcedure = "/nagi.v1.AuthService/BeginLoginApproval"
+	// AuthServiceCompleteLoginApprovalProcedure is the fully-qualified name of the AuthService's
+	// CompleteLoginApproval RPC.
+	AuthServiceCompleteLoginApprovalProcedure = "/nagi.v1.AuthService/CompleteLoginApproval"
 	// AuthServiceChangePasswordProcedure is the fully-qualified name of the AuthService's
 	// ChangePassword RPC.
 	AuthServiceChangePasswordProcedure = "/nagi.v1.AuthService/ChangePassword"
@@ -601,6 +613,13 @@ const (
 	AppServiceInfoProcedure = "/nagi.v1.AppService/Info"
 	// AppServiceLogoutProcedure is the fully-qualified name of the AppService's Logout RPC.
 	AppServiceLogoutProcedure = "/nagi.v1.AppService/Logout"
+	// AppServiceListApprovalsProcedure is the fully-qualified name of the AppService's ListApprovals
+	// RPC.
+	AppServiceListApprovalsProcedure = "/nagi.v1.AppService/ListApprovals"
+	// AppServiceApproveProcedure is the fully-qualified name of the AppService's Approve RPC.
+	AppServiceApproveProcedure = "/nagi.v1.AppService/Approve"
+	// AppServiceElevateProcedure is the fully-qualified name of the AppService's Elevate RPC.
+	AppServiceElevateProcedure = "/nagi.v1.AppService/Elevate"
 )
 
 // SetupServiceClient is a client for the nagi.v1.SetupService service.
@@ -707,6 +726,14 @@ type AuthServiceClient interface {
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
 	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
 	Elevate(context.Context, *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error)
+	// 手机确认（见 docs/android.md#手机确认）：网页发起，成员在手机 App 上用指纹、面容或锁屏密码确认。
+	// 高权限确认：发起后轮询 GetPhoneApproval，手机确认后这个会话算做过高权限确认（给自己留登录凭据的操作不认）。
+	BeginPhoneApproval(context.Context, *connect.Request[v1.BeginPhoneApprovalRequest]) (*connect.Response[v1.PhoneApproval], error)
+	GetPhoneApproval(context.Context, *connect.Request[v1.GetPhoneApprovalRequest]) (*connect.Response[v1.GetPhoneApprovalResponse], error)
+	// 登录的第二步：密码对了、开了两步验证的账号可以在手机上确认，代替验证码。不用登录。
+	// 发起后轮询 CompleteLoginApproval，手机确认后它返回会话 cookie。
+	BeginLoginApproval(context.Context, *connect.Request[v1.BeginLoginApprovalRequest]) (*connect.Response[v1.PhoneApproval], error)
+	CompleteLoginApproval(context.Context, *connect.Request[v1.CompleteLoginApprovalRequest]) (*connect.Response[v1.CompleteLoginApprovalResponse], error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -768,6 +795,30 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+AuthServiceElevateProcedure,
 			connect.WithSchema(authServiceMethods.ByName("Elevate")),
+			connect.WithClientOptions(opts...),
+		),
+		beginPhoneApproval: connect.NewClient[v1.BeginPhoneApprovalRequest, v1.PhoneApproval](
+			httpClient,
+			baseURL+AuthServiceBeginPhoneApprovalProcedure,
+			connect.WithSchema(authServiceMethods.ByName("BeginPhoneApproval")),
+			connect.WithClientOptions(opts...),
+		),
+		getPhoneApproval: connect.NewClient[v1.GetPhoneApprovalRequest, v1.GetPhoneApprovalResponse](
+			httpClient,
+			baseURL+AuthServiceGetPhoneApprovalProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetPhoneApproval")),
+			connect.WithClientOptions(opts...),
+		),
+		beginLoginApproval: connect.NewClient[v1.BeginLoginApprovalRequest, v1.PhoneApproval](
+			httpClient,
+			baseURL+AuthServiceBeginLoginApprovalProcedure,
+			connect.WithSchema(authServiceMethods.ByName("BeginLoginApproval")),
+			connect.WithClientOptions(opts...),
+		),
+		completeLoginApproval: connect.NewClient[v1.CompleteLoginApprovalRequest, v1.CompleteLoginApprovalResponse](
+			httpClient,
+			baseURL+AuthServiceCompleteLoginApprovalProcedure,
+			connect.WithSchema(authServiceMethods.ByName("CompleteLoginApproval")),
 			connect.WithClientOptions(opts...),
 		),
 		changePassword: connect.NewClient[v1.ChangePasswordRequest, v1.ChangePasswordResponse](
@@ -859,24 +910,28 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login              *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	logout             *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	me                 *connect.Client[v1.MeRequest, v1.MeResponse]
-	elevate            *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
-	changePassword     *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
-	setLanguage        *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
-	updateProfile      *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
-	getOAuthRequest    *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
-	approveOAuth       *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
-	registerSessionKey *connect.Client[v1.RegisterSessionKeyRequest, v1.RegisterSessionKeyResponse]
-	rotateSession      *connect.Client[v1.RotateSessionRequest, v1.RotateSessionResponse]
-	reverify           *connect.Client[v1.ReverifyRequest, v1.ReverifyResponse]
-	beginPasskeyLogin  *connect.Client[v1.BeginPasskeyLoginRequest, v1.PasskeyChallenge]
-	passkeyLogin       *connect.Client[v1.PasskeyLoginRequest, v1.LoginResponse]
-	getProjectOrder    *connect.Client[v1.GetProjectOrderRequest, v1.ProjectOrder]
-	setProjectOrder    *connect.Client[v1.ProjectOrder, v1.SetProjectOrderResponse]
-	createAppPairing   *connect.Client[v1.CreateAppPairingRequest, v1.CreateAppPairingResponse]
-	getAppPairing      *connect.Client[v1.GetAppPairingRequest, v1.GetAppPairingResponse]
+	login                 *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	logout                *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	me                    *connect.Client[v1.MeRequest, v1.MeResponse]
+	elevate               *connect.Client[v1.ElevateRequest, v1.ElevateResponse]
+	beginPhoneApproval    *connect.Client[v1.BeginPhoneApprovalRequest, v1.PhoneApproval]
+	getPhoneApproval      *connect.Client[v1.GetPhoneApprovalRequest, v1.GetPhoneApprovalResponse]
+	beginLoginApproval    *connect.Client[v1.BeginLoginApprovalRequest, v1.PhoneApproval]
+	completeLoginApproval *connect.Client[v1.CompleteLoginApprovalRequest, v1.CompleteLoginApprovalResponse]
+	changePassword        *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
+	setLanguage           *connect.Client[v1.SetLanguageRequest, v1.SetLanguageResponse]
+	updateProfile         *connect.Client[v1.UpdateProfileRequest, v1.UpdateProfileResponse]
+	getOAuthRequest       *connect.Client[v1.OAuthRequest, v1.GetOAuthRequestResponse]
+	approveOAuth          *connect.Client[v1.ApproveOAuthRequest, v1.ApproveOAuthResponse]
+	registerSessionKey    *connect.Client[v1.RegisterSessionKeyRequest, v1.RegisterSessionKeyResponse]
+	rotateSession         *connect.Client[v1.RotateSessionRequest, v1.RotateSessionResponse]
+	reverify              *connect.Client[v1.ReverifyRequest, v1.ReverifyResponse]
+	beginPasskeyLogin     *connect.Client[v1.BeginPasskeyLoginRequest, v1.PasskeyChallenge]
+	passkeyLogin          *connect.Client[v1.PasskeyLoginRequest, v1.LoginResponse]
+	getProjectOrder       *connect.Client[v1.GetProjectOrderRequest, v1.ProjectOrder]
+	setProjectOrder       *connect.Client[v1.ProjectOrder, v1.SetProjectOrderResponse]
+	createAppPairing      *connect.Client[v1.CreateAppPairingRequest, v1.CreateAppPairingResponse]
+	getAppPairing         *connect.Client[v1.GetAppPairingRequest, v1.GetAppPairingResponse]
 }
 
 // Login calls nagi.v1.AuthService.Login.
@@ -897,6 +952,26 @@ func (c *authServiceClient) Me(ctx context.Context, req *connect.Request[v1.MeRe
 // Elevate calls nagi.v1.AuthService.Elevate.
 func (c *authServiceClient) Elevate(ctx context.Context, req *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error) {
 	return c.elevate.CallUnary(ctx, req)
+}
+
+// BeginPhoneApproval calls nagi.v1.AuthService.BeginPhoneApproval.
+func (c *authServiceClient) BeginPhoneApproval(ctx context.Context, req *connect.Request[v1.BeginPhoneApprovalRequest]) (*connect.Response[v1.PhoneApproval], error) {
+	return c.beginPhoneApproval.CallUnary(ctx, req)
+}
+
+// GetPhoneApproval calls nagi.v1.AuthService.GetPhoneApproval.
+func (c *authServiceClient) GetPhoneApproval(ctx context.Context, req *connect.Request[v1.GetPhoneApprovalRequest]) (*connect.Response[v1.GetPhoneApprovalResponse], error) {
+	return c.getPhoneApproval.CallUnary(ctx, req)
+}
+
+// BeginLoginApproval calls nagi.v1.AuthService.BeginLoginApproval.
+func (c *authServiceClient) BeginLoginApproval(ctx context.Context, req *connect.Request[v1.BeginLoginApprovalRequest]) (*connect.Response[v1.PhoneApproval], error) {
+	return c.beginLoginApproval.CallUnary(ctx, req)
+}
+
+// CompleteLoginApproval calls nagi.v1.AuthService.CompleteLoginApproval.
+func (c *authServiceClient) CompleteLoginApproval(ctx context.Context, req *connect.Request[v1.CompleteLoginApprovalRequest]) (*connect.Response[v1.CompleteLoginApprovalResponse], error) {
+	return c.completeLoginApproval.CallUnary(ctx, req)
 }
 
 // ChangePassword calls nagi.v1.AuthService.ChangePassword.
@@ -977,6 +1052,14 @@ type AuthServiceHandler interface {
 	Me(context.Context, *connect.Request[v1.MeRequest]) (*connect.Response[v1.MeResponse], error)
 	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
 	Elevate(context.Context, *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error)
+	// 手机确认（见 docs/android.md#手机确认）：网页发起，成员在手机 App 上用指纹、面容或锁屏密码确认。
+	// 高权限确认：发起后轮询 GetPhoneApproval，手机确认后这个会话算做过高权限确认（给自己留登录凭据的操作不认）。
+	BeginPhoneApproval(context.Context, *connect.Request[v1.BeginPhoneApprovalRequest]) (*connect.Response[v1.PhoneApproval], error)
+	GetPhoneApproval(context.Context, *connect.Request[v1.GetPhoneApprovalRequest]) (*connect.Response[v1.GetPhoneApprovalResponse], error)
+	// 登录的第二步：密码对了、开了两步验证的账号可以在手机上确认，代替验证码。不用登录。
+	// 发起后轮询 CompleteLoginApproval，手机确认后它返回会话 cookie。
+	BeginLoginApproval(context.Context, *connect.Request[v1.BeginLoginApprovalRequest]) (*connect.Response[v1.PhoneApproval], error)
+	CompleteLoginApproval(context.Context, *connect.Request[v1.CompleteLoginApprovalRequest]) (*connect.Response[v1.CompleteLoginApprovalResponse], error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -1034,6 +1117,30 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		AuthServiceElevateProcedure,
 		svc.Elevate,
 		connect.WithSchema(authServiceMethods.ByName("Elevate")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceBeginPhoneApprovalHandler := connect.NewUnaryHandler(
+		AuthServiceBeginPhoneApprovalProcedure,
+		svc.BeginPhoneApproval,
+		connect.WithSchema(authServiceMethods.ByName("BeginPhoneApproval")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceGetPhoneApprovalHandler := connect.NewUnaryHandler(
+		AuthServiceGetPhoneApprovalProcedure,
+		svc.GetPhoneApproval,
+		connect.WithSchema(authServiceMethods.ByName("GetPhoneApproval")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceBeginLoginApprovalHandler := connect.NewUnaryHandler(
+		AuthServiceBeginLoginApprovalProcedure,
+		svc.BeginLoginApproval,
+		connect.WithSchema(authServiceMethods.ByName("BeginLoginApproval")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceCompleteLoginApprovalHandler := connect.NewUnaryHandler(
+		AuthServiceCompleteLoginApprovalProcedure,
+		svc.CompleteLoginApproval,
+		connect.WithSchema(authServiceMethods.ByName("CompleteLoginApproval")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceChangePasswordHandler := connect.NewUnaryHandler(
@@ -1130,6 +1237,14 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceMeHandler.ServeHTTP(w, r)
 		case AuthServiceElevateProcedure:
 			authServiceElevateHandler.ServeHTTP(w, r)
+		case AuthServiceBeginPhoneApprovalProcedure:
+			authServiceBeginPhoneApprovalHandler.ServeHTTP(w, r)
+		case AuthServiceGetPhoneApprovalProcedure:
+			authServiceGetPhoneApprovalHandler.ServeHTTP(w, r)
+		case AuthServiceBeginLoginApprovalProcedure:
+			authServiceBeginLoginApprovalHandler.ServeHTTP(w, r)
+		case AuthServiceCompleteLoginApprovalProcedure:
+			authServiceCompleteLoginApprovalHandler.ServeHTTP(w, r)
 		case AuthServiceChangePasswordProcedure:
 			authServiceChangePasswordHandler.ServeHTTP(w, r)
 		case AuthServiceSetLanguageProcedure:
@@ -1181,6 +1296,22 @@ func (UnimplementedAuthServiceHandler) Me(context.Context, *connect.Request[v1.M
 
 func (UnimplementedAuthServiceHandler) Elevate(context.Context, *connect.Request[v1.ElevateRequest]) (*connect.Response[v1.ElevateResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.Elevate is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginPhoneApproval(context.Context, *connect.Request[v1.BeginPhoneApprovalRequest]) (*connect.Response[v1.PhoneApproval], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.BeginPhoneApproval is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) GetPhoneApproval(context.Context, *connect.Request[v1.GetPhoneApprovalRequest]) (*connect.Response[v1.GetPhoneApprovalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.GetPhoneApproval is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginLoginApproval(context.Context, *connect.Request[v1.BeginLoginApprovalRequest]) (*connect.Response[v1.PhoneApproval], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.BeginLoginApproval is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) CompleteLoginApproval(context.Context, *connect.Request[v1.CompleteLoginApprovalRequest]) (*connect.Response[v1.CompleteLoginApprovalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.CompleteLoginApproval is not implemented"))
 }
 
 func (UnimplementedAuthServiceHandler) ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
@@ -5989,6 +6120,12 @@ type AppServiceClient interface {
 	Info(context.Context, *connect.Request[v1.AppInfoRequest]) (*connect.Response[v1.AppInfoResponse], error)
 	// 退出：删除这台手机的设备记录（要令牌）。
 	Logout(context.Context, *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error)
+	// 等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+	ListApprovals(context.Context, *connect.Request[v1.AppListApprovalsRequest]) (*connect.Response[v1.AppListApprovalsResponse], error)
+	// 确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+	Approve(context.Context, *connect.Request[v1.AppApproveRequest]) (*connect.Response[v1.AppApproveResponse], error)
+	// App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+	Elevate(context.Context, *connect.Request[v1.AppElevateRequest]) (*connect.Response[v1.AppElevateResponse], error)
 }
 
 // NewAppServiceClient constructs a client for the nagi.v1.AppService service. By default, it uses
@@ -6038,17 +6175,38 @@ func NewAppServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(appServiceMethods.ByName("Logout")),
 			connect.WithClientOptions(opts...),
 		),
+		listApprovals: connect.NewClient[v1.AppListApprovalsRequest, v1.AppListApprovalsResponse](
+			httpClient,
+			baseURL+AppServiceListApprovalsProcedure,
+			connect.WithSchema(appServiceMethods.ByName("ListApprovals")),
+			connect.WithClientOptions(opts...),
+		),
+		approve: connect.NewClient[v1.AppApproveRequest, v1.AppApproveResponse](
+			httpClient,
+			baseURL+AppServiceApproveProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Approve")),
+			connect.WithClientOptions(opts...),
+		),
+		elevate: connect.NewClient[v1.AppElevateRequest, v1.AppElevateResponse](
+			httpClient,
+			baseURL+AppServiceElevateProcedure,
+			connect.WithSchema(appServiceMethods.ByName("Elevate")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // appServiceClient implements AppServiceClient.
 type appServiceClient struct {
-	getPairing *connect.Client[v1.GetPairingRequest, v1.GetPairingResponse]
-	pair       *connect.Client[v1.PairRequest, v1.PairResponse]
-	challenge  *connect.Client[v1.AppChallengeRequest, v1.AppChallengeResponse]
-	token      *connect.Client[v1.AppTokenRequest, v1.AppTokenResponse]
-	info       *connect.Client[v1.AppInfoRequest, v1.AppInfoResponse]
-	logout     *connect.Client[v1.AppLogoutRequest, v1.AppLogoutResponse]
+	getPairing    *connect.Client[v1.GetPairingRequest, v1.GetPairingResponse]
+	pair          *connect.Client[v1.PairRequest, v1.PairResponse]
+	challenge     *connect.Client[v1.AppChallengeRequest, v1.AppChallengeResponse]
+	token         *connect.Client[v1.AppTokenRequest, v1.AppTokenResponse]
+	info          *connect.Client[v1.AppInfoRequest, v1.AppInfoResponse]
+	logout        *connect.Client[v1.AppLogoutRequest, v1.AppLogoutResponse]
+	listApprovals *connect.Client[v1.AppListApprovalsRequest, v1.AppListApprovalsResponse]
+	approve       *connect.Client[v1.AppApproveRequest, v1.AppApproveResponse]
+	elevate       *connect.Client[v1.AppElevateRequest, v1.AppElevateResponse]
 }
 
 // GetPairing calls nagi.v1.AppService.GetPairing.
@@ -6081,6 +6239,21 @@ func (c *appServiceClient) Logout(ctx context.Context, req *connect.Request[v1.A
 	return c.logout.CallUnary(ctx, req)
 }
 
+// ListApprovals calls nagi.v1.AppService.ListApprovals.
+func (c *appServiceClient) ListApprovals(ctx context.Context, req *connect.Request[v1.AppListApprovalsRequest]) (*connect.Response[v1.AppListApprovalsResponse], error) {
+	return c.listApprovals.CallUnary(ctx, req)
+}
+
+// Approve calls nagi.v1.AppService.Approve.
+func (c *appServiceClient) Approve(ctx context.Context, req *connect.Request[v1.AppApproveRequest]) (*connect.Response[v1.AppApproveResponse], error) {
+	return c.approve.CallUnary(ctx, req)
+}
+
+// Elevate calls nagi.v1.AppService.Elevate.
+func (c *appServiceClient) Elevate(ctx context.Context, req *connect.Request[v1.AppElevateRequest]) (*connect.Response[v1.AppElevateResponse], error) {
+	return c.elevate.CallUnary(ctx, req)
+}
+
 // AppServiceHandler is an implementation of the nagi.v1.AppService service.
 type AppServiceHandler interface {
 	// 查询配对码：面板名称、成员。不认识的配对码返回 not_found。
@@ -6095,6 +6268,12 @@ type AppServiceHandler interface {
 	Info(context.Context, *connect.Request[v1.AppInfoRequest]) (*connect.Response[v1.AppInfoResponse], error)
 	// 退出：删除这台手机的设备记录（要令牌）。
 	Logout(context.Context, *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error)
+	// 等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+	ListApprovals(context.Context, *connect.Request[v1.AppListApprovalsRequest]) (*connect.Response[v1.AppListApprovalsResponse], error)
+	// 确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+	Approve(context.Context, *connect.Request[v1.AppApproveRequest]) (*connect.Response[v1.AppApproveResponse], error)
+	// App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+	Elevate(context.Context, *connect.Request[v1.AppElevateRequest]) (*connect.Response[v1.AppElevateResponse], error)
 }
 
 // NewAppServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -6140,6 +6319,24 @@ func NewAppServiceHandler(svc AppServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(appServiceMethods.ByName("Logout")),
 		connect.WithHandlerOptions(opts...),
 	)
+	appServiceListApprovalsHandler := connect.NewUnaryHandler(
+		AppServiceListApprovalsProcedure,
+		svc.ListApprovals,
+		connect.WithSchema(appServiceMethods.ByName("ListApprovals")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServiceApproveHandler := connect.NewUnaryHandler(
+		AppServiceApproveProcedure,
+		svc.Approve,
+		connect.WithSchema(appServiceMethods.ByName("Approve")),
+		connect.WithHandlerOptions(opts...),
+	)
+	appServiceElevateHandler := connect.NewUnaryHandler(
+		AppServiceElevateProcedure,
+		svc.Elevate,
+		connect.WithSchema(appServiceMethods.ByName("Elevate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AppService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AppServiceGetPairingProcedure:
@@ -6154,6 +6351,12 @@ func NewAppServiceHandler(svc AppServiceHandler, opts ...connect.HandlerOption) 
 			appServiceInfoHandler.ServeHTTP(w, r)
 		case AppServiceLogoutProcedure:
 			appServiceLogoutHandler.ServeHTTP(w, r)
+		case AppServiceListApprovalsProcedure:
+			appServiceListApprovalsHandler.ServeHTTP(w, r)
+		case AppServiceApproveProcedure:
+			appServiceApproveHandler.ServeHTTP(w, r)
+		case AppServiceElevateProcedure:
+			appServiceElevateHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -6185,4 +6388,16 @@ func (UnimplementedAppServiceHandler) Info(context.Context, *connect.Request[v1.
 
 func (UnimplementedAppServiceHandler) Logout(context.Context, *connect.Request[v1.AppLogoutRequest]) (*connect.Response[v1.AppLogoutResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Logout is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) ListApprovals(context.Context, *connect.Request[v1.AppListApprovalsRequest]) (*connect.Response[v1.AppListApprovalsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.ListApprovals is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Approve(context.Context, *connect.Request[v1.AppApproveRequest]) (*connect.Response[v1.AppApproveResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Approve is not implemented"))
+}
+
+func (UnimplementedAppServiceHandler) Elevate(context.Context, *connect.Request[v1.AppElevateRequest]) (*connect.Response[v1.AppElevateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AppService.Elevate is not implemented"))
 }

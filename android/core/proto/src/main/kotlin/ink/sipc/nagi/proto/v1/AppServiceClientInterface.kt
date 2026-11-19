@@ -40,4 +40,19 @@ public interface AppServiceClientInterface {
    *  退出：删除这台手机的设备记录（要令牌）。
    */
   public suspend fun logout(request: AppLogoutRequest, headers: Headers = emptyMap()): ResponseMessage<AppLogoutResponse>
+
+  /**
+   *  等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+   */
+  public suspend fun listApprovals(request: AppListApprovalsRequest, headers: Headers = emptyMap()): ResponseMessage<AppListApprovalsResponse>
+
+  /**
+   *  确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+   */
+  public suspend fun approve(request: AppApproveRequest, headers: Headers = emptyMap()): ResponseMessage<AppApproveResponse>
+
+  /**
+   *  App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+   */
+  public suspend fun elevate(request: AppElevateRequest, headers: Headers = emptyMap()): ResponseMessage<AppElevateResponse>
 }

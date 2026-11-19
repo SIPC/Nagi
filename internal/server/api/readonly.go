@@ -17,13 +17,19 @@ var readOnlyPrefixes = []string{"Get", "List", "Query", "Stream", "Check", "Ping
 
 // readOnlyAllowed 是另外放行的接口：登录、退出只改本面板自己的会话；提升为主面板；更新只换本面板自己的程序。
 var readOnlyAllowed = map[string]bool{
-	nagiv1connect.AuthServiceLoginProcedure:              true,
-	nagiv1connect.AuthServiceBeginPasskeyLoginProcedure:  true,
-	nagiv1connect.AuthServicePasskeyLoginProcedure:       true,
-	nagiv1connect.AuthServiceLogoutProcedure:             true,
-	nagiv1connect.AuthServiceMeProcedure:                 true,
-	nagiv1connect.SettingsServicePromoteStandbyProcedure: true,
-	nagiv1connect.SettingsServiceUpdatePanelProcedure:    true,
+	nagiv1connect.AuthServiceLoginProcedure:             true,
+	nagiv1connect.AuthServiceBeginPasskeyLoginProcedure: true,
+	nagiv1connect.AuthServicePasskeyLoginProcedure:      true,
+	nagiv1connect.AuthServiceLogoutProcedure:            true,
+	// 手机确认只改本面板自己的会话和内存里的请求（见 docs/android.md#手机确认）。
+	nagiv1connect.AuthServiceBeginPhoneApprovalProcedure:    true,
+	nagiv1connect.AuthServiceBeginLoginApprovalProcedure:    true,
+	nagiv1connect.AuthServiceCompleteLoginApprovalProcedure: true,
+	nagiv1connect.AppServiceApproveProcedure:                true,
+	nagiv1connect.AppServiceElevateProcedure:                true,
+	nagiv1connect.AuthServiceMeProcedure:                    true,
+	nagiv1connect.SettingsServicePromoteStandbyProcedure:    true,
+	nagiv1connect.SettingsServiceUpdatePanelProcedure:       true,
 	// 安卓 App 在备用面板上照常换取令牌（不更新最近活动），只能查看（见 docs/android.md#面板地址和备用面板）。
 	nagiv1connect.AppServiceChallengeProcedure: true,
 	nagiv1connect.AppServiceTokenProcedure:     true,

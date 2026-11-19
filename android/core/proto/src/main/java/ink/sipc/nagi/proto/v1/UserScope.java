@@ -520,6 +520,44 @@ public  final class UserScope extends
     nodeTags_.add(value.toStringUtf8());
   }
 
+  public static final int NODES_FOLLOW_FIELD_NUMBER = 7;
+  private boolean nodesFollow_;
+  /**
+   * <pre>
+   * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+   * </pre>
+   *
+   * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+   * @return The nodesFollow.
+   */
+  @java.lang.Override
+  public boolean getNodesFollow() {
+    return nodesFollow_;
+  }
+  /**
+   * <pre>
+   * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+   * </pre>
+   *
+   * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+   * @param value The nodesFollow to set.
+   */
+  private void setNodesFollow(boolean value) {
+    
+    nodesFollow_ = value;
+  }
+  /**
+   * <pre>
+   * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+   * </pre>
+   *
+   * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+   */
+  private void clearNodesFollow() {
+
+    nodesFollow_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.UserScope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1117,6 +1155,46 @@ public  final class UserScope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+     * </pre>
+     *
+     * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+     * @return The nodesFollow.
+     */
+    @java.lang.Override
+    public boolean getNodesFollow() {
+      return instance.getNodesFollow();
+    }
+    /**
+     * <pre>
+     * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+     * </pre>
+     *
+     * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+     * @param value The nodesFollow to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodesFollow(boolean value) {
+      copyOnWrite();
+      instance.setNodesFollow(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 节点跟随项目：只能看到范围内项目的容器所在的节点（按当时的位置算）。为 true 时 all_nodes 为 false，node_ids、node_tags 为空。
+     * </pre>
+     *
+     * <code>bool nodes_follow = 7 [json_name = "nodesFollow"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNodesFollow() {
+      copyOnWrite();
+      instance.clearNodesFollow();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.UserScope)
   }
   @java.lang.Override
@@ -1139,10 +1217,11 @@ public  final class UserScope extends
             "nodeIds_",
             "projectGroups_",
             "nodeTags_",
+            "nodesFollow_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0004\u0000\u0001\u0007\u0002\u0007" +
-              "\u0003\u021a\u0004\u021a\u0005\u021a\u0006\u021a";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0004\u0000\u0001\u0007\u0002\u0007" +
+              "\u0003\u021a\u0004\u021a\u0005\u021a\u0006\u021a\u0007\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

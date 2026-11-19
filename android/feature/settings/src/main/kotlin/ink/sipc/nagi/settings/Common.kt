@@ -1,5 +1,6 @@
 package ink.sipc.nagi.settings
 
+import ink.sipc.nagi.ui.LocalElevate
 import ink.sipc.nagi.ui.SettingsRow
 import ink.sipc.nagi.ui.ChoiceRow
 import androidx.compose.material3.ModalBottomSheet
@@ -80,7 +81,7 @@ internal fun <T> Loaded(state: LoadState<T>, rows: Int = 3, content: @Composable
 
 /** 页面上的操作：同一时间只做一个，[busy] 是正在做的那个（按钮转圈），[error] 是上一次失败的原因。 */
 @Stable
-internal class Action(private val scope: CoroutineScope, private val elevationText: String) {
+internal class Action(private val scope: CoroutineScope, private val elevationText: String, private val elevate: (suspend () -> Boolean)?) {
     var busy by mutableStateOf<String?>(null)
         private set
     var error by mutableStateOf<String?>(null)
@@ -95,8 +96,21 @@ internal class Action(private val scope: CoroutineScope, private val elevationTe
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ElevationRequiredException) {
-                // App 还不能做高权限确认（AppService.Elevate 还没有做），这一项先在网页上操作。
-                error = elevationText
+                // 要先做高权限确认：弹系统验证框，确认后再做一次。确认了面板还是要求验证的，是只认密码或验证码的操作
+                // （给自己留登录凭据的），请到网页上做。
+                try {
+                    if (elevate == null) {
+                        error = elevationText
+                    } else if (elevate.invoke()) {
+                        block()
+                    }
+                } catch (e2: CancellationException) {
+                    throw e2
+                } catch (e2: ElevationRequiredException) {
+                    error = elevationText
+                } catch (e2: Exception) {
+                    error = e2.message.orEmpty()
+                }
             } catch (e: Exception) {
                 error = e.message.orEmpty()
             } finally {
@@ -110,7 +124,8 @@ internal class Action(private val scope: CoroutineScope, private val elevationTe
 internal fun rememberAction(): Action {
     val scope = rememberCoroutineScope()
     val text = stringResource(R.string.needs_web_elevation)
-    return remember { Action(scope, text) }
+    val elevate = LocalElevate.current
+    return remember(elevate) { Action(scope, text, elevate) }
 }
 
 /** 操作失败的原因：红字，放在页面或对话框里出错的那一块上面。 */

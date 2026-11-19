@@ -1,5 +1,10 @@
 package ink.sipc.nagi
 
+import ink.sipc.nagi.pairing.ApprovalPrompts
+import ink.sipc.nagi.pairing.rememberElevate
+import ink.sipc.nagi.ui.LocalElevate
+import androidx.compose.runtime.CompositionLocalProvider
+import ink.sipc.nagi.data.Access
 import ink.sipc.nagi.ui.Avatar
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.contentDescription
@@ -168,10 +173,16 @@ fun AppRoot(graph: AppGraph, lock: AppLock, pendingPair: MutableStateFlow<Pairin
                 graph.forget()
                 removed = true
             })
-            else -> MainTabs(graph, s, onLocked = lock::lockNow, onRemoved = {
-                graph.forget()
-                removed = true
-            })
+            else -> {
+                // 高权限确认交给设置里的各个操作用；网页发来的确认请求在主界面上弹出（见 docs/android.md#手机确认）。
+                CompositionLocalProvider(LocalElevate provides rememberElevate(s)) {
+                    MainTabs(graph, s, onLocked = lock::lockNow, onRemoved = {
+                        graph.forget()
+                        removed = true
+                    })
+                }
+                ApprovalPrompts(s)
+            }
         }
     }
 }
@@ -353,7 +364,7 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
         val go: (String) -> Unit = { n.navigate(it) }
         page(SettingsRoutes.PANEL) {
             val info by settings.info.collectAsStateWithLifecycle()
-            PanelScreen(session, info?.role == "admin", onBack = back, onLogout = logout, open = go)
+            PanelScreen(session, info?.let { Access.of(it) }, onBack = back, onLogout = logout, open = go)
         }
         page(SettingsRoutes.PANEL_ALIAS) { PanelAliasScreen(session, onBack = back) }
         page(SettingsRoutes.PANEL_NAME) {
@@ -364,12 +375,15 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
         page(SettingsRoutes.LANGUAGE) { LanguageScreen(graph.prefs, onBack = back) }
         page(SettingsRoutes.ABOUT) {
             val info by settings.info.collectAsStateWithLifecycle()
-            AboutScreen(BuildConfig.VERSION_NAME, info?.version, session, info?.role == "admin", onBack = back, open = go)
+            AboutScreen(BuildConfig.VERSION_NAME, info?.version, session, info?.let { Access.of(it) }, onBack = back, open = go)
         }
         page(SettingsRoutes.PROFILE) { ProfileScreen(session, onBack = back, onSaved = settings::refresh) }
         page(SettingsRoutes.SECURITY) { SecurityScreen(session, onBack = back, open = go, onSignedOut = onRemoved) }
         page(SettingsRoutes.PASSWORD) { PasswordScreen(session, onBack = back, onSignedOut = onRemoved) }
-        page(SettingsRoutes.ACCESS) { AccessScreen(session, onBack = back, open = go) }
+        page(SettingsRoutes.ACCESS) {
+            val info by settings.info.collectAsStateWithLifecycle()
+            AccessScreen(session, info?.role == "admin", onBack = back, open = go)
+        }
         page(SettingsRoutes.ACCESS_ADDRESS) { AccessAddressScreen(session, onBack = back) }
         page(SettingsRoutes.ACCESS_DOMAIN) { AccessDomainScreen(session, onBack = back) }
         page(SettingsRoutes.PANEL_SECURITY) { PanelSecurityScreen(session, onBack = back) }
@@ -477,7 +491,8 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
     if (sheet) {
         ModalBottomSheet(onDismissRequest = { sheet = false }, containerColor = NagiTheme.colors.card) {
             // 点顶部栏的面板名称：当前面板和退出（多个面板以后再做）。
-            PanelDetails(session, logout, Modifier.padding(horizontal = Dimens.pageHorizontal).navigationBarsPadding().padding(bottom = 16.dp))
+            val info by settings.info.collectAsStateWithLifecycle()
+            PanelDetails(session, logout, Modifier.padding(horizontal = Dimens.pageHorizontal).navigationBarsPadding().padding(bottom = 16.dp), showAddress = info?.role == "admin")
         }
     }
 }

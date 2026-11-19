@@ -1,4 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import { PhoneApprovalWait } from "@/components/phone-approval";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "@tanstack/react-router";
@@ -125,6 +126,8 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needCode, setNeedCode] = useState(false);
+  // 两步验证改在手机 App 上确认（见 docs/android.md#手机确认）。
+  const [onPhone, setOnPhone] = useState(false);
   const setupState = useQuery({ queryKey: ["setup-state"], queryFn: () => setupClient.getSetupState({}) });
 
   const signedIn = async () => {
@@ -176,6 +179,19 @@ export function LoginPage() {
     login.mutate();
   };
 
+  if (needCode && onPhone)
+    return (
+      <AuthShell title={t.auth.login.totpTitle} description={t.common.phone.loginDescription} step="totp" stepIndex={1}>
+        <PhoneApprovalWait
+          begin={() => authClient.beginLoginApproval({ username, password })}
+          poll={async (a) => (await authClient.completeLoginApproval({ ticket: a.ticket })).status}
+          onApproved={signedIn}
+          onBack={() => setOnPhone(false)}
+          backLabel={t.common.phone.useCode}
+        />
+      </AuthShell>
+    );
+
   if (needCode)
     return (
       <AuthShell title={t.auth.login.totpTitle} description={t.auth.login.totpDescription} step="totp" stepIndex={1}>
@@ -205,12 +221,16 @@ export function LoginPage() {
               {login.isPending && <Spinner />}
               {t.auth.login.verifySubmit}
             </Button>
+            <Button variant="outline" className="w-full" disabled={login.isPending} onClick={() => setOnPhone(true)}>
+              {t.common.phone.use}
+            </Button>
             <Button
               variant="ghost"
               className="w-full"
               disabled={login.isPending}
               onClick={() => {
                 setNeedCode(false);
+                setOnPhone(false);
                 setTotpCode("");
                 login.reset();
               }}

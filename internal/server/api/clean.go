@@ -144,6 +144,7 @@ var cleanedFields = map[string]string{
 	"nagi.v1.AuditEvent.params":                   "非管理员去掉地址类参数（B9），看不到的节点的 ID 和名称（audit_api.go）",
 	"nagi.v1.AuditEvent.error":                    "去掉看不到的节点名（audit_api.go）",
 	"nagi.v1.LoginSession.ip":                     "保留：本人的登录设备",
+	"nagi.v1.AppApproval.ip":                      "保留：发起本人账号的确认请求的地址，用来认出不是自己发起的",
 	"nagi.v1.LoginSession.last_ip":                "保留：本人的登录设备",
 	"nagi.v1.AccessToken.last_ip":                 "保留：本人的令牌（看别人的只给管理员）",
 	"nagi.v1.AccessToken.networks":                "保留：本人的令牌",

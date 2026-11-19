@@ -170,4 +170,94 @@ public interface AppInfoResponseOrBuilder extends
    */
   com.google.protobuf.ByteString
       getAvatarTypeBytes();
+
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @return A list containing the permissions.
+   */
+  java.util.List<java.lang.String>
+      getPermissionsList();
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @return The count of permissions.
+   */
+  int getPermissionsCount();
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param index The index of the element to return.
+   * @return The permissions at the given index.
+   */
+  java.lang.String getPermissions(int index);
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param index The index of the element to return.
+   * @return The permissions at the given index.
+   */
+  com.google.protobuf.ByteString
+      getPermissionsBytes(int index);
+
+  /**
+   * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  long getRoleId();
+
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   * @return The roleName.
+   */
+  java.lang.String getRoleName();
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   * @return The bytes for roleName.
+   */
+  com.google.protobuf.ByteString
+      getRoleNameBytes();
+
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   * @return The roleBuiltin.
+   */
+  java.lang.String getRoleBuiltin();
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   * @return The bytes for roleBuiltin.
+   */
+  com.google.protobuf.ByteString
+      getRoleBuiltinBytes();
+
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   * @return Whether the elevatedUntil field is set.
+   */
+  boolean hasElevatedUntil();
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   * @return The elevatedUntil.
+   */
+  com.google.protobuf.Timestamp getElevatedUntil();
 }

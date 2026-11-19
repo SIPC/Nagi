@@ -1,5 +1,11 @@
 package ink.sipc.nagi.data
 
+import ink.sipc.nagi.proto.v1.AppChallengeRequest
+import ink.sipc.nagi.proto.v1.AppElevateRequest
+import ink.sipc.nagi.proto.v1.AppApproveRequest
+import ink.sipc.nagi.proto.v1.AppListApprovalsRequest
+import ink.sipc.nagi.proto.v1.AppApproval
+import com.google.protobuf.ByteString
 import com.connectrpc.Code
 import com.connectrpc.ResponseMessage
 import ink.sipc.nagi.network.DeviceRemovedException
@@ -122,8 +128,14 @@ class PanelSession(
 
     private val home = HomeLoader(this)
 
-    /** 自己的角色（决定「需要处理」行尾有没有按钮），查一次记下。 */
-    private var role: String? = null
+    /** 自己的权限（决定入口和「需要处理」行尾有没有按钮），1 分钟查一次（角色的权限可能被改）。 */
+    private var access: Access? = null
+    private var accessAt = 0L
+
+    suspend fun access(): Access {
+        access?.let { if (System.currentTimeMillis() - accessAt < ACCESS_TTL_MS) return it }
+        return Access.of(info()).also { access = it; accessAt = System.currentTimeMillis() }
+    }
 
     /**
      * 首页的数据：和网页的全局概览一样用网页的接口查、在手机上算（见 HomeData.kt），每 [POLL_MS] 查一次，
@@ -143,13 +155,11 @@ class PanelSession(
         } else {
             send(OverviewState.Loading)
         }
-        // 面板名称可能被管理员改过：打开首页时查一次（info 里会更新记下的名称），不影响首页的数据。
-        launch { runCatching { info() } }
+        // 面板名称可能被管理员改过：access() 查 Info 时会更新记下的名称。
         while (true) {
             var error: PanelException? = null
             try {
-                val r = role ?: rpc { c, h -> c.auth.me(MeRequest.getDefaultInstance(), h) }.role.also { role = it }
-                val o = home.load(r)
+                val o = home.load(access())
                 last = o
                 lastAt = System.currentTimeMillis()
                 attempt = 0
@@ -192,6 +202,38 @@ class PanelSession(
     /** 流量趋势：和网页概览一样按节点查监控、在手机上合计。 */
     suspend fun traffic(range: TrafficRange): TrafficSeries = home.traffic(range.seconds, range.step)
 
+    // ---- 手机确认和高权限确认（见 docs/android.md#手机确认）----
+
+    /** 等这个成员在手机上确认的请求（网页的高权限确认、登录的第二步）。 */
+    suspend fun approvals(): List<AppApproval> =
+        rpc { c, h -> c.app.listApprovals(AppListApprovalsRequest.getDefaultInstance(), h) }.approvalsList
+
+    /**
+     * 确认一个请求：[sign] 弹出系统验证框后用确认密钥签名。签的是用途、连接的主机、设备 ID、请求 ID、种类和网页上的数字，
+     * 所以这个签名只能确认这一个请求。
+     */
+    suspend fun approve(a: AppApproval, code: String, sign: suspend (ByteArray) -> ByteArray) {
+        val host = panel.address
+        val msg = listOf("nagi-app-approve", host, panel.deviceId, a.id, a.kind, code).joinToString("\n").toByteArray()
+        val sig = sign(msg)
+        rpc { c, h ->
+            c.app.approve(AppApproveRequest.newBuilder().setId(a.id).setCode(code).setHost(host).setSignature(ByteString.copyFrom(sig)).build(), h)
+        }
+    }
+
+    /** 拒绝一个请求（不用验证）。 */
+    suspend fun denyApproval(id: String) {
+        rpc { c, h -> c.app.approve(AppApproveRequest.newBuilder().setId(id).setDeny(true).build(), h) }
+    }
+
+    /** App 自己的高权限确认：用确认密钥签面板给的挑战，15 分钟内有效。 */
+    suspend fun elevate(sign: suspend (ByteArray) -> ByteArray) {
+        val host = panel.address
+        val ch = client.app.challenge(AppChallengeRequest.newBuilder().setDeviceId(panel.deviceId).build()).orThrow().challenge
+        val sig = sign(listOf("nagi-app-elevate", host, panel.deviceId, ch).joinToString("\n").toByteArray())
+        rpc { c, h -> c.app.elevate(AppElevateRequest.newBuilder().setChallenge(ch).setHost(host).setSignature(ByteString.copyFrom(sig)).build(), h) }
+    }
+
     /** 批准节点（首页「需要处理」行尾的「批准」）。 */
     suspend fun approveNode(nodeId: String) {
         tokens.call { h -> client.nodes.approveNode(ApproveNodeRequest.newBuilder().setNodeId(nodeId).build(), h).orThrow() }
@@ -205,6 +247,7 @@ class PanelSession(
     private companion object {
         /** 首页多久查一次（和网页的概览一样）。 */
         const val POLL_MS = 10_000L
+        const val ACCESS_TTL_MS = 60_000L
         const val OFFLINE_GRACE_MS = 5_000L
         val BACKOFF_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
     }

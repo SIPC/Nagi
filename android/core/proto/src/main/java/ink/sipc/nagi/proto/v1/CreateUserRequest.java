@@ -117,6 +117,10 @@ public  final class CreateUserRequest extends
   public static final int ROLE_FIELD_NUMBER = 3;
   private java.lang.String role_;
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    * @return The role.
    */
@@ -125,6 +129,10 @@ public  final class CreateUserRequest extends
     return role_;
   }
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    * @return The bytes for role.
    */
@@ -134,6 +142,10 @@ public  final class CreateUserRequest extends
     return com.google.protobuf.ByteString.copyFromUtf8(role_);
   }
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    * @param value The role to set.
    */
@@ -144,6 +156,10 @@ public  final class CreateUserRequest extends
     role_ = value;
   }
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    */
   private void clearRole() {
@@ -151,6 +167,10 @@ public  final class CreateUserRequest extends
     role_ = getDefaultInstance().getRole();
   }
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    * @param value The bytes for role to set.
    */
@@ -165,7 +185,7 @@ public  final class CreateUserRequest extends
   private ink.sipc.nagi.proto.v1.UserScope scope_;
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -176,7 +196,7 @@ public  final class CreateUserRequest extends
   }
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -187,7 +207,7 @@ public  final class CreateUserRequest extends
   }
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -199,7 +219,7 @@ public  final class CreateUserRequest extends
   }
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -218,7 +238,7 @@ public  final class CreateUserRequest extends
   }
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -226,6 +246,32 @@ public  final class CreateUserRequest extends
   private void clearScope() {
     scope_ = null;
     bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
+  public static final int ROLE_ID_FIELD_NUMBER = 5;
+  private long roleId_;
+  /**
+   * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  @java.lang.Override
+  public long getRoleId() {
+    return roleId_;
+  }
+  /**
+   * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+   * @param value The roleId to set.
+   */
+  private void setRoleId(long value) {
+    
+    roleId_ = value;
+  }
+  /**
+   * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+   */
+  private void clearRoleId() {
+
+    roleId_ = 0L;
   }
 
   public static ink.sipc.nagi.proto.v1.CreateUserRequest parseFrom(
@@ -424,6 +470,10 @@ public  final class CreateUserRequest extends
     }
 
     /**
+     * <pre>
+     * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+     * </pre>
+     *
      * <code>string role = 3 [json_name = "role"];</code>
      * @return The role.
      */
@@ -432,6 +482,10 @@ public  final class CreateUserRequest extends
       return instance.getRole();
     }
     /**
+     * <pre>
+     * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+     * </pre>
+     *
      * <code>string role = 3 [json_name = "role"];</code>
      * @return The bytes for role.
      */
@@ -441,6 +495,10 @@ public  final class CreateUserRequest extends
       return instance.getRoleBytes();
     }
     /**
+     * <pre>
+     * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+     * </pre>
+     *
      * <code>string role = 3 [json_name = "role"];</code>
      * @param value The role to set.
      * @return This builder for chaining.
@@ -452,6 +510,10 @@ public  final class CreateUserRequest extends
       return this;
     }
     /**
+     * <pre>
+     * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+     * </pre>
+     *
      * <code>string role = 3 [json_name = "role"];</code>
      * @return This builder for chaining.
      */
@@ -461,6 +523,10 @@ public  final class CreateUserRequest extends
       return this;
     }
     /**
+     * <pre>
+     * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+     * </pre>
+     *
      * <code>string role = 3 [json_name = "role"];</code>
      * @param value The bytes for role to set.
      * @return This builder for chaining.
@@ -474,7 +540,7 @@ public  final class CreateUserRequest extends
 
     /**
      * <pre>
-     * 为空表示全部。
+     * 为空表示项目全部、节点跟随项目。
      * </pre>
      *
      * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -485,7 +551,7 @@ public  final class CreateUserRequest extends
     }
     /**
      * <pre>
-     * 为空表示全部。
+     * 为空表示项目全部、节点跟随项目。
      * </pre>
      *
      * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -496,7 +562,7 @@ public  final class CreateUserRequest extends
     }
     /**
      * <pre>
-     * 为空表示全部。
+     * 为空表示项目全部、节点跟随项目。
      * </pre>
      *
      * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -508,7 +574,7 @@ public  final class CreateUserRequest extends
       }
     /**
      * <pre>
-     * 为空表示全部。
+     * 为空表示项目全部、节点跟随项目。
      * </pre>
      *
      * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -521,7 +587,7 @@ public  final class CreateUserRequest extends
     }
     /**
      * <pre>
-     * 为空表示全部。
+     * 为空表示项目全部、节点跟随项目。
      * </pre>
      *
      * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -533,13 +599,41 @@ public  final class CreateUserRequest extends
     }
     /**
      * <pre>
-     * 为空表示全部。
+     * 为空表示项目全部、节点跟随项目。
      * </pre>
      *
      * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
      */
     public Builder clearScope() {  copyOnWrite();
       instance.clearScope();
+      return this;
+    }
+
+    /**
+     * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+     * @return The roleId.
+     */
+    @java.lang.Override
+    public long getRoleId() {
+      return instance.getRoleId();
+    }
+    /**
+     * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+     * @param value The roleId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleId(long value) {
+      copyOnWrite();
+      instance.setRoleId(value);
+      return this;
+    }
+    /**
+     * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleId() {
+      copyOnWrite();
+      instance.clearRoleId();
       return this;
     }
 
@@ -564,10 +658,11 @@ public  final class CreateUserRequest extends
             "password_",
             "role_",
             "scope_",
+            "roleId_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0001\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u1009\u0000";
+              "\u0000\u0005\u0000\u0001\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u1009\u0000\u0005\u0002";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

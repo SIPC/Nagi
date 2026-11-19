@@ -1,5 +1,9 @@
 package ink.sipc.nagi.settings
 
+import ink.sipc.nagi.proto.v1.ListRolesRequest
+import ink.sipc.nagi.network.PanelException
+import com.connectrpc.Code
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,37 +51,64 @@ import ink.sipc.nagi.ui.SettingsGroup
 import ink.sipc.nagi.ui.UnderlineTabs
 import ink.sipc.nagi.ui.rowClickable
 
-// 成员（管理员，和网页 pages/members.tsx 一样）：列表，点一个成员进去改角色和访问范围、重置密码、清除两步验证和通行密钥、删除；
-// 右上角加成员。访问范围在手机上按项目、节点逐个勾选；网页上按分组、标签选的照样保留，在这里不改动它们。
+// 成员（要「成员」权限，和网页 pages/members.tsx 一样）：列表，点一个成员进去改角色和访问范围、重置密码、清除两步验证和通行密钥、删除；
+// 右上角加成员。角色从面板的角色列表里选（见 docs/panel.md#成员和角色），新建和编辑角色只在网页上做。
+// 访问范围在手机上按项目、节点逐个勾选；网页上按分组、标签选的照样保留，在这里不改动它们。
 
-private val roles = listOf("admin", "operator", "viewer")
+/**
+ * 可以选的一个角色。新版面板按 [id] 选；旧版面板没有角色列表（[legacy] 为 true），只有 admin、operator、viewer 三种，按 [builtin] 选。
+ * [allowed]：当前成员能不能授予它（不是管理员时只能授予自己有的权限，不能选管理员）。
+ */
+private class RoleChoice(val id: Long, val name: String, val builtin: String, val permissions: Int, val allowed: Boolean, val legacy: Boolean = false) {
+    val isAdmin: Boolean get() = builtin == "admin"
+}
+
+private val legacyRoles = listOf("admin", "operator", "viewer").mapIndexed { i, r -> RoleChoice(-1L - i, "", r, 0, allowed = true, legacy = true) }
+
+/** 角色列表。面板没有这个接口（旧版）时用以前的三种角色。 */
+private suspend fun loadRoles(session: PanelSession): List<RoleChoice> {
+    val res = try {
+        session.rpc { c, h -> c.settings.listRoles(ListRolesRequest.getDefaultInstance(), h) }
+    } catch (e: PanelException) {
+        if (e.code == Code.UNIMPLEMENTED) return legacyRoles
+        throw e
+    }
+    val admin = session.access().isAdmin
+    val grantable = res.grantableList.toSet()
+    return res.rolesList.map { r ->
+        RoleChoice(r.id, r.name, r.builtin, r.permissionsCount, allowed = if (r.builtin == "admin") admin else admin || grantable.containsAll(r.permissionsList))
+    }
+}
+
+/** 成员现在的角色在列表里是哪一个。 */
+private fun List<RoleChoice>.of(u: PanelUser): RoleChoice? =
+    firstOrNull { if (it.legacy) it.builtin == u.role else it.id == u.roleId }
+
+private val PanelUser.admin: Boolean get() = roleBuiltin == "admin" || (roleId == 0L && role == "admin")
 
 @Composable
-private fun roleName(role: String) = stringResource(
-    when (role) {
-        "admin" -> R.string.role_admin
-        "operator" -> R.string.role_operator
-        else -> R.string.role_viewer
-    },
-)
-
-@Composable
-private fun roleHint(role: String) = stringResource(
-    when (role) {
-        "admin" -> R.string.role_admin_hint
-        "operator" -> R.string.role_operator_hint
-        else -> R.string.role_viewer_hint
-    },
-)
+private fun roleHint(r: RoleChoice) = when {
+    r.legacy -> stringResource(
+        when (r.builtin) {
+            "admin" -> R.string.role_admin_hint
+            "operator" -> R.string.role_operator_hint
+            else -> R.string.role_viewer_hint
+        },
+    )
+    !r.allowed -> stringResource(R.string.role_not_grantable)
+    r.isAdmin -> stringResource(R.string.role_all_permissions)
+    else -> stringResource(R.string.role_permission_count, r.permissions)
+}
 
 /** 访问范围的一句话：全部项目 · 3 个节点。分组和标签也写上。 */
 @Composable
 private fun scopeText(u: PanelUser): String {
-    if (u.role == "admin") return stringResource(R.string.scope_everything)
+    if (u.admin) return stringResource(R.string.scope_everything)
     val s = u.scope
     val projects = if (s.allProjects) stringResource(R.string.scope_all_projects)
     else (s.projectGroupsList.map { stringResource(R.string.scope_group, it) } + stringResource(R.string.scope_project_count, s.projectIdsCount)).joinToString("、")
-    val nodes = if (s.allNodes) stringResource(R.string.scope_all_nodes)
+    val nodes = if (s.nodesFollow) stringResource(R.string.scope_nodes_follow)
+    else if (s.allNodes) stringResource(R.string.scope_all_nodes)
     else (s.nodeTagsList.map { stringResource(R.string.scope_tag, it) } + stringResource(R.string.scope_node_count, s.nodeIdsCount)).joinToString("、")
     return "$projects · $nodes"
 }
@@ -103,7 +134,7 @@ fun MembersScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> U
                             style = NagiTheme.type.body, color = NagiTheme.colors.foreground,
                         )
                         Text(
-                            listOfNotNull(u.username.takeIf { u.displayName.isNotEmpty() }, roleName(u.role), scopeText(u).takeIf { u.role != "admin" }).joinToString(" · "),
+                            listOfNotNull(u.username.takeIf { u.displayName.isNotEmpty() }, roleLabel(u.roleName, u.roleBuiltin, u.role), scopeText(u).takeIf { !u.admin }).joinToString(" · "),
                             style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground,
                         )
                     }
@@ -118,6 +149,7 @@ fun MembersScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> U
 @Composable
 fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
     val users = rememberLoad { session.rpc { c, h -> c.settings.listUsers(ListUsersRequest.getDefaultInstance(), h) }.usersList }
+    val roles = rememberLoad { loadRoles(session) }
     val action = rememberAction()
     var dialog by remember { mutableStateOf<String?>(null) }
     val u = users.value?.firstOrNull { it.id == id }
@@ -125,7 +157,12 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
         ActionError(action)
         Loaded(users) { list ->
             val user = list.firstOrNull { it.id == id } ?: return@Loaded Note(stringResource(R.string.member_gone))
-            var role by remember(user) { mutableStateOf(user.role) }
+            // 选中的角色（列表里的 id），没动过时是成员现在的角色。
+            var pickedId by remember(user) { mutableStateOf<Long?>(null) }
+            val current = roles.value?.of(user)
+            val picked = roles.value?.firstOrNull { it.id == pickedId } ?: current
+            val pickedAdmin = picked?.isAdmin ?: user.admin
+            val legacy = roles.value?.firstOrNull()?.legacy == true
             var scope by remember(user) { mutableStateOf(user.scope.takeIf { user.hasScope() } ?: fullScope) }
             Spacer(Modifier.height(Dimens.topBarToContent))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -140,16 +177,18 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
                 }
             }
             SettingsGroup(stringResource(R.string.member_role)) {
-                RolePick(role) { role = it }
+                Loaded(roles, rows = 3) { list -> RolePick(list, picked?.id) { pickedId = it } }
             }
-            if (role != "admin") ScopeFields(session, scope) { scope = it }
+            if (!pickedAdmin) ScopeFields(session, scope, legacy) { scope = it }
             Spacer(Modifier.height(16.dp))
-            val changed = role != user.role || (role != "admin" && scope != (user.scope.takeIf { user.hasScope() } ?: fullScope))
+            val roleChanged = picked != null && picked.id != current?.id
+            val changed = roleChanged || (!pickedAdmin && scope != (user.scope.takeIf { user.hasScope() } ?: fullScope))
+            val save: suspend () -> Unit = { saveAccess(session, user, picked.takeIf { roleChanged }, pickedAdmin, scope); users.reload() }
             NagiButton(stringResource(R.string.save), {
-                if (user.isSelf && user.role == "admin" && role != "admin") {
+                if (user.isSelf && user.admin && !pickedAdmin) {
                     dialog = "demote"
                 } else {
-                    action.run("save") { saveAccess(session, user, role, scope); users.reload() }
+                    action.run("save") { save() }
                 }
             }, Modifier.fillMaxWidth(), enabled = changed, loading = action.busy == "save")
 
@@ -177,10 +216,10 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
             val name = user.displayName.ifEmpty { user.username }
             when (dialog) {
                 "demote" -> NagiDialog(
-                    title = stringResource(R.string.member_demote_self), text = stringResource(R.string.member_demote_self_confirm, roleName(role)),
+                    title = stringResource(R.string.member_demote_self), text = stringResource(R.string.member_demote_self_confirm, picked?.let { roleLabel(it.name, it.builtin) }.orEmpty()),
                     confirm = stringResource(R.string.member_demote_self), cancel = stringResource(R.string.cancel), danger = true, busy = action.busy == "save",
                     onDismiss = { dialog = null },
-                    onConfirm = { action.run("save") { saveAccess(session, user, role, scope); dialog = null; users.reload() } },
+                    onConfirm = { action.run("save") { save(); dialog = null } },
                 )
                 "password" -> {
                     var pw by remember { mutableStateOf("") }
@@ -248,9 +287,14 @@ fun MemberScreen(session: PanelSession, id: Long, onBack: () -> Unit) {
 
 private val fullScope: UserScope = UserScope.newBuilder().setAllProjects(true).setAllNodes(true).build()
 
-private suspend fun saveAccess(session: PanelSession, user: PanelUser, role: String, scope: UserScope) {
-    val req = UpdateUserRequest.newBuilder().setId(user.id).setRole(if (role == user.role) "" else role)
-    if (role != "admin") req.setScope(scope)
+/** 新成员默认的范围（和网页一样）：项目全部，节点跟随项目。 */
+private val defaultScope: UserScope = UserScope.newBuilder().setAllProjects(true).setNodesFollow(true).build()
+
+/** 保存角色和访问范围。[role] 为 null 表示角色不改；管理员不设范围。 */
+private suspend fun saveAccess(session: PanelSession, user: PanelUser, role: RoleChoice?, admin: Boolean, scope: UserScope) {
+    val req = UpdateUserRequest.newBuilder().setId(user.id)
+    if (role != null) { if (role.legacy) req.setRole(role.builtin) else req.setRoleId(role.id) }
+    if (!admin) req.setScope(scope)
     session.rpc { c, h -> c.settings.updateUser(req.build(), h) }
 }
 
@@ -259,8 +303,18 @@ private suspend fun saveAccess(session: PanelSession, user: PanelUser, role: Str
 fun MemberAddScreen(session: PanelSession, onBack: () -> Unit) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var role by remember { mutableStateOf("operator") }
-    var scope by remember { mutableStateOf(fullScope) }
+    val roles = rememberLoad { loadRoles(session) }
+    var pickedId by remember { mutableStateOf<Long?>(null) }
+    // 默认选预置的操作员（没有、不能授予时选第一个能授予的、不是管理员的角色）。
+    val picked = roles.value?.let { list ->
+        list.firstOrNull { it.id == pickedId }
+            ?: list.firstOrNull { it.builtin == "operator" && it.allowed }
+            ?: list.firstOrNull { !it.isAdmin && it.allowed }
+    }
+    val legacy = roles.value?.firstOrNull()?.legacy == true
+    // 旧版面板不认「跟随项目」，默认全部。
+    var edited by remember { mutableStateOf<UserScope?>(null) }
+    val scope = edited ?: if (legacy) fullScope else defaultScope
     val action = rememberAction()
     SubPage(stringResource(R.string.member_add), onBack) {
         Spacer(Modifier.height(Dimens.topBarToContent + 8.dp))
@@ -269,20 +323,21 @@ fun MemberAddScreen(session: PanelSession, onBack: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Label(stringResource(R.string.member_password))
         NagiTextField(password, { password = it }, label = stringResource(R.string.member_password), placeholder = stringResource(R.string.password_hint), password = true)
-        SettingsGroup(stringResource(R.string.member_role)) { RolePick(role) { role = it } }
-        if (role != "admin") ScopeFields(session, scope) { scope = it }
+        SettingsGroup(stringResource(R.string.member_role)) {
+            Loaded(roles, rows = 3) { list -> RolePick(list, picked?.id) { pickedId = it } }
+        }
+        if (picked?.isAdmin != true) ScopeFields(session, scope, legacy) { edited = it }
         ActionError(action)
         Spacer(Modifier.height(16.dp))
         NagiButton(stringResource(R.string.member_add), {
+            val role = picked ?: return@NagiButton
             action.run("add") {
-                session.rpc { c, h ->
-                    c.settings.createUser(
-                        CreateUserRequest.newBuilder().setUsername(username.trim()).setPassword(password).setRole(role).setScope(if (role == "admin") fullScope else scope).build(), h,
-                    )
-                }
+                val req = CreateUserRequest.newBuilder().setUsername(username.trim()).setPassword(password).setScope(if (role.isAdmin) fullScope else scope)
+                if (role.legacy) req.setRole(role.builtin) else req.setRoleId(role.id)
+                session.rpc { c, h -> c.settings.createUser(req.build(), h) }
                 onBack()
             }
-        }, Modifier.fillMaxWidth(), enabled = username.isNotBlank() && password.length >= 8, loading = action.busy == "add")
+        }, Modifier.fillMaxWidth(), enabled = picked != null && username.isNotBlank() && password.length >= 8, loading = action.busy == "add")
     }
 }
 
@@ -291,19 +346,21 @@ private fun Label(text: String) {
     Text(text, style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground, modifier = Modifier.height(22.dp))
 }
 
-/** 角色：三项单选，每项下面写能做什么。 */
+/** 角色：单选，每项下面写有几项权限；不能授予的置灰。新建和编辑角色在网页上做。 */
 @Composable
-private fun RolePick(role: String, onChange: (String) -> Unit) {
+private fun RolePick(roles: List<RoleChoice>, picked: Long?, onChange: (Long) -> Unit) {
     roles.forEach { r ->
-        CheckRow(roleName(r), roleHint(r), r == role, radio = true) { onChange(r) }
+        CheckRow(roleLabel(r.name, r.builtin), roleHint(r), r.id == picked, radio = true, enabled = r.allowed || r.id == picked) { onChange(r.id) }
     }
+    if (roles.none { it.legacy }) Note(stringResource(R.string.roles_on_web))
 }
 
 /**
- * 访问范围：项目、节点各一个「全部 / 指定」，指定时列出可以勾选的项。网页上按分组、标签选的保留着，写在列表上面。
+ * 访问范围：项目「全部 / 指定」，节点「全部 / 跟随项目 / 指定」，指定时列出可以勾选的项。网页上按分组、标签选的保留着，写在列表上面。
+ * 跟随项目：只能看到范围内项目的容器所在的节点（见 docs/panel.md#访问范围）；旧版面板（[legacy]）没有这一项。
  */
 @Composable
-private fun ScopeFields(session: PanelSession, scope: UserScope, onChange: (UserScope) -> Unit) {
+private fun ScopeFields(session: PanelSession, scope: UserScope, legacy: Boolean, onChange: (UserScope) -> Unit) {
     val projects = rememberLoad { session.rpc { c, h -> c.projects.listProjects(ListProjectsRequest.getDefaultInstance(), h) }.projectsList.map { it.project } }
     val nodes = rememberLoad { session.rpc { c, h -> c.nodes.listNodes(ListNodesRequest.getDefaultInstance(), h) }.nodesList.filter { !it.pending } }
     val all = stringResource(R.string.scope_all)
@@ -326,8 +383,19 @@ private fun ScopeFields(session: PanelSession, scope: UserScope, onChange: (User
         Note(stringResource(R.string.scope_projects_hint))
     }
     SettingsGroup(stringResource(R.string.scope_nodes)) {
-        UnderlineTabs(listOf(all, some), if (scope.allNodes) 0 else 1, { onChange(scope.toBuilder().setAllNodes(it == 0).build()) })
-        if (!scope.allNodes) {
+        if (legacy) {
+            UnderlineTabs(listOf(all, some), if (scope.allNodes) 0 else 1, { onChange(scope.toBuilder().setAllNodes(it == 0).build()) })
+        } else {
+            UnderlineTabs(listOf(all, stringResource(R.string.scope_follow), some), if (scope.allNodes) 0 else if (scope.nodesFollow) 1 else 2, {
+                val b = scope.toBuilder().setAllNodes(it == 0).setNodesFollow(it == 1)
+                // 跟随项目时不带指定的节点和标签（面板要求）。
+                if (it == 1) b.clearNodeIds().clearNodeTags()
+                onChange(b.build())
+            })
+        }
+        if (scope.nodesFollow) {
+            Note(stringResource(R.string.scope_follow_hint))
+        } else if (!scope.allNodes) {
             if (scope.nodeTagsCount > 0) Note(stringResource(R.string.scope_kept, scope.nodeTagsList.joinToString("、")))
             Loaded(nodes) { list ->
                 if (list.isEmpty()) Note(stringResource(R.string.scope_no_nodes))
@@ -340,15 +408,16 @@ private fun ScopeFields(session: PanelSession, scope: UserScope, onChange: (User
                 }
             }
         }
-        Note(stringResource(R.string.scope_nodes_hint))
+        if (!scope.nodesFollow) Note(stringResource(R.string.scope_nodes_hint))
     }
 }
 
 /** 勾选的一行：左边方框（[radio] 时是圆圈），名称和灰色说明。 */
 @Composable
-internal fun CheckRow(title: String, description: String?, checked: Boolean, radio: Boolean = false, onClick: () -> Unit) {
+internal fun CheckRow(title: String, description: String?, checked: Boolean, radio: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().rowClickable(onClick, role = if (radio) Role.RadioButton else Role.Checkbox).heightIn(min = Dimens.rowHeight),
+        Modifier.fillMaxWidth().rowClickable(onClick, enabled = enabled, role = if (radio) Role.RadioButton else Role.Checkbox).heightIn(min = Dimens.rowHeight)
+            .alpha(if (enabled) 1f else 0.5f),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val c = NagiTheme.colors

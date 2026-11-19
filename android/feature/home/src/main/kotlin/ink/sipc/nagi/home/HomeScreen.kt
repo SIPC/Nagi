@@ -567,9 +567,11 @@ private fun TopRoutes(routes: List<RouteRate>) {
         Text(stringResource(R.string.range_day), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
     }
     val max = routes.maxOf { it.rx + it.tx }.coerceAtLeast(1.0)
+    // 节点看不到（访问范围外）时面板不给名称和地址：写「其他节点」。
+    val other = stringResource(R.string.other_node)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         routes.forEach { r ->
-            UsageRow(r.address, formatBytesText(r.rx + r.tx), ((r.rx + r.tx) / max).toFloat(), mono = true)
+            UsageRow(r.address.ifEmpty { if (r.port > 0) "$other:${r.port}" else other }, formatBytesText(r.rx + r.tx), ((r.rx + r.tx) / max).toFloat(), mono = true)
         }
     }
 }

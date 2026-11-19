@@ -83,6 +83,9 @@ func (a *API) Mount(mux *http.ServeMux) {
 		nagiv1connect.AuthServiceLoginProcedure,
 		nagiv1connect.AuthServiceBeginPasskeyLoginProcedure,
 		nagiv1connect.AuthServicePasskeyLoginProcedure,
+		// 登录的第二步改用手机确认（见 docs/android.md#手机确认）。
+		nagiv1connect.AuthServiceBeginLoginApprovalProcedure,
+		nagiv1connect.AuthServiceCompleteLoginApprovalProcedure,
 		nagiv1connect.AuthServiceLogoutProcedure,
 		// 要求重新验证的会话，其他接口都被拒绝，只有这个能用（处理函数自己找会话）。
 		nagiv1connect.AuthServiceReverifyProcedure,
@@ -213,9 +216,11 @@ func (s *authService) Logout(ctx context.Context, req *connect.Request[nagiv1.Lo
 
 func (s *authService) Me(ctx context.Context, _ *connect.Request[nagiv1.MeRequest]) (*connect.Response[nagiv1.MeResponse], error) {
 	u := auth.CurrentUser(ctx)
-	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role, Permissions: u.EffectivePerms().Names()}
+	resp := &nagiv1.MeResponse{Username: u.Name, TotpEnabled: s.Auth.TOTPEnabled(ctx, u.ID), Role: u.Role, Permissions: u.EffectivePerms().Names(),
+		HasPhone: s.Auth.HasPhone(ctx, u.ID)}
 	if u.Elevated() {
 		resp.ElevatedUntil = timestamppb.New(time.Unix(u.ElevatedUntil, 0))
+		resp.ElevatedBy = u.ElevatedBy
 	}
 	if row, err := s.Q.GetUserByID(ctx, u.ID); err == nil {
 		resp.Language = row.Language

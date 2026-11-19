@@ -1,5 +1,6 @@
 package ink.sipc.nagi.settings
 
+import ink.sipc.nagi.data.Access
 import android.app.Activity
 import android.app.LocaleManager
 import android.content.Context
@@ -22,7 +23,7 @@ class SettingsViewModel(private val session: PanelSession) : ViewModel() {
     private val _info = MutableStateFlow<AppInfoResponse?>(null)
     val info: StateFlow<AppInfoResponse?> = _info
 
-    /** 面板名称留空时用的默认名称（主机名），只有管理员能查（SettingsService.GetSettings）。 */
+    /** 面板名称留空时用的默认名称（主机名），改面板名称时用，要「面板设置」权限。 */
     private val _defaultName = MutableStateFlow<String?>(null)
     val defaultName: StateFlow<String?> = _defaultName
 
@@ -34,7 +35,7 @@ class SettingsViewModel(private val session: PanelSession) : ViewModel() {
         viewModelScope.launch {
             runCatching { session.info() }.onSuccess {
                 _info.value = it
-                if (it.role == "admin") runCatching { session.panelSettings() }.onSuccess { s -> _defaultName.value = s.defaultName }
+                if (Access.of(it).can(Access.PANEL_SETTINGS)) runCatching { session.panelSettings() }.onSuccess { s -> _defaultName.value = s.defaultName }
             }
         }
     }

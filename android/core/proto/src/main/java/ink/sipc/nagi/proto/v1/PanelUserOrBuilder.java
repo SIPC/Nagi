@@ -149,4 +149,38 @@ public interface PanelUserOrBuilder extends
    * <code>repeated .nagi.v1.Passkey passkeys = 11 [json_name = "passkeys"];</code>
    */
   int getPasskeysCount();
+
+  /**
+   * <pre>
+   * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+   * </pre>
+   *
+   * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  long getRoleId();
+
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   * @return The roleName.
+   */
+  java.lang.String getRoleName();
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   * @return The bytes for roleName.
+   */
+  com.google.protobuf.ByteString
+      getRoleNameBytes();
+
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   * @return The roleBuiltin.
+   */
+  java.lang.String getRoleBuiltin();
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   * @return The bytes for roleBuiltin.
+   */
+  com.google.protobuf.ByteString
+      getRoleBuiltinBytes();
 }

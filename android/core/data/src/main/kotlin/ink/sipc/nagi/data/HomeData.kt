@@ -1,5 +1,8 @@
 package ink.sipc.nagi.data
 
+import ink.sipc.nagi.network.ElevationRequiredException
+import ink.sipc.nagi.network.PanelException
+import com.connectrpc.Code
 import com.google.protobuf.Timestamp
 import ink.sipc.nagi.proto.v1.GetNodeMeshRequest
 import ink.sipc.nagi.proto.v1.GetPanelMeshRequest
@@ -39,8 +42,12 @@ data class Attention(
     val action: String = "",
 )
 
-/** 一条端口映射最近 24 小时的流量合计（字节），和网页概览的「流量最大的端口映射」一样。 */
-data class RouteRate(val projectId: String, val projectName: String, val route: String, val address: String, val rx: Double, val tx: Double)
+/**
+ * 一条端口映射最近 24 小时的流量合计（字节），和网页概览的「流量最大的端口映射」一样。
+ * address：有域名是域名；否则是「节点地址:端口」（面板只在有「查看访问地址」时给节点地址），没有地址时是「节点名:端口」；
+ * 节点看不到时为空，界面写「其他节点」加 port。
+ */
+data class RouteRate(val projectId: String, val projectName: String, val route: String, val address: String, val rx: Double, val tx: Double, val port: Int = 0)
 
 /** 实时流量的一条路径。from、to 是节点 ID，外部网络是 __external，面板（没有自带节点时）是 __panel。kind 是 ext 或 mesh。 */
 data class FlowPath(val from: String, val to: String, val rate: Double, val kind: String, val relay: Boolean = false)
@@ -96,7 +103,8 @@ private const val TOP_ROUTES = 3
 /** 端口映射的合计按 10 分钟聚合（和网页一样），1 分钟查一次。 */
 private const val ROUTE_STEP = 600L
 private const val ROUTE_EVERY_MS = 60_000L
-private val meshSeries = Regex("^m:([0-9a-f]+):(rx|tx)$")
+// m:other 是到看不到的节点的流量合在一起（见 docs/panel.md#访问范围）：只从对外流量里扣，不画到哪个节点。
+private val meshSeries = Regex("^m:([0-9a-f]+|other):(rx|tx)$")
 private val relaySeries = Regex("^m:relay:(rx|tx)$")
 
 private fun MetricSeries.latest(): Double? = valuesList.lastOrNull()
@@ -117,9 +125,16 @@ internal class HomeLoader(private val session: PanelSession) {
     private var routeTotals: Map<String, Double> = emptyMap()
     private var routeTotalsAt = 0L
 
-    suspend fun load(role: String): HomeOverview = coroutineScope {
-        val nodesJob = async { session.rpc { c, h -> c.nodes.listNodes(ListNodesRequest.getDefaultInstance(), h) }.nodesList }
-        val projectsJob = async { session.rpc { c, h -> c.projects.listProjects(ListProjectsRequest.getDefaultInstance(), h) }.projectsList }
+    suspend fun load(access: Access): HomeOverview = coroutineScope {
+        // 没有「查看节点」「查看」权限时面板拒绝：当作空的（和网页一样），不去问。
+        val nodesJob = async {
+            if (!access.can(Access.NODE_VIEW)) emptyList()
+            else denied(emptyList()) { session.rpc { c, h -> c.nodes.listNodes(ListNodesRequest.getDefaultInstance(), h) }.nodesList }
+        }
+        val projectsJob = async {
+            if (!access.can(Access.PROJECT_VIEW)) emptyList()
+            else denied(emptyList()) { session.rpc { c, h -> c.projects.listProjects(ListProjectsRequest.getDefaultInstance(), h) }.projectsList }
+        }
         val nodes = nodesJob.await()
         val projects = projectsJob.await()
         val online = nodes.filter { !it.pending && it.online }
@@ -128,7 +143,14 @@ internal class HomeLoader(private val session: PanelSession) {
         val ratesJob = online.map { n -> async { n to nodeRates(n.id) } }
         val totalsJob = async { routeTotals(online) }
         val rates = ratesJob.awaitAll().filter { it.second != null }.associate { it.first.id to it.second!! }
-        build(role, nodes, projects, rates, k, totalsJob.await())
+        build(access, nodes, projects, rates, k, totalsJob.await())
+    }
+
+    /** 面板以没有权限拒绝时用 fallback（权限刚被改少，记下的还没更新）。 */
+    private suspend fun <T> denied(fallback: T, block: suspend () -> T): T = try {
+        block()
+    } catch (e: PanelException) {
+        if (e.code == Code.PERMISSION_DENIED && e !is ElevationRequiredException) fallback else throw e
     }
 
     private suspend fun meshKeys(online: List<Node>): MeshKeys = coroutineScope {
@@ -179,22 +201,25 @@ internal class HomeLoader(private val session: PanelSession) {
 
     private suspend fun nodeRates(nodeId: String): NodeRates? = withTimeoutOrNull(5_000) {
         coroutineScope {
+            // 问不到（节点刚离线、没有权限）时这个节点不算，不让别的查询跟着失败。
             fun q(prefix: String) = async {
-                session.rpc { c, h -> c.nodes.queryNodeMetrics(QueryNodeMetricsRequest.newBuilder().setNodeId(nodeId).setPrefix(prefix).setFrom(ago(60)).build(), h) }.seriesList
+                runCatching {
+                    session.rpc { c, h -> c.nodes.queryNodeMetrics(QueryNodeMetricsRequest.newBuilder().setNodeId(nodeId).setPrefix(prefix).setFrom(ago(60)).build(), h) }.seriesList
+                }.getOrNull()
             }
             val net = q("node:net_")
             val mesh = q("m:")
-            runCatching { NodeRates(net.await(), mesh.await()) }.getOrNull()
+            NodeRates(net.await() ?: return@coroutineScope null, mesh.await() ?: return@coroutineScope null)
         }
     }
 
-    private fun build(role: String, nodes: List<Node>, projects: List<ProjectSummary>, rates: Map<String, NodeRates>, keys: MeshKeys, routeTotals: Map<String, Double>): HomeOverview {
+    private fun build(access: Access, nodes: List<Node>, projects: List<ProjectSummary>, rates: Map<String, NodeRates>, keys: MeshKeys, routeTotals: Map<String, Double>): HomeOverview {
         val nodeById = nodes.associateBy { it.id }
         val offline = nodes.filter { !it.pending && !it.online }.mapTo(HashSet()) { it.id }
         val attention = ArrayList<Attention>()
         for (n in nodes) {
             when {
-                n.pending -> attention += Attention("node_pending", "warning", nodeId = n.id, nodeName = n.name, action = if (role == "admin") "approve" else "")
+                n.pending -> attention += Attention("node_pending", "warning", nodeId = n.id, nodeName = n.name, action = if (access.can(Access.NODE_MANAGE)) "approve" else "")
                 !n.online -> attention += Attention("node_offline", "critical", nodeId = n.id, nodeName = n.name, since = n.lastSeen.seconds)
             }
         }
@@ -220,7 +245,7 @@ internal class HomeLoader(private val session: PanelSession) {
             for (up in s.status.imageUpdatesList.distinctBy { it.container }) {
                 attention += Attention(
                     "image_update", "info", projectId = p.id, projectName = p.name, container = up.container, detail = up.image,
-                    action = if (role != "viewer") "update" else "",
+                    action = if (access.can(Access.PROJECT_DEPLOY)) "update" else "",
                 )
             }
         }
@@ -268,7 +293,7 @@ internal class HomeLoader(private val session: PanelSession) {
                 val req = routeTotals[key + "req"] ?: 0.0
                 if (req <= 0 && rx + tx <= 0) continue
                 val node = p.containersList.firstOrNull { it.name == r.container }?.nodeId?.let { nodeById[it] }
-                ranked += RouteRate(p.id, p.name, r.name, routeAddress(r, node), rx, tx) to req
+                ranked += RouteRate(p.id, p.name, r.name, routeAddress(r, node), rx, tx, r.published) to req
             }
         }
         val routes = ranked.sortedWith(compareByDescending<Pair<RouteRate, Double>> { it.first.rx + it.first.tx }.thenByDescending { it.second }).map { it.first }
@@ -319,10 +344,13 @@ internal class HomeLoader(private val session: PanelSession) {
         )
     }
 
-    /** 访问地址：绑了域名的写域名，否则是节点地址和端口。 */
+    /**
+     * 访问地址：绑了域名的写域名，否则是节点地址和端口。面板只在有「查看访问地址」时给节点地址，没有时写节点名；
+     * 节点看不到（访问范围外）时返回空，界面写「其他节点」。不退回面板的地址。
+     */
     private fun routeAddress(r: ink.sipc.nagi.proto.v1.Exposure, node: Node?): String {
         if (r.domainsCount > 0) return (if (r.httpOnly) "http://" else "https://") + r.getDomains(0)
-        val host = node?.address?.ifEmpty { null } ?: session.panel.address.substringBeforeLast(':')
+        val host = node?.address?.ifEmpty { null } ?: node?.name?.ifEmpty { null } ?: return ""
         if (r.published == 0) return host
         return if (host.contains(':')) "[$host]:${r.published}" else "$host:${r.published}"
     }
@@ -423,7 +451,7 @@ internal fun HomeOverview.toJson(): String = JSONObject().apply {
     put("nodesOnline", nodesOnline); put("nodesTotal", nodesTotal); put("containersRunning", containersRunning); put("containersTotal", containersTotal)
     put("externalRx", externalRx); put("externalTx", externalTx); put("trafficReady", trafficReady)
     put("topRoutes", JSONArray(topRoutes.map {
-        JSONObject().put("projectId", it.projectId).put("projectName", it.projectName).put("route", it.route).put("address", it.address).put("rx", it.rx).put("tx", it.tx)
+        JSONObject().put("projectId", it.projectId).put("projectName", it.projectName).put("route", it.route).put("address", it.address).put("rx", it.rx).put("tx", it.tx).put("port", it.port)
     }))
     put("flows", JSONArray(flows.map { JSONObject().put("from", it.from).put("to", it.to).put("rate", it.rate).put("kind", it.kind).put("relay", it.relay) }))
     put("flowRows", JSONArray(flowRows.map { JSONObject().put("id", it.id).put("name", it.name).put("offline", it.offline) }))
@@ -448,7 +476,7 @@ internal fun homeOverviewFromJson(raw: String): HomeOverview {
         nodesOnline = o.optInt("nodesOnline"), nodesTotal = o.optInt("nodesTotal"),
         containersRunning = o.optInt("containersRunning"), containersTotal = o.optInt("containersTotal"),
         externalRx = o.optDouble("externalRx", 0.0), externalTx = o.optDouble("externalTx", 0.0), trafficReady = o.optBoolean("trafficReady"),
-        topRoutes = list("topRoutes") { RouteRate(it.optString("projectId"), it.optString("projectName"), it.optString("route"), it.optString("address"), it.optDouble("rx"), it.optDouble("tx")) },
+        topRoutes = list("topRoutes") { RouteRate(it.optString("projectId"), it.optString("projectName"), it.optString("route"), it.optString("address"), it.optDouble("rx"), it.optDouble("tx"), it.optInt("port")) },
         flows = list("flows") { FlowPath(it.getString("from"), it.getString("to"), it.optDouble("rate"), it.optString("kind"), it.optBoolean("relay")) },
         flowRows = list("flowRows") { FlowRowInfo(it.getString("id"), it.optString("name"), it.optBoolean("offline")) },
         nodes = list("nodes") {

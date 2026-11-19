@@ -56,7 +56,7 @@
     <string name="sign_out">Sign out</string>
     <string name="cancel">Cancel</string>
     <string name="retry">Retry</string>
-    <string name="needs_web_elevation">This requires verifying your identity, which the app does not support yet. Use the web panel.</string>
+    <string name="needs_web_elevation">This can only be verified with your password or a code. Use the web panel.</string>
     <string name="only_on_web">Use the web panel for this.</string>
     <string name="edit">Edit</string>
     <string name="delete">Delete</string>

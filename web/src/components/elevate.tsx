@@ -4,22 +4,26 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PhoneApprovalWait } from "@/components/phone-approval";
 import { Alert, Button, Dialog, DialogActions, Field, Input, Spinner, textLink } from "@/components/ui";
 import { t } from "@/i18n";
 import { authClient, errorMessage, toDate } from "@/lib/api";
 
 // suggestTotp：没开两步验证时在密码旁建议开启。正在开启两步验证时不提示。
-type Request = { totp: boolean; description?: string; suggestTotp: boolean; resolve: (ok: boolean) => void };
+// phone：可以改在手机 App 上确认（添加过手机，而且这个操作认手机的确认）。
+type Request = { totp: boolean; phone: boolean; description?: string; suggestTotp: boolean; resolve: (ok: boolean) => void };
 
 let show: ((r: Request) => void) | undefined;
 
 // requireElevation 确认过了就直接返回 true，否则弹框。取消时返回 false。description 换掉对话框的说明（默认是节点权限的）。
-export async function requireElevation(description?: string, options: { suggestTotp?: boolean } = {}): Promise<boolean> {
+// passwordOnly：给自己留登录凭据的操作（生成令牌、添加通行密钥、开启两步验证、添加手机）只认密码或验证码，
+// 手机上做的确认不算，也不给「在手机上确认」（见 docs/android.md#高权限确认和重新验证）。
+export async function requireElevation(description?: string, options: { suggestTotp?: boolean; passwordOnly?: boolean } = {}): Promise<boolean> {
   const me = await authClient.me({});
   const until = toDate(me.elevatedUntil);
-  if (until && until.getTime() > Date.now() + 5000) return true;
+  if (until && until.getTime() > Date.now() + 5000 && !(options.passwordOnly && me.elevatedBy === "app")) return true;
   return new Promise((resolve) => {
-    if (show) show({ totp: me.totpEnabled, description, suggestTotp: options.suggestTotp ?? true, resolve });
+    if (show) show({ totp: me.totpEnabled, phone: me.hasPhone && !options.passwordOnly, description, suggestTotp: options.suggestTotp ?? true, resolve });
     else resolve(false);
   });
 }
@@ -35,12 +39,14 @@ export function ElevateHost() {
   const [value, setValue] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [onPhone, setOnPhone] = useState(false);
   const m = t.nodeAccess.elevate;
 
   useEffect(() => {
     show = (r) => {
       setValue("");
       setError("");
+      setOnPhone(false);
       setReq(r);
     };
     return () => {
@@ -89,6 +95,18 @@ export function ElevateHost() {
         </>
       }
     >
+      {onPhone ? (
+        <PhoneApprovalWait
+          begin={() => authClient.beginPhoneApproval({})}
+          poll={async (a) => (await authClient.getPhoneApproval({ id: a.id })).status}
+          onApproved={() => {
+            queryClient.invalidateQueries({ queryKey: ["me"] });
+            finish(true);
+          }}
+          onBack={() => setOnPhone(false)}
+          backLabel={req?.totp ? t.common.phone.useCode : t.common.phone.usePassword}
+        />
+      ) : (
       <form
         className="grid gap-4"
         onSubmit={(e) => {
@@ -107,6 +125,11 @@ export function ElevateHost() {
         )}
         {error && <Alert>{error}</Alert>}
         <DialogActions>
+          {req?.phone && (
+            <Button variant="ghost" className="mr-auto" readOnlyOk onClick={() => setOnPhone(true)}>
+              {t.common.phone.use}
+            </Button>
+          )}
           <Button variant="outline" readOnlyOk onClick={() => finish(false)}>
             {t.common.actions.cancel}
           </Button>
@@ -116,6 +139,7 @@ export function ElevateHost() {
           </Button>
         </DialogActions>
       </form>
+      )}
     </Dialog>
   );
 }

@@ -159,24 +159,28 @@ var SetupService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthService_Login_FullMethodName              = "/nagi.v1.AuthService/Login"
-	AuthService_Logout_FullMethodName             = "/nagi.v1.AuthService/Logout"
-	AuthService_Me_FullMethodName                 = "/nagi.v1.AuthService/Me"
-	AuthService_Elevate_FullMethodName            = "/nagi.v1.AuthService/Elevate"
-	AuthService_ChangePassword_FullMethodName     = "/nagi.v1.AuthService/ChangePassword"
-	AuthService_SetLanguage_FullMethodName        = "/nagi.v1.AuthService/SetLanguage"
-	AuthService_UpdateProfile_FullMethodName      = "/nagi.v1.AuthService/UpdateProfile"
-	AuthService_GetOAuthRequest_FullMethodName    = "/nagi.v1.AuthService/GetOAuthRequest"
-	AuthService_ApproveOAuth_FullMethodName       = "/nagi.v1.AuthService/ApproveOAuth"
-	AuthService_RegisterSessionKey_FullMethodName = "/nagi.v1.AuthService/RegisterSessionKey"
-	AuthService_RotateSession_FullMethodName      = "/nagi.v1.AuthService/RotateSession"
-	AuthService_Reverify_FullMethodName           = "/nagi.v1.AuthService/Reverify"
-	AuthService_BeginPasskeyLogin_FullMethodName  = "/nagi.v1.AuthService/BeginPasskeyLogin"
-	AuthService_PasskeyLogin_FullMethodName       = "/nagi.v1.AuthService/PasskeyLogin"
-	AuthService_GetProjectOrder_FullMethodName    = "/nagi.v1.AuthService/GetProjectOrder"
-	AuthService_SetProjectOrder_FullMethodName    = "/nagi.v1.AuthService/SetProjectOrder"
-	AuthService_CreateAppPairing_FullMethodName   = "/nagi.v1.AuthService/CreateAppPairing"
-	AuthService_GetAppPairing_FullMethodName      = "/nagi.v1.AuthService/GetAppPairing"
+	AuthService_Login_FullMethodName                 = "/nagi.v1.AuthService/Login"
+	AuthService_Logout_FullMethodName                = "/nagi.v1.AuthService/Logout"
+	AuthService_Me_FullMethodName                    = "/nagi.v1.AuthService/Me"
+	AuthService_Elevate_FullMethodName               = "/nagi.v1.AuthService/Elevate"
+	AuthService_BeginPhoneApproval_FullMethodName    = "/nagi.v1.AuthService/BeginPhoneApproval"
+	AuthService_GetPhoneApproval_FullMethodName      = "/nagi.v1.AuthService/GetPhoneApproval"
+	AuthService_BeginLoginApproval_FullMethodName    = "/nagi.v1.AuthService/BeginLoginApproval"
+	AuthService_CompleteLoginApproval_FullMethodName = "/nagi.v1.AuthService/CompleteLoginApproval"
+	AuthService_ChangePassword_FullMethodName        = "/nagi.v1.AuthService/ChangePassword"
+	AuthService_SetLanguage_FullMethodName           = "/nagi.v1.AuthService/SetLanguage"
+	AuthService_UpdateProfile_FullMethodName         = "/nagi.v1.AuthService/UpdateProfile"
+	AuthService_GetOAuthRequest_FullMethodName       = "/nagi.v1.AuthService/GetOAuthRequest"
+	AuthService_ApproveOAuth_FullMethodName          = "/nagi.v1.AuthService/ApproveOAuth"
+	AuthService_RegisterSessionKey_FullMethodName    = "/nagi.v1.AuthService/RegisterSessionKey"
+	AuthService_RotateSession_FullMethodName         = "/nagi.v1.AuthService/RotateSession"
+	AuthService_Reverify_FullMethodName              = "/nagi.v1.AuthService/Reverify"
+	AuthService_BeginPasskeyLogin_FullMethodName     = "/nagi.v1.AuthService/BeginPasskeyLogin"
+	AuthService_PasskeyLogin_FullMethodName          = "/nagi.v1.AuthService/PasskeyLogin"
+	AuthService_GetProjectOrder_FullMethodName       = "/nagi.v1.AuthService/GetProjectOrder"
+	AuthService_SetProjectOrder_FullMethodName       = "/nagi.v1.AuthService/SetProjectOrder"
+	AuthService_CreateAppPairing_FullMethodName      = "/nagi.v1.AuthService/CreateAppPairing"
+	AuthService_GetAppPairing_FullMethodName         = "/nagi.v1.AuthService/GetAppPairing"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -189,6 +193,14 @@ type AuthServiceClient interface {
 	Me(ctx context.Context, in *MeRequest, opts ...grpc.CallOption) (*MeResponse, error)
 	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
 	Elevate(ctx context.Context, in *ElevateRequest, opts ...grpc.CallOption) (*ElevateResponse, error)
+	// 手机确认（见 docs/android.md#手机确认）：网页发起，成员在手机 App 上用指纹、面容或锁屏密码确认。
+	// 高权限确认：发起后轮询 GetPhoneApproval，手机确认后这个会话算做过高权限确认（给自己留登录凭据的操作不认）。
+	BeginPhoneApproval(ctx context.Context, in *BeginPhoneApprovalRequest, opts ...grpc.CallOption) (*PhoneApproval, error)
+	GetPhoneApproval(ctx context.Context, in *GetPhoneApprovalRequest, opts ...grpc.CallOption) (*GetPhoneApprovalResponse, error)
+	// 登录的第二步：密码对了、开了两步验证的账号可以在手机上确认，代替验证码。不用登录。
+	// 发起后轮询 CompleteLoginApproval，手机确认后它返回会话 cookie。
+	BeginLoginApproval(ctx context.Context, in *BeginLoginApprovalRequest, opts ...grpc.CallOption) (*PhoneApproval, error)
+	CompleteLoginApproval(ctx context.Context, in *CompleteLoginApprovalRequest, opts ...grpc.CallOption) (*CompleteLoginApprovalResponse, error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(ctx context.Context, in *ChangePasswordRequest, opts ...grpc.CallOption) (*ChangePasswordResponse, error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -259,6 +271,46 @@ func (c *authServiceClient) Elevate(ctx context.Context, in *ElevateRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ElevateResponse)
 	err := c.cc.Invoke(ctx, AuthService_Elevate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) BeginPhoneApproval(ctx context.Context, in *BeginPhoneApprovalRequest, opts ...grpc.CallOption) (*PhoneApproval, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PhoneApproval)
+	err := c.cc.Invoke(ctx, AuthService_BeginPhoneApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) GetPhoneApproval(ctx context.Context, in *GetPhoneApprovalRequest, opts ...grpc.CallOption) (*GetPhoneApprovalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPhoneApprovalResponse)
+	err := c.cc.Invoke(ctx, AuthService_GetPhoneApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) BeginLoginApproval(ctx context.Context, in *BeginLoginApprovalRequest, opts ...grpc.CallOption) (*PhoneApproval, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PhoneApproval)
+	err := c.cc.Invoke(ctx, AuthService_BeginLoginApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) CompleteLoginApproval(ctx context.Context, in *CompleteLoginApprovalRequest, opts ...grpc.CallOption) (*CompleteLoginApprovalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CompleteLoginApprovalResponse)
+	err := c.cc.Invoke(ctx, AuthService_CompleteLoginApproval_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -415,6 +467,14 @@ type AuthServiceServer interface {
 	Me(context.Context, *MeRequest) (*MeResponse, error)
 	// 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
 	Elevate(context.Context, *ElevateRequest) (*ElevateResponse, error)
+	// 手机确认（见 docs/android.md#手机确认）：网页发起，成员在手机 App 上用指纹、面容或锁屏密码确认。
+	// 高权限确认：发起后轮询 GetPhoneApproval，手机确认后这个会话算做过高权限确认（给自己留登录凭据的操作不认）。
+	BeginPhoneApproval(context.Context, *BeginPhoneApprovalRequest) (*PhoneApproval, error)
+	GetPhoneApproval(context.Context, *GetPhoneApprovalRequest) (*GetPhoneApprovalResponse, error)
+	// 登录的第二步：密码对了、开了两步验证的账号可以在手机上确认，代替验证码。不用登录。
+	// 发起后轮询 CompleteLoginApproval，手机确认后它返回会话 cookie。
+	BeginLoginApproval(context.Context, *BeginLoginApprovalRequest) (*PhoneApproval, error)
+	CompleteLoginApproval(context.Context, *CompleteLoginApprovalRequest) (*CompleteLoginApprovalResponse, error)
 	// 修改密码。成功后其他地方的登录全部失效。
 	ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error)
 	// 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -462,6 +522,18 @@ func (UnimplementedAuthServiceServer) Me(context.Context, *MeRequest) (*MeRespon
 }
 func (UnimplementedAuthServiceServer) Elevate(context.Context, *ElevateRequest) (*ElevateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Elevate not implemented")
+}
+func (UnimplementedAuthServiceServer) BeginPhoneApproval(context.Context, *BeginPhoneApprovalRequest) (*PhoneApproval, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginPhoneApproval not implemented")
+}
+func (UnimplementedAuthServiceServer) GetPhoneApproval(context.Context, *GetPhoneApprovalRequest) (*GetPhoneApprovalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPhoneApproval not implemented")
+}
+func (UnimplementedAuthServiceServer) BeginLoginApproval(context.Context, *BeginLoginApprovalRequest) (*PhoneApproval, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginLoginApproval not implemented")
+}
+func (UnimplementedAuthServiceServer) CompleteLoginApproval(context.Context, *CompleteLoginApprovalRequest) (*CompleteLoginApprovalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteLoginApproval not implemented")
 }
 func (UnimplementedAuthServiceServer) ChangePassword(context.Context, *ChangePasswordRequest) (*ChangePasswordResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangePassword not implemented")
@@ -594,6 +666,78 @@ func _AuthService_Elevate_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).Elevate(ctx, req.(*ElevateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_BeginPhoneApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginPhoneApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).BeginPhoneApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_BeginPhoneApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).BeginPhoneApproval(ctx, req.(*BeginPhoneApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_GetPhoneApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPhoneApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetPhoneApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetPhoneApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetPhoneApproval(ctx, req.(*GetPhoneApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_BeginLoginApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginLoginApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).BeginLoginApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_BeginLoginApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).BeginLoginApproval(ctx, req.(*BeginLoginApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_CompleteLoginApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteLoginApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CompleteLoginApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_CompleteLoginApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).CompleteLoginApproval(ctx, req.(*CompleteLoginApprovalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -872,6 +1016,22 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Elevate",
 			Handler:    _AuthService_Elevate_Handler,
+		},
+		{
+			MethodName: "BeginPhoneApproval",
+			Handler:    _AuthService_BeginPhoneApproval_Handler,
+		},
+		{
+			MethodName: "GetPhoneApproval",
+			Handler:    _AuthService_GetPhoneApproval_Handler,
+		},
+		{
+			MethodName: "BeginLoginApproval",
+			Handler:    _AuthService_BeginLoginApproval_Handler,
+		},
+		{
+			MethodName: "CompleteLoginApproval",
+			Handler:    _AuthService_CompleteLoginApproval_Handler,
 		},
 		{
 			MethodName: "ChangePassword",
@@ -7825,12 +7985,15 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AppService_GetPairing_FullMethodName = "/nagi.v1.AppService/GetPairing"
-	AppService_Pair_FullMethodName       = "/nagi.v1.AppService/Pair"
-	AppService_Challenge_FullMethodName  = "/nagi.v1.AppService/Challenge"
-	AppService_Token_FullMethodName      = "/nagi.v1.AppService/Token"
-	AppService_Info_FullMethodName       = "/nagi.v1.AppService/Info"
-	AppService_Logout_FullMethodName     = "/nagi.v1.AppService/Logout"
+	AppService_GetPairing_FullMethodName    = "/nagi.v1.AppService/GetPairing"
+	AppService_Pair_FullMethodName          = "/nagi.v1.AppService/Pair"
+	AppService_Challenge_FullMethodName     = "/nagi.v1.AppService/Challenge"
+	AppService_Token_FullMethodName         = "/nagi.v1.AppService/Token"
+	AppService_Info_FullMethodName          = "/nagi.v1.AppService/Info"
+	AppService_Logout_FullMethodName        = "/nagi.v1.AppService/Logout"
+	AppService_ListApprovals_FullMethodName = "/nagi.v1.AppService/ListApprovals"
+	AppService_Approve_FullMethodName       = "/nagi.v1.AppService/Approve"
+	AppService_Elevate_FullMethodName       = "/nagi.v1.AppService/Elevate"
 )
 
 // AppServiceClient is the client API for AppService service.
@@ -7851,6 +8014,12 @@ type AppServiceClient interface {
 	Info(ctx context.Context, in *AppInfoRequest, opts ...grpc.CallOption) (*AppInfoResponse, error)
 	// 退出：删除这台手机的设备记录（要令牌）。
 	Logout(ctx context.Context, in *AppLogoutRequest, opts ...grpc.CallOption) (*AppLogoutResponse, error)
+	// 等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+	ListApprovals(ctx context.Context, in *AppListApprovalsRequest, opts ...grpc.CallOption) (*AppListApprovalsResponse, error)
+	// 确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+	Approve(ctx context.Context, in *AppApproveRequest, opts ...grpc.CallOption) (*AppApproveResponse, error)
+	// App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+	Elevate(ctx context.Context, in *AppElevateRequest, opts ...grpc.CallOption) (*AppElevateResponse, error)
 }
 
 type appServiceClient struct {
@@ -7921,6 +8090,36 @@ func (c *appServiceClient) Logout(ctx context.Context, in *AppLogoutRequest, opt
 	return out, nil
 }
 
+func (c *appServiceClient) ListApprovals(ctx context.Context, in *AppListApprovalsRequest, opts ...grpc.CallOption) (*AppListApprovalsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppListApprovalsResponse)
+	err := c.cc.Invoke(ctx, AppService_ListApprovals_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Approve(ctx context.Context, in *AppApproveRequest, opts ...grpc.CallOption) (*AppApproveResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppApproveResponse)
+	err := c.cc.Invoke(ctx, AppService_Approve_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *appServiceClient) Elevate(ctx context.Context, in *AppElevateRequest, opts ...grpc.CallOption) (*AppElevateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AppElevateResponse)
+	err := c.cc.Invoke(ctx, AppService_Elevate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AppServiceServer is the server API for AppService service.
 // All implementations must embed UnimplementedAppServiceServer
 // for forward compatibility.
@@ -7939,6 +8138,12 @@ type AppServiceServer interface {
 	Info(context.Context, *AppInfoRequest) (*AppInfoResponse, error)
 	// 退出：删除这台手机的设备记录（要令牌）。
 	Logout(context.Context, *AppLogoutRequest) (*AppLogoutResponse, error)
+	// 等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+	ListApprovals(context.Context, *AppListApprovalsRequest) (*AppListApprovalsResponse, error)
+	// 确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+	Approve(context.Context, *AppApproveRequest) (*AppApproveResponse, error)
+	// App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+	Elevate(context.Context, *AppElevateRequest) (*AppElevateResponse, error)
 	mustEmbedUnimplementedAppServiceServer()
 }
 
@@ -7966,6 +8171,15 @@ func (UnimplementedAppServiceServer) Info(context.Context, *AppInfoRequest) (*Ap
 }
 func (UnimplementedAppServiceServer) Logout(context.Context, *AppLogoutRequest) (*AppLogoutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Logout not implemented")
+}
+func (UnimplementedAppServiceServer) ListApprovals(context.Context, *AppListApprovalsRequest) (*AppListApprovalsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListApprovals not implemented")
+}
+func (UnimplementedAppServiceServer) Approve(context.Context, *AppApproveRequest) (*AppApproveResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Approve not implemented")
+}
+func (UnimplementedAppServiceServer) Elevate(context.Context, *AppElevateRequest) (*AppElevateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Elevate not implemented")
 }
 func (UnimplementedAppServiceServer) mustEmbedUnimplementedAppServiceServer() {}
 func (UnimplementedAppServiceServer) testEmbeddedByValue()                    {}
@@ -8096,6 +8310,60 @@ func _AppService_Logout_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AppService_ListApprovals_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppListApprovalsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).ListApprovals(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_ListApprovals_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).ListApprovals(ctx, req.(*AppListApprovalsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Approve_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppApproveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Approve(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Approve_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Approve(ctx, req.(*AppApproveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AppService_Elevate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppElevateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AppServiceServer).Elevate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AppService_Elevate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AppServiceServer).Elevate(ctx, req.(*AppElevateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AppService_ServiceDesc is the grpc.ServiceDesc for AppService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -8126,6 +8394,18 @@ var AppService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Logout",
 			Handler:    _AppService_Logout_Handler,
+		},
+		{
+			MethodName: "ListApprovals",
+			Handler:    _AppService_ListApprovals_Handler,
+		},
+		{
+			MethodName: "Approve",
+			Handler:    _AppService_Approve_Handler,
+		},
+		{
+			MethodName: "Elevate",
+			Handler:    _AppService_Elevate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

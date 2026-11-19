@@ -51,4 +51,5 @@
     <string name="node_pending">待批准</string>
     <string name="node_memory">内存</string>
     <string name="node_disk">磁盘</string>
+    <string name="other_node">其他节点</string>
 </resources>

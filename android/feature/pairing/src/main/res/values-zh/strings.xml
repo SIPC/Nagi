@@ -31,4 +31,14 @@
     <string name="unlock">解锁</string>
     <string name="unlock_locked">已锁定</string>
     <string name="unlock_idle">已锁定 · %1$d 分钟未使用</string>
+    <string name="approval_login_title">登录确认</string>
+    <string name="approval_elevate_title">身份验证</string>
+    <string name="approval_login_text">有人正在用你的账号登录 %1$s。</string>
+    <string name="approval_elevate_text">网页上的操作要验证你的身份（%1$s）。</string>
+    <string name="approval_not_you">不是你本人发起的，请点「拒绝」。</string>
+    <string name="approval_code">网页上显示的数字</string>
+    <string name="approval_code_hint">两位数字</string>
+    <string name="approval_deny">拒绝</string>
+    <string name="approval_confirm">确认</string>
+    <string name="prompt_elevate_title">验证身份</string>
 </resources>

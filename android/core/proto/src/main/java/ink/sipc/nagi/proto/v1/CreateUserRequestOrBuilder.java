@@ -35,11 +35,19 @@ public interface CreateUserRequestOrBuilder extends
       getPasswordBytes();
 
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    * @return The role.
    */
   java.lang.String getRole();
   /**
+   * <pre>
+   * 旧版本的角色名（admin、operator、viewer），填了 role_id 时不用。
+   * </pre>
+   *
    * <code>string role = 3 [json_name = "role"];</code>
    * @return The bytes for role.
    */
@@ -48,7 +56,7 @@ public interface CreateUserRequestOrBuilder extends
 
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
@@ -57,11 +65,17 @@ public interface CreateUserRequestOrBuilder extends
   boolean hasScope();
   /**
    * <pre>
-   * 为空表示全部。
+   * 为空表示项目全部、节点跟随项目。
    * </pre>
    *
    * <code>.nagi.v1.UserScope scope = 4 [json_name = "scope"];</code>
    * @return The scope.
    */
   ink.sipc.nagi.proto.v1.UserScope getScope();
+
+  /**
+   * <code>int64 role_id = 5 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  long getRoleId();
 }

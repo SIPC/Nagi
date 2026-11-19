@@ -201,4 +201,16 @@ public interface SettingsServiceClientInterface {
   public suspend fun getAdminNetworks(request: GetAdminNetworksRequest, headers: Headers = emptyMap()): ResponseMessage<AdminNetworks>
 
   public suspend fun setAdminNetworks(request: AdminNetworks, headers: Headers = emptyMap()): ResponseMessage<AdminNetworks>
+
+  /**
+   *  角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+   *  正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+   */
+  public suspend fun listRoles(request: ListRolesRequest, headers: Headers = emptyMap()): ResponseMessage<ListRolesResponse>
+
+  public suspend fun createRole(request: CreateRoleRequest, headers: Headers = emptyMap()): ResponseMessage<Role>
+
+  public suspend fun updateRole(request: UpdateRoleRequest, headers: Headers = emptyMap()): ResponseMessage<Role>
+
+  public suspend fun deleteRole(request: DeleteRoleRequest, headers: Headers = emptyMap()): ResponseMessage<DeleteRoleResponse>
 }

@@ -684,4 +684,56 @@ public class SettingsServiceClient(
     ),
   )
 
+
+  /**
+   *  角色（见 docs/panel.md#成员和角色）：管理员是固定的，不能编辑；操作员、只读是预置的，可以编辑；可以新建。
+   *  正在使用的角色不能删除。要「成员」权限；不是管理员时只能授予自己有的权限。
+   */
+  override suspend fun listRoles(request: ListRolesRequest, headers: Headers): ResponseMessage<ListRolesResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/ListRoles",
+      ink.sipc.nagi.proto.v1.ListRolesRequest::class,
+      ink.sipc.nagi.proto.v1.ListRolesResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  override suspend fun createRole(request: CreateRoleRequest, headers: Headers): ResponseMessage<Role> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/CreateRole",
+      ink.sipc.nagi.proto.v1.CreateRoleRequest::class,
+      ink.sipc.nagi.proto.v1.Role::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  override suspend fun updateRole(request: UpdateRoleRequest, headers: Headers): ResponseMessage<Role> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/UpdateRole",
+      ink.sipc.nagi.proto.v1.UpdateRoleRequest::class,
+      ink.sipc.nagi.proto.v1.Role::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  override suspend fun deleteRole(request: DeleteRoleRequest, headers: Headers): ResponseMessage<DeleteRoleResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/DeleteRole",
+      ink.sipc.nagi.proto.v1.DeleteRoleRequest::class,
+      ink.sipc.nagi.proto.v1.DeleteRoleResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
 }

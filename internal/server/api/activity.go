@@ -39,6 +39,14 @@ var auditSkipped = map[string]bool{
 	nagiv1connect.AppServiceTokenProcedure:     true,
 	nagiv1connect.AppServiceInfoProcedure:      true,
 	nagiv1connect.AppServiceLogoutProcedure:    true,
+	// 手机确认在 auth 里记（elevated_by_phone、app_approved、app_approval_denied、app_elevated、Login）；查询和轮询不记。
+	nagiv1connect.AuthServiceBeginPhoneApprovalProcedure:    true,
+	nagiv1connect.AuthServiceGetPhoneApprovalProcedure:      true,
+	nagiv1connect.AuthServiceBeginLoginApprovalProcedure:    true,
+	nagiv1connect.AuthServiceCompleteLoginApprovalProcedure: true,
+	nagiv1connect.AppServiceListApprovalsProcedure:          true,
+	nagiv1connect.AppServiceApproveProcedure:                true,
+	nagiv1connect.AppServiceElevateProcedure:                true,
 	// 退出在处理函数里单独记（这时会话还在，查得到是谁）；登录在 auth 里记（成功时才知道是哪个成员）。
 	nagiv1connect.AuthServiceLogoutProcedure: true,
 	nagiv1connect.AuthServiceLoginProcedure:  true,
@@ -57,7 +65,8 @@ func unauthenticatedNoise(procedure string, err error) bool {
 	switch procedure {
 	case nagiv1connect.SetupServiceSetupProcedure:
 		return true
-	case nagiv1connect.AuthServiceLoginProcedure:
+	case nagiv1connect.AuthServiceLoginProcedure, nagiv1connect.AuthServiceBeginLoginApprovalProcedure,
+		nagiv1connect.AuthServiceCompleteLoginApprovalProcedure:
 		return true
 	}
 	return false

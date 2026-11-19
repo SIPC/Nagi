@@ -147,6 +147,9 @@ func (s *appService) Info(ctx context.Context, _ *connect.Request[nagiv1.AppInfo
 		Domain: s.Panel.Domain(ctx), UnlockMinutes: int32(s.Auth.AppUnlockMinutes(ctx)), DeviceName: u.DeviceName,
 		Username: u.Name, Role: u.Role, Permissions: u.EffectivePerms().Names(),
 	}
+	if u.Elevated() {
+		out.ElevatedUntil = timestamppb.New(time.Unix(u.ElevatedUntil, 0))
+	}
 	if row, err := s.Q.GetUserByID(ctx, u.ID); err == nil {
 		out.DisplayName, out.Avatar, out.AvatarType = row.DisplayName, row.Avatar, avatarType(row.Avatar)
 		out.RoleId = row.RoleID

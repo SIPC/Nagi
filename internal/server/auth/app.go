@@ -84,6 +84,11 @@ type appState struct {
 	usedCh map[int64]map[string]bool
 	// devKeys：nagi server --dev-app-keys，接受软件密钥和模拟器的证明。
 	devKeys bool
+	// 手机确认（见 approval.go）：approvals 是等确认的请求，approvalTimes 是每个成员最近发起的时间（限制频率），
+	// elevated 是手机做过的高权限确认（设备 ID → 到期时间和 IP）。
+	approvals     map[string]*approval
+	approvalTimes map[int64][]time.Time
+	elevated      map[string]appElevation
 }
 
 type appPairing struct {
@@ -747,6 +752,10 @@ func (s *Service) AppTokenUser(ctx context.Context, token, ip string) (User, err
 		return User{}, i18n.New("管理员只能从允许的地址登录")
 	}
 	u := User{ID: d.UserID, Name: d.Username, Via: audit.ViaApp, DeviceID: d.ID, DeviceName: d.Name}
+	// 这台手机做过的高权限确认（AppElevate），只对确认时的 IP 有效。
+	if until := s.appElevatedUntil(d.ID, ip); until > 0 {
+		u.ElevatedUntil, u.ElevatedBy = until, ElevatedByApp
+	}
 	u.applyRole(d.Role, d.RoleID, d.Perms, d.AllProjects, d.AllNodes, d.NodesFollow)
 	return u, nil
 }
@@ -768,6 +777,7 @@ func (s *Service) dropDeviceTokens(deviceID string) {
 			delete(s.app.tokens, h)
 		}
 	}
+	delete(s.app.elevated, deviceID)
 }
 
 // RemoveAppDevice 退出成员的一台手机：删除设备记录，令牌立即作废。不是这个成员的手机时返回 false。

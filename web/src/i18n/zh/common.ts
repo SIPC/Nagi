@@ -1,6 +1,17 @@
 // 通用的词：状态、按钮、时间。状态用固定的词（docs/ui.md）。
 export default {
   otherNode: "其他节点",
+  phone: {
+    use: "在手机上确认",
+    useCode: "改用验证码",
+    usePassword: "改用密码",
+    codeLabel: "确认数字",
+    waiting: "在手机 App 上输入此数字并确认",
+    denied: "已在手机上拒绝",
+    expired: "请求已过期",
+    retry: "重新发起",
+    loginDescription: "打开手机上的 Nagi App，输入下方数字并确认。",
+  },
   // 字段和标题旁问号按钮的读屏名称。
   help: "说明",
   // 设置行里的开关（SettingSwitch）。
