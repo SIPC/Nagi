@@ -8,6 +8,7 @@ import { capitalize, cn, formatDateTime, formatTime, timeAgo } from "@/lib/utils
 import { locale, t } from "@/i18n";
 import { checkName, envToText, lines, textToEnv } from "@/lib/config";
 import { useRun } from "@/components/run";
+import { requireElevation, responseNeedsElevation, withPrivilegedElevation } from "@/components/elevate";
 import { ImportDir } from "@/pages/import-dir";
 import { ContainerMetrics, containerUsage, EmptyProjectMetrics, ProjectMetrics, projectMetricNodes, UsageRings, useProjectMetrics, useRange } from "@/components/metrics";
 import { offlineNodeNames, ProjectState, serviceDetail, ServiceState, stateOf } from "@/components/status";
@@ -592,9 +593,12 @@ function ContainerDetail({
     setLines([t.projectContainers.detail.uploading(file.name, (file.size / 1048576).toFixed(1))]);
     const q = new URLSearchParams({ project: project.id, container: container.name });
     const fail = (msg: string) => setLines((l) => [...l, t.projectContainers.detail.uploadFailed(msg)]);
+    const send = () => fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: file });
     let res: Response;
     try {
-      res = await fetch(`/api/upload?${q}`, { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body: file });
+      res = await send();
+      // 特权容器：验证身份后重新上传。
+      if (responseNeedsElevation(res) && (await requireElevation(t.common.privilegedElevate))) res = await send();
     } catch {
       fail(t.common.errors.unreachable);
       return;
@@ -1038,13 +1042,18 @@ function Overview({ project, container, services }: { project: Project; containe
                   <CopyButton text={container.deployKey} />
                 </>,
               ],
-              [
-                <KeyHelp k={o.webhook} help={o.webhookHint} />,
-                <>
-                  <span className={cn(mono, "min-w-0")}>{webhookUrl}</span>
-                  <CopyButton text={webhookUrl} />
-                </>,
-              ],
+              // webhook 地址只给有「部署」权限的成员，没有令牌时不显示这一行。
+              ...(container.webhookToken
+                ? [
+                    [
+                      <KeyHelp k={o.webhook} help={o.webhookHint} />,
+                      <>
+                        <span className={cn(mono, "min-w-0")}>{webhookUrl}</span>
+                        <CopyButton text={webhookUrl} />
+                      </>,
+                    ] as [React.ReactNode, React.ReactNode],
+                  ]
+                : []),
             ]}
           />
         </Section>
@@ -1370,7 +1379,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
   const save = () =>
     (!isForm || imageForm.validate()) &&
     call("save", async () => {
-      const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
+      const res = await withPrivilegedElevation(() => projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() }));
       toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? t.projectContainers.config.savedDraft : t.projectContainers.config.noChanges);
     });
 
@@ -1380,7 +1389,7 @@ function ContainerConfig({ project, container, services, onDeploy, deploying }: 
     if ((isForm && !imageForm.validate()) || (form && !form.reportValidity())) return;
     if (container.deployedVersion > 0n && !(await confirmAction(t.projectContainers.detail.deployDraftConfirm(container.name), { action: t.projectContainers.config.saveAndDeploy }))) return;
     await call("deploy", async () => {
-      const res = await projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() });
+      const res = await withPrivilegedElevation(() => projectClient.saveDraft({ projectId: project.id, container: container.name, baseRevision: container.revision, config: buildConfig() }));
       const revision = res.containers.find((c) => c.name === container.name)?.revision;
       if (revision !== undefined) onDeploy(revision);
     });
@@ -1730,7 +1739,7 @@ function AddContainer({ project }: { project: Project }) {
     setError("");
     const finalName = name || imageBaseName(form.image());
     try {
-      await projectClient.addContainer({ projectId: project.id, name: finalName, config: form.build(), nodeId: node.nodeId, dir: node.dirFor(finalName) });
+      await withPrivilegedElevation(() => projectClient.addContainer({ projectId: project.id, name: finalName, config: form.build(), nodeId: node.nodeId, dir: node.dirFor(finalName) }));
       await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       navigate({
         to: "/projects/$projectId/c/$container",

@@ -95,6 +95,12 @@ var elevationRequired = map[string]bool{
 	// 建一个知道密码的管理员，再用这个密码通过高权限确认。同样只认密码或验证码做的确认（auth.passwordElevation）。
 	nagiv1connect.SettingsServiceCreateUserProcedure: true,
 	nagiv1connect.SettingsServiceUpdateUserProcedure: true,
+	// 新建、修改角色：给成员在用的角色加权限，效果和改成员的角色一样，留在那个成员的账号上。同样只认密码或验证码做的确认。
+	nagiv1connect.SettingsServiceCreateRoleProcedure: true,
+	nagiv1connect.SettingsServiceUpdateRoleProcedure: true,
+	// 删除成员、删除角色：删掉的账号和它的令牌、手机恢复不了。普通的确认即可。
+	nagiv1connect.SettingsServiceDeleteUserProcedure: true,
+	nagiv1connect.SettingsServiceDeleteRoleProcedure: true,
 }
 
 // needsElevation 判断这次调用要不要先做高权限确认。访问令牌按 auth.User.ElevatedFor 的规则（见 docs/mcp.md#高权限确认）。

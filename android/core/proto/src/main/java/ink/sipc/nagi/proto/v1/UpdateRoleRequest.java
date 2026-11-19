@@ -114,6 +114,10 @@ public  final class UpdateRoleRequest extends
   public static final int PERMISSIONS_FIELD_NUMBER = 3;
   private com.google.protobuf.Internal.ProtobufList<java.lang.String> permissions_;
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @return A list containing the permissions.
    */
@@ -122,6 +126,10 @@ public  final class UpdateRoleRequest extends
     return permissions_;
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @return The count of permissions.
    */
@@ -130,6 +138,10 @@ public  final class UpdateRoleRequest extends
     return permissions_.size();
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param index The index of the element to return.
    * @return The permissions at the given index.
@@ -139,6 +151,10 @@ public  final class UpdateRoleRequest extends
     return permissions_.get(index);
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param index The index of the value to return.
    * @return The bytes of the permissions at the given index.
@@ -157,6 +173,10 @@ public  final class UpdateRoleRequest extends
      }
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param index The index to set the value at.
    * @param value The permissions to set.
@@ -168,6 +188,10 @@ public  final class UpdateRoleRequest extends
     permissions_.set(index, value);
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param value The permissions to add.
    */
@@ -178,6 +202,10 @@ public  final class UpdateRoleRequest extends
     permissions_.add(value);
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param values The permissions to add.
    */
@@ -188,12 +216,20 @@ public  final class UpdateRoleRequest extends
         values, permissions_);
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    */
   private void clearPermissions() {
     permissions_ = emptyProtobufList();
   }
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param value The bytes of the permissions to add.
    */
@@ -202,6 +238,44 @@ public  final class UpdateRoleRequest extends
     checkByteStringIsUtf8(value);
     ensurePermissionsIsMutable();
     permissions_.add(value.toStringUtf8());
+  }
+
+  public static final int KEEP_PERMISSIONS_FIELD_NUMBER = 4;
+  private boolean keepPermissions_;
+  /**
+   * <pre>
+   * 不改权限，permissions 不看。
+   * </pre>
+   *
+   * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+   * @return The keepPermissions.
+   */
+  @java.lang.Override
+  public boolean getKeepPermissions() {
+    return keepPermissions_;
+  }
+  /**
+   * <pre>
+   * 不改权限，permissions 不看。
+   * </pre>
+   *
+   * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+   * @param value The keepPermissions to set.
+   */
+  private void setKeepPermissions(boolean value) {
+    
+    keepPermissions_ = value;
+  }
+  /**
+   * <pre>
+   * 不改权限，permissions 不看。
+   * </pre>
+   *
+   * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+   */
+  private void clearKeepPermissions() {
+
+    keepPermissions_ = false;
   }
 
   public static ink.sipc.nagi.proto.v1.UpdateRoleRequest parseFrom(
@@ -399,6 +473,10 @@ public  final class UpdateRoleRequest extends
     }
 
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @return A list containing the permissions.
      */
@@ -409,6 +487,10 @@ public  final class UpdateRoleRequest extends
           instance.getPermissionsList());
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @return The count of permissions.
      */
@@ -417,6 +499,10 @@ public  final class UpdateRoleRequest extends
       return instance.getPermissionsCount();
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @param index The index of the element to return.
      * @return The permissions at the given index.
@@ -426,6 +512,10 @@ public  final class UpdateRoleRequest extends
       return instance.getPermissions(index);
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @param index The index of the value to return.
      * @return The bytes of the permissions at the given index.
@@ -436,6 +526,10 @@ public  final class UpdateRoleRequest extends
       return instance.getPermissionsBytes(index);
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @param index The index to set the value at.
      * @param value The permissions to set.
@@ -448,6 +542,10 @@ public  final class UpdateRoleRequest extends
       return this;
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @param value The permissions to add.
      * @return This builder for chaining.
@@ -459,6 +557,10 @@ public  final class UpdateRoleRequest extends
       return this;
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @param values The permissions to add.
      * @return This builder for chaining.
@@ -470,6 +572,10 @@ public  final class UpdateRoleRequest extends
       return this;
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @return This builder for chaining.
      */
@@ -479,6 +585,10 @@ public  final class UpdateRoleRequest extends
       return this;
     }
     /**
+     * <pre>
+     * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+     * </pre>
+     *
      * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
      * @param value The bytes of the permissions to add.
      * @return This builder for chaining.
@@ -487,6 +597,46 @@ public  final class UpdateRoleRequest extends
         com.google.protobuf.ByteString value) {
       copyOnWrite();
       instance.addPermissionsBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 不改权限，permissions 不看。
+     * </pre>
+     *
+     * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+     * @return The keepPermissions.
+     */
+    @java.lang.Override
+    public boolean getKeepPermissions() {
+      return instance.getKeepPermissions();
+    }
+    /**
+     * <pre>
+     * 不改权限，permissions 不看。
+     * </pre>
+     *
+     * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+     * @param value The keepPermissions to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKeepPermissions(boolean value) {
+      copyOnWrite();
+      instance.setKeepPermissions(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 不改权限，permissions 不看。
+     * </pre>
+     *
+     * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKeepPermissions() {
+      copyOnWrite();
+      instance.clearKeepPermissions();
       return this;
     }
 
@@ -509,10 +659,11 @@ public  final class UpdateRoleRequest extends
             "id_",
             "name_",
             "permissions_",
+            "keepPermissions_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u0002\u0002\u0208" +
-              "\u0003\u021a";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u0002\u0002\u0208" +
+              "\u0003\u021a\u0004\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

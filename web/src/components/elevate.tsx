@@ -40,7 +40,21 @@ export async function withElevation<T>(call: () => Promise<T>, description: stri
 
 // isElevationRequired：接口因为确认过期而拒绝。
 export function isElevationRequired(err: unknown): boolean {
-  return err instanceof ConnectError && err.code === Code.PermissionDenied && err.metadata.get("X-Nagi-Elevation") === "required";
+  return err instanceof ElevationRequiredError || (err instanceof ConnectError && err.code === Code.PermissionDenied && err.metadata.get("X-Nagi-Elevation") === "required");
+}
+
+// ElevationRequiredError：不走 Connect 的接口（上传）因为没有验证身份而拒绝。
+export class ElevationRequiredError extends Error {}
+
+// responseNeedsElevation：不走 Connect 的接口返回的是「请先验证身份」。
+export function responseNeedsElevation(res: Response): boolean {
+  return res.status === 403 && res.headers.get("X-Nagi-Elevation") === "required";
+}
+
+// withPrivilegedElevation：保存特权配置、修改特权容器引用的变量等。有「特权配置」权限的成员也要先验证身份
+// （见 docs/node-access.md#权限），面板要求时弹框，验证后重试一次。
+export function withPrivilegedElevation<T>(call: () => Promise<T>): Promise<T> {
+  return withElevation(call, t.common.privilegedElevate);
 }
 
 export function ElevateHost() {

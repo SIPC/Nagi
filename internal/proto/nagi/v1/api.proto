@@ -625,7 +625,10 @@ message UpdateRoleRequest {
   int64 id = 1;
   // 为空表示不改。预置角色可以改名，填空不会清除名称。
   string name = 2;
+  // 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
   repeated string permissions = 3;
+  // 不改权限，permissions 不看。
+  bool keep_permissions = 4;
 }
 
 message DeleteRoleRequest {

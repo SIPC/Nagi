@@ -461,7 +461,7 @@ export function MembersCard() {
                             danger: true,
                             onSelect: async () => {
                               if (await confirmAction(t.members.deleteConfirm(u.username), { action: t.members.deleteMember, danger: true }))
-                                call(() => settingsClient.deleteUser({ id: u.id }));
+                                call(() => withElevation(() => settingsClient.deleteUser({ id: u.id }), t.members.elevateDelete, { suggestTotp: false }));
                             },
                           },
                         ]
@@ -514,7 +514,12 @@ function RoleForm({ role, grantable, onDone, onCancel }: { role?: Role; grantabl
   const save = useMutation({
     mutationFn: () => {
       const permissions = [...withPrerequisites(perms)];
-      return role ? settingsClient.updateRole({ id: role.id, name: name.trim(), permissions }) : settingsClient.createRole({ name: name.trim(), permissions });
+      // 新建、修改角色和成员一样只认密码或验证码。
+      return withElevation(
+        () => (role ? settingsClient.updateRole({ id: role.id, name: name.trim(), permissions }) : settingsClient.createRole({ name: name.trim(), permissions })),
+        t.members.elevateRole,
+        { passwordOnly: true },
+      );
     },
     onSuccess: () => {
       if (!role) toast.success(t.members.roleAdded(name.trim()));
@@ -631,7 +636,7 @@ function RolesCard() {
                                   if (!(await confirmAction(t.members.deleteRoleConfirm(roleLabel(r)), { action: t.members.deleteRole, danger: true }))) return;
                                   setError("");
                                   try {
-                                    await settingsClient.deleteRole({ id: r.id });
+                                    await withElevation(() => settingsClient.deleteRole({ id: r.id }), t.members.elevateDeleteRole, { suggestTotp: false });
                                   } catch (err) {
                                     setError(errorMessage(err));
                                   }

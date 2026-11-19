@@ -12,7 +12,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.view.WindowManager
+import android.os.SystemClock
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -34,6 +37,11 @@ internal fun acceptsPairLink(flags: Int, hasPanel: Boolean): Boolean =
 /** 添加流程停在哪一页时收外部链接：只在欢迎页（还没进导航时也算）；扫码页、确认页打开期间不收。 */
 internal fun acceptsPairLinkOn(route: String?): Boolean = route == null || route == "welcome"
 
+internal const val KEEP_ALIVE_MS = 4 * 60_000L
+
+/** 距下一次换令牌还要等多久：上一次（[last]）之后满 4 分钟，已经过了就不等。 */
+internal fun keepAliveWait(now: Long, last: Long): Long = (KEEP_ALIVE_MS - (now - last)).coerceIn(0, KEEP_ALIVE_MS)
+
 // BiometricPrompt 要 FragmentActivity。
 class MainActivity : FragmentActivity() {
     /** 从链接（系统相机扫码）打开的配对二维码。只在还没有添加面板时接收（见 [handle]）。 */
@@ -48,8 +56,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // 最近任务里不留首页的截图：超过解锁时长后，拿到手机的人打开最近任务能看到上次离开时的告警、节点、流量，
-        // 解锁页挡的就是这些（安全审查 v0.34.0-b L5）。Android 13 起系统直接不截；更早的版本见 onPause。
-        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
+        // 解锁页挡的就是这些。Android 13 起系统直接不截；更早的版本让系统不拿截图当缩略图。都在这里设好：
+        // 手势导航进最近任务时缩略图在 onPause 之前就截了，离开前台时才加 FLAG_SECURE 来不及。
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false) else recentsFallback = !disablePreviewScreenshots()
         // 重建（切换语言、旋转、进程被回收后恢复）时拿到的还是最初的 intent，不再处理，旧链接不会再打开一次确认页。
         if (savedInstanceState == null) handle(intent)
         val app = application as NagiApplication
@@ -72,14 +81,27 @@ class MainActivity : FragmentActivity() {
         keepAlive(app)
     }
 
+    /**
+     * Android 9 到 12：`Activity.setDisablePreviewScreenshots(true)`，系统不拿截图当最近任务的缩略图，按主题画一个空白窗口。
+     * 这个方法不在 SDK 里（13 起换成公开的 setRecentsScreenshotEnabled），按名字调用；调不到时返回 false。
+     */
+    @SuppressLint("DiscouragedPrivateApi", "PrivateApi")
+    private fun disablePreviewScreenshots(): Boolean = try {
+        Activity::class.java.getMethod("setDisablePreviewScreenshots", Boolean::class.javaPrimitiveType).invoke(this, true)
+        true
+    } catch (e: ReflectiveOperationException) {
+        false
+    }
+
+    /** 上面的方法调不到时退回的做法：离开前台时加 FLAG_SECURE，回来再去掉。手势导航进最近任务时挡不住，暂停但还看得见时录屏里是黑的。 */
+    private var recentsFallback = false
+
     /** onPause 时为最近任务加上的 FLAG_SECURE（页面自己设的不算），onResume 时只去掉这个。 */
     private var recentsSecure = false
 
-    // Android 13 以前没有 setRecentsScreenshotEnabled：离开前台时加上 FLAG_SECURE，最近任务里的截图是空白，回来再去掉，
-    // 平时照常能截屏。
     override fun onPause() {
         val secure = WindowManager.LayoutParams.FLAG_SECURE
-        if (Build.VERSION.SDK_INT < 33 && window.attributes.flags and secure == 0) {
+        if (recentsFallback && window.attributes.flags and secure == 0) {
             window.addFlags(secure)
             recentsSecure = true
         }
@@ -113,13 +135,16 @@ class MainActivity : FragmentActivity() {
 
     /**
      * 在前台、已解锁时每 4 分钟用设备密钥换一次令牌，面板同时把解锁时间往后延，连续使用时不会反复要求验证
-     * （见 docs/android.md#解锁-app）。在后台不换取。
+     * （见 docs/android.md#解锁-app）。在后台不换取；回到前台时接着上一次算，已经过了 4 分钟就马上换，
+     * 频繁在 App 之间切换时也不会一直换不上。
      */
     private fun keepAlive(app: NagiApplication) {
+        var last = SystemClock.elapsedRealtime()
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
-                    delay(4 * 60_000L)
+                    delay(keepAliveWait(SystemClock.elapsedRealtime(), last))
+                    last = SystemClock.elapsedRealtime()
                     val session = app.graph.session.value ?: continue
                     if (app.lock.locked.value != null) continue
                     try {

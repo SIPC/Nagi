@@ -71,12 +71,23 @@ func (c *call) backupNodeID(m *nagiv1.Container, ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// 和 findNode 一样：ID 优先；有不止一台备份节点叫这个名称时不猜，要求改用 ID。
+	var named []string
 	for _, id := range m.GetBackupNodeIds() {
-		if id == ref || strings.EqualFold(nodeName(nodes, id), ref) {
+		if id == ref {
 			return id, nil
 		}
+		if id != "" && strings.EqualFold(nodeName(nodes, id), ref) {
+			named = append(named, id)
+		}
 	}
-	return "", fmt.Errorf("%s is not a backup node of container %s", ref, m.GetName())
+	switch len(named) {
+	case 0:
+		return "", fmt.Errorf("%s is not a backup node of container %s", ref, m.GetName())
+	case 1:
+		return named[0], nil
+	}
+	return "", fmt.Errorf("%d backup nodes of container %s are named %q; pass the node ID instead (%s)", len(named), m.GetName(), ref, strings.Join(named, ", "))
 }
 
 type SyncBackupArg struct {

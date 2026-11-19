@@ -1,6 +1,8 @@
 // 通用的词：状态、按钮、时间。状态用固定的词（docs/ui.md）。
 export default {
   otherNode: "其他节点",
+  // 保存或部署特权配置、进入特权容器、修改其文件前的身份验证（见 docs/node-access.md）。
+  privilegedElevate: "特权配置等同于节点的 root 权限，操作前需验证身份。验证后 15 分钟内无需再次验证。",
   phone: {
     use: "在手机上确认",
     useCode: "改用验证码",

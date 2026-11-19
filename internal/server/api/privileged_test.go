@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -86,17 +87,20 @@ func TestCheckPrivilegedEntry(t *testing.T) {
 		{auth.RoleAdmin, "fresh", false},
 	}
 	for _, c := range cases {
-		err := a.checkPrivilegedEntry(ctx, auth.PresetUser(c.role), project, c.container)
+		// 做过高权限确认的会话：没确认时管理员也要先验证身份（见 TestPrivilegedNeedsElevation）。
+		u := auth.PresetUser(c.role)
+		u.ElevatedUntil = time.Now().Add(time.Minute).Unix()
+		err := a.checkPrivilegedEntry(ctx, u, project, c.container)
 		if got := errors.Is(err, errPrivilegedEntry); got != c.denied || err != nil && !got {
 			t.Errorf("%s 进入 %s：%v", c.role, c.container, err)
 		}
 		// 往容器里写文件按同样的规则。
-		err = a.checkPrivilegedWrite(ctx, auth.PresetUser(c.role), project, c.container)
+		err = a.checkPrivilegedWrite(ctx, u, project, c.container)
 		if got := errors.Is(err, errPrivilegedWrite); got != c.denied || err != nil && !got {
 			t.Errorf("%s 写入 %s：%v", c.role, c.container, err)
 		}
 		// 卷的所有写接口（删除、新建目录、上传、恢复、改名、移动、复制、压缩、解压）都经 checkVolumeWrite。
-		err = a.checkVolumeWrite(auth.WithUser(ctx, auth.PresetUser(c.role)), project, c.container)
+		err = a.checkVolumeWrite(auth.WithUser(ctx, u), project, c.container)
 		if got := errors.Is(err, errPrivilegedWrite); got != c.denied || err != nil && !got {
 			t.Errorf("%s 经 checkVolumeWrite 写入 %s：%v", c.role, c.container, err)
 		}

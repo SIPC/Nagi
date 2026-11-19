@@ -9,6 +9,7 @@ import (
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc"
 )
 
@@ -52,7 +53,7 @@ func (a *retireAgent) count() int {
 	return a.calls
 }
 
-// v0.35.0#15：让原节点停掉已换到别的节点的容器时不拿着项目锁调用节点：节点不回应也不拖住项目的部署。
+// 让原节点停掉已换到别的节点的容器时不拿着项目锁调用节点：节点不回应也不拖住项目的部署。
 // 刚停掉的容器很快又报上来不管；过一会儿还报的记越权、不再调用节点；调用失败的下次照常重试。
 func TestRetireMovedOutsideLock(t *testing.T) {
 	ctx := context.Background()
@@ -127,5 +128,39 @@ func TestRetireMovedOutsideLock(t *testing.T) {
 	s.retireMoved(ctx, &nodes.Conn{NodeID: "n1", Agent: agent}, reported, nil)
 	if agent.count() != 4 {
 		t.Fatalf("容器在上报的节点上时不应让它停：%d", agent.count())
+	}
+}
+
+// 逐个让原节点停掉容器时，前一个还没回应、后一个被迁回了这个节点：轮到它时要按此刻的记录核对，不能再停。
+func TestRetireMovedRechecksEach(t *testing.T) {
+	ctx := context.Background()
+	s := haTestService(t) // 容器 web 在 n1 上
+	const pid = "aaaaaaaaaaaaaaaa"
+	err := s.Q.InsertContainer(ctx, store.InsertContainerParams{ProjectID: pid, Name: "api", Position: 2, NodeID: "n1", Dir: "/srv/api", WebhookHash: "h2", Secrets: []byte{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &retireAgent{entered: make(chan struct{}, 2), block: make(chan struct{})}
+	c := &nodes.Conn{NodeID: "n2", Agent: agent}
+	reported := []*nagiv1.ContainerStatus{{ProjectId: pid, Name: "web"}, {ProjectId: pid, Name: "api"}}
+
+	done := make(chan struct{})
+	go func() {
+		s.retireMoved(ctx, c, reported, nil)
+		close(done)
+	}()
+	select {
+	case <-agent.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("没有让 n2 停掉 web")
+	}
+	// web 的请求还没回应，api 迁回了 n2。
+	if err := s.Q.MoveContainer(ctx, store.MoveContainerParams{NodeID: "n2", Dir: "/srv/api", ProjectID: pid, Name: "api"}); err != nil {
+		t.Fatal(err)
+	}
+	close(agent.block)
+	<-done
+	if n := agent.count(); n != 1 {
+		t.Fatalf("迁回 n2 的 api 不应被停掉：调用了 %d 次", n)
 	}
 }

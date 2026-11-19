@@ -73,7 +73,7 @@ func toolSetNodeReplicaDir(c *call, in SetNodeReplicaDirArgs) (any, error) {
 		return nil, err
 	}
 	if !n.GetInfo().GetReplicaDirs() {
-		return nil, fmt.Errorf("node %s is out of date; upgrade it to choose where replicas are stored", n.GetName())
+		return nil, nodeErrorf("node %s is out of date; upgrade it to choose where replicas are stored", nodeRef(n))
 	}
 	if code, ok := c.confirm(in.Confirm, replicaDirParts("set_node_replica_dir", n.GetId(), "", "", dir)...); !ok {
 		var moving []string
@@ -128,10 +128,10 @@ func toolSetReplicaLocation(c *call, in SetReplicaLocationArgs) (any, error) {
 		return nil, err
 	}
 	if !slices.Contains(m.GetBackupNodeIds(), n.GetId()) {
-		return nil, fmt.Errorf("node %s is not a backup node of container %s; add it with set_backup_node first", n.GetName(), m.GetName())
+		return nil, nodeErrorf("node %s is not a backup node of container %s; add it with set_backup_node first", nodeRef(n), m.GetName())
 	}
 	if !n.GetInfo().GetReplicaDirs() {
-		return nil, fmt.Errorf("node %s is out of date; upgrade it to choose where replicas are stored", n.GetName())
+		return nil, nodeErrorf("node %s is out of date; upgrade it to choose where replicas are stored", nodeRef(n))
 	}
 	p := s.GetProject()
 	if code, ok := c.confirm(in.Confirm, replicaDirParts("set_replica_location", n.GetId(), p.GetId(), m.GetName(), dir)...); !ok {

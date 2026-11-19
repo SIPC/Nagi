@@ -16,10 +16,32 @@ import (
 )
 
 // 没有「特权配置」权限的成员不能借容器配置拿到节点的 root（见 docs/node-access.md#操作员不能借-compose-拿到节点-root）。
-// 管理员和有这项权限的成员不受这些限制。
+// 管理员和有这项权限的成员不受这些限制，但要先做高权限确认：特权配置等于节点的 root，只拿到会话的人不能用。
+// 还没确认时按没有这项权限检查，不通过的要求先验证身份（privilegedDenied）。
 
 func operatorLimited(ctx context.Context) bool {
-	return !auth.CurrentUser(ctx).Can(auth.PermPrivileged)
+	u := auth.CurrentUser(ctx)
+	return !u.Can(auth.PermPrivileged) || privilegedUnconfirmed(u)
+}
+
+// privilegedUnconfirmed：成员有「特权配置」权限，但这次登录还没有做高权限确认（网页和 App）。
+// 访问令牌做不了交互式的确认：生成令牌、OAuth 授权时已经用密码确认过，照常放行（见 docs/mcp.md#高权限确认）。
+func privilegedUnconfirmed(u auth.User) bool {
+	return u.Can(auth.PermPrivileged) && u.TokenID == 0 && !u.Elevated()
+}
+
+// privilegedDenied 是特权内容的检查没通过时返回的错误：没有「特权配置」权限的返回 denied，有权限、还没确认的要求先验证身份。
+func privilegedDenied(u auth.User, denied error) error {
+	if privilegedUnconfirmed(u) {
+		return elevationError()
+	}
+	return denied
+}
+
+// isElevationError：错误是「请先验证身份」。
+func isElevationError(err error) bool {
+	var ce *connect.Error
+	return errors.As(err, &ce) && ce.Meta().Get(elevationHeader) == "required"
 }
 
 func adminOnlyConfig(reasons []string) error {
@@ -75,7 +97,29 @@ func (s *projectService) checkOperatorConfig(ctx context.Context, projectID, con
 			}
 		}
 	}
-	return adminOnlyConfig(reasons)
+	return privilegedDenied(auth.CurrentUser(ctx), adminOnlyConfig(reasons))
+}
+
+// checkPrivilegedDeploy：部署会让特权内容生效的草稿前，同样要先做高权限确认。草稿不一定是这次登录保存的，
+// 容器现在运行的配置没有特权时，往它的目录和卷里写文件也不要确认，部署以后这些文件就在特权容器里。
+func (s *projectService) checkPrivilegedDeploy(ctx context.Context, projectID string, targets []*nagiv1.DeployTarget) error {
+	u := auth.CurrentUser(ctx)
+	if !privilegedUnconfirmed(u) {
+		return nil
+	}
+	summary, err := s.Projects.Get(ctx, projectID)
+	if err != nil {
+		return toConnect(err)
+	}
+	for _, c := range summary.GetProject().GetContainers() {
+		if c.GetDraft() == nil || !slices.ContainsFunc(targets, func(t *nagiv1.DeployTarget) bool { return t.GetContainer() == c.GetName() }) {
+			continue
+		}
+		if reasons, _ := spec.PrivilegeReasons(c.GetDraft(), c.GetName()); len(reasons) > 0 {
+			return elevationError()
+		}
+	}
+	return nil
 }
 
 func sameCompose(a, b *nagiv1.ContainerConfig, container string) bool {
@@ -120,10 +164,34 @@ func sameVars(a, b *nagiv1.ContainerConfig) bool {
 	return true
 }
 
+// adoptCheck 是把节点缓存里的容器收进项目时的检查（AdoptNodeContainer）：配置是节点说的，没有经过保存时的
+// checkOperatorConfig。没有「特权配置」权限的成员不能收进带特权内容的配置、项目根目录以外的容器目录：
+// 节点被攻破（或者有人改了它的缓存）时，收进来的特权容器之后可以迁移、恢复到别的节点上，等于拿到那些节点的 root。
+// 检查的是实际要收进来的那一份（由 projects.AdoptContainer 在读到缓存以后调用）。有这项权限时返回 nil。
+func (a *API) adoptCheck(ctx context.Context, nodeID string) func(*nagiv1.ContainerSpec) error {
+	if !operatorLimited(ctx) {
+		return nil
+	}
+	return func(sp *nagiv1.ContainerSpec) error {
+		// 有「特权配置」权限、还没做高权限确认的，要求先验证身份（见 privilegedDenied）。
+		if reasons, _ := spec.PrivilegeReasons(sp.GetConfig(), sp.GetName()); len(reasons) > 0 {
+			return privilegedDenied(auth.CurrentUser(ctx), adminOnlyConfig(reasons))
+		}
+		return (&projectService{a}).checkOperatorDir(ctx, nodeID, sp.GetDir())
+	}
+}
+
+// errAdoptStale：以节点为准重建项目会用节点缓存里的配置换掉面板上的整个项目，换进来什么由节点决定，
+// 逐项检查不了（项目在别的节点上的容器之后也按各自的缓存拼回），所以整个操作要「特权配置」权限。
+func errAdoptStale() error {
+	return connect.NewError(connect.CodePermissionDenied, i18n.New("以节点为准重建项目需要「特权配置」权限"))
+}
+
 // checkPrivilegedEntry：容器部署的配置有特权（以特权运行、挂载主机目录等）时，进入容器就等于拿到节点的 root，
-// 终端和执行命令要「特权配置」权限。u 是当前的成员（打开着的终端重查时传重新读出的）。
+// 终端和执行命令要「特权配置」权限，还要先做高权限确认（没确认时返回「请先验证身份」，见 privilegedDenied）。
+// u 是当前的成员（打开着的终端重查时传重新读出的）。
 func (a *API) checkPrivilegedEntry(ctx context.Context, u auth.User, projectID, container string) error {
-	if u.Can(auth.PermPrivileged) {
+	if u.Can(auth.PermPrivileged) && !privilegedUnconfirmed(u) {
 		return nil
 	}
 	cfg, err := a.Projects.RunningConfig(ctx, projectID, container)
@@ -131,15 +199,15 @@ func (a *API) checkPrivilegedEntry(ctx context.Context, u auth.User, projectID, 
 		return err
 	}
 	if reasons, _ := spec.PrivilegeReasons(cfg, container); len(reasons) > 0 {
-		return errPrivilegedEntry
+		return privilegedDenied(u, errPrivilegedEntry)
 	}
 	return nil
 }
 
 var errPrivilegedEntry = i18n.New("进入特权容器需要「特权配置」权限")
 
-// checkPrivilegedWrite：同样的道理，往特权容器的卷和容器目录里写文件（上传、MCP 写文件）只给管理员，
-// 容器会以 root 运行这些文件。
+// checkPrivilegedWrite：同样的道理，往特权容器的卷和容器目录里写文件（上传、MCP 写文件）要「特权配置」权限和
+// 高权限确认，容器会以 root 运行这些文件。
 func (a *API) checkPrivilegedWrite(ctx context.Context, u auth.User, projectID, container string) error {
 	if err := a.checkPrivilegedEntry(ctx, u, projectID, container); errors.Is(err, errPrivilegedEntry) {
 		return errPrivilegedWrite
@@ -190,7 +258,8 @@ func (s *projectService) checkOperatorSharedEnv(ctx context.Context, projectID s
 			same := !spec.SharedEnvChanged(cfg, c.GetName(), p.GetSettings().GetSharedEnv(), vars) ||
 				p.GetHasSharedEnvDraft() && !spec.SharedEnvChanged(cfg, c.GetName(), p.GetSharedEnvDraft(), vars)
 			if !same {
-				return connect.NewError(connect.CodePermissionDenied, i18n.Errorf("容器 %s 有特权，修改它引用的共享变量需要「特权配置」权限", c.GetName()))
+				return privilegedDenied(auth.CurrentUser(ctx),
+					connect.NewError(connect.CodePermissionDenied, i18n.Errorf("容器 %s 有特权，修改它引用的共享变量需要「特权配置」权限", c.GetName())))
 			}
 		}
 	}
@@ -219,5 +288,5 @@ func (s *projectService) checkOperatorDir(ctx context.Context, nodeID, dir strin
 	if root != "." && root != "/" && path.IsAbs(root) && strings.HasPrefix(clean, root+"/") {
 		return nil
 	}
-	return connect.NewError(connect.CodePermissionDenied, i18n.New("项目根目录以外的容器目录需要「特权配置」权限"))
+	return privilegedDenied(auth.CurrentUser(ctx), connect.NewError(connect.CodePermissionDenied, i18n.New("项目根目录以外的容器目录需要「特权配置」权限")))
 }

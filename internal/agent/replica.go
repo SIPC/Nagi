@@ -113,7 +113,8 @@ func (r *replicas) openStream(projectID, container, files string) (*metrics.Disk
 		r.streams[id] = st
 	}
 	if st.n >= replicaStreamsMax {
-		return nil, nil, status.Error(codes.ResourceExhausted, "同步这个副本的连接过多，稍后重试")
+		// 回 Unavailable：多半是源节点断开重连、旧流还没收尾，源节点按连接断开处理，过一会儿接着传（见 connectionLost）。
+		return nil, nil, status.Error(codes.Unavailable, "同步这个副本的连接过多，稍后重试")
 	}
 	// 副本移动以后（移动拿着写锁，那时没有流）目录变了，换一个新的检查。
 	if st.guard == nil || st.guard.Dir != files {

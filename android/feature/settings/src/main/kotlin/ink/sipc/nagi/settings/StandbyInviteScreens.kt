@@ -56,6 +56,7 @@ private fun CommandDialog(title: String, text: String, command: String, notice: 
 /**
  * 备用面板：本面板是主面板时列出它的备用面板（连接状态、最近同步，可以移除），右上角加一个（生成配对码，给出命令）；
  * 本面板是备用面板时写主面板和同步状态，可以提升为主面板。
+ * 添加和提升面板只认密码或验证码做的确认（v0.35.0 起），手机上做不了：这样的面板上不显示这两个入口，写明在网页上操作。
  */
 @Composable
 fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
@@ -67,8 +68,9 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
     var promoted by remember { mutableStateOf(false) }
     // 打开、关上确认框时清掉上一次的错误，免得别的操作的错误写进这个确认框。
     LaunchedEffect(removing, promoting) { action.error = null }
+    val webOnly = rememberWebOnly(session)
     SubPage(stringResource(R.string.standby), onBack, actions = {
-        if (st.value?.isStandby == false) {
+        if (st.value?.isStandby == false && webOnly == false) {
             NagiIconButton(NagiIcons.Plus, stringResource(R.string.standby_add), {
                 action.run("code", passwordOnly = true) { code = session.rpc { c, h -> c.settings.createStandbyCode(CreateStandbyCodeRequest.getDefaultInstance(), h) }.code }
             })
@@ -89,11 +91,16 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
                         s.lastError.ifEmpty { null },
                     ).joinToString(" · "),
                 ) { StatusDot(if (s.connected) c.success else c.warning) }
-                SettingsGroup(null) {
-                    NagiButton(stringResource(R.string.standby_promote), { promoting = true }, variant = ButtonVariant.Destructive)
+                if (webOnly == true) {
+                    Note(stringResource(R.string.standby_promote_on_web))
+                } else if (webOnly == false) {
+                    SettingsGroup(null) {
+                        NagiButton(stringResource(R.string.standby_promote), { promoting = true }, variant = ButtonVariant.Destructive)
+                    }
                 }
             } else {
                 Note(stringResource(R.string.standby_list_help))
+                if (webOnly == true) Note(stringResource(R.string.standby_add_on_web))
                 if (s.standbysCount == 0) Note(stringResource(R.string.standby_empty))
                 s.standbysList.forEach { p ->
                     ActionRow(

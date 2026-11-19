@@ -51,4 +51,19 @@ class AccessTest {
         assertFalse(viewer.can(Access.PROJECT_DEPLOY))
         assertTrue(Access.of(info("admin")).can(Access.PANEL_SETTINGS))
     }
+
+    // 只认密码或验证码的操作从哪一版起只能在网页上做。
+    @Test
+    fun passwordOnlyChangesByPanelVersion() {
+        assertTrue(Access.passwordOnlyChanges("v0.35.0"))
+        assertTrue(Access.passwordOnlyChanges("0.35.1"))
+        assertTrue(Access.passwordOnlyChanges("v0.40.0-rc1"))
+        assertTrue(Access.passwordOnlyChanges("v1.0.0"))
+        assertTrue(Access.passwordOnlyChanges("dev"))
+        assertFalse(Access.passwordOnlyChanges("v0.34.0"))
+        assertFalse(Access.passwordOnlyChanges("v0.9.0"))
+        assertFalse(Access.passwordOnlyChanges(""))
+        assertTrue(Access.of(info("admin", 1, "admin").toBuilder().setVersion("v0.35.0").build()).webOnlyChanges)
+        assertFalse(Access.of(info("admin").toBuilder().setVersion("v0.34.0").build()).webOnlyChanges)
+    }
 }

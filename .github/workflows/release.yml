@@ -2,10 +2,10 @@
 # 连同面板安装脚本、卸载脚本和 SHA256SUMS 上传到 GitHub Release。
 # 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
 #
-# 测试、漏洞检查和两个架构的编译同时进行，都通过后才发布。Go 的编译缓存用 main 上 ci.yml 存下的：
-# 标签上的流程只能读当前标签和默认分支的缓存（GitHub 的限制），所以缓存要靠 main 预热。
-# 发版时 main 和标签一起推，不等 main 上的 ci.yml 跑完：那时它还没存下这次的缓存，按 restore-keys 用 main 上一次的，
-# 只多编译改过的包。这里自己跑测试和漏洞检查，不依赖 ci.yml 的结果。
+# 测试、漏洞检查和两个架构的编译同时进行，都通过后才发布。这里自己跑测试和漏洞检查，不依赖 ci.yml 的结果。
+# 测试和漏洞检查用 main 上 ci.yml 存下的 Go 缓存（标签上的流程只能读当前标签和默认分支的缓存，按 restore-keys
+# 用 main 上一次的）。产出发布文件的任务（build、android）不恢复任何缓存，从头下载依赖、从头编译：
+# 缓存是别的任务写的，发布文件不能建立在它上面。
 name: release
 
 on:
@@ -94,6 +94,11 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
+    # 编译结果的 SHA-256 作为任务输出交给 release 核对：release 按名字下载 artifact，内容和这里算的不一致就不发布。
+    # 两个架构各写自己的那一项。
+    outputs:
+      sha_amd64: ${{ steps.sum.outputs.sha_amd64 }}
+      sha_arm64: ${{ steps.sum.outputs.sha_arm64 }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -105,16 +110,7 @@ jobs:
           check-latest: true
           cache: false
 
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            go-build-${{ matrix.arch }}-${{ hashFiles('go.sum') }}-
-            go-build-${{ matrix.arch }}-
-
+      # 不恢复 Go 和 pnpm 的缓存（见文件开头的说明）：模块按 go.sum、pnpm-lock.yaml 重新下载并核对。
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10
@@ -122,8 +118,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Build web
         run: |
@@ -141,6 +135,10 @@ jobs:
             -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
             -o dist/nagi-linux-${{ matrix.arch }} ./cmd/nagi
 
+      - name: Checksum
+        id: sum
+        run: echo "sha_${{ matrix.arch }}=$(sha256sum dist/nagi-linux-${{ matrix.arch }} | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nagi-linux-${{ matrix.arch }}
@@ -152,6 +150,10 @@ jobs:
   # 没配签名密钥时跳过（不发未签名的包）；这一步失败也不影响面板发布（见下面 release 的 if）。
   android:
     runs-on: ubuntu-latest
+    # APK 的 SHA-256 和签名证书的 SHA-256 作为任务输出交给 release（同 build）。没配签名密钥时两项都为空。
+    outputs:
+      sha: ${{ steps.apk.outputs.sha }}
+      cert: ${{ steps.apk.outputs.cert }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -162,12 +164,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 只读缓存：标签上存的缓存别的标签用不到，缓存由 main 上的 android.yml 预热。
+      # 不用缓存（见文件开头的说明）：签名的 APK 从头下载依赖、从头编译。
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
-          cache-read-only: true
+          cache-disabled: true
 
       - name: Build APK
+        id: apk
         env:
           KEYSTORE_BASE64: ${{ secrets.NAGI_KEYSTORE_BASE64 }}
           NAGI_KEYSTORE_PASSWORD: ${{ secrets.NAGI_KEYSTORE_PASSWORD }}
@@ -186,16 +189,16 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk dist/nagi-android.apk
           # 签名证书的 SHA-256 写进发布正文，方便用户核对。
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
-          "$apksigner" verify --print-certs dist/nagi-android.apk | sed -n 's/.*SHA-256 digest: //p' | head -1 > dist/android-cert.txt
-          test -s dist/android-cert.txt
+          cert="$("$apksigner" verify --print-certs dist/nagi-android.apk | sed -n 's/.*SHA-256 digest: //p' | head -1)"
+          test -n "$cert"
+          echo "cert=$cert" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum dist/nagi-android.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: ${{ hashFiles('dist/nagi-android.apk') != '' }}
+        if: ${{ steps.apk.outputs.sha != '' }}
         with:
           name: nagi-android
-          path: |
-            dist/nagi-android.apk
-            dist/android-cert.txt
+          path: dist/nagi-android.apk
           retention-days: 1
 
   # 面板的测试、漏洞检查和编译都通过才发布；安卓 App 成功了就带上，失败或跳过也照常发布面板。
@@ -210,15 +213,50 @@ jobs:
         with:
           persist-credentials: false
 
+      # 按确切的名字一个一个下载，不按通配符合并：别的任务上传的同类名字的 artifact 进不来。
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          name: nagi-linux-amd64
           path: dist
-          pattern: nagi-*
-          merge-multiple: true
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nagi-linux-arm64
+          path: dist
+
+      # 安卓任务成功并且产出了 APK 才带上；失败或跳过时不下载，免得用上别处上传的同名 artifact。
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: ${{ needs.android.result == 'success' && needs.android.outputs.sha != '' }}
+        with:
+          name: nagi-android
+          path: dist
+
+      # 下载到的文件要和编译任务自己算的 SHA-256 一致，多出来的文件也不行。
+      - name: Verify artifacts
+        env:
+          SHA_AMD64: ${{ needs.build.outputs.sha_amd64 }}
+          SHA_ARM64: ${{ needs.build.outputs.sha_arm64 }}
+          SHA_APK: ${{ needs.android.result == 'success' && needs.android.outputs.sha || '' }}
+        run: |
+          test -n "$SHA_AMD64" && test -n "$SHA_ARM64"
+          want="nagi-linux-amd64 nagi-linux-arm64"
+          {
+            echo "$SHA_AMD64  nagi-linux-amd64"
+            echo "$SHA_ARM64  nagi-linux-arm64"
+          } > "$RUNNER_TEMP/expected.sha256"
+          if [ -n "$SHA_APK" ]; then
+            echo "$SHA_APK  nagi-android.apk" >> "$RUNNER_TEMP/expected.sha256"
+            want="nagi-android.apk $want"
+          fi
+          (cd dist && sha256sum -c "$RUNNER_TEMP/expected.sha256")
+          actual="$(cd dist && ls -A | sort | xargs)"
+          if [ "$actual" != "$want" ]; then
+            echo "发布文件和预期不一致：$actual" >&2
+            exit 1
+          fi
 
       - name: Checksums
         run: |
-          mv dist/android-cert.txt . 2>/dev/null || true
           cp scripts/install.sh scripts/uninstall.sh CHANGELOG.md CHANGELOG.en.md dist/
           files="nagi-linux-amd64 nagi-linux-arm64 install.sh uninstall.sh"
           [ -f dist/nagi-android.apk ] && files="$files nagi-android.apk"
@@ -227,11 +265,13 @@ jobs:
       # 正文取自 CHANGELOG.md 里这个版本的说明，没写的话发布失败（先补上更新日志再打标签）。
       # 两份更新日志也作为发布文件上传，面板的「关于」按界面语言取，英文的也要写。
       - name: Release notes
+        env:
+          ANDROID_CERT: ${{ needs.android.outputs.cert }}
         run: |
           sh scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
           grep -qx "## $GITHUB_REF_NAME" CHANGELOG.en.md || { echo "CHANGELOG.en.md 中没有 $GITHUB_REF_NAME" >&2; exit 1; }
-          if [ -s android-cert.txt ]; then
-            printf '\n\n安卓 App 签名证书 SHA-256：`%s`\n' "$(cat android-cert.txt)" >> notes.md
+          if [ -f dist/nagi-android.apk ] && [ -n "$ANDROID_CERT" ]; then
+            printf '\n\n安卓 App 签名证书 SHA-256：`%s`\n' "$ANDROID_CERT" >> notes.md
           fi
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2

@@ -14,7 +14,7 @@
     <string name="confirm_unreachable">Can\'t reach the panel: %1$s</string>
     <string name="confirm_address">Address</string>
     <string name="confirm_from_panel">The name, account, and avatar come from the panel at the address below.</string>
-    <string name="confirm_external">This link came from another app. Make sure it\'s from your own panel.</string>
+    <string name="confirm_external">This link came from another app or a web page. Make sure it\'s from your own panel.</string>
     <string name="confirm_fingerprint">Fingerprint</string>
     <string name="confirm_phone">Phone</string>
     <string name="confirm_hint">You\'ll verify with your fingerprint, face, or screen lock.</string>

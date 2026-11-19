@@ -2,11 +2,13 @@ package api
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"net/http"
 	"text/template"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/release"
+	"github.com/SIPC/nagi/internal/server/auth"
 )
 
 // installScript 是节点安装脚本，由面板填入自己的地址、公钥指纹和版本后提供下载。
@@ -52,7 +54,7 @@ while [ $# -gt 0 ]; do
     *) fail "未知参数 $1" ;;
   esac
 done
-[ -n "$TOKEN" ] || fail "缺少加入令牌（环境变量 NAGI_TOKEN），请在面板上重新复制安装命令"
+[ -n "$TOKEN" ] || fail "缺少加入令牌（环境变量 NAGI_TOKEN）。请以 root 执行面板上复制的安装命令：不要在 sh 前加 sudo（sudo 不传环境变量），先执行 sudo -i 再粘贴"
 case "$DOWNLOAD_URL" in "" | http://* | https://*) ;; *) fail "--download-url 须以 http:// 或 https:// 开头" ;; esac
 if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
@@ -78,6 +80,7 @@ detect_cn
 ensure_docker
 
 download_nagi
+` + enrollVersionCheck + `
 if [ "$NEW_VERSION" != "$PANEL_VERSION" ]; then
   say "注意：下载的 nagi 是 $NEW_VERSION，面板是 $PANEL_VERSION。加入后可在面板的「节点」页升级到一致。"
 fi
@@ -120,6 +123,13 @@ else
 fi
 say "已注册 nagi 命令，例如 nagi panel list 查看信任的面板（更多命令：nagi --help）。"
 `))
+
+// enrollVersionCheck 在下载到的 nagi 太旧时停下并说明原因：v0.35.0 之前的 nagi enroll 不读环境变量里的令牌，
+// 照常执行只会报缺少令牌。--download-url 指向的镜像没更新时会遇到。
+const enrollVersionCheck = `case "$NEW_VERSION" in
+  v0.[0-9].* | v0.[12][0-9].* | v0.3[0-4].*)
+    fail "下载到的 nagi 是 $NEW_VERSION，低于 v0.35.0，无法加入这个面板。请更新 --download-url 指向的镜像后重试" ;;
+esac`
 
 // sharedScript 是节点安装脚本和面板安装脚本（scripts/install.sh）共用的函数：自动安装 Docker 和 compose 插件、
 // 把 nagi 注册为命令。面板安装脚本在 GitHub 上单独提供，只能复制一份；TestSharedScript 检查两边一致。
@@ -285,12 +295,26 @@ download_nagi() {
 
 # <<< 共用代码结束`
 
-// InstallHandler 提供 GET /install.sh。
+// installKey 是安装命令里取安装脚本用的钥匙（/install.sh?k=…），由加入令牌的哈希算出：拿到它的人取得到脚本，
+// 但算不回令牌，不能用它加入节点。令牌本身不放进地址：curl 的参数别的用户读得到（见 installScript）。
+func installKey(tokenHash string) string {
+	return auth.HashToken("nagi-install:" + tokenHash)[:32]
+}
+
+// InstallHandler 提供 GET /install.sh?k=<钥匙>。
 func (a *API) InstallHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 只在有可用的加入令牌（刚生成了安装命令或接入码）时提供。安装脚本里有面板地址和指纹，
-		// 一直公开的话，开了安全入口也能被扫描器认出这是 Nagi 面板。
-		if n, err := a.Q.CountActiveEnrollTokens(r.Context(), time.Now().Unix()); err != nil || n == 0 {
+		// 安装脚本里有面板地址和指纹：非管理员不该看到面板的 IP，开了安全入口时扫描的人也不该从这里认出面板。
+		// 所以只给带着钥匙的请求，钥匙对应一个还能用的一次性加入令牌（刚生成的安装命令里带着）；其余一律 404。
+		k := r.URL.Query().Get("k")
+		hashes, err := a.Q.ActiveInstallTokens(r.Context(), time.Now().Unix())
+		ok := false
+		for _, h := range hashes {
+			if subtle.ConstantTimeCompare([]byte(installKey(h)), []byte(k)) == 1 {
+				ok = true
+			}
+		}
+		if err != nil || !ok {
 			http.NotFound(w, r)
 			return
 		}

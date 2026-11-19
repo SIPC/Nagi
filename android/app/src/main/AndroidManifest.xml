@@ -29,11 +29,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 别的 App（例如系统相机扫码）用配对链接打开时进确认页。不带 BROWSABLE：网页里的链接打不开 App，
-                 钓鱼网页不能借链接把 App 引到别的面板（安全审查 v0.34.0-b L3、L4）。在 App 里扫码不受影响。 -->
+            <!-- 系统相机扫码用配对链接打开时进确认页。扫码器打开链接时通常带 BROWSABLE，不声明就打不开 App。
+                 网页里的链接因此也能拉起 App，靠 MainActivity 把关：只在还没有添加面板、停在欢迎页时接收，
+                 确认页注明哪些内容由对方面板提供、链接来自其他应用。 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nagi-app" android:host="pair" />
             </intent-filter>
         </activity>

@@ -439,7 +439,7 @@ func TestScrubErrorByRef(t *testing.T) {
 	}
 }
 
-// MCP 调用的记录：有看不到的节点时，非管理员不看失败详情，参数里和节点有关的键去掉（2026-11-19-834f027#2）。
+// stripParams 按键名去掉参数里的键，嵌套的对象、数组里的也去。
 func TestStripParamsNodeKeys(t *testing.T) {
 	in := `{"arguments":{"project":"web","node":"prod-9","backup_node":"prod-8","items":[{"target_node":"x","keep":1}]},"result_bytes":3}`
 	got := stripParams(in, func(k string) bool { return strings.Contains(strings.ToLower(k), "node") })
@@ -469,7 +469,7 @@ func TestStripParamsTruncated(t *testing.T) {
 	}
 }
 
-// 项目事件页和审计页一样：有看不到的节点时，MCP 调用的记录不给失败详情（2026-11-19-c8e87dd#1）。
+// 以前的 MCP 调用记录（没有记权限的）：失败详情是工具返回的原文，可能写着节点的名称，项目事件页和审计页都只给管理员。
 func TestMCPRecordFailureHidden(t *testing.T) {
 	e := audit.Event{Category: audit.MCP, Action: "mcp:deploy", Result: audit.ResultFailed, Error: "节点 prod-9 离线", TargetType: "tool"}
 	ident := func(s string) string { return s }

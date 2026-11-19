@@ -107,9 +107,11 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | 节点文件的修改：`WriteNodeFile`、`DeleteNodeFile`、`CreateNodeDir`、`RestoreNodeFileBackup`、`RenameNodeFile`、`MoveNodeFiles`、`CopyNodeFiles`、`CompressNodeFiles`、`ExtractNodeFile`；`ImportComposeDir`、`IsolateNode`、`UnisolateNode`、`ConfirmPendingHA` | 节点终端、可修改 | 以 root 改节点上的东西，或者让别的节点运行拼回的配置 |
 | `SetNodeReplicaDir`、`SetBackupReplicaDir`（`SetBackupNodes` 指定存放位置时同样） | 节点终端、可修改 | 让节点以 root 在任意位置建目录、写数据 |
 | `DeleteNodeImages`、`PruneNodeImages` | 可修改 | 节点拒绝删有容器在用、Nagi 需要的镜像，影响和部署同一级 |
-| 设置和账号的：`CreateAccessToken`、`BeginTOTP`、`BeginPasskeyRegistration`、`SetAdminNetworks`、`GetRecording`、`TestAuditSink` | 令牌一律不行 | 会给自己留登录凭据、把账号主人锁在外面，或者泄露录制和外送的凭据 |
+| 设置和账号的：`CreateAccessToken`、`BeginTOTP`、`BeginPasskeyRegistration`、`SetAdminNetworks`、`GetRecording`、`TestAuditSink`，成员和角色的新建、修改、删除 | 令牌一律不行 | 会给自己留登录凭据、把账号主人锁在外面，或者泄露录制和外送的凭据 |
 
 「节点终端」只能在做过高权限确认之后勾选（生成令牌前、在授权页点允许前），所以这些令牌已经确认过身份；令牌只在 `/mcp` 有效，到接口的令牌请求都来自 MCP 工具。
+
+特权配置（保存或部署特权 compose、在特权容器里执行命令、改它的文件，见 [node-access.md](node-access.md#权限)）在网页和 App 上也要先做高权限确认。这是按内容判断的，不在上面的表里；令牌的规则没有变：角色有「特权配置」权限、令牌勾了相应的选项（可修改、执行命令）就能用，不另外要求「节点终端」。生成令牌和 OAuth 授权本身只认密码或验证码做的确认。
 
 ### 确认码
 
@@ -137,7 +139,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_deployments` | 项目的部署记录：时间、来源、涉及的容器和版本、是否成功 | `ListDeployments` |
 | `check_images` | 立即检查项目里的镜像有没有新版本 | `CheckImages` |
 | `list_registries` | 项目登录过的私有镜像仓库地址，不返回密码 | `ListRegistries` |
-| `list_backup_snapshots` | 一个备份节点（`backup_node`，默认第一个）上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
+| `list_backup_snapshots` | 一个备份节点（`backup_node`，默认第一个；容器有不止一台备份节点叫这个名称时报错，要求改用 ID，`sync_backup`、`restore_from_backup` 同样）上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
 | `list_nodes` | 节点、标签、在线、占用、容器数，可以只列带某个标签的 | `ListNodes` |
 | `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
@@ -147,7 +149,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `inspect_node_storage` | 只给管理员（内容涉及节点上所有项目）：Docker 镜像、容器可写层、数据卷、构建缓存的占用和可回收空间，最大的镜像，每个容器的 data、volumes、快照占用。只读，不清理 | `GetNodeStorage`（节点的 `GetStorage`） |
 | `list_versions` | 容器的全部版本：创建和部署时间、镜像、git 提交、是否保存了文件、回滚自哪个版本（`get_container` 只给最近 5 个） | `ListVersions` |
 | `get_node` | 一个节点的详情：系统和版本、占用、标签、告警规则、项目根目录、节点访问是否可用、面板不认识的容器和以节点为准的项目（见下面的 `adopt_*`）、信任的面板、节点上保存的副本 | `ListNodes`、`ListNodePanels`、`ListNodeReplicas` |
-| `check_mesh` | 一个节点（或面板自己）看到的节点网络：每个成员的路径（直连、中转）、延迟、丢包、最近握手；带 `peer` 时让节点立即 ping 这个成员 | `GetNodeMesh`、`GetPanelMesh`、`PingNodeMesh` |
+| `check_mesh` | 一个节点（或面板自己）看到的节点网络：每个成员的路径（直连、中转）、延迟、丢包、最近握手；带 `peer` 时让节点立即 ping 这个成员（`peer` 写名称或公钥；有不止一个成员叫这个名称时报错，要求改用公钥，`test_mesh_speed` 同样） | `GetNodeMesh`、`GetPanelMesh`、`PingNodeMesh` |
 | `get_node_mirrors` | 只给管理员：节点的镜像加速地址、Docker 当前生效的和默认的加速地址 | `GetNodeMirrors` |
 | `list_node_images` | 只给管理员：节点上的镜像（标签、ID、大小、创建时间、使用它的容器、Nagi 需要它的原因），一键清理会删除几个、至少释放多少，可回收的构建缓存。可以按文字筛选，最多列 300 个 | `ListNodeImages` |
 
@@ -247,8 +249,8 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `reclaim_node_snapshots` | 立即清理节点上每个容器的快照仓库，回收没用到的数据，快照本身不删 | — | `ReclaimNodeSnapshots` |
 | `remove_node_panel` | 从节点的信任列表移除一个面板；移除的是本面板时本面板忘记这个节点 | 面板指纹 | `ListNodePanels`、`RemoveNodePanel` |
 | `delete_node_replica` | 删除节点上已经没有容器使用的副本（`get_node` 里 `in_use` 为 false） | 容器名 | `ListNodeReplicas`、`DeleteNodeReplica` |
-| `adopt_node_container` | 把节点上有、面板不认识的容器按节点缓存加入项目 | — | `AdoptNodeContainer` |
-| `adopt_stale_project` | 节点报告项目被别的面板改过时，以节点为准重建面板上的记录。节点可能被攻破，预览里写明 | 项目名 | `AdoptStaleProject` |
+| `adopt_node_container` | 把节点上有、面板不认识的容器按节点缓存加入项目。配置里有特权内容（或容器目录在项目根目录以外）时要「特权配置」 | — | `AdoptNodeContainer` |
+| `adopt_stale_project` | 节点报告项目被别的面板改过时，以节点为准重建面板上的记录。节点可能被攻破，预览里写明。换进来的配置由节点决定，要「特权配置」（没有的看不到这个工具） | 项目名 | `AdoptStaleProject` |
 
 ### 节点文件和节点级操作
 

@@ -73,6 +73,9 @@ func drainFileOp(stream fileOpStream, err error) (*nagiv1.FileOpResult, error) {
 // volumeWriteAgent 检查能不能改这个容器的文件（见 checkVolumeWrite），返回容器所在节点。卷的所有写接口都经过它。
 func (s *projectService) volumeWriteAgent(ctx context.Context, projectID, container string) (nagiv1.AgentServiceClient, error) {
 	if err := s.checkVolumeWrite(ctx, projectID, container); err != nil {
+		if isElevationError(err) {
+			return nil, err
+		}
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 	agent, err := s.Projects.ContainerAgent(ctx, projectID, container)

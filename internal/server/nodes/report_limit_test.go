@@ -77,16 +77,16 @@ func (d *faultDB) counts() (writes, failed int) {
 	return d.writes, d.failed
 }
 
-// refill 把连接的上报额度补满（测试里代替等待）。
-func (c *Conn) refill() {
-	c.mu.Lock()
-	c.reportAt = time.Time{}
-	c.mu.Unlock()
+// refill 把节点的上报额度补满（测试里代替等待）。
+func (s *nodeState) refill() {
+	s.mu.Lock()
+	s.reportAt = time.Time{}
+	s.mu.Unlock()
 }
 
 // v0.35.0#13：令牌桶攒 30 次、每秒补一次；正常节点的上报节奏用不完，超出的丢弃。
 func TestAllowReport(t *testing.T) {
-	c := &Conn{}
+	c := &nodeState{}
 	now := time.Unix(1000, 0)
 	for i := range reportBurst {
 		if ok, _ := c.allowReport(now); !ok {
@@ -108,7 +108,7 @@ func TestAllowReport(t *testing.T) {
 	}
 
 	// 正常节点：每 15 秒定时上报，备份同步时每 5 秒一次，每分钟一次部署连着报 10 次（间隔 300 毫秒），一小时不丢。
-	c = &Conn{}
+	c = &nodeState{}
 	start := time.Unix(2000, 0)
 	var times []time.Duration
 	for s := time.Duration(0); s < time.Hour; s += 5 * time.Second {
@@ -186,7 +186,7 @@ func TestReportLimits(t *testing.T) {
 	}
 
 	// 内容变了：写库。
-	p.conn.refill()
+	p.r.state(p.conn.NodeID).refill()
 	if _, err := report("h2"); err != nil {
 		t.Fatal(err)
 	}
@@ -272,9 +272,10 @@ func TestOnReportOneAtATime(t *testing.T) {
 		}
 	}
 	idle := func() bool {
-		c.syncMu.Lock()
-		defer c.syncMu.Unlock()
-		return !c.syncing
+		st := r.state("n")
+		st.mu.Lock()
+		defer st.mu.Unlock()
+		return !st.syncing
 	}
 
 	r.runOnReport(c, req("a"))

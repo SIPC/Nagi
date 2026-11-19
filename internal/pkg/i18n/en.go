@@ -81,7 +81,7 @@ var en = map[string]string{
 	"节点离线":      "The node is offline",
 	"节点 %s 离线":  "Node %s is offline",
 	"节点名称不能为空，且不超过 64 个字符":                   "Node name is required and must be at most 64 characters",
-	"节点名称不能包含控制字符":                           "Node name can't contain control characters",
+	"节点名称不能包含控制字符或不可见字符":                     "Node name can't contain control or invisible characters",
 	"已有名为 %s 的节点":                            "A node named %s already exists",
 	"节点通过接入码加入，尚未批准。请在节点页确认为自有机器后批准":         "This node joined with an invite code and hasn't been approved. Confirm on the Nodes page that it's your machine, then approve it",
 	"节点上还有 1 个容器，请先迁移到其他节点或删除":               "The node still has 1 container. Migrate it to another node or delete it first",
@@ -961,6 +961,7 @@ var en = map[string]string{
 	"进入特权容器需要「特权配置」权限":               "Entering a privileged container needs the Privileged configuration permission",
 	"容器 %s 有特权，修改它引用的共享变量需要「特权配置」权限": "Container %s is privileged. Changing the shared variables it uses needs the Privileged configuration permission",
 	"项目根目录以外的容器目录需要「特权配置」权限":         "A container directory outside the projects root needs the Privileged configuration permission",
+	"以节点为准重建项目需要「特权配置」权限":            "Rebuilding a project from a node needs the Privileged configuration permission",
 	"指定副本的存放位置需要「节点终端和文件」权限":         "Choosing where replicas are stored needs the Node terminal and files permission",
 	"没有「网络和域名」权限，不能修改出站限制":           "Changing outbound limits needs the Network and domains permission",
 	"没有「审计日志」权限，不能导出审计记录":            "Exporting audit records needs the Audit log permission",
@@ -994,4 +995,5 @@ var en = map[string]string{
 	"账号 %s 的登录请求在手机 %s 上被拒绝。发起的人知道这个账号的密码，请尽快更改密码。来源：%s": "A sign-in request for account %s was denied on phone %s. Whoever started it knows the password. Change it soon. Source: %s",
 	"等待手机确认的请求太多，请稍后重试或改用验证码":                            "Too many requests are waiting for phone confirmation. Try again later or use a code",
 	"数字不正确": "Incorrect number",
+	"账号 %s 的密码可能已泄露：密码正确，但登录的手机确认连续 %d 次没有通过。来源 IP：%s": "The password for %s may be leaked: the password was correct but the phone confirmation for sign-in failed %d times in a row. Source IP: %s",
 }

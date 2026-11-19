@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -22,6 +23,8 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/client"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -188,7 +191,7 @@ var gitDiskEvery = 2 * time.Second
 var checkDisk = metrics.CheckDisk
 
 // guardedClone 运行 clone，开始前和进行中定时检查 dir 所在磁盘的剩余空间，不够了就取消：恶意的 git 服务器
-// 发一个无穷大的 packfile 时不会写满磁盘（v0.35.0#21）。总时长由调用方的 ctx 限制（见 pull）。
+// 发一个无穷大的 packfile 时不会写满磁盘。总时长由调用方的 ctx 限制（见 pull）。
 func guardedClone(ctx context.Context, dir string, clone func(ctx context.Context) error) error {
 	if err := checkDisk(dir, 0); err != nil {
 		return err
@@ -220,10 +223,159 @@ func guardedClone(ctx context.Context, dir string, clone func(ctx context.Contex
 	err := clone(cctx)
 	close(stop)
 	<-watched // 之后读 low 不用加锁
-	if err != nil && low != nil {
+	// clone 没报错也一样：磁盘已经不够了，不能接着往下写。
+	if low != nil {
 		return low
 	}
 	return err
+}
+
+// 检出时的限制，测试时替换：每写 gitDiskBytes 字节检查一次磁盘；文件（含符号链接、子模块目录）最多 gitMaxFiles 个。
+var (
+	gitDiskBytes int64 = 32 << 20
+	gitMaxFiles        = 1_000_000
+)
+
+// checkoutTree 把提交 commit 的文件写到 dir（已经存在，里面只有 .git）。base 是检查剩余空间用的目录。
+//
+// 不用 go-git 自带的检出：它不看 ctx，也不检查磁盘。仓库可以很小、检出来却很大（一个压缩比很高的文件，
+// 在目录树里用很多个名字引用；或者目录树层层引用自己，文件数按指数增长），拉取时的磁盘检查拦不住。
+// 这里边写边检查磁盘、限制文件个数，ctx 取消时停下。写到一半失败时 dir 留给调用方删掉。
+//
+// 目录树是 git 服务器给的：名字逐段检查，写文件经 os.Root，不会跟着符号链接写到 dir 外面。
+func checkoutTree(ctx context.Context, repo *git.Repository, commit plumbing.Hash, dir, base string) error {
+	c, err := repo.CommitObject(commit)
+	if err != nil {
+		return err
+	}
+	tree, err := c.Tree()
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	if err := checkDisk(base, 0); err != nil {
+		return err
+	}
+	var files int
+	var written int64 // 上次检查磁盘以后写了多少
+	buf := make([]byte, 64<<10)
+	walker := object.NewTreeWalker(tree, true, nil)
+	defer walker.Close()
+	for {
+		name, e, err := walker.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !validTreeName(e.Name) {
+			return fmt.Errorf("仓库里有不允许的文件名 %q", name)
+		}
+		if e.Mode == filemode.Dir {
+			continue // 目录在写里面的文件时建，空目录不建
+		}
+		if files++; files > gitMaxFiles {
+			return fmt.Errorf("仓库里的文件超过 %d 个", gitMaxFiles)
+		}
+		if err := root.MkdirAll(path.Dir(name), 0o755); err != nil {
+			return err
+		}
+		switch e.Mode {
+		case filemode.Submodule:
+			// 不拉取子模块，留一个空目录。
+			if err := root.Mkdir(name, 0o755); err != nil {
+				return err
+			}
+			continue
+		case filemode.Regular, filemode.Deprecated, filemode.Executable, filemode.Symlink:
+		default:
+			return fmt.Errorf("仓库里的 %q 类型不支持", name)
+		}
+		blob, err := repo.BlobObject(e.Hash)
+		if err != nil {
+			return err
+		}
+		r, err := blob.Reader()
+		if err != nil {
+			return err
+		}
+		if e.Mode == filemode.Symlink {
+			target, err := io.ReadAll(io.LimitReader(r, maxLinkTarget+1))
+			r.Close()
+			if err != nil {
+				return err
+			}
+			if len(target) == 0 || len(target) > maxLinkTarget {
+				return fmt.Errorf("仓库里的符号链接 %q 不正确", name)
+			}
+			if err := root.Symlink(string(target), name); err != nil {
+				return err
+			}
+			continue
+		}
+		mode := os.FileMode(0o644)
+		if e.Mode == filemode.Executable {
+			mode = 0o755
+		}
+		// O_EXCL：目录树里重名的条目不能覆盖已经写出的文件，也不能顺着已经写出的符号链接写。
+		f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+		if err != nil {
+			r.Close()
+			return err
+		}
+		err = func() error {
+			for {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				n, rerr := r.Read(buf)
+				if n > 0 {
+					if written += int64(n); written >= gitDiskBytes {
+						written = 0
+						if err := checkDisk(base, 0); err != nil {
+							return err
+						}
+					}
+					if _, err := f.Write(buf[:n]); err != nil {
+						return err
+					}
+				}
+				if errors.Is(rerr, io.EOF) {
+					return nil
+				}
+				if rerr != nil {
+					return rerr
+				}
+			}
+		}()
+		r.Close()
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
+
+// maxLinkTarget 是符号链接目标的最大长度（Linux 的 PATH_MAX）。
+const maxLinkTarget = 4096
+
+// validTreeName 检查目录树里一个条目的名字（路径里的一段）：不能为空、是 . 或 ..、是 .git（不分大小写），不能带 / 和 NUL。
+func validTreeName(name string) bool {
+	switch {
+	case name == "", name == ".", name == "..", strings.EqualFold(name, ".git"):
+		return false
+	}
+	return !strings.ContainsAny(name, "/\x00")
 }
 
 // pull 从 git 拉取文件替换容器的 data/，保留 preserve 里的路径。返回拉取到的提交。
@@ -246,6 +398,7 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 		URL:          url,
 		Depth:        1,
 		SingleBranch: true,
+		NoCheckout:   true, // 文件由 checkoutTree 写
 		Progress:     &lineWriter{onLine: func(l string) { onLine("  " + l) }},
 	}
 	if auth != nil {
@@ -292,6 +445,15 @@ func pull(ctx context.Context, p containerPaths, src *nagiv1.Source, preserve []
 	}
 	commit := head.Hash().String()
 	onLine("拉取到提交 " + commit[:12])
+	switch err := checkoutTree(pctx, repo, head.Hash(), p.checkoutDir(), p.root); {
+	case err == nil:
+	case ctx.Err() == nil && errors.Is(pctx.Err(), context.DeadlineExceeded):
+		return "", errors.New("拉取超过 30 分钟，已停止")
+	case errors.As(err, &low):
+		return "", err
+	default:
+		return "", fmt.Errorf("检出文件失败：%w", err)
+	}
 
 	if err := os.RemoveAll(filepath.Join(p.checkoutDir(), ".git")); err != nil {
 		return "", err

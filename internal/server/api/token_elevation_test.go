@@ -57,6 +57,11 @@ var tokenElevationRules = map[string]string{
 	nagiv1connect.SettingsServicePromoteStandbyProcedure:    "",
 	nagiv1connect.SettingsServiceCreateUserProcedure:        "",
 	nagiv1connect.SettingsServiceUpdateUserProcedure:        "",
+	// 角色的新建、修改、删除和删除成员：令牌一律不行（都不在 tokenAccount 里）。
+	nagiv1connect.SettingsServiceCreateRoleProcedure: "",
+	nagiv1connect.SettingsServiceUpdateRoleProcedure: "",
+	nagiv1connect.SettingsServiceDeleteRoleProcedure: "",
+	nagiv1connect.SettingsServiceDeleteUserProcedure: "",
 }
 
 // 每个要确认的接口都按上表判断：各种令牌（勾的选项、角色）能不能调用、算不算确认过；网页的会话只看有没有做过确认。

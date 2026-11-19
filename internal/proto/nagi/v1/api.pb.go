@@ -3835,10 +3835,13 @@ type UpdateRoleRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// 为空表示不改。预置角色可以改名，填空不会清除名称。
-	Name          string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Permissions   []string `protobuf:"bytes,3,rep,name=permissions,proto3" json:"permissions,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+	Permissions []string `protobuf:"bytes,3,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	// 不改权限，permissions 不看。
+	KeepPermissions bool `protobuf:"varint,4,opt,name=keep_permissions,json=keepPermissions,proto3" json:"keep_permissions,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *UpdateRoleRequest) Reset() {
@@ -3890,6 +3893,13 @@ func (x *UpdateRoleRequest) GetPermissions() []string {
 		return x.Permissions
 	}
 	return nil
+}
+
+func (x *UpdateRoleRequest) GetKeepPermissions() bool {
+	if x != nil {
+		return x.KeepPermissions
+	}
+	return false
 }
 
 type DeleteRoleRequest struct {
@@ -15817,11 +15827,12 @@ const file_nagi_v1_api_proto_rawDesc = "" +
 	"\tgrantable\x18\x02 \x03(\tR\tgrantable\"I\n" +
 	"\x11CreateRoleRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
-	"\vpermissions\x18\x02 \x03(\tR\vpermissions\"Y\n" +
+	"\vpermissions\x18\x02 \x03(\tR\vpermissions\"\x84\x01\n" +
 	"\x11UpdateRoleRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vpermissions\x18\x03 \x03(\tR\vpermissions\"#\n" +
+	"\vpermissions\x18\x03 \x03(\tR\vpermissions\x12)\n" +
+	"\x10keep_permissions\x18\x04 \x01(\bR\x0fkeepPermissions\"#\n" +
 	"\x11DeleteRoleRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\"\x14\n" +
 	"\x12DeleteRoleResponse\"\xdc\x03\n" +

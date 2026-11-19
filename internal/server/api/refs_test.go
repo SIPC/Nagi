@@ -85,7 +85,7 @@ func TestAuditFailureByRef(t *testing.T) {
 	if strings.Contains(i18n.PlainRefs(stored), "\x02") || i18n.PlainRefs(stored) != "同步失败：节点 b 离线" {
 		t.Errorf("管理员看到的：%q", i18n.PlainRefs(stored))
 	}
-	e := audit.Event{ProjectID: "p1", Error: stored, TargetType: "container", TargetName: "b"}
+	e := audit.Event{Category: audit.Operation, Action: "Deploy", ProjectID: "p1", Error: stored, TargetType: "container", TargetName: "b"}
 	if got := member.entry(e, auditNames{}); got.Error != "同步失败：节点 其他节点 离线" || got.TargetName != "b" {
 		t.Errorf("成员看到的：%q 对象 %q", got.Error, got.TargetName)
 	}

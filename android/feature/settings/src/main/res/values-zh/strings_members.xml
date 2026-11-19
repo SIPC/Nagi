@@ -48,4 +48,7 @@
     <string name="role_permission_count">%1$d 项权限</string>
     <string name="role_not_grantable">包含你没有的权限，不能授予</string>
     <string name="roles_on_web">角色在网页上新建和编辑。</string>
+    <string name="member_scope">访问范围</string>
+    <string name="members_on_web">添加和修改成员请在网页上操作。</string>
+    <string name="member_on_web">角色、访问范围、密码、两步验证和通行密钥请在网页上修改。</string>
 </resources>

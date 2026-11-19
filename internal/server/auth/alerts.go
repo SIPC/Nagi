@@ -12,7 +12,7 @@ import (
 )
 
 // 登录相关的安全告警（见 docs/audit.md#安全告警），在「设置 → 告警」里有开关，默认开启：
-//   - 密码正确但验证码连续错误 5 次；
+//   - 密码正确但验证码连续错误 5 次，或者登录的手机确认连续 5 次没有通过；
 //   - 按 IP 的登录限速开始等待，每小时汇总一条；
 //   - 管理员从新的网段登录（最近 90 天没有登录过的 IPv4 /24、IPv6 /48）。
 
@@ -37,6 +37,8 @@ func (s *Service) AlertEnabled(ctx context.Context, key string) bool {
 type totpStreaks struct {
 	mu sync.Mutex
 	n  map[int64]int
+	// phone 是登录的手机确认连续没有通过（过期没人确认、数字输错作废）的次数。
+	phone map[int64]int
 }
 
 // totpFailed 记一次验证码错误；连续第 5 次时告警（之后不重复，直到验证成功）。
@@ -56,9 +58,28 @@ func (s *Service) totpFailed(ctx context.Context, userID int64, username, ip str
 	}
 }
 
+// loginApprovalFailed 记一次登录的手机确认没有通过；连续第 5 次时告警（之后不重复，直到登录成功）。
+// 和验证码连续错误是同一种情况（密码对了，第二步过不去），用同一个开关。
+func (s *Service) loginApprovalFailed(ctx context.Context, userID int64, username, ip string) {
+	s.streaks.mu.Lock()
+	if s.streaks.phone == nil {
+		s.streaks.phone = map[int64]int{}
+	}
+	s.streaks.phone[userID]++
+	n := s.streaks.phone[userID]
+	s.streaks.mu.Unlock()
+	if n == totpAlertAfter && s.Alert != nil && s.AlertEnabled(ctx, SettingAlertTOTP) {
+		at, aid, an := userActor(userID, username)
+		s.loginEvent(ctx, audit.Event{Category: audit.Security, Action: "login_approval_failures", ActorType: at, ActorID: aid, ActorName: an, IP: ip, Result: audit.ResultDenied})
+		s.Alert(context.WithoutCancel(ctx), "login-approval:"+strconv.FormatInt(userID, 10), i18n.New("登录安全").Error(),
+			i18n.Errorf("账号 %s 的密码可能已泄露：密码正确，但登录的手机确认连续 %d 次没有通过。来源 IP：%s", username, totpAlertAfter, ip).Error())
+	}
+}
+
 func (s *Service) totpOK(userID int64) {
 	s.streaks.mu.Lock()
 	delete(s.streaks.n, userID)
+	delete(s.streaks.phone, userID)
 	s.streaks.mu.Unlock()
 }
 

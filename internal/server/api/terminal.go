@@ -24,7 +24,8 @@ import (
 // 浏览器通过 WebSocket 打开容器终端，面板桥接到节点的 AgentService.Exec。
 //
 // 消息格式：二进制帧是终端的输入输出；文本帧是控制消息（JSON），
-// 浏览器发 {"type":"resize","cols":80,"rows":24}，面板发 {"type":"exit","code":0} 或 {"type":"error","message":"..."}。
+// 浏览器发 {"type":"resize","cols":80,"rows":24}，面板发 {"type":"exit","code":0} 或 {"type":"error","message":"..."}；
+// 特权容器要先做高权限确认时，错误消息里多一个 "elevation":true，界面验证身份后重新连接。
 // 需要已登录；WebSocket 库默认只接受同源请求，防止其他网站借用户的 cookie 打开终端。
 func (a *API) TerminalHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +67,11 @@ func (a *API) TerminalHandler() http.Handler {
 		}
 		if err := a.checkPrivilegedEntry(ctx, u, start.ProjectId, start.Container); err != nil {
 			a.recordOperation(ctx, "/OpenTerminal", start, auditFailure(err))
+			if isElevationError(err) {
+				// 特权容器要先做高权限确认：带上 elevation，界面验证身份后重新连接。
+				wsFailElevation(ctx, ws, errorText(lang, err))
+				return
+			}
 			fail(i18n.Localize(lang, err))
 			return
 		}
@@ -241,6 +247,13 @@ func terminalError(lang i18n.Lang, err error) string {
 		return i18n.Sprintf(lang, "与节点的连接已断开")
 	}
 	return errorText(lang, err)
+}
+
+// wsFailElevation 告诉界面要先做高权限确认（消息里 elevation 为 true），然后关闭 WebSocket。
+func wsFailElevation(ctx context.Context, ws *websocket.Conn, msg string) {
+	b, _ := json.Marshal(map[string]any{"type": "error", "message": msg, "elevation": true})
+	_ = ws.Write(ctx, websocket.MessageText, b)
+	ws.Close(websocket.StatusNormalClosure, "")
 }
 
 // wsFail 返回发送错误并关闭 WebSocket 的函数。

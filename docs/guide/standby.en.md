@@ -23,6 +23,12 @@ Before you start, prepare a server that meets the [requirements](../../README.en
    curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh -s -- --standby <pairing-code>
    ```
 
+   If other users have accounts on the server, pass the pairing code in an environment variable so that it doesn't appear in the process arguments. Run `sudo -i` to switch to root first, then run:
+
+   ```bash
+   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | NAGI_STANDBY=<pairing-code> sh
+   ```
+
 Once started, the standby panel connects to the primary panel, starts syncing and appears under **Settings → Standby panels** on the primary panel.
 
 ## Promote to primary

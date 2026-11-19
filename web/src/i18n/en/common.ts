@@ -4,6 +4,7 @@ const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? o
 
 export default {
   otherNode: "Other node",
+  privilegedElevate: "Privileged configuration is equivalent to root on the node. Verify your identity first. You won't be asked again for 15 minutes.",
   phone: {
     use: "Confirm on phone",
     useCode: "Use a code instead",

@@ -26,11 +26,13 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - The QR code for adding a phone is simpler and larger, and the app scans it faster.
 - The Android app shows the last data first when opened, with smoother animations and adding flow.
 - Sync status appears immediately after clicking "Sync now" or "Stop sync".
+- Repeated failed phone confirmations at sign-in send an alert and are recorded in Audit.
 
 ### Fixes
 
 - Fixed an issue where some Xiaomi phones could not be added.
 - Fixed an issue where the Android app crashed in some cases.
+- Fixed an issue where a stalled download during a panel update was reported as a missing file.
 - Fixed known vulnerabilities and improved security.
 
 ### Behavior changes
@@ -38,21 +40,28 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - The preset Operator role no longer includes backup, high availability, migration, network and domains, alert rules, registries, or project management. Edit the role if needed.
 - Changing a node's projects root requires the "Node terminal and files" permission and verifying your identity first. Access tokens need "Node terminal" selected.
 - Access tokens need "Panel administration" selected to change project groups and node tags.
-- Pulling from a git repository is limited to 30 minutes and stops when the node runs low on disk space.
+- Pulling from a git repository is limited to 30 minutes and stops when the node runs low on disk space or the repository has more than 1,000,000 files.
 - Ports in compose bound only to a local address (for example `127.0.0.1:5432:5432`) are no longer imported as port mappings.
 - Compose files whose ports expand to more than 1,000 after expanding ranges can no longer be saved or deployed.
-- Creating or editing members, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity, with a password or verification code only.
-- The node install command now passes the join token in an environment variable. If you use sudo, run `sudo -i` first. Old commands still work.
-- Each invite code can add up to 20 nodes, and up to 20 nodes can be handed over at a time. Nodes with the same name get a number added automatically.
+- Creating or editing members and roles, generating standby panel pairing codes, handing over nodes, and promoting a standby panel now require verifying your identity, with a password or verification code only.
+- Deleting members and roles requires verifying your identity.
+- Saving or deploying privileged configuration, opening a terminal in a privileged container, and changing files in a privileged container require verifying your identity.
+- Rebuilding a project from a node requires the "Privileged configuration" permission.
+- Parameters and failure details in Audit are shown only to members with permission for that action, and webhook URLs only to members with the "Deploy" permission.
+- The node install command now passes the join token in an environment variable. If you use sudo, run `sudo -i` first.
+- Each invite code can add up to 20 nodes, and up to 20 nodes can be handed over at a time. Nodes with the same name get a number added automatically, and node names cannot contain invisible characters.
+- In MCP, nodes that share a name must be specified by node ID.
 - Node join notifications show the source address, and multiple joins with the same invite code in a short time are combined into one notification.
 - Terminals opened in the Android app are disconnected after the unlock duration has passed.
-- Pairing links on web pages no longer open the Android app, and the app no longer accepts external pairing links after a panel has been added. The app's content is hidden in recent tasks.
+- The Android app no longer accepts external pairing links after a panel has been added. The app's content is hidden in recent tasks.
+- In the Android app, adding and editing members and adding and promoting standby panels have moved to the web panel.
 - The panel no longer accepts avatars larger than 1024 pixels on either side.
 
 ### Upgrade notes
 
 - Upgrade nodes to v0.35.0 to fix security issues on nodes. Later node upgrades will also show download progress.
 - After updating the panel, update the Android app to v0.35.0.
+- Node install commands generated before the update and not yet run must be generated again.
 - Check port mappings previously imported from compose in the container's "Network" tab.
 - If untrusted containers have run on a node, we recommend replacing the keys and passwords stored on it.
 

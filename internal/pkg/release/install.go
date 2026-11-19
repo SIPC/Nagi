@@ -344,6 +344,11 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer, report fun
 		body.last = time.Now()
 		body.report = func(n int64) { report(n, size) }
 	}
+	// 下载被取消（太慢或超时）时，读正文不一定报错，有时只是提前读到结尾。这时手里的内容不完整，
+	// 不能当成服务器给的文件：否则会拿空的 SHA256SUMS 得出「没有这个文件」。长度对得上的不算。
+	cut := func() bool {
+		return context.Cause(wctx) != nil && got.Load() != resp.ContentLength
+	}
 	if w != nil {
 		var r io.Reader = body
 		if limit > 0 {
@@ -357,6 +362,8 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer, report fun
 			return nil, unreachable(err)
 		case limit > 0 && n > limit:
 			return nil, tooLarge()
+		case cut():
+			return nil, unreachable(context.Cause(wctx))
 		}
 		if report != nil {
 			report(got.Load(), resp.ContentLength)
@@ -366,6 +373,9 @@ func fetch(ctx context.Context, url string, limit int64, w io.Writer, report fun
 	b, err := io.ReadAll(io.LimitReader(body, limit))
 	if err != nil {
 		return nil, unreachable(err)
+	}
+	if cut() {
+		return nil, unreachable(context.Cause(wctx))
 	}
 	return b, nil
 }

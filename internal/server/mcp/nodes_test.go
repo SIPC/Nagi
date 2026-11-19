@@ -23,6 +23,8 @@ type fakeNodeAdmin struct {
 	write *nagiv1.WriteNodeFileRequest
 	del   *nagiv1.DeleteNodeFileRequest
 	move  *nagiv1.NodeTransferRequest
+	// nodes 不为空时 ListNodes 返回它。
+	nodes []*nagiv1.Node
 }
 
 func (f *fakeNodeAdmin) record(name string) {
@@ -38,6 +40,9 @@ func (f *fakeNodeAdmin) called() []string {
 }
 
 func (f *fakeNodeAdmin) ListNodes(context.Context, *connect.Request[nagiv1.ListNodesRequest]) (*connect.Response[nagiv1.ListNodesResponse], error) {
+	if f.nodes != nil {
+		return connect.NewResponse(&nagiv1.ListNodesResponse{Nodes: f.nodes}), nil
+	}
 	return connect.NewResponse(&nagiv1.ListNodesResponse{Nodes: []*nagiv1.Node{
 		{Id: "n1", Name: "alpha", Online: true, Containers: 0, Info: &nagiv1.NodeInfo{Version: "v1"}},
 		{Id: "n2", Name: "beta", Online: true, Pending: true, Info: &nagiv1.NodeInfo{Version: "v1", Hostname: "beta-host"}},

@@ -56,7 +56,7 @@ import { AlertRulesForm, nodeRules, rulesSummary } from "@/components/alert-rule
 import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
-import { requireElevation } from "@/components/elevate";
+import { requireElevation, withPrivilegedElevation } from "@/components/elevate";
 import { cancelable, progressText, updateActive, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
@@ -1001,7 +1001,7 @@ function AddNode({ onClose }: { onClose: () => void }) {
 
 // NodeSettings：节点「设置」标签。和设置页一样用设置行：一行状态加一个按钮，表单放进对话框（docs/ui.md「节点详情」）。
 function NodeSettings({ n }: { n: Node }) {
-  // 修改节点设置要「节点管理」，路径要「查看节点详情」，副本的存放位置要「节点终端和文件」。
+  // 修改节点设置要「节点管理」，路径要「查看节点详情」，项目根目录和副本的存放位置要「节点终端和文件」。
   const { can } = useRole();
   const isAdmin = can("node.manage");
   const details = can("node.details");
@@ -1024,7 +1024,7 @@ function NodeSettings({ n }: { n: Node }) {
         {/* 非管理员：有值的行只显示值、不放按钮；没有值可显示的行写原因（只有管理员能操作）。各行一致。 */}
         {details && (
         <SettingRow label={t.nodes.settings.root} help={t.nodes.settings.rootHelp} description={<span className="font-mono">{root}</span>}>
-          {isAdmin && (
+          {canRoot && (
             <Button variant="outline" onClick={() => setEditing("root")}>
               {t.common.actions.edit}
             </Button>
@@ -1154,6 +1154,7 @@ function RootForm({ nodeId, root, onDone }: { nodeId: string; root: string; onDo
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (value === root) return onDone();
+    if (!(await requireElevation(t.nodes.settings.rootElevate))) return;
     setBusy(true);
     setError("");
     try {
@@ -1399,11 +1400,13 @@ function NodeReplicas({ nodeId, nodes }: { nodeId: string; nodes: Node[] }) {
 // StaleProjects：节点报告配置由别的面板写过的项目。以节点为准要删掉面板上的记录，节点又可能被攻破，所以由管理员确认。
 function StaleProjects({ nodeId, list, onDone }: { nodeId: string; list: StaleProject[]; onDone: () => void }) {
   const [error, setError] = useState("");
+  // 以节点为准重建项目要「特权配置」权限，没有时只显示说明。
+  const canAdopt = useRole().can("project.privileged");
   const adopt = async (p: StaleProject) => {
     if (!(await confirmAction(t.nodes.stale.adoptConfirm(p.projectName), { action: t.nodes.stale.adopt, danger: true }))) return;
     setError("");
     try {
-      await nodeClient.adoptStaleProject({ nodeId, projectId: p.projectId });
+      await withPrivilegedElevation(() => nodeClient.adoptStaleProject({ nodeId, projectId: p.projectId }));
       onDone();
     } catch (err) {
       setError(errorMessage(err));
@@ -1422,9 +1425,11 @@ function StaleProjects({ nodeId, list, onDone }: { nodeId: string; list: StalePr
             title={<span className="truncate">{p.projectName}</span>}
             actionsWidth="w-auto"
             actions={
-              <Button size="row" variant="ghost" onClick={() => adopt(p)}>
-                {t.nodes.stale.adopt}
-              </Button>
+              canAdopt && (
+                <Button size="row" variant="ghost" onClick={() => adopt(p)}>
+                  {t.nodes.stale.adopt}
+                </Button>
+              )
             }
           />
         ))}
@@ -1440,7 +1445,7 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
     if (!(await confirmAction(t.nodes.unknown.adoptConfirm(u.container, u.projectName), { action: t.nodes.unknown.adopt }))) return;
     setError("");
     try {
-      await nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container });
+      await withPrivilegedElevation(() => nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container }));
       onDone();
     } catch (err) {
       setError(errorMessage(err));

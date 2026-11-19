@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -158,9 +159,16 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 			out.Session = ""
 		}
 		out.RecordingId = ""
-		if v.viewer {
-			// 操作失败的详情可能带着配置里的内容（compose 报错等），参数里也有配置，没有「查看配置」时只看结果。
+		if !v.detail(e) {
+			// 操作失败的详情可能带着配置里的内容（compose 报错等），参数里也有配置，没有「查看配置」时只看结果；
+			// 别的权限管着的内容（执行的命令、文件路径、域名等）还要相应的权限（见 detail）。
 			out.Error, out.Params = "", ""
+			if e.TargetType == "file" {
+				out.TargetId, out.TargetName = "", fileContainer(e)
+			}
+		}
+		if e.Category == audit.Alert && !v.x.can(auth.PermAddresses) {
+			out.Params = hideEgressTarget(out.Params)
 		}
 		// 看不到的节点（A7）：对象、操作者（告警由节点发出）是节点的，按类型和 ID 判断，整个名称换成「其他节点」；
 		// 别的名称、报错和参数里只去掉节点的 ID。参数里的地址去掉（B9）。
@@ -172,21 +180,106 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 		}
 		out.Error = v.scrub(out.Error)
 		out.Params = v.scrub(stripAddressParams(out.Params))
-		// MCP 调用的记录：失败详情是工具返回的文字，参数是工具的原始参数（节点可以按名称写），都没有标记。
-		// 有看不到的节点时不给失败详情，参数里和节点有关的键去掉；它下面的接口调用记录带着按标记换过的详情。
-		if v.hideMCP(e) {
-			out.Error = ""
-			out.Params = stripParams(out.Params, func(k string) bool { return strings.Contains(strings.ToLower(k), "node") || addressParam(k) })
-		}
 	}
 	return out
 }
 
-// hideMCP：这条是 MCP 调用的记录，而且查看者有看不到的节点。这类记录的失败详情是工具返回的普通文字，
-// 参数是工具的原始参数（节点可以按名称写），都没有标记，可能写着他看不到的节点的名称：审计页和项目事件页都
-// 不给失败详情（它下面的接口调用记录带着按标记换过的），参数里和节点有关的键去掉。
-func (v auditViewer) hideMCP(e audit.Event) bool {
-	return !v.admin && e.Category == audit.MCP && len(v.hidden) > 0
+// configLevel 是有「查看配置」就够看参数和失败详情的操作要的权限：这些操作的参数是配置里本来就看得到的内容。
+var configLevel = auth.PermsOf(auth.PermView, auth.PermConfig, auth.PermControl, auth.PermDeploy)
+
+// actionPerms 是不走 Connect 的入口记的动作要的权限，和入口自己检查的一样。
+var actionPerms = map[string]auth.Perm{
+	"ExecCommand": auth.PermTerminal, "OpenTerminal": auth.PermTerminal, "CloseTerminal": auth.PermTerminal,
+	"DownloadVolumeFile": auth.PermFilesRead, "UploadVolumeFile": auth.PermFilesWrite,
+}
+
+// detailPerms 返回看一条记录的参数和失败详情，除了「查看配置」还要哪些权限：做这个操作要的权限。
+// 参数里是那项权限管着的内容：执行的命令（终端）、文件路径（文件）、域名和端口（网络和域名）、备份和顶替的节点等，
+// 只有「查看配置」的成员在项目页上看不到它们，也不该从记录里看到。ok 为 false 表示认不出是什么操作，只给管理员。
+func detailPerms(e audit.Event) (need auth.Perms, ok bool) {
+	switch e.Category {
+	case audit.Alert:
+		// 告警的参数只有标题和键。
+		return 0, true
+	case audit.MCP:
+		return mcpPerms(e.Params)
+	}
+	if p, ok := actionPerms[e.Action]; ok {
+		return auth.PermsOf(p), true
+	}
+	for _, svc := range []string{nagiv1connect.ProjectServiceName, nagiv1connect.NodeServiceName, nagiv1connect.SettingsServiceName} {
+		if p, ok := auth.ProcedurePerm("/" + svc + "/" + e.Action); ok {
+			return auth.PermsOf(p) &^ configLevel, true
+		}
+	}
+	return 0, false
+}
+
+// mcpPerms 取出 MCP 调用的记录里记着的权限（工具要的权限，见 mcp 的 record）。记了权限的记录，节点参数是 ID、
+// 失败详情带引用标记，可以按查看的人换；没记的是以前的记录，参数和失败详情是工具的原文，可能写着查看者看不到的
+// 节点的名称，只给管理员（它下面的接口调用记录照常按各自的规则给）。
+func mcpPerms(params string) (auth.Perms, bool) {
+	var p struct {
+		Perms *[]string `json:"perms"`
+	}
+	if json.Unmarshal([]byte(params), &p) != nil || p.Perms == nil {
+		return 0, false
+	}
+	for _, name := range *p.Perms {
+		if !auth.ValidPermName(name) {
+			return 0, false
+		}
+	}
+	return auth.ParsePerms(*p.Perms) &^ configLevel, true
+}
+
+// detail 判断查看者能不能看这条记录的参数和失败详情：要「查看配置」，加上做这个操作要的权限（见 detailPerms）。
+func (v auditViewer) detail(e audit.Event) bool {
+	if v.admin {
+		return true
+	}
+	need, ok := detailPerms(e)
+	return !v.viewer && ok && v.x != nil && v.x.perms&need == need
+}
+
+// fileContainer 是文件操作的记录里文件所在的容器（对象名称是 <容器>:<路径>，不在容器里的文件为空）。
+func fileContainer(e audit.Event) string {
+	if c, ok := strings.CutSuffix(e.TargetName, ":"+e.TargetID); ok {
+		return c
+	}
+	return ""
+}
+
+// hideEgressTarget 去掉出站告警里容器尝试连接的地址和端口（没有「查看访问地址」的成员不该看到）：
+// 标题里的换成「…」，键 egress:<项目>/<容器>/<目标> 只留到容器。不是出站告警时原样返回。
+func hideEgressTarget(params string) string {
+	var p map[string]any
+	if json.Unmarshal([]byte(params), &p) != nil {
+		return params
+	}
+	key, _ := p["key"].(string)
+	rest, ok := strings.CutPrefix(key, "egress:")
+	if !ok {
+		return params
+	}
+	parts := strings.SplitN(rest, "/", 3)
+	target := ""
+	if len(parts) == 3 {
+		target = parts[2]
+		p["key"] = "egress:" + parts[0] + "/" + parts[1]
+	}
+	if title, ok := p["title"].(string); ok {
+		if target != "" {
+			title = strings.ReplaceAll(title, target, "…")
+		}
+		// 标题和键来自节点，对不上时（被截断等）至少把 IP 去掉。
+		p["title"] = scrubIPs(title)
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // addressParam 判断审计参数的键是不是地址类的（B9）：issued_ip、ip、address、endpoint 这些。
@@ -366,12 +459,13 @@ func (s *settingsService) ExportAuditEvents(ctx context.Context, req *connect.Re
 // activityEntry 把审计记录转成原来的活动记录格式。节点和审计页一样按引用换（见 entry）：操作者、对象是
 // 查看者看不到的节点时换成「其他节点」，失败详情里的引用按标记换；不在文字里找名称。
 func (v auditViewer) activityEntry(e audit.Event, names auditNames) *nagiv1.ActivityEntry {
+	// 失败详情和文件路径的规则和审计页一样（见 detail）：没有「查看配置」、或者没有做这个操作要的权限时不给。
+	detailed := v.detail(e)
 	e.Error = v.refs(e.Error)
 	if !v.admin {
 		e.Error = v.scrub(e.Error)
-		// MCP 调用的记录不给失败详情，和审计页一样（见 hideMCP）。
-		if v.hideMCP(e) {
-			e.Error = ""
+		if e.Category == audit.Alert && !v.x.can(auth.PermAddresses) {
+			e.Params = hideEgressTarget(e.Params)
 		}
 		if e.ActorType == "node" && !v.x.node(e.ActorID) {
 			e.ActorName = v.other
@@ -387,6 +481,8 @@ func (v auditViewer) activityEntry(e audit.Event, names auditNames) *nagiv1.Acti
 	detail := e.Error
 	if kind == "alert" {
 		detail = alertTitle(e.Params)
+	} else if !detailed {
+		detail = ""
 	} else if e.TargetType == "file" && e.TargetID != "" {
 		detail = e.TargetID
 		if e.Error != "" {
@@ -451,16 +547,11 @@ func (s *projectService) projectEvents(ctx context.Context, f audit.Filter) (*co
 	if err != nil {
 		return nil, err
 	}
-	viewer := !auth.CurrentUser(ctx).Can(auth.PermConfig)
 	names := s.auditNames(ctx)
 	out := &nagiv1.ListActivityResponse{}
 	for _, r := range rows {
-		e := v.activityEntry(r, names)
-		// 操作失败的详情可能带着配置里的内容（compose 报错等），只读角色只看结果。
-		if viewer && e.Kind == "operation" {
-			e.Detail = ""
-		}
-		out.Entries = append(out.Entries, e)
+		// 操作失败的详情可能带着配置里的内容（compose 报错等），只读角色只看结果（见 activityEntry）。
+		out.Entries = append(out.Entries, v.activityEntry(r, names))
 	}
 	return connect.NewResponse(out), nil
 }

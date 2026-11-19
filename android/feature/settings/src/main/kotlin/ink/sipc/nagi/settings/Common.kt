@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ink.sipc.nagi.data.PanelSession
 import ink.sipc.nagi.network.ElevationRequiredException
 import ink.sipc.nagi.ui.InlineError
 import ink.sipc.nagi.ui.NagiTheme
@@ -127,6 +128,16 @@ internal fun rememberAction(): Action {
     val text = stringResource(R.string.needs_web_elevation)
     val elevate = LocalElevate.current
     return remember(elevate) { Action(scope, text, elevate) }
+}
+
+/**
+ * 添加和修改成员、添加备用面板、提升为主面板在这个面板上是不是只能到网页上做（见 [ink.sipc.nagi.data.Access.webOnlyChanges]）。
+ * 还没查到时为 null；查不到时按能做算，入口照常显示，面板拒绝时再提示。
+ */
+@Composable
+internal fun rememberWebOnly(session: PanelSession): Boolean? {
+    val access = rememberLoad { session.access() }
+    return access.value?.webOnlyChanges ?: if (access.error != null) false else null
 }
 
 /** 操作失败的原因：红字，放在页面或对话框里出错的那一块上面。 */

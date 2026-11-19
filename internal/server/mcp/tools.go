@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/api"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/oauth"
@@ -35,6 +37,30 @@ type tool struct {
 	// procedures 是用到的面板接口。
 	procedures []string
 	add        func(h *handler, s *mcp.Server, t *mcp.Tool)
+	// in 是参数的类型（测试按它检查参数的键名，见 nodeArg）。
+	in reflect.Type
+}
+
+// permNames 是用这个工具要的权限的名称，记在调用记录里：查看记录的成员要有这些权限才看得到参数和失败详情
+// （见 api 的 detailPerms）。只给管理员的接口记成 admin。
+func (t tool) permNames() []string {
+	var set auth.Perms
+	admin := false
+	for _, p := range toolPerms[t.name] {
+		set |= auth.PermsOf(p)
+	}
+	for _, p := range t.required() {
+		if perm, ok := auth.ProcedurePerm(p); ok {
+			set |= auth.PermsOf(perm)
+		} else if auth.ProcedureAccess(p) == "admin" {
+			admin = true
+		}
+	}
+	names := set.Names()
+	if admin {
+		names = append(names, "admin")
+	}
+	return names
 }
 
 // allowedFor 判断令牌能不能用这个工具（备用面板上只有查看类的）：令牌的选项，加上成员的权限（permitted）。
@@ -98,6 +124,8 @@ var toolPerms = map[string][]auth.Perm{
 	"restore_file": {auth.PermFilesWrite}, "move_files": {auth.PermFilesWrite}, "compress_files": {auth.PermFilesWrite},
 	"extract_file": {auth.PermFilesWrite},
 	"node_exec":    {auth.PermNodeRoot}, "get_node_download_link": {auth.PermNodeRoot},
+	// 以节点为准重建项目：换进来的配置由节点决定，要「特权配置」（见 api 的 errAdoptStale）。
+	"adopt_stale_project": {auth.PermPrivileged},
 	// 面板的工具：用到的接口所有成员都能调用（回复按权限清理），工具本身按面板的权限给。
 	"get_panel_settings": {auth.PermSettings}, "check_panel_update": {auth.PermSettings},
 	"query_audit": {auth.PermAudit},
@@ -133,6 +161,7 @@ type call struct {
 
 // def 定义一个工具：参数从 In 推出 JSON Schema，返回值写成 JSON 文本。
 func def[In any](t tool, fn func(c *call, in In) (any, error)) tool {
+	t.in = reflect.TypeFor[In]()
 	t.add = func(h *handler, s *mcp.Server, mt *mcp.Tool) {
 		mcp.AddTool(s, mt, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 			u, ok := userOf(req)
@@ -158,12 +187,14 @@ func def[In any](t tool, fn func(c *call, in In) (any, error)) tool {
 			// 每次调用都记一条 mcp 记录（见 docs/audit.md#mcp-调用）：工具名、脱敏后的参数、结果、返回的字节数、耗时。
 			// 工具在进程内调用的接口记录先收集起来，挂在这一条下面。
 			args, _ := json.Marshal(in)
+			// 记录里的节点参数写成 ID（见 nodeArgIDs），用调用者自己看得到的节点列表对。
+			lookup := callCtx(ctx, u, req)
 			if denied != "" {
-				h.record(ctx, u, t.name, args, audit.ResultDenied, denied, 0, 0, nil)
+				h.record(lookup, u, t, args, audit.ResultDenied, denied, 0, 0, nil)
 				return nil, nil, errors.New(denied)
 			}
 			if !h.allow(u, t.exec) {
-				h.record(ctx, u, t.name, args, audit.ResultDenied, "too many calls", 0, 0, nil)
+				h.record(lookup, u, t, args, audit.ResultDenied, "too many calls", 0, 0, nil)
 				return nil, nil, errors.New("too many calls, try again in a minute")
 			}
 			// 管理面板的工具每次调用都发一条告警（和节点命令一样），令牌泄露时用户马上知道。
@@ -171,11 +202,14 @@ func def[In any](t tool, fn func(c *call, in In) (any, error)) tool {
 				h.o.PanelAlert(ctx, u, t.name)
 			}
 			start := time.Now()
-			cctx, col := audit.WithCollector(callCtx(ctx, u, req))
+			cctx, col := audit.WithCollector(lookup)
+			// 失败详情记带节点引用的那一份（见 api.FailureNotes）：返回给客户端的只是文字。
+			cctx, notes := api.WithFailureNotes(cctx)
 			v, err := fn(&call{ctx: cctx, u: u, h: h, req: req}, in)
 			if err != nil {
+				failure := notes.Mark(err)
 				err = toolError(err)
-				h.record(ctx, u, t.name, args, audit.ResultFailed, err.Error(), 0, time.Since(start), col)
+				h.record(lookup, u, t, args, audit.ResultFailed, failure, 0, time.Since(start), col)
 				return nil, nil, err
 			}
 			b, err := json.MarshalIndent(v, "", "  ")
@@ -189,9 +223,9 @@ func def[In any](t tool, fn func(c *call, in In) (any, error)) tool {
 				Error   string `json:"error"`
 			}
 			if json.Unmarshal(b, &r) == nil && r.Success != nil && !*r.Success {
-				result, msg = audit.ResultFailed, r.Error
+				result, msg = audit.ResultFailed, notes.MarkText(r.Error)
 			}
-			h.record(ctx, u, t.name, args, result, msg, len(b), time.Since(start), col)
+			h.record(lookup, u, t, args, result, msg, len(b), time.Since(start), col)
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}, nil, nil
 		})
 	}

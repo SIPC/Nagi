@@ -14,7 +14,7 @@
     <string name="confirm_unreachable">连不上面板：%1$s</string>
     <string name="confirm_address">地址</string>
     <string name="confirm_from_panel">名称、账号和头像由下方地址的面板提供。</string>
-    <string name="confirm_external">此链接来自其他应用，请确认来自你自己的面板。</string>
+    <string name="confirm_external">此链接来自其他应用或网页，请确认来自你自己的面板。</string>
     <string name="confirm_fingerprint">指纹</string>
     <string name="confirm_phone">手机</string>
     <string name="confirm_hint">添加时需要验证指纹、面容或锁屏密码。</string>

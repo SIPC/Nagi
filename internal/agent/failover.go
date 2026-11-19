@@ -112,6 +112,12 @@ func isParticipant(cfg *nagiv1.FailoverConfig, key []byte) bool {
 	return len(key) > 0 && slices.ContainsFunc(participants(cfg), func(k []byte) bool { return bytes.Equal(k, key) })
 }
 
+// isOtherParticipant 判断 key 是不是这份顶替设置里除 self 以外的那个参与者。「被谁顶替了」只能是它：
+// 持有方是本节点自己时谈不上被顶替，照着去撤容器就是自己把自己停掉。
+func isOtherParticipant(cfg *nagiv1.FailoverConfig, self, key []byte) bool {
+	return isParticipant(cfg, key) && !bytes.Equal(key, self)
+}
+
 // checkControl 判断能不能手动操作容器。设置了顶替的容器：停止了会被代管重启或另一个节点拉起，所以不能停止；
 // 启动和重启只能在持有租约时做，否则可能和另一个节点上的容器同时运行。
 func (a *agent) checkControl(projectID, container string, action nagiv1.ContainerAction) error {
@@ -377,7 +383,7 @@ type voteResult struct {
 }
 
 // collect 并行向 others 要票。
-func (a *agent) collect(ctx context.Context, others []*nagiv1.FailoverParticipant, cfg *nagiv1.FailoverConfig, epoch uint64) voteResult {
+func (a *agent) collect(ctx context.Context, self []byte, others []*nagiv1.FailoverParticipant, cfg *nagiv1.FailoverConfig, epoch uint64) voteResult {
 	var r voteResult
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -391,12 +397,12 @@ func (a *agent) collect(ctx context.Context, others []*nagiv1.FailoverParticipan
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			// 回复里的持有方不是参与者时不算更高的轮次：被攻破的见证人回复「持有方是任意公钥 X」，
-			// 本节点会撤掉容器、把 X 登记成副本的源节点（v0.35.0#23）。
+			// 回复里的持有方不是另一个参与者时不算更高的轮次：被攻破的见证人回复「持有方是任意公钥 X」，
+			// 本节点会撤掉容器、把 X 登记成副本的源节点；回复「持有方是本节点自己」，本节点也会撤掉容器。
 			if resp.GetGranted() {
 				r.granted++
 				r.grantedBy = append(r.grantedBy, m.GetKey())
-			} else if resp.GetEpoch() > epoch && isParticipant(cfg, resp.GetHolder()) && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()) {
+			} else if resp.GetEpoch() > epoch && isOtherParticipant(cfg, self, resp.GetHolder()) && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()) {
 				r.higher = resp
 			}
 		}(m)
@@ -466,7 +472,7 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	f.mu.Unlock()
 	if due {
 		sent := time.Now()
-		r := a.collect(ctx, []*nagiv1.FailoverParticipant{other, cfg.GetWitness()}, cfg, epoch)
+		r := a.collect(ctx, me.GetKey(), []*nagiv1.FailoverParticipant{other, cfg.GetWitness()}, cfg, epoch)
 		self, _, _ := f.voter.Vote(id, participants(cfg), me.GetKey(), epoch, L)
 		votes := r.granted
 		if self {
@@ -671,7 +677,7 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 	// 先向见证人和原持有者要票，拿到一票再投自己。
 	newEpoch := epoch + 1
 	sent := time.Now()
-	r := a.collect(ctx, []*nagiv1.FailoverParticipant{cfg.GetWitness(), other}, cfg, newEpoch)
+	r := a.collect(ctx, me.GetKey(), []*nagiv1.FailoverParticipant{cfg.GetWitness(), other}, cfg, newEpoch)
 	if r.granted == 0 {
 		return
 	}
@@ -859,9 +865,9 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	cfg := st.cfg
 	f.mu.Unlock()
 	pid, name := cfg.GetProjectId(), cfg.GetContainer()
-	// 新的持有方只能是参与者：不是的话不撤容器、不改副本的源节点（collect 已经滤掉，这里再核对一次）。
-	if !isParticipant(cfg, holder) {
-		a.log.Warn("新的持有方不是这份顶替的参与者，忽略", "project", pid, "container", name, "epoch", epoch)
+	// 新的持有方只能是另一个参与者：不是的话不撤容器、不改副本的源节点（collect 已经滤掉，这里再核对一次）。
+	if !isOtherParticipant(cfg, a.selfKey(), holder) {
+		a.log.Warn("新的持有方不是这份顶替的另一个参与者，忽略", "project", pid, "container", name, "epoch", epoch)
 		return
 	}
 	holderName := participantName(cfg, holder)

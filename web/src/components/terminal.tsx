@@ -4,6 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { Button, Notice, Select, Spinner, Status } from "@/components/ui";
+import { requireElevation } from "@/components/elevate";
 import { locale, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,8 @@ type SessionProps = {
   deps?: unknown[];
   // beforeConnect 在点连接时调用，返回 false 就不连了。
   beforeConnect?: () => Promise<boolean>;
+  // onElevation：面板要求先验证身份（特权容器）时调用，返回 true 就重新连接。
+  onElevation?: () => Promise<boolean>;
   intro: React.ReactNode;
   canConnect?: boolean;
   picker?: React.ReactNode;
@@ -43,7 +46,7 @@ type SessionProps = {
 
 // TerminalSession：通过 WebSocket 连到面板，面板转发到节点。消息格式见 internal/server/api/terminal.go。
 // 顶部左边是连接状态，右边是连接和重新连接；连接前不显示黑框。
-export function TerminalSession({ url, deps = [], beforeConnect, intro, canConnect = true, picker, label, onSession }: SessionProps) {
+export function TerminalSession({ url, deps = [], beforeConnect, onElevation, intro, canConnect = true, picker, label, onSession }: SessionProps) {
   const [session, setSession] = useState(0);
   const [conn, setConn] = useState<Conn>({ kind: "idle" });
   const [ctrl, setCtrl] = useState(false);
@@ -95,7 +98,10 @@ export function TerminalSession({ url, deps = [], beforeConnect, intro, canConne
       if (typeof e.data === "string") {
         const msg = JSON.parse(e.data);
         if (msg.type === "exit") setConn({ kind: "ended", message: t.app.terminal.exited(msg.code) });
-        if (msg.type === "error") setConn({ kind: "failed", message: msg.message });
+        if (msg.type === "error") {
+          setConn({ kind: "failed", message: msg.message });
+          if (msg.elevation && onElevation) void onElevation().then((ok) => ok && setSession((n) => n + 1));
+        }
         return;
       }
       term.write(new Uint8Array(e.data));
@@ -241,6 +247,7 @@ export function TerminalView({ projectId, container, services, service: chosen, 
     <TerminalSession
       url={() => `/ws/exec?${new URLSearchParams({ project: projectId, container, service: selected })}`}
       deps={[projectId, container, selected]}
+      onElevation={() => requireElevation(t.common.privilegedElevate)}
       intro={t.app.terminal.intro}
       canConnect={!!selected}
       picker={picker}

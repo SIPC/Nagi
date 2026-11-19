@@ -26,6 +26,9 @@ import (
 //
 // 防止随手点了别人发起的请求（知道密码的人反复发起，等成员误点）：网页显示两位数字，成员要在手机上照着输入，
 // 数字签在确认里；输错 3 次这个请求作废。每个成员每种请求同时只有一个，10 分钟内最多发起 10 个。
+//
+// 登录的请求从发起到结束都记审计：发起（login_approval_requested）、确认、拒绝、数字输错作废（app_approval_code_failed）、
+// 过期没人确认（app_approval_expired）。连续 5 次没有通过时告警，和验证码连续输错一样。
 
 const (
 	// ElevatedByApp 是用手机的确认密钥做的高权限确认（sessions.elevated_by）。给自己留登录凭据的操作不认（passwordElevation）。
@@ -92,7 +95,18 @@ var (
 )
 
 // newApproval 登记一个请求，同一个成员、同一种、同一个来源的旧请求作废，别的来源的留着（有名额上限）。调用时不持有 s.app.mu。
-func (s *Service) newApproval(a *approval) (*approval, error) {
+func (s *Service) newApproval(ctx context.Context, a *approval) (*approval, error) {
+	a, lapsed, err := s.addApproval(a)
+	s.loginApprovalsLapsed(ctx, lapsed)
+	if err == nil && a.kind == ApprovalLogin {
+		// 到期时没人来取结果、也没有别的请求进来的话，靠这个定时器记下「没有等到确认」。
+		time.AfterFunc(approvalTTL+time.Second, func() { s.sweepApprovals(context.Background(), time.Now()) })
+	}
+	return a, err
+}
+
+// addApproval 是 newApproval 持锁的部分。lapsed 是顺带清掉的、没有等到确认的登录请求（过期的，和被这个请求顶掉的）。
+func (s *Service) addApproval(a *approval) (_ *approval, lapsed []approval, _ error) {
 	now := time.Now()
 	a.id = must(RandomToken())
 	var n [1]byte
@@ -112,7 +126,7 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 	times := slices.DeleteFunc(s.app.approvalTimes[key], func(t time.Time) bool { return now.Sub(t) > approvalWindow })
 	if len(times) >= approvalPerWindow {
 		s.app.approvalTimes[key] = times
-		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("发起得太频繁，请稍后重试"))
+		return nil, nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("发起得太频繁，请稍后重试"))
 	}
 	// 同一个成员、同一种、同一个来源的旧请求作废；别的来源发起的留着，手机上一起列出来，由成员按来源和数字认
 	// （否则别处的人能把成员自己正在等的请求顶掉）。每个成员同时最多 approvalMaxPending 个，满了就拒绝新的：
@@ -122,6 +136,9 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 	for id, old := range s.app.approvals {
 		switch {
 		case now.After(old.expires):
+			if old.unconfirmedLogin() {
+				lapsed = append(lapsed, *old)
+			}
 			delete(s.app.approvals, id)
 		case old.userID == a.userID && old.kind == a.kind && LimitKey(old.ip) == LimitKey(a.ip):
 			same = append(same, id)
@@ -132,9 +149,12 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 		}
 	}
 	if others >= approvalMaxPending {
-		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("等待手机确认的请求太多，请稍后重试或改用验证码"))
+		return nil, lapsed, connect.NewError(connect.CodeResourceExhausted, i18n.New("等待手机确认的请求太多，请稍后重试或改用验证码"))
 	}
 	for _, id := range same {
+		if old := s.app.approvals[id]; old.unconfirmedLogin() {
+			lapsed = append(lapsed, *old)
+		}
 		delete(s.app.approvals, id)
 	}
 	for k, ts := range s.app.approvalTimes {
@@ -144,7 +164,40 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 	}
 	s.app.approvalTimes[key] = append(times, now)
 	s.app.approvals[a.id] = a
-	return a, nil
+	return a, lapsed, nil
+}
+
+// unconfirmedLogin：登录的请求，到作废时还没有人在手机上答复。
+func (a *approval) unconfirmedLogin() bool {
+	return a.kind == ApprovalLogin && a.status == ApprovalPending
+}
+
+// sweepApprovals 清掉过期的请求，记下其中没有等到确认的登录请求。
+func (s *Service) sweepApprovals(ctx context.Context, now time.Time) {
+	var lapsed []approval
+	s.app.mu.Lock()
+	for id, a := range s.app.approvals {
+		if now.After(a.expires) {
+			if a.unconfirmedLogin() {
+				lapsed = append(lapsed, *a)
+			}
+			delete(s.app.approvals, id)
+		}
+	}
+	s.app.mu.Unlock()
+	s.loginApprovalsLapsed(ctx, lapsed)
+}
+
+// loginApprovalsLapsed 给没有等到确认的登录请求各记一条审计（app_approval_expired）：发起的人知道这个账号的密码，
+// 成员的 App 不在前台时，这是唯一的痕迹。连续多次时告警（loginApprovalFailed）。调用时不持有 s.app.mu。
+func (s *Service) loginApprovalsLapsed(ctx context.Context, lapsed []approval) {
+	for _, a := range lapsed {
+		at, aid, an := userActor(a.userID, a.username)
+		b, _ := json.Marshal(map[string]string{"kind": a.kind, "from": a.ip})
+		s.loginEvent(ctx, audit.Event{Category: audit.Security, Action: "app_approval_expired", ActorType: at, ActorID: aid, ActorName: an,
+			IP: a.ip, Result: audit.ResultFailed, Params: string(b)})
+		s.loginApprovalFailed(ctx, a.userID, a.username, a.ip)
+	}
 }
 
 func (s *Service) hasPhone(ctx context.Context, userID int64) (bool, error) {
@@ -169,7 +222,7 @@ func (s *Service) BeginElevateApproval(ctx context.Context, ip, token string) (A
 	} else if !ok {
 		return Approval{}, errNoPhone
 	}
-	a, err := s.newApproval(&approval{userID: st.UserID, username: st.Username, kind: ApprovalElevate, sessionID: st.ID, ip: ip,
+	a, err := s.newApproval(ctx, &approval{userID: st.UserID, username: st.Username, kind: ApprovalElevate, sessionID: st.ID, ip: ip,
 		agent: ParseAgent(RequestMeta(ctx).UserAgent).String()})
 	if err != nil {
 		return Approval{}, err
@@ -263,11 +316,14 @@ func (s *Service) BeginLoginApproval(ctx context.Context, ip, username, password
 		return Approval{}, errNoPhone
 	}
 	ticket := must(RandomToken())
-	a, err := s.newApproval(&approval{userID: user.ID, username: user.Username, kind: ApprovalLogin, ticket: HashToken(ticket), ip: ip,
+	a, err := s.newApproval(ctx, &approval{userID: user.ID, username: user.Username, kind: ApprovalLogin, ticket: HashToken(ticket), ip: ip,
 		agent: ParseAgent(RequestMeta(ctx).UserAgent).String()})
 	if err != nil {
 		return Approval{}, err
 	}
+	// 发起就记一条：密码已经对了，之后有没有人确认都留有痕迹。
+	at, aid, an := userActor(user.ID, user.Username)
+	s.loginEvent(ctx, audit.Event{Action: "login_approval_requested", ActorType: at, ActorID: aid, ActorName: an, IP: ip})
 	return Approval{ID: a.id, Code: a.code, Ticket: ticket, Expires: a.expires}, nil
 }
 
@@ -288,14 +344,19 @@ func (s *Service) CompleteLoginApproval(ctx context.Context, ip, ticket string) 
 		return "", nil, errApprovalNotFound
 	}
 	status := a.status
+	var lapsed []approval
 	if now.After(a.expires) {
 		status = ApprovalExpired
+		if a.unconfirmedLogin() {
+			lapsed = append(lapsed, *a)
+		}
 	}
 	if status != ApprovalPending {
 		delete(s.app.approvals, a.id)
 	}
 	userID, username, device := a.userID, a.username, a.device
 	s.app.mu.Unlock()
+	s.loginApprovalsLapsed(ctx, lapsed)
 	if status != ApprovalApproved {
 		return status, nil, nil
 	}
@@ -391,10 +452,19 @@ func (s *Service) AppApprove(ctx context.Context, ip string, u User, req AppAppr
 	}
 	if subtle.ConstantTimeCompare([]byte(req.Code), []byte(a.code)) != 1 {
 		a.tries++
-		if a.tries >= approvalCodeTries {
+		voided := a.tries >= approvalCodeTries
+		if voided {
 			a.status = ApprovalDenied
 		}
+		username := a.username
 		s.app.mu.Unlock()
+		if voided {
+			// 数字输错到作废：多半是别人发起的请求，成员照着自己屏幕上的数字输。
+			event("app_approval_code_failed", kind, from, audit.ResultDenied)
+			if kind == ApprovalLogin {
+				s.loginApprovalFailed(ctx, u.ID, username, from)
+			}
+		}
 		return connect.NewError(connect.CodeInvalidArgument, i18n.New("数字不正确"))
 	}
 	code := a.code
