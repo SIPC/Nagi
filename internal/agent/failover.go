@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -380,6 +381,9 @@ type voteResult struct {
 	granted   int
 	grantedBy [][]byte                  // 投了票的各方的公钥
 	higher    *nagiv1.LeaseVoteResponse // 某一方告诉我们的更高轮次
+	// selfHigher 是某一方记着「票投给了本节点」的更高轮次（没有时为 0）：例如本节点调高轮次以后、
+	// 记下新轮次之前重启了，投票人记着的比本节点自己记着的新，按本节点的旧轮次续约时就不同意。
+	selfHigher uint64
 }
 
 // collect 并行向 others 要票。
@@ -399,16 +403,37 @@ func (a *agent) collect(ctx context.Context, self []byte, others []*nagiv1.Failo
 			defer mu.Unlock()
 			// 回复里的持有方不是另一个参与者时不算更高的轮次：被攻破的见证人回复「持有方是任意公钥 X」，
 			// 本节点会撤掉容器、把 X 登记成副本的源节点；回复「持有方是本节点自己」，本节点也会撤掉容器。
-			if resp.GetGranted() {
+			switch {
+			case resp.GetGranted():
 				r.granted++
 				r.grantedBy = append(r.grantedBy, m.GetKey())
-			} else if resp.GetEpoch() > epoch && isOtherParticipant(cfg, self, resp.GetHolder()) && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()) {
+			case resp.GetEpoch() > epoch && isOtherParticipant(cfg, self, resp.GetHolder()) && (r.higher == nil || resp.GetEpoch() > r.higher.GetEpoch()):
 				r.higher = resp
+			case resp.GetEpoch() > epoch && len(self) > 0 && bytes.Equal(resp.GetHolder(), self):
+				r.selfHigher = max(r.selfHigher, resp.GetEpoch())
 			}
 		}(m)
 	}
 	wg.Wait()
 	return r
+}
+
+// raisedEpoch 返回持有者这次续约以后该用的轮次（不用调时就是 epoch）。ok 是这次续约有没有拿到两票。
+//   - 某个投票人记着另一方更高的轮次，而那一方并没有拿到租约（本节点照样拿到了两票）：调到它之上。
+//     否则那个投票人一直不投给本节点，等另一方真挂了，本节点只剩一票，还会以为被那一方顶替了而停掉容器。
+//     没拿到两票时不调：那是本节点被顶替了，由调用方退为热备。
+//   - 某个投票人记着「票投给了本节点」、轮次比本节点记着的高：也调到它之上，下一次续约就能拿到这张票
+//     （投票人的票本来就投给本节点，同一方调高轮次照投，不涉及别人）。不调的话本节点一直续不上，最后被热备顶替。
+//     这时没拿到两票也调，除非同时有人记着另一方更高的轮次（本节点被顶替了）。
+func raisedEpoch(r voteResult, ok bool, epoch uint64) uint64 {
+	to := epoch
+	if ok && r.higher != nil && r.higher.GetEpoch() >= epoch && r.higher.GetEpoch() < math.MaxUint64 {
+		to = max(to, r.higher.GetEpoch()+1)
+	}
+	if r.selfHigher > epoch && r.selfHigher < math.MaxUint64 && (ok || r.higher == nil) {
+		to = max(to, r.selfHigher+1)
+	}
+	return to
 }
 
 // ---- 循环 ----
@@ -473,10 +498,12 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	if due {
 		sent := time.Now()
 		r := a.collect(ctx, me.GetKey(), []*nagiv1.FailoverParticipant{other, cfg.GetWitness()}, cfg, epoch)
-		self, _, _ := f.voter.Vote(id, participants(cfg), me.GetKey(), epoch, L)
+		self, voteFor, voteEpoch := f.voter.Vote(id, participants(cfg), me.GetKey(), epoch, L)
 		votes := r.granted
 		if self {
 			votes++
+		} else if voteEpoch > epoch && bytes.Equal(voteFor, me.GetKey()) {
+			r.selfHigher = max(r.selfHigher, voteEpoch)
 		}
 		f.mu.Lock()
 		st.renewed = true
@@ -485,18 +512,16 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		if ok {
 			st.leaseEnd = sent.Add(L)
 			st.everOK = true
-			// 某个投票人（例如见证人）记着另一方更高的轮次，而那一方并没有拿到租约（本节点照样拿到了两票）：
-			// 把自己的轮次调到它之上。否则那个投票人一直不投给本节点，等另一方真挂了，本节点只剩一票，
-			// 还会以为被那一方顶替了而停掉容器。
-			// 正在切回原节点时不调：那时投票人记着的更高轮次正是切回转让出去的那一轮。
-			if r.higher != nil && r.higher.GetEpoch() >= epoch && !bytes.Equal(r.higher.GetHolder(), me.GetKey()) && !st.failingBack {
-				st.epoch = r.higher.GetEpoch() + 1
-				st.nextRenew = now // 马上用新的轮次续约
-				_ = f.save(id, st)
-				a.log.Warn("有投票人记着更高的轮次，本节点调高轮次", "project", pid, "container", name, "epoch", st.epoch)
-			}
 		} else {
 			st.nextRenew = now.Add(2 * time.Second) // 续不上时尽快重试
+		}
+		// 正在切回原节点时不调：那时投票人记着的更高轮次正是切回转让出去的那一轮。
+		// 这一轮续约期间轮次被别处改过（例如已经退为热备）时也不调。
+		if to := raisedEpoch(r, ok, epoch); to > epoch && !st.failingBack && st.epoch == epoch && bytes.Equal(st.holder, me.GetKey()) {
+			st.epoch = to
+			st.nextRenew = now // 马上用新的轮次续约
+			_ = f.save(id, st)
+			a.log.Warn("有投票人记着更高的轮次，本节点调高轮次", "project", pid, "container", name, "epoch", st.epoch)
 		}
 		wasFenced := st.fenced
 		// 自动切回：记下原节点（A）从什么时候起一直在投票。
