@@ -8,25 +8,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-// 节点列表的顺序和占用（docs/android.md「节点列表」，算法同网页的 nodeUsage）。
+// 节点列表的占用（docs/android.md「节点列表」，算法同网页的 nodeUsage）。
 class NodesDataTest {
     private fun node(name: String, online: Boolean = true, pending: Boolean = false, cpu: Double = 10.0, mem: Double = 20.0, disk: Double = 30.0, cpus: Int = 4) =
         Node.newBuilder().setId(name).setName(name).setOnline(online).setPending(pending)
             .setInfo(NodeInfo.newBuilder().setCpus(cpus).setMemoryBytes(8L shl 30).setDiskBytes(100L shl 30))
             .setUsage(NodeUsage.newBuilder().setCpu(cpu).setMemory(mem).setDisk(disk))
             .build()
-
-    @Test
-    fun problemsFirstThenByName() {
-        val list = listOf(
-            node("b"),
-            node("a"),
-            node("full", disk = 95.0),
-            node("new", pending = true),
-            node("down", online = false),
-        )
-        assertEquals(listOf("down", "new", "full", "a", "b"), sortNodes(list).map { it.name })
-    }
 
     @Test
     fun cpuIsFoldedByCores() {

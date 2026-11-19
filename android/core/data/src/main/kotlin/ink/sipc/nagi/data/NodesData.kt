@@ -134,22 +134,9 @@ fun Node.usageInfo(): NodeUsageInfo? {
     )
 }
 
-/** 用量到这里算超过阈值（变红，排到前面），和网页的占用指示一样。 */
+/** 用量到这里算超过阈值（变红），和网页的占用指示一样。 */
 const val USAGE_DANGER = 0.9
 const val USAGE_WARNING = 0.75
-
-/**
- * 节点列表的顺序（docs/android.md「节点列表」）：有问题的排在前面：离线、待批准、用量超过阈值的，其余按名称。
- */
-fun sortNodes(nodes: List<Node>): List<Node> {
-    fun rank(n: Node) = when {
-        n.pending -> 1
-        !n.online -> 0
-        (n.usageInfo()?.max ?: 0.0) >= USAGE_DANGER -> 2
-        else -> 3
-    }
-    return nodes.sortedWith(compareBy<Node> { rank(it) }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }.thenBy { it.id })
-}
 
 /** 节点列表和自己的权限（决定入口）。 */
 data class NodeList(val nodes: List<Node>, val access: Access)
@@ -166,7 +153,8 @@ class NodesRepo(private val session: PanelSession) {
         val access = session.access()
         if (!access.can(Access.NODE_VIEW)) return NodeList(emptyList(), access)
         val nodes = session.rpc { c, h -> c.nodes.listNodes(ListNodesRequest.getDefaultInstance(), h) }.nodesList
-        return NodeList(sortNodes(nodes), access)
+        // 顺序和网页的节点页一样，用面板返回的顺序，不再排。
+        return NodeList(nodes, access)
     }
 
     /** 项目列表（节点页的「容器」）。没有「查看」权限时是空的。 */
