@@ -13,7 +13,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
-// v0.35.0#23：回复里「更高的轮次」的持有方不是参与者（A 或 B）时不算，demote 也再核对一次：
+// 回复里「更高的轮次」的持有方不是另一个参与者时不算（不是 A 或 B，或者就是本节点自己），demote 也再核对一次：
 // 被攻破的见证人不能让持有方撤掉容器、把任意公钥登记成副本的源节点。
 func TestFailoverIgnoresNonParticipantHolder(t *testing.T) {
 	key := func(b byte) []byte { k := make([]byte, 32); k[0] = b; return k }
@@ -34,15 +34,19 @@ func TestFailoverIgnoresNonParticipantHolder(t *testing.T) {
 		return out, nil
 	}}
 	others := []*nagiv1.FailoverParticipant{cfg.GetB(), cfg.GetWitness()}
-	for _, h := range [][]byte{X, W, nil} {
+	// 本节点是 A。见证人回复「持有方是 A」时也不算：A 不能因此撤掉自己的容器。
+	for _, h := range [][]byte{X, W, nil, A} {
 		witnessHolder = h
-		if r := a.collect(context.Background(), others, cfg, 5); r.higher != nil {
-			t.Fatalf("持有方 %x 不是参与者，不应该算更高的轮次", h[:min(len(h), 1)])
+		if r := a.collect(context.Background(), A, others, cfg, 5); r.higher != nil {
+			t.Fatalf("持有方 %x 不是另一个参与者，不应该算更高的轮次", h[:min(len(h), 1)])
 		}
 	}
 	witnessHolder = B
-	if r := a.collect(context.Background(), others, cfg, 5); r.higher == nil || r.higher.GetEpoch() != 100 {
+	if r := a.collect(context.Background(), A, others, cfg, 5); r.higher == nil || r.higher.GetEpoch() != 100 {
 		t.Fatal("持有方是另一个参与者时应该算更高的轮次")
+	}
+	if isOtherParticipant(cfg, A, A) || isOtherParticipant(cfg, A, X) || isOtherParticipant(cfg, A, W) || isOtherParticipant(cfg, A, nil) || !isOtherParticipant(cfg, A, B) || !isOtherParticipant(cfg, B, A) {
+		t.Fatal("isOtherParticipant 只认另一个参与者")
 	}
 
 	// demote 再核对一次：持有方不是参与者时什么都不改。

@@ -23,6 +23,12 @@
    curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh -s -- --standby <配对码>
    ```
 
+   服务器上有其他用户时，改用环境变量传配对码，配对码不会出现在进程参数中。先执行 `sudo -i` 切换到 root，再执行：
+
+   ```bash
+   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | NAGI_STANDBY=<配对码> sh
+   ```
+
 备用面板启动后自动连接主面板并开始同步，出现在主面板的「设置 → 备用面板」列表中。
 
 ## 提升为主面板

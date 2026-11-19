@@ -58,6 +58,9 @@ func serverCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 			log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+			standbyCode = flagOrEnv(standbyCode, standbyEnv)
+			// 读完就清掉，不传给内嵌节点启动的子进程。
+			os.Unsetenv(standbyEnv)
 
 			panelDir := filepath.Join(dataDir, "panel")
 			// 内嵌节点：配对来的面板（备用面板，以后提升了也一样）不带；第一个主面板带着，降为备用面板后也照常运行。
@@ -111,7 +114,7 @@ func serverCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noAgent, "no-agent", false, "只运行面板，不启动内嵌节点")
 	cmd.Flags().BoolVar(&noProxy, "no-proxy", false, "内嵌节点不启动 Caddy（仅用于开发）")
 	cmd.Flags().BoolVar(&newKey, "new-master-key", false, "面板主密钥确实丢了时使用：生成新的主密钥，清掉用旧密钥加密的数据")
-	cmd.Flags().StringVar(&standbyCode, "standby", "", "作为备用面板启动：主面板生成的配对码（数据目录须为空）")
+	cmd.Flags().StringVar(&standbyCode, "standby", "", "作为备用面板启动：主面板生成的配对码（数据目录须为空；建议改用环境变量 "+standbyEnv+"）")
 	cmd.Flags().BoolVar(&devAppKeys, "dev-app-keys", false, "开发模式：安卓 App 可以用软件密钥和模拟器添加（仅用于开发和测试）")
 	return cmd
 }
@@ -184,12 +187,19 @@ func enrollCmd() *cobra.Command {
 // 环境变量只有同一用户和 root 能读，所以安装脚本用它把令牌传给 nagi enroll。
 const tokenEnv = "NAGI_TOKEN"
 
+// standbyEnv 是传备用面板配对码的环境变量，道理和 tokenEnv 一样：配对码能换到面板的 CA、主密钥和整个数据库，
+// 写在进程参数里的话，同一台机器上的其他用户可以读到、抢在面板之前用掉。面板安装脚本用它传配对码。
+const standbyEnv = "NAGI_STANDBY"
+
 // tokenFromEnv 返回加入令牌：命令行给了 --token（旧的安装脚本、手动执行）就用它，否则读环境变量 NAGI_TOKEN。
-func tokenFromEnv(flag string) string {
+func tokenFromEnv(flag string) string { return flagOrEnv(flag, tokenEnv) }
+
+// flagOrEnv 返回命令行参数的值，没给时读环境变量 env。
+func flagOrEnv(flag, env string) string {
 	if flag != "" {
 		return flag
 	}
-	return strings.TrimSpace(os.Getenv(tokenEnv))
+	return strings.TrimSpace(os.Getenv(env))
 }
 
 // linkProxyCmd 是项目内网和项目连接的代理容器里运行的程序，由节点创建，不用手动运行。

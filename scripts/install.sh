@@ -19,7 +19,9 @@ VERSION=latest
 DATA_DIR=""
 PORT=""
 NO_AGENT=""
-STANDBY=""
+# 配对码可以用环境变量 NAGI_STANDBY 传，不出现在进程参数里。读完就清掉，不传给 Docker 安装脚本等子进程。
+STANDBY="${NAGI_STANDBY:-}"
+unset NAGI_STANDBY
 DOWNLOAD_URL="${NAGI_DOWNLOAD_URL:-}"
 DOCKER_MIRROR=""
 
@@ -30,7 +32,8 @@ usage() {
   --version <版本>        安装指定版本，例如 v0.1.0（默认最新版本）
   --port <端口>           面板端口（默认首次启动时随机选择）
   --no-agent              只运行面板，不带内嵌节点（面板单独放在一台不运行项目的机器上）
-  --standby <配对码>      作为备用面板安装（配对码在主面板「设置 → 备用面板」中生成）
+  --standby <配对码>      作为备用面板安装（配对码在主面板「设置 → 备用面板」中生成），
+                          也可用环境变量 NAGI_STANDBY 指定（不出现在进程参数里）
   --data-dir <目录>       数据目录（默认 /var/lib/nagi）
   --download-url <地址>   从该地址下载 nagi-linux-<架构> 和 SHA256SUMS（镜像或内网），
                           也可用环境变量 NAGI_DOWNLOAD_URL 指定
@@ -361,20 +364,36 @@ server_args() {
   ARGS="server --data-dir $DATA_DIR"
   [ -z "$PORT" ] || ARGS="$ARGS --port $PORT"
   [ -z "$NO_AGENT" ] || ARGS="$ARGS --no-agent"
-  [ -z "${1:-}" ] || ARGS="$ARGS --standby $1"
   printf '%s' "$ARGS"
 }
 
 if [ -z "$HAS_SYSTEMD" ]; then
   say ""
   say "未检测到 systemd，请以服务方式自行运行："
-  say "  $BIN $(server_args "$STANDBY")"
+  if [ -n "$STANDBY" ]; then
+    say "  NAGI_STANDBY=<配对码> $BIN $(server_args)"
+  else
+    say "  $BIN $(server_args)"
+  fi
   exit 0
 fi
 
+# 配对码不写进启动参数和服务配置（进程参数和 $UNIT 谁都能读），放在只有 root 能读的文件里，由 systemd 作为环境变量
+# NAGI_STANDBY 传给面板；配对成功后删掉。
+STANDBY_ENV="$DATA_DIR/standby.env"
+
+# write_unit 写服务配置；$1 不为空时是配对码。
 write_unit() {
   WANTS="network-online.target"
   [ -n "$NO_AGENT" ] || WANTS="$WANTS docker.service"
+  ENV_LINE=""
+  if [ -n "${1:-}" ]; then
+    mkdir -p "$DATA_DIR"
+    (umask 077 && printf 'NAGI_STANDBY=%s\n' "$1" >"$STANDBY_ENV")
+    ENV_LINE="EnvironmentFile=$STANDBY_ENV"
+  else
+    rm -f "$STANDBY_ENV"
+  fi
   cat >"$UNIT" <<EOF
 [Unit]
 Description=Nagi panel
@@ -382,7 +401,8 @@ After=$WANTS
 Wants=$WANTS
 
 [Service]
-ExecStart=$BIN $(server_args "${1:-}")
+$ENV_LINE
+ExecStart=$BIN $(server_args)
 Restart=always
 RestartSec=5
 LimitNOFILE=1048576
