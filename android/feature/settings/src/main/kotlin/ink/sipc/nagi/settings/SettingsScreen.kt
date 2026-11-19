@@ -475,6 +475,9 @@ private val licenses = listOf(
     "Connect Kotlin" to "Apache License 2.0",
     "Protocol Buffers" to "BSD 3-Clause License",
     "ZXing" to "Apache License 2.0",
+    "Termux terminal-emulator · terminal-view" to "Apache License 2.0",
+    "Sora Editor" to "GNU LGPL 2.1",
+    "TextMate grammars (Visual Studio Code)" to "MIT License",
 )
 
 /** 安装包签名证书的 SHA-256（小写十六进制，不分隔），和发版说明里的写法一样（apksigner --print-certs）。 */
