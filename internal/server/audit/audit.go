@@ -301,6 +301,9 @@ type Filter struct {
 	// SearchSkipNodes：操作者、对象是节点的记录，名称不参与搜索。查看者有看不到的节点时用：这些名称显示时会换成
 	// 「其他节点」，搜索匹配的却是原文，按有没有结果能一段一段拼出名称（2026-11-19-402545d#2）。
 	SearchSkipNodes bool
+	// SearchFilePaths 不为 nil 时，对象是文件、动作不在其中的记录，名称只按容器那一段匹配（对象名称是 <容器>:<路径>）：
+	// 查看者看不到这些记录的路径，显示时只留下容器，按原文匹配的话，按有没有结果能一段一段拼出路径。
+	SearchFilePaths []string
 	ParentID        int64
 	// Before 只返回 ID 比它小的（翻页）。
 	Before int64
@@ -380,7 +383,16 @@ func (f Filter) where() (string, []any) {
 			if !slices.Contains(SearchAll, c) {
 				continue
 			}
-			cond := c + ` LIKE ? ESCAPE '\'`
+			col := c
+			if c == "target_name" && f.SearchFilePaths != nil {
+				hidden := "target_type = 'file'"
+				if len(f.SearchFilePaths) > 0 {
+					hidden += " AND action NOT IN (" + placeholders(len(f.SearchFilePaths)) + ")"
+					a = append(a, anySlice(f.SearchFilePaths)...)
+				}
+				col = "(CASE WHEN " + hidden + " THEN " + fileContainerSQL + " ELSE target_name END)"
+			}
+			cond := col + ` LIKE ? ESCAPE '\'`
 			if f.SearchSkipNodes && c == "actor_name" {
 				cond = "(actor_type <> 'node' AND " + cond + ")"
 			}
@@ -410,6 +422,10 @@ func (f Filter) where() (string, []any) {
 	}
 	return " WHERE " + strings.Join(conds, " AND "), args
 }
+
+// fileContainerSQL 是文件操作的记录里文件所在的容器：对象名称以 :<路径> 结尾时去掉这一段，否则为空（和 api 的 fileContainer 一样）。
+const fileContainerSQL = "(CASE WHEN substr(target_name, -length(target_id) - 1) = ':' || target_id " +
+	"THEN substr(target_name, 1, length(target_name) - length(target_id) - 1) ELSE '' END)"
 
 func escapeLike(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)

@@ -43,7 +43,7 @@ export function useRun(projectId: string) {
       try {
         await consume();
       } catch (err) {
-        // 部署特权配置、把容器目录放到项目根目录以外等要先验证身份：面板在开始前就拒绝，验证后重新执行。
+        // 部署特权配置、回滚到特权版本、把容器目录放到项目根目录以外等要先验证身份：面板在开始前就拒绝，验证后重新执行。
         if (!isElevationRequired(err) || !(await requireElevation(t.common.privilegedElevate))) throw err;
         await consume();
       }

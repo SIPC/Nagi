@@ -65,6 +65,10 @@ func streamOp(ctx context.Context, out *connect.ServerStream[nagiv1.DeployEvent]
 	if err != nil && (errors.Is(err, spec.ErrInvalid) || errors.Is(err, projects.ErrNotFound) || errors.Is(err, projects.ErrConflict)) {
 		return toConnect(err)
 	}
+	// 开始前的权限检查没通过（例如回滚到特权配置要先验证身份）：作为接口的错误返回，界面据此弹出验证框后重试。
+	if ce := new(connect.Error); errors.As(err, &ce) && ce.Code() == connect.CodePermissionDenied {
+		return err
+	}
 	res := &nagiv1.DeployResult{Success: err == nil, Version: version}
 	if err != nil {
 		res.Error = errorText(i18n.FromContext(ctx), err)
@@ -243,7 +247,7 @@ func (s *projectService) ListVersions(ctx context.Context, req *connect.Request[
 func (s *projectService) Rollback(ctx context.Context, req *connect.Request[nagiv1.RollbackRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
-		return s.Projects.Rollback(ctx, m.GetProjectId(), m.GetContainer(), m.GetVersion(), m.GetRestoreData(), o)
+		return s.Projects.Rollback(ctx, m.GetProjectId(), m.GetContainer(), m.GetVersion(), m.GetRestoreData(), rollbackCheck(ctx), o)
 	})
 }
 
@@ -255,7 +259,7 @@ func (s *projectService) ListDeployments(ctx context.Context, req *connect.Reque
 func (s *projectService) RestoreDeployment(ctx context.Context, req *connect.Request[nagiv1.RestoreDeploymentRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
 	return streamOp(ctx, out, func(o projects.Output) (int64, error) {
-		return s.Projects.RestoreDeployment(ctx, m.GetProjectId(), m.GetDeploymentId(), o)
+		return s.Projects.RestoreDeployment(ctx, m.GetProjectId(), m.GetDeploymentId(), rollbackCheck(ctx), o)
 	})
 }
 

@@ -422,9 +422,46 @@ func (s *Service) rollbackJob(ctx context.Context, c store.Container, target int
 	return j, nil
 }
 
+// RollbackTarget 是回滚前交给调用方检查的一个容器：要回到的版本的配置和共享变量，以及容器正在运行的那一份
+// （Running 为 nil：容器还没有部署过）。
+type RollbackTarget struct {
+	Container     string
+	Config        *nagiv1.ContainerConfig
+	Shared        []*nagiv1.EnvVar
+	Running       *nagiv1.ContainerConfig
+	RunningShared []*nagiv1.EnvVar
+}
+
+// RollbackCheck 在拿着项目锁、开始部署前对每个要回滚的容器调用，返回错误就整个不执行（能不能回到这样的配置，见 api 的 rollbackCheck）。
+// 为 nil 时不检查。
+type RollbackCheck func(RollbackTarget) error
+
+// checkRollback 对每个要回滚的容器调用 check。
+func (s *Service) checkRollback(ctx context.Context, jobs []job, check RollbackCheck) error {
+	if check == nil {
+		return nil
+	}
+	for _, j := range jobs {
+		t := RollbackTarget{Container: j.c.Name, Config: j.cfg, Shared: j.shared}
+		v, err := s.deployed(ctx, j.c)
+		if err != nil {
+			return err
+		}
+		if v != nil {
+			if t.Running, t.RunningShared, err = s.versionData(*v); err != nil {
+				return err
+			}
+		}
+		if err := check(t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Rollback 回滚容器到某个版本：用它的配置、文件和镜像生成这个容器的一个新版本并部署。
 // restoreData 时，同时把运行数据恢复到这个版本被替换之前（需要有对应的部署前快照）。
-func (s *Service) Rollback(ctx context.Context, projectID, name string, target int64, restoreData bool, out Output) (int64, error) {
+func (s *Service) Rollback(ctx context.Context, projectID, name string, target int64, restoreData bool, check RollbackCheck, out Output) (int64, error) {
 	ctx = context.WithoutCancel(ctx)
 	l := s.lock(projectID)
 	l.Lock()
@@ -442,13 +479,16 @@ func (s *Service) Rollback(ctx context.Context, projectID, name string, target i
 		return 0, err
 	}
 	j.restoreData = restoreData
+	if err := s.checkRollback(ctx, []job{j}, check); err != nil {
+		return 0, err
+	}
 	out(i18n.T(ctx, "将容器 %s 回滚到版本 %d", name, target))
 	return s.runJobs(ctx, p, []job{j}, "rollback", 0, out)
 }
 
 // RestoreDeployment 回到某次部署时的状态：版本和那次记录不一样的容器都回滚到记录里的版本（各自生成新版本），
 // 作为一次一起部署执行。之后才加的容器不动。
-func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deploymentID int64, out Output) (int64, error) {
+func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deploymentID int64, check RollbackCheck, out Output) (int64, error) {
 	ctx = context.WithoutCancel(ctx)
 	l := s.lock(projectID)
 	l.Lock()
@@ -469,11 +509,13 @@ func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deplo
 	if err != nil {
 		return 0, err
 	}
+	// 检查通过前不输出：检查要求先验证身份时，界面验证后重新执行，不留下前一次的输出。
 	var jobs []job
+	var lines []string
 	for _, c := range rows {
 		target, ok := versions[c.Name]
 		if !ok {
-			out(i18n.T(ctx, "容器 %s 在该次部署之后才添加（或当时未部署），保持不变", c.Name))
+			lines = append(lines, i18n.T(ctx, "容器 %s 在该次部署之后才添加（或当时未部署），保持不变", c.Name))
 			continue
 		}
 		if c.DeployedVersion == target {
@@ -483,11 +525,17 @@ func (s *Service) RestoreDeployment(ctx context.Context, projectID string, deplo
 		if err != nil {
 			return 0, err
 		}
-		out(i18n.T(ctx, "容器 %s：版本 %d → 回到版本 %d", c.Name, c.DeployedVersion, target))
+		lines = append(lines, i18n.T(ctx, "容器 %s：版本 %d → 回到版本 %d", c.Name, c.DeployedVersion, target))
 		jobs = append(jobs, j)
 	}
 	if len(jobs) == 0 {
 		return 0, invalid("所有容器的版本已与该次部署时相同")
+	}
+	if err := s.checkRollback(ctx, jobs, check); err != nil {
+		return 0, err
+	}
+	for _, l := range lines {
+		out(l)
 	}
 	return s.runJobs(ctx, p, jobs, "restore", deploymentID, out)
 }

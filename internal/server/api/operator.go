@@ -12,6 +12,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/projects"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -120,6 +121,29 @@ func (s *projectService) checkPrivilegedDeploy(ctx context.Context, projectID st
 		}
 	}
 	return nil
+}
+
+// rollbackCheck：回滚和回到某次部署时的状态恢复的是以前部署过的配置，但容器现在运行的配置没有特权时，
+// 往它的目录和卷里写文件不要确认（见 checkPrivilegedWrite）。先回滚到没有特权的版本、写好文件，再回滚回特权版本，
+// 特权容器就会运行这些文件。所以要回到的版本有特权内容、又和正在运行的不同时，按保存配置的规则检查：
+// 没有「特权配置」权限的拒绝，有权限、还没确认的要求先验证身份。回到正在运行的同一份特权配置、回到没有特权的版本照常放行。
+// 有这项权限并且已经确认时返回 nil。
+func rollbackCheck(ctx context.Context) projects.RollbackCheck {
+	if !operatorLimited(ctx) {
+		return nil
+	}
+	u := auth.CurrentUser(ctx)
+	return func(t projects.RollbackTarget) error {
+		reasons, _ := spec.PrivilegeReasons(t.Config, t.Container)
+		if len(reasons) == 0 {
+			return nil
+		}
+		if r := t.Running; r != nil && sameCompose(r, t.Config, t.Container) && sameDirs(r, t.Config) && sameVars(r, t.Config) &&
+			proto.Equal(r.GetSource(), t.Config.GetSource()) && !spec.SharedEnvChanged(t.Config, t.Container, t.RunningShared, t.Shared) {
+			return nil
+		}
+		return privilegedDenied(u, adminOnlyConfig(reasons))
+	}
 }
 
 func sameCompose(a, b *nagiv1.ContainerConfig, container string) bool {

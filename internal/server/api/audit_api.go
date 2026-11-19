@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
@@ -14,6 +15,8 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -119,6 +122,8 @@ func (v auditViewer) restrict(f *audit.Filter) {
 	// 有看不到的节点时，操作者、对象是节点的记录不按名称匹配：名称显示时会换成「其他节点」，按原文匹配的话，
 	// 用很短的词反复搜就能把名称一段一段拼出来。别的记录照常按名称匹配，不看搜索的词是什么。
 	f.SearchSkipNodes = len(v.hidden) > 0
+	// 文件操作的记录，看不到路径的（见 entry）名称只按容器匹配，否则同样能把路径一段一段拼出来。
+	f.SearchFilePaths = v.fileActions()
 	if v.projects != nil {
 		f.Projects = v.projects
 	} else {
@@ -169,6 +174,10 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 		}
 		if e.Category == audit.Alert && !v.x.can(auth.PermAddresses) {
 			out.Params = hideEgressTarget(out.Params)
+		}
+		// 项目设置里别的权限管着的项（出站放行、内部端口、告警、快照）：参数里去掉，失败详情可能提到它们，也不给。
+		if p, hid := hideSettingsParams(e.Action, out.Params, v.x); hid {
+			out.Params, out.Error = p, ""
 		}
 		// 看不到的节点（A7）：对象、操作者（告警由节点发出）是节点的，按类型和 ID 判断，整个名称换成「其他节点」；
 		// 别的名称、报错和参数里只去掉节点的 ID。参数里的地址去掉（B9）。
@@ -241,6 +250,102 @@ func (v auditViewer) detail(e audit.Event) bool {
 	need, ok := detailPerms(e)
 	return !v.viewer && ok && v.x != nil && v.x.perms&need == need
 }
+
+// settingsParams 是项目设置的记录里各项要的权限，和项目接口回复里去掉的一样（见 cleanProject）：
+// 动作 → 参数里放设置的键 → 设置项 → 权限。MCP 的 update_project 把设置写在工具参数里（它调用的 UpdateProjectSettings 另记一条）。
+var settingsParams = map[string]struct {
+	key   string
+	perms map[string]auth.Perm
+}{
+	"UpdateProjectSettings": {"settings", projectSettingPerms},
+	"CreateProject":         {"settings", projectSettingPerms},
+	"mcp:update_project": {"arguments", map[string]auth.Perm{
+		"internal_ports": auth.PermNetwork, "egress_mode": auth.PermNetwork, "egress_allow": auth.PermNetwork,
+		"snapshot_limit": auth.PermSnapshots, "snapshots_enabled": auth.PermSnapshots, "snapshot_interval_minutes": auth.PermSnapshots,
+		"snapshot_times": auth.PermSnapshots, "snapshot_time_zone": auth.PermSnapshots,
+	}},
+}
+
+var projectSettingPerms = map[string]auth.Perm{
+	"internal_ports": auth.PermNetwork, "egress": auth.PermNetwork, "alert_rules": auth.PermAlerts,
+	"snapshot_interval_minutes": auth.PermSnapshots, "snapshot_limit": auth.PermSnapshots, "snapshot_schedule": auth.PermSnapshots,
+}
+
+// hideSettingsParams 去掉项目设置的参数里查看者没有相应权限的项，返回去掉以后的参数，以及有没有去掉。
+// 参数被截断过、读不出来时整个不给。不是项目设置的记录、查看者权限都有时原样返回。
+func hideSettingsParams(action, params string, x *access) (string, bool) {
+	s, ok := settingsParams[action]
+	if !ok || params == "" {
+		return params, false
+	}
+	all := true
+	for _, p := range s.perms {
+		all = all && x.can(p)
+	}
+	if all {
+		return params, false
+	}
+	var m map[string]any
+	dec := json.NewDecoder(strings.NewReader(params))
+	dec.UseNumber() // 修订号这类大整数不经过 float64
+	if dec.Decode(&m) != nil || m["truncated"] == true {
+		return "", true
+	}
+	sub, ok := m[s.key].(map[string]any)
+	if !ok {
+		return params, false
+	}
+	hid := false
+	if sub["truncated"] == true {
+		m[s.key], hid = map[string]any{"truncated": true}, true
+	} else {
+		for k, p := range s.perms {
+			if _, ok := sub[k]; ok && !x.can(p) {
+				delete(sub, k)
+				hid = true
+			}
+		}
+	}
+	if !hid {
+		return params, false
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "", true
+	}
+	return string(b), true
+}
+
+// fileActions 返回查看者看得到路径的文件操作（对象是文件的记录的动作），不在其中的只看得到容器。
+func (v auditViewer) fileActions() []string {
+	out := []string{}
+	for _, a := range fileActionNames() {
+		if v.detail(audit.Event{Action: a}) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// fileActionNames 是对象可能是文件的动作：请求里有 path 的接口（见 recordCallWith），加上不走 Connect 的下载和上传。
+// 只列 detailPerms 认得的几个服务，别的动作不在里面，按看不到路径处理。
+var fileActionNames = sync.OnceValue(func() []string {
+	out := []string{"DownloadVolumeFile", "UploadVolumeFile"}
+	for _, svc := range []string{nagiv1connect.ProjectServiceName, nagiv1connect.NodeServiceName, nagiv1connect.SettingsServiceName} {
+		d, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(svc))
+		sd, ok := d.(protoreflect.ServiceDescriptor)
+		if err != nil || !ok {
+			continue
+		}
+		for i := range sd.Methods().Len() {
+			m := sd.Methods().Get(i)
+			if m.Input().Fields().ByName("path") != nil {
+				out = append(out, string(m.Name()))
+			}
+		}
+	}
+	return out
+})
 
 // fileContainer 是文件操作的记录里文件所在的容器（对象名称是 <容器>:<路径>，不在容器里的文件为空）。
 func fileContainer(e audit.Event) string {
@@ -466,6 +571,9 @@ func (v auditViewer) activityEntry(e audit.Event, names auditNames) *nagiv1.Acti
 		e.Error = v.scrub(e.Error)
 		if e.Category == audit.Alert && !v.x.can(auth.PermAddresses) {
 			e.Params = hideEgressTarget(e.Params)
+		}
+		if _, hid := hideSettingsParams(e.Action, e.Params, v.x); hid {
+			e.Error = ""
 		}
 		if e.ActorType == "node" && !v.x.node(e.ActorID) {
 			e.ActorName = v.other
