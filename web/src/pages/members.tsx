@@ -117,8 +117,8 @@ function ScopePick({
   const picked = new Set(ids);
   const covered = (o: { labels: string[] }) => o.labels.some((l) => pickedLabels.includes(l));
   // 访问范围里还有、但已经没有项目（节点）用着的分组（标签），也列出来，才能取消。
-  const allLabels = [...labels, ...pickedLabels.filter((p) => !labels.some((l) => l.name === p)).map((name) => ({ name, count: 0 }))];
   const heading = "pt-1 text-[13px] leading-5 text-muted-foreground first:pt-0";
+  const allLabels = [...labels, ...pickedLabels.filter((p) => !labels.some((l) => l.name === p)).map((name) => ({ name, count: 0 }))];
   return (
     <Field label={label} help={hint}>
       <div className="grid">
@@ -520,7 +520,6 @@ function RoleForm({ role, grantable, onDone, onCancel }: { role?: Role; grantabl
     },
   });
   const allowed = new Set(grantable);
-  const heading = "pt-1 text-[13px] leading-5 text-muted-foreground first:pt-0";
   return (
     <form
       className="grid gap-4"
@@ -532,11 +531,12 @@ function RoleForm({ role, grantable, onDone, onCancel }: { role?: Role; grantabl
       <Field label={t.members.roleName} htmlFor="role-name">
         <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} required={!role?.builtin} placeholder={role?.builtin ? roleLabel({ builtin: role.builtin }) : undefined} maxLength={32} autoComplete="off" />
       </Field>
-      <Field label={t.members.permissions}>
-        <div role="group" aria-label={t.members.permissions} className={checkListClass}>
-          {(Object.keys(permissionGroups) as (keyof typeof permissionGroups)[]).map((g) => (
-            <div key={g} className="contents">
-              <div className={heading}>{t.members.permGroups[g]}</div>
+      {/* 权限按项目、节点、面板分组，每组两列，整个对话框一起滚动，不在框里再套一层滚动。 */}
+      <div role="group" aria-label={t.members.permissions} className="grid gap-4">
+        {(Object.keys(permissionGroups) as (keyof typeof permissionGroups)[]).map((g) => (
+          <fieldset key={g} className="grid gap-2">
+            <legend className="mb-2 text-sm leading-5 font-medium">{t.members.permGroups[g]}</legend>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-sm:grid-cols-1">
               {permissionGroups[g].map((p) => {
                 const adminOnly = adminOnlyPermissions.includes(p);
                 const [label, hint] = t.members.perms[p] ?? [p, ""];
@@ -553,9 +553,9 @@ function RoleForm({ role, grantable, onDone, onCancel }: { role?: Role; grantabl
                 );
               })}
             </div>
-          ))}
-        </div>
-      </Field>
+          </fieldset>
+        ))}
+      </div>
       {save.error && <Alert>{errorMessage(save.error)}</Alert>}
       <DialogActions>
         <Button variant="outline" onClick={onCancel}>
@@ -646,7 +646,7 @@ function RolesCard() {
           })}
         </List>
       )}
-      <Dialog open={adding} onClose={() => setAdding(false)} title={t.members.addRole}>
+      <Dialog open={adding} onClose={() => setAdding(false)} title={t.members.addRole} className="max-w-[560px]">
         {adding && (
           <RoleForm
             grantable={grantable}
@@ -658,7 +658,7 @@ function RolesCard() {
           />
         )}
       </Dialog>
-      <Dialog open={!!editing} onClose={() => setEditing(null)} title={t.members.editRole} description={editing ? roleLabel(editing) : undefined}>
+      <Dialog open={!!editing} onClose={() => setEditing(null)} title={t.members.editRole} description={editing ? roleLabel(editing) : undefined} className="max-w-[560px]">
         {editing && (
           <RoleForm
             role={editing}
