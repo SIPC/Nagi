@@ -144,6 +144,10 @@ export const fmtMs = (v: number) => {
 };
 // 上万的次数用紧凑写法（1.9 万次、239.3K），统计格放得下。数字和单位分开交给文案拼，中文的单位和「次」连写。
 const compactCount = new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 });
+// spanOf：时间从 t 开始、长 step 秒的点实际覆盖的秒数。节点按窗口里已经过去、且在查询范围内的部分算端口映射的速率
+// （见 docs/monitoring.md#存储），算合计时乘以这一段，不乘完整的步长：还没结束的最后一段、范围起点所在的第一段只算覆盖的部分。
+export const spanOf = (t: number, step: number, from: number, to: number) => Math.max(0, Math.min(t + step, to) - Math.max(t, from));
+
 // fmtErrorRate：错误率，没有请求时是「—」。
 export const fmtErrorRate = (errors: number, requests: number) => (requests > 0 ? `${((100 * errors) / requests).toFixed(1)}%` : "—");
 
@@ -511,8 +515,9 @@ function RouteMetrics({ name, data: reported, range, divided, empty, quiet }: { 
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   const get = (m: string) => data.get(m) ?? [];
-  const sum = (m: string) => get(m).reduce((acc, [, v]) => acc + v * r.step, 0);
-  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * r.step]);
+  const span = (t: number) => spanOf(t, r.step, now - r.seconds, now);
+  const sum = (m: string) => get(m).reduce((acc, [t, v]) => acc + v * span(t), 0);
+  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * span(t)]);
 
   const requests = sum("req");
   const errors = sum("5xx");
@@ -601,8 +606,9 @@ function L4RouteMetrics({ name, data, range, divided, empty }: { name: string; d
   const r = rangeOf(range);
   const now = Date.now() / 1000;
   const get = (m: string) => data.get(m) ?? [];
-  const sum = (m: string) => get(m).reduce((acc, [, v]) => acc + v * r.step, 0);
-  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * r.step]);
+  const span = (t: number) => spanOf(t, r.step, now - r.seconds, now);
+  const sum = (m: string) => get(m).reduce((acc, [t, v]) => acc + v * span(t), 0);
+  const counts = (m: string): Pt[] => get(m).map(([t, v]) => [t, v * span(t)]);
   const conns = sum("conn");
   const fails = sum("fail");
   const active = get("active").at(-1)?.[1];

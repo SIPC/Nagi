@@ -42,7 +42,7 @@ DELETE FROM subnets WHERE owner = ?;
 INSERT OR REPLACE INTO metrics_raw (series, ts, value) VALUES (?, ?, ?);
 
 -- name: AverageRaw :many
-SELECT series, CAST(avg(value) AS REAL) AS value FROM metrics_raw
+SELECT series, CAST(avg(value) AS REAL) AS value, count(*) AS samples FROM metrics_raw
 WHERE ts >= @from_ts AND ts < @to_ts GROUP BY series;
 
 -- name: InsertM5 :exec

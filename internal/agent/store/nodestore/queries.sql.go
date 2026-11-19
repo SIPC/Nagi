@@ -10,7 +10,7 @@ import (
 )
 
 const averageRaw = `-- name: AverageRaw :many
-SELECT series, CAST(avg(value) AS REAL) AS value FROM metrics_raw
+SELECT series, CAST(avg(value) AS REAL) AS value, count(*) AS samples FROM metrics_raw
 WHERE ts >= ?1 AND ts < ?2 GROUP BY series
 `
 
@@ -20,8 +20,9 @@ type AverageRawParams struct {
 }
 
 type AverageRawRow struct {
-	Series string
-	Value  float64
+	Series  string
+	Value   float64
+	Samples int64
 }
 
 func (q *Queries) AverageRaw(ctx context.Context, arg AverageRawParams) ([]AverageRawRow, error) {
@@ -33,7 +34,7 @@ func (q *Queries) AverageRaw(ctx context.Context, arg AverageRawParams) ([]Avera
 	items := []AverageRawRow{}
 	for rows.Next() {
 		var i AverageRawRow
-		if err := rows.Scan(&i.Series, &i.Value); err != nil {
+		if err := rows.Scan(&i.Series, &i.Value, &i.Samples); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

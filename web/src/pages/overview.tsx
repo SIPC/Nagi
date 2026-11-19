@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, orOther, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
-import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, type MetricRange } from "@/components/metrics";
+import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, spanOf, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status, Table, Td, Th } from "@/components/ui";
@@ -700,9 +700,10 @@ export function OverviewPage() {
     queryFn: async () => {
       const parts = await Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "r:", from: ago(86400), step: BigInt(routeStep) }).catch(() => null)));
       const totals = new Map<string, number>();
+      const end = Date.now() / 1000;
       for (const p of parts) {
         for (const s of p?.series ?? []) {
-          inc(totals, s.name, s.values.reduce((sum, v) => sum + v * routeStep, 0));
+          inc(totals, s.name, s.values.reduce((sum, v, i) => sum + v * spanOf(Number(s.times[i]), routeStep, end - 86400, end), 0));
         }
       }
       return totals;
