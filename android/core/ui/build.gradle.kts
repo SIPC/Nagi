@@ -30,5 +30,8 @@ dependencies {
     // 终端：Termux 的解析和绘制（Apache 2.0），连接由 App 自己接（见 Terminal.kt）。
     api(libs.termux.terminal.emulator)
     implementation(libs.termux.terminal.view)
+    // 编辑器：Sora Editor（LGPL-2.1，以库的方式引用），语法着色用 TextMate 语法（assets/textmate，取自 VS Code，MIT）。
+    implementation(libs.sora.editor)
+    implementation(libs.sora.textmate)
     testImplementation(libs.junit)
 }
