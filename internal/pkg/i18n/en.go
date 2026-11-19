@@ -979,5 +979,6 @@ var en = map[string]string{
 	"这个账号没有开启两步验证，直接登录即可":        "Two-step verification is off for this account. Just sign in",
 	"登录请求在手机上被拒绝":                "A sign-in request was denied on a phone",
 	"账号 %s 的登录请求在手机 %s 上被拒绝。发起的人知道这个账号的密码，请尽快更改密码。来源：%s": "A sign-in request for account %s was denied on phone %s. Whoever started it knows the password. Change it soon. Source: %s",
+	"等待手机确认的请求太多，请稍后重试或改用验证码":                            "Too many requests are waiting for phone confirmation. Try again later or use a code",
 	"数字不正确": "Incorrect number",
 }

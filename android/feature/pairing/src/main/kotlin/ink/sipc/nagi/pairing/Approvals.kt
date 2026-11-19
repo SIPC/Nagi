@@ -1,5 +1,6 @@
 package ink.sipc.nagi.pairing
 
+import ink.sipc.nagi.ui.rowClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -63,8 +64,67 @@ fun ApprovalPrompts(session: PanelSession) {
             }
         }
     }
-    val current = pending.firstOrNull { it.id !in ignored } ?: return
-    ApprovalDialog(session, current, onDone = { pending = pending.filter { it.id != current.id } }, onIgnore = { ignored = ignored + current.id })
+    val waiting = pending.filter { it.id !in ignored }
+    if (waiting.isEmpty()) return
+    // 同时有几个请求（不同的来源各发起了一个）时先列出来让成员选自己发起的那个，不直接弹最早的：
+    // 别处知道密码的人先发一个，成员照自己屏幕上的数字输进去，输的就是别人的请求（2026-11-19-402545d#3）。
+    var chosen by remember { mutableStateOf<String?>(null) }
+    val current = waiting.firstOrNull { it.id == chosen } ?: waiting.singleOrNull()
+    if (current == null) {
+        ApprovalChooser(session, waiting, onPick = { chosen = it.id }, onIgnore = { ignored = ignored + waiting.map { it.id } }, onDenied = { ids -> pending = pending.filter { it.id !in ids } })
+        return
+    }
+    ApprovalDialog(
+        session, current,
+        onDone = { pending = pending.filter { it.id != current.id }; chosen = null },
+        onIgnore = { ignored = ignored + current.id; chosen = null },
+    )
+}
+
+/** 几个请求同时在等：写明各自的种类、来源和发起时间，点一个进去确认；「全部拒绝」把它们都拒绝掉。 */
+@Composable
+private fun ApprovalChooser(session: PanelSession, list: List<AppApproval>, onPick: (AppApproval) -> Unit, onIgnore: () -> Unit, onDenied: (List<String>) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    val fmt = remember { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()) }
+    Dialog(
+        onDismissRequest = { if (!busy) onIgnore() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+    ) {
+        val shape = RoundedCornerShape(12.dp)
+        val c = NagiTheme.colors
+        Column(
+            Modifier.padding(horizontal = 24.dp).widthIn(max = 420.dp).fillMaxWidth().shadow(16.dp, shape).background(c.card, shape).padding(20.dp),
+        ) {
+            Text(stringResource(R.string.approval_many_title, list.size), style = NagiTheme.type.section, color = c.foreground)
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.approval_many_text), style = NagiTheme.type.body, color = c.mutedForeground)
+            Spacer(Modifier.height(8.dp))
+            list.forEach { a ->
+                Column(Modifier.fillMaxWidth().rowClickable({ if (!busy) onPick(a) }).padding(vertical = 10.dp)) {
+                    Text(
+                        stringResource(if (a.kind == "login") R.string.approval_login_title else R.string.approval_elevate_title) + " · " +
+                            fmt.format(java.util.Date(a.createdAt.seconds * 1000)),
+                        style = NagiTheme.type.body, color = c.foreground,
+                    )
+                    Text(listOf(a.ip, a.agent).filter { it.isNotEmpty() }.joinToString(" · "), style = NagiTheme.type.mono, color = c.mutedForeground)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            NagiButton(
+                stringResource(R.string.approval_deny_all),
+                {
+                    busy = true
+                    scope.launch {
+                        val done = list.filter { runCatching { session.denyApproval(it.id) }.isSuccess }.map { it.id }
+                        busy = false
+                        onDenied(done)
+                    }
+                },
+                Modifier.fillMaxWidth(), variant = ButtonVariant.Outline, loading = busy,
+            )
+        }
+    }
 }
 
 @Composable
@@ -113,6 +173,7 @@ private fun ApprovalDialog(session: PanelSession, a: AppApproval, onDone: () -> 
             Spacer(Modifier.height(8.dp))
             Text(listOf(a.ip, a.agent).filter { it.isNotEmpty() }.joinToString(" · "), style = NagiTheme.type.mono, color = c.foreground)
             Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.approval_account, session.panel.displayName.ifEmpty { session.panel.username }), style = NagiTheme.type.secondary, color = c.mutedForeground)
             Text(stringResource(R.string.approval_not_you), style = NagiTheme.type.secondary, color = c.mutedForeground)
             Spacer(Modifier.height(16.dp))
             NagiTextField(

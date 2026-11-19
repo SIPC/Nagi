@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -322,5 +323,39 @@ func TestPhoneApprovalSources(t *testing.T) {
 	// 别处的额度用完了，自己这边照常能发起。
 	if _, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse"); err != nil {
 		t.Errorf("自己这边的额度不该被占掉：%v", err)
+	}
+}
+
+// 别的来源再多也顶不掉已有的请求：满了就拒绝新的（2026-11-19-402545d#3）。
+func TestPhoneApprovalFullKeepsExisting(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := WithMeta(context.Background(), Meta{IP: approvalIP, UserAgent: chromeUA})
+	keys := newAppKeys()
+	device := h.pairSoftware("op", keys)
+	phone := h.appUserOf(device, keys)
+	op, _ := h.q.GetUserByUsername(ctx, "op")
+	if err := h.q.SetTOTP(ctx, store.SetTOTPParams{TotpSecret: base64.StdEncoding.EncodeToString([]byte("JBSWY3DPEHPK3PXP")), ID: op.ID}); err != nil {
+		t.Fatal(err)
+	}
+	mine, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 手机上已经确认、网页还没来取。
+	req := AppApprovalRequest{ID: mine.ID, Code: mine.Code, Host: appHost, Signature: signApproval(keys.confirm, device, mine.ID, ApprovalLogin, mine.Code)}
+	if err := h.s.AppApprove(ctx, approvalIP, phone, req, appHosts); err != nil {
+		t.Fatal(err)
+	}
+	rejected := 0
+	for i := 0; i < approvalMaxPending+3; i++ {
+		if _, err := h.s.BeginLoginApproval(ctx, fmt.Sprintf("203.0.%d.9", 100+i), "op", "correct horse"); connect.CodeOf(err) == connect.CodeResourceExhausted {
+			rejected++
+		}
+	}
+	if rejected == 0 {
+		t.Error("来源太多时应该拒绝新的请求")
+	}
+	if st, cookie, err := h.s.CompleteLoginApproval(ctx, approvalIP, mine.Ticket); err != nil || st != ApprovalApproved || cookie == nil {
+		t.Fatalf("已经确认的请求被别处的顶掉了：%q %v", st, err)
 	}
 }

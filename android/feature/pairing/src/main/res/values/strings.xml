@@ -41,4 +41,8 @@
     <string name="approval_deny">Deny</string>
     <string name="approval_confirm">Confirm</string>
     <string name="prompt_elevate_title">Verify identity</string>
+    <string name="approval_many_title">%1$d confirmation requests</string>
+    <string name="approval_many_text">Pick the one you started (check the source and time). An unknown source means someone knows your password.</string>
+    <string name="approval_deny_all">Deny all</string>
+    <string name="approval_account">Account: %1$s</string>
 </resources>

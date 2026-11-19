@@ -1,7 +1,9 @@
 package api
 
 import (
+	"connectrpc.com/connect"
 	"context"
+	"errors"
 	"google.golang.org/protobuf/proto"
 	"slices"
 	"sort"
@@ -382,5 +384,37 @@ func TestScrubEdges(t *testing.T) {
 		if got := hostAddress(addr); got != want {
 			t.Errorf("hostAddress(%q) = %v", addr, got)
 		}
+	}
+}
+
+// 报错里看不到的节点名换成「其他节点」，但请求里自己写了的词不换：否则填一个猜的名称、看它有没有被换掉，
+// 就能确认有没有这台节点（2026-11-19-402545d#1）。
+func TestScrubErrorNoOracle(t *testing.T) {
+	a := cleanTest(t)
+	ctx := context.Background()
+	x := memberAccess(auth.PresetOperator)
+	hidden := a.hiddenNames(ctx, x)
+	if len(hidden) == 0 {
+		t.Fatal("测试数据里应该有看不到的节点")
+	}
+	name := hidden[0]
+	offline := connect.NewError(connect.CodeUnavailable, errors.New("节点 "+name+" 离线"))
+	offline.Meta().Set("X-Test", "kept")
+	got := a.scrubError(ctx, x, offline, `{"projectId":"p1"}`)
+	if !strings.Contains(got.Error(), "节点 其他节点 离线") || connect.CodeOf(got) != connect.CodeUnavailable {
+		t.Errorf("节点名应该换掉、错误码保留：%v", got)
+	}
+	var ce *connect.Error
+	if !errors.As(got, &ce) || ce.Meta().Get("X-Test") != "kept" {
+		t.Error("响应头应该保留")
+	}
+	// 请求里写了这个词：有没有这台节点，报错都一样。
+	echo := connect.NewError(connect.CodeInvalidArgument, errors.New("权限 "+name+" 不存在"))
+	if got := a.scrubError(ctx, x, echo, `{"permissions":["`+name+`"]}`); !strings.Contains(got.Error(), "权限 "+name+" 不存在") {
+		t.Errorf("请求里自己写的词不该换：%v", got)
+	}
+	// 请求里只是别的词的一部分，不算写了。
+	if got := a.scrubError(ctx, x, offline, `{"name":"`+name+`-prod"}`); strings.Contains(got.Error(), "节点 "+name+" 离线") {
+		t.Errorf("只是别的词的一部分时照样要换：%v", got)
 	}
 }

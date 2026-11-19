@@ -41,4 +41,8 @@
     <string name="approval_deny">拒绝</string>
     <string name="approval_confirm">确认</string>
     <string name="prompt_elevate_title">验证身份</string>
+    <string name="approval_many_title">%1$d 个确认请求</string>
+    <string name="approval_many_text">选择你自己发起的那个（看来源和时间）。不认识的来源说明有人知道你的密码。</string>
+    <string name="approval_deny_all">全部拒绝</string>
+    <string name="approval_account">账号：%1$s</string>
 </resources>

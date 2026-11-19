@@ -115,23 +115,25 @@ func (s *Service) newApproval(a *approval) (*approval, error) {
 		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("发起得太频繁，请稍后重试"))
 	}
 	// 同一个成员、同一种、同一个来源的旧请求作废；别的来源发起的留着，手机上一起列出来，由成员按来源和数字认
-	// （否则别处的人能把成员自己正在等的请求顶掉）。每个成员同时最多 approvalMaxPending 个，满了丢最早的。
-	var mine []*approval
+	// （否则别处的人能把成员自己正在等的请求顶掉）。每个成员同时最多 approvalMaxPending 个，满了就拒绝新的：
+	// 不丢已有的，成员已经在等、或者手机上已经确认还没取走的请求不会被别处的顶掉（2026-11-19-402545d#3）。
+	others := 0
+	var same []string
 	for id, old := range s.app.approvals {
 		switch {
 		case now.After(old.expires):
 			delete(s.app.approvals, id)
 		case old.userID == a.userID && old.kind == a.kind && LimitKey(old.ip) == LimitKey(a.ip):
-			delete(s.app.approvals, id)
+			same = append(same, id)
 		case old.userID == a.userID:
-			mine = append(mine, old)
+			others++
 		}
 	}
-	if len(mine) >= approvalMaxPending {
-		slices.SortFunc(mine, func(x, y *approval) int { return x.created.Compare(y.created) })
-		for _, old := range mine[:len(mine)-approvalMaxPending+1] {
-			delete(s.app.approvals, old.id)
-		}
+	if others >= approvalMaxPending {
+		return nil, connect.NewError(connect.CodeResourceExhausted, i18n.New("等待手机确认的请求太多，请稍后重试或改用验证码"))
+	}
+	for _, id := range same {
+		delete(s.app.approvals, id)
 	}
 	for k, ts := range s.app.approvalTimes {
 		if len(ts) == 0 || now.Sub(ts[len(ts)-1]) > approvalWindow {

@@ -298,7 +298,10 @@ type Filter struct {
 	// SearchFields 是 Search 匹配的列，按查看者能看到的字段定（见 SearchViewer 等）。为空时匹配全部列（管理员）。
 	// 搜索不能匹配查看者看不到的列，否则按有没有结果就能逐字猜出隐藏的内容。
 	SearchFields []string
-	ParentID     int64
+	// SearchSkipNodes：操作者、对象是节点的记录，名称不参与搜索。查看者有看不到的节点时用：这些名称显示时会换成
+	// 「其他节点」，搜索匹配的却是原文，按有没有结果能一段一段拼出名称（2026-11-19-402545d#2）。
+	SearchSkipNodes bool
+	ParentID        int64
 	// Before 只返回 ID 比它小的（翻页）。
 	Before int64
 	Limit  int
@@ -374,10 +377,18 @@ func (f Filter) where() (string, []any) {
 		var or []string
 		var a []any
 		for _, c := range cols {
-			if slices.Contains(SearchAll, c) {
-				or = append(or, c+` LIKE ? ESCAPE '\'`)
-				a = append(a, like)
+			if !slices.Contains(SearchAll, c) {
+				continue
 			}
+			cond := c + ` LIKE ? ESCAPE '\'`
+			if f.SearchSkipNodes && c == "actor_name" {
+				cond = "(actor_type <> 'node' AND " + cond + ")"
+			}
+			if f.SearchSkipNodes && c == "target_name" {
+				cond = "(target_type <> 'node' AND " + cond + ")"
+			}
+			or = append(or, cond)
+			a = append(a, like)
 		}
 		if len(or) == 0 {
 			add("0")
