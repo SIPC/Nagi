@@ -20,6 +20,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -120,7 +123,11 @@ fun Roll(text: String, style: TextStyle, color: Color, modifier: Modifier = Modi
     val last = remember { arrayOf(text) }
     val up = text == last[0] || (text.numberOrNull() ?: 0.0) >= (last[0].numberOrNull() ?: 0.0)
     SideEffect { last[0] = text }
-    Row(if (reduced) modifier else modifier.animateContentSize(tween(Motion.ROLL, easing = Motion.Enter))) {
+    // 每一位是单独的 Text，无障碍里合成一个节点读整段文字：位数多时节点少很多，开着无障碍服务（例如系统截屏）时每帧不必重算这么多。
+    Row(
+        (if (reduced) modifier else modifier.animateContentSize(tween(Motion.ROLL, easing = Motion.Enter)))
+            .clearAndSetSemantics { this.text = AnnotatedString(text) },
+    ) {
         val n = text.length
         text.forEachIndexed { i, ch ->
             // 按从右数第几位做 key：位数变了，个位还是个位。
