@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/SIPC/nagi/internal/agent/fileops"
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
@@ -30,6 +31,11 @@ func openDirRoot(dir string) (*os.Root, error) {
 	return os.OpenRoot(dir)
 }
 
+// walkRoot 遍历根 root。读目录时用 fileops.OpenDir：容器把目录换成管道时报错，不会卡在打开上。
+func walkRoot(root *os.Root, fn fs.WalkDirFunc) error {
+	return fs.WalkDir(fileops.RootFS(root), ".", fn)
+}
+
 // syncDir 让 dst 变成 src 的内容：删掉 dst 里不在保留路径中的所有东西，再复制 src。
 // 保留路径在 dst 里已经存在时，src 里的这部分被忽略，以 dst 现有内容为准；
 // 还不存在时（例如第一次部署），用 src 里的内容初始化。
@@ -46,7 +52,7 @@ func syncDir(src, dst string, preserve []string, onLine func(string)) error {
 // syncRoot 和 syncDir 一样，目标是已经打开的根。
 func syncRoot(root *os.Root, src string, preserve []string, onLine func(string)) error {
 	// 1. 清理旧文件。WalkDir 不跟随符号链接，链接本身会被删掉。
-	err := fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+	err := walkRoot(root, func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -213,7 +219,7 @@ func removeSymlinks(dir string) error {
 		return err
 	}
 	defer root.Close()
-	return fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+	return walkRoot(root, func(rel string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

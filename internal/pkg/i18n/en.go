@@ -532,6 +532,7 @@ var en = map[string]string{
 	"文件超过 1 MB，请使用上传":                            "The file is larger than 1 MB. Upload it instead",
 	"同名文件已存在":                                    "A file with this name already exists",
 	"文件已被修改":                                     "The file has changed",
+	"节点没有挂载 /proc，无法安全读取文件":                      "/proc isn't mounted on the node, so files can't be read safely",
 	"备份不存在":                                      "Backup not found",
 	"不能删除根目录或一级目录":                               "The root directory and top-level directories can't be deleted",
 	"请输入名称确认":                                    "Enter the name to confirm",

@@ -95,6 +95,33 @@ func TestOpenRegularRejectsSwappedSpecial(t *testing.T) {
 	}
 }
 
+// 没有挂载 /proc 时拒绝读取，不退回直接打开。
+func TestOpenRegularWithoutProc(t *testing.T) {
+	old := procFD
+	procFD = filepath.Join(t.TempDir(), "no-proc") + "/"
+	t.Cleanup(func() { procFD = old })
+	dir := t.TempDir()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("AAAA"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := root.Lstat("f")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, ok, err := OpenRegular(root, "f", info)
+	if f != nil {
+		f.Close()
+	}
+	if ok || !errors.Is(err, errNoProc) {
+		t.Fatalf("没有 /proc 时应该拒绝读取：ok=%v err=%v", ok, err)
+	}
+}
+
 // 目录被换成管道时，OpenDir 和经 RootFS 的遍历报错，不卡住。
 func TestOpenDirRejectsFIFO(t *testing.T) {
 	dir := t.TempDir()
