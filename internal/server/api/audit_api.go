@@ -172,6 +172,12 @@ func (v auditViewer) entry(e audit.Event, names auditNames) *nagiv1.AuditEvent {
 		}
 		out.Error = v.scrub(out.Error)
 		out.Params = v.scrub(stripAddressParams(out.Params))
+		// MCP 调用的记录：失败详情是工具返回的文字，参数是工具的原始参数（节点可以按名称写），都没有标记。
+		// 有看不到的节点时不给失败详情，参数里和节点有关的键去掉；它下面的接口调用记录带着按标记换过的详情。
+		if e.Category == audit.MCP && len(v.hidden) > 0 {
+			out.Error = ""
+			out.Params = stripParams(out.Params, func(k string) bool { return strings.Contains(strings.ToLower(k), "node") || addressParam(k) })
+		}
 	}
 	return out
 }
@@ -184,7 +190,10 @@ func addressParam(key string) bool {
 }
 
 // stripAddressParams 去掉 JSON 参数里地址类的键（包括嵌套的），不是 JSON 对象时原样返回。
-func stripAddressParams(params string) string {
+func stripAddressParams(params string) string { return stripParams(params, addressParam) }
+
+// stripParams 去掉 JSON 参数里 drop 认为要去掉的键（包括嵌套的），不是 JSON 对象时原样返回。
+func stripParams(params string, drop func(key string) bool) string {
 	if params == "" || params[0] != '{' {
 		return params
 	}
@@ -197,7 +206,7 @@ func stripAddressParams(params string) string {
 		switch t := v.(type) {
 		case map[string]any:
 			for k, x := range t {
-				if addressParam(k) {
+				if drop(k) {
 					delete(t, k)
 				} else {
 					t[k] = strip(x)

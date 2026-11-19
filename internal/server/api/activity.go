@@ -275,13 +275,25 @@ func errorResult(err error) string {
 
 // rawError 让 activityLog 拿到清理之前的报错：scopeCheck 在里面一层，返回给成员的报错已经把他看不到的节点
 // 换成了「其他节点」，审计里要记原来的。
-type rawError struct{ err error }
+type rawError struct {
+	err error
+	// stream 是流式操作（部署、迁移等）在结果里返回的失败（见 streamOp）：发给浏览器的是按语言拼好的文字，
+	// 审计里要记带节点标记的。
+	stream error
+}
 
 type rawErrorKey struct{}
 
 func noteRawError(ctx context.Context, err error) {
 	if h, ok := ctx.Value(rawErrorKey{}).(*rawError); ok {
 		h.err = err
+	}
+}
+
+// noteStreamError 记下流式操作在结果里返回的失败。
+func noteStreamError(ctx context.Context, err error) {
+	if h, ok := ctx.Value(rawErrorKey{}).(*rawError); ok {
+		h.stream = err
 	}
 }
 
@@ -430,6 +442,11 @@ func (l activityLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) con
 		result, failure := audit.ResultOK, w.failure
 		if failure != "" {
 			result = audit.ResultFailed
+			// 有原来的报错时记它（节点写成带 ID 的标记）：成员看到的文字是按他的范围换过的，直接记的话，
+			// 管理员的操作失败会把范围外节点的名称留在记录里，成员自己的失败又记不下真实的节点。
+			if raw.stream != nil {
+				failure = auditFailure(raw.stream)
+			}
 		}
 		if err != nil {
 			result, failure = errorResult(err), auditFailure(raw.or(err))
