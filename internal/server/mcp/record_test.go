@@ -66,7 +66,7 @@ func TestNodeArgKeys(t *testing.T) {
 // 记录里的节点参数写成 ID：按调用者看得到的节点对名称（不分大小写），重名的写各台的 ID，对不上的原样留着；
 // 别的参数不动，大整数不走样。
 func TestNodeArgIDs(t *testing.T) {
-	c, _, _ := nodeAdminCall(t)
+	c, fn, _ := nodeAdminCall(t)
 	in := `{"project":"shop","node":"Alpha","backup_node":"n2","entry_nodes":["beta","nowhere"],"peer":"panel","expected_revision":12345678901234567,"name":"alpha"}`
 	out, found := c.h.nodeArgIDs(c.ctx, []byte(in))
 	var got map[string]any
@@ -84,6 +84,22 @@ func TestNodeArgIDs(t *testing.T) {
 	}
 	if found["n1"] != "alpha" || found["n2"] != "beta" {
 		t.Errorf("换到的节点：%v", found)
+	}
+	// 重名的写成各台 ID 的数组：查看记录的成员看不到其中一台时，面板按 ID 去掉的是数组里的那一项，不会剩下「n1,」这样半截的值。
+	fn.nodes = []*nagiv1.Node{{Id: "n1", Name: "same"}, {Id: "n2", Name: "Same"}, {Id: "n3", Name: "other"}}
+	out, found = c.h.nodeArgIDs(c.ctx, []byte(`{"node":"same","entry_nodes":["same","other"]}`))
+	if !strings.Contains(string(out), `"node":["n1","n2"]`) || !strings.Contains(string(out), `"entry_nodes":[["n1","n2"],"n3"]`) || strings.Contains(string(out), "same") {
+		t.Errorf("重名的节点：%s", out)
+	}
+	if found["n1"] != "same" || found["n2"] != "Same" {
+		t.Errorf("重名时换到的节点：%v", found)
+	}
+	// 记录的对象：节点参数不是一个 ID 时不当成节点。
+	var rec audit.Event
+	c.h.o.Audit = func(_ context.Context, _ auth.User, e audit.Event, _ string, _ *audit.Collector) { rec = e }
+	c.h.record(c.ctx, c.u, tool{name: "get_node"}, []byte(`{"node":"same"}`), audit.ResultFailed, "x", 0, 0, nil)
+	if rec.TargetType != "tool" || strings.Contains(rec.Params, "n1,") {
+		t.Errorf("重名时的记录：%s %s %s", rec.TargetType, rec.TargetID, rec.Params)
 	}
 	// 拿不到节点列表时不留原文。
 	if out, _ := (&handler{}).nodeArgIDs(c.ctx, []byte(`{"project":"shop","node":"alpha"}`)); strings.Contains(string(out), "alpha") || !strings.Contains(string(out), "shop") {

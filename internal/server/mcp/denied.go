@@ -83,7 +83,8 @@ func nodeArg(key string) bool {
 }
 
 // nodeArgIDs 把参数里按名称写的节点换成节点 ID，返回换过的参数和换到的节点（ID → 名称）。
-// 名称按调用者看得到的节点列表对（和 findNode 一样不分大小写），重名的写成各台的 ID；对不上的原样留着：
+// 名称按调用者看得到的节点列表对（和 findNode 一样不分大小写），重名的写成各台 ID 的数组（每个 ID 单独一项，
+// 查看记录的成员看不到其中某台时，那一项整个去掉、成为空字符串，不会剩下半截）；对不上的原样留着：
 // 那是调用者自己写的文字（写错的名称，或者他看不到的节点）；拿不到节点列表时一律清空。记成 ID 以后，查看记录的成员看不到的节点由面板按 ID 去掉，
 // 名称不会留在记录里。
 func (h *handler) nodeArgIDs(ctx context.Context, args []byte) ([]byte, map[string]string) {
@@ -97,9 +98,10 @@ func (h *handler) nodeArgIDs(ctx context.Context, args []byte) ([]byte, map[stri
 	var list []*nagiv1.Node
 	loaded, listed := false, false
 	found := map[string]string{}
-	resolve := func(ref string) string {
+	// resolve 返回换成的值（ID，或者重名时 ID 的列表）和换没换。
+	resolve := func(ref string) (any, bool) {
 		if ref == "" {
-			return ref
+			return ref, false
 		}
 		if !loaded {
 			loaded = true
@@ -111,12 +113,12 @@ func (h *handler) nodeArgIDs(ctx context.Context, args []byte) ([]byte, map[stri
 		}
 		// 拿不到节点列表（调用者没有「查看节点」，或者一时出错）就对不了：不留原文，免得名称留在记录里。
 		if !listed {
-			return ""
+			return "", true
 		}
 		for _, n := range list {
 			if n.GetId() == ref {
 				found[n.GetId()] = n.GetName()
-				return ref
+				return ref, false
 			}
 		}
 		var ids []string
@@ -126,10 +128,13 @@ func (h *handler) nodeArgIDs(ctx context.Context, args []byte) ([]byte, map[stri
 				found[n.GetId()] = n.GetName()
 			}
 		}
-		if len(ids) == 0 {
-			return ref
+		switch len(ids) {
+		case 0:
+			return ref, false
+		case 1:
+			return ids[0], true
 		}
-		return strings.Join(ids, ",")
+		return ids, true
 	}
 	changed := false
 	var walk func(v any)
@@ -143,13 +148,13 @@ func (h *handler) nodeArgIDs(ctx context.Context, args []byte) ([]byte, map[stri
 				}
 				switch val := x.(type) {
 				case string:
-					if id := resolve(val); id != val {
+					if id, ok := resolve(val); ok {
 						t[k], changed = id, true
 					}
 				case []any:
 					for i, item := range val {
 						if s, ok := item.(string); ok {
-							if id := resolve(s); id != s {
+							if id, ok := resolve(s); ok {
 								val[i], changed = id, true
 							}
 						}

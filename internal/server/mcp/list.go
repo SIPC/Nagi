@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
@@ -425,7 +426,21 @@ func findNode(n *nagiv1.ListNodesResponse, ref string) (*nagiv1.Node, error) {
 	for i, x := range named {
 		ids[i] = x.GetId()
 	}
-	return nil, fmt.Errorf("%d nodes are named %q; pass the node ID instead (%s)", len(named), ref, strings.Join(ids, ", "))
+	return nil, ambiguousNodes(fmt.Sprintf("%d nodes are named", len(named)), ref, ids)
+}
+
+// ambiguousNodes 是按名称找到不止一台节点时的报错：「<what> "名称"; pass the node ID instead (ID, ID)」。
+// 报错会记进审计的失败详情，给看不到其中某台的成员看，所以名称和各台的 ID 都写成引用（见 nodeErrorf）：
+// 他看不到的那台的 ID 显示为「其他节点」，一台都看不到时名称也是。
+func ambiguousNodes(what, ref string, ids []string) error {
+	// what 里有容器名这类调用者写的文字，其中的 % 不能当成格式。
+	format := strings.ReplaceAll(what, "%", "%%") + ` "%s"; pass the node ID instead (` + strings.TrimSuffix(strings.Repeat("%s, ", len(ids)), ", ") + ")"
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, i18n.NodeRef(ids[0], ref))
+	for _, id := range ids {
+		args = append(args, i18n.NodeRef(id, id))
+	}
+	return nodeErrorf(format, args...)
 }
 
 // ---- 输出 ----

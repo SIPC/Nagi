@@ -144,21 +144,46 @@ func (a *API) RecordMCPDenied(ctx context.Context, u auth.User, tool, reason str
 }
 
 // RecordMCPCall 记一次 MCP 工具调用，再把它触发的接口调用挂在下面（见 docs/audit.md#mcp-调用）。
-// project 是工具参数里的项目，可能是名称也可能是 ID。
+// project 是工具参数里的项目，可能是名称也可能是 ID。只认调用者访问范围内的项目：参数是调用者自己写的，
+// 按全部项目找的话，写一个范围外的项目名称，这条记录就会挂到那个项目上，出现在它的活动记录里。
+// 和 MCP 找项目的办法一样：ID、网络名优先，再按名称（不分大小写）；范围内有几个项目同名时不猜，不挂到项目上。
 func (a *API) RecordMCPCall(ctx context.Context, u auth.User, e audit.Event, project string, children *audit.Collector) {
 	ctx = auth.WithUser(context.WithoutCancel(ctx), u)
 	if project != "" {
-		if rows, err := a.Q.ListProjects(ctx); err == nil {
-			for _, p := range rows {
-				if p.ID == project || p.Name == project {
-					e.ProjectID = p.ID
-					break
-				}
-			}
-		}
+		e.ProjectID = a.mcpProject(ctx, u, project)
 	}
 	auditActor(ctx, &e)
 	a.Audit.RecordWithChildren(ctx, e, children)
+}
+
+// mcpProject 找出 MCP 调用参数里的项目（名称或 ID）在调用者范围内对应的项目 ID，找不到时为空。
+func (a *API) mcpProject(ctx context.Context, u auth.User, ref string) string {
+	x, err := a.loadAccess(ctx, u)
+	if err != nil {
+		return ""
+	}
+	rows, err := a.Q.ListProjects(ctx)
+	if err != nil {
+		return ""
+	}
+	byName := ""
+	named := 0
+	for _, p := range rows {
+		if !x.project(p.ID) {
+			continue
+		}
+		if p.ID == ref || p.NetworkName == ref {
+			return p.ID
+		}
+		if strings.EqualFold(p.Name, ref) {
+			byName = p.ID
+			named++
+		}
+	}
+	if named != 1 {
+		return ""
+	}
+	return byName
 }
 
 // recordSessionEnd 记下终端会话的结束：时长、录制和各块的哈希（见 docs/audit.md#终端与命令录制）。

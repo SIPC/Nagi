@@ -87,7 +87,7 @@ func (c *call) backupNodeID(m *nagiv1.Container, ref string) (string, error) {
 	case 1:
 		return named[0], nil
 	}
-	return "", fmt.Errorf("%d backup nodes of container %s are named %q; pass the node ID instead (%s)", len(named), m.GetName(), ref, strings.Join(named, ", "))
+	return "", ambiguousNodes(fmt.Sprintf("%d backup nodes of container %s are named", len(named), m.GetName()), ref, named)
 }
 
 type SyncBackupArg struct {
