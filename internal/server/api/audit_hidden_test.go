@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/audit"
@@ -31,33 +33,45 @@ func TestAuditSearchHiddenFilePaths(t *testing.T) {
 	_, vc := h.login("viewer", "viewer-password-1")
 	_, oc := h.login("op", "op-password-1")
 	_, ac := h.login("admin", "admin-password-1")
-	n := func(c nagiv1connect.SettingsServiceClient, q string) int {
-		return len(h.list(c, &nagiv1.AuditFilter{Search: q}))
-	}
-	check := func(who string, c nagiv1connect.SettingsServiceClient, q string, want int) {
-		t.Helper()
-		if got := n(c, q); got != want {
-			t.Errorf("%s「%s」：%d 条，应该是 %d 条", who, q, got, want)
+
+	// 没有「审计日志」的成员不能搜索审计记录，只能查一个项目的告警，文件的记录不在其中。
+	for who, c := range map[string]nagiv1connect.SettingsServiceClient{"只读成员": vc, "操作员": oc} {
+		_, err := c.ListAuditEvents(ctx, connect.NewRequest(&nagiv1.ListAuditEventsRequest{Filter: &nagiv1.AuditFilter{Search: "payroll"}}))
+		if connect.CodeOf(err) != connect.CodePermissionDenied {
+			t.Errorf("%s搜索审计记录：%v", who, err)
+		}
+		if got := h.list(c, &nagiv1.AuditFilter{ProjectId: "p1", Categories: []string{audit.Alert}, Search: "payroll"}); len(got) != 0 {
+			t.Errorf("%s查项目告警搜到了文件的记录：%d 条", who, len(got))
 		}
 	}
-	check("只读成员按路径", vc, "payroll", 0)
-	check("只读成员按路径的片段", vc, "payroll-2026.x", 0)
-	check("只读成员按容器", vc, "web", 2)
-	check("只读成员按冒号", vc, ":", 0)
-	// 预置的操作员有「文件查看」「文件修改」，看得到路径。
-	check("操作员按路径", oc, "payroll", 3)
-	check("管理员按路径", ac, "payroll", 3)
-
-	// 有「查看配置」、只有「文件查看」：下载的路径看得到，删除的看不到。
-	if err := h.a.Q.SetRolePermissions(ctx, auth.ViewerRoleID, []string{"project.view", "project.config", "project.files.read"}); err != nil {
-		t.Fatal(err)
+	if got := len(h.list(ac, &nagiv1.AuditFilter{Search: "payroll"})); got != 3 {
+		t.Errorf("管理员按路径：%d 条，应该是 3 条", got)
 	}
-	check("只能查看文件的成员按路径", vc, "payroll", 2)
-	check("只能查看文件的成员按删除的路径", vc, "old-payroll", 0)
-	check("只能查看文件的成员按容器", vc, "web", 2)
-	for _, e := range h.list(vc, &nagiv1.AuditFilter{Search: "web"}) {
-		if e.GetAction() == "DeleteVolumeFile" && e.GetTargetName() != "web" {
-			t.Errorf("看不到路径时对象应该只留容器：%q", e.GetTargetName())
+
+	// 过滤本身：看不到路径的动作只按容器匹配，作为上面那道限制以外的兜底。
+	count := func(f audit.Filter) int {
+		t.Helper()
+		rows, err := h.a.view().List(ctx, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(rows)
+	}
+	for _, c := range []struct {
+		name string
+		f    audit.Filter
+		want int
+	}{
+		{"看不到任何路径，按路径", audit.Filter{Search: "payroll", SearchFilePaths: []string{}}, 0},
+		{"看不到任何路径，按路径的片段", audit.Filter{Search: "payroll-2026.x", SearchFilePaths: []string{}}, 0},
+		{"看不到任何路径，按冒号", audit.Filter{Search: ":", SearchFilePaths: []string{}}, 0},
+		{"看不到任何路径，按容器", audit.Filter{Search: "web", SearchFilePaths: []string{}}, 2},
+		{"只看得到下载的路径", audit.Filter{Search: "payroll", SearchFilePaths: []string{"DownloadVolumeFile"}}, 2},
+		{"只看得到下载的路径，按删除的路径", audit.Filter{Search: "old-payroll", SearchFilePaths: []string{"DownloadVolumeFile"}}, 0},
+		{"不限制", audit.Filter{Search: "payroll"}, 3},
+	} {
+		if got := count(c.f); got != c.want {
+			t.Errorf("%s：%d 条，应该是 %d 条", c.name, got, c.want)
 		}
 	}
 }
@@ -87,20 +101,27 @@ func TestAuditProjectSettingsParams(t *testing.T) {
 		TargetName: "update_project",
 		Params:     `{"perms":["project.view","project.manage"],"arguments":{"project":"a","name":"renamed","egress_allow":["192.168.1.20:5432"],"internal_ports":["db:6543"],"snapshot_limit":7}}`})
 
-	_, oc := h.login("op", "op-password-1")
-	_, ac := h.login("admin", "admin-password-1")
-	byAction := func(c nagiv1connect.SettingsServiceClient) map[string]*nagiv1.AuditEvent {
+	// 没有「审计日志」的成员只在项目的事件里看到这些记录（只有失败详情），有「审计日志」的和管理员一样。
+	// 这里直接用查看者检查清理规则：审计条目的参数和失败详情、项目事件的失败详情。
+	rows, err := h.a.view().List(ctx, audit.Filter{ProjectID: "p1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := memberAccess(auth.PresetOperator | auth.PermsOf(auth.PermProjectManage))
+	member := auditViewer{x: x, other: "其他节点", scrub: func(s string) string { return s }, refs: i18n.PlainRefs}
+	admin := auditViewer{admin: true, scrub: func(s string) string { return s }, refs: i18n.PlainRefs}
+	byAction := func(v auditViewer) map[string]*nagiv1.AuditEvent {
 		out := map[string]*nagiv1.AuditEvent{}
-		for _, e := range h.list(c, &nagiv1.AuditFilter{}) {
-			out[e.GetAction()] = e
+		for _, r := range rows {
+			out[r.Action] = v.entry(r, auditNames{})
 		}
 		return out
 	}
-	op := byAction(oc)
+	op := byAction(member)
 	for _, action := range []string{"UpdateProjectSettings", "mcp:update_project"} {
 		e := op[action]
 		if e == nil {
-			t.Fatalf("操作员看不到 %s 的记录", action)
+			t.Fatalf("没有 %s 的记录", action)
 		}
 		p := e.GetParams()
 		for _, hidden := range []string{"192.168.1.20", "6543", "egress", "internal_ports", "alert_rules"} {
@@ -117,7 +138,12 @@ func TestAuditProjectSettingsParams(t *testing.T) {
 			t.Errorf("%s：去掉了参数时不该给失败详情：%q", action, e.GetError())
 		}
 	}
-	adm := byAction(ac)
+	for _, r := range rows {
+		if r.Action == "UpdateProjectSettings" && strings.Contains(member.activityEntry(r, auditNames{}).GetDetail(), "192.168.1.20") {
+			t.Error("项目事件里不该有出站放行的地址")
+		}
+	}
+	adm := byAction(admin)
 	if p := adm["UpdateProjectSettings"].GetParams(); !strings.Contains(p, "192.168.1.20:5432") || !strings.Contains(p, "db:6543") {
 		t.Errorf("管理员看得到全部参数：%s", p)
 	}
