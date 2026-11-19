@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
@@ -40,9 +41,12 @@ fun Modifier.rowClickable(
     // 且给了 [selectionKey] 时，底色由外面画、换一行时滑过去（Selection.kt）。
     .clip(RoundedCornerShape(8.dp))
     .selectionRow(selectionKey, highlight)
-    // 能被选中的行（[selectionKey]）点了以后由选中的底色滑过来，不再另有一层按下的底色，免得目标那一行先亮一下。
-    .then(
-        if (selectionKey != null) Modifier.clickable(interactionSource = null, indication = null, enabled = enabled, role = role, onClick = onClick)
-        else Modifier.clickable(enabled = enabled, role = role, onClick = onClick),
-    )
+    // 外面有 SlidingSelection 时，能被选中的行（[selectionKey]）点了以后由选中的底色滑过来，不再另有一层按下的底色，
+    // 免得目标那一行先亮一下。没有时（竖屏，点了进下一页）照常有按下的底色。
+    .then(if (selectionKey != null) Modifier.selectionClickable(enabled, role, onClick) else Modifier.clickable(enabled = enabled, role = role, onClick = onClick))
     .padding(horizontal = inset)
+
+private fun Modifier.selectionClickable(enabled: Boolean, role: Role?, onClick: () -> Unit): Modifier = composed {
+    if (LocalSelection.current != null) clickable(interactionSource = null, indication = null, enabled = enabled, role = role, onClick = onClick)
+    else clickable(enabled = enabled, role = role, onClick = onClick)
+}
