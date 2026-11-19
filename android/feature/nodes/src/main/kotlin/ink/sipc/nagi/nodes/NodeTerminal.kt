@@ -76,6 +76,9 @@ sealed interface ShellState {
 class NodeTerminalViewModel(private val session: PanelSession, private val nodeId: String) : ViewModel() {
     var state by mutableStateOf<ShellState>(ShellState.Idle)
         private set
+    /** 连上过：之后断开了也留着屏幕上的内容。还没连上过时不显示终端区域，只写状态和原因。 */
+    var everOpened by mutableStateOf(false)
+        private set
     private var conn: ShellConnection? = null
     private var job: Job? = null
     /** 这次连接打开的目录（文件页的「在此打开终端」）。 */
@@ -134,6 +137,7 @@ class NodeTerminalViewModel(private val session: PanelSession, private val nodeI
                 }
                 // 连上之前视图可能已经量好了行列：告诉面板。
                 if (screen.cols > 0) conn?.resize(screen.cols, screen.rows)
+                everOpened = true
                 ShellState.Open
             } catch (e: CancellationException) {
                 throw e
@@ -251,7 +255,15 @@ internal fun TerminalTab(session: PanelSession, n: Node, cwd: String, modifier: 
                 modifier = Modifier.padding(horizontal = Dimens.pageHorizontal).padding(bottom = 8.dp),
             )
         }
-        if (vm.state != ShellState.Idle) {
+        val s = vm.state
+        if (!vm.everOpened && s is ShellState.Ended) {
+            // 还没连上就失败了：把原因写在中间，免得只看到一块空白的终端。
+            Text(
+                s.message, style = NagiTheme.type.body, color = if (s.failed) c.destructive else c.mutedForeground,
+                modifier = Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp),
+            )
+        }
+        if (vm.everOpened || s == ShellState.Open) {
             Box(Modifier.weight(1f).fillMaxWidth().background(c.background)) {
                 TerminalPane(
                     vm.screen, Modifier.fillMaxSize(),

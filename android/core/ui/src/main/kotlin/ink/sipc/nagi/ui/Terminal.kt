@@ -64,6 +64,8 @@ class TerminalScreen(private val send: (ByteArray) -> Unit, private val resize: 
     internal var view: TerminalCanvasView? = null
     private val main = Handler(Looper.getMainLooper())
     private var palette: IntArray? = null
+    /** 视图量出行列之前收到的输出（连上以后才显示终端区域）：解析器建好后补上。 */
+    private val early = java.io.ByteArrayOutputStream()
 
     /** 键盘上方的 Ctrl、Alt：按一下，作用于下一个键。 */
     var ctrl by mutableStateOf(false)
@@ -88,7 +90,11 @@ class TerminalScreen(private val send: (ByteArray) -> Unit, private val resize: 
     /** 远端的输出，任何线程都可以调用。 */
     fun output(bytes: ByteArray) {
         main.post {
-            val e = emulator ?: return@post
+            val e = emulator
+            if (e == null) {
+                if (early.size() < 1 shl 20) early.write(bytes)
+                return@post
+            }
             e.append(bytes, bytes.size)
             view?.onOutput()
         }
@@ -148,8 +154,14 @@ class TerminalScreen(private val send: (ByteArray) -> Unit, private val resize: 
     internal fun sizeTo(cols: Int, rows: Int) {
         val e = emulator
         if (e == null) {
-            emulator = TerminalEmulator(output, cols, rows, 2000, NoClient)
+            val e2 = TerminalEmulator(output, cols, rows, 2000, NoClient)
+            emulator = e2
             applyPalette()
+            if (early.size() > 0) {
+                val b = early.toByteArray()
+                early.reset()
+                e2.append(b, b.size)
+            }
         } else if (e.mColumns != cols || e.mRows != rows) {
             e.resize(cols, rows)
         } else {
