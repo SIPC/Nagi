@@ -92,7 +92,7 @@
 
 规则和网页一样（[ui.md](ui.md) 的「动画」）：有用途、简短、随时能打断；系统开了「移除动画」时（`isReducedMotion()`）位移和缩放归零，只剩淡入淡出。
 
-- `Roll(text, style, color)`：跳字，数字变了只滚动变了的那几位。数量、速率、关键数字都用它。
+- `Roll(text, style, color)`：跳字，数字变了只滚动变了的那几位，上下渐隐、略微模糊，不在行的边缘硬切。数量、速率、关键数字都用它。别的上下滚动的文字（例如竖向胶囊拖动时的名称）用同一套 `rollTransform`、`rollFadeEdges`、`rollBlur`。
 - `Modifier.autoHeight()`：内容高度变化时过渡到新高度（条目增减）。
 - `Collapse(visible) { … }`：整块展开、收起（提示条、折叠的内容）。
 - `rememberSlidingIndicator(selected)`：选中指示器从上一项滑过去（`PillNav`、`UnderlineTabs` 用的就是它）。`tail()` 给出后面那一小段拖尾，`PillNav` 画成渐变（最长 20）。
