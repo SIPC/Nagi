@@ -15,7 +15,6 @@ import android.os.Bundle
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.view.WindowManager
-import android.os.SystemClock
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -39,8 +38,8 @@ internal fun acceptsPairLinkOn(route: String?): Boolean = route == null || route
 
 internal const val KEEP_ALIVE_MS = 4 * 60_000L
 
-/** 距下一次换令牌还要等多久：上一次（[last]）之后满 4 分钟，已经过了就不等。 */
-internal fun keepAliveWait(now: Long, last: Long): Long = (KEEP_ALIVE_MS - (now - last)).coerceIn(0, KEEP_ALIVE_MS)
+/** 距下一次换令牌还要等多久：上一次真正换到令牌（[sinceMs] 之前）后满 4 分钟，已经过了就不等；时钟往回调过时最多等 4 分钟。 */
+internal fun keepAliveWait(sinceMs: Long): Long = (KEEP_ALIVE_MS - sinceMs).coerceIn(0, KEEP_ALIVE_MS)
 
 // BiometricPrompt 要 FragmentActivity。
 class MainActivity : FragmentActivity() {
@@ -135,18 +134,24 @@ class MainActivity : FragmentActivity() {
 
     /**
      * 在前台、已解锁时每 4 分钟用设备密钥换一次令牌，面板同时把解锁时间往后延，连续使用时不会反复要求验证
-     * （见 docs/android.md#解锁-app）。在后台不换取；回到前台时接着上一次算，已经过了 4 分钟就马上换，
-     * 频繁在 App 之间切换时也不会一直换不上。
+     * （见 docs/android.md#解锁-app）。在后台不换取；回到前台时接着上一次真正换到令牌的时间算（[TokenManager.sinceExchangeMs]，
+     * 记在令牌里，页面重建、别的请求换过的都算），已经过了 4 分钟就马上换，频繁在 App 之间切换时也不会一直换不上。
      */
     private fun keepAlive(app: NagiApplication) {
-        var last = SystemClock.elapsedRealtime()
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
-                    delay(keepAliveWait(SystemClock.elapsedRealtime(), last))
-                    last = SystemClock.elapsedRealtime()
-                    val session = app.graph.session.value ?: continue
-                    if (app.lock.locked.value != null) continue
+                    val session = app.graph.session.value
+                    if (session == null || app.lock.locked.value != null) {
+                        delay(KEEP_ALIVE_MS)
+                        continue
+                    }
+                    val wait = keepAliveWait(session.tokens.sinceExchangeMs())
+                    if (wait > 0) {
+                        // 等的期间别的请求可能已经换过，醒来再算一次。
+                        delay(wait)
+                        continue
+                    }
                     try {
                         session.tokens.invalidate()
                         session.tokens.token()
@@ -155,7 +160,8 @@ class MainActivity : FragmentActivity() {
                     } catch (e: DeviceRemovedException) {
                         app.graph.forget()
                     } catch (e: Exception) {
-                        // 连不上面板：下一次请求再换。
+                        // 连不上面板：下一次请求再换，这里隔 4 分钟再试。
+                        delay(KEEP_ALIVE_MS)
                     }
                 }
             }
