@@ -113,7 +113,7 @@ func richProject() *nagiv1.Project {
 		Containers: []*nagiv1.Container{{
 			Name: "web", NodeId: "n2", Dir: "/srv/web", Config: &nagiv1.ContainerConfig{Compose: "x"}, DeployKey: "k", WebhookToken: "w",
 			BackupNodeId: "n2", BackupNodeIds: []string{"n2", "n1"},
-			Backups:           []*nagiv1.BackupStatus{{TargetNodeId: "n2", TargetName: "b", LastError: "connect to b failed"}, {TargetNodeId: "n1", TargetName: "a"}},
+			Backups:           []*nagiv1.BackupStatus{{TargetNodeId: "n2", TargetName: "b", LastError: "connect to node-b failed"}, {TargetNodeId: "n1", TargetName: "a"}},
 			BackupReplicaDirs: map[string]string{"n2": "/data/r", "n1": "/data/s"},
 			Failover: &nagiv1.FailoverConfig{A: &nagiv1.FailoverParticipant{NodeId: "n2", Name: "b", Key: []byte{2}, Dir: "/srv/web"},
 				B: &nagiv1.FailoverParticipant{NodeId: "n1", Name: "a", Key: []byte{1}, Dir: "/srv/web"}},
@@ -126,7 +126,8 @@ func richProject() *nagiv1.Project {
 
 // 每项权限给和不给：回复里相应的字段去掉；范围外的节点 n2 一律看不到（名称、ID、地址、目录、公钥）。
 func TestCleanProjectByPermission(t *testing.T) {
-	a := cleanTest(t)
+	// 文字里只换够长的名称（见 nodeWord），n2 用一个不会误伤的名称。
+	a, _ := scopeTestAPI(t, `UPDATE nodes SET name = 'node-b' WHERE id = 'n2'`)
 	ctx := context.Background()
 	all := auth.AllPerms.Normalize()
 	cases := []struct {
@@ -297,12 +298,12 @@ func TestCleanSettingsAndStandbys(t *testing.T) {
 
 // 部署输出、副本里看不到的节点名换成「其他节点」（A6、A7）。事件按引用换，见 TestActivityByRef。
 func TestScrubNodeNames(t *testing.T) {
-	a := cleanTest(t)
+	a, _ := scopeTestAPI(t, `UPDATE nodes SET name = 'node-b' WHERE id = 'n2'`)
 	ctx := context.Background()
 	x := memberAccess(auth.PresetOperator)
-	ev := &nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: "迁移到 b 完成，a 上的容器已停止，b-2 不受影响"}}
+	ev := &nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: "迁移到 node-b 完成，a 上的容器已停止，node-b-2 不受影响"}}
 	a.filterReply(ctx, x, ev)
-	if got := ev.GetOutput(); got != "迁移到 其他节点 完成，a 上的容器已停止，b-2 不受影响" {
+	if got := ev.GetOutput(); got != "迁移到 其他节点 完成，a 上的容器已停止，node-b-2 不受影响" {
 		t.Errorf("部署输出：%s", got)
 	}
 	rep := &nagiv1.ListNodeReplicasResponse{Replicas: []*nagiv1.NodeReplica{

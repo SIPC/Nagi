@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -471,7 +472,7 @@ func (a *API) cleanFailoverStatus(ctx context.Context, x *access, st *nagiv1.Fai
 		if owner := a.meshNodes(ctx)[hex.EncodeToString(st.GetHolderKey())]; owner == "" || !x.node(owner) {
 			st.HolderKey, st.HolderName = nil, ""
 		}
-	} else if slices.Contains(a.nodeWords(ctx, x).hidden, st.GetHolderName()) {
+	} else if a.nodeWords(ctx, x).hiddenNames[st.GetHolderName()] {
 		// 记的是设置顶替时的名称，节点后来改了名也要认得。
 		st.HolderName = ""
 	}
@@ -682,8 +683,10 @@ func (a *API) nodeNames(ctx context.Context, x *access) map[string]string {
 // nodeWords 是节点在文字里可能出现的叫法：现在的名称、改名前用过的名称、节点上报的主机名。
 // 来自节点的文字（部署输出、同步和顶替的报错）里写的可能是其中任何一个。
 type nodeWords struct {
-	// hidden 是成员看不到的节点的叫法，长的在前。
+	// hidden 是成员看不到的节点在文字里要换的叫法，长的在前（不含太短的和常见词，见 nodeWord）。
 	hidden []string
+	// hiddenNames 是看不到的节点的全部叫法，用来比对整个字段（例如顶替的持有者名称），不用担心误伤。
+	hiddenNames map[string]bool
 	// visible 是他看得到的节点的叫法。
 	visible map[string]bool
 }
@@ -703,12 +706,17 @@ func (a *API) formerNodeNames(ctx context.Context) map[string][]string {
 	return out
 }
 
+// formerNamesMu 让记下原来的名称的「读出、改、写回」不会交错：两台节点同时改名时，后写的会盖掉先写的那份。
+var formerNamesMu sync.Mutex
+
 // rememberNodeName 在节点改名时记下原来的名称：以前的部署输出、同步和顶替的报错里写的还是它，
 // 对看不到这台节点的成员要照样换掉（见 scrubNodes）。已经移除的节点的记录顺手清掉。
 func (a *API) rememberNodeName(ctx context.Context, nodeID, old string) {
 	if old == "" {
 		return
 	}
+	formerNamesMu.Lock()
+	defer formerNamesMu.Unlock()
 	names := a.formerNodeNames(ctx)
 	if rows, err := a.Q.ListNodes(ctx); err == nil {
 		exists := map[string]bool{}
@@ -741,7 +749,7 @@ func (a *API) nodeWords(ctx context.Context, x *access) *nodeWords {
 	if x.words != nil {
 		return x.words
 	}
-	w := &nodeWords{visible: map[string]bool{}}
+	w := &nodeWords{visible: map[string]bool{}, hiddenNames: map[string]bool{}}
 	x.words = w
 	rows, err := a.Q.ListNodes(ctx)
 	if err != nil {
@@ -750,7 +758,13 @@ func (a *API) nodeWords(ctx context.Context, x *access) *nodeWords {
 	former := a.formerNodeNames(ctx)
 	hidden := map[string]bool{}
 	for _, r := range rows {
-		words := append([]string{r.Name}, former[r.ID]...)
+		visible := x.node(r.ID)
+		words := []string{r.Name}
+		// 改名前用过的名称只用来换看不到的节点的。看得到的节点的旧名称不算「看得到」：否则把自己的节点改成
+		// 一台隐藏节点的名称再改回来，这个名称就一直留在可见的那一侧，那台节点的名称再也不会被换掉。
+		if !visible {
+			words = append(words, former[r.ID]...)
+		}
 		// 主机名：在线的节点取最近一次上报的，另外加上数据库里存的那份（节点断开时存下）。
 		if a.Nodes != nil {
 			if c, err := a.Nodes.Peek(r.ID); err == nil {
@@ -762,10 +776,12 @@ func (a *API) nodeWords(ctx context.Context, x *access) *nodeWords {
 			words = append(words, info.GetHostname())
 		}
 		for _, word := range words {
+			if word != "" && !visible {
+				w.hiddenNames[word] = true
+			}
 			switch {
-			// localhost 不算：它在部署输出里到处都是，也说明不了是哪台节点。
-			case word == "" || strings.EqualFold(word, "localhost"):
-			case x.node(r.ID):
+			case !nodeWord(word):
+			case visible:
 				w.visible[word] = true
 			default:
 				hidden[word] = true
@@ -782,6 +798,37 @@ func (a *API) nodeWords(ctx context.Context, x *access) *nodeWords {
 		return w.hidden[i] < w.hidden[j]
 	})
 	return w
+}
+
+// commonWords 是不当作节点叫法的常见词（比较时不分大小写）：系统默认的主机名、常见的镜像名，
+// 以及部署输出和报错里常见的单词。节点叫这些名称时照样换的话，`Pulling ubuntu:22.04` 会变成
+// `Pulling 其他节点:22.04`，`error`、`failed` 这类词也会从别人的输出里消失；有「节点管理」的成员还能借改名、
+// 节点借上报的主机名这样做。这些词本来就说明不了是哪台节点，不换。
+var commonWords = func() map[string]bool {
+	m := map[string]bool{}
+	for _, w := range strings.Fields(`
+		localhost localdomain ubuntu debian centos fedora alpine rocky rockylinux almalinux alma rhel redhat oracle
+		arch archlinux manjaro opensuse suse gentoo nixos kali mint linux armbian raspberrypi raspbian openwrt
+		proxmox pve truenas unraid synology nas router server host node vps instance default docker
+		busybox nginx caddy redis mysql mariadb postgres postgresql mongo mongodb python golang java
+		error errors failed failure fail fatal warning warn info debug trace panic timeout unknown none null nil
+		true false yes done pulling pulled pull push building build created creating started starting running
+		stopped stopping exited removed removing healthy unhealthy waiting latest stable main master test
+	`) {
+		m[w] = true
+	}
+	return m
+}()
+
+// nodeWord 判断 word 能不能当作节点在文字里的叫法：太短的（只有 ASCII 的不到 3 个字符，其他的不到 2 个字）
+// 和常见词不算，换的话会误伤句子里的普通字母、单词（节点叫 a、b 时，句子里的 a 都会被换掉）。
+func nodeWord(word string) bool {
+	n := utf8.RuneCountInString(word)
+	ascii := n == len(word)
+	if n == 0 || ascii && n < 3 || n < 2 {
+		return false
+	}
+	return !commonWords[strings.ToLower(word)]
 }
 
 // scrubNodeIDs 去掉文字（例如审计的参数）里成员看不到的节点 ID（A7）。节点 ID 是固定长度的十六进制，按原样替换。
@@ -809,7 +856,7 @@ func (a *API) visibleNames(ctx context.Context, x *access) map[string]bool {
 }
 
 // scrubNodes 把文字里看不到的节点名换成「其他节点」（A7）。只换完整的名称：前后不是字母、数字、-、_、.。
-// 改名前用过的名称、节点的主机名同样换（见 nodeWords）。看得到的节点里有同名的不换。
+// 改名前用过的名称、节点的主机名同样换（见 nodeWords）。看得到的节点里有同名的不换，太短的名称和常见词不换（见 nodeWord）。
 // 看不到的节点的 ID 也去掉（节点没有名称时报错里写的是 ID）。
 func (a *API) scrubNodes(ctx context.Context, x *access, s string) string {
 	if s == "" || x == nil {

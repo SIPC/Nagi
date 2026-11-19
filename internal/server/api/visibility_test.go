@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,7 +62,8 @@ func TestScrubFormerNamesAndHostnames(t *testing.T) {
 	x := memberAccess(auth.PresetOperator)
 	ev := &nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: "sync to old-b failed, host-b unreachable, b down; old-a host-a a fine; localhost:80 ghost"}}
 	a.filterReply(ctx, x, ev)
-	if got, want := ev.GetOutput(), "sync to 其他节点 failed, 其他节点 unreachable, 其他节点 down; old-a host-a a fine; localhost:80 ghost"; got != want {
+	// n2 现在叫 b：太短，文字里不换（见 nodeWord）。
+	if got, want := ev.GetOutput(), "sync to 其他节点 failed, 其他节点 unreachable, b down; old-a host-a a fine; localhost:80 ghost"; got != want {
 		t.Errorf("部署输出：%s", got)
 	}
 	// 顶替状态里记的是设置时的名称。
@@ -69,6 +71,12 @@ func TestScrubFormerNamesAndHostnames(t *testing.T) {
 	a.cleanFailoverStatus(ctx, x, st)
 	if st.HolderName != "" {
 		t.Errorf("顶替的持有者：%q", st.HolderName)
+	}
+	// 比对整个字段时，太短的名称照样认得。
+	st = &nagiv1.FailoverStatus{HolderName: "b"}
+	a.cleanFailoverStatus(ctx, memberAccess(auth.PresetOperator), st)
+	if st.HolderName != "" {
+		t.Errorf("顶替的持有者叫 b：%q", st.HolderName)
 	}
 	// 同一个名称只记一次，最多记 maxFormerNames 个；已经移除的节点的记录清掉。
 	for i := range maxFormerNames + 3 {
@@ -80,6 +88,72 @@ func TestScrubFormerNamesAndHostnames(t *testing.T) {
 		t.Errorf("记下的名称：%v", names)
 	}
 	_ = q
+}
+
+// 按名称换节点名时不误伤普通的词：太短的名称、常见的主机名和单词不换（主机名是 ubuntu 时，镜像名 ubuntu:22.04 不变）；
+// 看得到的节点改名前的名称不算「看得到」，不会因此留下一台隐藏节点的名称。
+func TestScrubNodeWordsFalsePositives(t *testing.T) {
+	info := func(host string) string {
+		b, err := proto.Marshal(&nagiv1.NodeInfo{Hostname: host})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprintf("x'%x'", b)
+	}
+	ctx := context.Background()
+	scrub := func(a *API, s string) string {
+		ev := &nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: s}}
+		a.filterReply(ctx, memberAccess(auth.PresetOperator), ev)
+		return ev.GetOutput()
+	}
+	// n2 看不到：叫 node-b，主机名 ubuntu。
+	a, _ := scopeTestAPI(t, `UPDATE nodes SET name = 'node-b', info = `+info("ubuntu")+` WHERE id = 'n2'`)
+	if got, want := scrub(a, "Pulling ubuntu:22.04 on node-b; Ubuntu ok"), "Pulling ubuntu:22.04 on 其他节点; Ubuntu ok"; got != want {
+		t.Errorf("主机名是常见词：%s", got)
+	}
+	// n2 被改名成 error，以前叫过 b（太短）、failed，主机名 Debian。
+	a, _ = scopeTestAPI(t, `UPDATE nodes SET name = 'error', info = `+info("Debian")+` WHERE id = 'n2'`)
+	a.rememberNodeName(ctx, "n2", "b")
+	a.rememberNodeName(ctx, "n2", "failed")
+	if got, want := scrub(a, "error: failed to pull debian, b is a letter"), "error: failed to pull debian, b is a letter"; got != want {
+		t.Errorf("常见词和太短的名称：%s", got)
+	}
+	// 中文名称两个字就够长。
+	a, _ = scopeTestAPI(t, `UPDATE nodes SET name = '东京' WHERE id = 'n2'`)
+	if got, want := scrub(a, "连接 东京 失败"), "连接 其他节点 失败"; got != want {
+		t.Errorf("中文名称：%s", got)
+	}
+	// 看得到的 n1 改名前叫过 secret-b，看不到的 n2 现在就叫 secret-b：仍然要换。
+	a, _ = scopeTestAPI(t, `UPDATE nodes SET name = 'secret-b' WHERE id = 'n2'`)
+	a.rememberNodeName(ctx, "n1", "secret-b")
+	if got, want := scrub(a, "sync to secret-b failed"), "sync to 其他节点 failed"; got != want {
+		t.Errorf("看得到的节点用过的名称：%s", got)
+	}
+}
+
+// 几台节点同时改名时，记下的原来的名称一个也不丢。
+func TestRememberNodeNameConcurrent(t *testing.T) {
+	extra := []string{}
+	for i := 3; i <= 12; i++ {
+		extra = append(extra, fmt.Sprintf(`INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n%d', 'node-%d', 0, x'%02x')`, i, i, i))
+	}
+	a, _ := scopeTestAPI(t, extra...)
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := 1; i <= 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			a.rememberNodeName(ctx, fmt.Sprintf("n%d", i), fmt.Sprintf("old-%d", i))
+		}()
+	}
+	wg.Wait()
+	names := a.formerNodeNames(ctx)
+	for i := 1; i <= 12; i++ {
+		if got := names[fmt.Sprintf("n%d", i)]; len(got) != 1 || got[0] != fmt.Sprintf("old-%d", i) {
+			t.Errorf("n%d 记下的名称：%v（全部：%v）", i, got, names)
+		}
+	}
 }
 
 // webhook 令牌要「部署」权限：拿到它不用登录就能触发部署。
