@@ -968,6 +968,7 @@ var en = map[string]string{
 	"没有「节点终端和文件」权限，不能创建可在节点上执行命令的令牌": "Tokens that can run commands on nodes need the Node terminal and files permission",
 	"没有面板的权限，不能创建可以管理面板的令牌":          "Tokens that can administer the panel need a panel permission",
 	"其他节点":                       "Other node",
+	"同步失败":                       "Sync failed",
 	"只有管理员能管理管理员":                "Only administrators can manage administrators",
 	"只能授予自己拥有的权限":                "You can only grant permissions you have",
 	"审计日志和安全设置只给管理员":             "Audit log and Security settings are for administrators only",

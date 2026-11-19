@@ -158,7 +158,7 @@ var cleanedFields = map[string]string{
 	"nagi.v1.ActivityEntry.via":                   "保留：来源（网页、MCP 令牌名）",
 	"nagi.v1.AuditEvent.via":                      "保留：来源",
 	"nagi.v1.AlertConfig.node_name":               "接口要面板设置；只在下发给节点时填写",
-	"nagi.v1.Container.failover_holder":           "要高可用权限；持有者看不到时清空名称和公钥",
+	"nagi.v1.Container.failover_holder":           "要高可用权限；持有者看不到时清空名称和公钥；热备看不到时清空同步时间、切回状态，失败原因只留「同步失败」",
 	"nagi.v1.Container.host_network_services":     "保留：服务名",
 	"nagi.v1.ContainerDirUsage.dir":               "接口要节点管理（整个节点的磁盘明细）",
 	"nagi.v1.NodeStorage.container_dirs":          "接口要节点管理（整个节点的磁盘明细）",
@@ -392,8 +392,11 @@ func (a *API) cleanContainer(ctx context.Context, x *access, c *nagiv1.Container
 		a.cleanFailover(x, c.GetFailover())
 		// 热备的状态是热备节点自己上报的，节点离线时没有：看不到这台节点的成员据此就知道它在不在线。
 		// 所以看不到时不给；只在它等着确认顶替时保留（成员要据此确认，这时热备必然在线）。
-		if !x.node(standby) && !c.GetFailoverStandby().GetPendingConfirm() {
-			c.FailoverStandby = nil
+		if !x.node(standby) {
+			if !c.GetFailoverStandby().GetPendingConfirm() {
+				c.FailoverStandby = nil
+			}
+			hideOtherSide(ctx, c.GetFailoverHolder())
 		}
 		for _, st := range []*nagiv1.FailoverStatus{c.GetFailoverHolder(), c.GetFailoverStandby()} {
 			a.cleanFailoverStatus(ctx, x, st)
@@ -444,6 +447,18 @@ func (a *API) cleanFailover(x *access, f *nagiv1.FailoverConfig) {
 		} else if !x.can(auth.PermConfig) {
 			p.Dir = ""
 		}
+	}
+}
+
+// hideOtherSide 去掉持有方状态里关于另一方的部分，给看不到另一方的成员：最近一次同步给热备的时间（热备离线时不再更新）、
+// 切回的倒计时和是否正在切回（说明原节点已经恢复）。失败原因只留「同步失败」，原因里写的是连不上、超时这类，同样说明它在不在线。
+func hideOtherSide(ctx context.Context, st *nagiv1.FailoverStatus) {
+	if st == nil {
+		return
+	}
+	st.LastSync, st.FailbackInMs, st.FailingBack = nil, 0, false
+	if st.GetLastError() != "" {
+		st.LastError = i18n.T(ctx, "同步失败")
 	}
 }
 

@@ -1579,6 +1579,10 @@ function FailoverDetail({ project, container, nodes }: { project: Project; conta
   // 持有者上报的是最近一次同步给热备的时间，持有者离线时用热备记录的最近一次收到同步的时间。
   const lastSync = holder?.lastSync ?? standby?.lastSync;
   const standbyNode = standbyOf(container);
+  // 热备节点看不到时，面板不给同步时间、切回状态和失败原因（据此能看出它在不在线），只告诉同步失败。
+  const standbyHidden = !!standbyNode && !standbyNode.nodeId;
+  const syncFailed = !!(holder?.lastError || standby?.lastError);
+  const syncError = standbyHidden ? standby?.lastError : holder?.lastError || standby?.lastError;
   let state: React.ReactNode = <Status tone="neutral">—</Status>;
   if (holder?.failingBack)
     state = (
@@ -1646,7 +1650,7 @@ function FailoverDetail({ project, container, nodes }: { project: Project; conta
               </Button>
             </span>,
           ],
-          [t.projectData.lastSync, <span title={formatDateTime(toDate(lastSync))}>{lastSync ? capitalize(timeAgo(toDate(lastSync))) : f.notSynced}</span>],
+          [t.projectData.lastSync, <span title={formatDateTime(toDate(lastSync))}>{lastSync ? capitalize(timeAgo(toDate(lastSync))) : standbyHidden ? "—" : f.notSynced}</span>],
           [f.lease, <span title={holder?.epoch ? f.epochTitle(holder.epoch) : undefined}>{t.common.time.seconds(cfg.leaseSeconds || 30)}</span>],
           [
             f.autoFailbackLabel,
@@ -1657,9 +1661,9 @@ function FailoverDetail({ project, container, nodes }: { project: Project; conta
           ],
         ]}
       />
-      {(holder?.lastError || standby?.lastError) && (
+      {syncFailed && (
         <Notice tone="danger" title={t.projectData.backup.syncFailed}>
-          {holder?.lastError || standby?.lastError}
+          {syncError}
         </Notice>
       )}
       {error && <Alert>{error}</Alert>}

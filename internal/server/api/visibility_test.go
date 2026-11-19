@@ -18,6 +18,7 @@ import (
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // memberViewer 是测试用的查看者：n1 看得到，n2 看不到。
@@ -122,6 +123,49 @@ func TestCleanStandbyStatus(t *testing.T) {
 	a.filterReply(ctx, memberAccess(ha), p)
 	if p.Containers[0].FailoverStandby == nil {
 		t.Error("热备 n1 看得到，状态照常给")
+	}
+}
+
+// 另一方看不到时，持有方的状态里也不给同步时间、切回状态和失败原因：同步时间停了、开始倒计时切回，
+// 都说明那台节点离线或恢复了。持有方自己的租约照常给。
+func TestCleanHolderHidesOtherSide(t *testing.T) {
+	a := cleanTest(t)
+	ctx := context.Background()
+	ha := auth.PresetOperator | auth.PermsOf(auth.PermHA)
+	project := func(node string) *nagiv1.Project {
+		return &nagiv1.Project{Id: "p1", Containers: []*nagiv1.Container{{Name: "web", NodeId: node,
+			Failover: &nagiv1.FailoverConfig{A: &nagiv1.FailoverParticipant{NodeId: "n1"}, B: &nagiv1.FailoverParticipant{NodeId: "n2"}},
+			FailoverHolder: &nagiv1.FailoverStatus{Role: "holder", LeaseRemainingMs: 5000, LastSync: timestamppb.Now(),
+				FailbackInMs: 30000, FailingBack: true, LastError: "dial 203.0.113.9: connection refused"}}}}
+	}
+	// 持有方 n1，热备 n2 看不到。
+	p := project("n1")
+	a.filterReply(ctx, memberAccess(ha), p)
+	h := p.Containers[0].GetFailoverHolder()
+	if h.LastSync != nil || h.FailbackInMs != 0 || h.FailingBack || h.LastError != "同步失败" {
+		t.Errorf("热备看不到：%v", h)
+	}
+	if h.LeaseRemainingMs != 5000 || h.Role != "holder" {
+		t.Errorf("持有方自己的状态应该照常给：%v", h)
+	}
+	// 没有失败时不凭空写上「同步失败」。
+	p = project("n1")
+	p.Containers[0].FailoverHolder.LastError = ""
+	a.filterReply(ctx, memberAccess(ha), p)
+	if p.Containers[0].GetFailoverHolder().GetLastError() != "" {
+		t.Error("没有失败原因时应该为空")
+	}
+	// 顶替到了 n2（看不到），另一方是原节点 n1，看得到：照常给。
+	p = project("n2")
+	a.filterReply(ctx, memberAccess(ha), p)
+	if h := p.Containers[0].GetFailoverHolder(); h.LastSync == nil || h.FailbackInMs != 30000 || !h.FailingBack || !strings.Contains(h.LastError, "connection refused") {
+		t.Errorf("另一方看得到：%v", h)
+	}
+	// 管理员照常。
+	p = project("n1")
+	a.filterReply(ctx, nil, p)
+	if h := p.Containers[0].GetFailoverHolder(); h.LastSync == nil || h.FailbackInMs != 30000 {
+		t.Errorf("管理员：%v", h)
 	}
 }
 
