@@ -615,11 +615,13 @@ export function OverviewPage() {
   const range: MetricRange = search.range ?? "1h";
   const r = metricRanges.find((x) => x.value === range)!;
 
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: refresh });
   // 没有「查看节点」时节点的数据一律不显示：节点数、流量和下面的节点区块（面板也不返回节点）。添加节点只给管理员。
+  // 没有「查看」「查看节点」的角色（例如只有「审计日志」）不去查项目和节点，免得每次刷新都被拒绝。
   const { can, isAdmin } = useRole();
   const canNodes = can("node.view");
-  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), refetchInterval: refresh });
+  const canProjects = can("project.view");
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), refetchInterval: refresh, enabled: canNodes });
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), refetchInterval: refresh, enabled: canProjects });
   const all = (nodes.data?.nodes ?? []).filter((n) => !n.pending);
   const online = all.filter((n) => n.online);
   const onlineKey = online.map((n) => n.id).join(",");
@@ -864,8 +866,8 @@ export function OverviewPage() {
       {/* 列数固定，不留单独掉行的一个：宽屏 6 列，窄一些时 3 列。 */}
       <div className="grid grid-cols-3 gap-4 lg:grid-cols-6 lg:gap-x-8 max-md:grid-cols-2">
         {canNodes && <Stat label={o.stats.nodes} to="/nodes" value={nodes.data ? online.length : dash} unit={nodes.data ? `/ ${all.length}` : undefined} />}
-        <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />
-        <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />
+        {canProjects && <Stat label={o.stats.containers} to="/projects" value={projects.data ? running : dash} unit={projects.data ? `/ ${containers.length}` : undefined} />}
+        {canProjects && <Stat label={o.stats.projects} to="/projects" value={projects.data ? projectList.length : dash} />}
         {canNodes && (
           <>
             <Stat label={o.stats.extIn} help={o.stats.estimated} value={ready ? inValue : dash} n={extIn} unit={ready ? inUnit : undefined} />

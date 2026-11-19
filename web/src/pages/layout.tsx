@@ -154,7 +154,7 @@ const navItems: { to: "/overview" | "/projects" | "/nodes" | "/audit" | "/settin
   { to: "/overview", label: t.app.nav.overview, icon: navIcons.overview },
   { to: "/projects", label: t.app.nav.projects, icon: navIcons.projects, perm: "project.view" },
   { to: "/nodes", label: t.app.nav.nodes, icon: navIcons.nodes, perm: "node.view" },
-  { to: "/audit", label: t.app.nav.audit, icon: navIcons.audit, perm: "project.view" },
+  { to: "/audit", label: t.app.nav.audit, icon: navIcons.audit, perm: "panel.audit" },
   { to: "/settings", label: t.app.nav.settings, icon: navIcons.settings },
 ];
 

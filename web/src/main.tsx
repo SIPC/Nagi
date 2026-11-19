@@ -11,6 +11,7 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import { authClient, isNotFound, isUnauthenticated, reverifyReason, setupClient } from "@/lib/api";
+import type { MeResponse } from "@/gen/nagi/v1/api_pb";
 import { ReverifyHost, waitReverify } from "@/components/reverify";
 import { LoginPage, SetupPage } from "@/pages/auth";
 import { OAuthAuthorizePage } from "@/pages/tokens";
@@ -340,6 +341,11 @@ const auditRoute = createRoute({
     q: str(search.q),
     id: num(search.id),
   }),
+  // 要「审计日志」权限（见 docs/audit.md#权限）：没有时直接打开地址也回到概览。成员信息由 appRoute 先取好。
+  beforeLoad: ({ context }) => {
+    const me = context.queryClient.getQueryData<MeResponse>(["me"]);
+    if (me && me.role !== "admin" && !me.permissions.includes("panel.audit")) throw redirect({ to: "/overview", replace: true });
+  },
   component: AuditPage,
 });
 

@@ -16,7 +16,7 @@ type StreamEvent = { event: { case: string | undefined; value?: unknown } };
 export function useRun(projectId: string) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { isAdmin } = useRole();
+  const canAudit = useRole().can("panel.audit");
   const [lines, setLines] = useState<string[]>([]);
   const [result, setResult] = useState<RunResult>();
   const [busy, setBusy] = useState(false);
@@ -30,8 +30,8 @@ export function useRun(projectId: string) {
       setResult(r);
       if (inView(boxRef.current)) return;
       if (r.success) toast.success(t.common.feedback.done);
-      // 失败的详情记在审计里（只有管理员能看）。
-      else toast.error(r.error || t.common.feedback.failed, isAdmin ? { action: { label: t.common.feedback.viewActivity, onClick: () => navigate({ to: "/audit", search: { failed: true } }) } } : undefined);
+      // 失败的详情记在审计里（要「审计日志」权限）。
+      else toast.error(r.error || t.common.feedback.failed, canAudit ? { action: { label: t.common.feedback.viewActivity, onClick: () => navigate({ to: "/audit", search: { failed: true } }) } } : undefined);
     };
     const consume = async () => {
       for await (const ev of start()) {

@@ -107,6 +107,9 @@ private const val ATTENTION_LIMIT = 5
 interface HomeActions {
     fun openAttention(item: Attention)
     fun openNodes(offlineOnly: Boolean)
+
+    /** 打开一个节点的页面（节点状态里点一个节点）。 */
+    fun openNode(id: String)
     fun openProjects(notRunningOnly: Boolean)
     fun update(item: Attention)
 }
@@ -215,7 +218,9 @@ fun HomeContent(
                                     TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
                                     if (s.overview.nodes.isNotEmpty()) {
                                         SectionDivider()
-                                        NodesSection(s.overview.nodes, actions)
+                                        // 竖屏也两个一行（放不下三个环，不画磁盘），内容区太窄（340 以下）时才一个一行。
+                                        val two = this@BoxWithConstraints.maxWidth >= 340.dp
+                                        NodesSection(s.overview.nodes, actions, columns = if (two) 2 else 1, disk = !two)
                                     }
                                 }
                             }
@@ -481,12 +486,12 @@ private fun timeLabels(times: List<Long>, range: TrafficRange): List<String> {
  * 点一格去节点页。[columns] 为 2 时（宽屏左边一栏）两个一行。
  */
 @Composable
-private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: Int = 1) {
+private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: Int = 1, disk: Boolean = true) {
     SectionHeader(stringResource(R.string.nodes_title))
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         nodes.chunked(columns).forEach { group ->
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                group.forEach { n -> NodeCell(n, Modifier.weight(1f)) { actions.openNodes(offlineOnly = false) } }
+                group.forEach { n -> NodeCell(n, Modifier.weight(1f), disk) { actions.openNode(n.id) } }
                 // 最后一行只有一个时，空出另一半，宽度和上面的对齐。
                 repeat(columns - group.size) { Spacer(Modifier.weight(1f)) }
             }
@@ -495,7 +500,7 @@ private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: I
 }
 
 @Composable
-private fun NodeCell(n: NodeStat, modifier: Modifier, onClick: () -> Unit) {
+private fun NodeCell(n: NodeStat, modifier: Modifier, disk: Boolean, onClick: () -> Unit) {
     val c = NagiTheme.colors
     val dot = when (n.status) {
         "online" -> c.success
@@ -520,8 +525,10 @@ private fun NodeCell(n: NodeStat, modifier: Modifier, onClick: () -> Unit) {
             Ring("CPU", NagiIcons.Cpu, cpu)
             Spacer(Modifier.width(8.dp))
             Ring(stringResource(R.string.node_memory), NagiIcons.MemoryStick, n.memory / 100)
-            Spacer(Modifier.width(8.dp))
-            Ring(stringResource(R.string.node_disk), NagiIcons.HardDrive, if (n.diskTotal > 0) n.diskUsed / n.diskTotal else null)
+            if (disk) {
+                Spacer(Modifier.width(8.dp))
+                Ring(stringResource(R.string.node_disk), NagiIcons.HardDrive, if (n.diskTotal > 0) n.diskUsed / n.diskTotal else null)
+            }
         }
     }
 }

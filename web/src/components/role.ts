@@ -31,7 +31,7 @@ export const permissionGroups = {
 export type Permission = (typeof permissionGroups)[keyof typeof permissionGroups][number];
 
 // 只给管理员的权限：角色里不能勾。
-export const adminOnlyPermissions: Permission[] = ["panel.audit", "panel.security"];
+export const adminOnlyPermissions: Permission[] = ["panel.security"];
 
 // requires：勾了一项权限时自动带上的前提，和面板的 Normalize 一致。
 const requires: Partial<Record<Permission, Permission[]>> = {

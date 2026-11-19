@@ -5,6 +5,7 @@ import { create } from "@bufbuild/protobuf";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
+import { useRole } from "@/components/role";
 import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertConfig } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
 import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
@@ -195,6 +196,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
 }
 
 export function AlertSettings() {
+  const { can } = useRole();
   const cfg = useQuery({
     queryKey: ["alert-config"],
     queryFn: () => settingsClient.getAlertConfig({}),
@@ -215,7 +217,8 @@ export function AlertSettings() {
   return (
     <>
       <AlertForm config={cfg.data.config} lost={cfg.data.lost} />
-      <SecurityAlertRules />
+      {/* 登录安全告警存在审计设置里，归「安全设置」。 */}
+      {can("panel.security") && <SecurityAlertRules />}
     </>
   );
 }

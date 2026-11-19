@@ -403,12 +403,32 @@ func TestPanelToolsAllowedFor(t *testing.T) {
 	read := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowPanel: true}
 	noPanel := auth.User{Role: auth.RoleAdmin, TokenID: 1, AllowWrite: true, AllowExec: true, AllowNodeExec: true}
 	op := auth.User{Role: auth.RoleOperator, Perms: auth.PresetOperator, TokenID: 1, AllowWrite: true, AllowPanel: true}
+	// 只有「审计日志」的成员：审计的工具按这项权限给，别的面板工具没有。
+	auditor := auth.MemberWith(2, auth.PermsOf(auth.PermAudit))
+	auditor.TokenID, auditor.AllowPanel = 1, true
+	settingsOnly := auth.MemberWith(3, auth.PermsOf(auth.PermSettings))
+	settingsOnly.TokenID, settingsOnly.AllowPanel = 1, true
+	auditorNoPanel := auditor
+	auditorNoPanel.AllowPanel = false
 	cases := []struct {
 		tool    string
 		u       auth.User
 		standby bool
 		want    bool
 	}{
+		{"query_audit", auditor, false, true},
+		{"export_audit", auditor, false, true},
+		{"verify_audit", auditor, false, true},
+		{"list_activity", auditor, false, true},
+		{"query_audit", auditorNoPanel, false, false},
+		{"get_panel_settings", auditor, false, false},
+		{"list_members", auditor, false, false},
+		{"query_audit", settingsOnly, false, false},
+		{"export_audit", settingsOnly, false, false},
+		{"verify_audit", settingsOnly, false, false},
+		{"query_audit", op, false, false},
+		{"export_audit", op, false, false},
+		{"verify_audit", op, false, false},
 		{"get_panel_settings", read, false, true},
 		{"get_panel_settings", noPanel, false, false},
 		{"get_panel_settings", op, false, false},

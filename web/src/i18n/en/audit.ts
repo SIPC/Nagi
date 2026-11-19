@@ -10,8 +10,6 @@ export default {
   exported: "Exported",
   search: "Filter records…",
   searchLabel: "Filter by action, target, IP, or parameter",
-  searchLabelOperator: "Filter by action, target, or parameter",
-  searchLabelViewer: "Filter by action or target",
   failedOnly: "Failures only",
   viaToken: (via, token) => `${via} (${token})`,
   filters: {
