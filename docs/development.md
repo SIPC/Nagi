@@ -171,7 +171,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 用了 `--download-url` 时把地址记在 `<数据目录>/panel/download-url`，面板一键更新时也从这里下载（见 [panel.md](panel.md#更新面板)）。
 - 检测到中国大陆网络时经 GitHub 加速代理下载，用上的代理记在 `<数据目录>/panel/github-proxy`，一键更新先经它下载，不行再换别的地址（见 [guide/install.md](guide/install.md#中国大陆服务器)、[panel.md](panel.md#更新面板)）。代理列表 `GH_PROXIES` 和 Docker Hub 镜像加速地址 `REGISTRY_MIRRORS` 在 Go 里各有一份（`release.GitHubProxies`、`api.DefaultRegistryMirrors`），改动时一起改，`TestInstallConstants` 会检查。
 - 已安装时再次执行即为升级，只更换二进制并重启；端口、数据目录、是否带内嵌节点不允许在升级时修改（已加入的节点按原端口连接面板）。
-- `--standby <配对码>`（或环境变量 `NAGI_STANDBY`）安装备用面板：配对码写进只有 root 能读的 `<数据目录>/standby.env`，服务配置用 `EnvironmentFile` 引用它，面板从环境变量 `NAGI_STANDBY` 读到，不出现在进程参数和服务配置里；配对成功（数据目录出现 `panel/paired`）后删掉这个文件，并从服务配置中去掉。
+- 环境变量 `NAGI_STANDBY`（`curl … | NAGI_STANDBY=<配对码> sh`，以 root 执行）安装备用面板；旧的 `--standby <配对码>` 仍然接受，但会提示配对码出现在进程参数里，建议改用环境变量。配对码写进只有 root 能读的 `<数据目录>/standby.env`，服务配置用 `EnvironmentFile` 引用它，面板从环境变量 `NAGI_STANDBY` 读到，不出现在进程参数和服务配置里；配对成功（数据目录出现 `panel/paired`）后删掉这个文件，并从服务配置中去掉。
 - 本机已有节点（`nagi-agent` 服务）时拒绝安装带内嵌节点的面板；只装面板时需 `--no-agent` 并使用另一个数据目录。
 - 带内嵌节点时确保 Docker 和 compose 插件可用，没有就自动安装；安装后把 nagi 注册为命令（`/usr/bin/nagi` 链接、bash 补全）。这些函数和节点安装脚本共用，源头是 `internal/server/api/install.go` 的 `sharedScript`，改动时两边一起改，`go test ./internal/server/api` 会检查。
 - 没有 systemd 时只安装二进制，并打印需要自行运行的命令。
@@ -198,7 +198,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 
 2026-10 加主备面板（见 [standby.md](standby.md)）。分步做，每一步在界面上实际操作验证：
 
-1. **配对和同步**（已完成）：主面板生成配对码，`nagi server --standby <配对码>` 配对（主密钥、CA、数据库），主面板变化后几秒内把数据库快照发给备用面板，保留各自的本地设置和会话；设置页列出备用面板和同步状态，可以移除。
+1. **配对和同步**（已完成）：主面板生成配对码，`NAGI_STANDBY=<配对码> nagi server` 配对（主密钥、CA、数据库），主面板变化后几秒内把数据库快照发给备用面板，保留各自的本地设置和会话；设置页列出备用面板和同步状态，可以移除。
 2. **节点连接备用面板和任期**（已完成）：主面板把备用面板加进节点的信任列表；面板连上节点时带上任期和主备身份，节点只执行任期最大的主面板发来的修改；备用面板的接口拒绝修改，界面只读。
 3. **提升和降级**（已完成）：备用面板手动提升（任期加一，通知节点，其他备用面板改为从它同步，见证人换成它）；旧主面板回来发现任期落后自动降为备用。最后在测试环境里走一遍：配对、主面板改东西备用面板看到、停掉主面板、提升、继续修改和部署、旧主面板回来降为备用。
 

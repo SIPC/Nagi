@@ -3,6 +3,7 @@
 #
 #   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh
 #   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh -s -- --port 28443
+#   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | NAGI_STANDBY=<配对码> sh   # 备用面板
 #
 # 没有 Docker 时自动安装（面板带内嵌节点时需要）；下载 nagi、校验 SHA-256、安装到 /usr/local/bin/nagi
 # 并注册为 nagi 命令，以 systemd 服务 nagi-server 运行面板。首次安装后打印初始化链接。
@@ -19,9 +20,11 @@ VERSION=latest
 DATA_DIR=""
 PORT=""
 NO_AGENT=""
-# 配对码可以用环境变量 NAGI_STANDBY 传，不出现在进程参数里。读完就清掉，不传给 Docker 安装脚本等子进程。
+# 配对码用环境变量 NAGI_STANDBY 传，不出现在进程参数里。读完就清掉，不传给 Docker 安装脚本等子进程。
 STANDBY="${NAGI_STANDBY:-}"
 unset NAGI_STANDBY
+# STANDBY_ARG：配对码是用 --standby 参数给的（旧写法，安装期间本机其他用户能从进程参数里读到）。
+STANDBY_ARG=""
 DOWNLOAD_URL="${NAGI_DOWNLOAD_URL:-}"
 DOCKER_MIRROR=""
 
@@ -32,8 +35,9 @@ usage() {
   --version <版本>        安装指定版本，例如 v0.1.0（默认最新版本）
   --port <端口>           面板端口（默认首次启动时随机选择）
   --no-agent              只运行面板，不带内嵌节点（面板单独放在一台不运行项目的机器上）
-  --standby <配对码>      作为备用面板安装（配对码在主面板「设置 → 备用面板」中生成），
-                          也可用环境变量 NAGI_STANDBY 指定（不出现在进程参数里）
+  --standby <配对码>      作为备用面板安装（配对码在主面板「设置 → 备用面板」中生成）。
+                          建议改用环境变量 NAGI_STANDBY 指定，配对码不出现在进程参数里：
+                          curl … | NAGI_STANDBY=<配对码> sh（以 root 执行，不要在 sh 前加 sudo）
   --data-dir <目录>       数据目录（默认 /var/lib/nagi）
   --download-url <地址>   从该地址下载 nagi-linux-<架构> 和 SHA256SUMS（镜像或内网），
                           也可用环境变量 NAGI_DOWNLOAD_URL 指定
@@ -57,7 +61,7 @@ while [ $# -gt 0 ]; do
     --version) need_value "$@"; VERSION="$2"; shift 2 ;;
     --port) need_value "$@"; PORT="$2"; shift 2 ;;
     --no-agent) NO_AGENT=1; shift ;;
-    --standby) need_value "$@"; STANDBY="$2"; shift 2 ;;
+    --standby) need_value "$@"; STANDBY="$2"; STANDBY_ARG=1; shift 2 ;;
     --data-dir) need_value "$@"; DATA_DIR="$2"; shift 2 ;;
     --download-url) need_value "$@"; DOWNLOAD_URL="$2"; shift 2 ;;
     --docker-mirror) need_value "$@"; DOCKER_MIRROR="$2"; shift 2 ;;
@@ -65,6 +69,11 @@ while [ $# -gt 0 ]; do
     *) fail "未知参数 $1（--help 查看用法）" ;;
   esac
 done
+
+if [ -n "$STANDBY_ARG" ]; then
+  printf '%s
+' "注意：配对码写在命令参数里，安装期间本机其他用户可以看到。建议改用环境变量：先执行 sudo -i 切换到 root，再执行 curl … | NAGI_STANDBY=<配对码> sh" >&2
+fi
 
 if [ -n "$PORT" ]; then
   case "$PORT" in *[!0-9]*) fail "端口须为数字" ;; esac
@@ -238,7 +247,11 @@ download_nagi() {
 # ---- 环境检查 ----
 
 [ "$(uname -s)" = "Linux" ] || fail "Nagi 仅支持 Linux"
-[ "$(id -u)" = "0" ] || fail "请使用 root 运行（例如 curl ... | sudo sh）"
+if [ "$(id -u)" != "0" ]; then
+  # sudo 不传递环境变量，NAGI_STANDBY 要在 root 的 shell 里设置。
+  [ -z "$STANDBY" ] || [ -n "$STANDBY_ARG" ] || fail "请先执行 sudo -i 切换到 root，再执行安装命令（sudo 不传递环境变量 NAGI_STANDBY）"
+  fail "请使用 root 运行（例如 curl ... | sudo sh）"
+fi
 case "$(uname -m)" in
   x86_64 | amd64) ARCH=amd64 ;;
   aarch64 | arm64) ARCH=arm64 ;;

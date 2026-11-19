@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -32,6 +35,54 @@ func TestStandbyCodeFromEnv(t *testing.T) {
 	}
 }
 
+// nagi server --standby <码> 仍然接受，但提示改用环境变量；用环境变量时不提示。读完都清掉环境变量。
+func TestStandbyCodeFlagWarns(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, nil))
+	t.Setenv(standbyEnv, "nagi-standby:env")
+	if got := standbyCodeFrom("nagi-standby:flag", log); got != "nagi-standby:flag" {
+		t.Errorf("给了 --standby 时用它，得到 %q", got)
+	}
+	if !strings.Contains(buf.String(), standbyEnv) {
+		t.Errorf("用 --standby 时应该提示改用环境变量：%s", buf.String())
+	}
+	if _, ok := os.LookupEnv(standbyEnv); ok {
+		t.Error("读完应该清掉环境变量")
+	}
+	buf.Reset()
+	t.Setenv(standbyEnv, "nagi-standby:env")
+	if got := standbyCodeFrom("", log); got != "nagi-standby:env" {
+		t.Errorf("没给 --standby 时应该读环境变量，得到 %q", got)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("用环境变量时不应该提示：%s", buf.String())
+	}
+}
+
+// 安装脚本遇到 --standby <码> 时照常接受，但提示改用环境变量；用环境变量时不提示。
+// 用一个不合法的端口让脚本在参数检查时停下，不会真的安装。
+func TestInstallScriptStandbyArgWarns(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	run := func(env []string, args ...string) string {
+		cmd := exec.Command(sh, append([]string{"../../scripts/install.sh"}, args...)...)
+		cmd.Env = append([]string{"PATH=" + os.Getenv("PATH")}, env...)
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "端口须为数字") {
+			t.Fatalf("应该在端口检查时停下：%v %s", err, out)
+		}
+		return string(out)
+	}
+	if out := run(nil, "--standby", "nagi-standby:abc", "--port", "x"); !strings.Contains(out, "NAGI_STANDBY=<配对码>") {
+		t.Errorf("用 --standby 时应该提示改用环境变量：%s", out)
+	}
+	if out := run([]string{standbyEnv + "=nagi-standby:abc"}, "--port", "x"); strings.Contains(out, "注意") {
+		t.Errorf("用环境变量时不应该提示：%s", out)
+	}
+}
+
 // 面板安装脚本不把配对码写进服务的启动参数和服务配置（谁都能读），而是放在只有 root 能读的环境变量文件里。
 func TestInstallScriptStandbyCodeNotInArgs(t *testing.T) {
 	b, err := os.ReadFile("../../scripts/install.sh")
@@ -45,6 +96,24 @@ func TestInstallScriptStandbyCodeNotInArgs(t *testing.T) {
 	for _, want := range []string{`EnvironmentFile=`, standbyEnv + `=`, `umask 077`} {
 		if !strings.Contains(script, want) {
 			t.Errorf("安装脚本应该用只有 root 能读的环境变量文件传配对码，缺少 %q", want)
+		}
+	}
+}
+
+// 网页、App 给出的命令和使用文档默认用环境变量传配对码，不写成 --standby <码>。
+func TestStandbyCommandsUseEnv(t *testing.T) {
+	for _, f := range []string{
+		"../../web/src/pages/standby.tsx",
+		"../../android/feature/settings/src/main/kotlin/ink/sipc/nagi/settings/StandbyInviteScreens.kt",
+		"../../docs/guide/standby.md",
+		"../../docs/guide/standby.en.md",
+	} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s := string(b); strings.Contains(s, "--standby") || !strings.Contains(s, standbyEnv+"=") {
+			t.Errorf("%s 应该用环境变量 %s 传配对码，不用 --standby", f, standbyEnv)
 		}
 	}
 }

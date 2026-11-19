@@ -20,7 +20,7 @@
     <string name="standby_remove">Remove standby panel</string>
     <string name="standby_remove_confirm">Remove standby panel %1$s? It can no longer sync this panel, and its data directory must be deleted manually.</string>
     <string name="standby_dialog_desc">Run this command on the standby machine.</string>
-    <string name="standby_dialog_notice">The data directory must be empty. The pairing code is valid for 1 hour and can be used once. The standby connects and starts syncing once it starts, and appears in the list.</string>
+    <string name="standby_dialog_notice">The data directory must be empty, and nagi must be v0.35.0 or later. The pairing code is valid for 1 hour and can be used once. The standby connects and starts syncing once it starts, and appears in the list.</string>
     <string name="invite_desc">Used when another panel hands over nodes. To add a new machine, add a node on the Nodes page.</string>
     <string name="invite_help">Join codes are valid for 1 hour and can be used by several nodes. Nodes that join with a code must be approved on the Nodes page before use.</string>
     <string name="invite_generate">Generate join code</string>

@@ -58,9 +58,7 @@ func serverCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 			log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-			standbyCode = flagOrEnv(standbyCode, standbyEnv)
-			// 读完就清掉，不传给内嵌节点启动的子进程。
-			os.Unsetenv(standbyEnv)
+			standbyCode = standbyCodeFrom(standbyCode, log)
 
 			panelDir := filepath.Join(dataDir, "panel")
 			// 内嵌节点：配对来的面板（备用面板，以后提升了也一样）不带；第一个主面板带着，降为备用面板后也照常运行。
@@ -190,6 +188,17 @@ const tokenEnv = "NAGI_TOKEN"
 // standbyEnv 是传备用面板配对码的环境变量，道理和 tokenEnv 一样：配对码能换到面板的 CA、主密钥和整个数据库，
 // 写在进程参数里的话，同一台机器上的其他用户可以读到、抢在面板之前用掉。面板安装脚本用它传配对码。
 const standbyEnv = "NAGI_STANDBY"
+
+// standbyCodeFrom 返回备用面板的配对码：给了 --standby 就用它（旧写法，仍然接受，但提示改用环境变量），
+// 否则读环境变量 NAGI_STANDBY。读完就清掉环境变量，不传给内嵌节点启动的子进程。
+func standbyCodeFrom(flag string, log *slog.Logger) string {
+	if flag != "" {
+		log.Warn("配对码写在命令参数里，本机其他用户可以看到。建议改用环境变量：" + standbyEnv + "=<配对码> nagi server")
+	}
+	code := flagOrEnv(flag, standbyEnv)
+	os.Unsetenv(standbyEnv)
+	return code
+}
 
 // tokenFromEnv 返回加入令牌：命令行给了 --token（旧的安装脚本、手动执行）就用它，否则读环境变量 NAGI_TOKEN。
 func tokenFromEnv(flag string) string { return flagOrEnv(flag, tokenEnv) }

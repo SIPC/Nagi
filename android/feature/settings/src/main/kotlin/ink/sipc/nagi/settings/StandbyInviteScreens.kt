@@ -118,9 +118,10 @@ fun StandbyScreen(session: PanelSession, onBack: () -> Unit) {
             }
         }
     }
+    // 配对码用环境变量传，不出现在进程参数里（见 docs/standby.md）；v0.35.0 之前的 nagi 不读这个环境变量，提示里写明。
     code?.let {
         CommandDialog(
-            stringResource(R.string.standby_add), stringResource(R.string.standby_dialog_desc), "nagi server --standby $it",
+            stringResource(R.string.standby_add), stringResource(R.string.standby_dialog_desc), "NAGI_STANDBY=$it nagi server",
             stringResource(R.string.standby_dialog_notice),
         ) { code = null; st.reload() }
     }

@@ -8,7 +8,7 @@ Before you start, prepare a server that meets the [requirements](../../README.en
 
 1. In the primary panel, click **Settings → Standby panels**, then click **Add standby panel**.
 
-2. Copy the pairing code after `--standby` in the dialog. It starts with `nagi-standby:`.
+2. Copy the pairing code in the dialog. It starts with `nagi-standby:`.
 
    <picture>
      <source media="(prefers-color-scheme: dark)" srcset="../assets/guide/standby.en.dark.png">
@@ -17,17 +17,13 @@ Before you start, prepare a server that meets the [requirements](../../README.en
 
    The pairing code is valid for 1 hour and can be used once.
 
-3. Run this command on the new server, replacing `<pairing-code>` with the code you copied:
-
-   ```bash
-   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh -s -- --standby <pairing-code>
-   ```
-
-   If other users have accounts on the server, pass the pairing code in an environment variable so that it doesn't appear in the process arguments. Run `sudo -i` to switch to root first, then run:
+3. Run this command on the new server as root, replacing `<pairing-code>` with the code you copied:
 
    ```bash
    curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | NAGI_STANDBY=<pairing-code> sh
    ```
+
+   The pairing code is passed in an environment variable, so it doesn't appear in the process arguments. If you aren't root, run `sudo -i` to switch to root first. Don't add `sudo` before `sh`, because `sudo` doesn't pass environment variables.
 
 Once started, the standby panel connects to the primary panel, starts syncing and appears under **Settings → Standby panels** on the primary panel.
 

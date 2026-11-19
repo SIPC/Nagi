@@ -8,7 +8,7 @@
 
 1. 在主面板中点击「设置 → 备用面板」，然后点击「添加备用面板」。
 
-2. 复制对话框中 `--standby` 之后的配对码（以 `nagi-standby:` 开头）。
+2. 复制对话框中的配对码（以 `nagi-standby:` 开头）。
 
    <picture>
      <source media="(prefers-color-scheme: dark)" srcset="../assets/guide/standby.dark.png">
@@ -17,17 +17,13 @@
 
    配对码 1 小时内有效，只能使用一次。
 
-3. 在新服务器上执行以下命令，把 `<配对码>` 换成上一步复制的配对码：
-
-   ```bash
-   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh -s -- --standby <配对码>
-   ```
-
-   服务器上有其他用户时，改用环境变量传配对码，配对码不会出现在进程参数中。先执行 `sudo -i` 切换到 root，再执行：
+3. 在新服务器上以 root 身份执行以下命令，把 `<配对码>` 换成上一步复制的配对码：
 
    ```bash
    curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | NAGI_STANDBY=<配对码> sh
    ```
+
+   配对码通过环境变量传入，不会出现在进程参数中。不是 root 时，先执行 `sudo -i` 切换到 root。不要在 `sh` 前加 `sudo`：`sudo` 不传递环境变量。
 
 备用面板启动后自动连接主面板并开始同步，出现在主面板的「设置 → 备用面板」列表中。
 

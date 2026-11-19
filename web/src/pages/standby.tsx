@@ -166,7 +166,8 @@ export function StandbyCard() {
       <Dialog open={code !== null} onClose={() => setCode(null)} title={t.standby.dialog.title} description={t.standby.dialog.description} className="max-w-[520px]">
         {code && (
           <>
-            <CodeBlock copy nowrap>{`nagi server --standby ${code.code}`}</CodeBlock>
+            {/* 配对码用环境变量传，不出现在进程参数里（见 docs/standby.md）。 */}
+            <CodeBlock copy nowrap>{`NAGI_STANDBY=${code.code} nagi server`}</CodeBlock>
             <p className="leading-5 text-muted-foreground">{t.standby.dialog.notice}</p>
             <DialogActions>
               <Button readOnlyOk onClick={() => setCode(null)}>
