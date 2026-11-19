@@ -403,16 +403,20 @@ func (s *nodeService) ApproveNode(ctx context.Context, req *connect.Request[nagi
 }
 
 // RenameNode 修改节点在面板上的名称。名字只用于显示，但不能和别的节点重名，否则界面上分不清。
-// 节点离线时也能改。
+// 节点离线时也能改。名称按 cleanNodeName 整理空格；带不可见字符的拒绝。重名按骨架比较（见 nameSkeleton）：
+// 形近字、全角字母和已有的名称一样的也算重名。
 func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv1.RenameNodeRequest]) (*connect.Response[nagiv1.RenameNodeResponse], error) {
 	id := req.Msg.GetNodeId()
-	name := strings.TrimSpace(strings.Map(plainSpace, req.Msg.GetName()))
+	if strings.ContainsFunc(req.Msg.GetName(), invisibleRune) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能包含控制字符、不可见字符或未分配的字符"))
+	}
+	name := cleanNodeName(req.Msg.GetName())
 	if name == "" || utf8.RuneCountInString(name) > maxNodeName {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能为空，且不超过 64 个字符"))
 	}
-	if strings.ContainsFunc(name, invisibleRune) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("节点名称不能包含控制字符或不可见字符"))
-	}
+	// 和节点加入挑名字用同一把锁：同时加入的节点不会和改好的名称撞名。
+	s.enrollNames.Lock()
+	defer s.enrollNames.Unlock()
 	rows, err := s.Q.ListNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -424,13 +428,19 @@ func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv
 		return nil, err
 	}
 	old := ""
+	skeleton := nameSkeleton(name)
 	for _, row := range rows {
 		if row.ID == id {
 			old = row.Name
+			continue
 		}
-		if row.ID != id && row.Name == name && x.node(row.ID) {
+		if !x.node(row.ID) || nameSkeleton(row.Name) != skeleton {
+			continue
+		}
+		if row.Name == name {
 			return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("已有名为 %s 的节点", name))
 		}
+		return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("名称与节点 %s 过于相似", i18n.NodeRef(row.ID, row.Name)))
 	}
 	if err := s.Nodes.Rename(ctx, id, name); err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -568,7 +578,26 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		if n.Revoked == 0 && n.Pending == 0 {
 			pending = 0 // 已经批准过的节点重新加入，不用再批准
 		}
-		if err := s.Q.SetNodeEnrollment(ctx, store.SetNodeEnrollmentParams{MeshKey: meshKey, Pending: pending, ID: nodeID}); err != nil {
+		// 移除过的节点重新加入时沿用原来的名称：移除期间可能有别的节点用了同样的名称，原来的名称也可能是旧版本存下的、
+		// 带着现在不允许的字符，所以按加入的规则再处理一次。
+		s.enrollNames.Lock()
+		err := s.Q.SetNodeEnrollment(ctx, store.SetNodeEnrollmentParams{MeshKey: meshKey, Pending: pending, ID: nodeID})
+		if err == nil && n.Revoked != 0 {
+			var rows []store.Node
+			if rows, err = s.Q.ListNodes(ctx); err == nil {
+				names := nodeNames{}
+				for _, row := range rows {
+					if row.ID != nodeID {
+						names.add(row.Name)
+					}
+				}
+				if name := enrollName(n.Name, nodeID, names.taken); name != n.Name {
+					_, err = s.Q.RenameNode(ctx, store.RenameNodeParams{Name: name, ID: nodeID})
+				}
+			}
+		}
+		s.enrollNames.Unlock()
+		if err != nil {
 			return nil, err
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
@@ -576,11 +605,11 @@ func (s *enrollService) Enroll(ctx context.Context, req *connect.Request[nagiv1.
 		s.enrollNames.Lock()
 		rows, err := s.Q.ListNodes(ctx)
 		if err == nil {
-			taken := make(map[string]bool, len(rows))
+			names := make(nodeNames, len(rows))
 			for _, row := range rows {
-				taken[row.Name] = true
+				names.add(row.Name)
 			}
-			name := enrollName(req.Msg.GetHostname(), nodeID, func(n string) bool { return taken[n] })
+			name := enrollName(req.Msg.GetHostname(), nodeID, names.taken)
 			err = s.Q.CreateNode(ctx, store.CreateNodeParams{ID: nodeID, Name: name, CreatedAt: now, MeshKey: meshKey, Pending: pending})
 		}
 		s.enrollNames.Unlock()

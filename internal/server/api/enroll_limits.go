@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,6 +12,8 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/audit"
+	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -29,31 +33,49 @@ const (
 )
 
 // invisibleRune 判断字符是不是不显示出来、或者会改变显示方式的：控制字符、格式字符（零宽空格、双向控制符）、
-// 行和段分隔符、私用区和代理区的字符、变体选择符、其他默认不显示的字符（韩文填充符之类）、盲文空格。
+// 行和段分隔符、私用区和代理区的字符、变体选择符、其他默认不显示的字符（韩文填充符之类）、盲文空格，
+// 以及还没分配的码位和非字符（各个字体显示成什么样都不一定，以后分配了也可能是不显示的字符）。
 // 节点名称里不能有：带着它们的名字和另一个名字看起来一样，却不算重名。
+// 是否已分配按 Go 自带的 Unicode 表判断：比它新的 Unicode 版本里才有的字符（例如新的表情）也算没分配。
 func invisibleRune(r rune) bool {
 	return unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp, unicode.Co, unicode.Cs,
-		unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point) || r == '\u2800' || r == utf8.RuneError
+		unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point, unicode.Noncharacter_Code_Point) ||
+		r == '\u2800' || r == utf8.RuneError || unassignedRune(r)
 }
 
-// plainSpace 把各种空格（不换行空格、全角空格等）换成普通空格，它们看起来一样。
-func plainSpace(r rune) rune {
-	if unicode.Is(unicode.Zs, r) {
-		return ' '
-	}
-	return r
+// unassignedRune 判断码位是不是还没分配（Cn）：不属于任何一个已分配的类别。unicode.C 里包含 Cn，不能用来判断。
+func unassignedRune(r rune) bool {
+	return !unicode.In(r, unicode.L, unicode.M, unicode.N, unicode.P, unicode.S, unicode.Z,
+		unicode.Cc, unicode.Cf, unicode.Co, unicode.Cs)
 }
 
-// enrollName 把节点加入时提交的主机名变成节点名称：去掉控制字符和不可见字符，各种空格换成普通空格，
-// 最多 64 个字符（和 RenameNode 的规则一样）；是空的用节点 ID。和别的节点重名时加后缀 -2、-3……，不拒绝，免得正常的加入失败。
-func enrollName(hostname, nodeID string, taken func(string) bool) string {
-	name := strings.TrimSpace(strings.Map(func(r rune) rune {
-		if invisibleRune(r) {
-			return -1
+// cleanNodeName 整理节点名称里的字符：去掉不可见字符，各种空格（不换行空格、全角空格等，看起来一样）换成普通空格，
+// 连续的空格合成一个，去掉首尾的空格。网页显示时连续的空格会合成一个，不合并的话 `web  1` 和 `web 1` 看起来一样却不算重名。
+func cleanNodeName(s string) string {
+	var b strings.Builder
+	space := false
+	for _, r := range s {
+		switch {
+		case invisibleRune(r):
+			continue
+		case unicode.Is(unicode.Zs, r):
+			space = true
+			continue
 		}
-		return plainSpace(r)
-	}, hostname))
-	name = truncateRunes(name, maxNodeName)
+		if space && b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		space = false
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// enrollName 把节点加入时提交的主机名变成节点名称：按 cleanNodeName 整理，最多 64 个字符（截断后再去掉末尾的空格），
+// 和 RenameNode 的规则一样；是空的用节点 ID。和别的节点重名时（taken 返回 true，见 nodeNames）加后缀 -2、-3……，
+// 不拒绝，免得正常的加入失败。
+func enrollName(hostname, nodeID string, taken func(string) bool) string {
+	name := strings.TrimSpace(truncateRunes(cleanNodeName(hostname), maxNodeName))
 	if name == "" {
 		name = nodeID
 	}
@@ -65,6 +87,52 @@ func enrollName(hostname, nodeID string, taken func(string) bool) string {
 		candidate := strings.TrimSpace(truncateRunes(name, maxNodeName-len(suffix))) + suffix
 		if !taken(candidate) {
 			return candidate
+		}
+	}
+}
+
+// nodeNames 是已有的节点名称，按骨架（见 nameSkeleton）判断重名：形近字、全角字母、连续空格不同的名称也算重名。
+type nodeNames map[string]bool
+
+func (n nodeNames) add(name string) { n[nameSkeleton(name)] = true }
+
+// taken 判断 name 和已有的名称是否重名。
+func (n nodeNames) taken(name string) bool { return n[nameSkeleton(name)] }
+
+// NormalizeNodeNames 按现在的规则整理已有的节点名称，主面板启动时调用。旧版本存下的名称可能带着不可见字符、
+// 没分配的码位、连续的空格，或者超过 64 个字符；整理后的名称和别的节点重名时按加入的规则加后缀（已经合规的名称优先保留）。
+// 改了的节点各记一条审计（操作者是系统）和一条日志。已经合规的名称不动，所以每次启动都调用也只会改一次。
+func (a *API) NormalizeNodeNames(ctx context.Context) {
+	a.enrollNames.Lock()
+	defer a.enrollNames.Unlock()
+	rows, err := a.Q.ListNodes(ctx)
+	if err != nil {
+		a.Log.Warn("整理节点名称失败", "err", err)
+		return
+	}
+	never := func(string) bool { return false }
+	names := nodeNames{}
+	var dirty []store.Node
+	for _, row := range rows {
+		if enrollName(row.Name, row.ID, never) == row.Name {
+			names.add(row.Name)
+		} else {
+			dirty = append(dirty, row)
+		}
+	}
+	for _, row := range dirty {
+		name := enrollName(row.Name, row.ID, names.taken)
+		names.add(name)
+		if err := a.Nodes.Rename(ctx, row.ID, name); err != nil {
+			a.Log.Warn("整理节点名称失败", "node", row.ID, "err", err)
+			continue
+		}
+		a.rememberNodeName(ctx, row.ID, row.Name)
+		a.Log.Info("节点名称已按现在的规则整理", "node", row.ID, "from", strconv.QuoteToASCII(row.Name), "to", name)
+		if a.Audit != nil {
+			params, _ := json.Marshal(map[string]string{"node_id": row.ID, "name": name})
+			a.Audit.Record(ctx, audit.Event{Category: audit.Operation, Action: "RenameNode", ActorType: audit.ActorSystem, Via: audit.ViaSystem,
+				TargetType: "node", TargetID: row.ID, TargetName: name, Params: string(params), Result: audit.ResultOK})
 		}
 	}
 }
