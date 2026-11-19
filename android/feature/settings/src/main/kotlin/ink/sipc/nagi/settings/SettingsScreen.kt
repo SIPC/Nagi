@@ -26,6 +26,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,7 +121,8 @@ object SettingsRoutes {
 }
 
 /** 面板设置的各项，和网页设置的二级菜单同样的分组和顺序。不是管理员时只有我的账号和关于。 */
-private val accountKeys = listOf("profile", "security")
+// 个人资料不单独占一行：最上面的头像那一行就是入口。
+private val accountKeys = listOf("security")
 private val panelKeys = listOf("access", "panel-security", "members", "alerts", "standby")
 private val nodeKeys = listOf("invite", "mesh")
 
@@ -204,9 +207,11 @@ fun SettingsContent(
     val name = i?.displayName?.ifEmpty { null } ?: i?.username ?: session.panel.displayName.ifEmpty { session.panel.username }
     Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(contentPadding).padding(horizontal = Dimens.pageHorizontal)) {
         Spacer(Modifier.height(Dimens.topBarToContent))
-        // 账号：头像、名称、角色。点了去个人资料。
+        // 账号：头像、名称、角色。点了去个人资料（宽屏时选中个人资料，这一行有选中的底色）。
         Row(
-            Modifier.fillMaxWidth().rowClickable({ open(SettingsRoutes.PROFILE) }).heightIn(min = 64.dp),
+            Modifier.fillMaxWidth()
+                .rowClickable({ open(SettingsRoutes.PROFILE) }, highlight = if (on(SettingsRoutes.PROFILE)) NagiTheme.colors.muted else null, selectionKey = SettingsRoutes.PROFILE)
+                .heightIn(min = 64.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(name, i?.avatar?.toByteArray(), size = 48.dp)
@@ -220,6 +225,9 @@ fun SettingsContent(
                     )
                 }
             }
+            // 和下面的设置行一样，右边一个「›」，看得出点了能进去。
+            Spacer(Modifier.width(8.dp))
+            Icon(NagiIcons.ChevronRight, contentDescription = null, tint = NagiTheme.colors.mutedForeground, modifier = Modifier.size(16.dp))
         }
         SettingsGroup(stringResource(R.string.local)) {
             SettingsRow(stringResource(R.string.panel), { open(SettingsRoutes.PANEL) }, value = panel.title, selected = on(SettingsRoutes.PANEL), selectionKey = SettingsRoutes.PANEL)
