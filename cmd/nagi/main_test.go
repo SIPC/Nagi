@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -97,6 +99,122 @@ func TestInstallScriptStandbyCodeNotInArgs(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("安装脚本应该用只有 root 能读的环境变量文件传配对码，缺少 %q", want)
 		}
+	}
+}
+
+// installScriptFunc 从面板安装脚本里取出函数 name 的定义（从 `name() {` 到行首的 `}`），给测试单独执行。
+func installScriptFunc(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile("../../scripts/install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	i := strings.Index(s, "\n"+name+"() {\n")
+	if i < 0 {
+		t.Fatalf("安装脚本里找不到函数 %s", name)
+	}
+	j := strings.Index(s[i:], "\n}\n")
+	if j < 0 {
+		t.Fatalf("安装脚本里函数 %s 没有结尾", name)
+	}
+	return s[i+1 : i+j+3]
+}
+
+// 配对码文件先删再以 0600 新建：原有的文件权限更宽、是指向别处的链接时都不沿用。
+// 安装出错退出时，还没配上对就停下面板、删掉配对码文件；已经配上对时从服务配置中去掉它。
+func TestInstallScriptStandbyEnvFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("要用 Unix 的文件权限和符号链接")
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	funcs := `say() { printf '%s\n' "$*"; }
+fail() { printf '错误：%s\n' "$*" >&2; exit 1; }
+systemctl() { echo "systemctl $*" >>"$DATA_DIR/calls"; }
+write_unit() { echo "write_unit $*" >>"$DATA_DIR/calls"; }
+` + installScriptFunc(t, "write_standby_env") + installScriptFunc(t, "on_exit")
+	run := func(dir, body string) string {
+		cmd := exec.Command(sh, "-euc", funcs+body)
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "DATA_DIR=" + dir, "STANDBY_ENV=" + filepath.Join(dir, "standby.env"),
+			"SERVICE=nagi-server", "TMP=" + filepath.Join(dir, "tmp"), "STANDBY_WRITTEN="}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, "calls"))
+		return string(out) + string(b)
+	}
+
+	// 原有的文件权限更宽：换成 0600 的新文件。
+	dir := t.TempDir()
+	env := filepath.Join(dir, "standby.env")
+	if err := os.WriteFile(env, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(dir, `write_standby_env nagi-standby:abc`)
+	if fi, err := os.Lstat(env); err != nil || fi.Mode() != 0o600 {
+		t.Fatalf("配对码文件应该是 0600 的普通文件：%v %v", fi.Mode(), err)
+	}
+	if b, _ := os.ReadFile(env); string(b) != "NAGI_STANDBY=nagi-standby:abc\n" {
+		t.Errorf("配对码文件内容不对：%q", b)
+	}
+
+	// 原有的是指向别处的链接：不写到链接指向的地方。
+	dir = t.TempDir()
+	env = filepath.Join(dir, "standby.env")
+	target := filepath.Join(dir, "target")
+	if err := os.WriteFile(target, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, env); err != nil {
+		t.Fatal(err)
+	}
+	run(dir, `write_standby_env nagi-standby:abc`)
+	if b, _ := os.ReadFile(target); string(b) != "keep" {
+		t.Errorf("不应该写到链接指向的文件：%q", b)
+	}
+	if fi, err := os.Lstat(env); err != nil || !fi.Mode().IsRegular() {
+		t.Errorf("配对码文件应该是新建的普通文件：%v %v", fi, err)
+	}
+
+	// 出错退出、还没配上对：停下面板，删掉配对码文件。
+	dir = t.TempDir()
+	env = filepath.Join(dir, "standby.env")
+	out := run(dir, `write_standby_env nagi-standby:abc; on_exit 1`)
+	if _, err := os.Stat(env); !os.IsNotExist(err) {
+		t.Errorf("出错退出时应该删掉配对码文件：%v", err)
+	}
+	if !strings.Contains(out, "systemctl stop nagi-server") {
+		t.Errorf("还没配上对时应该停下面板：%s", out)
+	}
+
+	// 出错退出、已经配上对：从服务配置中去掉配对码文件，不停面板。
+	dir = t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "panel"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "panel", "paired"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out = run(dir, `write_standby_env nagi-standby:abc; on_exit 1`)
+	if !strings.Contains(out, "write_unit ") || strings.Contains(out, "systemctl stop") {
+		t.Errorf("已经配上对时应该从服务配置中去掉配对码文件、不停面板：%s", out)
+	}
+
+	// 正常退出、没写过配对码文件：都不动。
+	dir = t.TempDir()
+	env = filepath.Join(dir, "standby.env")
+	if out := run(dir, `write_standby_env nagi-standby:abc; on_exit 0`); strings.Contains(out, "systemctl") || strings.Contains(out, "write_unit") {
+		t.Errorf("正常退出时不应该清理：%s", out)
+	}
+	if _, err := os.Stat(env); err != nil {
+		t.Errorf("正常退出时配对码文件由后面的步骤处理：%v", err)
+	}
+	if out := run(t.TempDir(), `on_exit 1`); strings.Contains(out, "systemctl") || strings.Contains(out, "write_unit") {
+		t.Errorf("没写过配对码文件时不应该清理：%s", out)
 	}
 }
 

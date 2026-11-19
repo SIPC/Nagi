@@ -25,6 +25,8 @@ STANDBY="${NAGI_STANDBY:-}"
 unset NAGI_STANDBY
 # STANDBY_ARG：配对码是用 --standby 参数给的（旧写法，安装期间本机其他用户能从进程参数里读到）。
 STANDBY_ARG=""
+# STANDBY_WRITTEN：已经写了配对码文件（见 write_standby_env），出错退出时由 on_exit 清掉。
+STANDBY_WRITTEN=""
 DOWNLOAD_URL="${NAGI_DOWNLOAD_URL:-}"
 DOCKER_MIRROR=""
 
@@ -304,8 +306,24 @@ if [ -z "$UPGRADE" ] && [ -f /etc/systemd/system/nagi-agent.service ]; then
   [ "$DATA_DIR" != /var/lib/nagi ] || fail "本机的 Nagi 节点使用 /var/lib/nagi，请用 --data-dir 为面板指定其他目录，例如 /var/lib/nagi-panel"
 fi
 
+# on_exit 在脚本退出时执行，$1 是退出码：删掉临时目录。备用面板没装成（出错或被中断）时不把配对码留在磁盘上：
+# 还没配上对时先停下面板（免得它带着配对码反复重试，或者在脚本退出以后才配上对、之后因为缺少配对码文件起不来），
+# 再删掉配对码文件；已经配上对时和成功时一样，从服务配置中去掉配对码文件。
+on_exit() {
+  rm -rf "$TMP"
+  [ "$1" -ne 0 ] && [ -n "$STANDBY_WRITTEN" ] || return 0
+  [ -f "$DATA_DIR/panel/paired" ] || systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+  if [ -f "$DATA_DIR/panel/paired" ]; then
+    write_unit "" || true
+  else
+    rm -f "$STANDBY_ENV"
+    say "备用面板未完成配对，已停止面板并删除配对码文件 $STANDBY_ENV。" >&2
+  fi
+}
+
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+trap 'on_exit $?' EXIT
+trap 'exit 130' INT TERM HUP
 
 detect_cn
 
@@ -395,14 +413,22 @@ fi
 # NAGI_STANDBY 传给面板；配对成功后删掉。
 STANDBY_ENV="$DATA_DIR/standby.env"
 
+# write_standby_env 把配对码 $1 写进 $STANDBY_ENV，权限 0600：先删掉原有的文件（权限可能更宽，也可能是指向别处的链接），
+# 再新建（set -C：删掉以后又出现同名文件时不写，报错退出）。
+write_standby_env() {
+  mkdir -p "$DATA_DIR"
+  rm -f "$STANDBY_ENV"
+  STANDBY_WRITTEN=1
+  (umask 077 && set -C && printf 'NAGI_STANDBY=%s\n' "$1" >"$STANDBY_ENV") || fail "无法写入 $STANDBY_ENV"
+}
+
 # write_unit 写服务配置；$1 不为空时是配对码。
 write_unit() {
   WANTS="network-online.target"
   [ -n "$NO_AGENT" ] || WANTS="$WANTS docker.service"
   ENV_LINE=""
   if [ -n "${1:-}" ]; then
-    mkdir -p "$DATA_DIR"
-    (umask 077 && printf 'NAGI_STANDBY=%s\n' "$1" >"$STANDBY_ENV")
+    write_standby_env "$1"
     ENV_LINE="EnvironmentFile=$STANDBY_ENV"
   else
     rm -f "$STANDBY_ENV"
