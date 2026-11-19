@@ -41,4 +41,11 @@
     <string name="scope_no_projects">暂无项目</string>
     <string name="scope_no_nodes">暂无节点</string>
     <string name="scope_kept">另外包含：%1$s（在网页上修改）</string>
+    <string name="scope_follow">跟随项目</string>
+    <string name="scope_nodes_follow">跟随项目的节点</string>
+    <string name="scope_follow_hint">只能看到范围内项目的容器所在的节点。</string>
+    <string name="role_all_permissions">全部权限</string>
+    <string name="role_permission_count">%1$d 项权限</string>
+    <string name="role_not_grantable">包含你没有的权限，不能授予</string>
+    <string name="roles_on_web">角色在网页上新建和编辑。</string>
 </resources>

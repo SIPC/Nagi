@@ -190,6 +190,8 @@ func LegacyRole(admin bool, s Perms) string {
 var publicProcedures = map[string]bool{
 	"/nagi.v1.SetupService/GetSetupState": true, "/nagi.v1.SetupService/Setup": true,
 	"/nagi.v1.AuthService/Login": true, "/nagi.v1.AuthService/BeginPasskeyLogin": true, "/nagi.v1.AuthService/PasskeyLogin": true,
+	// 登录的第二步改用手机确认（见 approval.go）：先核对密码，凭发起时给的凭据取结果。
+	"/nagi.v1.AuthService/BeginLoginApproval": true, "/nagi.v1.AuthService/CompleteLoginApproval": true,
 	"/nagi.v1.AppService/GetPairing": true, "/nagi.v1.AppService/Pair": true, "/nagi.v1.AppService/Challenge": true,
 	"/nagi.v1.AppService/Token": true,
 	// 节点用接入码加入面板（enroll.proto），接入码自己就是凭据。
@@ -204,6 +206,9 @@ var selfProcedures = map[string]bool{
 	"/nagi.v1.AuthService/GetProjectOrder": true, "/nagi.v1.AuthService/SetProjectOrder": true,
 	"/nagi.v1.AuthService/CreateAppPairing": true, "/nagi.v1.AuthService/GetAppPairing": true,
 	"/nagi.v1.AppService/Info": true, "/nagi.v1.AppService/Logout": true,
+	// 手机确认（见 approval.go）：网页发起自己的高权限确认；手机查看、确认自己账号的请求，做自己的高权限确认。
+	"/nagi.v1.AuthService/BeginPhoneApproval": true, "/nagi.v1.AuthService/GetPhoneApproval": true,
+	"/nagi.v1.AppService/ListApprovals": true, "/nagi.v1.AppService/Approve": true, "/nagi.v1.AppService/Elevate": true,
 	// 回复按权限清理（api 的 clean.go）：非管理员只拿到名称、版本，和绑了域名的备用面板。
 	"/nagi.v1.SettingsService/GetSettings": true, "/nagi.v1.SettingsService/GetStandbys": true,
 	// 版本号所有人都能看；force（让面板联网检查）只给管理员，处理函数里检查。

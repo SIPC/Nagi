@@ -44,7 +44,8 @@ internal fun CopyButton(text: String) {
 }
 
 @Composable
-fun AccessScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> Unit) {
+fun AccessScreen(session: PanelSession, isAdmin: Boolean, onBack: () -> Unit, open: (String) -> Unit) {
+    // 对外地址、指纹、主密钥和安全入口只给管理员；有「面板设置」的成员能改名称和域名（和网页 pages/access.tsx 一样）。
     val settings = rememberLoad { session.rpc { c, h -> c.settings.getSettings(GetSettingsRequest.getDefaultInstance(), h) }.settings }
     val sec = rememberLoad { session.rpc { c, h -> c.settings.getSecurity(GetSecurityRequest.getDefaultInstance(), h) } }
     val action = rememberAction()
@@ -60,7 +61,7 @@ fun AccessScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> Un
             ActionRow(stringResource(R.string.panel_name), description = s.name.ifEmpty { s.defaultName }) {
                 NagiButton(stringResource(R.string.edit), { open(SettingsRoutes.PANEL_NAME) }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
             }
-            ActionRow(stringResource(R.string.public_address), description = "${s.publicAddress.ifEmpty { stringResource(R.string.not_set) }}:${s.port} · ${stringResource(R.string.public_address_usage)}") {
+            if (isAdmin) ActionRow(stringResource(R.string.public_address), description = "${s.publicAddress.ifEmpty { stringResource(R.string.not_set) }}:${s.port} · ${stringResource(R.string.public_address_usage)}") {
                 NagiButton(stringResource(R.string.edit), { open(SettingsRoutes.ACCESS_ADDRESS) }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
             }
             ActionRow(
@@ -75,12 +76,12 @@ fun AccessScreen(session: PanelSession, onBack: () -> Unit, open: (String) -> Un
                     variant = ButtonVariant.Outline, size = ButtonSize.Small,
                 )
             }
-            ActionRow(stringResource(R.string.panel_fingerprint), description = s.fingerprint) { CopyButton(s.fingerprint) }
-            if (s.masterKeyPath.isNotEmpty()) {
+            if (isAdmin) ActionRow(stringResource(R.string.panel_fingerprint), description = s.fingerprint) { CopyButton(s.fingerprint) }
+            if (isAdmin && s.masterKeyPath.isNotEmpty()) {
                 ActionRow(stringResource(R.string.master_key), description = "${s.masterKeyPath} · ${stringResource(R.string.master_key_backup)}") { CopyButton(s.masterKeyPath) }
             }
         }
-        Loaded(sec, rows = 1) { e ->
+        if (isAdmin) Loaded(sec, rows = 1) { e ->
             val url = if (e.entrance.isNotEmpty()) "$origin/${e.entrance}" else ""
             ActionRow(
                 stringResource(R.string.entrance),

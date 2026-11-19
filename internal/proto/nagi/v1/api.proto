@@ -41,6 +41,14 @@ service AuthService {
   rpc Me(MeRequest) returns (MeResponse);
   // 高权限确认：打开节点终端、访问节点文件前再验证一次身份（见 docs/node-access.md#权限）。
   rpc Elevate(ElevateRequest) returns (ElevateResponse);
+  // 手机确认（见 docs/android.md#手机确认）：网页发起，成员在手机 App 上用指纹、面容或锁屏密码确认。
+  // 高权限确认：发起后轮询 GetPhoneApproval，手机确认后这个会话算做过高权限确认（给自己留登录凭据的操作不认）。
+  rpc BeginPhoneApproval(BeginPhoneApprovalRequest) returns (PhoneApproval);
+  rpc GetPhoneApproval(GetPhoneApprovalRequest) returns (GetPhoneApprovalResponse);
+  // 登录的第二步：密码对了、开了两步验证的账号可以在手机上确认，代替验证码。不用登录。
+  // 发起后轮询 CompleteLoginApproval，手机确认后它返回会话 cookie。
+  rpc BeginLoginApproval(BeginLoginApprovalRequest) returns (PhoneApproval);
+  rpc CompleteLoginApproval(CompleteLoginApprovalRequest) returns (CompleteLoginApprovalResponse);
   // 修改密码。成功后其他地方的登录全部失效。
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
   // 保存界面语言。浏览器优先用自己记住的选择，没有时（例如换了设备）用这里保存的。
@@ -150,6 +158,10 @@ message MeResponse {
   string role_builtin = 12;
   // 访问范围（见 docs/panel.md#访问范围）。管理员为空。
   UserScope scope = 13;
+  // 添加过手机 App：高权限确认可以选「在手机上确认」。
+  bool has_phone = 14;
+  // 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+  string elevated_by = 15;
 }
 
 message ElevateRequest {
@@ -160,6 +172,43 @@ message ElevateRequest {
 
 message ElevateResponse {
   google.protobuf.Timestamp elevated_until = 1;
+}
+
+message BeginPhoneApprovalRequest {}
+
+// PhoneApproval 是一次等手机确认的请求。
+message PhoneApproval {
+  string id = 1;
+  // 两位数字：网页显示，成员在手机上照着输入，防止随手点了别人发起的请求。
+  string code = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  // 登录用：只给发起的浏览器，凭它取结果（CompleteLoginApproval）。
+  string ticket = 4 [debug_redact = true];
+}
+
+message GetPhoneApprovalRequest {
+  string id = 1;
+}
+
+message GetPhoneApprovalResponse {
+  // pending、approved、denied、expired。
+  string status = 1;
+  // approved 时：高权限确认的有效期。
+  google.protobuf.Timestamp elevated_until = 2;
+}
+
+message BeginLoginApprovalRequest {
+  string username = 1;
+  string password = 2 [debug_redact = true];
+}
+
+message CompleteLoginApprovalRequest {
+  string ticket = 1 [debug_redact = true];
+}
+
+message CompleteLoginApprovalResponse {
+  // pending、approved（这次回复带会话 cookie）、denied、expired。
+  string status = 1;
 }
 
 message UpdateProfileRequest {
@@ -1901,6 +1950,54 @@ service AppService {
   rpc Info(AppInfoRequest) returns (AppInfoResponse);
   // 退出：删除这台手机的设备记录（要令牌）。
   rpc Logout(AppLogoutRequest) returns (AppLogoutResponse);
+  // 等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+  rpc ListApprovals(AppListApprovalsRequest) returns (AppListApprovalsResponse);
+  // 确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+  rpc Approve(AppApproveRequest) returns (AppApproveResponse);
+  // App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+  rpc Elevate(AppElevateRequest) returns (AppElevateResponse);
+}
+
+message AppListApprovalsRequest {}
+
+// AppApproval 是一个等确认的请求。
+message AppApproval {
+  string id = 1;
+  // elevate（网页的高权限确认）、login（网页登录）。
+  string kind = 2;
+  // 发起的 IP 和浏览器（例如「Chrome · Windows」）。
+  string ip = 3;
+  string agent = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+
+message AppListApprovalsResponse {
+  repeated AppApproval approvals = 1;
+}
+
+message AppApproveRequest {
+  string id = 1;
+  // 拒绝。拒绝不用签名和数字。
+  bool deny = 2;
+  // 网页上显示的两位数字。
+  string code = 3 [debug_redact = true];
+  // 签名用的主机和签名：确认密钥签 nagi-app-approve、主机、设备 ID、请求 ID、种类、数字（换行分隔）。
+  string host = 4;
+  bytes signature = 5;
+}
+
+message AppApproveResponse {}
+
+message AppElevateRequest {
+  string challenge = 1;
+  string host = 2;
+  // 确认密钥签 nagi-app-elevate、主机、设备 ID、挑战（换行分隔）。
+  bytes signature = 3;
+}
+
+message AppElevateResponse {
+  google.protobuf.Timestamp elevated_until = 1;
 }
 
 message GetPairingRequest {
@@ -1993,6 +2090,8 @@ message AppInfoResponse {
   int64 role_id = 14;
   string role_name = 15;
   string role_builtin = 16;
+  // 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+  google.protobuf.Timestamp elevated_until = 17;
 }
 
 message AppLogoutRequest {}

@@ -31,4 +31,14 @@
     <string name="unlock">Unlock</string>
     <string name="unlock_locked">Locked</string>
     <string name="unlock_idle">Locked · Not used for %1$d min</string>
+    <string name="approval_login_title">Confirm sign-in</string>
+    <string name="approval_elevate_title">Verify identity</string>
+    <string name="approval_login_text">Someone is signing in to %1$s with your account.</string>
+    <string name="approval_elevate_text">An action on the web needs to verify your identity (%1$s).</string>
+    <string name="approval_not_you">If this was not you, tap Deny.</string>
+    <string name="approval_code">Number shown on the web</string>
+    <string name="approval_code_hint">Two digits</string>
+    <string name="approval_deny">Deny</string>
+    <string name="approval_confirm">Confirm</string>
+    <string name="prompt_elevate_title">Verify identity</string>
 </resources>

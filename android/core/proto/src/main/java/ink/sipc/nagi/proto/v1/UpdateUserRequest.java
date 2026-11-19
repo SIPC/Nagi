@@ -310,6 +310,44 @@ public  final class UpdateUserRequest extends
     clearPasskeys_ = false;
   }
 
+  public static final int ROLE_ID_FIELD_NUMBER = 7;
+  private long roleId_;
+  /**
+   * <pre>
+   * 角色，0 表示不改（填了时不看 role）。
+   * </pre>
+   *
+   * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  @java.lang.Override
+  public long getRoleId() {
+    return roleId_;
+  }
+  /**
+   * <pre>
+   * 角色，0 表示不改（填了时不看 role）。
+   * </pre>
+   *
+   * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+   * @param value The roleId to set.
+   */
+  private void setRoleId(long value) {
+    
+    roleId_ = value;
+  }
+  /**
+   * <pre>
+   * 角色，0 表示不改（填了时不看 role）。
+   * </pre>
+   *
+   * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+   */
+  private void clearRoleId() {
+
+    roleId_ = 0L;
+  }
+
   public static ink.sipc.nagi.proto.v1.UpdateUserRequest parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -712,6 +750,46 @@ public  final class UpdateUserRequest extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 角色，0 表示不改（填了时不看 role）。
+     * </pre>
+     *
+     * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+     * @return The roleId.
+     */
+    @java.lang.Override
+    public long getRoleId() {
+      return instance.getRoleId();
+    }
+    /**
+     * <pre>
+     * 角色，0 表示不改（填了时不看 role）。
+     * </pre>
+     *
+     * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+     * @param value The roleId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleId(long value) {
+      copyOnWrite();
+      instance.setRoleId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 角色，0 表示不改（填了时不看 role）。
+     * </pre>
+     *
+     * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleId() {
+      copyOnWrite();
+      instance.clearRoleId();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.UpdateUserRequest)
   }
   @java.lang.Override
@@ -735,10 +813,11 @@ public  final class UpdateUserRequest extends
             "clearTotp_",
             "scope_",
             "clearPasskeys_",
+            "roleId_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0002\u0002\u0208" +
-              "\u0003\u0208\u0004\u0007\u0005\u1009\u0000\u0006\u0007";
+              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0002\u0002\u0208" +
+              "\u0003\u0208\u0004\u0007\u0005\u1009\u0000\u0006\u0007\u0007\u0002";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

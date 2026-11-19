@@ -128,4 +128,128 @@ public interface MeResponseOrBuilder extends
    * @return The elevatedUntil.
    */
   com.google.protobuf.Timestamp getElevatedUntil();
+
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @return A list containing the permissions.
+   */
+  java.util.List<java.lang.String>
+      getPermissionsList();
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @return The count of permissions.
+   */
+  int getPermissionsCount();
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param index The index of the element to return.
+   * @return The permissions at the given index.
+   */
+  java.lang.String getPermissions(int index);
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param index The index of the element to return.
+   * @return The permissions at the given index.
+   */
+  com.google.protobuf.ByteString
+      getPermissionsBytes(int index);
+
+  /**
+   * <pre>
+   * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+   * </pre>
+   *
+   * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  long getRoleId();
+
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   * @return The roleName.
+   */
+  java.lang.String getRoleName();
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   * @return The bytes for roleName.
+   */
+  com.google.protobuf.ByteString
+      getRoleNameBytes();
+
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   * @return The roleBuiltin.
+   */
+  java.lang.String getRoleBuiltin();
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   * @return The bytes for roleBuiltin.
+   */
+  com.google.protobuf.ByteString
+      getRoleBuiltinBytes();
+
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   * @return Whether the scope field is set.
+   */
+  boolean hasScope();
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  ink.sipc.nagi.proto.v1.UserScope getScope();
+
+  /**
+   * <pre>
+   * 添加过手机 App：高权限确认可以选「在手机上确认」。
+   * </pre>
+   *
+   * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+   * @return The hasPhone.
+   */
+  boolean getHasPhone();
+
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   * @return The elevatedBy.
+   */
+  java.lang.String getElevatedBy();
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   * @return The bytes for elevatedBy.
+   */
+  com.google.protobuf.ByteString
+      getElevatedByBytes();
 }

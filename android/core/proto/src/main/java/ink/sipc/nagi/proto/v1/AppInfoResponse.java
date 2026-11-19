@@ -26,7 +26,11 @@ public  final class AppInfoResponse extends
     role_ = "";
     avatar_ = com.google.protobuf.ByteString.EMPTY;
     avatarType_ = "";
+    permissions_ = emptyProtobufList();
+    roleName_ = "";
+    roleBuiltin_ = "";
   }
+  private int bitField0_;
   public static final int PANEL_NAME_FIELD_NUMBER = 1;
   private java.lang.String panelName_;
   /**
@@ -630,6 +634,322 @@ public  final class AppInfoResponse extends
     checkByteStringIsUtf8(value);
     avatarType_ = value.toStringUtf8();
 
+  }
+
+  public static final int PERMISSIONS_FIELD_NUMBER = 13;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> permissions_;
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @return A list containing the permissions.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getPermissionsList() {
+    return permissions_;
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @return The count of permissions.
+   */
+  @java.lang.Override
+  public int getPermissionsCount() {
+    return permissions_.size();
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param index The index of the element to return.
+   * @return The permissions at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getPermissions(int index) {
+    return permissions_.get(index);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the permissions at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPermissionsBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        permissions_.get(index));
+  }
+  private void ensurePermissionsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        permissions_;  if (!tmp.isModifiable()) {
+      permissions_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param index The index to set the value at.
+   * @param value The permissions to set.
+   */
+  private void setPermissions(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensurePermissionsIsMutable();
+    permissions_.set(index, value);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param value The permissions to add.
+   */
+  private void addPermissions(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensurePermissionsIsMutable();
+    permissions_.add(value);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param values The permissions to add.
+   */
+  private void addAllPermissions(
+      java.lang.Iterable<java.lang.String> values) {
+    ensurePermissionsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, permissions_);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   */
+  private void clearPermissions() {
+    permissions_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+   * </pre>
+   *
+   * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+   * @param value The bytes of the permissions to add.
+   */
+  private void addPermissionsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensurePermissionsIsMutable();
+    permissions_.add(value.toStringUtf8());
+  }
+
+  public static final int ROLE_ID_FIELD_NUMBER = 14;
+  private long roleId_;
+  /**
+   * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  @java.lang.Override
+  public long getRoleId() {
+    return roleId_;
+  }
+  /**
+   * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+   * @param value The roleId to set.
+   */
+  private void setRoleId(long value) {
+    
+    roleId_ = value;
+  }
+  /**
+   * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+   */
+  private void clearRoleId() {
+
+    roleId_ = 0L;
+  }
+
+  public static final int ROLE_NAME_FIELD_NUMBER = 15;
+  private java.lang.String roleName_;
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   * @return The roleName.
+   */
+  @java.lang.Override
+  public java.lang.String getRoleName() {
+    return roleName_;
+  }
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   * @return The bytes for roleName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRoleNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(roleName_);
+  }
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   * @param value The roleName to set.
+   */
+  private void setRoleName(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    roleName_ = value;
+  }
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   */
+  private void clearRoleName() {
+
+    roleName_ = getDefaultInstance().getRoleName();
+  }
+  /**
+   * <code>string role_name = 15 [json_name = "roleName"];</code>
+   * @param value The bytes for roleName to set.
+   */
+  private void setRoleNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    roleName_ = value.toStringUtf8();
+
+  }
+
+  public static final int ROLE_BUILTIN_FIELD_NUMBER = 16;
+  private java.lang.String roleBuiltin_;
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   * @return The roleBuiltin.
+   */
+  @java.lang.Override
+  public java.lang.String getRoleBuiltin() {
+    return roleBuiltin_;
+  }
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   * @return The bytes for roleBuiltin.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRoleBuiltinBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(roleBuiltin_);
+  }
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   * @param value The roleBuiltin to set.
+   */
+  private void setRoleBuiltin(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    roleBuiltin_ = value;
+  }
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   */
+  private void clearRoleBuiltin() {
+
+    roleBuiltin_ = getDefaultInstance().getRoleBuiltin();
+  }
+  /**
+   * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+   * @param value The bytes for roleBuiltin to set.
+   */
+  private void setRoleBuiltinBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    roleBuiltin_ = value.toStringUtf8();
+
+  }
+
+  public static final int ELEVATED_UNTIL_FIELD_NUMBER = 17;
+  private com.google.protobuf.Timestamp elevatedUntil_;
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   */
+  @java.lang.Override
+  public boolean hasElevatedUntil() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   */
+  @java.lang.Override
+  public com.google.protobuf.Timestamp getElevatedUntil() {
+    return elevatedUntil_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : elevatedUntil_;
+  }
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   */
+  private void setElevatedUntil(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    elevatedUntil_ = value;
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeElevatedUntil(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    if (elevatedUntil_ != null &&
+        elevatedUntil_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+      elevatedUntil_ =
+        com.google.protobuf.Timestamp.newBuilder(elevatedUntil_).mergeFrom(value).buildPartial();
+    } else {
+      elevatedUntil_ = value;
+    }
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+   */
+  private void clearElevatedUntil() {
+    elevatedUntil_ = null;
+    bitField0_ = (bitField0_ & ~0x00000001);
   }
 
   public static ink.sipc.nagi.proto.v1.AppInfoResponse parseFrom(
@@ -1354,6 +1674,331 @@ public  final class AppInfoResponse extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @return A list containing the permissions.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getPermissionsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getPermissionsList());
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @return The count of permissions.
+     */
+    @java.lang.Override
+    public int getPermissionsCount() {
+      return instance.getPermissionsCount();
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @param index The index of the element to return.
+     * @return The permissions at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getPermissions(int index) {
+      return instance.getPermissions(index);
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the permissions at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPermissionsBytes(int index) {
+      return instance.getPermissionsBytes(index);
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @param index The index to set the value at.
+     * @param value The permissions to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPermissions(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setPermissions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @param value The permissions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addPermissions(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addPermissions(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @param values The permissions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllPermissions(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllPermissions(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPermissions() {
+      copyOnWrite();
+      instance.clearPermissions();
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限（同 MeResponse.permissions）和角色。App 据此隐藏入口。
+     * </pre>
+     *
+     * <code>repeated string permissions = 13 [json_name = "permissions"];</code>
+     * @param value The bytes of the permissions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addPermissionsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addPermissionsBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+     * @return The roleId.
+     */
+    @java.lang.Override
+    public long getRoleId() {
+      return instance.getRoleId();
+    }
+    /**
+     * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+     * @param value The roleId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleId(long value) {
+      copyOnWrite();
+      instance.setRoleId(value);
+      return this;
+    }
+    /**
+     * <code>int64 role_id = 14 [json_name = "roleId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleId() {
+      copyOnWrite();
+      instance.clearRoleId();
+      return this;
+    }
+
+    /**
+     * <code>string role_name = 15 [json_name = "roleName"];</code>
+     * @return The roleName.
+     */
+    @java.lang.Override
+    public java.lang.String getRoleName() {
+      return instance.getRoleName();
+    }
+    /**
+     * <code>string role_name = 15 [json_name = "roleName"];</code>
+     * @return The bytes for roleName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRoleNameBytes() {
+      return instance.getRoleNameBytes();
+    }
+    /**
+     * <code>string role_name = 15 [json_name = "roleName"];</code>
+     * @param value The roleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoleName(value);
+      return this;
+    }
+    /**
+     * <code>string role_name = 15 [json_name = "roleName"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleName() {
+      copyOnWrite();
+      instance.clearRoleName();
+      return this;
+    }
+    /**
+     * <code>string role_name = 15 [json_name = "roleName"];</code>
+     * @param value The bytes for roleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRoleNameBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+     * @return The roleBuiltin.
+     */
+    @java.lang.Override
+    public java.lang.String getRoleBuiltin() {
+      return instance.getRoleBuiltin();
+    }
+    /**
+     * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+     * @return The bytes for roleBuiltin.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRoleBuiltinBytes() {
+      return instance.getRoleBuiltinBytes();
+    }
+    /**
+     * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+     * @param value The roleBuiltin to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleBuiltin(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoleBuiltin(value);
+      return this;
+    }
+    /**
+     * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleBuiltin() {
+      copyOnWrite();
+      instance.clearRoleBuiltin();
+      return this;
+    }
+    /**
+     * <code>string role_builtin = 16 [json_name = "roleBuiltin"];</code>
+     * @param value The bytes for roleBuiltin to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleBuiltinBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRoleBuiltinBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+     */
+    @java.lang.Override
+    public boolean hasElevatedUntil() {
+      return instance.hasElevatedUntil();
+    }
+    /**
+     * <pre>
+     * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getElevatedUntil() {
+      return instance.getElevatedUntil();
+    }
+    /**
+     * <pre>
+     * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+     */
+    public Builder setElevatedUntil(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.setElevatedUntil(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+     */
+    public Builder setElevatedUntil(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setElevatedUntil(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+     */
+    public Builder mergeElevatedUntil(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.mergeElevatedUntil(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 这台手机做过的高权限确认的有效期（AppService.Elevate），没有或过期时为空。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp elevated_until = 17 [json_name = "elevatedUntil"];</code>
+     */
+    public Builder clearElevatedUntil() {  copyOnWrite();
+      instance.clearElevatedUntil();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.AppInfoResponse)
   }
   @java.lang.Override
@@ -1370,6 +2015,7 @@ public  final class AppInfoResponse extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "panelName_",
             "version_",
             "features_",
@@ -1382,11 +2028,16 @@ public  final class AppInfoResponse extends
             "role_",
             "avatar_",
             "avatarType_",
+            "permissions_",
+            "roleId_",
+            "roleName_",
+            "roleBuiltin_",
+            "elevatedUntil_",
           };
           java.lang.String info =
-              "\u0000\f\u0000\u0000\u0001\f\f\u0000\u0001\u0000\u0001\u0208\u0002\u0208\u0003\u021a" +
-              "\u0004\u0208\u0005\u0208\u0006\u0004\u0007\u0208\b\u0208\t\u0208\n\u0208\u000b\n" +
-              "\f\u0208";
+              "\u0000\u0011\u0000\u0001\u0001\u0011\u0011\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u021a\u0004\u0208\u0005\u0208\u0006\u0004\u0007\u0208\b\u0208\t\u0208\n\u0208" +
+              "\u000b\n\f\u0208\r\u021a\u000e\u0002\u000f\u0208\u0010\u0208\u0011\u1009\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

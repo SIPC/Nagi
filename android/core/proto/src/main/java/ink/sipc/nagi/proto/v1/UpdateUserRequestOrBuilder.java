@@ -90,4 +90,14 @@ public interface UpdateUserRequestOrBuilder extends
    * @return The clearPasskeys.
    */
   boolean getClearPasskeys();
+
+  /**
+   * <pre>
+   * 角色，0 表示不改（填了时不看 role）。
+   * </pre>
+   *
+   * <code>int64 role_id = 7 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  long getRoleId();
 }

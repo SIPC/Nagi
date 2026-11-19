@@ -4,6 +4,17 @@ const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? o
 
 export default {
   otherNode: "Other node",
+  phone: {
+    use: "Confirm on phone",
+    useCode: "Use a code instead",
+    usePassword: "Use password instead",
+    codeLabel: "Confirmation number",
+    waiting: "Enter this number in the phone app and confirm",
+    denied: "Denied on the phone",
+    expired: "The request expired",
+    retry: "Try again",
+    loginDescription: "Open the Nagi app on your phone, enter the number below and confirm.",
+  },
   // 字段和标题旁问号按钮的读屏名称。
   help: "More info",
   switch: { on: "On", off: "Off", turnOn: "Turn on", turnOff: "Turn off" },

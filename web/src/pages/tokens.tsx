@@ -116,7 +116,7 @@ function CreateToken({ onDone, onCancel }: { onDone: (res: CreateAccessTokenResp
         return await settingsClient.createAccessToken(req);
       } catch (err) {
         // 生成令牌要先再验证一次身份。
-        if (!isElevationRequired(err) || !(await requireElevation(t.tokens.elevate))) throw err;
+        if (!isElevationRequired(err) || !(await requireElevation(t.tokens.elevate, { passwordOnly: true }))) throw err;
         return settingsClient.createAccessToken(req);
       }
     },

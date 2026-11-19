@@ -68,6 +68,62 @@ public class AuthServiceClient(
 
 
   /**
+   *  手机确认（见 docs/android.md#手机确认）：网页发起，成员在手机 App 上用指纹、面容或锁屏密码确认。
+   *  高权限确认：发起后轮询 GetPhoneApproval，手机确认后这个会话算做过高权限确认（给自己留登录凭据的操作不认）。
+   */
+  override suspend fun beginPhoneApproval(request: BeginPhoneApprovalRequest, headers: Headers): ResponseMessage<PhoneApproval> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AuthService/BeginPhoneApproval",
+      ink.sipc.nagi.proto.v1.BeginPhoneApprovalRequest::class,
+      ink.sipc.nagi.proto.v1.PhoneApproval::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  override suspend fun getPhoneApproval(request: GetPhoneApprovalRequest, headers: Headers): ResponseMessage<GetPhoneApprovalResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AuthService/GetPhoneApproval",
+      ink.sipc.nagi.proto.v1.GetPhoneApprovalRequest::class,
+      ink.sipc.nagi.proto.v1.GetPhoneApprovalResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  登录的第二步：密码对了、开了两步验证的账号可以在手机上确认，代替验证码。不用登录。
+   *  发起后轮询 CompleteLoginApproval，手机确认后它返回会话 cookie。
+   */
+  override suspend fun beginLoginApproval(request: BeginLoginApprovalRequest, headers: Headers): ResponseMessage<PhoneApproval> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AuthService/BeginLoginApproval",
+      ink.sipc.nagi.proto.v1.BeginLoginApprovalRequest::class,
+      ink.sipc.nagi.proto.v1.PhoneApproval::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  override suspend fun completeLoginApproval(request: CompleteLoginApprovalRequest, headers: Headers): ResponseMessage<CompleteLoginApprovalResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AuthService/CompleteLoginApproval",
+      ink.sipc.nagi.proto.v1.CompleteLoginApprovalRequest::class,
+      ink.sipc.nagi.proto.v1.CompleteLoginApprovalResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
    *  修改密码。成功后其他地方的登录全部失效。
    */
   override suspend fun changePassword(request: ChangePasswordRequest, headers: Headers): ResponseMessage<ChangePasswordResponse> = client.unary(

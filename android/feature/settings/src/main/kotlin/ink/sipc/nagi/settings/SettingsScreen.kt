@@ -1,5 +1,6 @@
 package ink.sipc.nagi.settings
 
+import ink.sipc.nagi.data.Access
 import androidx.compose.foundation.ScrollState
 import android.app.Activity
 import android.content.ClipData
@@ -122,6 +123,17 @@ private val accountKeys = listOf("profile", "security")
 private val panelKeys = listOf("access", "panel-security", "members", "alerts", "standby")
 private val nodeKeys = listOf("invite", "mesh")
 
+/**
+ * 每项要的权限（和网页 pages/settings.tsx 的 tabAllowed 一样，见 internal/server/auth/perms.go）：没有的不显示，接口也会拒绝。
+ * 备用面板、接收节点、节点网络只给管理员。
+ */
+private fun keyAllowed(key: String, access: Access): Boolean = when (key) {
+    "access", "alerts" -> access.can(Access.PANEL_SETTINGS)
+    "panel-security" -> access.can(Access.PANEL_SECURITY)
+    "members" -> access.can(Access.PANEL_MEMBERS)
+    else -> access.isAdmin
+}
+
 @Composable
 private fun keyTitle(key: String): String = stringResource(
     when (key) {
@@ -139,12 +151,16 @@ private fun keyTitle(key: String): String = stringResource(
 )
 
 @Composable
-private fun roleLabel(role: String): String = when (role) {
+internal fun roleLabel(role: String): String = when (role) {
     "admin" -> stringResource(R.string.role_admin)
     "operator" -> stringResource(R.string.role_operator)
     "viewer" -> stringResource(R.string.role_viewer)
     else -> role
 }
+
+/** 角色的名称：起了名的用名称，预置角色没有改名时用本地化的名称；旧版面板只有 legacy（admin、operator、viewer）。 */
+@Composable
+internal fun roleLabel(name: String, builtin: String, legacy: String = ""): String = name.ifEmpty { roleLabel(builtin.ifEmpty { legacy }) }
 
 @Composable
 private fun themeLabel(mode: ThemeMode) = stringResource(
@@ -199,7 +215,7 @@ fun SettingsContent(
                 Text(name, style = NagiTheme.type.bodyMedium, color = NagiTheme.colors.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Collapse(i != null) {
                     Text(
-                        listOfNotNull(i?.role?.let { roleLabel(it) }, i?.username?.takeIf { it != name }).joinToString(" · "),
+                        listOfNotNull(i?.let { roleLabel(it.roleName, it.roleBuiltin, it.role) }, i?.username?.takeIf { it != name }).joinToString(" · "),
                         style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground,
                     )
                 }
@@ -213,12 +229,18 @@ fun SettingsContent(
         SettingsGroup(stringResource(R.string.group_account)) {
             accountKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
         }
-        Collapse(i?.role == "admin") {
+        // 面板的几组按权限显示（知道权限后展开），一项都没有的组不显示。
+        val access = remember(i) { i?.let { Access.of(it) } }
+        val panelShown = access?.let { a -> panelKeys.filter { keyAllowed(it, a) } }.orEmpty()
+        val nodeShown = access?.let { a -> nodeKeys.filter { keyAllowed(it, a) } }.orEmpty()
+        Collapse(panelShown.isNotEmpty()) {
             SettingsGroup(stringResource(R.string.group_panel)) {
-                panelKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
+                panelShown.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
             }
+        }
+        Collapse(nodeShown.isNotEmpty()) {
             SettingsGroup(stringResource(R.string.group_nodes)) {
-                nodeKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
+                nodeShown.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
             }
         }
         // 关于只有一项，放在最下面，不写组标题（和网页一样）：App 和面板的版本都在里面。
@@ -266,9 +288,10 @@ fun LanguageScreen(prefs: AppPrefs, onBack: () -> Unit) {
 /**
  * 当前面板：名称、地址、域名、成员，和退出这台手机（先确认）。顶部栏的面板列表也用它。
  * 起了本机显示名称时，标题是显示名称，下面另写面板名称。[extra] 放在退出按钮上面（设置里的改名入口）。
+ * 面板的地址只给管理员看（[showAddress]，见 docs/panel.md#访问范围），其他成员只看域名。
  */
 @Composable
-fun PanelDetails(session: PanelSession, onLogout: () -> Unit, modifier: Modifier = Modifier, extra: @Composable ColumnScope.() -> Unit = {}) {
+fun PanelDetails(session: PanelSession, onLogout: () -> Unit, modifier: Modifier = Modifier, showAddress: Boolean = false, extra: @Composable ColumnScope.() -> Unit = {}) {
     var confirming by remember { mutableStateOf(false) }
     val p by session.current.collectAsStateWithLifecycle()
     Column(modifier.fillMaxWidth()) {
@@ -276,7 +299,7 @@ fun PanelDetails(session: PanelSession, onLogout: () -> Unit, modifier: Modifier
         Spacer(Modifier.height(8.dp))
         if (p.alias.isNotBlank()) KeyValueRow(stringResource(R.string.panel_name), p.name, labelWidth = 72.dp)
         KeyValueRow(stringResource(R.string.panel_member), p.displayName.ifEmpty { p.username }, labelWidth = 72.dp)
-        KeyValueRow(stringResource(R.string.panel_address), p.address, mono = true, labelWidth = 72.dp)
+        if (showAddress) KeyValueRow(stringResource(R.string.panel_address), p.address, mono = true, labelWidth = 72.dp)
         if (p.domain.isNotEmpty()) KeyValueRow(stringResource(R.string.panel_domain), p.domain, mono = true, labelWidth = 72.dp)
         extra()
         Spacer(Modifier.height(24.dp))
@@ -292,17 +315,17 @@ fun PanelDetails(session: PanelSession, onLogout: () -> Unit, modifier: Modifier
     }
 }
 
-/** 设置 → 面板：面板的信息，本机显示名称，管理员还能改面板名称。 */
+/** 设置 → 面板：面板的信息，本机显示名称，有「面板设置」权限的还能改面板名称。 */
 @Composable
-fun PanelScreen(session: PanelSession, isAdmin: Boolean, onBack: () -> Unit, onLogout: () -> Unit, open: (String) -> Unit) {
+fun PanelScreen(session: PanelSession, access: Access?, onBack: () -> Unit, onLogout: () -> Unit, open: (String) -> Unit) {
     val p by session.current.collectAsStateWithLifecycle()
     val notSet = stringResource(R.string.not_set)
     SubPage(stringResource(R.string.panel), onBack) {
         Spacer(Modifier.height(Dimens.topBarToContent))
-        PanelDetails(session, onLogout) {
+        PanelDetails(session, onLogout, showAddress = access?.isAdmin == true) {
             SettingsGroup(null) {
                 SettingsRow(stringResource(R.string.panel_alias), { open(SettingsRoutes.PANEL_ALIAS) }, value = p.alias.ifBlank { notSet })
-                if (isAdmin) SettingsRow(stringResource(R.string.panel_name), { open(SettingsRoutes.PANEL_NAME) }, value = p.name)
+                if (access?.can(Access.PANEL_SETTINGS) == true) SettingsRow(stringResource(R.string.panel_name), { open(SettingsRoutes.PANEL_NAME) }, value = p.name)
             }
         }
     }
@@ -350,7 +373,7 @@ internal fun EditNameScreen(
  * [panelVersion] 来自 AppService.Info，还没拿到时不写。
  */
 @Composable
-fun AboutScreen(appVersion: String, panelVersion: String?, session: PanelSession, isAdmin: Boolean, onBack: () -> Unit, open: (String) -> Unit) {
+fun AboutScreen(appVersion: String, panelVersion: String?, session: PanelSession, access: Access?, onBack: () -> Unit, open: (String) -> Unit) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val cert = remember { signingCertSha256(context) }
@@ -383,8 +406,8 @@ fun AboutScreen(appVersion: String, panelVersion: String?, session: PanelSession
         }
         SettingsGroup(stringResource(R.string.about_group_panel)) {
             KeyValueRow(stringResource(R.string.version), panelVersion?.ifEmpty { null } ?: "—", labelWidth = 72.dp)
-            // 检查更新、更新面板只有管理员能做。
-            if (isAdmin) PanelUpdateSection(session)
+            // 更新面板要「面板设置」权限；让面板联网检查只有管理员能做。
+            if (access?.can(Access.PANEL_SETTINGS) == true) PanelUpdateSection(session, canCheck = access.isAdmin)
         }
     }
 }

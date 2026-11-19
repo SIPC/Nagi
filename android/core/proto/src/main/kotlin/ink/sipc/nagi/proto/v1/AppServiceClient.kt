@@ -105,4 +105,49 @@ public class AppServiceClient(
     ),
   )
 
+
+  /**
+   *  等这个成员在手机上确认的请求（要令牌，见 docs/android.md#手机确认）。App 在前台时每几秒查一次。
+   */
+  override suspend fun listApprovals(request: AppListApprovalsRequest, headers: Headers): ResponseMessage<AppListApprovalsResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AppService/ListApprovals",
+      ink.sipc.nagi.proto.v1.AppListApprovalsRequest::class,
+      ink.sipc.nagi.proto.v1.AppListApprovalsResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  确认或拒绝一个请求。确认要用确认密钥签名（每次都要验证指纹、面容或锁屏密码）。
+   */
+  override suspend fun approve(request: AppApproveRequest, headers: Headers): ResponseMessage<AppApproveResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AppService/Approve",
+      ink.sipc.nagi.proto.v1.AppApproveRequest::class,
+      ink.sipc.nagi.proto.v1.AppApproveResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  App 自己的高权限确认：用确认密钥签名 Challenge 给的挑战。有效期 15 分钟，只对确认时的 IP 有效。
+   */
+  override suspend fun elevate(request: AppElevateRequest, headers: Headers): ResponseMessage<AppElevateResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AppService/Elevate",
+      ink.sipc.nagi.proto.v1.AppElevateRequest::class,
+      ink.sipc.nagi.proto.v1.AppElevateResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
 }

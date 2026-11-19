@@ -21,6 +21,10 @@ public  final class MeResponse extends
     displayName_ = "";
     avatar_ = com.google.protobuf.ByteString.EMPTY;
     avatarType_ = "";
+    permissions_ = emptyProtobufList();
+    roleName_ = "";
+    roleBuiltin_ = "";
+    elevatedBy_ = "";
   }
   private int bitField0_;
   public static final int USERNAME_FIELD_NUMBER = 1;
@@ -448,6 +452,439 @@ public  final class MeResponse extends
   private void clearElevatedUntil() {
     elevatedUntil_ = null;
     bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
+  public static final int PERMISSIONS_FIELD_NUMBER = 9;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> permissions_;
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @return A list containing the permissions.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getPermissionsList() {
+    return permissions_;
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @return The count of permissions.
+   */
+  @java.lang.Override
+  public int getPermissionsCount() {
+    return permissions_.size();
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param index The index of the element to return.
+   * @return The permissions at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getPermissions(int index) {
+    return permissions_.get(index);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the permissions at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPermissionsBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        permissions_.get(index));
+  }
+  private void ensurePermissionsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        permissions_;  if (!tmp.isModifiable()) {
+      permissions_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param index The index to set the value at.
+   * @param value The permissions to set.
+   */
+  private void setPermissions(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensurePermissionsIsMutable();
+    permissions_.set(index, value);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param value The permissions to add.
+   */
+  private void addPermissions(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensurePermissionsIsMutable();
+    permissions_.add(value);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param values The permissions to add.
+   */
+  private void addAllPermissions(
+      java.lang.Iterable<java.lang.String> values) {
+    ensurePermissionsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, permissions_);
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   */
+  private void clearPermissions() {
+    permissions_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+   * </pre>
+   *
+   * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+   * @param value The bytes of the permissions to add.
+   */
+  private void addPermissionsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensurePermissionsIsMutable();
+    permissions_.add(value.toStringUtf8());
+  }
+
+  public static final int ROLE_ID_FIELD_NUMBER = 10;
+  private long roleId_;
+  /**
+   * <pre>
+   * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+   * </pre>
+   *
+   * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  @java.lang.Override
+  public long getRoleId() {
+    return roleId_;
+  }
+  /**
+   * <pre>
+   * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+   * </pre>
+   *
+   * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+   * @param value The roleId to set.
+   */
+  private void setRoleId(long value) {
+    
+    roleId_ = value;
+  }
+  /**
+   * <pre>
+   * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+   * </pre>
+   *
+   * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+   */
+  private void clearRoleId() {
+
+    roleId_ = 0L;
+  }
+
+  public static final int ROLE_NAME_FIELD_NUMBER = 11;
+  private java.lang.String roleName_;
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   * @return The roleName.
+   */
+  @java.lang.Override
+  public java.lang.String getRoleName() {
+    return roleName_;
+  }
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   * @return The bytes for roleName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRoleNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(roleName_);
+  }
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   * @param value The roleName to set.
+   */
+  private void setRoleName(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    roleName_ = value;
+  }
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   */
+  private void clearRoleName() {
+
+    roleName_ = getDefaultInstance().getRoleName();
+  }
+  /**
+   * <code>string role_name = 11 [json_name = "roleName"];</code>
+   * @param value The bytes for roleName to set.
+   */
+  private void setRoleNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    roleName_ = value.toStringUtf8();
+
+  }
+
+  public static final int ROLE_BUILTIN_FIELD_NUMBER = 12;
+  private java.lang.String roleBuiltin_;
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   * @return The roleBuiltin.
+   */
+  @java.lang.Override
+  public java.lang.String getRoleBuiltin() {
+    return roleBuiltin_;
+  }
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   * @return The bytes for roleBuiltin.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRoleBuiltinBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(roleBuiltin_);
+  }
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   * @param value The roleBuiltin to set.
+   */
+  private void setRoleBuiltin(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    roleBuiltin_ = value;
+  }
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   */
+  private void clearRoleBuiltin() {
+
+    roleBuiltin_ = getDefaultInstance().getRoleBuiltin();
+  }
+  /**
+   * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+   * @param value The bytes for roleBuiltin to set.
+   */
+  private void setRoleBuiltinBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    roleBuiltin_ = value.toStringUtf8();
+
+  }
+
+  public static final int SCOPE_FIELD_NUMBER = 13;
+  private ink.sipc.nagi.proto.v1.UserScope scope_;
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   */
+  @java.lang.Override
+  public boolean hasScope() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.UserScope getScope() {
+    return scope_ == null ? ink.sipc.nagi.proto.v1.UserScope.getDefaultInstance() : scope_;
+  }
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   */
+  private void setScope(ink.sipc.nagi.proto.v1.UserScope value) {
+    java.util.Objects.requireNonNull(value);
+    scope_ = value;
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeScope(ink.sipc.nagi.proto.v1.UserScope value) {
+    java.util.Objects.requireNonNull(value);
+    if (scope_ != null &&
+        scope_ != ink.sipc.nagi.proto.v1.UserScope.getDefaultInstance()) {
+      scope_ =
+        ink.sipc.nagi.proto.v1.UserScope.newBuilder(scope_).mergeFrom(value).buildPartial();
+    } else {
+      scope_ = value;
+    }
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+   * </pre>
+   *
+   * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+   */
+  private void clearScope() {
+    scope_ = null;
+    bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
+  public static final int HAS_PHONE_FIELD_NUMBER = 14;
+  private boolean hasPhone_;
+  /**
+   * <pre>
+   * 添加过手机 App：高权限确认可以选「在手机上确认」。
+   * </pre>
+   *
+   * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+   * @return The hasPhone.
+   */
+  @java.lang.Override
+  public boolean getHasPhone() {
+    return hasPhone_;
+  }
+  /**
+   * <pre>
+   * 添加过手机 App：高权限确认可以选「在手机上确认」。
+   * </pre>
+   *
+   * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+   * @param value The hasPhone to set.
+   */
+  private void setHasPhone(boolean value) {
+    
+    hasPhone_ = value;
+  }
+  /**
+   * <pre>
+   * 添加过手机 App：高权限确认可以选「在手机上确认」。
+   * </pre>
+   *
+   * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+   */
+  private void clearHasPhone() {
+
+    hasPhone_ = false;
+  }
+
+  public static final int ELEVATED_BY_FIELD_NUMBER = 15;
+  private java.lang.String elevatedBy_;
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   * @return The elevatedBy.
+   */
+  @java.lang.Override
+  public java.lang.String getElevatedBy() {
+    return elevatedBy_;
+  }
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   * @return The bytes for elevatedBy.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getElevatedByBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(elevatedBy_);
+  }
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   * @param value The elevatedBy to set.
+   */
+  private void setElevatedBy(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    elevatedBy_ = value;
+  }
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   */
+  private void clearElevatedBy() {
+
+    elevatedBy_ = getDefaultInstance().getElevatedBy();
+  }
+  /**
+   * <pre>
+   * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+   * </pre>
+   *
+   * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+   * @param value The bytes for elevatedBy to set.
+   */
+  private void setElevatedByBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    elevatedBy_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.MeResponse parseFrom(
@@ -991,6 +1428,452 @@ public  final class MeResponse extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @return A list containing the permissions.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getPermissionsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getPermissionsList());
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @return The count of permissions.
+     */
+    @java.lang.Override
+    public int getPermissionsCount() {
+      return instance.getPermissionsCount();
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @param index The index of the element to return.
+     * @return The permissions at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getPermissions(int index) {
+      return instance.getPermissions(index);
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the permissions at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPermissionsBytes(int index) {
+      return instance.getPermissionsBytes(index);
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @param index The index to set the value at.
+     * @param value The permissions to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPermissions(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setPermissions(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @param value The permissions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addPermissions(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addPermissions(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @param values The permissions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllPermissions(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllPermissions(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPermissions() {
+      copyOnWrite();
+      instance.clearPermissions();
+      return this;
+    }
+    /**
+     * <pre>
+     * 当前成员的权限名称（见 docs/panel.md#权限），管理员是全部。界面按它隐藏入口，规则以面板为准。
+     * </pre>
+     *
+     * <code>repeated string permissions = 9 [json_name = "permissions"];</code>
+     * @param value The bytes of the permissions to add.
+     * @return This builder for chaining.
+     */
+    public Builder addPermissionsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addPermissionsBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+     * </pre>
+     *
+     * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+     * @return The roleId.
+     */
+    @java.lang.Override
+    public long getRoleId() {
+      return instance.getRoleId();
+    }
+    /**
+     * <pre>
+     * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+     * </pre>
+     *
+     * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+     * @param value The roleId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleId(long value) {
+      copyOnWrite();
+      instance.setRoleId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 角色：ID、名称（预置角色没有改名时为空）、预置标记（admin、operator、viewer，自定义为空）。
+     * </pre>
+     *
+     * <code>int64 role_id = 10 [json_name = "roleId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleId() {
+      copyOnWrite();
+      instance.clearRoleId();
+      return this;
+    }
+
+    /**
+     * <code>string role_name = 11 [json_name = "roleName"];</code>
+     * @return The roleName.
+     */
+    @java.lang.Override
+    public java.lang.String getRoleName() {
+      return instance.getRoleName();
+    }
+    /**
+     * <code>string role_name = 11 [json_name = "roleName"];</code>
+     * @return The bytes for roleName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRoleNameBytes() {
+      return instance.getRoleNameBytes();
+    }
+    /**
+     * <code>string role_name = 11 [json_name = "roleName"];</code>
+     * @param value The roleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoleName(value);
+      return this;
+    }
+    /**
+     * <code>string role_name = 11 [json_name = "roleName"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleName() {
+      copyOnWrite();
+      instance.clearRoleName();
+      return this;
+    }
+    /**
+     * <code>string role_name = 11 [json_name = "roleName"];</code>
+     * @param value The bytes for roleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRoleNameBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+     * @return The roleBuiltin.
+     */
+    @java.lang.Override
+    public java.lang.String getRoleBuiltin() {
+      return instance.getRoleBuiltin();
+    }
+    /**
+     * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+     * @return The bytes for roleBuiltin.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRoleBuiltinBytes() {
+      return instance.getRoleBuiltinBytes();
+    }
+    /**
+     * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+     * @param value The roleBuiltin to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleBuiltin(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoleBuiltin(value);
+      return this;
+    }
+    /**
+     * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleBuiltin() {
+      copyOnWrite();
+      instance.clearRoleBuiltin();
+      return this;
+    }
+    /**
+     * <code>string role_builtin = 12 [json_name = "roleBuiltin"];</code>
+     * @param value The bytes for roleBuiltin to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleBuiltinBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRoleBuiltinBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+     * </pre>
+     *
+     * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+     */
+    @java.lang.Override
+    public boolean hasScope() {
+      return instance.hasScope();
+    }
+    /**
+     * <pre>
+     * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+     * </pre>
+     *
+     * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.UserScope getScope() {
+      return instance.getScope();
+    }
+    /**
+     * <pre>
+     * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+     * </pre>
+     *
+     * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+     */
+    public Builder setScope(ink.sipc.nagi.proto.v1.UserScope value) {
+      copyOnWrite();
+      instance.setScope(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+     * </pre>
+     *
+     * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+     */
+    public Builder setScope(
+        ink.sipc.nagi.proto.v1.UserScope.Builder builderForValue) {
+      copyOnWrite();
+      instance.setScope(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+     * </pre>
+     *
+     * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+     */
+    public Builder mergeScope(ink.sipc.nagi.proto.v1.UserScope value) {
+      copyOnWrite();
+      instance.mergeScope(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 访问范围（见 docs/panel.md#访问范围）。管理员为空。
+     * </pre>
+     *
+     * <code>.nagi.v1.UserScope scope = 13 [json_name = "scope"];</code>
+     */
+    public Builder clearScope() {  copyOnWrite();
+      instance.clearScope();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 添加过手机 App：高权限确认可以选「在手机上确认」。
+     * </pre>
+     *
+     * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+     * @return The hasPhone.
+     */
+    @java.lang.Override
+    public boolean getHasPhone() {
+      return instance.getHasPhone();
+    }
+    /**
+     * <pre>
+     * 添加过手机 App：高权限确认可以选「在手机上确认」。
+     * </pre>
+     *
+     * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+     * @param value The hasPhone to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHasPhone(boolean value) {
+      copyOnWrite();
+      instance.setHasPhone(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 添加过手机 App：高权限确认可以选「在手机上确认」。
+     * </pre>
+     *
+     * <code>bool has_phone = 14 [json_name = "hasPhone"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHasPhone() {
+      copyOnWrite();
+      instance.clearHasPhone();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+     * </pre>
+     *
+     * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+     * @return The elevatedBy.
+     */
+    @java.lang.Override
+    public java.lang.String getElevatedBy() {
+      return instance.getElevatedBy();
+    }
+    /**
+     * <pre>
+     * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+     * </pre>
+     *
+     * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+     * @return The bytes for elevatedBy.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getElevatedByBytes() {
+      return instance.getElevatedByBytes();
+    }
+    /**
+     * <pre>
+     * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+     * </pre>
+     *
+     * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+     * @param value The elevatedBy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setElevatedBy(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setElevatedBy(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+     * </pre>
+     *
+     * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearElevatedBy() {
+      copyOnWrite();
+      instance.clearElevatedBy();
+      return this;
+    }
+    /**
+     * <pre>
+     * 高权限确认用的方式：password（密码或验证码）、app（手机确认）。给自己留登录凭据的操作只认 password。
+     * </pre>
+     *
+     * <code>string elevated_by = 15 [json_name = "elevatedBy"];</code>
+     * @param value The bytes for elevatedBy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setElevatedByBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setElevatedByBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.MeResponse)
   }
   @java.lang.Override
@@ -1016,10 +1899,18 @@ public  final class MeResponse extends
             "avatar_",
             "avatarType_",
             "elevatedUntil_",
+            "permissions_",
+            "roleId_",
+            "roleName_",
+            "roleBuiltin_",
+            "scope_",
+            "hasPhone_",
+            "elevatedBy_",
           };
           java.lang.String info =
-              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0007\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\n\u0007\u0208\b\u1009\u0000";
+              "\u0000\u000f\u0000\u0001\u0001\u000f\u000f\u0000\u0001\u0000\u0001\u0208\u0002\u0007" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\n\u0007\u0208\b\u1009\u0000\t\u021a\n" +
+              "\u0002\u000b\u0208\f\u0208\r\u1009\u0001\u000e\u0007\u000f\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

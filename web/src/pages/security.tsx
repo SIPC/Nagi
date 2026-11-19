@@ -153,7 +153,7 @@ function AddPasskeyDialog({ onClose, onDone }: { onClose: () => void; onDone: (s
         return await addPasskey(name);
       } catch (err) {
         // 添加前要先再验证一次身份。
-        if (!isElevationRequired(err) || !(await requireElevation(t.security.passkeys.elevate, { suggestTotp: false }))) throw err;
+        if (!isElevationRequired(err) || !(await requireElevation(t.security.passkeys.elevate, { suggestTotp: false, passwordOnly: true }))) throw err;
         return addPasskey(name);
       }
     },
@@ -270,7 +270,7 @@ async function createPairing(): Promise<Pairing> {
     res = await authClient.createAppPairing({});
   } catch (err) {
     // 生成配对码前要先再验证一次身份，只认密码或验证码。
-    if (!isElevationRequired(err) || !(await requireElevation(t.security.app.elevate, { suggestTotp: false }))) throw err;
+    if (!isElevationRequired(err) || !(await requireElevation(t.security.app.elevate, { suggestTotp: false, passwordOnly: true }))) throw err;
     res = await authClient.createAppPairing({});
   }
   const now = Date.now();
@@ -401,7 +401,7 @@ export function SecurityCard() {
         setSetup(await settingsClient.beginTOTP({}));
       } catch (err) {
         // 开启前要先再验证一次身份。
-        if (!isElevationRequired(err) || !(await requireElevation(t.security.totp.elevate, { suggestTotp: false }))) throw err;
+        if (!isElevationRequired(err) || !(await requireElevation(t.security.totp.elevate, { suggestTotp: false, passwordOnly: true }))) throw err;
         setSetup(await settingsClient.beginTOTP({}));
       }
     } catch (err) {

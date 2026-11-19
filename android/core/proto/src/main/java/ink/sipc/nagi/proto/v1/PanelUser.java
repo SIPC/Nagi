@@ -21,6 +21,8 @@ public  final class PanelUser extends
     avatar_ = com.google.protobuf.ByteString.EMPTY;
     avatarType_ = "";
     passkeys_ = emptyProtobufList();
+    roleName_ = "";
+    roleBuiltin_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -598,6 +600,138 @@ public  final class PanelUser extends
   private void removePasskeys(int index) {
     ensurePasskeysIsMutable();
     passkeys_.remove(index);
+  }
+
+  public static final int ROLE_ID_FIELD_NUMBER = 12;
+  private long roleId_;
+  /**
+   * <pre>
+   * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+   * </pre>
+   *
+   * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+   * @return The roleId.
+   */
+  @java.lang.Override
+  public long getRoleId() {
+    return roleId_;
+  }
+  /**
+   * <pre>
+   * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+   * </pre>
+   *
+   * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+   * @param value The roleId to set.
+   */
+  private void setRoleId(long value) {
+    
+    roleId_ = value;
+  }
+  /**
+   * <pre>
+   * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+   * </pre>
+   *
+   * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+   */
+  private void clearRoleId() {
+
+    roleId_ = 0L;
+  }
+
+  public static final int ROLE_NAME_FIELD_NUMBER = 13;
+  private java.lang.String roleName_;
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   * @return The roleName.
+   */
+  @java.lang.Override
+  public java.lang.String getRoleName() {
+    return roleName_;
+  }
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   * @return The bytes for roleName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRoleNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(roleName_);
+  }
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   * @param value The roleName to set.
+   */
+  private void setRoleName(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    roleName_ = value;
+  }
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   */
+  private void clearRoleName() {
+
+    roleName_ = getDefaultInstance().getRoleName();
+  }
+  /**
+   * <code>string role_name = 13 [json_name = "roleName"];</code>
+   * @param value The bytes for roleName to set.
+   */
+  private void setRoleNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    roleName_ = value.toStringUtf8();
+
+  }
+
+  public static final int ROLE_BUILTIN_FIELD_NUMBER = 14;
+  private java.lang.String roleBuiltin_;
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   * @return The roleBuiltin.
+   */
+  @java.lang.Override
+  public java.lang.String getRoleBuiltin() {
+    return roleBuiltin_;
+  }
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   * @return The bytes for roleBuiltin.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRoleBuiltinBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(roleBuiltin_);
+  }
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   * @param value The roleBuiltin to set.
+   */
+  private void setRoleBuiltin(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    roleBuiltin_ = value;
+  }
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   */
+  private void clearRoleBuiltin() {
+
+    roleBuiltin_ = getDefaultInstance().getRoleBuiltin();
+  }
+  /**
+   * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+   * @param value The bytes for roleBuiltin to set.
+   */
+  private void setRoleBuiltinBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    roleBuiltin_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.PanelUser parseFrom(
@@ -1301,6 +1435,144 @@ public  final class PanelUser extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+     * </pre>
+     *
+     * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+     * @return The roleId.
+     */
+    @java.lang.Override
+    public long getRoleId() {
+      return instance.getRoleId();
+    }
+    /**
+     * <pre>
+     * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+     * </pre>
+     *
+     * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+     * @param value The roleId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleId(long value) {
+      copyOnWrite();
+      instance.setRoleId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 角色（见 Role）。role 是给旧版本客户端看的角色名：管理员是 admin，其余按权限算 operator 或 viewer。
+     * </pre>
+     *
+     * <code>int64 role_id = 12 [json_name = "roleId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleId() {
+      copyOnWrite();
+      instance.clearRoleId();
+      return this;
+    }
+
+    /**
+     * <code>string role_name = 13 [json_name = "roleName"];</code>
+     * @return The roleName.
+     */
+    @java.lang.Override
+    public java.lang.String getRoleName() {
+      return instance.getRoleName();
+    }
+    /**
+     * <code>string role_name = 13 [json_name = "roleName"];</code>
+     * @return The bytes for roleName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRoleNameBytes() {
+      return instance.getRoleNameBytes();
+    }
+    /**
+     * <code>string role_name = 13 [json_name = "roleName"];</code>
+     * @param value The roleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoleName(value);
+      return this;
+    }
+    /**
+     * <code>string role_name = 13 [json_name = "roleName"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleName() {
+      copyOnWrite();
+      instance.clearRoleName();
+      return this;
+    }
+    /**
+     * <code>string role_name = 13 [json_name = "roleName"];</code>
+     * @param value The bytes for roleName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRoleNameBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+     * @return The roleBuiltin.
+     */
+    @java.lang.Override
+    public java.lang.String getRoleBuiltin() {
+      return instance.getRoleBuiltin();
+    }
+    /**
+     * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+     * @return The bytes for roleBuiltin.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRoleBuiltinBytes() {
+      return instance.getRoleBuiltinBytes();
+    }
+    /**
+     * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+     * @param value The roleBuiltin to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleBuiltin(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoleBuiltin(value);
+      return this;
+    }
+    /**
+     * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoleBuiltin() {
+      copyOnWrite();
+      instance.clearRoleBuiltin();
+      return this;
+    }
+    /**
+     * <code>string role_builtin = 14 [json_name = "roleBuiltin"];</code>
+     * @param value The bytes for roleBuiltin to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoleBuiltinBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRoleBuiltinBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.PanelUser)
   }
   @java.lang.Override
@@ -1330,11 +1602,14 @@ public  final class PanelUser extends
             "avatarType_",
             "passkeys_",
             ink.sipc.nagi.proto.v1.Passkey.class,
+            "roleId_",
+            "roleName_",
+            "roleBuiltin_",
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0001\u0000\u0001\u0002\u0002\u0208" +
+              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0001\u0000\u0001\u0002\u0002\u0208" +
               "\u0003\u0208\u0004\u0007\u0005\u1009\u0000\u0006\u0007\u0007\u1009\u0001\b\u0208" +
-              "\t\n\n\u0208\u000b\u001b";
+              "\t\n\n\u0208\u000b\u001b\f\u0002\r\u0208\u000e\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
