@@ -18,7 +18,7 @@ import (
 )
 
 // 管理面板（见 docs/mcp.md#管理面板）：面板设置、告警渠道、活动和审计记录、面板更新、备用面板的状态、成员（只读）。
-// 只给管理员、令牌勾了「管理面板」才有，每次调用都发告警；修改要「可修改」，改变通知去向、面板地址或者更新面板的先预览、
+// 要角色有相应的面板权限（审计的工具要「审计日志」）、令牌勾了「管理面板」才有，每次调用都发告警；修改要「可修改」，改变通知去向、面板地址或者更新面板的先预览、
 // 用户同意后带确认码执行。告警渠道的地址和机器人令牌只写不读。还有所有令牌都能用的项目页排序（自己的账号）。
 
 func init() {
@@ -48,19 +48,19 @@ func init() {
 			procedures:  []string{nagiv1connect.SettingsServiceGetAlertConfigProcedure, nagiv1connect.SettingsServiceTestAlertChannelProcedure}}),
 			toolTestAlertChannel),
 		def(panel(tool{name: "list_activity", title: "List activity", idempotent: true,
-			description: "Administrators with the panel administration permission only. The panel-wide activity: operations by members and tokens, and alerts, newest first, with paging.",
+			description: "Needs the audit log permission and a token with panel administration. The panel-wide activity: operations by members and tokens, and alerts, newest first, with paging.",
 			procedures:  []string{nagiv1connect.SettingsServiceListActivityProcedure}}),
 			toolListActivity),
 		def(panel(tool{name: "query_audit", title: "Query audit log", idempotent: true,
-			description: "Administrators with the panel administration permission only. Search the audit log (time range, member, source, category, project, node, failed only, text), page through it, or get one record with its parent and child records. Parameters are already redacted.",
+			description: "Needs the audit log permission and a token with panel administration. Search the audit log (time range, member, source, category, project, node, failed only, text), page through it, or get one record with its parent and child records. Parameters are already redacted.",
 			procedures:  []string{nagiv1connect.SettingsServiceListAuditEventsProcedure, nagiv1connect.SettingsServiceGetAuditEventProcedure}}),
 			toolQueryAudit),
 		def(panel(tool{name: "export_audit", title: "Export audit log", idempotent: true,
-			description: "Administrators with the panel administration permission only. Export audit records matching a filter as JSON Lines, at most 256 KB (truncated beyond that; narrow the filter).",
+			description: "Needs the audit log permission and a token with panel administration. Export audit records matching a filter as JSON Lines, at most 256 KB (truncated beyond that; narrow the filter).",
 			procedures:  []string{nagiv1connect.SettingsServiceExportAuditEventsProcedure}}),
 			toolExportAudit),
 		def(panel(tool{name: "verify_audit", title: "Verify audit log", idempotent: true,
-			description: "Administrators with the panel administration permission only. Verify the audit log's hash chain now and report whether it is intact, and the last anchor sent to the audit sinks.",
+			description: "Needs the audit log permission and a token with panel administration. Verify the audit log's hash chain now and report whether it is intact, and the last anchor sent to the audit sinks.",
 			procedures:  []string{nagiv1connect.SettingsServiceVerifyAuditProcedure}}),
 			toolVerifyAudit),
 		def(panel(tool{name: "check_panel_update", title: "Check panel update", idempotent: true,

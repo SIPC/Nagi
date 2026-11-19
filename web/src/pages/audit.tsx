@@ -1,7 +1,7 @@
 // 审计日志（见 docs/audit.md#界面）：谁在什么时候、从哪里、通过什么做了什么。
 // 管理员看全部；操作员和只读成员只看访问范围内项目的记录（面板按权限筛，IP 和浏览器不返回）。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ChevronDown, ChevronRight, Download, ListFilter, Play, X } from "lucide-react";
@@ -107,10 +107,17 @@ function toFilter(s: AuditSearch): AuditFilter {
   return f;
 }
 
+// 审计页要「审计日志」权限（见 docs/audit.md#权限）：没有时导航里没有入口，直接打开地址回到概览（main.tsx 的 auditRoute）。
+// 权限在使用中被收回时也一样。
 export function AuditPage() {
+  if (!useRole().can("panel.audit")) return <Navigate to="/overview" replace />;
+  return <AuditList />;
+}
+
+function AuditList() {
   const search = useSearch({ from: "/app/audit" });
   const navigate = useNavigate({ from: "/audit" });
-  const { isAdmin, isViewer } = useRole();
+  const { can } = useRole();
   const set = (patch: Partial<AuditSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
 
   // 搜索框输入时稍等再写进地址，免得每个字都查一次。
@@ -131,9 +138,13 @@ export function AuditPage() {
     getNextPageParam: (last) => (last.events.length < pageSize ? undefined : last.events[last.events.length - 1].id),
     refetchInterval: 15000,
   });
-  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
-  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), enabled: isAdmin });
-  const users = useQuery({ queryKey: ["users"], queryFn: () => settingsClient.listUsers({}), enabled: isAdmin });
+  // 筛选用的项目、节点、成员列表各要相应的权限，没有的那一项不显示（记录本身不受影响）。
+  const canProjects = can("project.view");
+  const canNodes = can("node.view");
+  const canMembers = can("panel.members");
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), enabled: canProjects });
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), enabled: canNodes });
+  const users = useQuery({ queryKey: ["users"], queryFn: () => settingsClient.listUsers({}), enabled: canMembers });
   const events = list.data?.pages.flatMap((p) => p.events) ?? [];
   const filtered = filterKey.some((v) => v !== undefined && v !== "" && v !== false);
 
@@ -176,18 +187,16 @@ export function AuditPage() {
         title={t.app.nav.audit}
         description={t.audit.description}
         actions={
-          isAdmin && (
-            <Button readOnlyOk variant="outline" disabled={exporting} onClick={exportJSONL}>
-              {exporting ? <Spinner /> : <Download />}
-              {t.audit.export}
-            </Button>
-          )
+          <Button readOnlyOk variant="outline" disabled={exporting} onClick={exportJSONL}>
+            {exporting ? <Spinner /> : <Download />}
+            {t.audit.export}
+          </Button>
         }
       />
       {/* 筛选：常用的筛选框和时间范围在一行，其余条件收进「筛选」对话框，生效的条件列在下面，可以单独去掉。 */}
       <div className="mb-4 grid gap-2">
         <div className="flex items-center justify-between gap-2">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.audit.search} aria-label={isAdmin ? t.audit.searchLabel : isViewer ? t.audit.searchLabelViewer : t.audit.searchLabelOperator} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.audit.search} aria-label={t.audit.searchLabel} autoComplete="off" className="max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1" />
           <div className="flex shrink-0 items-center gap-2">
             <Select aria-label={t.audit.filters.range} className="w-auto" value={search.range ?? ""} onChange={(e) => set({ range: (e.target.value || undefined) as AuditRange | undefined })}>
               <option value="">{t.audit.ranges.all}</option>
@@ -221,7 +230,7 @@ export function AuditPage() {
           </div>
         )}
       </div>
-      <AuditFilterDialog open={filtering} onClose={() => setFiltering(false)} search={search} isAdmin={isAdmin} users={users.data?.users ?? []} projects={projects.data?.projects ?? []} nodes={nodes.data?.nodes ?? []} onApply={(v) => set(v)} />
+      <AuditFilterDialog open={filtering} onClose={() => setFiltering(false)} search={search} show={{ members: canMembers, projects: canProjects, nodes: canNodes }} users={users.data?.users ?? []} projects={projects.data?.projects ?? []} nodes={nodes.data?.nodes ?? []} onApply={(v) => set(v)} />
       {/* 骨架换成列表时高度过渡，不直接跳（ui.md：骨架换成内容）。 */}
       <AutoHeight className="grid gap-4">
         {list.isPending ? (
@@ -430,7 +439,7 @@ function AuditFilterDialog({
   open,
   onClose,
   search,
-  isAdmin,
+  show,
   users,
   projects,
   nodes,
@@ -439,7 +448,7 @@ function AuditFilterDialog({
   open: boolean;
   onClose: () => void;
   search: AuditSearch;
-  isAdmin: boolean;
+  show: { members: boolean; projects: boolean; nodes: boolean };
   users: PanelUser[];
   projects: ProjectSummary[];
   nodes: Node[];
@@ -482,7 +491,7 @@ function AuditFilterDialog({
               ))}
             </Select>
           </Field>
-          {isAdmin && (
+          {show.members && (
             <Field label={f.member} htmlFor="audit-member">
               <Select id="audit-member" value={v.member} onChange={(e) => setV({ ...v, member: e.target.value })}>
                 <option value="">{f.all}</option>
@@ -494,17 +503,19 @@ function AuditFilterDialog({
               </Select>
             </Field>
           )}
-          <Field label={f.project} htmlFor="audit-project">
-            <Select id="audit-project" value={v.project} onChange={(e) => setV({ ...v, project: e.target.value })}>
-              <option value="">{f.all}</option>
-              {projects.map((p) => (
-                <option key={p.project?.id} value={p.project?.id ?? ""}>
-                  {p.project?.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {isAdmin && (
+          {show.projects && (
+            <Field label={f.project} htmlFor="audit-project">
+              <Select id="audit-project" value={v.project} onChange={(e) => setV({ ...v, project: e.target.value })}>
+                <option value="">{f.all}</option>
+                {projects.map((p) => (
+                  <option key={p.project?.id} value={p.project?.id ?? ""}>
+                    {p.project?.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          {show.nodes && (
             <Field label={f.node} htmlFor="audit-node">
               <Select id="audit-node" value={v.node} onChange={(e) => setV({ ...v, node: e.target.value })}>
                 <option value="">{f.all}</option>
