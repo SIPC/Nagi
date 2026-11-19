@@ -219,6 +219,9 @@ func (s *projectService) DiscardDraft(ctx context.Context, req *connect.Request[
 
 func (s *projectService) Deploy(ctx context.Context, req *connect.Request[nagiv1.DeployRequest], out *connect.ServerStream[nagiv1.DeployEvent]) error {
 	m := req.Msg
+	if err := s.checkPrivilegedDeploy(ctx, m.GetProjectId(), m.GetTargets()); err != nil {
+		return err
+	}
 	targets := make([]projects.Target, 0, len(m.GetTargets()))
 	for _, t := range m.GetTargets() {
 		targets = append(targets, projects.Target{Container: t.GetContainer(), BaseRevision: t.GetBaseRevision()})

@@ -83,6 +83,9 @@ var passwordElevation = map[string]bool{
 	// 新建成员、修改成员：新建一个自己知道密码的管理员、把成员改成管理员，同样是给自己留下登录凭据。
 	"/nagi.v1.SettingsService/CreateUser": true,
 	"/nagi.v1.SettingsService/UpdateUser": true,
+	// 新建、修改角色：给成员在用的角色加权限，和改成员的角色是一回事。成员和角色的修改统一只认密码。
+	"/nagi.v1.SettingsService/CreateRole": true,
+	"/nagi.v1.SettingsService/UpdateRole": true,
 }
 
 // PasswordElevationProcedures 列出 passwordElevation 里的接口（测试用）。

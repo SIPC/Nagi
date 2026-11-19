@@ -6,6 +6,7 @@ import { File, Folder, Link as LinkIcon } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
+import { ElevationRequiredError, isElevationRequired, requireElevation, responseNeedsElevation } from "@/components/elevate";
 import { useDownloads } from "@/components/download-links";
 import { ClipboardBar, DirSizeText, formatModified, useDirSizes, type FileOpsAdapter, freeName, isArchive, PendingUploads, SelectBox, SelectionBar, streamOp, UploadList, useFileOps, useSelection, useUploads } from "@/components/file-manager";
 import type { UploadTarget } from "@/lib/chunked-upload";
@@ -141,6 +142,16 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
   };
   const links = useDownloads({ direct, url: fileURL, check: checkDownload, onError: setError });
+  // 特权容器的文件要先验证身份才能修改：面板拒绝时弹出验证框，验证后再操作一次。
+  const needsElevation = (err: unknown) => {
+    if (!isElevationRequired(err)) return false;
+    void requireElevation(t.common.privilegedElevate);
+    return true;
+  };
+  const uploadFailure = async (res: Response) => {
+    const message = (await res.json().catch(() => null))?.message || t.common.errors.http(String(res.status));
+    return responseNeedsElevation(res) ? new ElevationRequiredError(message) : new Error(message);
+  };
   const download = (p: string) => {
     run(`download:${p}`, () => links.download(p));
   };
@@ -163,7 +174,7 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
       refresh();
       return true;
     } catch (err) {
-      setError(errorMessage(err));
+      if (!needsElevation(err)) setError(errorMessage(err));
       return false;
     } finally {
       setBusy("");
@@ -178,15 +189,24 @@ export function VolumeFiles({ project, container, volume, label, onClose, unmoun
     compress: (paths, dest, format, o) => streamOp(projectClient.compressVolumeFiles({ ...base, paths, dest, format, conflict: o.conflict }, { signal: o.signal }), o),
     extract: (p, destDir, intoNewDir, o) => streamOp(projectClient.extractVolumeFile({ ...base, path: p, destDir, intoNewDir, conflict: o.conflict }, { signal: o.signal }), o),
     snapshotFirst: { label: m.snapshotFirst, run: snapshotFirst },
+    onError: needsElevation,
   };
   const fops = useFileOps(adapter, { dir: path, entries, refresh, setError });
   const sel = useSelection(names, `${snapshot}|${path}`);
   const uploads = useUploads(scope);
-  const target: UploadTarget = { url: (p, params) => `${fileURL(p)}&${new URLSearchParams(params)}` };
+  const target: UploadTarget = {
+    url: (p, params) => `${fileURL(p)}&${new URLSearchParams(params)}`,
+    fail: async (res) => {
+      if (!responseNeedsElevation(res)) return undefined;
+      const err = await uploadFailure(res);
+      needsElevation(err);
+      return err;
+    },
+  };
 
   const uploadFile = async (p: string, body: Blob) => {
     const res = await fetch(fileURL(p), { method: "POST", headers: { "X-Nagi-Upload": "1", "Accept-Language": locale }, body });
-    if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
+    if (!res.ok) throw await uploadFailure(res);
   };
 
   // upload：节点支持时分块上传（断点续传，不限大小）；旧版本的节点整个文件一次传，最大 8 GB。

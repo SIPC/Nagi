@@ -995,4 +995,5 @@ var en = map[string]string{
 	"账号 %s 的登录请求在手机 %s 上被拒绝。发起的人知道这个账号的密码，请尽快更改密码。来源：%s": "A sign-in request for account %s was denied on phone %s. Whoever started it knows the password. Change it soon. Source: %s",
 	"等待手机确认的请求太多，请稍后重试或改用验证码":                            "Too many requests are waiting for phone confirmation. Try again later or use a code",
 	"数字不正确": "Incorrect number",
+	"账号 %s 的密码可能已泄露：密码正确，但登录的手机确认连续 %d 次没有通过。来源 IP：%s": "The password for %s may be leaked: the password was correct but the phone confirmation for sign-in failed %d times in a row. Source IP: %s",
 }

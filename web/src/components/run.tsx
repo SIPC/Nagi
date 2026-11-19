@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { errorMessage } from "@/lib/api";
+import { isElevationRequired, requireElevation } from "@/components/elevate";
 import { useRole } from "@/components/role";
 import { Alert, Button, Collapse, LogBox, Notice } from "@/components/ui";
 import { t } from "@/i18n";
@@ -32,10 +33,19 @@ export function useRun(projectId: string) {
       // 失败的详情记在审计里（只有管理员能看）。
       else toast.error(r.error || t.common.feedback.failed, isAdmin ? { action: { label: t.common.feedback.viewActivity, onClick: () => navigate({ to: "/audit", search: { failed: true } }) } } : undefined);
     };
-    try {
+    const consume = async () => {
       for await (const ev of start()) {
         if (ev.event.case === "output") setLines((l) => appendLine(l, ev.event.value as string));
         if (ev.event.case === "result") finish(ev.event.value as RunResult);
+      }
+    };
+    try {
+      try {
+        await consume();
+      } catch (err) {
+        // 部署特权配置、把容器目录放到项目根目录以外等要先验证身份：面板在开始前就拒绝，验证后重新执行。
+        if (!isElevationRequired(err) || !(await requireElevation(t.common.privilegedElevate))) throw err;
+        await consume();
       }
     } catch (err) {
       finish({ success: false, error: errorMessage(err) });

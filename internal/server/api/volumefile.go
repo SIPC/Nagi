@@ -62,6 +62,9 @@ func (a *API) VolumeFileHandler() http.Handler {
 		if r.Method != http.MethodGet {
 			// 上传（整个文件和分块）：和其他写接口同样的检查，访问令牌要有「执行命令」权限。
 			if err := a.checkVolumeWrite(ctx, q.Get("project"), q.Get("container")); err != nil {
+				if isElevationError(err) {
+					w.Header().Set(elevationHeader, "required")
+				}
 				fail(http.StatusForbidden, err)
 				return
 			}

@@ -9,6 +9,7 @@ import { t } from "@/i18n";
 import { defaultSnapshotLimit, envToText, textToEnv } from "@/lib/config";
 import { projectSchedule, sameForm, scheduleErrors, ScheduleFields, scheduleForm, scheduleSummary, toSchedule } from "@/components/snapshot-schedule";
 import { useRun } from "@/components/run";
+import { withPrivilegedElevation } from "@/components/elevate";
 import { useRole } from "@/components/role";
 import { Alert, Badge, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormActions, FormBody, Input, List, QueryError, Row, RowsSkeleton, Section, SettingRow, SettingRows, Spinner, Status } from "@/components/ui";
 import { HelpParts } from "@/components/help-parts";
@@ -370,7 +371,7 @@ function SharedEnv({ project }: { project: Project }) {
 
   const save = () =>
     call(async () => {
-      const res = await projectClient.saveSharedEnv({ projectId: project.id, baseRevision: project.revision, vars: textToEnv(sharedEnv) });
+      const res = await withPrivilegedElevation(() => projectClient.saveSharedEnv({ projectId: project.id, baseRevision: project.revision, vars: textToEnv(sharedEnv) }));
       setAffected(Object.fromEntries(res.affected.map((c) => [c, true])));
       // 再次保存时页面上没有变化，所以给提示。
       toast.success(m.savedDraft);

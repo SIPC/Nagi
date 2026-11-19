@@ -185,16 +185,24 @@ func (s *settingsService) UpdateRole(ctx context.Context, req *connect.Request[n
 	if err != nil {
 		return nil, err
 	}
-	name, perms, err := s.checkRoleInput(ctx, r.ID, r.Builtin, m.GetName(), m.GetPermissions(), false)
+	old := rolePerms(r)
+	// 只改名称（keep_permissions）：权限照原样，不按请求里的检查，也不重写。
+	names := m.GetPermissions()
+	if m.GetKeepPermissions() {
+		names = old.Names()
+	}
+	name, perms, err := s.checkRoleInput(ctx, r.ID, r.Builtin, m.GetName(), names, false)
 	if err != nil {
 		return nil, err
+	}
+	if m.GetKeepPermissions() {
+		perms = old
 	}
 	if name != "" && name != r.Name {
 		if err := s.Q.RenameRole(ctx, r.ID, name); err != nil {
 			return nil, err
 		}
 	}
-	old := rolePerms(r)
 	if perms != old {
 		if err := s.Q.SetRolePermissions(ctx, r.ID, perms.Names()); err != nil {
 			return nil, err

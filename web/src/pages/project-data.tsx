@@ -40,7 +40,7 @@ import type { BackupStatus, Container, Project } from "@/gen/nagi/v1/common_pb";
 import type { VolumeInfo } from "@/gen/nagi/v1/agent_pb";
 import { useDefaultDir } from "@/pages/projects";
 import { ask, confirmAction } from "@/components/confirm";
-import { isElevationRequired, requireElevation } from "@/components/elevate";
+import { isElevationRequired, requireElevation, withPrivilegedElevation } from "@/components/elevate";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { WriteGate } from "@/components/perm";
 import { useRole } from "@/components/role";
@@ -217,12 +217,14 @@ function useVolumes(project: Project, container: Container, nodes: Nodes) {
     setBusy(true);
     setError("");
     try {
-      const res = await projectClient.saveDraft({
-        projectId: project.id,
-        container: container.name,
-        baseRevision: container.revision,
-        config: { ...cfg, form: { ...form, volumes: next } },
-      });
+      const res = await withPrivilegedElevation(() =>
+        projectClient.saveDraft({
+          projectId: project.id,
+          container: container.name,
+          baseRevision: container.revision,
+          config: { ...cfg, form: { ...form, volumes: next } },
+        }),
+      );
       toast.success(res.containers.find((c) => c.name === container.name)?.hasDraft ? m.savedDraft : m.noChanges);
       queryClient.invalidateQueries({ queryKey: ["project", project.id] });
       return true;
@@ -1379,16 +1381,18 @@ function FailoverDialog({ project, container, nodes, onClose }: { project: Proje
             return;
           }
           const ok = await call(() =>
-            projectClient.setFailover({
-              projectId: project.id,
-              container: container.name,
-              standbyNodeId: standbyId,
-              standbyDir: form.dir.trim() || def,
-              witnessNodeId: form.witness,
-              leaseSeconds: Number(form.lease.trim() || 0),
-              autoStateful: form.autoStateful,
-              autoFailback: form.autoFailback,
-            }),
+            withPrivilegedElevation(() =>
+              projectClient.setFailover({
+                projectId: project.id,
+                container: container.name,
+                standbyNodeId: standbyId,
+                standbyDir: form.dir.trim() || def,
+                witnessNodeId: form.witness,
+                leaseSeconds: Number(form.lease.trim() || 0),
+                autoStateful: form.autoStateful,
+                autoFailback: form.autoFailback,
+              }),
+            ),
           );
           if (ok) onClose();
         }}

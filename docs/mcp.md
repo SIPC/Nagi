@@ -107,9 +107,11 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | 节点文件的修改：`WriteNodeFile`、`DeleteNodeFile`、`CreateNodeDir`、`RestoreNodeFileBackup`、`RenameNodeFile`、`MoveNodeFiles`、`CopyNodeFiles`、`CompressNodeFiles`、`ExtractNodeFile`；`ImportComposeDir`、`IsolateNode`、`UnisolateNode`、`ConfirmPendingHA` | 节点终端、可修改 | 以 root 改节点上的东西，或者让别的节点运行拼回的配置 |
 | `SetNodeReplicaDir`、`SetBackupReplicaDir`（`SetBackupNodes` 指定存放位置时同样） | 节点终端、可修改 | 让节点以 root 在任意位置建目录、写数据 |
 | `DeleteNodeImages`、`PruneNodeImages` | 可修改 | 节点拒绝删有容器在用、Nagi 需要的镜像，影响和部署同一级 |
-| 设置和账号的：`CreateAccessToken`、`BeginTOTP`、`BeginPasskeyRegistration`、`SetAdminNetworks`、`GetRecording`、`TestAuditSink` | 令牌一律不行 | 会给自己留登录凭据、把账号主人锁在外面，或者泄露录制和外送的凭据 |
+| 设置和账号的：`CreateAccessToken`、`BeginTOTP`、`BeginPasskeyRegistration`、`SetAdminNetworks`、`GetRecording`、`TestAuditSink`，成员和角色的新建、修改、删除 | 令牌一律不行 | 会给自己留登录凭据、把账号主人锁在外面，或者泄露录制和外送的凭据 |
 
 「节点终端」只能在做过高权限确认之后勾选（生成令牌前、在授权页点允许前），所以这些令牌已经确认过身份；令牌只在 `/mcp` 有效，到接口的令牌请求都来自 MCP 工具。
+
+特权配置（保存或部署特权 compose、在特权容器里执行命令、改它的文件，见 [node-access.md](node-access.md#权限)）在网页和 App 上也要先做高权限确认。这是按内容判断的，不在上面的表里；令牌的规则没有变：角色有「特权配置」权限、令牌勾了相应的选项（可修改、执行命令）就能用，不另外要求「节点终端」。生成令牌和 OAuth 授权本身只认密码或验证码做的确认。
 
 ### 确认码
 

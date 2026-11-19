@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -395,4 +396,108 @@ func TestPhoneApprovalDeniedFreesSlot(t *testing.T) {
 	if _, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse"); err != nil {
 		t.Errorf("拒绝以后应该能发起：%v", err)
 	}
+}
+
+// 登录的手机确认从发起到结束都留痕迹：发起、过期没人确认、数字输错作废各记一条审计，连续 5 次没有通过时告警。
+func TestPhoneApprovalLoginAudit(t *testing.T) {
+	h := newSessionHarness(t)
+	ctx := WithMeta(context.Background(), Meta{IP: approvalIP, UserAgent: chromeUA})
+	keys := newAppKeys()
+	device := h.pairSoftware("op", keys)
+	phone := h.appUserOf(device, keys)
+	// 开两步验证以前先登录一个网页会话，后面发起高权限确认用。
+	web := h.login("op", RequestInfo{IP: approvalIP, UserAgent: chromeUA})
+	op, _ := h.q.GetUserByUsername(ctx, "op")
+	if err := h.q.SetTOTP(ctx, store.SetTOTPParams{TotpSecret: base64.StdEncoding.EncodeToString([]byte("JBSWY3DPEHPK3PXP")), ID: op.ID}); err != nil {
+		t.Fatal(err)
+	}
+	begin := func() Approval {
+		t.Helper()
+		a, err := h.s.BeginLoginApproval(ctx, approvalIP, "op", "correct horse")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	expire := func(id string) {
+		h.s.app.mu.Lock()
+		h.s.app.approvals[id].expires = time.Now().Add(-time.Second)
+		h.s.app.mu.Unlock()
+	}
+	count := func(action string, want int) {
+		t.Helper()
+		if n := h.countAudit(action); n != want {
+			t.Errorf("%s 记了 %d 条，应为 %d", action, n, want)
+		}
+	}
+
+	// 发起就记一条；没人确认、也没人来取结果，到期后清理时记一条。
+	a := begin()
+	count("login_approval_requested", 1)
+	h.s.sweepApprovals(context.Background(), time.Now())
+	count("app_approval_expired", 0)
+	expire(a.ID)
+	h.s.sweepApprovals(context.Background(), time.Now())
+	h.s.sweepApprovals(context.Background(), time.Now())
+	count("app_approval_expired", 1)
+
+	// 登录页还在等时过期：取结果时记，只记一次。
+	a = begin()
+	expire(a.ID)
+	if st, _, err := h.s.CompleteLoginApproval(ctx, approvalIP, a.Ticket); err != nil || st != ApprovalExpired {
+		t.Fatalf("过期：%q %v", st, err)
+	}
+	h.s.sweepApprovals(context.Background(), time.Now())
+	count("app_approval_expired", 2)
+
+	// 数字输错 3 次作废：记一条，之后过期不再记。
+	a = begin()
+	wrong := AppApprovalRequest{ID: a.ID, Code: "xx", Host: appHost}
+	for i := 0; i < approvalCodeTries; i++ {
+		if err := h.s.AppApprove(ctx, approvalIP, phone, wrong, appHosts); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("第 %d 次输错：%v", i+1, err)
+		}
+	}
+	count("app_approval_code_failed", 1)
+	expire(a.ID)
+	h.s.sweepApprovals(context.Background(), time.Now())
+	count("app_approval_expired", 2)
+
+	// 被同一来源的新请求顶掉的也算没有等到确认。到这里连续 3 次，再两次就告警。
+	if h.alerted("手机确认连续") {
+		t.Fatal("还没到 5 次不应告警")
+	}
+	begin()
+	begin()
+	a = begin()
+	count("app_approval_expired", 4)
+	if !h.alerted("手机确认连续") {
+		t.Errorf("连续 5 次没有通过应该告警：%v", h.alerts)
+	}
+	count("login_approval_failures", 1)
+
+	// 确认并登录以后重新计数；确认过的请求不算过期。
+	req := AppApprovalRequest{ID: a.ID, Code: a.Code, Host: appHost, Signature: signApproval(keys.confirm, device, a.ID, ApprovalLogin, a.Code)}
+	if err := h.s.AppApprove(ctx, approvalIP, phone, req, appHosts); err != nil {
+		t.Fatal(err)
+	}
+	if st, _, err := h.s.CompleteLoginApproval(ctx, approvalIP, a.Ticket); err != nil || st != ApprovalApproved {
+		t.Fatalf("确认以后：%q %v", st, err)
+	}
+	count("app_approval_expired", 4)
+	h.s.streaks.mu.Lock()
+	n := h.s.streaks.phone[op.ID]
+	h.s.streaks.mu.Unlock()
+	if n != 0 {
+		t.Errorf("登录成功后连续次数应该清零：%d", n)
+	}
+
+	// 高权限确认的请求过期不记：发起的人已经登录，改用密码时每次都会留下一个没确认的请求。
+	e, err := h.s.BeginElevateApproval(ctx, approvalIP, web)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expire(e.ID)
+	h.s.sweepApprovals(context.Background(), time.Now())
+	count("app_approval_expired", 4)
 }

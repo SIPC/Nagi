@@ -37,27 +37,53 @@ public interface UpdateRoleRequestOrBuilder extends
       getNameBytes();
 
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @return A list containing the permissions.
    */
   java.util.List<java.lang.String>
       getPermissionsList();
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @return The count of permissions.
    */
   int getPermissionsCount();
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param index The index of the element to return.
    * @return The permissions at the given index.
    */
   java.lang.String getPermissions(int index);
   /**
+   * <pre>
+   * 角色的全部权限，为空表示一项都不给。只改名称时设 keep_permissions。
+   * </pre>
+   *
    * <code>repeated string permissions = 3 [json_name = "permissions"];</code>
    * @param index The index of the element to return.
    * @return The permissions at the given index.
    */
   com.google.protobuf.ByteString
       getPermissionsBytes(int index);
+
+  /**
+   * <pre>
+   * 不改权限，permissions 不看。
+   * </pre>
+   *
+   * <code>bool keep_permissions = 4 [json_name = "keepPermissions"];</code>
+   * @return The keepPermissions.
+   */
+  boolean getKeepPermissions();
 }

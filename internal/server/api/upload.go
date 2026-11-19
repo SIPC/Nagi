@@ -49,6 +49,9 @@ func (a *API) UploadHandler() http.Handler {
 			return
 		}
 		if err := a.checkPrivilegedWrite(r.Context(), u, r.URL.Query().Get("project"), r.URL.Query().Get("container")); err != nil {
+			if isElevationError(err) {
+				w.Header().Set(elevationHeader, "required")
+			}
 			fail(http.StatusForbidden, err)
 			return
 		}
