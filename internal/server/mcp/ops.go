@@ -56,9 +56,11 @@ var deployNotices = []*regexp.Regexp{
 }
 
 // 部署结果里最多放多少条提醒、每条最多多少个字符（git 服务器不换行就能把一行做得很大）。
+// maxOutputLineLen 是进度通知和 last_output 里每行最多多少个字符：旧版本的节点不截断 git 服务器发来的进度（v0.35.0#21）。
 const (
 	maxDeployNotices   = 20
 	maxDeployNoticeLen = 300
+	maxOutputLineLen   = 1000
 )
 
 func deployNotice(line string) bool {
@@ -76,10 +78,22 @@ func clipNotice(line string) string {
 		}
 		return r
 	}, line)
-	if utf8.RuneCountInString(line) <= maxDeployNoticeLen {
+	return clipLine(line, maxDeployNoticeLen)
+}
+
+// clipLine 把一行截到 n 个字符，截掉的部分用 … 表示。不把整行转成 []rune：行可能很大。
+func clipLine(line string, n int) string {
+	if len(line) <= n {
 		return line
 	}
-	return string([]rune(line)[:maxDeployNoticeLen]) + "…"
+	count := 0
+	for i := range line {
+		if count == n {
+			return line[:i] + "…"
+		}
+		count++
+	}
+	return line
 }
 
 // 节点的匿名卷提醒（internal/agent/project/startwatch.go 的 anonymousVolumeLines）。数据目录是镜像声明的，内容不可信：
@@ -127,7 +141,7 @@ func (c *call) follow(open func(ctx context.Context) (*connect.ServerStreamForCl
 		for stream.Receive() {
 			switch e := stream.Msg().Event.(type) {
 			case *nagiv1.DeployEvent_Output:
-				ch <- item{line: e.Output}
+				ch <- item{line: clipLine(e.Output, maxOutputLineLen)}
 			case *nagiv1.DeployEvent_Result:
 				ch <- item{result: e.Result}
 			}

@@ -263,6 +263,7 @@ type fakeDeployAPI struct {
 	added   *nagiv1.AddContainerRequest
 	draft   *nagiv1.SaveDraftRequest
 	lines   []string
+	fail    bool // 部署失败，结果里带 last_output
 }
 
 func (f *fakeDeployAPI) summary() *nagiv1.ProjectSummary {
@@ -302,6 +303,9 @@ func (f *fakeDeployAPI) Deploy(_ context.Context, _ *connect.Request[nagiv1.Depl
 		if err := out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Output{Output: l}}); err != nil {
 			return err
 		}
+	}
+	if f.fail {
+		return out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: &nagiv1.DeployResult{Error: "拉取失败"}}})
 	}
 	return out.Send(&nagiv1.DeployEvent{Event: &nagiv1.DeployEvent_Result{Result: &nagiv1.DeployResult{Success: true, Version: 2}}})
 }
@@ -530,6 +534,35 @@ func TestDeployWarnings(t *testing.T) {
 	}
 	if n := utf8.RuneCountInString(w[0]); n > maxDeployNoticeLen+1 {
 		t.Errorf("超长的提醒应该截断，得到 %d 个字符", n)
+	}
+}
+
+// v0.35.0#21：旧版本的节点不截断 git 服务器发来的进度，面板放进 last_output（和进度通知）的每行截断。
+func TestDeployOutputClipped(t *testing.T) {
+	m := &nagiv1.Container{Name: "web", Revision: 2, LastCommit: "abc", Draft: &nagiv1.ContainerConfig{Form: &nagiv1.ImageForm{Image: "web:1"}}}
+	p := &nagiv1.Project{Id: "p1", Name: "shop", NetworkName: "shop", Containers: []*nagiv1.Container{m}}
+	c, f := deployTestCall(t, p)
+	f.fail = true
+	f.lines = []string{"拉取 https://git.example.com/a/b.git", "  " + strings.Repeat("进", 1<<20), "短的一行"}
+	out, err := toolDeploy(c, DeployArgs{ProjectArg: ProjectArg{Project: "shop"}, Containers: []string{"web"}, ApplySharedEnv: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(out)
+	var res struct {
+		Output []string `json:"last_output"`
+	}
+	if err := json.Unmarshal(b, &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Output) != 3 || res.Output[2] != "短的一行" {
+		t.Fatalf("last_output：%d 行", len(res.Output))
+	}
+	if n := utf8.RuneCountInString(res.Output[1]); n != maxOutputLineLen+1 || !strings.HasSuffix(res.Output[1], "…") {
+		t.Errorf("超长的一行应该截到 %d 个字符，得到 %d", maxOutputLineLen, n)
+	}
+	if got := clipLine("短", 1); got != "短" {
+		t.Errorf("不超过的不截：%q", got)
 	}
 }
 
