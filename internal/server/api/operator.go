@@ -173,8 +173,9 @@ func (a *API) adoptCheck(ctx context.Context, nodeID string) func(*nagiv1.Contai
 		return nil
 	}
 	return func(sp *nagiv1.ContainerSpec) error {
+		// 有「特权配置」权限、还没做高权限确认的，要求先验证身份（见 privilegedDenied）。
 		if reasons, _ := spec.PrivilegeReasons(sp.GetConfig(), sp.GetName()); len(reasons) > 0 {
-			return adminOnlyConfig(reasons)
+			return privilegedDenied(auth.CurrentUser(ctx), adminOnlyConfig(reasons))
 		}
 		return (&projectService{a}).checkOperatorDir(ctx, nodeID, sp.GetDir())
 	}

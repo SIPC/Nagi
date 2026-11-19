@@ -56,7 +56,7 @@ import { AlertRulesForm, nodeRules, rulesSummary } from "@/components/alert-rule
 import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
-import { requireElevation } from "@/components/elevate";
+import { requireElevation, withPrivilegedElevation } from "@/components/elevate";
 import { cancelable, progressText, updateActive, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
@@ -1406,7 +1406,7 @@ function StaleProjects({ nodeId, list, onDone }: { nodeId: string; list: StalePr
     if (!(await confirmAction(t.nodes.stale.adoptConfirm(p.projectName), { action: t.nodes.stale.adopt, danger: true }))) return;
     setError("");
     try {
-      await nodeClient.adoptStaleProject({ nodeId, projectId: p.projectId });
+      await withPrivilegedElevation(() => nodeClient.adoptStaleProject({ nodeId, projectId: p.projectId }));
       onDone();
     } catch (err) {
       setError(errorMessage(err));
@@ -1445,7 +1445,7 @@ function UnknownContainers({ nodeId, list, onDone }: { nodeId: string; list: Unk
     if (!(await confirmAction(t.nodes.unknown.adoptConfirm(u.container, u.projectName), { action: t.nodes.unknown.adopt }))) return;
     setError("");
     try {
-      await nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container });
+      await withPrivilegedElevation(() => nodeClient.adoptNodeContainer({ nodeId, projectId: u.projectId, container: u.container }));
       onDone();
     } catch (err) {
       setError(errorMessage(err));

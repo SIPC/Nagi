@@ -389,10 +389,23 @@ func TestInstallScriptNeedsKey(t *testing.T) {
 func TestAdoptNeedsPrivileged(t *testing.T) {
 	a := cleanTest(t)
 	member := auth.WithUser(context.Background(), auth.MemberWith(2, auth.PresetOperator|auth.PermsOf(auth.PermNodeManage)))
-	privileged := auth.WithUser(context.Background(), auth.MemberWith(3, auth.PresetOperator|auth.PermsOf(auth.PermNodeManage, auth.PermPrivileged)))
-	admin := auth.WithUser(context.Background(), auth.PresetUser(auth.RoleAdmin))
-	if a.adoptCheck(privileged, "n1") != nil || a.adoptCheck(admin, "n1") != nil {
-		t.Error("有特权配置权限时不用检查")
+	confirmed := func(u auth.User) context.Context {
+		u.ElevatedUntil, u.ElevatedBy = time.Now().Add(time.Minute).Unix(), auth.ElevatedByPassword
+		return auth.WithUser(context.Background(), u)
+	}
+	privilegedUser := auth.MemberWith(3, auth.PresetOperator|auth.PermsOf(auth.PermNodeManage, auth.PermPrivileged))
+	if a.adoptCheck(confirmed(privilegedUser), "n1") != nil || a.adoptCheck(confirmed(auth.PresetUser(auth.RoleAdmin)), "n1") != nil {
+		t.Error("有特权配置权限并且验证过身份时不用检查")
+	}
+	// 有权限、还没验证身份：带特权内容的配置要求先验证，重建项目也一样。
+	unconfirmed := auth.WithUser(context.Background(), privilegedUser)
+	risky := &nagiv1.ContainerSpec{ProjectId: "p1", Name: "web", Config: &nagiv1.ContainerConfig{Compose: "services:\n  web:\n    image: nginx\n    privileged: true\n"}}
+	if c := a.adoptCheck(unconfirmed, "n1"); c == nil || !isElevationError(c(risky)) {
+		t.Error("没验证身份时收进带特权内容的配置应该要求先验证")
+	}
+	stale := connect.NewRequest(&nagiv1.AdoptStaleProjectRequest{NodeId: "n1", ProjectId: "p1"})
+	if _, err := (&nodeService{a}).AdoptStaleProject(unconfirmed, stale); !isElevationError(err) {
+		t.Errorf("没验证身份时重建项目应该要求先验证：%v", err)
 	}
 	check := a.adoptCheck(member, "n1")
 	if check == nil {

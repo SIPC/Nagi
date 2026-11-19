@@ -669,7 +669,7 @@ func (s *nodeService) ConfirmPendingHA(ctx context.Context, req *connect.Request
 
 func (s *nodeService) AdoptStaleProject(ctx context.Context, req *connect.Request[nagiv1.AdoptStaleProjectRequest]) (*connect.Response[nagiv1.AdoptStaleProjectResponse], error) {
 	if operatorLimited(ctx) {
-		return nil, errAdoptStale()
+		return nil, privilegedDenied(auth.CurrentUser(ctx), errAdoptStale())
 	}
 	if err := s.Projects.AdoptStaleProject(ctx, req.Msg.GetNodeId(), req.Msg.GetProjectId()); err != nil {
 		return nil, toConnect(err)
