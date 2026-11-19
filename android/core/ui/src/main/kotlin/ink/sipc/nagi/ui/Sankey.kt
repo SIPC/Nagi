@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -34,8 +33,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -157,7 +159,8 @@ fun SankeyChart(
     val colors = NagiTheme.colors
     val density = LocalDensity.current
     val st = remember { SankeyState() }
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // 量名称和速率的宽度：两边各十来行，默认的缓存（8 条）不够，每次重组都要重新排版。
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer(cacheSize = 64)
     // 淡出的路径和行走完以后加一，让图重新组合、不再画它们。
     var settled by remember { mutableIntStateOf(0) }
     check(settled >= 0)
@@ -229,7 +232,13 @@ fun SankeyChart(
     LaunchedEffect(goal) {
         val from = st.values
         val s = seedsNow
-        if (reduced) {
+        // 变化小到看不出（位置、线宽都不到 0.5，透明度没变）时直接到位：每 10 秒刷新一次，速率通常只差一点，
+        // 不必为此把几十条线重画 360ms。
+        val small = goal.all { (k, to) ->
+            val a = from[k] ?: s[k] ?: return@all false
+            kotlin.math.abs(to - a) < if (k.endsWith(":op")) 0.01f else 0.5f
+        }
+        if (reduced || small) {
             st.values = goal
         } else {
             val start = withFrameNanos { it }
@@ -257,7 +266,7 @@ fun SankeyChart(
         }
     }
 
-    val v = st.values
+    // st.values 每一帧都在变，只在绘制和布局阶段读（Canvas、offset、graphicsLayer、layout），动画时不重组整张图。
     val drawn = st.shown.entries.toList() + st.leaving.entries.toList()
     val drawnRows = st.shownRows.values.toList() + st.leavingRows.values.toList()
     var selected by remember { mutableStateOf<Pair<String, Offset>?>(null) }
@@ -289,7 +298,7 @@ fun SankeyChart(
         val x2 = x3 - min(120f, (x3 - x0) * 0.2f)
         val cx = (x1 + x2) / 2
         val nameMax = max(min(st.leftLabel, st.rightLabel) - 8, 40f)
-        val height = v["h"] ?: geo.height
+        val fallbackHeight = geo.height
 
         val hit by rememberUpdatedState { at: Offset ->
             // 细线不好点中：离线比线宽两边各多 8，至少 10。
@@ -308,32 +317,41 @@ fun SankeyChart(
 
         Canvas(
             // 手指点一下看那条线；接鼠标、触控板或用触控笔时悬浮就看，移出收起。
-            Modifier.fillMaxWidth().height(height.dp)
+            Modifier.fillMaxWidth()
+                .layout { m, c ->
+                    val h = ((st.values["h"] ?: fallbackHeight) * density.density).roundToInt()
+                    val p = m.measure(c.copy(minHeight = h, maxHeight = h))
+                    layout(p.width, h) { p.place(0, 0) }
+                }
                 .mouseHover(onMove = { pos -> hit(Offset(pos.x / density.density, pos.y / density.density)) }, onExit = { selected = null })
                 .pointerInput(Unit) {
                     detectTapGestures { pos -> hit(Offset(pos.x / density.density, pos.y / density.density)) }
                 },
         ) {
             val s = density.density
+            val v = st.values
+            val native = drawContext.canvas.nativeCanvas
             for ((k, d) in drawn) {
                 val op = v["$k:op"] ?: 0f
                 if (op <= 0f) continue
                 val w = v["$k:w"] ?: 0f
                 val y1 = v["$k:y1"] ?: d.y1
                 val y2 = v["$k:y2"] ?: d.y2
-                val path = Path().apply {
-                    moveTo(x0 * s, y1 * s); lineTo(x1 * s, y1 * s); cubicTo(cx * s, y1 * s, cx * s, y2 * s, x2 * s, y2 * s); lineTo(x3 * s, y2 * s)
-                }
                 val base = if (d.flow.kind == FlowKind.External) 0.6f else 0.45f
                 val alpha = op * (base + (1f - base) * (highlight[k] ?: 0f))
                 val color = if (d.flow.kind == FlowKind.External) colors.brand else colors.mutedForeground
-                drawPath(
-                    path, color.copy(alpha = alpha),
-                    style = Stroke(
-                        width = w * s, cap = StrokeCap.Butt,
-                        pathEffect = if (d.flow.relay) PathEffect.dashPathEffect(floatArrayOf(max(w, 4f) * s, 4f * s)) else null,
-                    ),
-                )
+                if (d.flow.relay) {
+                    // 经面板中转的画成虚线，很少见，照常描边。
+                    val path = Path().apply {
+                        moveTo(x0 * s, y1 * s); lineTo(x1 * s, y1 * s); cubicTo(cx * s, y1 * s, cx * s, y2 * s, x2 * s, y2 * s); lineTo(x3 * s, y2 * s)
+                    }
+                    drawPath(
+                        path, color.copy(alpha = alpha),
+                        style = Stroke(width = w * s, cap = StrokeCap.Butt, pathEffect = PathEffect.dashPathEffect(floatArrayOf(max(w, 4f) * s, 4f * s))),
+                    )
+                } else {
+                    st.band.draw(native, x0 * s, x1 * s, x2 * s, x3 * s, cx * s, y1 * s, y2 * s, w * s, color.copy(alpha = alpha).toArgb())
+                }
             }
         }
         // 两边的标题。
@@ -341,16 +359,16 @@ fun SankeyChart(
         Text(texts.receive, style = NagiTheme.type.small, color = colors.mutedForeground, modifier = Modifier.align(Alignment.TopEnd))
         // 名称和速率：名称在线的上方，速率在下方，两边各一份。速率变了逐位滚动。
         for (r in drawnRows) key(r.id) {
-            val center = v["row:${r.id}"] ?: r.center
-            val op = v["row:${r.id}:op"] ?: 0f
+            val centerKey = "row:${r.id}"
+            val opKey = "row:${r.id}:op"
             val nameColor = if (r.offline) colors.mutedForeground else colors.foreground
             val sendText = if (r.offline) texts.offline else if (r.send > 0) formatRateText(r.send) else texts.noSend
             val receiveText = if (r.offline) texts.offline else if (r.receive > 0) formatRateText(r.receive) else texts.noReceive
             for (end in listOf(false, true)) {
                 Column(
                     Modifier.align(if (end) Alignment.TopEnd else Alignment.TopStart)
-                        .offset { IntOffset(0, ((center - spec.nameTop) * density.density).roundToInt()) }
-                        .graphicsLayer { alpha = op },
+                        .offset { IntOffset(0, (((st.values[centerKey] ?: r.center) - spec.nameTop) * density.density).roundToInt()) }
+                        .graphicsLayer { alpha = st.values[opKey] ?: 0f },
                     horizontalAlignment = if (end) Alignment.End else Alignment.Start,
                 ) {
                     Text(
@@ -391,7 +409,68 @@ private class DrawnFlow(val flow: SankeyFlow, val y1: Float, val y2: Float)
 
 private class Geometry(val rows: LinkedHashMap<String, DrawnRow>, val flows: LinkedHashMap<String, DrawnFlow>, val height: Float)
 
+/**
+ * 一条路径画成三角形网格，交给 GPU 直接画：带宽度的曲线描边要在 CPU 上算轮廓、光栅化成遮罩再上传，
+ * 几十条线一起过渡时每帧要十几毫秒。中线是「直线、三次曲线、直线」，沿中线采样，两边按法线各偏半个线宽，
+ * 最外面再留 1px 透明度渐变做抗锯齿，看起来和描边一样。缓冲区复用，不每帧分配。
+ */
+internal class BandMesh {
+    private var verts = FloatArray(0)
+    private var colors = IntArray(0)
+    private var indices = ShortArray(0)
+    private val paint = android.graphics.Paint()
+
+    fun draw(canvas: android.graphics.Canvas, x0: Float, x1: Float, x2: Float, x3: Float, cx: Float, y1: Float, y2: Float, width: Float, argb: Int) {
+        val dy = kotlin.math.abs(y2 - y1)
+        // 三次曲线分几段：按长度大约每 12px 一段，至少 8 段、最多 64 段；两头的直线各一段。
+        val n = if (dy < 0.5f) 1 else ((dy + (x2 - x1)) / 12f).toInt().coerceIn(8, 64)
+        val points = n + 3
+        if (verts.size < points * 8) {
+            verts = FloatArray(points * 8)
+            colors = IntArray(points * 4)
+            indices = ShortArray((points - 1) * 18)
+        }
+        val half = width / 2
+        val outer = half + 0.5f
+        val inner = max(0f, half - 0.5f)
+        val clear = argb and 0x00FFFFFF
+        fun put(i: Int, px: Float, py: Float, nx: Float, ny: Float) {
+            val o = i * 8
+            verts[o] = px - nx * outer; verts[o + 1] = py - ny * outer
+            verts[o + 2] = px - nx * inner; verts[o + 3] = py - ny * inner
+            verts[o + 4] = px + nx * inner; verts[o + 5] = py + ny * inner
+            verts[o + 6] = px + nx * outer; verts[o + 7] = py + ny * outer
+            val c = i * 4
+            colors[c] = clear; colors[c + 1] = argb; colors[c + 2] = argb; colors[c + 3] = clear
+        }
+        put(0, x0, y1, 0f, 1f)
+        for (j in 0..n) {
+            val t = j.toFloat() / n
+            val u = 1 - t
+            // B(t)，控制点 (x1,y1) (cx,y1) (cx,y2) (x2,y2)；切线的 x 分量总是正的，法线方向一致。
+            val px = u * u * u * x1 + 3 * u * u * t * cx + 3 * u * t * t * cx + t * t * t * x2
+            val py = u * u * u * y1 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y2
+            val tx = 3 * u * u * (cx - x1) + 3 * t * t * (x2 - cx)
+            val ty = 6 * u * t * (y2 - y1)
+            val len = hypot(tx, ty)
+            if (len < 1e-3f) put(j + 1, px, py, 0f, 1f) else put(j + 1, px, py, -ty / len, tx / len)
+        }
+        put(points - 1, x3, y2, 0f, 1f)
+        var k = 0
+        for (i in 0 until points - 1) {
+            val a = i * 4
+            val b = a + 4
+            for (e in 0 until 3) {
+                indices[k++] = (a + e).toShort(); indices[k++] = (b + e).toShort(); indices[k++] = (a + e + 1).toShort()
+                indices[k++] = (a + e + 1).toShort(); indices[k++] = (b + e).toShort(); indices[k++] = (b + e + 1).toShort()
+            }
+        }
+        canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, points * 8, verts, 0, null, 0, colors, 0, indices, 0, k, paint)
+    }
+}
+
 private class SankeyState {
+    val band = BandMesh()
     var shown = LinkedHashMap<String, DrawnFlow>()
     val leaving = LinkedHashMap<String, DrawnFlow>()
     var shownRows = LinkedHashMap<String, DrawnRow>()
