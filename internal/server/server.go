@@ -414,6 +414,18 @@ func (s *Server) CreateEnrollToken(ctx context.Context) (string, error) {
 }
 
 // Run 提供服务，直到 ctx 取消。
+// mountPublicRoutes 挂上不需要登录的备用面板接口，并让节点安装脚本（GET /install.sh，在 api 包里挂）和这几个地址
+// 在请求方法不对时返回 404，不落到前端页面（开了安全入口时，前端页面会暴露这是面板）。pair 为 nil 时是备用面板，不接受配对。
+func mountPublicRoutes(mux *http.ServeMux, pair, status http.Handler) {
+	if pair != nil {
+		mux.Handle("POST /api/standby/pair", pair)
+	}
+	mux.Handle("/api/standby/pair", http.NotFoundHandler())
+	mux.Handle("GET /api/standby/status", status)
+	mux.Handle("/api/standby/status", http.NotFoundHandler())
+	mux.Handle("/install.sh", http.NotFoundHandler())
+}
+
 func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
 	ctx, cancel := context.WithCancel(ctx)
@@ -500,13 +512,11 @@ func (s *Server) Run(ctx context.Context) error {
 		Direct:     mcp.DirectAccess{Volume: a.VolumeDirectLink, Node: a.NodeDirectLink},
 		Version:    s.cfg.Version, Standby: s.standby != nil, Log: s.log,
 	})
+	var pair http.Handler
 	if s.primary != nil {
-		mux.HandleFunc("/api/standby/pair", s.primary.HandlePair)
-	} else {
-		// 备用面板不接受配对：明确返回 404，不落到前端页面（开了安全入口时，前端页面会暴露这是面板）。
-		mux.Handle("/api/standby/pair", http.NotFoundHandler())
+		pair = http.HandlerFunc(s.primary.HandlePair)
 	}
-	mux.HandleFunc("GET /api/standby/status", s.handleStatus)
+	mountPublicRoutes(mux, pair, http.HandlerFunc(s.handleStatus))
 	mux.Handle("/", web.Handler())
 
 	httpLn := newChanListener(s.listener.Addr())

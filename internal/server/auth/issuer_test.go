@@ -76,6 +76,35 @@ func TestEntranceHidesPanel(t *testing.T) {
 		}
 	}
 
+	// 放行的地址只认各自的请求方法，其余 404（后面会落到前端页面），带着入口 cookie 也一样。
+	entered := &http.Cookie{Name: entranceCookie, Value: entranceToken(s.Entrance(ctx))}
+	for _, c := range []struct {
+		method, path string
+		open         bool
+	}{
+		{http.MethodGet, "/install.sh", true},
+		{http.MethodHead, "/install.sh", true},
+		{http.MethodPost, "/install.sh", false},
+		{http.MethodPut, "/install.sh", false},
+		{http.MethodGet, "/api/standby/status", true},
+		{http.MethodPost, "/api/standby/status", false},
+		{http.MethodPost, "/api/standby/pair", true},
+		{http.MethodGet, "/api/standby/pair", false},
+		{http.MethodPost, "/hooks/abc", true},
+	} {
+		for _, cookie := range []*http.Cookie{nil, entered} {
+			r := httptest.NewRequest(c.method, "https://panel.example.com"+c.path, nil)
+			if cookie != nil {
+				r.AddCookie(cookie)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if got := w.Code != http.StatusNotFound; got != c.open {
+				t.Errorf("%s %s（cookie %v）：状态 %d，应该%s", c.method, c.path, cookie != nil, w.Code, map[bool]string{true: "放行", false: "返回 404"}[c.open])
+			}
+		}
+	}
+
 	// L2：App 的接口只放行拿到令牌之前的四个，只认 POST 加 application/proto（App 发的格式）；其余和别处一样 404。
 	for _, c := range []struct {
 		method, path, contentType string

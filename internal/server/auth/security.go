@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -242,8 +243,16 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
-		if strings.HasPrefix(p, "/hooks/") || p == "/install.sh" || p == "/api/standby/pair" || p == "/api/standby/status" ||
-			appEntranceRequest(r) {
+		if methods, ok := entranceExempt[p]; ok {
+			// 方法不对时一律 404，不交给后面（会落到前端页面，看得出是面板）。已登录的会话也一样。
+			if !slices.Contains(methods, r.Method) {
+				http.NotFound(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(p, "/hooks/") || appEntranceRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -268,6 +277,14 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 		}
 		http.NotFound(w, r)
 	})
+}
+
+// entranceExempt 是开了安全入口也放行的地址和各自接受的请求方法：节点安装脚本、备用面板的状态和配对。
+// webhook（/hooks/）先认令牌再检查请求方法，不在这里。
+var entranceExempt = map[string][]string{
+	"/install.sh":         {http.MethodGet, http.MethodHead},
+	"/api/standby/status": {http.MethodGet, http.MethodHead},
+	"/api/standby/pair":   {http.MethodPost},
 }
 
 // appEntranceProcedures 是开了安全入口也放行的 App 接口：App 拿到令牌之前要调用、又没有别的凭据的四个
