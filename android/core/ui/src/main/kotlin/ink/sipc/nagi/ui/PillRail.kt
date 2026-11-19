@@ -99,12 +99,11 @@ fun PillRail(items: List<PillNavItem>, selected: Int, onSelect: (Int) -> Unit, m
                 .drawBehind {
                     val w = RailWidth.toPx()
                     val rowTop = (RailPad + RailItem).toPx() + pos.value * step
-                    // 切到最上、最下一项时，底色回弹越出项目区，外框在那一侧按越出的距离撑开（最多 FRAME_MAX），
-                    // 回弹结束一起收回，和底部胶囊的两侧一样。中间几项的回弹在框内，外框不动。
+                    // 切到最下一项时，底色回弹越出项目区，外框在底部按越出的距离撑开（最多 FRAME_MAX），回弹结束一起收回，
+                    // 和底部胶囊的两侧一样。上面是 logo，底色往上回弹还在框内，外框不动；中间几项也不动。
                     val maxOver = FRAME_MAX.toPx()
-                    val overTop = (maxOf(0f, -pos.value * step) * FRAME_FOLLOW).coerceAtMost(maxOver)
                     val overBottom = (maxOf(0f, rowTop + RailItem.toPx() - (size.height - RailPad.toPx())) * FRAME_FOLLOW).coerceAtMost(maxOver)
-                    val railTop = -overTop
+                    val railTop = 0f
                     val railBottom = size.height + overBottom
                     val rail = RoundRect(0f, railTop, w, railBottom, CornerRadius(w / 2))
                     val grow = extra.toPx() * open
