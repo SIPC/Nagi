@@ -160,7 +160,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - **混淆和压缩**：release 构建开启 R8 的代码裁剪和混淆（`isMinifyEnabled`）和资源裁剪（`isShrinkResources`），规则在 `android/app/proguard-rules.pro`。
 - **签名**：用仓库 Secrets 里的签名密钥（`NAGI_KEYSTORE_BASE64` 是密钥库文件的 base64，`NAGI_KEYSTORE_PASSWORD`、`NAGI_KEY_ALIAS`、`NAGI_KEY_PASSWORD`），解出到临时文件、用完删除。签名密钥一旦发布就不能换：换了以后已安装的 App 无法升级，只能卸载重装，所以密钥库要另外备份。
 - **失败时**：没配签名密钥时跳过这一步（不发未签名的包）；App 编译失败也不影响面板发布，这一版的 Release 只是没有 APK。
-- **日常构建**：`.github/workflows/android.yml` 在 `main` 上 `android/` 或 proto 有改动时编译 debug 包、跑单元测试，同时预热 Gradle 缓存（打标签时只能读默认分支的缓存）。
+- **日常构建**：`.github/workflows/android.yml` 在 `main` 上 `android/` 或 proto 有改动时编译 debug 包、跑单元测试。
 
 `scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。
 

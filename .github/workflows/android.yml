@@ -1,5 +1,5 @@
-# 安卓 App 有改动时编译 debug 包、跑单元测试。除了提前发现问题，也在 main 上存下 Gradle 缓存：
-# 打标签发布时（release.yml 的 android 任务）只能读默认分支的缓存。
+# 安卓 App 有改动时编译 debug 包、跑单元测试，提前发现问题。这里的 Gradle 缓存只给本流程自己用：
+# 打标签发布时（release.yml 的 android 任务）不用缓存。
 # 和 ci.yml 分开：ci.yml 只看 Go 和网页，安卓只在 android/ 或 proto 改动时才跑。
 name: android
 
