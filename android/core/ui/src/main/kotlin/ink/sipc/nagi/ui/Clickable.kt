@@ -1,6 +1,5 @@
 package ink.sipc.nagi.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.padding
@@ -25,6 +24,7 @@ fun Modifier.rowClickable(
     enabled: Boolean = true,
     inset: Dp = RowInset,
     highlight: Color? = null,
+    selectionKey: Any? = null,
 ): Modifier = this
     // 量的时候左右各多给 inset，摆的时候往左挪 inset，报给外面的宽度还是原来的。
     .layout { measurable, constraints ->
@@ -36,8 +36,13 @@ fun Modifier.rowClickable(
         val p = measurable.measure(wide)
         layout(p.width - extra, p.height) { p.place(-extra / 2, 0) }
     }
+    // 选中的一行（宽屏设置页左边的菜单、节点列表）一直有底色，范围和按下的底色一样。外面有 SlidingSelection
+    // 且给了 [selectionKey] 时，底色由外面画、换一行时滑过去（Selection.kt）。
     .clip(RoundedCornerShape(8.dp))
-    // 选中的一行（宽屏设置页左边的菜单）一直有底色，范围和按下的底色一样。
-    .then(if (highlight != null) Modifier.background(highlight) else Modifier)
-    .clickable(enabled = enabled, role = role, onClick = onClick)
+    .selectionRow(selectionKey, highlight)
+    // 能被选中的行（[selectionKey]）点了以后由选中的底色滑过来，不再另有一层按下的底色，免得目标那一行先亮一下。
+    .then(
+        if (selectionKey != null) Modifier.clickable(interactionSource = null, indication = null, enabled = enabled, role = role, onClick = onClick)
+        else Modifier.clickable(enabled = enabled, role = role, onClick = onClick),
+    )
     .padding(horizontal = inset)

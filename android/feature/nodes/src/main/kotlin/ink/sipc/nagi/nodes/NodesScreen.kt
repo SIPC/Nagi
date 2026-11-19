@@ -176,7 +176,7 @@ private fun NodeRow(
     val c = NagiTheme.colors
     val usage = n.usageInfo()
     Row(
-        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) c.muted else null).heightIn(min = 64.dp).padding(vertical = 10.dp),
+        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) c.muted else null, selectionKey = n.id).heightIn(min = 64.dp).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.align(Alignment.Top).padding(top = 7.dp)) { StatusDot(nodeDot(n)) }

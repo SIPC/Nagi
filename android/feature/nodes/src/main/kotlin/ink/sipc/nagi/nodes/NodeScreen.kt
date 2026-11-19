@@ -61,6 +61,7 @@ import ink.sipc.nagi.ui.NagiTextField
 import ink.sipc.nagi.ui.NagiTheme
 import ink.sipc.nagi.ui.NagiTopBar
 import ink.sipc.nagi.ui.PageTabs
+import ink.sipc.nagi.ui.PageTabContent
 import ink.sipc.nagi.ui.Roll
 import ink.sipc.nagi.ui.SectionDivider
 import ink.sipc.nagi.ui.SectionHeader
@@ -178,11 +179,8 @@ private fun NodeBody(list: NodesViewModel, n: Node, access: Access, actions: Nod
         val tabs = listOfNotNull(stringResource(R.string.tab_metrics), stringResource(R.string.tab_containers), stringResource(R.string.images).takeIf { images })
         if (tab >= tabs.size) tab = 0
         PageTabs(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = { fadeIn(tween(Motion.FADE_IN, easing = Motion.Enter)) togetherWith fadeOut(tween(100, easing = Motion.Exit)) },
-            label = "node-tab",
-        ) { t ->
+        // 换标签时内容跟标签同方向滑入。
+        PageTabContent(tab) { t ->
             Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.pageHorizontal)) {
                 when (t) {
                     0 -> MetricsTab(vm, n, access)

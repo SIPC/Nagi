@@ -206,7 +206,7 @@ fun SettingsContent(
         Spacer(Modifier.height(Dimens.topBarToContent))
         // 账号：头像、名称、角色。点了去个人资料。
         Row(
-            Modifier.fillMaxWidth().rowClickable({ open(SettingsRoutes.PROFILE) }, highlight = if (on(SettingsRoutes.PROFILE)) NagiTheme.colors.muted else null).heightIn(min = 64.dp),
+            Modifier.fillMaxWidth().rowClickable({ open(SettingsRoutes.PROFILE) }).heightIn(min = 64.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(name, i?.avatar?.toByteArray(), size = 48.dp)
@@ -222,12 +222,12 @@ fun SettingsContent(
             }
         }
         SettingsGroup(stringResource(R.string.local)) {
-            SettingsRow(stringResource(R.string.panel), { open(SettingsRoutes.PANEL) }, value = panel.title, selected = on(SettingsRoutes.PANEL))
-            SettingsRow(stringResource(R.string.appearance), { open(SettingsRoutes.APPEARANCE) }, value = themeLabel(theme), selected = on(SettingsRoutes.APPEARANCE))
-            SettingsRow(stringResource(R.string.language), { open(SettingsRoutes.LANGUAGE) }, value = languageLabel(AppLocales.current(context, prefs)), selected = on(SettingsRoutes.LANGUAGE))
+            SettingsRow(stringResource(R.string.panel), { open(SettingsRoutes.PANEL) }, value = panel.title, selected = on(SettingsRoutes.PANEL), selectionKey = SettingsRoutes.PANEL)
+            SettingsRow(stringResource(R.string.appearance), { open(SettingsRoutes.APPEARANCE) }, value = themeLabel(theme), selected = on(SettingsRoutes.APPEARANCE), selectionKey = SettingsRoutes.APPEARANCE)
+            SettingsRow(stringResource(R.string.language), { open(SettingsRoutes.LANGUAGE) }, value = languageLabel(AppLocales.current(context, prefs)), selected = on(SettingsRoutes.LANGUAGE), selectionKey = SettingsRoutes.LANGUAGE)
         }
         SettingsGroup(stringResource(R.string.group_account)) {
-            accountKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
+            accountKeys.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it)), selectionKey = SettingsRoutes.of(it)) }
         }
         // 面板的几组按权限显示（知道权限后展开），一项都没有的组不显示。
         val access = remember(i) { i?.let { Access.of(it) } }
@@ -235,17 +235,17 @@ fun SettingsContent(
         val nodeShown = access?.let { a -> nodeKeys.filter { keyAllowed(it, a) } }.orEmpty()
         Collapse(panelShown.isNotEmpty()) {
             SettingsGroup(stringResource(R.string.group_panel)) {
-                panelShown.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
+                panelShown.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it)), selectionKey = SettingsRoutes.of(it)) }
             }
         }
         Collapse(nodeShown.isNotEmpty()) {
             SettingsGroup(stringResource(R.string.group_nodes)) {
-                nodeShown.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it))) }
+                nodeShown.forEach { SettingsRow(keyTitle(it), { open(SettingsRoutes.of(it)) }, selected = on(SettingsRoutes.of(it)), selectionKey = SettingsRoutes.of(it)) }
             }
         }
         // 关于只有一项，放在最下面，不写组标题（和网页一样）：App 和面板的版本都在里面。
         SettingsGroup(null) {
-            SettingsRow(stringResource(R.string.about), { open(SettingsRoutes.ABOUT) }, selected = on(SettingsRoutes.ABOUT))
+            SettingsRow(stringResource(R.string.about), { open(SettingsRoutes.ABOUT) }, selected = on(SettingsRoutes.ABOUT), selectionKey = SettingsRoutes.ABOUT)
         }
     }
 }

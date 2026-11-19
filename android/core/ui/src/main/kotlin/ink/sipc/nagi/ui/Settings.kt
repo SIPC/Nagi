@@ -43,9 +43,9 @@ fun SettingsGroup(title: String?, modifier: Modifier = Modifier, content: @Compo
 
 /** SettingsRow：一行设置，左边名称，右边当前值（灰色）和「›」，点了进下一级。 */
 @Composable
-fun SettingsRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, value: String? = null, selected: Boolean = false) {
+fun SettingsRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier, value: String? = null, selected: Boolean = false, selectionKey: Any? = null) {
     Row(
-        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) NagiTheme.colors.muted else null).heightIn(min = Dimens.rowHeight),
+        modifier.fillMaxWidth().rowClickable(onClick, highlight = if (selected) NagiTheme.colors.muted else null, selectionKey = selectionKey).heightIn(min = Dimens.rowHeight),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, style = NagiTheme.type.body, color = NagiTheme.colors.foreground, modifier = Modifier.weight(1f))

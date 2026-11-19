@@ -34,11 +34,22 @@ object NagiTransitions {
      * 主导航切换。[forward] 为 true 时选的是右边（宽屏时是下面）的标签；[inPx]、[outPx] 是 32dp、16dp 换成的像素。
      * [vertical]：宽屏的导航竖在左边，页面跟着上下滑（选下面的标签，新页面从下面进来，旧页面往上让开）。
      */
-    fun tab(forward: Boolean, inPx: Int, outPx: Int, reduced: Boolean, vertical: Boolean = false): ContentTransform {
-        if (reduced) return fadeIn(tween(Motion.FADE_IN)) togetherWith fadeOut(tween(100))
+    fun tab(forward: Boolean, inPx: Int, outPx: Int, reduced: Boolean, vertical: Boolean = false): ContentTransform =
+        tabEnter(forward, inPx, reduced, vertical) togetherWith tabExit(forward, outPx, reduced, vertical)
+
+    /** [tab] 的进入那一半：同方向滑入 [inPx]，透明度先到（120ms），共 300ms。NavHost 要分开传进入和退出时用。 */
+    fun tabEnter(forward: Boolean, inPx: Int, reduced: Boolean, vertical: Boolean = false): EnterTransition {
+        if (reduced) return fadeIn(tween(Motion.FADE_IN))
         val dir = if (forward) 1 else -1
-        val enter = if (vertical) slideInVertically(tween(300, easing = Motion.ContentIn)) { dir * inPx } else slideInHorizontally(tween(300, easing = Motion.ContentIn)) { dir * inPx }
-        val exit = if (vertical) slideOutVertically(tween(100, easing = Motion.Exit)) { -dir * outPx } else slideOutHorizontally(tween(100, easing = Motion.Exit)) { -dir * outPx }
-        return (enter + fadeIn(tween(120, easing = Motion.Enter))) togetherWith (exit + fadeOut(tween(100, easing = Motion.Exit)))
+        val slide = if (vertical) slideInVertically(tween(300, easing = Motion.ContentIn)) { dir * inPx } else slideInHorizontally(tween(300, easing = Motion.ContentIn)) { dir * inPx }
+        return slide + fadeIn(tween(120, easing = Motion.Enter))
+    }
+
+    /** [tab] 的退出那一半：同方向移开 [outPx] 并淡出，100ms。 */
+    fun tabExit(forward: Boolean, outPx: Int, reduced: Boolean, vertical: Boolean = false): ExitTransition {
+        if (reduced) return fadeOut(tween(100))
+        val dir = if (forward) 1 else -1
+        val slide = if (vertical) slideOutVertically(tween(100, easing = Motion.Exit)) { -dir * outPx } else slideOutHorizontally(tween(100, easing = Motion.Exit)) { -dir * outPx }
+        return slide + fadeOut(tween(100, easing = Motion.Exit))
     }
 }
