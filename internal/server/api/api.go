@@ -410,8 +410,14 @@ func (s *nodeService) RenameNode(ctx context.Context, req *connect.Request[nagiv
 	if err != nil {
 		return nil, err
 	}
+	// 成员只和他看得到的节点比：和看不到的节点比的话，把节点改名成猜的名称、看报不报重名，就能确认有没有
+	// 这台节点。范围外正好有同名的，管理员那边按 ID 区分。
+	x, err := s.loadAccess(ctx, auth.CurrentUser(ctx))
+	if err != nil {
+		return nil, err
+	}
 	for _, row := range rows {
-		if row.ID != id && row.Name == name {
+		if row.ID != id && row.Name == name && x.node(row.ID) {
 			return nil, connect.NewError(connect.CodeAlreadyExists, i18n.Errorf("已有名为 %s 的节点", name))
 		}
 	}

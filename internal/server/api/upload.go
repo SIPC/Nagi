@@ -26,7 +26,10 @@ func (a *API) UploadHandler() http.Handler {
 			_ = json.NewEncoder(w).Encode(v)
 		}
 		lang := requestLang(r)
+		// who 是登录以后的成员：报错里他看不到的节点换成「其他节点」。
+		var who auth.User
 		fail := func(code int, err error) {
+			err = a.scrubFor(r.Context(), who, lang, err)
 			msg := errorText(lang, err)
 			reply(code, map[string]string{"message": msg})
 		}
@@ -35,6 +38,7 @@ func (a *API) UploadHandler() http.Handler {
 			fail(http.StatusUnauthorized, i18n.New("请先登录"))
 			return
 		}
+		who = u
 		// 上传的文件随后由部署用上（Deploy 的 use_upload），要「部署」权限。
 		if !u.Can(auth.PermDeploy) {
 			fail(http.StatusForbidden, errNoPermission)

@@ -91,7 +91,7 @@ var (
 	errApprovalNotFound = connect.NewError(connect.CodeNotFound, i18n.New("请求已失效，请重新发起"))
 )
 
-// newApproval 登记一个请求，同一个成员同一种的旧请求作废。调用时不持有 s.app.mu。
+// newApproval 登记一个请求，同一个成员、同一种、同一个来源的旧请求作废，别的来源的留着（有名额上限）。调用时不持有 s.app.mu。
 func (s *Service) newApproval(a *approval) (*approval, error) {
 	now := time.Now()
 	a.id = must(RandomToken())

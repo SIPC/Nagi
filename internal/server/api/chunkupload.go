@@ -92,7 +92,7 @@ func (c chunkUploader) serve(w http.ResponseWriter, r *http.Request, op string) 
 		}
 		sess, err := c.begin(ctx, size, q.Get("key"))
 		if err != nil {
-			c.record(activityFailure(err))
+			c.record(auditFailure(err))
 			chunkFail(w, r, http.StatusBadRequest, err)
 			return
 		}
@@ -113,7 +113,7 @@ func (c chunkUploader) serve(w http.ResponseWriter, r *http.Request, op string) 
 	case op == "commit" && r.Method == http.MethodPost:
 		res, err := c.commit(ctx, q.Get("id"), q.Get("sha256"))
 		if err != nil {
-			c.record(activityFailure(err))
+			c.record(auditFailure(err))
 			chunkFail(w, r, http.StatusBadRequest, err)
 			return
 		}

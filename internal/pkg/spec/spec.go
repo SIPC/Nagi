@@ -31,6 +31,15 @@ func (e invalidError) Error() string        { return e.err.Error() }
 func (e invalidError) Unwrap() error        { return e.err }
 func (e invalidError) Is(target error) bool { return target == ErrInvalid }
 
+// Redact 换掉里面提到的对象的名称，仍是参数错误（见 i18n.Redact）。
+func (e invalidError) Redact(hide func(i18n.Ref) (string, bool)) (error, bool) {
+	inner, ok := i18n.Redact(e.err, hide)
+	if !ok {
+		return e, false
+	}
+	return invalidError{err: inner}, true
+}
+
 // Invalid 返回一个参数错误，消息只包含具体原因。按请求的语言显示（见 i18n）。
 func Invalid(format string, args ...any) error {
 	return invalidError{err: i18n.Errorf(format, args...)}

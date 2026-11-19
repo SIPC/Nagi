@@ -40,6 +40,15 @@ func (e notFoundError) Error() string        { return e.err.Error() }
 func (e notFoundError) Unwrap() error        { return e.err }
 func (e notFoundError) Is(target error) bool { return target == ErrNotFound }
 
+// Redact 换掉里面提到的对象的名称，仍是「不存在」的错误（见 i18n.Redact）。
+func (e notFoundError) Redact(hide func(i18n.Ref) (string, bool)) (error, bool) {
+	inner, ok := i18n.Redact(e.err, hide)
+	if !ok {
+		return e, false
+	}
+	return notFoundError{inner}, true
+}
+
 func invalid(format string, args ...any) error { return spec.Invalid(format, args...) }
 
 const (
