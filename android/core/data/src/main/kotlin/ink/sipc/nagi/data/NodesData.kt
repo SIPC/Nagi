@@ -147,7 +147,7 @@ data class NodeMetrics(val times: Map<String, List<Long>>, val values: Map<Strin
 private fun ago(seconds: Long): Timestamp = Timestamp.newBuilder().setSeconds(System.currentTimeMillis() / 1000 - seconds).build()
 
 /** 节点页用到的接口（都是网页也在用的）。 */
-class NodesRepo(private val session: PanelSession) {
+class NodesRepo(val session: PanelSession) {
     /** 节点列表（要「查看节点」）。没有这个权限时是空的，和网页一样不去问。 */
     suspend fun list(): NodeList {
         val access = session.access()

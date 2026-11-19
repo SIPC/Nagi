@@ -6,6 +6,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -110,11 +115,21 @@ fun NodeScreen(list: NodesViewModel, nodeId: String, actions: NodeActions, showB
             if (node != null && canManage) NagiIconButton(NagiIcons.More, stringResource(R.string.more), { menu = true })
         }
         if (showBack) NagiBackTopBar(title, onBack = actions::back, actions = more) else NagiTopBar(title, actions = more)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
         when {
             state is Polled.Loading -> SkeletonRows(4, Modifier.padding(horizontal = Dimens.pageHorizontal))
             state is Polled.Failed -> InlineError((state as Polled.Failed).message, stringResource(R.string.retry), list::refresh, Modifier.padding(horizontal = Dimens.pageHorizontal))
             node == null -> EmptyState(stringResource(R.string.node_not_found))
             else -> NodeBody(list, node, access!!, actions)
+        }
+        // 手机上节点页盖住了一级页面，操作结果在这里提示；宽屏由外层的 Snackbar 提示。
+        if (showBack) {
+            val snackbar = remember { SnackbarHostState() }
+            LaunchedEffect(list) { list.messages.collect { snackbar.showSnackbar(it) } }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter)) {
+                Snackbar(it, containerColor = NagiTheme.colors.primary, contentColor = NagiTheme.colors.primaryForeground)
+            }
+        }
         }
     }
     if (menu && node != null) {
@@ -143,17 +158,22 @@ internal fun SheetRow(text: String, color: Color = NagiTheme.colors.foreground, 
     }
 }
 
+/** 节点页的标签。终端和文件只给有「节点终端和文件」权限的成员（docs/node-access.md#权限）。 */
+private enum class NodeTab { METRICS, CONTAINERS, IMAGES, TERMINAL, FILES }
+
 @Composable
 private fun NodeBody(list: NodesViewModel, n: Node, access: Access, actions: NodeActions) {
     val vm: NodeViewModel = viewModel(key = "node-${n.id}", factory = Factory { NodeViewModel(list.repo, n.id) })
-    var tab by rememberSaveable(n.id) { mutableStateOf(0) }
+    var tab by rememberSaveable(n.id) { mutableStateOf(NodeTab.METRICS) }
+    // 文件页的「在此打开终端」：带着目录切到终端。
+    var shellCwd by rememberSaveable(n.id) { mutableStateOf("") }
     var approve by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        Column(Modifier.padding(horizontal = Dimens.pageHorizontal)) {
-            Spacer(Modifier.height(Dimens.topBarToContent))
-            StatusLine(n)
-        }
-        if (n.pending) {
+    if (n.pending) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Column(Modifier.padding(horizontal = Dimens.pageHorizontal)) {
+                Spacer(Modifier.height(Dimens.topBarToContent))
+                StatusLine(n)
+            }
             Spacer(Modifier.height(16.dp))
             // 待批准：批准前不能查看和操作（和网页一样），写明节点 ID 和来源地址，同名的节点靠它们分清。
             Banner(
@@ -166,18 +186,58 @@ private fun NodeBody(list: NodesViewModel, n: Node, access: Access, actions: Nod
                 action = if (access.can(Access.NODE_MANAGE)) stringResource(R.string.approve) else null, onAction = { approve = true },
             )
             if (approve) ApproveDialog(list, n) { approve = false }
-            return@Column
+        }
+        return
+    }
+    // 镜像要「节点镜像」，节点的版本支持镜像管理时才有（和网页一样）。
+    val images = access.can(Access.NODE_IMAGES) && n.info.imageOps
+    val root = access.can(Access.NODE_ROOT)
+    val tabs = listOfNotNull(
+        NodeTab.METRICS, NodeTab.CONTAINERS, NodeTab.IMAGES.takeIf { images },
+        NodeTab.TERMINAL.takeIf { root }, NodeTab.FILES.takeIf { root },
+    )
+    if (tab !in tabs) tab = NodeTab.METRICS
+    val labels = tabs.map {
+        stringResource(
+            when (it) {
+                NodeTab.METRICS -> R.string.tab_metrics
+                NodeTab.CONTAINERS -> R.string.tab_containers
+                NodeTab.IMAGES -> R.string.images
+                NodeTab.TERMINAL -> R.string.tab_terminal
+                NodeTab.FILES -> R.string.tab_files
+            },
+        )
+    }
+    val header: @Composable () -> Unit = {
+        Column(Modifier.padding(horizontal = Dimens.pageHorizontal)) {
+            Spacer(Modifier.height(Dimens.topBarToContent))
+            StatusLine(n)
         }
         if (n.isolated) {
             Spacer(Modifier.height(16.dp))
             Banner(stringResource(R.string.isolated), dot = NagiTheme.colors.destructive, lines = listOf(stringResource(R.string.isolated_hint)))
         }
         Spacer(Modifier.height(12.dp))
-        // 镜像要「节点镜像」，节点的版本支持镜像管理时才有（和网页一样）。
-        val images = access.can(Access.NODE_IMAGES) && n.info.imageOps
-        val tabs = listOfNotNull(stringResource(R.string.tab_metrics), stringResource(R.string.tab_containers), stringResource(R.string.images).takeIf { images })
-        if (tab >= tabs.size) tab = 0
-        PageTabs(tabs, tab, { tab = it }, Modifier.fillMaxWidth())
+        PageTabs(labels, tabs.indexOf(tab), { tab = tabs[it] }, Modifier.fillMaxWidth())
+    }
+    // 终端和文件铺满标签以下的高度（自己滚动），其余的标签和标题一起滚动。
+    if (tab == NodeTab.TERMINAL || tab == NodeTab.FILES) {
+        Column(Modifier.fillMaxSize()) {
+            header()
+            val blocked = nodeAccessBlock(n)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    !n.online -> OfflineNote()
+                    blocked != null -> blocked()
+                    tab == NodeTab.TERMINAL -> TerminalTab(list.repo.session, n, shellCwd)
+                    else -> FilesTab(list.repo.session, n, onTerminal = { shellCwd = it; tab = NodeTab.TERMINAL }, showMessage = list::message)
+                }
+            }
+        }
+        return
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        header()
         AnimatedContent(
             targetState = tab,
             transitionSpec = { fadeIn(tween(Motion.FADE_IN, easing = Motion.Enter)) togetherWith fadeOut(tween(100, easing = Motion.Exit)) },
@@ -185,13 +245,44 @@ private fun NodeBody(list: NodesViewModel, n: Node, access: Access, actions: Nod
         ) { t ->
             Column(Modifier.fillMaxWidth().padding(horizontal = Dimens.pageHorizontal)) {
                 when (t) {
-                    0 -> MetricsTab(vm, n, access)
-                    1 -> ContainersTab(vm, n, actions)
-                    else -> ImagesTab(list, n.id, n.name)
+                    NodeTab.CONTAINERS -> ContainersTab(vm, n, actions)
+                    NodeTab.IMAGES -> ImagesTab(list, n.id, n.name)
+                    else -> MetricsTab(vm, n, access)
                 }
             }
         }
     }
+}
+
+/** 节点离线时终端和文件用不了。 */
+@Composable
+private fun OfflineNote() {
+    Column(Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp)) {
+        Text(stringResource(R.string.offline_title), style = NagiTheme.type.bodyMedium, color = NagiTheme.colors.foreground)
+        Text(stringResource(R.string.offline_notice), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+    }
+}
+
+/** 终端和文件用不了的原因：节点在本地关闭了节点访问、版本过低（和网页的 nodeAccessBlock 一样）。能用时为 null。 */
+private fun nodeAccessBlock(n: Node): (@Composable () -> Unit)? = when {
+    n.info.nodeAccessDisabled -> {
+        {
+            val copy = rememberCopy()
+            Column(Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp)) {
+                Text(stringResource(R.string.node_access_disabled), style = NagiTheme.type.bodyMedium, color = NagiTheme.colors.foreground)
+                Text(stringResource(R.string.node_access_disabled_text), style = NagiTheme.type.secondary, color = NagiTheme.colors.mutedForeground)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "nagi node access enable", style = NagiTheme.type.mono, color = NagiTheme.colors.foreground,
+                    modifier = Modifier.fillMaxWidth().rowClickable({ copy("nagi node access enable") }).padding(vertical = 8.dp),
+                )
+            }
+        }
+    }
+    !n.info.nodeAccess -> {
+        { Text(stringResource(R.string.node_access_old), style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground, modifier = Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp)) }
+    }
+    else -> null
 }
 
 /** 状态、地址、面板内置：「● 在线 · 203.0.113.12」。地址只给管理员。 */

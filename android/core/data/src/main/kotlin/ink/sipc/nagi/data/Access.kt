@@ -32,6 +32,7 @@ class Access(
         const val NODE_MANAGE = "node.manage"
         const val NODE_DETAILS = "node.details"
         const val NODE_IMAGES = "node.images"
+        const val NODE_ROOT = "node.root"
         const val PANEL_MEMBERS = "panel.members"
         const val PANEL_SETTINGS = "panel.settings"
         const val PANEL_SECURITY = "panel.security"
