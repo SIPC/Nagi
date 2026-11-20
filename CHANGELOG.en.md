@@ -8,6 +8,12 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## Unreleased
+
+### Fixes
+
+- Fixed known vulnerabilities and improved security.
+
 ## v0.36.0
 
 ### New features

@@ -17,6 +17,96 @@ import (
 
 const panelScript = "../../../scripts/install.sh"
 
+func TestComposeProxyChecksum(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	bin := t.TempDir()
+	for _, name := range []string{"apt-get", "dnf", "yum"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, mode := range []string{"forged", "unreachable", "official"} {
+		t.Run(mode, func(t *testing.T) {
+			script := sharedScript + `
+ARCH=amd64
+mkdir() { :; }
+install() { touch "$TMP/installed"; }
+gh_fetch() { printf 'untrusted executable' > "$2"; }
+curl() {
+  OUT=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in -o) OUT=$2; shift ;; *) URL=$1 ;; esac
+    shift
+  done
+  [ "$URL" = https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-x86_64.sha256 ] || exit 9
+  [ "$MODE" != unreachable ] || return 1
+  if [ "$MODE" = forged ]; then printf '%064d\n' 0 > "$OUT"; else printf 'untrusted executable' | sha256sum > "$OUT"; fi
+}
+install_compose
+`
+			dir := t.TempDir()
+			cmd := exec.Command(sh, "-c", script)
+			cmd.Env = append(os.Environ(), "MODE="+mode, "TMP="+dir, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			out, err := cmd.CombinedOutput()
+			_, installed := os.Stat(filepath.Join(dir, "installed"))
+			if (err == nil) != (mode == "official") || (installed == nil) != (mode == "official") {
+				t.Fatalf("compose trust result: %v installed=%v %s", err, installed, out)
+			}
+		})
+	}
+}
+
+func TestInstallProxyCannotSupplyTrust(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	for _, mode := range []string{"forged", "unreachable", "official", "custom"} {
+		t.Run(mode, func(t *testing.T) {
+			script := sharedScript + `
+say() { :; }
+fail() { exit 1; }
+ARCH=amd64
+BASE=https://github.com/SIPC/Nagi/releases/download/v0.36.0
+DOWNLOAD_URL=""
+if [ "$MODE" = custom ]; then BASE=https://my-mirror.invalid; DOWNLOAD_URL=$BASE; fi
+gh_urls() { printf '%s\n' "https://untrusted.invalid/$1"; }
+printf '#!/bin/sh\necho v0.36.0\n' > "$TMP/payload"
+HASH=$(sha256sum "$TMP/payload" | awk '{print $1}')
+curl() {
+  OUT=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in -o) OUT=$2; shift ;; *) URL=$1 ;; esac
+    shift
+  done
+  case "$URL" in
+    */SHA256SUMS)
+      case "$URL" in
+        https://github.com/*)
+          [ "$MODE" != unreachable ] || return 1
+          if [ "$MODE" = forged ]; then printf '%064d  nagi-linux-amd64\n' 0 > "$OUT"; return; fi ;;
+      esac
+      printf '%s  nagi-linux-amd64\n' "$HASH" > "$OUT" ;;
+    */nagi-linux-amd64) cp "$TMP/payload" "$OUT" ;;
+    *) return 1 ;;
+  esac
+}
+download_nagi
+`
+			cmd := exec.Command(sh, "-c", script)
+			cmd.Env = append(os.Environ(), "MODE="+mode, "TMP="+t.TempDir())
+			out, err := cmd.CombinedOutput()
+			wantOK := mode == "official" || mode == "custom"
+			if (err == nil) != wantOK {
+				t.Fatalf("trust result: %v %s", err, out)
+			}
+		})
+	}
+}
+
 // 面板安装脚本里的共用代码要和 sharedScript 一字不差（节点安装脚本由面板生成，用的是 sharedScript）。
 func TestSharedScript(t *testing.T) {
 	b, err := os.ReadFile(panelScript)
