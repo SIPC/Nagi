@@ -65,6 +65,10 @@ type Engine struct {
 	memSince time.Time
 	load     loadState
 	queue    []queued
+	source   string
+	revision uint64
+	history  []*nagiv1.Alert
+	stateErr error // fail closed: never publish an uncommitted source version
 }
 
 type state struct {
@@ -444,7 +448,9 @@ func (e *Engine) evaluate(ctx context.Context) {
 	}
 	for key, st := range e.states {
 		// 事件类告警（例如快照失败）由 Fire/Resolve 控制，这里只处理规则类告警。
-		if st.firing && !isEventKey(key) && active[key] == nil && healthy[key] {
+		if !isEventKey(key) && !e.ruleEnabled(key, node) {
+			e.end(key, "rule_disabled")
+		} else if st.firing && !isEventKey(key) && active[key] == nil && healthy[key] {
 			send = append(send, e.setResolved(key))
 		} else if !isEventKey(key) {
 			st.confirmed = active[key] != nil
@@ -620,14 +626,13 @@ func (e *Engine) Resolve(ctx context.Context, key string) {
 	}
 }
 
-// MarkUnavailableUnless keeps removed objects unresolved: removal is not health
-// evidence. A future versioned lifecycle can end them with an explicit reason.
+// MarkUnavailableUnless ends explicitly removed objects, never as recovery.
 func (e *Engine) MarkUnavailableUnless(prefix string, keep func(rest string) bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for k, st := range e.states {
 		if rest, ok := strings.CutPrefix(k, "event:"+prefix); ok && st.firing && !keep(rest) {
-			st.confirmed = false
+			e.end(k, "object_removed")
 		}
 	}
 	e.saveStates()
@@ -640,11 +645,15 @@ func (e *Engine) setFiring(key string, a *nagiv1.Alert) *nagiv1.Alert {
 	st := e.states[key]
 	now := time.Now()
 	if st == nil {
+		if len(e.states) >= 200 {
+			return nil
+		}
 		st = &state{occurrence: rand.Text(), since: now}
 		e.states[key] = st
 	}
 	st.confirmed = true
 	a.Status, a.Node, a.Time = "firing", e.nodeName(), timestamppb.New(now)
+	a.Occurrence, a.Source, a.Since, a.Validity = st.occurrence, e.source, timestamppb.New(st.since), "valid"
 	if st.firing && now.Sub(st.lastNotified) < alert.RepeatInterval {
 		st.alert = a
 		return nil
@@ -655,10 +664,26 @@ func (e *Engine) setFiring(key string, a *nagiv1.Alert) *nagiv1.Alert {
 
 // setResolved 清除告警状态，返回恢复通知。调用方持有 e.mu。
 func (e *Engine) setResolved(key string) *nagiv1.Alert {
+	return e.end(key, "recovered")
+}
+
+func (e *Engine) end(key, reason string) *nagiv1.Alert {
 	st := e.states[key]
 	st.firing = false
-	a := &nagiv1.Alert{Key: key, Status: "resolved", Title: st.alert.GetTitle(), Project: st.alert.GetProject(),
-		Node: e.nodeName(), Time: timestamppb.Now()}
+	status := "ended"
+	if reason == "recovered" {
+		status = "resolved"
+	}
+	a := &nagiv1.Alert{Key: key, Status: status, Title: st.alert.GetTitle(), Project: st.alert.GetProject(),
+		Node: e.nodeName(), Time: timestamppb.Now(), Occurrence: st.occurrence, Source: e.source,
+		Since: timestamppb.New(st.since), EndReason: reason, Validity: "unknown"}
+	if reason == "recovered" {
+		a.Validity = "valid"
+	}
+	e.history = append(e.history, a)
+	if len(e.history) > 200 {
+		e.history = e.history[len(e.history)-200:]
+	}
 	delete(e.states, key)
 	return a
 }
