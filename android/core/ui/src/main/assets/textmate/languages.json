@@ -1,0 +1,29 @@
+{
+  "languages": [
+    {
+      "grammar": "textmate/yaml.tmLanguage.json",
+      "name": "yaml",
+      "scopeName": "source.yaml"
+    },
+    {
+      "grammar": "textmate/json.tmLanguage.json",
+      "name": "json",
+      "scopeName": "source.json"
+    },
+    {
+      "grammar": "textmate/shell.tmLanguage.json",
+      "name": "shell",
+      "scopeName": "source.shell"
+    },
+    {
+      "grammar": "textmate/ini.tmLanguage.json",
+      "name": "ini",
+      "scopeName": "source.ini"
+    },
+    {
+      "grammar": "textmate/dockerfile.tmLanguage.json",
+      "name": "dockerfile",
+      "scopeName": "source.dockerfile"
+    }
+  ]
+}

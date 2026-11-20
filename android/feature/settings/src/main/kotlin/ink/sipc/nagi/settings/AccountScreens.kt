@@ -86,7 +86,8 @@ fun ProfileScreen(session: PanelSession, onBack: () -> Unit, onSaved: () -> Unit
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(name.ifEmpty { m.username }, avatar, size = 56.dp)
                 Spacer(Modifier.width(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 并排按钮之间 12（docs/android.md 视觉「间距」）。
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     NagiButton(stringResource(R.string.avatar_pick), {
                         pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }, variant = ButtonVariant.Outline, size = ButtonSize.Small)

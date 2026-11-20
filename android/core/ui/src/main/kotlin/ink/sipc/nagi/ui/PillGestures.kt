@@ -19,7 +19,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 
-// 胶囊的长按拖动（底部的 PillNav 和宽屏左侧的 PillRail 共用，见 docs/android.md 导航）：
+// 胶囊导航 PillNav 的长按拖动（横向、竖向共用，见 docs/android.md 导航）：
 // 按住 PILL_LONG_PRESS_MS 后拖动，手指经过哪一项就切到哪一项，每切一次轻振一下；按住时胶囊放大 4%，松手回弹。
 // 手指下是哪一项按胶囊的项目区等分来算：各项的大小在变，但总长度不变，等分是稳定的，不会来回跳。
 
@@ -61,7 +61,7 @@ internal fun PillLongPress(content: @Composable () -> Unit) {
 }
 
 /**
- * 加在胶囊的项目区上：长按后拖动选项。[vertical] 为 true 时按上下等分（PillRail），否则按左右（PillNav）。
+ * 加在胶囊的项目区上：长按后拖动选项。[vertical] 为 true 时按上下等分（竖向），否则按左右（横向）。
  */
 @Composable
 internal fun Modifier.pillDrag(drag: PillDrag, count: Int, selected: Int, onSelect: (Int) -> Unit, vertical: Boolean = false): Modifier {

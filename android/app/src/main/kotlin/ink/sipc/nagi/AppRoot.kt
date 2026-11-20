@@ -1,6 +1,16 @@
 package ink.sipc.nagi
 
 import ink.sipc.nagi.pairing.ApprovalPrompts
+import ink.sipc.nagi.nodes.AddNodeScreen
+import ink.sipc.nagi.nodes.HaScreen
+import ink.sipc.nagi.nodes.MeshScreen
+import ink.sipc.nagi.nodes.NodeActions
+import ink.sipc.nagi.nodes.NodeScreen
+import ink.sipc.nagi.nodes.NodesContent
+import ink.sipc.nagi.nodes.NodesViewModel
+import ink.sipc.nagi.nodes.accessOf
+import ink.sipc.nagi.data.Polled
+import ink.sipc.nagi.ui.NagiIconButton
 import ink.sipc.nagi.pairing.rememberElevate
 import ink.sipc.nagi.ui.LocalElevate
 import androidx.compose.runtime.CompositionLocalProvider
@@ -19,7 +29,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.statusBarsPadding
-import ink.sipc.nagi.ui.PillRail
+import ink.sipc.nagi.ui.PillOrientation
+import ink.sipc.nagi.ui.NagiLogo
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.NavController
 import androidx.compose.ui.platform.LocalConfiguration
@@ -73,6 +84,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import ink.sipc.nagi.ui.EmptyState
 import ink.sipc.nagi.ui.NagiTransitions
+import ink.sipc.nagi.ui.SlidingSelection
+import ink.sipc.nagi.ui.rememberSelectionState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInVertically
 import androidx.compose.ui.platform.LocalDensity
@@ -294,6 +307,10 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
     var sheet by remember { mutableStateOf(false) }
     val home: HomeViewModel = viewModel(key = session.panel.id, factory = Factory { HomeViewModel(session) })
     val settings: SettingsViewModel = viewModel(key = "settings-" + session.panel.id, factory = Factory { SettingsViewModel(session) })
+    val nodes: NodesViewModel = viewModel(key = "nodes-" + session.panel.id, factory = Factory { NodesViewModel(session) })
+    val nodesList = rememberLazyListState()
+    // 宽屏时节点页右边正在看的节点（从首页点进来时也用它）；为空时看列表里的第一个。
+    var pickedNode by rememberSaveable { mutableStateOf<String?>(null) }
     // 退出这台手机（顶部栏的面板列表、设置里的面板页）：通知面板删除设备记录，再回到欢迎页。
     val logout: () -> Unit = {
         scope.launch {
@@ -312,17 +329,31 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
     }
     val critical = (overview as? OverviewState.Ready)?.overview?.attention?.any { it.severity == "critical" } == true
     val showMessage: (String) -> Unit = { msg -> scope.launch { snackbar.showSnackbar(msg) } }
+    // 宽屏（600 dp 以上，平板、横屏、折叠屏展开）：左边竖着的胶囊代替底部的胶囊，一级和二级页面都显示；
+    // 设置页、节点页左边是列表，右边是选中的一项（见 docs/android.md#宽屏）。只按窗口宽度判断。
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    // 打开一个节点：手机上推进节点页；宽屏切到节点标签，右边显示这个节点。
+    val openNode: (String) -> Unit = { id ->
+        if (wide) {
+            pickedNode = id
+            tab = Tab.NODES
+        } else {
+            nav.navigate("node/$id")
+        }
+    }
     val actions = object : HomeActions {
         override fun openAttention(item: Attention) {
             when {
                 item.container.isNotEmpty() -> nav.navigate("container/${item.projectId}/${item.container}")
-                item.nodeId.isNotEmpty() -> tab = Tab.NODES
+                item.nodeId.isNotEmpty() -> openNode(item.nodeId)
             }
         }
 
         override fun openNodes(offlineOnly: Boolean) {
             tab = Tab.NODES
         }
+
+        override fun openNode(id: String) = openNode(id)
 
         override fun openProjects(notRunningOnly: Boolean) {
             tab = Tab.PROJECTS
@@ -334,9 +365,6 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
     }
 
     val reduced = isReducedMotion()
-    // 宽屏（600 dp 以上，平板、横屏、折叠屏展开）：左边竖着的胶囊代替底部的胶囊，一级和二级页面都显示；
-    // 设置页左边是菜单，右边是选中的一项（见 docs/android.md#宽屏）。只按窗口宽度判断。
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
     val navItems = listOf(
         PillNavItem(NagiIcons.Home, stringResource(R.string.tab_home), badge = critical),
         PillNavItem(NagiIcons.Folder, stringResource(R.string.tab_projects)),
@@ -353,6 +381,7 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
             scope.launch {
                 when (tab) {
                     Tab.HOME -> if (reduced) homeList.scrollToItem(0) else homeList.animateScrollToItem(0)
+                    Tab.NODES -> if (reduced) nodesList.scrollToItem(0) else nodesList.animateScrollToItem(0)
                     Tab.SETTINGS -> if (reduced) settingsScroll.scrollTo(0) else settingsScroll.animateScrollTo(0)
                     else -> {}
                 }
@@ -406,6 +435,23 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
         page(SettingsRoutes.LICENSES) { LicensesScreen(onBack = back) }
     }
 
+    // 节点的各个二级页面。窄屏时在主导航里一页一页推进去；宽屏时在节点页右边的那一栏里（[n] 是那一栏自己的导航，
+    // 第一页是 NodesPanes 里的节点详情）。
+    fun NavGraphBuilder.nodePages(n: NavController, openNode: (String) -> Unit = { n.navigate("node/$it") }, onRemoved: () -> Unit) {
+        val back: () -> Unit = { n.popBackStack() }
+        val nodeActions = object : NodeActions {
+            override fun back() { n.popBackStack() }
+            override fun openContainer(projectId: String, name: String) = n.navigate("container/$projectId/$name")
+            override fun removed() = onRemoved()
+        }
+        page("node/{id}") { entry -> NodeScreen(nodes, entry.arguments?.getString("id").orEmpty(), nodeActions) }
+        page("nodes/add") { AddNodeScreen(nodes.repo, onBack = back, onDone = { nodes.refresh(); back() }) }
+        page("nodes/mesh") { MeshScreen(nodes, session, onBack = back, openNode = openNode) }
+        page("nodes/ha") { HaScreen(nodes, session, onBack = back, openNode = openNode, openContainer = { p, c -> n.navigate("container/$p/$c") }) }
+    }
+    val nodesState by nodes.list.collectAsStateWithLifecycle()
+    val canAddNode = nodes.accessOf(nodesState)?.isAdmin == true
+
     val panel by session.current.collectAsStateWithLifecycle()
     Row(Modifier.fillMaxSize()) {
         if (wide) {
@@ -419,7 +465,7 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                 val me = info?.displayName?.ifEmpty { null } ?: info?.username ?: session.panel.displayName.ifEmpty { session.panel.username }
                 PanelBadge(panel.title, me, info?.avatar?.toByteArray()) { sheet = true }
                 Spacer(Modifier.weight(1f))
-                PillRail(navItems, tab.ordinal, selectTab)
+                PillNav(navItems, tab.ordinal, selectTab, orientation = PillOrientation.Vertical, header = { NagiLogo(Modifier.size(28.dp)) })
             }
         }
         NavHost(
@@ -455,7 +501,19 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                         when (t) {
                             Tab.HOME -> HomeContent(home, actions, contentPadding, showMessage, homeList)
                             Tab.PROJECTS -> Placeholder()
-                            Tab.NODES -> Placeholder()
+                            Tab.NODES -> if (wide) {
+                                NodesPanes(contentPadding, nodes, pickedNode, { pickedNode = it }, pages = { n, open -> nodePages(n, open) { pickedNode = null; n.popBackStack(NODE_DETAIL, inclusive = false) } }) { selected, open, add, go, view ->
+                                    NodesContent(
+                                        nodes, contentPadding, onOpen = open, onAdd = add, showMessage = showMessage, listState = nodesList,
+                                        selected = selected, header = true, onMesh = { go("nodes/mesh") }, onHa = { go("nodes/ha") }, view = view,
+                                    )
+                                }
+                            } else {
+                                NodesContent(
+                                    nodes, contentPadding, onOpen = { nav.navigate("node/$it") }, onAdd = { nav.navigate("nodes/add") }, showMessage = showMessage, listState = nodesList,
+                                    onMesh = { nav.navigate("nodes/mesh") }, onHa = { nav.navigate("nodes/ha") },
+                                )
+                            }
                             Tab.SETTINGS -> if (wide) {
                                 SettingsPanes(contentPadding, pages = { n -> settingsPages(n) }) { detail, open ->
                                     SettingsContent(settings, session, graph.prefs, BuildConfig.VERSION_NAME, contentPadding, settingsScroll, selected = detail, open = open)
@@ -470,25 +528,25 @@ private fun MainTabs(graph: AppGraph, session: PanelSession, onLocked: () -> Uni
                         val bg = NagiTheme.colors.background
                         Box(Modifier.fillMaxWidth().height(statusTop + 12.dp).background(Brush.verticalGradient(0f to bg, 0.6f to bg, 1f to bg.copy(alpha = 0f))))
                     } else {
-                        NagiTopBar(panel.title, onTitleClick = { sheet = true }, showChevron = true, fade = true)
+                        NagiTopBar(panel.title, onTitleClick = { sheet = true }, showChevron = true, fade = true) {
+                            // 新建的入口是顶部栏的加号（docs/android.md「新建」）：节点页给管理员添加节点。
+                            if (tab == Tab.NODES && canAddNode) NagiIconButton(NagiIcons.Plus, stringResource(ink.sipc.nagi.nodes.R.string.add_node), { nav.navigate("nodes/add") })
+                        }
                     }
                     Column(Modifier.align(Alignment.BottomCenter)) {
                         SnackbarHost(snackbar) { Snackbar(it, containerColor = NagiTheme.colors.primary, contentColor = NagiTheme.colors.primaryForeground) }
-                        if (!wide) PillNav(navItems, selected = tab.ordinal, onSelect = selectTab)
+                        if (!wide) {
+                            // 底部居中，离手势条 12。
+                            Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp), contentAlignment = Alignment.BottomCenter) {
+                                PillNav(navItems, selected = tab.ordinal, onSelect = selectTab)
+                            }
+                        }
                     }
                 }
             }
             settingsPages(nav)
-            page("container/{project}/{name}") { entry ->
-                val name = entry.arguments?.getString("name").orEmpty()
-                Column(Modifier.fillMaxSize().navigationBarsPadding()) {
-                    NagiBackTopBar(name, onBack = { nav.popBackStack() })
-                    Text(
-                        stringResource(R.string.placeholder_update), style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground,
-                        modifier = Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp),
-                    )
-                }
-            }
+            nodePages(nav) { nav.popBackStack("tabs", inclusive = false) }
+            page("container/{project}/{name}") { entry -> ContainerPlaceholder(entry.arguments?.getString("name").orEmpty()) { nav.popBackStack() } }
         }
     }
 
@@ -513,9 +571,13 @@ private fun SettingsPanes(
 ) {
     val detail = rememberNavController()
     val entry by detail.currentBackStackEntryAsState()
+    val selection = rememberSelectionState()
+    val slide = rememberPaneSlide()
     Row(Modifier.fillMaxSize()) {
-        Box(Modifier.width(360.dp).fillMaxHeight()) {
+        // 左边菜单选中的底色从上一项滑过去；右边换内容时跟着同方向滑入（选下面的一项，新内容从下面进来）。
+        SlidingSelection(selection, Modifier.width(360.dp).fillMaxHeight()) {
             menu(entry?.destination?.route) { route ->
+                slide.forward = selection.isBelowSelected(route)
                 // 换一项时清掉右边原来的页面栈，不叠在一起。
                 detail.navigate(route) {
                     popUpTo(detail.graph.id) { inclusive = true }
@@ -526,12 +588,118 @@ private fun SettingsPanes(
         Box(Modifier.width(1.dp).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).background(NagiTheme.colors.border))
         // 右边一栏在主顶部栏下面，子页自己的顶部栏（返回、标题）不再留状态栏的高度。
         Box(Modifier.weight(1f).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).consumeWindowInsets(WindowInsets.statusBars)) {
+            // 换左边的一项：同方向滑入；在右边进下一级、返回：淡入淡出。
             NavHost(
                 detail, startDestination = SettingsRoutes.PROFILE,
-                enterTransition = { fadeIn(tween(Motion.FADE_IN)) }, exitTransition = { fadeOut(tween(100)) },
+                enterTransition = { if (selection.has(targetState.destination.route)) slide.enter() else fadeIn(tween(Motion.FADE_IN)) },
+                exitTransition = { if (selection.has(targetState.destination.route)) slide.exit() else fadeOut(tween(100)) },
                 popEnterTransition = { fadeIn(tween(Motion.FADE_IN)) }, popExitTransition = { fadeOut(tween(100)) },
             ) { pages(detail) }
         }
+    }
+}
+
+/** 宽屏两栏里右边换内容的方向：左边选的是下面的一项时往下（新内容从下面进来）。 */
+private class PaneSlide(val inPx: Int, val outPx: Int, val reduced: Boolean) {
+    var forward = true
+    fun enter() = NagiTransitions.tabEnter(forward, inPx, reduced, vertical = true)
+    fun exit() = NagiTransitions.tabExit(forward, outPx, reduced, vertical = true)
+}
+
+@Composable
+private fun rememberPaneSlide(): PaneSlide {
+    val density = LocalDensity.current
+    val reduced = isReducedMotion()
+    return remember(density, reduced) { PaneSlide(with(density) { 32.dp.roundToPx() }, with(density) { 16.dp.roundToPx() }, reduced) }
+}
+
+/** 宽屏节点页右边一栏的第一页（选中的节点）。 */
+private const val NODE_DETAIL = "detail"
+
+/**
+ * 宽屏的节点页：左边是节点列表（宽 360），右边是选中的节点（[picked]，没有选时是列表里的第一个），有自己的导航
+ * （添加节点、容器也在右边）。左边选中的一行有底色。
+ */
+@Composable
+private fun NodesPanes(
+    contentPadding: PaddingValues,
+    vm: NodesViewModel,
+    picked: String?,
+    pick: (String?) -> Unit,
+    pages: NavGraphBuilder.(NavController, (String) -> Unit) -> Unit,
+    list: @Composable (selected: String?, open: (String) -> Unit, add: () -> Unit, go: (String) -> Unit, view: String?) -> Unit,
+) {
+    val detail = rememberNavController()
+    val state by vm.list.collectAsStateWithLifecycle()
+    val ids = (state as? Polled.Ready)?.value?.nodes?.map { it.id }.orEmpty()
+    // 选中的节点不在了（被移除）时看第一个。
+    val shown = picked?.takeIf { it in ids } ?: ids.firstOrNull()
+    val route = detail.currentBackStackEntryAsState().value?.destination?.route
+    // 右边是节点网络或高可用时，左边那一行有底色，节点不高亮。
+    val view = when (route) {
+        "nodes/mesh" -> "mesh"
+        "nodes/ha" -> "ha"
+        else -> null
+    }
+    val selection = rememberSelectionState()
+    val slide = rememberPaneSlide()
+    val open = { id: String ->
+        slide.forward = selection.isBelowSelected(id)
+        pick(id)
+        detail.popBackStack(NODE_DETAIL, inclusive = false)
+        Unit
+    }
+    Row(Modifier.fillMaxSize()) {
+        // 左边选中的一行底色从上一行滑过去；右边换节点时跟着同方向滑入。
+        SlidingSelection(selection, Modifier.width(360.dp).fillMaxHeight()) {
+            list(if (view == null) shown else null, open, { detail.navigate("nodes/add") { launchSingleTop = true } }, { r ->
+                detail.navigate(r) {
+                    popUpTo(NODE_DETAIL)
+                    launchSingleTop = true
+                }
+            }, view)
+        }
+        Box(Modifier.width(1.dp).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).background(NagiTheme.colors.border))
+        Box(Modifier.weight(1f).fillMaxHeight().padding(top = contentPadding.calculateTopPadding()).consumeWindowInsets(WindowInsets.statusBars)) {
+            NavHost(
+                detail, startDestination = NODE_DETAIL,
+                enterTransition = { fadeIn(tween(Motion.FADE_IN)) }, exitTransition = { fadeOut(tween(100)) },
+                popEnterTransition = { fadeIn(tween(Motion.FADE_IN)) }, popExitTransition = { fadeOut(tween(100)) },
+            ) {
+                page(NODE_DETAIL) {
+                    // 换一个节点时跟左边列表同方向滑入（选下面的节点，新内容从下面进来）。
+                    AnimatedContent(
+                        targetState = shown,
+                        transitionSpec = { slide.enter() togetherWith slide.exit() },
+                        label = "node",
+                    ) { id ->
+                        when {
+                            id != null -> NodeScreen(vm, id, object : NodeActions {
+                                override fun back() {}
+                                override fun openContainer(projectId: String, name: String) = detail.navigate("container/$projectId/$name")
+                                override fun removed() = pick(null)
+                            }, showBack = false)
+                            state is Polled.Loading -> Box(Modifier.fillMaxSize())
+                            else -> EmptyState(stringResource(ink.sipc.nagi.nodes.R.string.nodes_none_selected))
+                        }
+                    }
+                }
+                pages(detail, open)
+                page("container/{project}/{name}") { entry -> ContainerPlaceholder(entry.arguments?.getString("name").orEmpty()) { detail.popBackStack() } }
+            }
+        }
+    }
+}
+
+/** 容器页还没有做：返回、名称和一行说明。 */
+@Composable
+private fun ContainerPlaceholder(name: String, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+        NagiBackTopBar(name, onBack = onBack)
+        Text(
+            stringResource(R.string.placeholder_update), style = NagiTheme.type.body, color = NagiTheme.colors.mutedForeground,
+            modifier = Modifier.padding(horizontal = Dimens.pageHorizontal, vertical = 16.dp),
+        )
     }
 }
 
@@ -548,6 +716,6 @@ private fun PanelBadge(title: String, name: String, avatar: ByteArray?, onClick:
     }
 }
 
-/** 项目、节点这一版是占位页。 */
+/** 项目这一版是占位页。 */
 @Composable
 private fun Placeholder() = EmptyState(stringResource(R.string.placeholder))

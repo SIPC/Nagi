@@ -10,11 +10,7 @@ import androidx.activity.SystemBarStyle
 import android.graphics.Color
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.annotation.SuppressLint
-import android.app.Activity
-import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
@@ -54,10 +50,6 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // 最近任务里不留首页的截图：超过解锁时长后，拿到手机的人打开最近任务能看到上次离开时的告警、节点、流量，
-        // 解锁页挡的就是这些。Android 13 起系统直接不截；更早的版本让系统不拿截图当缩略图。都在这里设好：
-        // 手势导航进最近任务时缩略图在 onPause 之前就截了，离开前台时才加 FLAG_SECURE 来不及。
-        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false) else recentsFallback = !disablePreviewScreenshots()
         // 重建（切换语言、旋转、进程被回收后恢复）时拿到的还是最初的 intent，不再处理，旧链接不会再打开一次确认页。
         if (savedInstanceState == null) handle(intent)
         val app = application as NagiApplication
@@ -78,41 +70,6 @@ class MainActivity : FragmentActivity() {
             }
         }
         keepAlive(app)
-    }
-
-    /**
-     * Android 9 到 12：`Activity.setDisablePreviewScreenshots(true)`，系统不拿截图当最近任务的缩略图，按主题画一个空白窗口。
-     * 这个方法不在 SDK 里（13 起换成公开的 setRecentsScreenshotEnabled），按名字调用；调不到时返回 false。
-     */
-    @SuppressLint("DiscouragedPrivateApi", "PrivateApi")
-    private fun disablePreviewScreenshots(): Boolean = try {
-        Activity::class.java.getMethod("setDisablePreviewScreenshots", Boolean::class.javaPrimitiveType).invoke(this, true)
-        true
-    } catch (e: ReflectiveOperationException) {
-        false
-    }
-
-    /** 上面的方法调不到时退回的做法：离开前台时加 FLAG_SECURE，回来再去掉。手势导航进最近任务时挡不住，暂停但还看得见时录屏里是黑的。 */
-    private var recentsFallback = false
-
-    /** onPause 时为最近任务加上的 FLAG_SECURE（页面自己设的不算），onResume 时只去掉这个。 */
-    private var recentsSecure = false
-
-    override fun onPause() {
-        val secure = WindowManager.LayoutParams.FLAG_SECURE
-        if (recentsFallback && window.attributes.flags and secure == 0) {
-            window.addFlags(secure)
-            recentsSecure = true
-        }
-        super.onPause()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (recentsSecure) {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            recentsSecure = false
-        }
     }
 
     override fun onNewIntent(intent: Intent) {
