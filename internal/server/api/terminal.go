@@ -191,7 +191,7 @@ func (a *API) watchSession(ctx context.Context, u auth.User, h http.Header, app 
 // recheckCaller 重新读出打开着的连接的调用者（见 watchSession）。opened 是连接打开的时间。
 func (a *API) recheckCaller(ctx context.Context, u auth.User, h http.Header, app appRecheck, opened time.Time) (auth.User, error) {
 	if u.DeviceID == "" {
-		cur, err := a.Auth.SessionByID(ctx, u.SessionID)
+		cur, err := a.Auth.LinkUser(ctx, u.SessionID, u.ID, auth.RequestMeta(ctx).IP)
 		if err != nil || cur.ID != u.ID {
 			return auth.User{}, errSessionExpired
 		}
