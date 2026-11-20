@@ -175,7 +175,7 @@ func copyGuarded(root *os.Root, rel, src string, mode os.FileMode, g *writeGuard
 // 或者从 git 仓库同步来的），Docker 和 compose 会跟着链接走，把宿主机的目录或文件挂进容器。
 func checkMountSources(proj *types.Project, base string) error {
 	var paths []string
-	for _, svc := range proj.Services {
+	for _, svc := range proj.AllServices() {
 		for _, v := range svc.Volumes {
 			if v.Type == types.VolumeTypeBind {
 				paths = append(paths, v.Source)

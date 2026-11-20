@@ -660,6 +660,10 @@ func (s *Server) metadataClient(ctx context.Context, id string) (Client, error) 
 	}
 	s.mu.Unlock()
 	c, err := s.fetchMetadata(ctx, id)
+	if err != nil {
+		// HTTP 状态描述及传输错误都可能包含远端提供的长文本；负缓存只保留固定错误。
+		err = i18n.New("无法获取客户端元数据，请检查客户端标识的网址")
+	}
 	s.mu.Lock()
 	if len(s.docs) >= 200 {
 		s.docs = map[string]cachedDoc{}
@@ -687,7 +691,7 @@ func (s *Server) fetchMetadata(ctx context.Context, id string) (Client, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return Client{}, i18n.Errorf("无法获取客户端元数据（%s）", res.Status)
+		return Client{}, i18n.Errorf("无法获取客户端元数据（%d）", res.StatusCode)
 	}
 	var doc struct {
 		ClientID     string   `json:"client_id"`

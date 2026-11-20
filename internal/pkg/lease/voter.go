@@ -25,6 +25,15 @@ func ValidAdvance(from, to uint64) bool {
 	return to > from && to-from <= 1024 && to < ^uint64(0)
 }
 
+// Advance 向目标轮次迈进最多 1024 轮；无效或耗尽的目标不推进。
+// 用于追赶离线期间积累的差距，不表示已经取得目标轮次的票。
+func Advance(from, to uint64) uint64 {
+	if to <= from || to >= ^uint64(0)-1 {
+		return from
+	}
+	return from + min(to-from, 1024)
+}
+
 type vote struct {
 	For     []byte    `json:"for"`
 	Epoch   uint64    `json:"epoch"`
@@ -87,10 +96,20 @@ func (v *Voter) Vote(project string, parties [][]byte, candidate []byte, epoch u
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	x := v.load(project, lease)
+	now := time.Now()
 	if !allowed || (epoch != x.Epoch && !ValidAdvance(x.Epoch, epoch)) {
+		// 离线节点可能落后很多轮：只推进一段，不授票、不续租，也不改变持有者。
+		// 活跃租约仍只能由原持有者推进；别人必须等到租约过期。
+		if to := Advance(x.Epoch, epoch); allowed && to > x.Epoch && to < epoch &&
+			(bytes.Equal(x.For, candidate) || len(x.For) == 0 || now.After(x.expires)) {
+			nx := &vote{For: x.For, Epoch: to, expires: x.expires}
+			if err := v.save(project, nx); err == nil {
+				v.v[project] = nx
+				return false, nx.For, nx.Epoch
+			}
+		}
 		return false, x.For, x.Epoch
 	}
-	now := time.Now()
 	switch {
 	case bytes.Equal(x.For, candidate) && epoch == x.Epoch:
 		x.expires = now.Add(lease)
@@ -112,6 +131,23 @@ func (v *Voter) Vote(project string, parties [][]byte, candidate []byte, epoch u
 		return true, nx.For, nx.Epoch
 	}
 	return false, x.For, x.Epoch
+}
+
+// CatchUp 按远端提示推进已过期的本地轮次，不改持有者，也不授票或续租。
+// 下一次顶替仍须用新轮次取得多数票。
+func (v *Voter) CatchUp(project string, epoch uint64, lease time.Duration) {
+	if !idRe.MatchString(project) {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	x := v.load(project, lease)
+	if to := Advance(x.Epoch, epoch); to > x.Epoch && (len(x.For) == 0 || time.Now().After(x.expires)) {
+		nx := &vote{For: x.For, Epoch: to, expires: x.expires}
+		if err := v.save(project, nx); err == nil {
+			v.v[project] = nx
+		}
+	}
 }
 
 // Handover 处理持有者的转让请求（切回原节点）：caller 是票现在投给的一方，请求把票转给 to，轮次加一。

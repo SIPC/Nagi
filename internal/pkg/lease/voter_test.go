@@ -17,7 +17,7 @@ func TestVoteRejectsEpochPoisoning(t *testing.T) {
 	if err := v.Set("p", a, 5, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	for _, epoch := range []uint64{1030, ^uint64(0) - 1, ^uint64(0)} {
+	for _, epoch := range []uint64{^uint64(0) - 1, ^uint64(0)} {
 		if ok, _, got := v.Vote("p", m, a, epoch, time.Minute); ok || got != 5 {
 			t.Fatalf("accepted excessive epoch %d: %v %d", epoch, ok, got)
 		}
@@ -30,6 +30,54 @@ func TestVoteRejectsEpochPoisoning(t *testing.T) {
 	}
 	if ok, _, epoch := v.Handover("p", m, a, b, 0, time.Minute); ok || epoch != ^uint64(0) {
 		t.Fatalf("handover wrapped: %v %d", ok, epoch)
+	}
+}
+
+func TestVoteCatchesUpWithoutPrematureGrant(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		t.Run(map[bool]string{false: "renew", true: "takeover"}[expired], func(t *testing.T) {
+			dir := t.TempDir()
+			v := NewVoter(dir)
+			L, candidate := time.Minute, a
+			if expired {
+				L, candidate = -time.Second, b
+			}
+			if err := v.Set("p", a, 1, L); err != nil {
+				t.Fatal(err)
+			}
+			if ok, h, epoch := v.Vote("p", m, candidate, 2050, time.Minute); ok || string(h) != string(a) || epoch != 1025 {
+				t.Fatalf("catch-up must not grant target epoch: %v %s %d", ok, h, epoch)
+			}
+			if h, e, gone := v.State("p", time.Minute); string(h) != string(a) || e != 1025 || gone != expired {
+				t.Fatalf("catch-up changed lease: %s %d %v", h, e, gone)
+			}
+			if ok, _, epoch := v.Vote("p", m, candidate, 2050, time.Minute); ok || epoch != 2049 {
+				t.Fatalf("second catch-up step: %v %d", ok, epoch)
+			}
+			if ok, h, epoch := v.Vote("p", m, candidate, 2050, time.Minute); !ok || string(h) != string(candidate) || epoch != 2050 {
+				t.Fatalf("caught-up vote rejected: %v %s %d", ok, h, epoch)
+			}
+			v = NewVoter(dir)
+			if ok, _, epoch := v.Vote("p", m, candidate, 2050, time.Minute); !ok || epoch != 2050 {
+				t.Fatalf("caught-up vote lost after restart: %v %d", ok, epoch)
+			}
+		})
+	}
+	// 追赶提示和对方的大跨度请求都不能打断仍有效的租约。
+	v := NewVoter(t.TempDir())
+	if err := v.Set("p", a, 1, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	v.CatchUp("p", 5000, time.Minute)
+	if ok, _, e := v.Vote("p", m, b, 5000, time.Minute); ok || e != 1 {
+		t.Fatalf("active lease advanced by other candidate: %v %d", ok, e)
+	}
+	if err := v.Set("p", a, 1, -time.Second); err != nil {
+		t.Fatal(err)
+	}
+	v.CatchUp("p", 5000, time.Minute)
+	if h, e, gone := v.State("p", time.Minute); string(h) != string(a) || e != 1025 || !gone {
+		t.Fatalf("hint granted or renewed lease: %s %d %v", h, e, gone)
 	}
 }
 

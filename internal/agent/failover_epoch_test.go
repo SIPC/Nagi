@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"math"
 	"path/filepath"
@@ -13,6 +14,96 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
+
+func TestHolderRecoversAfterWitnessCreatesEpochGap(t *testing.T) {
+	key := func(b byte) []byte { k := make([]byte, 32); k[0] = b; return k }
+	A, B, W := key(1), key(2), key(3)
+	cfg := &nagiv1.FailoverConfig{ProjectId: "0123456789abcdef", Container: "db", LeaseSeconds: 9,
+		A: &nagiv1.FailoverParticipant{Key: A}, B: &nagiv1.FailoverParticipant{Key: B}, Witness: &nagiv1.FailoverParticipant{Key: W}}
+	id, L := unitOf(cfg), leaseOf(cfg)
+	dir := t.TempDir()
+	vA, vB := lease.NewVoter(filepath.Join(dir, "a")), lease.NewVoter(filepath.Join(dir, "b"))
+	for _, v := range []*lease.Voter{vA, vB} {
+		if err := v.Set(id, A, 1, L); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bOnline := false
+	a := &agent{log: slog.New(slog.DiscardHandler), startedAt: time.Now()}
+	a.votes = &voteBatcher{send: func(_ context.Context, k mesh.Key, reqs []*nagiv1.LeaseVoteRequest) ([]*nagiv1.LeaseVoteResponse, error) {
+		if (k[0] == B[0]) != bOnline {
+			return nil, errors.New("offline")
+		}
+		out := make([]*nagiv1.LeaseVoteResponse, len(reqs))
+		for i, r := range reqs {
+			if !bOnline {
+				out[i] = &nagiv1.LeaseVoteResponse{Holder: A, Epoch: r.GetEpoch() + 1023}
+			} else {
+				ok, h, e := vB.Vote(id, participants(cfg), A, r.GetEpoch(), L)
+				out[i] = &nagiv1.LeaseVoteResponse{Granted: ok, Holder: h, Epoch: e}
+			}
+		}
+		return out, nil
+	}}
+	st := &failoverState{cfg: cfg, holder: A, epoch: 1, restoring: true}
+	a.failovers = &failovers{dir: filepath.Join(dir, "failover"), voter: vA, m: map[string]*failoverState{id: st}}
+	ctx := context.Background()
+	for range 2 {
+		st.renewed = false
+		a.holderTick(ctx, id, st, cfg, cfg.GetA(), cfg.GetB(), st.epoch)
+	}
+	if st.epoch != 2049 || !st.leaseEnd.IsZero() {
+		t.Fatalf("expected unleased epoch gap: epoch=%d lease=%v", st.epoch, st.leaseEnd)
+	}
+	// B 恢复、恶意见证人离线：不改设置、不重置票，两个诚实节点自行恢复多数票。
+	bOnline = true
+	for range 3 {
+		st.renewed = false
+		a.holderTick(ctx, id, st, cfg, cfg.GetA(), cfg.GetB(), st.epoch)
+	}
+	if !time.Now().Before(st.leaseEnd) || st.epoch != 2049 {
+		t.Fatalf("honest nodes failed to renew: epoch=%d lease=%v", st.epoch, st.leaseEnd)
+	}
+	if h, e, expired := vB.State(id, L); !bytes.Equal(h, A) || e != 2049 || expired {
+		t.Fatalf("B failed to catch up: holder=%x epoch=%d expired=%v", h, e, expired)
+	}
+	// A 随后离线，W 保留第 4097 轮；B 从 2049 分段追赶，提示不能直接成为租约。
+	if err := vB.Set(id, A, 2049, -time.Second); err != nil {
+		t.Fatal(err)
+	}
+	vW := lease.NewVoter(filepath.Join(dir, "w"))
+	if err := vW.Set(id, A, 4097, -time.Second); err != nil {
+		t.Fatal(err)
+	}
+	standby := &agent{log: slog.New(slog.DiscardHandler), replicas: newReplicas(filepath.Join(dir, "standby"))}
+	if err := standby.replicas.save(&replicaMeta{ProjectID: cfg.ProjectId, Container: cfg.Container, SourceKey: A}, &nagiv1.ContainerSpec{ProjectId: cfg.ProjectId, Name: cfg.Container}); err != nil {
+		t.Fatal(err)
+	}
+	bst := &failoverState{cfg: cfg, holder: A, epoch: 2049}
+	standby.failovers = &failovers{dir: filepath.Join(dir, "b-failover"), voter: vB, m: map[string]*failoverState{id: bst}}
+	standby.votes = &voteBatcher{send: func(_ context.Context, k mesh.Key, reqs []*nagiv1.LeaseVoteRequest) ([]*nagiv1.LeaseVoteResponse, error) {
+		if k[0] != W[0] {
+			return nil, errors.New("offline")
+		}
+		out := make([]*nagiv1.LeaseVoteResponse, len(reqs))
+		for i, req := range reqs {
+			ok, h, e := vW.Vote(id, participants(cfg), B, req.GetEpoch(), L)
+			out[i] = &nagiv1.LeaseVoteResponse{Granted: ok, Holder: h, Epoch: e}
+		}
+		return out, nil
+	}}
+	for _, want := range []uint64{3073, 4097} {
+		standby.standbyTick(ctx, id, bst, cfg, cfg.GetB(), cfg.GetA())
+		h, e, expired := vB.State(id, L)
+		if !bytes.Equal(h, A) || e != want || !expired || !bst.leaseEnd.IsZero() || !bytes.Equal(bst.holder, A) {
+			t.Fatalf("catch-up hint became lease: holder=%x epoch=%d expired=%v", h, e, expired)
+		}
+	}
+	r := standby.collect(ctx, B, []*nagiv1.FailoverParticipant{cfg.GetWitness(), cfg.GetA()}, cfg, 4098)
+	if ok, _, _ := vB.Vote(id, participants(cfg), B, 4098, L); r.granted != 1 || !ok {
+		t.Fatal("caught-up standby cannot acquire majority after A is gone")
+	}
+}
 
 // 投票人都记着「票投给了本节点、轮次比本节点记着的高」（例如本节点调高轮次以后、记下新轮次之前重启了）：
 // 持有者把轮次调到它之上再续约，能续上；这期间另一方要不到票，不会两边同时认为自己是持有者。

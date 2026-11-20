@@ -20,6 +20,12 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 - Fixed known vulnerabilities and improved security.
 
+### Upgrade notes
+
+- Cross-node entries restored from node caches remain inactive until edited and saved in the container's Network tab. The pending state survives node caching. Existing panel records and local-only entries are unchanged.
+- This update includes a database migration. Update primary and standby panels to the same version; standby synchronization pauses across schema versions and resumes afterward. Downgrading requires restoring the pre-upgrade database backup.
+- Also upgrade nodes and node witnesses for complete label-file and failover epoch catch-up protection. Deployment checks label files even in inactive profile services and limits their variable expansion budget.
+
 ## v0.36.0
 
 ### New features
