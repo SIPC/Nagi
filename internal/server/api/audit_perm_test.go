@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -138,4 +140,33 @@ func actions2(events []*nagiv1.AuditEvent) []string {
 		out = append(out, e.GetAction())
 	}
 	return out
+}
+
+// 项目设置的出站限制列出最近被记录的目标：没有「审计日志」的成员（要「查看配置」才看得到告警的参数）不带搜索词取本项目的告警，在页面上按键筛
+// （web/src/pages/project-egress.tsx）。非管理员的搜索不匹配参数，按「egress:」搜索一条也查不到。
+func TestEgressHitsWithoutAudit(t *testing.T) {
+	h := newAuditHarness(t)
+	ctx := context.Background()
+	id, err := h.a.Q.CreateRole(ctx, "网络", time.Now().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.a.Q.SetRolePermissions(ctx, id, []string{"project.view", "project.config", "project.network", "project.addresses"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.a.Auth.CreateUser(ctx, "net", "net-password-1", id); err != nil {
+		t.Fatal(err)
+	}
+	actx := auth.WithUser(ctx, auth.User{ID: 1, Name: "admin", Role: auth.RoleAdmin})
+	h.a.Record(actx, audit.Event{Category: audit.Alert, Action: "firing", ProjectID: "p1", TargetType: "container", TargetID: "web", TargetName: "web",
+		Params: `{"title":"web","key":"egress:p1/web/198.51.100.9:443"}`})
+	_, net := h.login("net", "net-password-1")
+
+	ev := h.list(net, &nagiv1.AuditFilter{ProjectId: "p1", Categories: []string{audit.Alert}})
+	if len(ev) != 1 || !strings.Contains(ev[0].GetParams(), `egress:p1/web/198.51.100.9:443`) {
+		t.Fatalf("本项目的告警：%v", ev)
+	}
+	if ev := h.list(net, &nagiv1.AuditFilter{ProjectId: "p1", Categories: []string{audit.Alert}, Search: "egress:"}); len(ev) != 0 {
+		t.Errorf("非管理员的搜索不应匹配参数：%d 条", len(ev))
+	}
 }
