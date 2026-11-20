@@ -13,6 +13,9 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### New features
 
 - The "Audit log" permission can be granted to other roles. Members with it can view, export, and verify all audit records.
+- TCP and UDP port mappings now report connections, failure rate, active connections, and traffic on the project overview, and are included in the home page rankings.
+- The Android app adds a Nodes page with node monitoring, networking, and high availability. Admins can use the node terminal, files, and images.
+- The MCP tool query_metrics can query requests, status codes, latency, connections, and traffic of port mappings. Access tokens with only the project "View" permission can query metrics of containers and port mappings.
 
 ### Improvements
 
@@ -26,6 +29,9 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Fixed an issue where the failover holder could fail to renew its lease in some cases and be taken over by the standby.
 - Fixed an issue where hiding node names replaced ordinary words in deployment output.
 - Fixed an issue where syncing release notes removed the Android app signing certificate digest.
+- Fixed an issue where port mapping totals for requests, connections, and traffic were too high, and traffic and failures were undercounted when connections ended.
+- Fixed an issue where egress restrictions did not show recently logged targets to non-admins.
+- Fixed an issue where the Android app stopped extending the foreground unlock after the system time was adjusted.
 - Fixed known vulnerabilities and improved security.
 
 ### Behavior changes
