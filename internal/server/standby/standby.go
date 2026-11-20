@@ -127,17 +127,17 @@ func (p *Primary) HandlePair(w http.ResponseWriter, r *http.Request) {
 	}
 	var req pairRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "请求格式不对", http.StatusBadRequest)
+		http.NotFound(w, r)
 		return
 	}
 	if req.ServerFP == "" || req.Address == "" {
-		http.Error(w, "缺少备用面板的地址或公钥指纹", http.StatusBadRequest)
+		http.NotFound(w, r)
 		return
 	}
 	ctx := r.Context()
 	n, err := p.Q.UseStandbyToken(ctx, store.UseStandbyTokenParams{TokenHash: auth.HashToken(req.Token), ExpiresAt: time.Now().Unix()})
 	if err != nil || n == 0 {
-		http.Error(w, "配对码无效或已过期，请在主面板上重新生成", http.StatusForbidden)
+		http.NotFound(w, r)
 		return
 	}
 	id, err := auth.RandomToken()

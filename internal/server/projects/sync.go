@@ -369,6 +369,8 @@ func (s *Service) foreignReport(ctx context.Context, c *nodes.Conn, projectID, n
 // errNoEntry 是入口节点都被移除了的端口映射的说明。返回给浏览器时按语言翻译（见 Get）。
 var errNoEntry = i18n.New("没有入口节点，请编辑端口映射重新选择")
 
+var errPendingEntry = i18n.New("从节点恢复的跨节点入口尚未确认，请编辑并保存端口映射")
+
 // RouteProto 把数据库里的映射转成 proto。
 func RouteProto(r store.Route) *nagiv1.Exposure {
 	e := &nagiv1.Exposure{
@@ -380,6 +382,9 @@ func RouteProto(r store.Route) *nagiv1.Exposure {
 	// 入口节点都被移除了：映射留着让用户重新选，但不生效。
 	if e.NoLocalEntry && len(e.EntryNodes) == 0 {
 		e.Error = errNoEntry.Error()
+	}
+	if r.PendingConfirmation != 0 {
+		e.Error = errPendingEntry.Error()
 	}
 	return e
 }

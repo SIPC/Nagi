@@ -169,7 +169,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 面板安装脚本的其他要点：
 
 - 用了 `--download-url` 时把地址记在 `<数据目录>/panel/download-url`，面板一键更新时也从这里下载（见 [panel.md](panel.md#更新面板)）。
-- 检测到中国大陆网络时经 GitHub 加速代理下载，用上的代理记在 `<数据目录>/panel/github-proxy`，一键更新先经它下载，不行再换别的地址（见 [guide/install.md](guide/install.md#中国大陆服务器)、[panel.md](panel.md#更新面板)）。代理列表 `GH_PROXIES` 和 Docker Hub 镜像加速地址 `REGISTRY_MIRRORS` 在 Go 里各有一份（`release.GitHubProxies`、`api.DefaultRegistryMirrors`），改动时一起改，`TestInstallConstants` 会检查。
+- 检测到中国大陆网络时经 GitHub 加速代理下载文件，安装脚本的校验值必须直连官方取得，失败即停止；compose 的备用下载固定 v2.40.3 并校验官方 `.sha256`，Docker 安装脚本不经代理回退。显式 `--download-url` 则由用户信任该镜像。用上的代理记在 `<数据目录>/panel/github-proxy`，一键更新先经它下载，不行再换别的地址（更新的既有信任策略见 [panel.md](panel.md#更新面板)，安装见 [guide/install.md](guide/install.md#中国大陆服务器)）。代理列表 `GH_PROXIES` 和 Docker Hub 镜像加速地址 `REGISTRY_MIRRORS` 在 Go 里各有一份（`release.GitHubProxies`、`api.DefaultRegistryMirrors`），改动时一起改，`TestInstallConstants` 会检查。
 - 已安装时再次执行即为升级，只更换二进制并重启；端口、数据目录、是否带内嵌节点不允许在升级时修改（已加入的节点按原端口连接面板）。
 - 环境变量 `NAGI_STANDBY`（`curl … | NAGI_STANDBY=<配对码> sh`，以 root 执行）安装备用面板；旧的 `--standby <配对码>` 仍然接受，但会提示配对码出现在进程参数里，建议改用环境变量。配对码写进只有 root 能读的 `<数据目录>/standby.env`（先删掉原有的文件再以 0600 新建），服务配置用 `EnvironmentFile` 引用它，面板从环境变量 `NAGI_STANDBY` 读到，不出现在进程参数和服务配置里；配对成功（数据目录出现 `panel/paired`）后删掉这个文件，并从服务配置中去掉；安装出错退出时，还没配上对就停下面板、删掉这个文件。要装的 nagi 低于 v0.35.0 时停下（旧版本不读 `NAGI_STANDBY`，会在空的数据目录里装成一个新的主面板），提示改用该版本的安装脚本或更新镜像：`--version` 指定的版本在下载前检查，镜像在下载后按下载到的版本检查。
 - 本机已有节点（`nagi-agent` 服务）时拒绝安装带内嵌节点的面板；只装面板时需 `--no-agent` 并使用另一个数据目录。

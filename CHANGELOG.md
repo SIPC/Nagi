@@ -8,6 +8,12 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## 未发布
+
+### 修复
+
+- 修复已知漏洞，提升安全性。
+
 ## v0.36.0
 
 ### 新功能

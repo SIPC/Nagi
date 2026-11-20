@@ -1223,7 +1223,7 @@ func (q *Queries) ListAllContainers(ctx context.Context) ([]Container, error) {
 }
 
 const listAllRoutes = `-- name: ListAllRoutes :many
-SELECT project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol FROM routes ORDER BY project_id, name
+SELECT project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol, pending_confirmation FROM routes ORDER BY project_id, name
 `
 
 func (q *Queries) ListAllRoutes(ctx context.Context) ([]Route, error) {
@@ -1248,6 +1248,7 @@ func (q *Queries) ListAllRoutes(ctx context.Context) ([]Route, error) {
 			&i.EntryNodes,
 			&i.NoLocalEntry,
 			&i.ProxyProtocol,
+			&i.PendingConfirmation,
 		); err != nil {
 			return nil, err
 		}
@@ -1546,7 +1547,7 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 }
 
 const listRoutes = `-- name: ListRoutes :many
-SELECT project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol FROM routes WHERE project_id = ? ORDER BY name
+SELECT project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol, pending_confirmation FROM routes WHERE project_id = ? ORDER BY name
 `
 
 func (q *Queries) ListRoutes(ctx context.Context, projectID string) ([]Route, error) {
@@ -1571,6 +1572,7 @@ func (q *Queries) ListRoutes(ctx context.Context, projectID string) ([]Route, er
 			&i.EntryNodes,
 			&i.NoLocalEntry,
 			&i.ProxyProtocol,
+			&i.PendingConfirmation,
 		); err != nil {
 			return nil, err
 		}
@@ -2339,27 +2341,29 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) er
 }
 
 const upsertRoute = `-- name: UpsertRoute :exec
-INSERT INTO routes (project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO routes (project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol, pending_confirmation)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (project_id, name) DO UPDATE SET
     container = excluded.container, service = excluded.service, target = excluded.target, protocol = excluded.protocol,
     published = excluded.published, domains = excluded.domains, http_only = excluded.http_only,
-    entry_nodes = excluded.entry_nodes, no_local_entry = excluded.no_local_entry, proxy_protocol = excluded.proxy_protocol
+    entry_nodes = excluded.entry_nodes, no_local_entry = excluded.no_local_entry, proxy_protocol = excluded.proxy_protocol,
+    pending_confirmation = excluded.pending_confirmation
 `
 
 type UpsertRouteParams struct {
-	ProjectID     string
-	Name          string
-	Container     string
-	Service       string
-	Target        int64
-	Protocol      string
-	Published     int64
-	Domains       string
-	HttpOnly      int64
-	EntryNodes    string
-	NoLocalEntry  int64
-	ProxyProtocol int64
+	ProjectID           string
+	Name                string
+	Container           string
+	Service             string
+	Target              int64
+	Protocol            string
+	Published           int64
+	Domains             string
+	HttpOnly            int64
+	EntryNodes          string
+	NoLocalEntry        int64
+	ProxyProtocol       int64
+	PendingConfirmation int64
 }
 
 func (q *Queries) UpsertRoute(ctx context.Context, arg UpsertRouteParams) error {
@@ -2376,6 +2380,7 @@ func (q *Queries) UpsertRoute(ctx context.Context, arg UpsertRouteParams) error 
 		arg.EntryNodes,
 		arg.NoLocalEntry,
 		arg.ProxyProtocol,
+		arg.PendingConfirmation,
 	)
 	return err
 }

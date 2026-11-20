@@ -12,6 +12,27 @@ var (
 	m = [][]byte{a, b}
 )
 
+func TestVoteRejectsEpochPoisoning(t *testing.T) {
+	v := NewVoter(t.TempDir())
+	if err := v.Set("p", a, 5, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	for _, epoch := range []uint64{1030, ^uint64(0) - 1, ^uint64(0)} {
+		if ok, _, got := v.Vote("p", m, a, epoch, time.Minute); ok || got != 5 {
+			t.Fatalf("accepted excessive epoch %d: %v %d", epoch, ok, got)
+		}
+	}
+	if ok, _, epoch := v.Vote("p", m, a, 1029, time.Minute); !ok || epoch != 1029 {
+		t.Fatalf("bounded advance rejected: %v %d", ok, epoch)
+	}
+	if err := v.Set("p", a, ^uint64(0), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _, epoch := v.Handover("p", m, a, b, 0, time.Minute); ok || epoch != ^uint64(0) {
+		t.Fatalf("handover wrapped: %v %d", ok, epoch)
+	}
+}
+
 func TestVote(t *testing.T) {
 	dir := t.TempDir()
 	v := NewVoter(dir)

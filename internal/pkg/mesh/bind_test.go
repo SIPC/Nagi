@@ -5,11 +5,71 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
 	"golang.zx2c4.com/wireguard/conn"
 )
+
+func TestPingSourceFloodIsBounded(t *testing.T) {
+	b := newBind(Key{9}, false, 0, 0, slog.Default())
+	k := PublicKey(Key{19})
+	b.setPeers([]Peer{{Key: k}})
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	p := b.peers[k]
+	for i := 0; i < 1000; i++ {
+		if i%64 == 0 {
+			p.pingWindow = time.Time{}
+		}
+		b.handleControl(c, 0, netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), uint16(10000+i)), encodePing(k, [txidLen]byte{}, p.mac))
+	}
+	if len(p.learned) > 32 || len(p.lastPing) > 512 || len(p.pings) > 512 {
+		t.Fatalf("unbounded ping state: %d %d %d", len(p.learned), len(p.lastPing), len(p.pings))
+	}
+}
+
+func TestSelfRelayDuringPeerRemoval(t *testing.T) {
+	b := newBind(Key{9}, true, 0, 0, slog.Default())
+	k := PublicKey(Key{19})
+	from := netip.MustParseAddrPort("127.0.0.1:10000")
+	p := &peerState{key: k, ep: &endpoint{key: k}, direct: from, directAt: time.Now()}
+	pkt := encodeRelay(typeRelaySend, b.pub, []byte("payload"))
+	b.peers[k], b.byAddr[from] = p, k
+	if ep, data := b.handleControl(nil, 0, from, pkt); ep != p.ep || string(data) != "payload" {
+		t.Fatal("self relay did not deliver")
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 20000 {
+			b.mu.Lock()
+			b.peers[k], b.byAddr[from] = p, k
+			b.mu.Unlock()
+			b.mu.Lock()
+			delete(b.peers, k)
+			delete(b.byAddr, from)
+			b.mu.Unlock()
+		}
+	}()
+	for range 20000 {
+		ep, data := b.handleControl(nil, 0, from, pkt)
+		if ep != nil && (ep != p.ep || string(data) != "payload") {
+			t.Errorf("incorrect delivery: %v %q", ep, data)
+			break
+		}
+	}
+	wg.Wait()
+	if ep, _ := b.handleControl(nil, 0, from, pkt); ep != nil {
+		t.Fatal("removed peer accepted")
+	}
+}
 
 // 已确认地址发来的空包要丢掉，不能读第一个字节时越界（UDP 来源地址能伪造）。
 func TestReceiveEmptyUDP(t *testing.T) {

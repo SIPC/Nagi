@@ -24,6 +24,8 @@ const (
 	pingSearch    = 5 * time.Second  // 直连不可用时探测候选地址的间隔
 	forget        = 2 * time.Minute  // 学到的地址、看到的自己的公网地址保留多久
 	maxCandidates = 16
+	maxLearned    = 32
+	maxPings      = 512 // 容纳 5 个本地端口对 16+32 个候选地址的一轮探测及反向探测
 	// pendingInitTTL 是没有路径时暂存的握手包留多久：再久 WireGuard 自己就重发了（REKEY_TIMEOUT 是 5 秒）。
 	pendingInitTTL = 5 * time.Second
 	// capsTimeout：这么久没收到对方的能力包，就当它不支持（例如换回了旧版本）。
@@ -77,8 +79,10 @@ type peerState struct {
 	learned    map[netip.AddrPort]time.Time // 从对方的 ping 学到的地址
 	lastPing   map[pingKey]time.Time        // 每个本地端口、每个地址上次发 ping 的时间
 	pings      map[[txidLen]byte]pingInfo   // 等待 pong 的 ping
-	direct     netip.AddrPort               // 确认能直连的地址
-	directConn int                          // 直连用的本地端口（Bind.conns 的下标）
+	pingWindow time.Time
+	pingCount  int
+	direct     netip.AddrPort // 确认能直连的地址
+	directConn int            // 直连用的本地端口（Bind.conns 的下标）
 	// confirmed 是最近经 ping/pong 确认过的对方地址（对方有备用端口时可能不止一个）。这些地址发来的包都收，
 	// 发只走 direct：两端各自选端口，对方用来发的端口不一定是我们选来发给它的那个。
 	confirmed  map[netip.AddrPort]time.Time
@@ -673,6 +677,26 @@ func (b *Bind) AttachLink(k Key, l Link) (detach func()) {
 
 // newPing 生成从第 local 个本地端口发往 addr 的 ping。调用时持有 b.mu。
 func (b *Bind) newPing(p *peerState, local int, addr netip.AddrPort, now time.Time) []byte {
+	if len(p.pings) >= maxPings {
+		var oldest [txidLen]byte
+		var at time.Time
+		for id, info := range p.pings {
+			if at.IsZero() || info.sent.Before(at) {
+				oldest, at = id, info.sent
+			}
+		}
+		delete(p.pings, oldest)
+	}
+	if len(p.lastPing) >= maxPings {
+		var oldest pingKey
+		var at time.Time
+		for key, sent := range p.lastPing {
+			if at.IsZero() || sent.Before(at) {
+				oldest, at = key, sent
+			}
+		}
+		delete(p.lastPing, oldest)
+	}
 	var txid [txidLen]byte
 	_, _ = rand.Read(txid[:])
 	p.pings[txid] = pingInfo{addr: addr, local: local, sent: now}
@@ -695,6 +719,24 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 		if p == nil || !verify(pkt, p.mac) {
 			b.mu.Unlock()
 			return nil, nil
+		}
+		if now.Sub(p.pingWindow) >= time.Second {
+			p.pingWindow, p.pingCount = now, 0
+		}
+		if p.pingCount >= 64 {
+			b.mu.Unlock()
+			return nil, nil
+		}
+		p.pingCount++
+		if _, exists := p.learned[from]; !exists && len(p.learned) >= maxLearned {
+			var oldest netip.AddrPort
+			var at time.Time
+			for addr, seen := range p.learned {
+				if at.IsZero() || seen.Before(at) {
+					oldest, at = addr, seen
+				}
+			}
+			delete(p.learned, oldest)
 		}
 		p.learned[from] = now
 		pong := encodePong(b.pub, m.txid, from, p.mac)
@@ -779,16 +821,16 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 		b.mu.Lock()
 		src, ok := b.byAddr[from]
 		alive := ok && b.peers[src] != nil && b.peers[src].directAlive(now)
-		b.mu.Unlock()
 		if !alive {
+			b.mu.Unlock()
 			return nil, nil
 		}
 		if m.key == b.pub {
-			b.mu.Lock()
 			ep := b.peers[src].ep
 			b.mu.Unlock()
 			return ep, m.payload
 		}
+		b.mu.Unlock()
 		if b.relay {
 			b.forward(src, m.key, m.payload)
 		} else {
@@ -917,9 +959,14 @@ func (b *Bind) maintain(now time.Time) {
 			p.direct, p.directConn = netip.AddrPort{}, 0
 		}
 		addrs := append([]netip.AddrPort(nil), p.candidates...)
+		seen := make(map[netip.AddrPort]bool, len(addrs)+len(p.learned))
+		for _, a := range addrs {
+			seen[a] = true
+		}
 		for a := range p.learned {
-			if !slices.Contains(addrs, a) {
+			if !seen[a] {
 				addrs = append(addrs, a)
+				seen[a] = true
 			}
 		}
 		// 每个地址从每个本地端口都探测：哪个端口先收到回复就用哪个。

@@ -4,10 +4,95 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SIPC/nagi/internal/pkg/spec"
+	"github.com/compose-spec/compose-go/v2/loader"
+	"github.com/compose-spec/compose-go/v2/types"
+	"gopkg.in/yaml.v3"
 )
+
+func TestLabelFileSnapshotComposeMerge(t *testing.T) {
+	dir := t.TempDir()
+	for name, data := range map[string]string{"first": "BASE=from-first\nCASH='$literal'\n", "second": "REF=${BASE}\nBASE=second\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	text := "services:\n  app:\n    image: alpine\n    labels:\n      BASE: explicit\n    label_file: [./first, ./second]\n"
+	cp, err := spec.LoadCompose(context.Background(), text, nil, dir, "nagi-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ov, err := buildOverride(overrideInput{proj: cp, mp: containerPaths{root: dir}, subnet: "172.28.0.0/24"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := yaml.Marshal(ov)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"first", "second"} {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	merged, err := loader.LoadWithContext(context.Background(), types.ConfigDetails{WorkingDir: dir, ConfigFiles: []types.ConfigFile{{Filename: "compose.yml", Content: []byte(text)}, {Filename: "override.yml", Content: data}}}, func(o *loader.Options) { o.SetProjectName("nagi-test", true) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := merged.Services["app"].Labels
+	if labels["BASE"] != "explicit" || labels["REF"] != "from-first" || labels["CASH"] != "$literal" {
+		t.Fatalf("snapshot changed label semantics: %v", labels)
+	}
+}
+
+func TestLabelFilesAreBoundedAndConfined(t *testing.T) {
+	base := t.TempDir()
+	data := filepath.Join(base, "data")
+	if err := os.Mkdir(data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(out, []byte("secret/key+value="), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(out, filepath.Join(data, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "large"), []byte(strings.Repeat("A", (64<<10)+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "bad"), []byte("secret/key+value="), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(data, "ok"), []byte("A=file\nB=preserved\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"link", "large", "bad", "ok"} {
+		cp, err := spec.LoadCompose(context.Background(), "services:\n  app:\n    image: alpine\n    labels:\n      A: explicit\n    label_file: ./"+name+"\n", nil, data, "nagi-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ov, err := buildOverride(overrideInput{proj: cp, mp: containerPaths{root: base}, projectID: "p", container: "app"})
+		if name != "ok" {
+			if err == nil {
+				t.Errorf("accepted %s", name)
+			} else if strings.Contains(err.Error(), "secret/key+value") {
+				t.Errorf("file contents leaked: %v", err)
+			}
+		} else {
+			if err != nil {
+				t.Fatal(err)
+			}
+			labels := ov["services"].(map[string]any)["app"].(map[string]any)["labels"].(map[string]string)
+			if labels["A"] != "explicit" || labels["B"] != "preserved" {
+				t.Fatalf("label precedence: %v", labels)
+			}
+		}
+	}
+}
 
 // 容器把 data/ 里的路径换成指向外面的符号链接，同步文件时不能写到外面去。
 func TestSyncDirDoesNotFollowSymlinks(t *testing.T) {

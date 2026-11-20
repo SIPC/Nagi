@@ -640,7 +640,20 @@ type cachedDoc struct {
 
 // metadataClient 取客户端元数据文档。网址由客户端提供，面板去访问它，所以只能访问公网地址（见 safehttp）。
 func (s *Server) metadataClient(ctx context.Context, id string) (Client, error) {
+	// 键长和 URL 结构先校验，错误输入不进入缓存。配合条数与响应上限，缓存有固定的内存上界。
+	if len(id) > 2048 {
+		return Client{}, i18n.New("客户端标识须为网址")
+	}
+	u, err := url.Parse(id)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || strings.Contains(id, "#") || u.Path == "" || u.Path == "/" {
+		return Client{}, i18n.New("客户端标识须为网址")
+	}
 	s.mu.Lock()
+	for key, doc := range s.docs {
+		if !time.Now().Before(doc.expires) {
+			delete(s.docs, key)
+		}
+	}
 	if d, ok := s.docs[id]; ok && time.Now().Before(d.expires) {
 		s.mu.Unlock()
 		return d.client, d.err
@@ -648,7 +661,7 @@ func (s *Server) metadataClient(ctx context.Context, id string) (Client, error) 
 	s.mu.Unlock()
 	c, err := s.fetchMetadata(ctx, id)
 	s.mu.Lock()
-	if len(s.docs) > 200 {
+	if len(s.docs) >= 200 {
 		s.docs = map[string]cachedDoc{}
 	}
 	s.docs[id] = cachedDoc{client: c, err: err, expires: time.Now().Add(10 * time.Minute)}

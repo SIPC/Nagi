@@ -424,6 +424,13 @@ func (s *Service) rebuildContainer(ctx context.Context, nodeID string, sp *nagiv
 	for _, r := range spec.JoinRoutes(sp.GetRoutes()) {
 		r = proto.Clone(r).(*nagiv1.Exposure)
 		r.Container = name
+		r.Error = ""
+		for _, entry := range r.GetEntryNodes() {
+			if entry != nodeID {
+				r.Error = errPendingEntry.Error()
+				break
+			}
+		}
 		if r.GetName() == "" || taken[r.GetName()] {
 			continue
 		}

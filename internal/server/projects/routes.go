@@ -31,6 +31,7 @@ func (s *Service) SaveRoute(ctx context.Context, projectID string, in *nagiv1.Ex
 		return nil, invalid("缺少端口映射")
 	}
 	r := spec.NormalizeRoute(in)
+	r.Error = ""
 	if err := spec.CheckRoute(r); err != nil {
 		return nil, err
 	}
@@ -106,6 +107,7 @@ func (s *Service) upsertRoute(ctx context.Context, projectID string, r *nagiv1.E
 		ProjectID: projectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Target: int64(r.GetTarget()),
 		Protocol: r.GetProtocol(), Published: int64(r.GetPublished()), Domains: string(domains), HttpOnly: boolInt(r.GetHttpOnly()),
 		EntryNodes: string(entries), NoLocalEntry: boolInt(r.GetNoLocalEntry()), ProxyProtocol: boolInt(r.GetProxyProtocol()),
+		PendingConfirmation: boolInt(r.GetError() == errPendingEntry.Error()),
 	})
 }
 
@@ -113,7 +115,7 @@ func (s *Service) upsertRoute(ctx context.Context, projectID string, r *nagiv1.E
 // 容器所在节点和顶替节点也要支持（要由它们放行入口节点的连接）。old 是修改前的映射：入口和端口都没变的节点不用再查，它不在线也能改别的。
 func (s *Service) checkEntries(ctx context.Context, c store.Container, old *store.Route, r *nagiv1.Exposure) error {
 	var before *nagiv1.Exposure
-	if old != nil {
+	if old != nil && old.PendingConfirmation == 0 {
 		before = RouteProto(*old)
 	}
 	samePorts := before != nil && slices.Equal(spec.ListenPorts(before), spec.ListenPorts(r))
@@ -289,6 +291,9 @@ func (s *Service) checkConflicts(ctx context.Context, nodeID, skipProject, skipN
 	}
 	names := map[string]string{}
 	for _, other := range all {
+		if other.PendingConfirmation != 0 {
+			continue
+		}
 		if other.ProjectID == skipProject && other.Name == skipName {
 			continue
 		}

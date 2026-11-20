@@ -24,7 +24,7 @@ func TestRolesMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "0027") || !strings.HasSuffix(e.Name(), ".sql") {
+		if e.Name() >= "0027" || !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
 		b, err := fs.ReadFile(store.Migrations, "migrations/"+e.Name())

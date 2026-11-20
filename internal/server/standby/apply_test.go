@@ -4,12 +4,27 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/server/store"
 )
+
+func TestPairUnknownRequestsAreNotFound(t *testing.T) {
+	d := openTestDB(t, filepath.Join(t.TempDir(), "panel.db"))
+	p := &Primary{Q: store.New(d)}
+	for _, body := range []string{"not json", `{}`, `{"address":"a","server_fp":"b","token":"invalid"}`} {
+		w := httptest.NewRecorder()
+		p.HandlePair(w, httptest.NewRequest(http.MethodPost, "/api/standby/pair", strings.NewReader(body)))
+		if w.Code != http.StatusNotFound || w.Body.String() != "404 page not found\n" {
+			t.Fatalf("unauthenticated pair response: %d %s", w.Code, w.Body.String())
+		}
+	}
+}
 
 func openTestDB(t *testing.T, path string) *sql.DB {
 	t.Helper()

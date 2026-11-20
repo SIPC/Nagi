@@ -199,8 +199,14 @@ install_compose() {
   fi
   case "$ARCH" in amd64) CARCH=x86_64 ;; *) CARCH=aarch64 ;; esac
   mkdir -p /usr/local/lib/docker/cli-plugins
-  gh_fetch "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$CARCH" "$TMP/docker-compose" &&
-    install -m 0755 "$TMP/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
+  COMPOSE_URL="https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-$CARCH"
+  curl -fsSL --retry 2 --connect-timeout 10 --max-time 60 "$COMPOSE_URL.sha256" -o "$TMP/compose.sha256" || return 1
+  gh_fetch "$COMPOSE_URL" "$TMP/docker-compose" || return 1
+  if command -v sha256sum >/dev/null 2>&1; then CSHA=sha256sum; else CSHA="shasum -a 256"; fi
+  CWANT=$(awk '{print $1}' "$TMP/compose.sha256")
+  CGOT=$($CSHA "$TMP/docker-compose" | awk '{print $1}') || return 1
+  [ -n "$CWANT" ] && [ "$CWANT" = "$CGOT" ] || return 1
+  install -m 0755 "$TMP/docker-compose" /usr/local/lib/docker/cli-plugins/docker-compose
 }
 
 # registry_mirrors 在中国大陆网络时给 Docker 配置 Docker Hub 镜像加速，部署时拉取镜像不会卡住。
@@ -220,7 +226,6 @@ ensure_docker() {
     say "未找到 Docker，使用官方脚本 get.docker.com 安装……"
     [ -z "$CN" ] || [ -n "$DOCKER_MIRROR" ] || DOCKER_MIRROR=Aliyun
     curl -fsSL --retry 3 --max-time 60 -o "$TMP/get-docker.sh" https://get.docker.com ||
-      { [ -n "$CN" ] && gh_fetch https://raw.githubusercontent.com/docker/docker-install/master/install.sh "$TMP/get-docker.sh"; } ||
       fail "下载 Docker 安装脚本失败，请先手动安装 Docker：https://docs.docker.com/engine/install/"
     if [ -n "$DOCKER_MIRROR" ]; then
       sh "$TMP/get-docker.sh" --mirror "$DOCKER_MIRROR"
@@ -254,17 +259,17 @@ link_command() {
   fi
 }
 
-# fetch_nagi 从 $1 下载 nagi-linux-<架构> 和 SHA256SUMS 并校验，成功时文件在 $TMP/nagi。
+# fetch_nagi 从 $1 下载二进制，但只信任 BASE 的校验值（自动加速代理不能提供信任依据）。
 fetch_nagi() {
   curl -fL --retry 2 --connect-timeout 10 --speed-limit 1024 --speed-time 30 --progress-bar -o "$TMP/nagi" "$1/nagi-linux-$ARCH" || return 1
-  curl -fsSL --retry 2 --connect-timeout 10 -o "$TMP/SHA256SUMS" "$1/SHA256SUMS" || { say "下载校验文件失败：$1/SHA256SUMS"; return 1; }
+  curl -fsSL --retry 2 --connect-timeout 10 --max-time 60 -o "$TMP/SHA256SUMS" "$BASE/SHA256SUMS" || { say "无法从可信来源取得校验值：$BASE/SHA256SUMS"; return 1; }
   WANT=$(awk -v f="nagi-linux-$ARCH" '$2 == f || $2 == "*" f { print $1 }' "$TMP/SHA256SUMS")
   [ -n "$WANT" ] || { say "SHA256SUMS 中没有 nagi-linux-$ARCH：$1"; return 1; }
   GOT=$($SHA "$TMP/nagi" | awk '{ print $1 }')
   [ "$WANT" = "$GOT" ] || { say "SHA-256 校验失败：应为 $WANT，实际为 $GOT（$1）"; return 1; }
 }
 
-# download_nagi 从 BASE 下载 nagi-linux-<架构> 到 $TMP/nagi，按同一地址下的 SHA256SUMS 校验，
+# download_nagi 下载 nagi 到 $TMP/nagi，校验值只从 BASE 取得，不经自动代理，
 # 试运行确认能在本机运行，版本号放在 NEW_VERSION。BASE 是 GitHub Release 或 --download-url 指定的镜像；
 # 是 GitHub 时按 gh_urls 的顺序试，用上的代理放在 GH_PROXY。
 download_nagi() {

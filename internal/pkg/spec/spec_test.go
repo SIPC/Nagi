@@ -2,12 +2,27 @@ package spec
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
+
+func TestValidateDoesNotReadLabelFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "labels"), []byte("secret/key+value="), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"./labels", "./missing"} {
+		cfg := &nagiv1.ContainerConfig{Compose: "services:\n  app:\n    image: alpine\n    label_file: " + path + "\n"}
+		if _, err := Validate(context.Background(), cfg, "app", nil, dir, "nagi-test"); err != nil {
+			t.Fatalf("validation must leave label files to deployment: %v", err)
+		}
+	}
+}
 
 func TestFormCompose(t *testing.T) {
 	text, err := formCompose(&nagiv1.ImageForm{

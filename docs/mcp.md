@@ -76,7 +76,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - 删除成员、管理员重置成员密码时，这个成员的令牌全部吊销（和登录会话一样）。
 - 数据库：
   - `api_tokens (id, user_id, name, source, client_id, token_hash, refresh_hash, prev_refresh_hash, allow_write, allow_exec, allow_node_exec, allow_panel, created_at, expires_at, refresh_expires_at, last_used_at, last_ip, networks, seen_networks, last_client)`，删除成员时级联删除。最后使用时间 1 分钟内不重复写（地址或客户端变了照写）。
-  - `oauth_clients (id, name, redirect_uris, created_at, authorized_at)`：动态注册的客户端。用网址作标识的不存，元数据在内存里缓存 10 分钟。
+  - `oauth_clients (id, name, redirect_uris, created_at, authorized_at)`：动态注册的客户端。用网址作标识的不存，元数据在内存里缓存 10 分钟，最多 200 项，过期项在访问时清理。网址标识最多 2048 字节，必须是带非根路径的 HTTPS 地址，不带用户信息或 fragment；结构不合规的输入不缓存。
   - 授权码只放在内存里。
   - 备用面板复制数据库时一起带过去。
 

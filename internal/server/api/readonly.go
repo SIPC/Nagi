@@ -88,6 +88,10 @@ func (a *API) standbyBlock(h http.Handler) http.Handler {
 		return h
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/hooks/") {
+			http.NotFound(w, r)
+			return
+		}
 		http.Error(w, i18n.Localize(requestLang(r), a.standbyError()), http.StatusServiceUnavailable)
 	})
 }

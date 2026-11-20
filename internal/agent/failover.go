@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -399,6 +398,10 @@ func (a *agent) collect(ctx context.Context, self []byte, others []*nagiv1.Failo
 			if err != nil {
 				return
 			}
+			if resp.GetEpoch() > epoch && !lease.ValidAdvance(epoch, resp.GetEpoch()+1) {
+				a.log.Warn("忽略异常租约轮次，请检查投票节点或重新设置顶替", "epoch", resp.GetEpoch(), "current", epoch)
+				return
+			}
 			mu.Lock()
 			defer mu.Unlock()
 			// 回复里的持有方不是另一个参与者时不算更高的轮次：被攻破的见证人回复「持有方是任意公钥 X」，
@@ -427,10 +430,10 @@ func (a *agent) collect(ctx context.Context, self []byte, others []*nagiv1.Failo
 //     这时没拿到两票也调，除非同时有人记着另一方更高的轮次（本节点被顶替了）。
 func raisedEpoch(r voteResult, ok bool, epoch uint64) uint64 {
 	to := epoch
-	if ok && r.higher != nil && r.higher.GetEpoch() >= epoch && r.higher.GetEpoch() < math.MaxUint64 {
+	if ok && r.higher != nil && r.higher.GetEpoch() >= epoch && lease.ValidAdvance(epoch, r.higher.GetEpoch()+1) {
 		to = max(to, r.higher.GetEpoch()+1)
 	}
-	if r.selfHigher > epoch && r.selfHigher < math.MaxUint64 && (ok || r.higher == nil) {
+	if r.selfHigher > epoch && lease.ValidAdvance(epoch, r.selfHigher+1) && (ok || r.higher == nil) {
 		to = max(to, r.selfHigher+1)
 	}
 	return to
@@ -701,6 +704,10 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 
 	// 先向见证人和原持有者要票，拿到一票再投自己。
 	newEpoch := epoch + 1
+	if !lease.ValidAdvance(epoch, newEpoch) {
+		a.log.Error("租约轮次耗尽，请重新设置顶替", "project", pid, "container", name)
+		return
+	}
 	sent := time.Now()
 	r := a.collect(ctx, me.GetKey(), []*nagiv1.FailoverParticipant{cfg.GetWitness(), other}, cfg, newEpoch)
 	if r.granted == 0 {
@@ -843,6 +850,10 @@ func (a *agent) failback(ctx context.Context, id string) {
 	}
 	// 转让租约：先请对方和见证人转票，拿到其中一票（加上自己的就是多数）才算数。
 	newEpoch := epoch + 1
+	if !lease.ValidAdvance(epoch, newEpoch) {
+		resume(errors.New("租约轮次耗尽，请重新设置顶替"))
+		return
+	}
 	if n := a.collectHandover(ctx, []*nagiv1.FailoverParticipant{other, cfg.GetWitness()}, cfg, other.GetKey(), newEpoch); n == 0 {
 		resume(errors.New("对方和见证人都没有同意转让租约"))
 		return

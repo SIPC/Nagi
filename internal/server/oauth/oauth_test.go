@@ -17,12 +17,33 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/store"
 )
+
+func TestMetadataRejectsInvalidIDsBeforeCaching(t *testing.T) {
+	s, _, _ := testServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, id := range []string{"https://example.com/#bad", "https://example.com/meta#bad", "https://user:pass@example.com/meta", "https://example.com/" + strings.Repeat("a", 4096)} {
+		if _, err := s.metadataClient(ctx, id); err == nil {
+			t.Fatal("accepted invalid metadata ID")
+		}
+	}
+	if len(s.docs) != 0 {
+		t.Fatalf("invalid IDs retained: %d", len(s.docs))
+	}
+	s.docs["https://expired.example/meta"] = cachedDoc{expires: time.Now().Add(-time.Second)}
+	s.docs["https://cached.example/meta"] = cachedDoc{expires: time.Now().Add(time.Minute)}
+	_, _ = s.metadataClient(context.Background(), "https://cached.example/meta")
+	if len(s.docs) != 1 {
+		t.Fatal("expired metadata retained")
+	}
+}
 
 func testServer(t *testing.T) (*Server, *auth.Service, *httptest.Server) {
 	t.Helper()

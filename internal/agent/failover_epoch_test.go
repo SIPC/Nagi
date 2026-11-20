@@ -32,6 +32,7 @@ func TestHolderRaisesEpochForOwnHigherVote(t *testing.T) {
 		}
 	}
 	a := &agent{log: slog.New(slog.DiscardHandler), startedAt: time.Now()}
+	var hostileHolder []byte
 	a.votes = &voteBatcher{send: func(_ context.Context, k mesh.Key, reqs []*nagiv1.LeaseVoteRequest) ([]*nagiv1.LeaseVoteResponse, error) {
 		v := vB
 		if k[0] == W[0] {
@@ -39,6 +40,10 @@ func TestHolderRaisesEpochForOwnHigherVote(t *testing.T) {
 		}
 		out := make([]*nagiv1.LeaseVoteResponse, len(reqs))
 		for i, r := range reqs {
+			if k[0] == W[0] && hostileHolder != nil {
+				out[i] = &nagiv1.LeaseVoteResponse{Holder: hostileHolder, Epoch: math.MaxUint64 - 1}
+				continue
+			}
 			granted, holder, epoch := v.Vote(id, participants(cfg), A, r.GetEpoch(), L)
 			out[i] = &nagiv1.LeaseVoteResponse{Granted: granted, Holder: holder, Epoch: epoch}
 		}
@@ -73,6 +78,19 @@ func TestHolderRaisesEpochForOwnHigherVote(t *testing.T) {
 			t.Fatalf("A 持有租约时 %s 不应该投给 B", name)
 		}
 	}
+	// 一名见证人不能把仍有多数票的持有者和诚实投票者推进到整数边界。
+	for _, holder := range [][]byte{A, B} {
+		hostileHolder = holder
+		st.renewed = false
+		a.holderTick(ctx, id, st, cfg, cfg.GetA(), cfg.GetB(), st.epoch)
+		if st.epoch != 8 || !time.Now().Before(st.leaseEnd) {
+			t.Fatalf("hostile witness poisoned holder: epoch=%d", st.epoch)
+		}
+		_, epoch, _ := vB.State(id, L)
+		if epoch != 8 {
+			t.Fatalf("honest voter poisoned: %d", epoch)
+		}
+	}
 }
 
 func TestRaisedEpoch(t *testing.T) {
@@ -91,6 +109,8 @@ func TestRaisedEpoch(t *testing.T) {
 		{"两种都有、拿到两票", voteResult{higher: other, selfHigher: 12}, true, 13},
 		{"两种都有、没拿到两票：被顶替了，不调", voteResult{higher: other, selfHigher: 12}, false, 5},
 		{"轮次到顶不调", voteResult{selfHigher: math.MaxUint64}, false, 5},
+		{"见证人报告极大轮次", voteResult{selfHigher: math.MaxUint64 - 1}, false, 5},
+		{"另一方报告极大轮次", voteResult{higher: &nagiv1.LeaseVoteResponse{Epoch: math.MaxUint64 - 1}}, true, 5},
 	} {
 		if got := raisedEpoch(c.r, c.ok, 5); got != c.want {
 			t.Errorf("%s：%d，应为 %d", c.name, got, c.want)

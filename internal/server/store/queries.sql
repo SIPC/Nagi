@@ -313,12 +313,13 @@ DELETE FROM deployments WHERE project_id = ? AND id < ?;
 
 
 -- name: UpsertRoute :exec
-INSERT INTO routes (project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO routes (project_id, name, container, service, target, protocol, published, domains, http_only, entry_nodes, no_local_entry, proxy_protocol, pending_confirmation)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (project_id, name) DO UPDATE SET
     container = excluded.container, service = excluded.service, target = excluded.target, protocol = excluded.protocol,
     published = excluded.published, domains = excluded.domains, http_only = excluded.http_only,
-    entry_nodes = excluded.entry_nodes, no_local_entry = excluded.no_local_entry, proxy_protocol = excluded.proxy_protocol;
+    entry_nodes = excluded.entry_nodes, no_local_entry = excluded.no_local_entry, proxy_protocol = excluded.proxy_protocol,
+    pending_confirmation = excluded.pending_confirmation;
 
 -- name: ListRoutes :many
 SELECT * FROM routes WHERE project_id = ? ORDER BY name;
