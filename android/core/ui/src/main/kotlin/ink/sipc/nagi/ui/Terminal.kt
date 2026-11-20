@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.Role
@@ -256,6 +257,8 @@ internal class TerminalCanvasView(context: Context, var screen: TerminalScreen, 
     }
 
     override fun onDraw(canvas: Canvas) {
+        // Compose 画 Android 视图时画布不一定裁到视图的范围：先裁，否则底色会盖住整个窗口。
+        canvas.clipRect(0, 0, width, height)
         canvas.drawColor(screen.background)
         val e = screen.emulator ?: return
         topRow = topRow.coerceIn(-e.screen.activeTranscriptRows, 0)
@@ -349,8 +352,9 @@ internal class TerminalCanvasView(context: Context, var screen: TerminalScreen, 
     override fun onCheckIsTextEditor() = true
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        // 不要联想和自动更正：输入的是命令。
-        outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        // 和 Termux 一样用 TYPE_NULL：输入法把每个键（回车、方向键、字母）都当按键事件送过来，不联想、不自动更正。
+        // 不用「可见密码」：有的系统（MIUI）会换成全屏的安全键盘；普通文本时有的输入法（微信输入法）会吞掉回车和方向键。
+        outAttrs.inputType = InputType.TYPE_NULL
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_EXTRACT_UI
         return object : BaseInputConnection(this, true) {
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
@@ -362,6 +366,13 @@ internal class TerminalCanvasView(context: Context, var screen: TerminalScreen, 
             override fun finishComposingText(): Boolean {
                 super.finishComposingText()
                 flush()
+                return true
+            }
+
+            // 输入法的回车（有的输入法不发回车键，而是当成编辑器的动作）。
+            override fun performEditorAction(editorAction: Int): Boolean {
+                flush()
+                screen.sendText("\r")
                 return true
             }
 
@@ -468,7 +479,7 @@ fun TerminalPane(
             v.invalidate()
         },
         onRelease = { v -> if (screen.view === v) screen.view = null },
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
     )
 }
 

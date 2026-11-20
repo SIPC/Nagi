@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.Role
@@ -168,7 +169,7 @@ fun CodeEditorPane(
             if (state.editor === e) state.editor = null
             e.release()
         },
-        modifier = modifier,
+        modifier = modifier.clipToBounds(),
     )
 }
 
