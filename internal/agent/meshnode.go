@@ -605,15 +605,15 @@ func (a *agent) meshMetrics() metrics.Source {
 type meshCounter struct{ rx, tx uint64 }
 
 // meshRates 算出这一轮的速率并更新 prev。第一次见到的成员还没有差值，计数器变小（对端重启、重新握手）的这一轮不算。
-// 直连的成员同时记下延迟（毫秒，来自每 10 秒一次的保活 ping）；中转时没有延迟，不记。
+// 有物理直连的成员同时记下直连延迟（毫秒，来自保活 ping），不拿中转估算冒充实测。
 func meshRates(prev map[mesh.Key]meshCounter, peers []mesh.Status, elapsed float64) map[string]float64 {
 	out := map[string]float64{}
 	seen := make(map[mesh.Key]bool, len(peers))
 	for _, s := range peers {
 		seen[s.Key] = true
 		name := "m:" + hex.EncodeToString(s.Key[:]) + ":"
-		if s.Path == "direct" && s.RTT > 0 {
-			out[name+"rtt"] = float64(s.RTT.Microseconds()) / 1000
+		if s.PhysicalDirect.IsValid() && s.DirectRTT > 0 {
+			out[name+"rtt"] = float64(s.DirectRTT.Microseconds()) / 1000
 		}
 		p, ok := prev[s.Key]
 		prev[s.Key] = meshCounter{s.RxBytes, s.TxBytes}

@@ -64,10 +64,13 @@ type Direct struct {
 
 // Directs 返回现在直连着的成员和延迟（上报给面板，面板据此挑中转节点）。
 func (m *Mesh) Directs() []Direct {
+	m.bind.mu.Lock()
+	defer m.bind.mu.Unlock()
+	now := time.Now()
 	var out []Direct
-	for _, s := range m.bind.status() {
-		if s.Path == "direct" {
-			out = append(out, Direct{Key: s.Key, RTT: s.RTT})
+	for _, p := range m.bind.peers {
+		if p.directAlive(now) {
+			out = append(out, Direct{Key: p.key, RTT: p.rtt})
 		}
 	}
 	return out

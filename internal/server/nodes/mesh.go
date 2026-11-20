@@ -72,8 +72,8 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 	direct := map[mesh.Key]netip.AddrPort{}
 	if m != nil {
 		for _, s := range m.Status() {
-			if s.Direct.IsValid() {
-				direct[s.Key] = s.Direct
+			if s.PhysicalDirect.IsValid() {
+				direct[s.Key] = s.PhysicalDirect
 			}
 		}
 	}

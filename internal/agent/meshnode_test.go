@@ -141,11 +141,13 @@ func TestMeshRates(t *testing.T) {
 		t.Fatalf("计数器重置后从新值算起：%v", got)
 	}
 
-	// 直连时记延迟，第一次见到也记；中转时不记。
+	// 即使业务将来走中转，物理直连仍上报；不能把所选路径 RTT 混进直连基线。
 	d := st(b, 0, 0)
-	d.Path, d.RTT = "direct", 12500*time.Microsecond
+	d.Path, d.RTT = "node-relay", 3*time.Millisecond
+	d.PhysicalDirect = netip.MustParseAddrPort("127.0.0.1:12345")
+	d.DirectRTT = 12500 * time.Microsecond
 	r := st(a, 30, 30)
-	r.Path, r.RTT = "udp-relay", 0
+	r.Path, r.RTT = "udp-relay", 17*time.Millisecond
 	got = meshRates(prev, []mesh.Status{d, r}, 10)
 	if got[name(b, "rtt")] != 12.5 {
 		t.Fatalf("直连的延迟：%v", got)

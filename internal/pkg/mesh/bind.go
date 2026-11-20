@@ -85,11 +85,12 @@ type peerState struct {
 	directConn int            // 直连用的本地端口（Bind.conns 的下标）
 	// confirmed 是最近经 ping/pong 确认过的对方地址（对方有备用端口时可能不止一个）。这些地址发来的包都收，
 	// 发只走 direct：两端各自选端口，对方用来发的端口不一定是我们选来发给它的那个。
-	confirmed  map[netip.AddrPort]time.Time
-	directAt   time.Time // 最近一次 pong 的时间
-	rtt        time.Duration
-	relays     []Key // 可以代为中转的面板
-	nodeRelays []Key // 可以代为中转的节点，先于面板用
+	confirmed   map[netip.AddrPort]time.Time
+	directAt    time.Time // 最近一次 pong 的时间
+	directEpoch uint64    // 物理地址/socket 变更或断路后重新确认时递增，隔离观测样本。
+	rtt         time.Duration
+	relays      []Key // 可以代为中转的面板
+	nodeRelays  []Key // 可以代为中转的节点，先于面板用
 	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
 	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
@@ -155,6 +156,10 @@ type Bind struct {
 	done      chan struct{}
 	// relayBudget：节点替每个来源中转的字节数配额（令牌桶，见 relayAllowed）。
 	relayBudget map[Key]*relayBucket
+	// 路径观测与 NAT ping、业务中转健康完全分开；仅显式调用时发起。
+	pathProbes  map[[txidLen]byte]*pathProbe
+	probeBudget relayBucket
+	probeSeen   map[Key]map[[txidLen]byte]time.Time
 }
 
 // relayBucket 是一个来源的中转配额。
@@ -713,6 +718,8 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 	}
 	now := time.Now()
 	switch m.typ {
+	case typePathRequest, typePathResponse:
+		b.handlePathProbe(c, local, from, Key{}, pkt)
 	case typePing:
 		b.mu.Lock()
 		p := b.peers[m.key]
@@ -782,6 +789,9 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			b.log.Debug("mesh 直连可用", "peer", p.key.Short(), "addr", from, "local_port", c.LocalAddr().(*net.UDPAddr).Port)
 			newPath = true
 		}
+		if newPath {
+			p.directEpoch++
+		}
 		p.direct, p.directConn, p.directAt, p.rtt = from, local, now, now.Sub(info.sent)
 		b.mu.Unlock()
 		// 到这个对端（以及经它中转的对端）有了路径：补发之前发不出去的握手，告诉对方自己的能力。
@@ -838,13 +848,22 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 		}
 	case typeRelayDeliver:
 		b.mu.Lock()
-		defer b.mu.Unlock()
 		relay, ok := b.byAddr[from]
 		p := b.peers[m.key]
 		if !ok || !b.relayKeys[relay] || p == nil {
+			b.mu.Unlock()
+			return nil, nil
+		}
+		if isControl(m.payload) && (m.payload[4] == typePathRequest || m.payload[4] == typePathResponse) {
+			b.mu.Unlock()
+			// 不把中转地址学成终点地址；认证和固定返回路径由独立处理器检查。
+			if inner, valid := parse(m.payload); valid && inner.key == m.key {
+				b.handlePathProbe(c, local, from, relay, m.payload)
+			}
 			return nil, nil
 		}
 		b.relayHeard(p, relay, now)
+		b.mu.Unlock()
 		return p.ep, m.payload
 	}
 	return nil, nil
@@ -904,6 +923,7 @@ func (b *Bind) setPeers(peers []Peer) {
 				}
 			}
 			delete(b.peers, k)
+			delete(b.probeSeen, k)
 		}
 	}
 }
@@ -1057,6 +1077,9 @@ type PeerStatus struct {
 	quicBytes [2]uint64
 	// fecBytes：FEC 在收、发两个方向上比 WireGuard 统计的多出的字节数，Status 同样加进去。
 	fecBytes [2]int64
+	// PhysicalDirect、DirectRTT 是独立于业务 Path 的物理邻接；RTT 仍表示所选业务路径的延迟。
+	PhysicalDirect netip.AddrPort
+	DirectRTT      time.Duration
 }
 
 func (b *Bind) status() []PeerStatus {
@@ -1069,6 +1092,7 @@ func (b *Bind) status() []PeerStatus {
 			fecBytes: [2]int64{p.dec.overheadBytes(), int64(p.enc.overheadBytes())},
 			TxLoss:   -1, RxLoss: -1}
 		if p.directAlive(now) {
+			s.PhysicalDirect, s.DirectRTT = p.direct, p.rtt
 			if now.Sub(p.lossAt) < lossFresh {
 				s.TxLoss, s.txLossAt = int64(p.lossPPM), p.lossAt
 			}
