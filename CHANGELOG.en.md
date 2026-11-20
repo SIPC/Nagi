@@ -10,6 +10,12 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ## Unreleased
 
+### New features
+
+- Nodes can be put in groups. The nodes page shows groups as collapsible sections, can filter by group, and manages groups from the ⋯ menu. Node groups only organize the list and don't change member access.
+- Projects can have tags, edited in project settings. The projects page can filter by tag and manages tags from the ⋯ menu. Project tags only organize the list and don't change member access.
+- The nodes page can sort by join time, name, or a custom order. Click "Reorder" to drag groups and nodes. The order is saved on the panel for each member.
+
 ### Fixes
 
 - Fixed known vulnerabilities and improved security.

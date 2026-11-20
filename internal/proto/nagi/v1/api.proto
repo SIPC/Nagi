@@ -71,6 +71,9 @@ service AuthService {
   rpc GetProjectOrder(GetProjectOrderRequest) returns (ProjectOrder);
   // 整份覆盖。
   rpc SetProjectOrder(ProjectOrder) returns (SetProjectOrderResponse);
+  // 自己的节点页排序，同项目页。
+  rpc GetNodeOrder(GetNodeOrderRequest) returns (NodeOrder);
+  rpc SetNodeOrder(NodeOrder) returns (SetNodeOrderResponse);
   // 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
   rpc CreateAppPairing(CreateAppPairingRequest) returns (CreateAppPairingResponse);
   // 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
@@ -239,6 +242,18 @@ message ProjectOrder {
 
 message SetProjectOrderResponse {}
 
+message GetNodeOrderRequest {}
+
+message NodeOrder {
+  // 空是加入时间，"name" 按名称，"custom" 自定义。
+  string sort = 1;
+  // 自定义顺序里的分组名、节点 ID。没排过的不在里面。
+  repeated string groups = 2;
+  repeated string nodes = 3;
+}
+
+message SetNodeOrderResponse {}
+
 service NodeService {
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
   // ---- 节点文件（见 docs/node-access.md）：只有管理员，要先做高权限确认 ----
@@ -317,6 +332,10 @@ service NodeService {
   rpc SetNodeTags(SetNodeTagsRequest) returns (SetNodeTagsResponse);
   // 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
   rpc RenameNodeTag(RenameLabelRequest) returns (RenameLabelResponse);
+  // 把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+  rpc SetNodeGroup(SetNodeGroupRequest) returns (SetNodeGroupResponse);
+  // 重命名或删除节点分组（new_name 为空），所有节点一起改。
+  rpc RenameNodeGroup(RenameLabelRequest) returns (RenameLabelResponse);
   // 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
   // 只有管理员能用，要先做高权限确认并输入节点名。
   rpc IsolateNode(IsolateNodeRequest) returns (IsolateNodeResponse);
@@ -352,6 +371,14 @@ message SetNodeTagsRequest {
 }
 
 message SetNodeTagsResponse {}
+
+message SetNodeGroupRequest {
+  string node_id = 1;
+  // 最多 32 个字符，为空表示移出分组。
+  string group = 2;
+}
+
+message SetNodeGroupResponse {}
 
 // RenameLabelRequest 重命名项目分组或节点标签。new_name 已存在时合并；为空表示删除：项目变成未分组，节点去掉这个标签，
 // 成员的访问范围里也去掉。
@@ -847,6 +874,8 @@ message Node {
   repeated string tags = 14;
   // 已被隔离（见 docs/mesh.md#隔离）。
   bool isolated = 15;
+  // 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+  string group = 16;
 }
 
 message SetNodeAlertRulesRequest {
@@ -911,6 +940,10 @@ service ProjectService {
   rpc SetProjectGroup(SetProjectGroupRequest) returns (Project);
   // 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
   rpc RenameProjectGroup(RenameLabelRequest) returns (RenameLabelResponse);
+  // 替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+  rpc SetProjectTags(SetProjectTagsRequest) returns (Project);
+  // 重命名或删除项目标签（new_name 为空），所有项目一起改。
+  rpc RenameProjectTag(RenameLabelRequest) returns (RenameLabelResponse);
   // 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
   rpc SaveSharedEnv(SaveSharedEnvRequest) returns (SaveSharedEnvResponse);
   rpc DiscardSharedEnv(ProjectRevisionRef) returns (Project);
@@ -1418,6 +1451,12 @@ message UpdateProjectSettingsRequest {
   string network_name = 4;
   // shared_env 在这里不生效（共享变量走草稿）。
   ProjectSettings settings = 5;
+}
+
+message SetProjectTagsRequest {
+  string project_id = 1;
+  // 每个最多 32 个字符，最多 10 个。
+  repeated string tags = 2;
 }
 
 message SetProjectGroupRequest {

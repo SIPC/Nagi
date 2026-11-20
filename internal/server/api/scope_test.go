@@ -318,6 +318,82 @@ func TestScopeGroupsAndTags(t *testing.T) {
 	}
 }
 
+// 节点分组只整理节点页：不进访问范围；重命名、合并、删除跟着改所有节点。
+func TestNodeGroups(t *testing.T) {
+	a, q := scopeTestAPI(t, `INSERT INTO nodes (id, name, created_at, mesh_key) VALUES ('n3', 'c', 0, x'03')`)
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	group := func(id, want string) {
+		t.Helper()
+		if g, err := q.NodeGroup(ctx, id); err != nil || g != want {
+			t.Errorf("节点 %s 的分组：%q %v，想要 %q", id, g, err, want)
+		}
+	}
+	must(q.SetNodeGroup(ctx, "n2", "香港"))
+	must(q.SetNodeGroup(ctx, "n3", "美国"))
+	// 成员只按 n1 和标签看节点，分组不让他多看到节点。
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitNodes: true})
+	must(err)
+	if x.node("n2") || x.node("n3") || !x.node("n1") {
+		t.Error("节点分组不应改变访问范围")
+	}
+	// 合并到已有的分组。
+	must(q.RenameNodeGroup(ctx, "香港", "美国"))
+	group("n2", "美国")
+	group("n3", "美国")
+	if ok, _ := q.NodeGroupExists(ctx, "香港"); ok {
+		t.Error("合并后旧分组还在")
+	}
+	// 删除：节点变成未分组。
+	must(q.RenameNodeGroup(ctx, "美国", ""))
+	group("n2", "")
+	group("n3", "")
+	// 移出分组。
+	must(q.SetNodeGroup(ctx, "n1", "x"))
+	must(q.SetNodeGroup(ctx, "n1", ""))
+	group("n1", "")
+}
+
+// 项目标签只整理项目页：不进访问范围；合并时去重，删除时从所有项目上去掉。
+func TestProjectTags(t *testing.T) {
+	a, q := scopeTestAPI(t)
+	ctx := context.Background()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	tags := func(id string, want ...string) {
+		t.Helper()
+		got, err := q.ProjectTags(ctx, id)
+		if err != nil || !slices.Equal(got, want) {
+			t.Errorf("项目 %s 的标签：%v %v，想要 %v", id, got, err, want)
+		}
+	}
+	must(q.SetProjectTags(ctx, "p2", []string{"web", "prod"}))
+	must(q.SetProjectTags(ctx, "p1", []string{"prod"}))
+	tags("p2", "prod", "web")
+	// 成员范围只有 p1，带标签的 p2 不因此进入范围。
+	x, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleOperator, Perms: auth.PresetOperator, LimitProjects: true})
+	must(err)
+	if x.project("p2") || !x.project("p1") {
+		t.Error("项目标签不应改变访问范围")
+	}
+	// 合并：p2 同时有 web 和 prod，web 并进 prod 后只留一个。
+	must(q.RenameProjectTag(ctx, "web", "prod"))
+	tags("p2", "prod")
+	// 删除：从所有项目上去掉。
+	must(q.RenameProjectTag(ctx, "prod", ""))
+	tags("p1")
+	tags("p2")
+}
+
 // 分组只有管理员能改：它决定成员的访问范围。
 func TestGroupAdminOnly(t *testing.T) {
 	for _, p := range []string{"/nagi.v1.ProjectService/SetProjectGroup", "/nagi.v1.ProjectService/RenameProjectGroup",

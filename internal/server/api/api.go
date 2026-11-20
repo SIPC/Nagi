@@ -272,26 +272,55 @@ func (s *authService) GetProjectOrder(ctx context.Context, _ *connect.Request[na
 	return connect.NewResponse(&nagiv1.ProjectOrder{Sort: o.Sort, Groups: o.Groups, Projects: o.Projects}), nil
 }
 
-// SetProjectOrder 保存自己的项目页排序，整份覆盖。只影响自己看到的顺序，不检查项目和分组是否存在。
-func (s *authService) SetProjectOrder(ctx context.Context, req *connect.Request[nagiv1.ProjectOrder]) (*connect.Response[nagiv1.SetProjectOrderResponse], error) {
-	m := req.Msg
-	if sort := m.GetSort(); sort != "" && sort != "name" && sort != "custom" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("排序方式不正确"))
+// checkOrder 检查要保存的排序：排序方式认识，顺序里的每项非空、不太长、没有换行。
+func checkOrder(sort string, lists ...[]string) error {
+	if sort != "" && sort != "name" && sort != "custom" {
+		return connect.NewError(connect.CodeInvalidArgument, i18n.New("排序方式不正确"))
 	}
-	for _, list := range [][]string{m.GetGroups(), m.GetProjects()} {
+	for _, list := range lists {
 		if len(list) > maxOrderItems {
-			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("排序的项目过多"))
+			return connect.NewError(connect.CodeInvalidArgument, i18n.New("排序的项目过多"))
 		}
 		for _, v := range list {
 			if v == "" || len(v) > maxOrderItem || strings.ContainsAny(v, "\r\n") {
-				return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("排序的项目不正确"))
+				return connect.NewError(connect.CodeInvalidArgument, i18n.New("排序的项目不正确"))
 			}
 		}
+	}
+	return nil
+}
+
+// SetProjectOrder 保存自己的项目页排序，整份覆盖。只影响自己看到的顺序，不检查项目和分组是否存在。
+func (s *authService) SetProjectOrder(ctx context.Context, req *connect.Request[nagiv1.ProjectOrder]) (*connect.Response[nagiv1.SetProjectOrderResponse], error) {
+	m := req.Msg
+	if err := checkOrder(m.GetSort(), m.GetGroups(), m.GetProjects()); err != nil {
+		return nil, err
 	}
 	if err := s.Q.SetProjectOrder(ctx, auth.CurrentUser(ctx).ID, store.ProjectOrder{Sort: m.GetSort(), Groups: m.GetGroups(), Projects: m.GetProjects()}); err != nil {
 		return nil, err
 	}
 	return connect.NewResponse(&nagiv1.SetProjectOrderResponse{}), nil
+}
+
+// GetNodeOrder 返回自己的节点页排序。
+func (s *authService) GetNodeOrder(ctx context.Context, _ *connect.Request[nagiv1.GetNodeOrderRequest]) (*connect.Response[nagiv1.NodeOrder], error) {
+	o, err := s.Q.GetNodeOrder(ctx, auth.CurrentUser(ctx).ID)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.NodeOrder{Sort: o.Sort, Groups: o.Groups, Nodes: o.Nodes}), nil
+}
+
+// SetNodeOrder 保存自己的节点页排序，整份覆盖。同 SetProjectOrder，不检查节点和分组是否存在。
+func (s *authService) SetNodeOrder(ctx context.Context, req *connect.Request[nagiv1.NodeOrder]) (*connect.Response[nagiv1.SetNodeOrderResponse], error) {
+	m := req.Msg
+	if err := checkOrder(m.GetSort(), m.GetGroups(), m.GetNodes()); err != nil {
+		return nil, err
+	}
+	if err := s.Q.SetNodeOrder(ctx, auth.CurrentUser(ctx).ID, store.NodeOrder{Sort: m.GetSort(), Groups: m.GetGroups(), Nodes: m.GetNodes()}); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.SetNodeOrderResponse{}), nil
 }
 
 // avatarType 按内容判断头像的类型，不是允许的图片时返回空。头像显示在页面里，所以不接受 SVG 这类能带脚本的格式。
@@ -360,6 +389,9 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		n.StaleProjects = s.Projects.StaleProjects(ctx, row.ID)
 		n.AlertRules = nodes.NodeAlertRules(row)
 		if n.Tags, err = s.Q.NodeTags(ctx, row.ID); err != nil {
+			return nil, err
+		}
+		if n.Group, err = s.Q.NodeGroup(ctx, row.ID); err != nil {
 			return nil, err
 		}
 		n.Isolated = s.Nodes.Isolated(ctx, row.ID)
@@ -525,6 +557,9 @@ func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 		return err
 	}
 	if err := s.Q.DeleteNodeTags(ctx, id); err != nil {
+		return err
+	}
+	if err := s.Q.SetNodeGroup(ctx, id, ""); err != nil {
 		return err
 	}
 	s.Projects.ForgetEntryNode(ctx, id)

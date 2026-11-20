@@ -14,7 +14,9 @@ import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeDirectDownload, NodeMesh, NodeQUIC, NodeRelay, ratePair } from "@/pages/mesh";
 import { NodeMap, type MapLayer } from "@/pages/node-map";
-import { EditNodeTags, ManageLabels, TagChip, TagFilter, tagsOf } from "@/components/labels";
+import { verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { EditNodeGroup, EditNodeTags, ManageLabels, nodeGroupsOf, TagChip, TagFilter, tagsOf } from "@/components/labels";
+import { GroupSection, Reorder, useCollapsed, useNodeOrder, useReorderItem, type ProjectSort } from "@/pages/project-order";
 import {
   Alert,
   Badge,
@@ -35,6 +37,7 @@ import {
   QueryError,
   Row,
   RowsSkeleton,
+  Select,
   AutoHeight,
   Roll,
   Section,
@@ -297,6 +300,8 @@ export function NodesPage({
   onView,
   tags: tagFilter,
   onTags,
+  group: requestedGroup,
+  onGroup,
   openAdd,
   onAddOpened,
 }: {
@@ -304,6 +309,9 @@ export function NodesPage({
   onView: (v: NodesView) => void;
   tags: string[];
   onTags: (v: string[]) => void;
+  // 只看一个分组；"" 是未分组，undefined 是全部。
+  group?: string;
+  onGroup: (v: string | undefined) => void;
   openAdd?: boolean;
   onAddOpened?: () => void;
 }) {
@@ -314,7 +322,11 @@ export function NodesPage({
   const canHA = can("project.ha") || can("project.backup");
   const view: NodesView = requestedView === "ha" && !canHA ? "cards" : requestedView;
   const status = useUpdateStatus(isAdmin);
-  const [dialog, setDialog] = useState<"add" | "handover" | "tags" | null>(openAdd && isAdmin ? "add" : null);
+  const [dialog, setDialog] = useState<"add" | "handover" | "tags" | "groups" | null>(openAdd && isAdmin ? "add" : null);
+  const order = useNodeOrder();
+  const { collapsed, toggle } = useCollapsed("nagi.nodes.collapsed");
+  // 调整顺序：同项目页，进入时排序换成「自定义」，点「完成」退出。
+  const [arranging, setArranging] = useState(false);
   useEffect(() => {
     if (openAdd) onAddOpened?.();
   }, [openAdd, onAddOpened]);
@@ -351,15 +363,137 @@ export function NodesPage({
   const tags = tagsOf(list);
   // 筛选里已经没有的标签（例如被删除）不算。
   const activeTags = tagFilter.filter((x) => tags.some((tag) => tag.name === x));
-  const shown = activeTags.length > 0 ? list.filter((n) => n.tags.some((x) => activeTags.includes(x))) : list;
+  const custom = order.sort === "custom";
+  const groups = custom ? order.sortGroups(nodeGroupsOf(list), (g) => g.name) : nodeGroupsOf(list);
+  // 筛选的分组已经没有了（例如被删除）时，当作全部。
+  const groupFilter = requestedGroup === "" || groups.some((g) => g.name === requestedGroup) ? requestedGroup : undefined;
+  // 列表本来按加入时间排；按名称时重新排，自定义时按记下的顺序（新加入的在最后）。
+  const sorted = custom ? order.sortItems(list, (n) => n.id) : order.sort === "name" ? list.slice().sort((a, b) => a.name.localeCompare(b.name)) : list;
+  const shown = sorted.filter((n) => (activeTags.length === 0 || n.tags.some((x) => activeTags.includes(x))) && (groupFilter === undefined || n.group === groupFilter));
+  const nodeName = (id: string) => list.find((n) => n.id === id)?.name ?? id;
+  // 有分组、没有筛选某个分组时按分组分段显示，未分组的放最后（同项目页）。
+  const sections =
+    groups.length > 0 && groupFilter === undefined
+      ? [
+          ...groups.map((g) => ({ key: `g:${g.name}`, name: g.name, items: shown.filter((n) => n.group === g.name) })),
+          { key: "-", name: t.labels.ungrouped, items: shown.filter((n) => !n.group) },
+        ].filter((s) => s.items.length > 0)
+      : undefined;
+  const rows = (items: Node[]) => {
+    const ids = items.map((n) => n.id);
+    return (
+      <Reorder ids={ids} name={nodeName} enabled={arranging} strategy={verticalListSortingStrategy} onMove={(a, o) => order.moveItem(order.sortItems(list, (n) => n.id).map((n) => n.id), ids, a, o)}>
+        {items.map((n) => (
+          <SortableNodeRow key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
+        ))}
+      </Reorder>
+    );
+  };
+  // 未分组的固定在最后，不参与分组的拖动。
+  const sortableSections = sections?.filter((s) => s.key !== "-") ?? [];
+  const sectionName = (key: string) => sections?.find((s) => s.key === key)?.name ?? key;
   const cards = (
     <div className="grid gap-4">
-      {tags.length > 0 && <TagFilter tags={tags} value={activeTags} onChange={onTags} />}
-      <NodeList>
-        {shown.map((n) => (
-          <NodeRow key={n.id} n={n} canUpgrade={upgradeTarget(n, panelVersion) !== ""} upgrade={states[n.id]} onApproved={() => nodes.refetch()} />
-        ))}
-      </NodeList>
+      {(tags.length > 0 || groups.length > 0 || list.length > 1) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {tags.length > 0 && (
+            <div className="min-w-0 flex-1">
+              <TagFilter tags={tags} value={activeTags} onChange={onTags} />
+            </div>
+          )}
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 max-md:w-full max-md:*:flex-1">
+            {groups.length > 0 && (
+              <Select
+                value={groupFilter === undefined ? "*" : groupFilter === "" ? "-" : `g:${groupFilter}`}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  onGroup(v === "*" ? undefined : v === "-" ? "" : v.slice(2));
+                }}
+                aria-label={t.labels.group}
+                className="w-auto max-w-40 shrink-0"
+              >
+                <option value="*">{t.labels.allGroups}</option>
+                {groups.map((g) => (
+                  <option key={g.name} value={`g:${g.name}`}>
+                    {g.name}
+                  </option>
+                ))}
+                <option value="-">{t.labels.ungrouped}</option>
+              </Select>
+            )}
+            <Select
+              value={order.sort}
+              disabled={!order.loaded}
+              onChange={(e) => {
+                const v = e.target.value as ProjectSort;
+                order.setSort(v);
+                if (v !== "custom") setArranging(false);
+              }}
+              aria-label={t.nodes.sort.label}
+              className="w-auto shrink-0"
+            >
+              <option value="created">{t.nodes.sort.byJoined}</option>
+              <option value="name">{t.nodes.sort.byName}</option>
+              <option value="custom">{t.nodes.sort.byCustom}</option>
+            </Select>
+            {list.length > 1 && (
+              <Button
+                variant={arranging ? "default" : "outline"}
+                disabled={!order.loaded}
+                onClick={() => {
+                  if (!arranging) order.setSort("custom");
+                  setArranging(!arranging);
+                }}
+              >
+                {arranging ? t.projects.reorder.done : t.projects.reorder.start}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {arranging && <p className="text-[13px] text-muted-foreground">{t.nodes.sort.reorderHint}</p>}
+      {shown.length === 0 ? (
+        <EmptyRow
+          action={
+            <Button
+              variant="outline"
+              onClick={() => {
+                onTags([]);
+                onGroup(undefined);
+              }}
+            >
+              {t.audit.clearFilters}
+            </Button>
+          }
+        >
+          {t.nodes.noMatch}
+        </EmptyRow>
+      ) : (
+        <NodeList>
+          {sections ? (
+            <div className="grid gap-4 pt-1">
+              <Reorder
+                ids={sortableSections.map((s) => s.key)}
+                name={sectionName}
+                enabled={arranging}
+                strategy={verticalListSortingStrategy}
+                onMove={(a, o) => order.moveGroup(groups.map((g) => g.name), a.slice(2), o.slice(2))}
+              >
+                {sections.map((s) => (
+                  // 标题和表头对齐，行照常外扩 8。
+                  <div key={s.key} className="mx-2 min-w-0">
+                    <GroupSection id={s.key} name={s.name} count={s.items.length} open={!collapsed.includes(s.key)} onToggle={() => toggle(s.key)}>
+                      <div className="-mx-2 grid grid-cols-[minmax(0,1fr)]">{rows(s.items)}</div>
+                    </GroupSection>
+                  </div>
+                ))}
+              </Reorder>
+            </div>
+          ) : (
+            rows(shown)
+          )}
+        </NodeList>
+      )}
     </div>
   );
 
@@ -406,7 +540,8 @@ export function NodesPage({
             {isAdmin && list.length > 0 && (
               <Menu
                 items={[
-                  ...(isAdmin && tags.length > 0 ? [{ label: t.labels.manageTags, onSelect: () => setDialog("tags") }] : []),
+                  ...(groups.length > 0 ? [{ label: t.labels.manageGroups, onSelect: () => setDialog("groups") }] : []),
+                  ...(tags.length > 0 ? [{ label: t.labels.manageTags, onSelect: () => setDialog("tags") }] : []),
                   { label: t.nodes.handover, onSelect: () => setDialog("handover") },
                 ]}
               />
@@ -454,6 +589,9 @@ export function NodesPage({
       <Dialog open={dialog === "tags"} onClose={() => setDialog(null)} title={t.labels.manageTags}>
         <ManageLabels kind="tag" labels={tags} />
       </Dialog>
+      <Dialog open={dialog === "groups"} onClose={() => setDialog(null)} title={t.labels.manageGroups} description={t.labels.nodeGroupHint}>
+        <ManageLabels kind="nodeGroup" labels={groups} />
+      </Dialog>
       <Dialog open={dialog === "handover"} onClose={() => setDialog(null)} title={t.nodes.handover} description={t.nodes.handoverDescription} className="max-w-[520px]">
         <HandOver nodes={list} onClose={() => setDialog(null)} />
       </Dialog>
@@ -476,6 +614,26 @@ function NodeList({ children }: { children: React.ReactNode }) {
         <span className="text-right">{t.nodes.columns.containers}</span>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] pt-1">{children}</div>
+    </div>
+  );
+}
+
+// SortableNodeRow：调整顺序时可以拖动的节点行，整行都能按住拖，加虚线框，点击不打开节点。拖动中的行浮在上面、带阴影。
+function SortableNodeRow(props: React.ComponentProps<typeof NodeRow>) {
+  const r = useReorderItem(props.n.id);
+  return (
+    <div
+      ref={r.ref}
+      style={r.style}
+      {...r.handle}
+      onClickCapture={r.enabled ? (e) => e.preventDefault() : undefined}
+      className={cn(
+        "grid min-w-0 rounded-md",
+        r.enabled && "cursor-grab touch-manipulation outline-1 -outline-offset-1 outline-border outline-dashed",
+        r.dragging && "relative z-10 cursor-grabbing bg-background shadow-lg",
+      )}
+    >
+      <NodeRow {...props} />
     </div>
   );
 }
@@ -575,6 +733,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
   const navigate = useNavigate();
   const [renaming, setRenaming] = useState(false);
   const [editingTags, setEditingTags] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(false);
   if (nodes.isPending) return <RowsSkeleton />;
   if (nodes.error) return <QueryError error={errorMessage(nodes.error)} onRetry={() => nodes.refetch()} />;
   const n = nodes.data.nodes.find((x) => x.id === nodeId);
@@ -656,6 +815,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
               <Roll value={t.nodes.containers(n.containers)} n={n.containers} />
             </button>
             {!n.online && !n.pending && <Roll value={lastSeenText(n)} />}
+            {n.group && <span title={t.labels.group}>{n.group}</span>}
             {n.tags.length > 0 && (
               <span className="flex flex-wrap gap-1" aria-label={`${t.labels.tags}: ${n.tags.join(", ")}`}>
                 {n.tags.map((x) => (
@@ -670,6 +830,7 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
             <Menu
               items={[
                 ...(canManage ? [{ label: t.nodes.rename.action, onSelect: () => setRenaming(true) }] : []),
+                ...(canManage ? [{ label: t.labels.editGroup, onSelect: () => setEditingGroup(true) }] : []),
                 ...(can("panel.members") ? [{ label: t.labels.editTags, onSelect: () => setEditingTags(true) }] : []),
                 ...(canManage ? [{ label: n.isolated ? t.nodes.isolation.unisolate : t.nodes.isolation.isolate, onSelect: () => toggleIsolation(n, () => nodes.refetch()), danger: !n.isolated }] : []),
                 ...(canManage ? [{ label: t.nodes.removeNode, onSelect: remove, danger: true }] : []),
@@ -683,6 +844,9 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
       </Dialog>
       <Dialog open={editingTags} onClose={() => setEditingTags(false)} title={t.labels.editTags} description={t.labels.editTagsDescription}>
         <EditNodeTags node={n} allTags={tagsOf(nodes.data.nodes).map((x) => x.name)} onDone={() => setEditingTags(false)} />
+      </Dialog>
+      <Dialog open={editingGroup} onClose={() => setEditingGroup(false)} title={t.labels.editGroup} description={t.labels.nodeGroupHint}>
+        <EditNodeGroup node={n} groups={nodeGroupsOf(nodes.data.nodes).map((x) => x.name)} onDone={() => setEditingGroup(false)} />
       </Dialog>
       {/* 同一处只放一条提示：多于一条时合并成「需要处理 N 项」，点开看（ui.md 提示）。 */}
       <NodeNotices open={!!upgradeState}>

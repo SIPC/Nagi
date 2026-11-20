@@ -205,6 +205,7 @@ var selfProcedures = map[string]bool{
 	"/nagi.v1.AuthService/GetOAuthRequest": true, "/nagi.v1.AuthService/ApproveOAuth": true,
 	"/nagi.v1.AuthService/RegisterSessionKey": true, "/nagi.v1.AuthService/RotateSession": true, "/nagi.v1.AuthService/Reverify": true,
 	"/nagi.v1.AuthService/GetProjectOrder": true, "/nagi.v1.AuthService/SetProjectOrder": true,
+	"/nagi.v1.AuthService/GetNodeOrder": true, "/nagi.v1.AuthService/SetNodeOrder": true,
 	"/nagi.v1.AuthService/CreateAppPairing": true, "/nagi.v1.AuthService/GetAppPairing": true,
 	"/nagi.v1.AppService/Info": true, "/nagi.v1.AppService/Logout": true,
 	// 手机确认（见 approval.go）：网页发起自己的高权限确认；手机查看、确认自己账号的请求，做自己的高权限确认。
@@ -243,6 +244,7 @@ var adminProcedures = map[string]bool{
 	"/nagi.v1.NodeService/UpgradeAllNodes": true,
 	// 重命名、删除分组和标签：会改到成员范围外的项目和节点。
 	"/nagi.v1.ProjectService/RenameProjectGroup": true, "/nagi.v1.NodeService/RenameNodeTag": true,
+	"/nagi.v1.NodeService/RenameNodeGroup": true, "/nagi.v1.ProjectService/RenameProjectTag": true,
 }
 
 // procedurePerms 是其余每个接口要的权限。
@@ -301,6 +303,8 @@ var procedurePerms = map[string]Perm{
 	// 项目设置里的告警规则、快照、内部端口、出站限制另外要相应的权限（api 的 projects.go）。
 	"/nagi.v1.ProjectService/CreateProject": PermProjectManage, "/nagi.v1.ProjectService/DeleteProject": PermProjectManage,
 	"/nagi.v1.ProjectService/UpdateProjectSettings": PermProjectManage,
+	// 项目标签只用来整理项目页，不影响访问范围，和改项目设置一样要「项目管理」。
+	"/nagi.v1.ProjectService/SetProjectTags": PermProjectManage,
 
 	// 分组和标签决定成员的访问范围，归到「成员」。重命名、删除会改到范围外的项目和节点，只给管理员（adminProcedures）。
 	"/nagi.v1.ProjectService/SetProjectGroup": PermMembers, "/nagi.v1.NodeService/SetNodeTags": PermMembers,
@@ -311,6 +315,8 @@ var procedurePerms = map[string]Perm{
 
 	"/nagi.v1.NodeService/RemoveNode": PermNodeManage, "/nagi.v1.NodeService/ApproveNode": PermNodeManage,
 	"/nagi.v1.NodeService/RenameNode": PermNodeManage, "/nagi.v1.NodeService/UpgradeNode": PermNodeManage,
+	// 节点分组只用来整理节点页，不影响访问范围，和重命名节点一样要「节点管理」。
+	"/nagi.v1.NodeService/SetNodeGroup":      PermNodeManage,
 	"/nagi.v1.NodeService/CancelNodeUpgrade": PermNodeManage,
 	"/nagi.v1.NodeService/GetNodeMirrors":    PermNodeManage, "/nagi.v1.NodeService/SetNodeMirrors": PermNodeManage,
 	"/nagi.v1.NodeService/ReclaimNodeSnapshots": PermNodeManage,

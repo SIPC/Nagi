@@ -32,6 +32,8 @@ var auditSkipped = map[string]bool{
 	// 项目页排序只影响自己看到的顺序。
 	nagiv1connect.AuthServiceGetProjectOrderProcedure: true,
 	nagiv1connect.AuthServiceSetProjectOrderProcedure: true,
+	nagiv1connect.AuthServiceGetNodeOrderProcedure:    true,
+	nagiv1connect.AuthServiceSetNodeOrderProcedure:    true,
 	nagiv1connect.SetupServiceGetSetupStateProcedure:  true,
 	nagiv1connect.EnrollServiceEnrollProcedure:        true,
 	// 安卓 App 的配对、换取令牌、退出在 auth 里记成安全事件（app_paired、app_unlock_required 等）；Info 是查询。

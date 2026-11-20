@@ -1,20 +1,27 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { ChevronRight, GripVertical } from "lucide-react";
 import { closestCenter, DndContext, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, type SortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Collapse } from "@/components/ui";
 import { authClient, errorMessage } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
 
-// 项目列表的排序：排序方式，以及「自定义」时分组和项目的顺序（拖动调整）。存在面板上，每个成员各自一份，
-// 换浏览器、换设备都一样（见 docs/panel.md#分组和标签）。
-// 项目的顺序是一份全局列表，分组内、筛选后都按它排，所以在哪一组里拖都只改这一份。
+// 项目页、节点页的排序：排序方式，以及「自定义」时分组和项目（节点）的顺序（拖动调整）。存在面板上，每个成员各自一份，
+// 换浏览器、换设备都一样（见 docs/panel.md#分组和标签）。分组的标题行、拖动也在这里，两页共用。
+// 项目（节点）的顺序是一份全局列表，分组内、筛选后都按它排，所以在哪一组里拖都只改这一份。
+// sort 为 "created" 是默认顺序：项目是最近创建在前，节点是加入时间。
 export type ProjectSort = "created" | "name" | "custom";
 
-type Saved = { sort: ProjectSort; groups: string[]; projects: string[] };
+type Saved = { sort: ProjectSort; groups: string[]; items: string[] };
 
 const orderQueryKey = ["projectOrder"];
+const nodeOrderQueryKey = ["nodeOrder"];
+
+const toSort = (s: string): ProjectSort => (s === "name" || s === "custom" ? s : "created");
 
 // 以前只记在浏览器里（nagi.projects.order）：面板上还没有时搬过去，然后删掉。
 const legacyKey = "nagi.projects.order";
@@ -25,7 +32,7 @@ function readLegacy(): Omit<Saved, "sort"> | undefined {
     if (raw === null) return undefined;
     const v = JSON.parse(raw);
     const strings = (x: unknown) => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string" && s !== "") : []);
-    return { groups: strings(v?.groups), projects: strings(v?.projects) };
+    return { groups: strings(v?.groups), items: strings(v?.projects) };
   } catch {
     return undefined;
   }
@@ -39,50 +46,43 @@ function dropLegacy() {
   }
 }
 
-export function useProjectOrder() {
+// useOrder：一页的排序。freshFirst：没排过的项目（节点）放在排过的前面还是后面。
+function useOrder({
+  queryKey,
+  load,
+  store,
+  freshFirst,
+}: {
+  queryKey: string[];
+  load: () => Promise<Saved>;
+  store: (o: Saved) => Promise<unknown>;
+  freshFirst: boolean;
+}) {
   const qc = useQueryClient();
-  const query = useQuery({
-    queryKey: orderQueryKey,
-    queryFn: async (): Promise<Saved> => {
-      const o = await authClient.getProjectOrder({});
-      return { sort: o.sort === "name" || o.sort === "custom" ? o.sort : "created", groups: o.groups, projects: o.projects };
-    },
-    staleTime: Infinity,
-  });
-  const saved: Saved = query.data ?? { sort: "created", groups: [], projects: [] };
+  const query = useQuery({ queryKey, queryFn: load, staleTime: Infinity });
+  const saved: Saved = query.data ?? { sort: "created", groups: [], items: [] };
   // 同一个 scope 的保存按顺序发出，连续拖动时后一次不会被前一次覆盖。
   const mutation = useMutation({
-    scope: { id: "projectOrder" },
-    mutationFn: (o: Saved) => authClient.setProjectOrder({ sort: o.sort === "created" ? "" : o.sort, groups: o.groups, projects: o.projects }),
+    scope: { id: queryKey[0] },
+    mutationFn: store,
     onError: (e) => {
       toast.error(errorMessage(e));
-      qc.invalidateQueries({ queryKey: orderQueryKey });
+      qc.invalidateQueries({ queryKey });
     },
   });
   const save = (next: Saved) => {
-    qc.setQueryData(orderQueryKey, next);
+    qc.setQueryData(queryKey, next);
     mutation.mutate(next);
   };
-  useEffect(() => {
-    if (!query.data) return;
-    const legacy = readLegacy();
-    if (!legacy) return;
-    if (query.data.groups.length === 0 && query.data.projects.length === 0 && (legacy.groups.length > 0 || legacy.projects.length > 0)) {
-      // 拖动过就是想按自定义顺序看。
-      save({ ...query.data, ...legacy, sort: query.data.sort === "created" ? "custom" : query.data.sort });
-    }
-    dropLegacy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query.data]);
   const setSort = (sort: ProjectSort) => {
     if (sort !== saved.sort) save({ ...saved, sort });
   };
-  // 没排过的项目（例如新建的）放最前面，保持传进来的顺序（最近创建在前）；排过的按记下的顺序。
-  const sortProjects = <T,>(list: T[], id: (x: T) => string) => {
-    const pos = new Map(saved.projects.map((p, i) => [p, i]));
+  // 没排过的（例如新建的）按 freshFirst 放在最前或最后，保持传进来的顺序；排过的按记下的顺序。
+  const sortItems = <T,>(list: T[], id: (x: T) => string) => {
+    const pos = new Map(saved.items.map((p, i) => [p, i]));
     const fresh = list.filter((x) => !pos.has(id(x)));
     const known = list.filter((x) => pos.has(id(x))).sort((a, b) => pos.get(id(a))! - pos.get(id(b))!);
-    return [...fresh, ...known];
+    return freshFirst ? [...fresh, ...known] : [...known, ...fresh];
   };
   // 没排过的分组放在排过的后面，保持传进来的顺序（按名称）。
   const sortGroups = <T,>(list: T[], name: (x: T) => string) => {
@@ -90,18 +90,55 @@ export function useProjectOrder() {
     const known = list.filter((x) => pos.has(name(x))).sort((a, b) => pos.get(name(a))! - pos.get(name(b))!);
     return [...known, ...list.filter((x) => !pos.has(name(x)))];
   };
-  // all：现在所有项目按自定义顺序排好的 ID；visible：这次拖动所在列表里的 ID（某一组或筛选后的）。
-  // 只调换 visible 在 all 里占的位置，其余项目不动。
-  const moveProject = (all: string[], visible: string[], active: string, over: string) => {
+  // all：现在所有项目（节点）按自定义顺序排好的 ID；visible：这次拖动所在列表里的 ID（某一组或筛选后的）。
+  // 只调换 visible 在 all 里占的位置，其余的不动。
+  const moveItem = (all: string[], visible: string[], active: string, over: string) => {
     const moved = arrayMove(visible, visible.indexOf(active), visible.indexOf(over));
     const inList = new Set(visible);
     let i = 0;
-    save({ ...saved, projects: all.map((id) => (inList.has(id) ? moved[i++] : id)) });
+    save({ ...saved, items: all.map((id) => (inList.has(id) ? moved[i++] : id)) });
   };
   const moveGroup = (names: string[], active: string, over: string) => {
     save({ ...saved, groups: arrayMove(names, names.indexOf(active), names.indexOf(over)) });
   };
-  return { sort: saved.sort, loaded: query.isSuccess, setSort, sortProjects, sortGroups, moveProject, moveGroup };
+  return { sort: saved.sort, loaded: query.isSuccess, data: query.data, save, setSort, sortItems, sortGroups, moveItem, moveGroup };
+}
+
+export function useProjectOrder() {
+  const o = useOrder({
+    queryKey: orderQueryKey,
+    load: async () => {
+      const r = await authClient.getProjectOrder({});
+      return { sort: toSort(r.sort), groups: r.groups, items: r.projects };
+    },
+    store: (o) => authClient.setProjectOrder({ sort: o.sort === "created" ? "" : o.sort, groups: o.groups, projects: o.items }),
+    freshFirst: true,
+  });
+  useEffect(() => {
+    if (!o.data) return;
+    const legacy = readLegacy();
+    if (!legacy) return;
+    if (o.data.groups.length === 0 && o.data.items.length === 0 && (legacy.groups.length > 0 || legacy.items.length > 0)) {
+      // 拖动过就是想按自定义顺序看。
+      o.save({ ...o.data, ...legacy, sort: o.data.sort === "created" ? "custom" : o.data.sort });
+    }
+    dropLegacy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o.data]);
+  return o;
+}
+
+// useNodeOrder：节点页的排序。默认按加入时间，没排过的节点（新加入的）放在最后。
+export function useNodeOrder() {
+  return useOrder({
+    queryKey: nodeOrderQueryKey,
+    load: async () => {
+      const r = await authClient.getNodeOrder({});
+      return { sort: toSort(r.sort), groups: r.groups, items: r.nodes };
+    },
+    store: (o) => authClient.setNodeOrder({ sort: o.sort === "created" ? "" : o.sort, groups: o.groups, nodes: o.items }),
+    freshFirst: false,
+  });
 }
 
 const ReorderEnabled = createContext(false);
@@ -190,4 +227,79 @@ export function useReorderItem(id: string) {
     enabled,
     dragging: s.isDragging,
   };
+}
+
+// useCollapsed：收起的分组，记在这个浏览器里（storageKey 每页一个）。
+export function useCollapsed(storageKey: string) {
+  const [collapsed, setCollapsed] = useState<string[]>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const toggle = (key: string) => {
+    const next = collapsed.includes(key) ? collapsed.filter((k) => k !== key) : [...collapsed, key];
+    setCollapsed(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch {
+      // 存不了就只在这次有效。
+    }
+  };
+  return { collapsed, toggle };
+}
+
+// GroupSection：一个分组：标题行和里面的卡片（行）。调整顺序时按住标题行上下拖动调整分组的顺序。
+export function GroupSection({ id, name, count, open, onToggle, children }: { id: string; name: string; count: number; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  const r = useReorderItem(id);
+  return (
+    <section ref={r.ref} style={r.style} className={cn("min-w-0", r.dragging && "relative z-10 rounded-lg bg-background shadow-lg")}>
+      <GroupHeader name={name} count={count} open={open} onToggle={onToggle} handle={r.handle} handleRef={r.handleRef} sortable={r.enabled} />
+      {/* 展开、收起时高度和透明度一起过渡，下面的分组跟着移动（ui.md 的 Collapse）。间距放在里面，收起后不留空。 */}
+      <Collapse open={open}>
+        <div className="pt-2">{children}</div>
+      </Collapse>
+    </section>
+  );
+}
+
+// GroupHeader：分组的标题行，点击展开或收起。参考 Grafana 的文件夹行：箭头、名称、数量。
+function GroupHeader({
+  name,
+  count,
+  open,
+  onToggle,
+  handle,
+  handleRef,
+  sortable,
+}: {
+  name: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  handle?: React.HTMLAttributes<HTMLElement>;
+  handleRef?: (el: HTMLElement | null) => void;
+  sortable?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      ref={handleRef}
+      {...handle}
+      aria-expanded={open}
+      aria-label={open ? t.labels.collapse(name) : t.labels.expand(name)}
+      className={cn(
+        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
+        sortable && "cursor-grab touch-manipulation active:cursor-grabbing",
+      )}
+      onClick={onToggle}
+    >
+      {sortable && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-240", open && "rotate-90")} />
+      <span className="truncate font-medium">{name}</span>
+      <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{count}</span>
+    </button>
+  );
 }

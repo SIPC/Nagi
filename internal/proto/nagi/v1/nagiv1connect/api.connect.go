@@ -102,6 +102,12 @@ const (
 	// AuthServiceSetProjectOrderProcedure is the fully-qualified name of the AuthService's
 	// SetProjectOrder RPC.
 	AuthServiceSetProjectOrderProcedure = "/nagi.v1.AuthService/SetProjectOrder"
+	// AuthServiceGetNodeOrderProcedure is the fully-qualified name of the AuthService's GetNodeOrder
+	// RPC.
+	AuthServiceGetNodeOrderProcedure = "/nagi.v1.AuthService/GetNodeOrder"
+	// AuthServiceSetNodeOrderProcedure is the fully-qualified name of the AuthService's SetNodeOrder
+	// RPC.
+	AuthServiceSetNodeOrderProcedure = "/nagi.v1.AuthService/SetNodeOrder"
 	// AuthServiceCreateAppPairingProcedure is the fully-qualified name of the AuthService's
 	// CreateAppPairing RPC.
 	AuthServiceCreateAppPairingProcedure = "/nagi.v1.AuthService/CreateAppPairing"
@@ -235,6 +241,12 @@ const (
 	// NodeServiceRenameNodeTagProcedure is the fully-qualified name of the NodeService's RenameNodeTag
 	// RPC.
 	NodeServiceRenameNodeTagProcedure = "/nagi.v1.NodeService/RenameNodeTag"
+	// NodeServiceSetNodeGroupProcedure is the fully-qualified name of the NodeService's SetNodeGroup
+	// RPC.
+	NodeServiceSetNodeGroupProcedure = "/nagi.v1.NodeService/SetNodeGroup"
+	// NodeServiceRenameNodeGroupProcedure is the fully-qualified name of the NodeService's
+	// RenameNodeGroup RPC.
+	NodeServiceRenameNodeGroupProcedure = "/nagi.v1.NodeService/RenameNodeGroup"
 	// NodeServiceIsolateNodeProcedure is the fully-qualified name of the NodeService's IsolateNode RPC.
 	NodeServiceIsolateNodeProcedure = "/nagi.v1.NodeService/IsolateNode"
 	// NodeServiceUnisolateNodeProcedure is the fully-qualified name of the NodeService's UnisolateNode
@@ -426,6 +438,12 @@ const (
 	// ProjectServiceRenameProjectGroupProcedure is the fully-qualified name of the ProjectService's
 	// RenameProjectGroup RPC.
 	ProjectServiceRenameProjectGroupProcedure = "/nagi.v1.ProjectService/RenameProjectGroup"
+	// ProjectServiceSetProjectTagsProcedure is the fully-qualified name of the ProjectService's
+	// SetProjectTags RPC.
+	ProjectServiceSetProjectTagsProcedure = "/nagi.v1.ProjectService/SetProjectTags"
+	// ProjectServiceRenameProjectTagProcedure is the fully-qualified name of the ProjectService's
+	// RenameProjectTag RPC.
+	ProjectServiceRenameProjectTagProcedure = "/nagi.v1.ProjectService/RenameProjectTag"
 	// ProjectServiceSaveSharedEnvProcedure is the fully-qualified name of the ProjectService's
 	// SaveSharedEnv RPC.
 	ProjectServiceSaveSharedEnvProcedure = "/nagi.v1.ProjectService/SaveSharedEnv"
@@ -756,6 +774,9 @@ type AuthServiceClient interface {
 	GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error)
 	// 整份覆盖。
 	SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error)
+	// 自己的节点页排序，同项目页。
+	GetNodeOrder(context.Context, *connect.Request[v1.GetNodeOrderRequest]) (*connect.Response[v1.NodeOrder], error)
+	SetNodeOrder(context.Context, *connect.Request[v1.NodeOrder]) (*connect.Response[v1.SetNodeOrderResponse], error)
 	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
 	CreateAppPairing(context.Context, *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error)
 	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
@@ -893,6 +914,18 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("SetProjectOrder")),
 			connect.WithClientOptions(opts...),
 		),
+		getNodeOrder: connect.NewClient[v1.GetNodeOrderRequest, v1.NodeOrder](
+			httpClient,
+			baseURL+AuthServiceGetNodeOrderProcedure,
+			connect.WithSchema(authServiceMethods.ByName("GetNodeOrder")),
+			connect.WithClientOptions(opts...),
+		),
+		setNodeOrder: connect.NewClient[v1.NodeOrder, v1.SetNodeOrderResponse](
+			httpClient,
+			baseURL+AuthServiceSetNodeOrderProcedure,
+			connect.WithSchema(authServiceMethods.ByName("SetNodeOrder")),
+			connect.WithClientOptions(opts...),
+		),
 		createAppPairing: connect.NewClient[v1.CreateAppPairingRequest, v1.CreateAppPairingResponse](
 			httpClient,
 			baseURL+AuthServiceCreateAppPairingProcedure,
@@ -930,6 +963,8 @@ type authServiceClient struct {
 	passkeyLogin          *connect.Client[v1.PasskeyLoginRequest, v1.LoginResponse]
 	getProjectOrder       *connect.Client[v1.GetProjectOrderRequest, v1.ProjectOrder]
 	setProjectOrder       *connect.Client[v1.ProjectOrder, v1.SetProjectOrderResponse]
+	getNodeOrder          *connect.Client[v1.GetNodeOrderRequest, v1.NodeOrder]
+	setNodeOrder          *connect.Client[v1.NodeOrder, v1.SetNodeOrderResponse]
 	createAppPairing      *connect.Client[v1.CreateAppPairingRequest, v1.CreateAppPairingResponse]
 	getAppPairing         *connect.Client[v1.GetAppPairingRequest, v1.GetAppPairingResponse]
 }
@@ -1034,6 +1069,16 @@ func (c *authServiceClient) SetProjectOrder(ctx context.Context, req *connect.Re
 	return c.setProjectOrder.CallUnary(ctx, req)
 }
 
+// GetNodeOrder calls nagi.v1.AuthService.GetNodeOrder.
+func (c *authServiceClient) GetNodeOrder(ctx context.Context, req *connect.Request[v1.GetNodeOrderRequest]) (*connect.Response[v1.NodeOrder], error) {
+	return c.getNodeOrder.CallUnary(ctx, req)
+}
+
+// SetNodeOrder calls nagi.v1.AuthService.SetNodeOrder.
+func (c *authServiceClient) SetNodeOrder(ctx context.Context, req *connect.Request[v1.NodeOrder]) (*connect.Response[v1.SetNodeOrderResponse], error) {
+	return c.setNodeOrder.CallUnary(ctx, req)
+}
+
 // CreateAppPairing calls nagi.v1.AuthService.CreateAppPairing.
 func (c *authServiceClient) CreateAppPairing(ctx context.Context, req *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error) {
 	return c.createAppPairing.CallUnary(ctx, req)
@@ -1082,6 +1127,9 @@ type AuthServiceHandler interface {
 	GetProjectOrder(context.Context, *connect.Request[v1.GetProjectOrderRequest]) (*connect.Response[v1.ProjectOrder], error)
 	// 整份覆盖。
 	SetProjectOrder(context.Context, *connect.Request[v1.ProjectOrder]) (*connect.Response[v1.SetProjectOrderResponse], error)
+	// 自己的节点页排序，同项目页。
+	GetNodeOrder(context.Context, *connect.Request[v1.GetNodeOrderRequest]) (*connect.Response[v1.NodeOrder], error)
+	SetNodeOrder(context.Context, *connect.Request[v1.NodeOrder]) (*connect.Response[v1.SetNodeOrderResponse], error)
 	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
 	CreateAppPairing(context.Context, *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error)
 	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
@@ -1215,6 +1263,18 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("SetProjectOrder")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceGetNodeOrderHandler := connect.NewUnaryHandler(
+		AuthServiceGetNodeOrderProcedure,
+		svc.GetNodeOrder,
+		connect.WithSchema(authServiceMethods.ByName("GetNodeOrder")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceSetNodeOrderHandler := connect.NewUnaryHandler(
+		AuthServiceSetNodeOrderProcedure,
+		svc.SetNodeOrder,
+		connect.WithSchema(authServiceMethods.ByName("SetNodeOrder")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authServiceCreateAppPairingHandler := connect.NewUnaryHandler(
 		AuthServiceCreateAppPairingProcedure,
 		svc.CreateAppPairing,
@@ -1269,6 +1329,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceGetProjectOrderHandler.ServeHTTP(w, r)
 		case AuthServiceSetProjectOrderProcedure:
 			authServiceSetProjectOrderHandler.ServeHTTP(w, r)
+		case AuthServiceGetNodeOrderProcedure:
+			authServiceGetNodeOrderHandler.ServeHTTP(w, r)
+		case AuthServiceSetNodeOrderProcedure:
+			authServiceSetNodeOrderHandler.ServeHTTP(w, r)
 		case AuthServiceCreateAppPairingProcedure:
 			authServiceCreateAppPairingHandler.ServeHTTP(w, r)
 		case AuthServiceGetAppPairingProcedure:
@@ -1362,6 +1426,14 @@ func (UnimplementedAuthServiceHandler) SetProjectOrder(context.Context, *connect
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.SetProjectOrder is not implemented"))
 }
 
+func (UnimplementedAuthServiceHandler) GetNodeOrder(context.Context, *connect.Request[v1.GetNodeOrderRequest]) (*connect.Response[v1.NodeOrder], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.GetNodeOrder is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) SetNodeOrder(context.Context, *connect.Request[v1.NodeOrder]) (*connect.Response[v1.SetNodeOrderResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.SetNodeOrder is not implemented"))
+}
+
 func (UnimplementedAuthServiceHandler) CreateAppPairing(context.Context, *connect.Request[v1.CreateAppPairingRequest]) (*connect.Response[v1.CreateAppPairingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AuthService.CreateAppPairing is not implemented"))
 }
@@ -1449,6 +1521,10 @@ type NodeServiceClient interface {
 	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+	SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error)
+	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
+	RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
@@ -1742,6 +1818,18 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeTag")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeGroup: connect.NewClient[v1.SetNodeGroupRequest, v1.SetNodeGroupResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeGroupProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeGroup")),
+			connect.WithClientOptions(opts...),
+		),
+		renameNodeGroup: connect.NewClient[v1.RenameLabelRequest, v1.RenameLabelResponse](
+			httpClient,
+			baseURL+NodeServiceRenameNodeGroupProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeGroup")),
+			connect.WithClientOptions(opts...),
+		),
 		isolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
 			httpClient,
 			baseURL+NodeServiceIsolateNodeProcedure,
@@ -1828,6 +1916,8 @@ type nodeServiceClient struct {
 	inspectComposeDir     *connect.Client[v1.NodeFileRef, v1.ComposeDirPreview]
 	setNodeTags           *connect.Client[v1.SetNodeTagsRequest, v1.SetNodeTagsResponse]
 	renameNodeTag         *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
+	setNodeGroup          *connect.Client[v1.SetNodeGroupRequest, v1.SetNodeGroupResponse]
+	renameNodeGroup       *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 	isolateNode           *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	unisolateNode         *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	listNodeImages        *connect.Client[v1.NodeRef, v1.NodeImages]
@@ -2061,6 +2151,16 @@ func (c *nodeServiceClient) RenameNodeTag(ctx context.Context, req *connect.Requ
 	return c.renameNodeTag.CallUnary(ctx, req)
 }
 
+// SetNodeGroup calls nagi.v1.NodeService.SetNodeGroup.
+func (c *nodeServiceClient) SetNodeGroup(ctx context.Context, req *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error) {
+	return c.setNodeGroup.CallUnary(ctx, req)
+}
+
+// RenameNodeGroup calls nagi.v1.NodeService.RenameNodeGroup.
+func (c *nodeServiceClient) RenameNodeGroup(ctx context.Context, req *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return c.renameNodeGroup.CallUnary(ctx, req)
+}
+
 // IsolateNode calls nagi.v1.NodeService.IsolateNode.
 func (c *nodeServiceClient) IsolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
 	return c.isolateNode.CallUnary(ctx, req)
@@ -2170,6 +2270,10 @@ type NodeServiceHandler interface {
 	SetNodeTags(context.Context, *connect.Request[v1.SetNodeTagsRequest]) (*connect.Response[v1.SetNodeTagsResponse], error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+	SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error)
+	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
+	RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
@@ -2459,6 +2563,18 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeTag")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeGroupHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeGroupProcedure,
+		svc.SetNodeGroup,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeGroup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	nodeServiceRenameNodeGroupHandler := connect.NewUnaryHandler(
+		NodeServiceRenameNodeGroupProcedure,
+		svc.RenameNodeGroup,
+		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeGroup")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceIsolateNodeHandler := connect.NewUnaryHandler(
 		NodeServiceIsolateNodeProcedure,
 		svc.IsolateNode,
@@ -2587,6 +2703,10 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceSetNodeTagsHandler.ServeHTTP(w, r)
 		case NodeServiceRenameNodeTagProcedure:
 			nodeServiceRenameNodeTagHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeGroupProcedure:
+			nodeServiceSetNodeGroupHandler.ServeHTTP(w, r)
+		case NodeServiceRenameNodeGroupProcedure:
+			nodeServiceRenameNodeGroupHandler.ServeHTTP(w, r)
 		case NodeServiceIsolateNodeProcedure:
 			nodeServiceIsolateNodeHandler.ServeHTTP(w, r)
 		case NodeServiceUnisolateNodeProcedure:
@@ -2786,6 +2906,14 @@ func (UnimplementedNodeServiceHandler) SetNodeTags(context.Context, *connect.Req
 
 func (UnimplementedNodeServiceHandler) RenameNodeTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeTag is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeGroup is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeGroup is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
@@ -4290,6 +4418,10 @@ type ProjectServiceClient interface {
 	SetProjectGroup(context.Context, *connect.Request[v1.SetProjectGroupRequest]) (*connect.Response[v1.Project], error)
 	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
 	RenameProjectGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+	SetProjectTags(context.Context, *connect.Request[v1.SetProjectTagsRequest]) (*connect.Response[v1.Project], error)
+	// 重命名或删除项目标签（new_name 为空），所有项目一起改。
+	RenameProjectTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
 	DiscardSharedEnv(context.Context, *connect.Request[v1.ProjectRevisionRef]) (*connect.Response[v1.Project], error)
@@ -4439,6 +4571,18 @@ func NewProjectServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+ProjectServiceRenameProjectGroupProcedure,
 			connect.WithSchema(projectServiceMethods.ByName("RenameProjectGroup")),
+			connect.WithClientOptions(opts...),
+		),
+		setProjectTags: connect.NewClient[v1.SetProjectTagsRequest, v1.Project](
+			httpClient,
+			baseURL+ProjectServiceSetProjectTagsProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("SetProjectTags")),
+			connect.WithClientOptions(opts...),
+		),
+		renameProjectTag: connect.NewClient[v1.RenameLabelRequest, v1.RenameLabelResponse](
+			httpClient,
+			baseURL+ProjectServiceRenameProjectTagProcedure,
+			connect.WithSchema(projectServiceMethods.ByName("RenameProjectTag")),
 			connect.WithClientOptions(opts...),
 		),
 		saveSharedEnv: connect.NewClient[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse](
@@ -4806,6 +4950,8 @@ type projectServiceClient struct {
 	updateProjectSettings        *connect.Client[v1.UpdateProjectSettingsRequest, v1.Project]
 	setProjectGroup              *connect.Client[v1.SetProjectGroupRequest, v1.Project]
 	renameProjectGroup           *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
+	setProjectTags               *connect.Client[v1.SetProjectTagsRequest, v1.Project]
+	renameProjectTag             *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 	saveSharedEnv                *connect.Client[v1.SaveSharedEnvRequest, v1.SaveSharedEnvResponse]
 	discardSharedEnv             *connect.Client[v1.ProjectRevisionRef, v1.Project]
 	deleteProject                *connect.Client[v1.DeleteProjectRequest, v1.DeleteProjectResponse]
@@ -4895,6 +5041,16 @@ func (c *projectServiceClient) SetProjectGroup(ctx context.Context, req *connect
 // RenameProjectGroup calls nagi.v1.ProjectService.RenameProjectGroup.
 func (c *projectServiceClient) RenameProjectGroup(ctx context.Context, req *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
 	return c.renameProjectGroup.CallUnary(ctx, req)
+}
+
+// SetProjectTags calls nagi.v1.ProjectService.SetProjectTags.
+func (c *projectServiceClient) SetProjectTags(ctx context.Context, req *connect.Request[v1.SetProjectTagsRequest]) (*connect.Response[v1.Project], error) {
+	return c.setProjectTags.CallUnary(ctx, req)
+}
+
+// RenameProjectTag calls nagi.v1.ProjectService.RenameProjectTag.
+func (c *projectServiceClient) RenameProjectTag(ctx context.Context, req *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return c.renameProjectTag.CallUnary(ctx, req)
 }
 
 // SaveSharedEnv calls nagi.v1.ProjectService.SaveSharedEnv.
@@ -5204,6 +5360,10 @@ type ProjectServiceHandler interface {
 	SetProjectGroup(context.Context, *connect.Request[v1.SetProjectGroupRequest]) (*connect.Response[v1.Project], error)
 	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
 	RenameProjectGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+	SetProjectTags(context.Context, *connect.Request[v1.SetProjectTagsRequest]) (*connect.Response[v1.Project], error)
+	// 重命名或删除项目标签（new_name 为空），所有项目一起改。
+	RenameProjectTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error)
 	DiscardSharedEnv(context.Context, *connect.Request[v1.ProjectRevisionRef]) (*connect.Response[v1.Project], error)
@@ -5349,6 +5509,18 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 		ProjectServiceRenameProjectGroupProcedure,
 		svc.RenameProjectGroup,
 		connect.WithSchema(projectServiceMethods.ByName("RenameProjectGroup")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceSetProjectTagsHandler := connect.NewUnaryHandler(
+		ProjectServiceSetProjectTagsProcedure,
+		svc.SetProjectTags,
+		connect.WithSchema(projectServiceMethods.ByName("SetProjectTags")),
+		connect.WithHandlerOptions(opts...),
+	)
+	projectServiceRenameProjectTagHandler := connect.NewUnaryHandler(
+		ProjectServiceRenameProjectTagProcedure,
+		svc.RenameProjectTag,
+		connect.WithSchema(projectServiceMethods.ByName("RenameProjectTag")),
 		connect.WithHandlerOptions(opts...),
 	)
 	projectServiceSaveSharedEnvHandler := connect.NewUnaryHandler(
@@ -5719,6 +5891,10 @@ func NewProjectServiceHandler(svc ProjectServiceHandler, opts ...connect.Handler
 			projectServiceSetProjectGroupHandler.ServeHTTP(w, r)
 		case ProjectServiceRenameProjectGroupProcedure:
 			projectServiceRenameProjectGroupHandler.ServeHTTP(w, r)
+		case ProjectServiceSetProjectTagsProcedure:
+			projectServiceSetProjectTagsHandler.ServeHTTP(w, r)
+		case ProjectServiceRenameProjectTagProcedure:
+			projectServiceRenameProjectTagHandler.ServeHTTP(w, r)
 		case ProjectServiceSaveSharedEnvProcedure:
 			projectServiceSaveSharedEnvHandler.ServeHTTP(w, r)
 		case ProjectServiceDiscardSharedEnvProcedure:
@@ -5868,6 +6044,14 @@ func (UnimplementedProjectServiceHandler) SetProjectGroup(context.Context, *conn
 
 func (UnimplementedProjectServiceHandler) RenameProjectGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RenameProjectGroup is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) SetProjectTags(context.Context, *connect.Request[v1.SetProjectTagsRequest]) (*connect.Response[v1.Project], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.SetProjectTags is not implemented"))
+}
+
+func (UnimplementedProjectServiceHandler) RenameProjectTag(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.ProjectService.RenameProjectTag is not implemented"))
 }
 
 func (UnimplementedProjectServiceHandler) SaveSharedEnv(context.Context, *connect.Request[v1.SaveSharedEnvRequest]) (*connect.Response[v1.SaveSharedEnvResponse], error) {

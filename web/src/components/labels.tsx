@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ask, confirmAction } from "@/components/confirm";
 import { Alert, Button, badgeVariants, buttonVariants, DialogActions, EmptyRow, Field, Input, List, Row, RowMenu, Select, Spinner } from "@/components/ui";
 import type { Node, PanelUser } from "@/gen/nagi/v1/api_pb";
-import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
+import type { Project, ProjectSummary } from "@/gen/nagi/v1/common_pb";
 import { errorMessage, nodeClient, projectClient, settingsClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n";
@@ -28,6 +28,16 @@ function count(names: string[]): Label[] {
 // groupsOf：项目用到的分组，按名称排序。
 export function groupsOf(projects: ProjectSummary[] | undefined): Label[] {
   return count((projects ?? []).map((s) => s.project?.group ?? ""));
+}
+
+// projectTagsOf：项目用到的标签，按名称排序。
+export function projectTagsOf(projects: ProjectSummary[] | undefined): Label[] {
+  return count((projects ?? []).flatMap((s) => s.project?.tags ?? []));
+}
+
+// nodeGroupsOf：节点用到的分组，按名称排序。
+export function nodeGroupsOf(nodes: Node[] | undefined): Label[] {
+  return count((nodes ?? []).map((n) => n.group));
 }
 
 // tagsOf：节点用到的标签，按名称排序。
@@ -191,6 +201,93 @@ export function EditNodeTags({ node, allTags, onDone }: { node: Node; allTags: s
   );
 }
 
+// EditNodeGroup：节点的分组（放在对话框里）。
+export function EditNodeGroup({ node, groups, onDone }: { node: Node; groups: string[]; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [group, setGroup] = useState(node.group);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await nodeClient.setNodeGroup({ nodeId: node.id, group: tidy(group) });
+      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Field label={t.labels.group} htmlFor="node-group" error={labelError(group) || undefined}>
+        <GroupSelect id="node-group" value={group} groups={groups} onChange={setGroup} />
+      </Field>
+      {error && <Alert>{error}</Alert>}
+      <DialogActions>
+        <Button variant="outline" onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={busy || !!labelError(group)}>
+          {busy && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </DialogActions>
+    </form>
+  );
+}
+
+// EditProjectTags：项目的标签（放在对话框里）。
+export function EditProjectTags({ project, allTags, onDone }: { project: Project; allTags: string[]; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [tags, setTags] = useState(project.tags);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await projectClient.setProjectTags({ projectId: project.id, tags });
+      await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      onDone();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form
+      className="grid gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <TagEditor id="project-tags" label={t.labels.tags} hint={t.labels.tagsHint} value={tags} suggestions={allTags} onChange={setTags} />
+      {error && <Alert>{error}</Alert>}
+      <DialogActions>
+        <Button variant="outline" onClick={onDone}>
+          {t.common.actions.cancel}
+        </Button>
+        <Button type="submit" disabled={busy}>
+          {busy && <Spinner />}
+          {t.common.actions.save}
+        </Button>
+      </DialogActions>
+    </form>
+  );
+}
+
 // TagFilter：按标签筛选，可以多选，带任一选中标签的节点都显示。
 export function TagFilter({ tags, value, onChange }: { tags: Label[]; value: string[]; onChange: (v: string[]) => void }) {
   // 和其他按钮一样高 32、14 号的次要按钮；选中的用 accent 底色，不反白。
@@ -223,9 +320,12 @@ export function TagFilter({ tags, value, onChange }: { tags: Label[]; value: str
 
 // ---- 管理分组和标签 ----
 
-type Kind = "group" | "tag";
+// nodeGroup、projectTag：节点分组、项目标签，只整理列表，不在成员的访问范围里。
+type Kind = "group" | "tag" | "nodeGroup" | "projectTag";
+const inScope = (kind: Kind) => kind === "group" || kind === "tag";
 
 function membersWith(users: PanelUser[] | undefined, kind: Kind, name: string) {
+  if (!inScope(kind)) return [];
   return (users ?? [])
     .filter((u) => u.role !== "admin" && u.scope && (kind === "group" ? !u.scope.allProjects && u.scope.projectGroups.includes(name) : !u.scope.allNodes && u.scope.nodeTags.includes(name)))
     .map((u) => u.displayName || u.username);
@@ -234,17 +334,26 @@ function membersWith(users: PanelUser[] | undefined, kind: Kind, name: string) {
 // ManageLabels：重命名、删除分组或标签。访问范围用到它的成员一起改，删除前列出受影响的成员。
 export function ManageLabels({ kind, labels }: { kind: Kind; labels: Label[] }) {
   const queryClient = useQueryClient();
-  const users = useQuery({ queryKey: ["users"], queryFn: () => settingsClient.listUsers({}) });
+  // 节点分组、项目标签不涉及成员，不用读成员列表。
+  const users = useQuery({ queryKey: ["users"], queryFn: () => settingsClient.listUsers({}), enabled: inScope(kind) });
   const [renaming, setRenaming] = useState<string | null>(null);
   const m = t.labels;
+  const ofProjects = kind === "group" || kind === "projectTag";
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: [kind === "group" ? "projects" : "nodes"] });
+    queryClient.invalidateQueries({ queryKey: [ofProjects ? "projects" : "nodes"] });
     queryClient.invalidateQueries({ queryKey: ["users"] });
   };
-  const rename = (name: string, newName: string) => (kind === "group" ? projectClient.renameProjectGroup({ name, newName }) : nodeClient.renameNodeTag({ name, newName }));
+  const rename = (name: string, newName: string) =>
+    ({
+      group: () => projectClient.renameProjectGroup({ name, newName }),
+      tag: () => nodeClient.renameNodeTag({ name, newName }),
+      nodeGroup: () => nodeClient.renameNodeGroup({ name, newName }),
+      projectTag: () => projectClient.renameProjectTag({ name, newName }),
+    })[kind]();
   const remove = async (l: Label) => {
     const members = membersWith(users.data?.users, kind, l.name);
-    const message = (kind === "group" ? m.deleteGroupConfirm : m.deleteTagConfirm)(l.name, l.count) + (members.length > 0 ? m.affectedMembers(t.common.list(members)) : "");
+    const confirm = { group: m.deleteGroupConfirm, tag: m.deleteTagConfirm, nodeGroup: m.deleteNodeGroupConfirm, projectTag: m.deleteProjectTagConfirm }[kind];
+    const message = confirm(l.name, l.count) + (members.length > 0 ? m.affectedMembers(t.common.list(members)) : "");
     if (!(await confirmAction(message, { action: m.delete, danger: true }))) return;
     try {
       await rename(l.name, "");
@@ -256,7 +365,7 @@ export function ManageLabels({ kind, labels }: { kind: Kind; labels: Label[] }) 
   if (renaming !== null) {
     return <RenameLabel kind={kind} name={renaming} labels={labels} members={membersWith(users.data?.users, kind, renaming)} rename={rename} onDone={() => (refresh(), setRenaming(null))} onCancel={() => setRenaming(null)} />;
   }
-  if (labels.length === 0) return <EmptyRow>{kind === "group" ? m.noGroups : m.noTags}</EmptyRow>;
+  if (labels.length === 0) return <EmptyRow>{kind === "tag" || kind === "projectTag" ? m.noTags : m.noGroups}</EmptyRow>;
   return (
     <List className="max-h-[60vh] overflow-y-auto">
       {labels.map((l) => {
@@ -265,7 +374,7 @@ export function ManageLabels({ kind, labels }: { kind: Kind; labels: Label[] }) 
           <Row
             key={l.name}
             title={l.name}
-            sub={[kind === "group" ? m.projectCount(l.count) : m.nodeCount(l.count), members > 0 ? m.memberCount(members) : ""].filter(Boolean).join(" · ")}
+            sub={[ofProjects ? m.projectCount(l.count) : m.nodeCount(l.count), members > 0 ? m.memberCount(members) : ""].filter(Boolean).join(" · ")}
             actions={
               <RowMenu
                 items={[
@@ -307,7 +416,8 @@ function RenameLabel({
   const merging = next !== name && labels.some((l) => l.name === next);
   const save = async () => {
     if (!next || next === name) return onCancel();
-    if (merging && !(await ask((kind === "group" ? m.mergeGroup : m.mergeTag)(name, next), { action: m.merge }))) return;
+    const merge = { group: m.mergeGroup, tag: m.mergeTag, nodeGroup: m.mergeNodeGroup, projectTag: m.mergeProjectTag }[kind];
+    if (merging && !(await ask(merge(name, next), { action: m.merge }))) return;
     setBusy(true);
     setError("");
     try {

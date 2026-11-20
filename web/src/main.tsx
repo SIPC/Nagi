@@ -131,9 +131,10 @@ const overviewRoute = createRoute({
 const projectsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/projects",
-  // group：只看一个分组；ungrouped：只看未分组的。
-  validateSearch: (search: Record<string, unknown>): { q?: string; group?: string; ungrouped?: true } => ({
+  // group：只看一个分组；ungrouped：只看未分组的。tags：按标签筛选（带任一标签的项目）。
+  validateSearch: (search: Record<string, unknown>): { q?: string; group?: string; ungrouped?: true; tags?: string[] } => ({
     q: typeof search.q === "string" && search.q ? search.q : undefined,
+    tags: Array.isArray(search.tags) && search.tags.length > 0 ? search.tags.filter((x): x is string => typeof x === "string") : undefined,
     group: typeof search.group === "string" && search.group ? search.group : undefined,
     ungrouped: search.ungrouped === true || search.ungrouped === "true" ? true : undefined,
   }),
@@ -253,15 +254,17 @@ const nodesRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/nodes",
   // add：打开添加节点的对话框（概览空状态的「添加节点」）。
-  // tags：按标签筛选（带任一标签的节点）。
-  validateSearch: (search: Record<string, unknown>): { view?: NodesView; add?: boolean; tags?: string[]; range?: MetricRange } => ({
+  // tags：按标签筛选（带任一标签的节点）。group：只看一个分组；ungrouped：只看未分组的。
+  validateSearch: (search: Record<string, unknown>): { view?: NodesView; add?: boolean; tags?: string[]; group?: string; ungrouped?: true; range?: MetricRange } => ({
     range: rangeSearch(search.range),
     view: search.view === "network" || search.view === "ha" ? search.view : undefined,
     add: search.add === true || search.add === "true" ? true : undefined,
     tags: Array.isArray(search.tags) && search.tags.length > 0 ? search.tags.filter((x): x is string => typeof x === "string") : undefined,
+    group: typeof search.group === "string" && search.group ? search.group : undefined,
+    ungrouped: search.ungrouped === true || search.ungrouped === "true" ? true : undefined,
   }),
   component: function Nodes() {
-    const { view, add, tags } = nodesRoute.useSearch();
+    const { view, add, tags, group, ungrouped } = nodesRoute.useSearch();
     const navigate = nodesRoute.useNavigate();
     return (
       <NodesPage
@@ -269,6 +272,8 @@ const nodesRoute = createRoute({
         onView={(v) => navigate({ search: (s) => ({ ...s, view: v === "cards" ? undefined : v }), replace: true })}
         tags={tags ?? []}
         onTags={(v) => navigate({ search: (s) => ({ ...s, tags: v.length > 0 ? v : undefined }), replace: true })}
+        group={ungrouped ? "" : group}
+        onGroup={(v) => navigate({ search: (s) => ({ ...s, group: v || undefined, ungrouped: v === "" ? true : undefined }), replace: true })}
         openAdd={add}
         onAddOpened={() => navigate({ search: (s) => ({ ...s, add: undefined }), replace: true })}
       />

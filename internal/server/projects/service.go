@@ -313,6 +313,9 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 	if proj.Group, err = s.Q.ProjectGroup(ctx, p.ID); err != nil {
 		return nil, err
 	}
+	if proj.Tags, err = s.Q.ProjectTags(ctx, p.ID); err != nil {
+		return nil, err
+	}
 	if d, ok, err := s.sharedEnvDraft(p); err != nil {
 		return nil, err
 	} else if ok {

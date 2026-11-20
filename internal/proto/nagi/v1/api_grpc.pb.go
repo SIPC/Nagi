@@ -179,6 +179,8 @@ const (
 	AuthService_PasskeyLogin_FullMethodName          = "/nagi.v1.AuthService/PasskeyLogin"
 	AuthService_GetProjectOrder_FullMethodName       = "/nagi.v1.AuthService/GetProjectOrder"
 	AuthService_SetProjectOrder_FullMethodName       = "/nagi.v1.AuthService/SetProjectOrder"
+	AuthService_GetNodeOrder_FullMethodName          = "/nagi.v1.AuthService/GetNodeOrder"
+	AuthService_SetNodeOrder_FullMethodName          = "/nagi.v1.AuthService/SetNodeOrder"
 	AuthService_CreateAppPairing_FullMethodName      = "/nagi.v1.AuthService/CreateAppPairing"
 	AuthService_GetAppPairing_FullMethodName         = "/nagi.v1.AuthService/GetAppPairing"
 )
@@ -223,6 +225,9 @@ type AuthServiceClient interface {
 	GetProjectOrder(ctx context.Context, in *GetProjectOrderRequest, opts ...grpc.CallOption) (*ProjectOrder, error)
 	// 整份覆盖。
 	SetProjectOrder(ctx context.Context, in *ProjectOrder, opts ...grpc.CallOption) (*SetProjectOrderResponse, error)
+	// 自己的节点页排序，同项目页。
+	GetNodeOrder(ctx context.Context, in *GetNodeOrderRequest, opts ...grpc.CallOption) (*NodeOrder, error)
+	SetNodeOrder(ctx context.Context, in *NodeOrder, opts ...grpc.CallOption) (*SetNodeOrderResponse, error)
 	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
 	CreateAppPairing(ctx context.Context, in *CreateAppPairingRequest, opts ...grpc.CallOption) (*CreateAppPairingResponse, error)
 	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
@@ -437,6 +442,26 @@ func (c *authServiceClient) SetProjectOrder(ctx context.Context, in *ProjectOrde
 	return out, nil
 }
 
+func (c *authServiceClient) GetNodeOrder(ctx context.Context, in *GetNodeOrderRequest, opts ...grpc.CallOption) (*NodeOrder, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NodeOrder)
+	err := c.cc.Invoke(ctx, AuthService_GetNodeOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) SetNodeOrder(ctx context.Context, in *NodeOrder, opts ...grpc.CallOption) (*SetNodeOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeOrderResponse)
+	err := c.cc.Invoke(ctx, AuthService_SetNodeOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authServiceClient) CreateAppPairing(ctx context.Context, in *CreateAppPairingRequest, opts ...grpc.CallOption) (*CreateAppPairingResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateAppPairingResponse)
@@ -497,6 +522,9 @@ type AuthServiceServer interface {
 	GetProjectOrder(context.Context, *GetProjectOrderRequest) (*ProjectOrder, error)
 	// 整份覆盖。
 	SetProjectOrder(context.Context, *ProjectOrder) (*SetProjectOrderResponse, error)
+	// 自己的节点页排序，同项目页。
+	GetNodeOrder(context.Context, *GetNodeOrderRequest) (*NodeOrder, error)
+	SetNodeOrder(context.Context, *NodeOrder) (*SetNodeOrderResponse, error)
 	// 添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
 	CreateAppPairing(context.Context, *CreateAppPairingRequest) (*CreateAppPairingResponse, error)
 	// 配对码有没有用掉，网页每 2 秒查一次，直到添加完成或过期。
@@ -570,6 +598,12 @@ func (UnimplementedAuthServiceServer) GetProjectOrder(context.Context, *GetProje
 }
 func (UnimplementedAuthServiceServer) SetProjectOrder(context.Context, *ProjectOrder) (*SetProjectOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetProjectOrder not implemented")
+}
+func (UnimplementedAuthServiceServer) GetNodeOrder(context.Context, *GetNodeOrderRequest) (*NodeOrder, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNodeOrder not implemented")
+}
+func (UnimplementedAuthServiceServer) SetNodeOrder(context.Context, *NodeOrder) (*SetNodeOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeOrder not implemented")
 }
 func (UnimplementedAuthServiceServer) CreateAppPairing(context.Context, *CreateAppPairingRequest) (*CreateAppPairingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateAppPairing not implemented")
@@ -958,6 +992,42 @@ func _AuthService_SetProjectOrder_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_GetNodeOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).GetNodeOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_GetNodeOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).GetNodeOrder(ctx, req.(*GetNodeOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_SetNodeOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeOrder)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).SetNodeOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_SetNodeOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).SetNodeOrder(ctx, req.(*NodeOrder))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_CreateAppPairing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateAppPairingRequest)
 	if err := dec(in); err != nil {
@@ -1082,6 +1152,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AuthService_SetProjectOrder_Handler,
 		},
 		{
+			MethodName: "GetNodeOrder",
+			Handler:    _AuthService_GetNodeOrder_Handler,
+		},
+		{
+			MethodName: "SetNodeOrder",
+			Handler:    _AuthService_SetNodeOrder_Handler,
+		},
+		{
 			MethodName: "CreateAppPairing",
 			Handler:    _AuthService_CreateAppPairing_Handler,
 		},
@@ -1140,6 +1218,8 @@ const (
 	NodeService_InspectComposeDir_FullMethodName     = "/nagi.v1.NodeService/InspectComposeDir"
 	NodeService_SetNodeTags_FullMethodName           = "/nagi.v1.NodeService/SetNodeTags"
 	NodeService_RenameNodeTag_FullMethodName         = "/nagi.v1.NodeService/RenameNodeTag"
+	NodeService_SetNodeGroup_FullMethodName          = "/nagi.v1.NodeService/SetNodeGroup"
+	NodeService_RenameNodeGroup_FullMethodName       = "/nagi.v1.NodeService/RenameNodeGroup"
 	NodeService_IsolateNode_FullMethodName           = "/nagi.v1.NodeService/IsolateNode"
 	NodeService_UnisolateNode_FullMethodName         = "/nagi.v1.NodeService/UnisolateNode"
 	NodeService_ListNodeImages_FullMethodName        = "/nagi.v1.NodeService/ListNodeImages"
@@ -1229,6 +1309,10 @@ type NodeServiceClient interface {
 	SetNodeTags(ctx context.Context, in *SetNodeTagsRequest, opts ...grpc.CallOption) (*SetNodeTagsResponse, error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
+	// 把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+	SetNodeGroup(ctx context.Context, in *SetNodeGroupRequest, opts ...grpc.CallOption) (*SetNodeGroupResponse, error)
+	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
+	RenameNodeGroup(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
@@ -1753,6 +1837,26 @@ func (c *nodeServiceClient) RenameNodeTag(ctx context.Context, in *RenameLabelRe
 	return out, nil
 }
 
+func (c *nodeServiceClient) SetNodeGroup(ctx context.Context, in *SetNodeGroupRequest, opts ...grpc.CallOption) (*SetNodeGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeGroupResponse)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeServiceClient) RenameNodeGroup(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameLabelResponse)
+	err := c.cc.Invoke(ctx, NodeService_RenameNodeGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IsolateNodeResponse)
@@ -1903,6 +2007,10 @@ type NodeServiceServer interface {
 	SetNodeTags(context.Context, *SetNodeTagsRequest) (*SetNodeTagsResponse, error)
 	// 重命名或删除标签（new_name 为空），所有节点和成员的访问范围一起改。
 	RenameNodeTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
+	// 把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+	SetNodeGroup(context.Context, *SetNodeGroupRequest) (*SetNodeGroupResponse, error)
+	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
+	RenameNodeGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
@@ -2057,6 +2165,12 @@ func (UnimplementedNodeServiceServer) SetNodeTags(context.Context, *SetNodeTagsR
 }
 func (UnimplementedNodeServiceServer) RenameNodeTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameNodeTag not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeGroup(context.Context, *SetNodeGroupRequest) (*SetNodeGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeGroup not implemented")
+}
+func (UnimplementedNodeServiceServer) RenameNodeGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameNodeGroup not implemented")
 }
 func (UnimplementedNodeServiceServer) IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IsolateNode not implemented")
@@ -2865,6 +2979,42 @@ func _NodeService_RenameNodeTag_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_SetNodeGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeGroup(ctx, req.(*SetNodeGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_RenameNodeGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).RenameNodeGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_RenameNodeGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).RenameNodeGroup(ctx, req.(*RenameLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_IsolateNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IsolateNodeRequest)
 	if err := dec(in); err != nil {
@@ -3128,6 +3278,14 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RenameNodeTag",
 			Handler:    _NodeService_RenameNodeTag_Handler,
+		},
+		{
+			MethodName: "SetNodeGroup",
+			Handler:    _NodeService_SetNodeGroup_Handler,
+		},
+		{
+			MethodName: "RenameNodeGroup",
+			Handler:    _NodeService_RenameNodeGroup_Handler,
 		},
 		{
 			MethodName: "IsolateNode",
@@ -5314,6 +5472,8 @@ const (
 	ProjectService_UpdateProjectSettings_FullMethodName        = "/nagi.v1.ProjectService/UpdateProjectSettings"
 	ProjectService_SetProjectGroup_FullMethodName              = "/nagi.v1.ProjectService/SetProjectGroup"
 	ProjectService_RenameProjectGroup_FullMethodName           = "/nagi.v1.ProjectService/RenameProjectGroup"
+	ProjectService_SetProjectTags_FullMethodName               = "/nagi.v1.ProjectService/SetProjectTags"
+	ProjectService_RenameProjectTag_FullMethodName             = "/nagi.v1.ProjectService/RenameProjectTag"
 	ProjectService_SaveSharedEnv_FullMethodName                = "/nagi.v1.ProjectService/SaveSharedEnv"
 	ProjectService_DiscardSharedEnv_FullMethodName             = "/nagi.v1.ProjectService/DiscardSharedEnv"
 	ProjectService_DeleteProject_FullMethodName                = "/nagi.v1.ProjectService/DeleteProject"
@@ -5389,6 +5549,10 @@ type ProjectServiceClient interface {
 	SetProjectGroup(ctx context.Context, in *SetProjectGroupRequest, opts ...grpc.CallOption) (*Project, error)
 	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
 	RenameProjectGroup(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
+	// 替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+	SetProjectTags(ctx context.Context, in *SetProjectTagsRequest, opts ...grpc.CallOption) (*Project, error)
+	// 重命名或删除项目标签（new_name 为空），所有项目一起改。
+	RenameProjectTag(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(ctx context.Context, in *SaveSharedEnvRequest, opts ...grpc.CallOption) (*SaveSharedEnvResponse, error)
 	DiscardSharedEnv(ctx context.Context, in *ProjectRevisionRef, opts ...grpc.CallOption) (*Project, error)
@@ -5555,6 +5719,26 @@ func (c *projectServiceClient) RenameProjectGroup(ctx context.Context, in *Renam
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RenameLabelResponse)
 	err := c.cc.Invoke(ctx, ProjectService_RenameProjectGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) SetProjectTags(ctx context.Context, in *SetProjectTagsRequest, opts ...grpc.CallOption) (*Project, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Project)
+	err := c.cc.Invoke(ctx, ProjectService_SetProjectTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *projectServiceClient) RenameProjectTag(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameLabelResponse)
+	err := c.cc.Invoke(ctx, ProjectService_RenameProjectTag_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6309,6 +6493,10 @@ type ProjectServiceServer interface {
 	SetProjectGroup(context.Context, *SetProjectGroupRequest) (*Project, error)
 	// 重命名或删除分组（new_name 为空），成员的访问范围一起改。只有管理员能用。
 	RenameProjectGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
+	// 替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+	SetProjectTags(context.Context, *SetProjectTagsRequest) (*Project, error)
+	// 重命名或删除项目标签（new_name 为空），所有项目一起改。
+	RenameProjectTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
 	// 保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
 	SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error)
 	DiscardSharedEnv(context.Context, *ProjectRevisionRef) (*Project, error)
@@ -6438,6 +6626,12 @@ func (UnimplementedProjectServiceServer) SetProjectGroup(context.Context, *SetPr
 }
 func (UnimplementedProjectServiceServer) RenameProjectGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameProjectGroup not implemented")
+}
+func (UnimplementedProjectServiceServer) SetProjectTags(context.Context, *SetProjectTagsRequest) (*Project, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetProjectTags not implemented")
+}
+func (UnimplementedProjectServiceServer) RenameProjectTag(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameProjectTag not implemented")
 }
 func (UnimplementedProjectServiceServer) SaveSharedEnv(context.Context, *SaveSharedEnvRequest) (*SaveSharedEnvResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SaveSharedEnv not implemented")
@@ -6741,6 +6935,42 @@ func _ProjectService_RenameProjectGroup_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProjectServiceServer).RenameProjectGroup(ctx, req.(*RenameLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_SetProjectTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetProjectTagsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).SetProjectTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_SetProjectTags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).SetProjectTags(ctx, req.(*SetProjectTagsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProjectService_RenameProjectTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProjectServiceServer).RenameProjectTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProjectService_RenameProjectTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProjectServiceServer).RenameProjectTag(ctx, req.(*RenameLabelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -7725,6 +7955,14 @@ var ProjectService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RenameProjectGroup",
 			Handler:    _ProjectService_RenameProjectGroup_Handler,
+		},
+		{
+			MethodName: "SetProjectTags",
+			Handler:    _ProjectService_SetProjectTags_Handler,
+		},
+		{
+			MethodName: "RenameProjectTag",
+			Handler:    _ProjectService_RenameProjectTag_Handler,
 		},
 		{
 			MethodName: "SaveSharedEnv",

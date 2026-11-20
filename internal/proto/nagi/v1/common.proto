@@ -38,6 +38,8 @@ message Project {
   google.protobuf.Timestamp rebuilt_at = 13;
   // 所在的分组，为空表示未分组（见 docs/panel.md#分组和标签）。只在面板上，不下发给节点。
   string group = 14;
+  // 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+  repeated string tags = 15;
 }
 
 message LinkedProject {

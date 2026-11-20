@@ -93,6 +93,36 @@ func (s *projectService) RenameProjectGroup(ctx context.Context, req *connect.Re
 	return connect.NewResponse(&nagiv1.RenameLabelResponse{}), nil
 }
 
+func (s *projectService) SetProjectTags(ctx context.Context, req *connect.Request[nagiv1.SetProjectTagsRequest]) (*connect.Response[nagiv1.Project], error) {
+	tags, err := cleanLabels(req.Msg.GetTags(), maxNodeTags)
+	if err != nil {
+		return nil, err
+	}
+	id := req.Msg.GetProjectId()
+	if _, err := s.Projects.Get(ctx, id); err != nil {
+		return nil, toConnect(err)
+	}
+	if err := s.Q.SetProjectTags(ctx, id, tags); err != nil {
+		return nil, err
+	}
+	p, err := s.Projects.Get(ctx, id)
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(p.GetProject()), nil
+}
+
+func (s *projectService) RenameProjectTag(ctx context.Context, req *connect.Request[nagiv1.RenameLabelRequest]) (*connect.Response[nagiv1.RenameLabelResponse], error) {
+	from, to, err := renameLabel(ctx, req.Msg, s.Q.ProjectTagExists)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Q.RenameProjectTag(ctx, from, to); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.RenameLabelResponse{}), nil
+}
+
 func (s *nodeService) SetNodeTags(ctx context.Context, req *connect.Request[nagiv1.SetNodeTagsRequest]) (*connect.Response[nagiv1.SetNodeTagsResponse], error) {
 	tags, err := cleanLabels(req.Msg.GetTags(), maxNodeTags)
 	if err != nil {
@@ -106,6 +136,32 @@ func (s *nodeService) SetNodeTags(ctx context.Context, req *connect.Request[nagi
 		return nil, err
 	}
 	return connect.NewResponse(&nagiv1.SetNodeTagsResponse{}), nil
+}
+
+func (s *nodeService) SetNodeGroup(ctx context.Context, req *connect.Request[nagiv1.SetNodeGroupRequest]) (*connect.Response[nagiv1.SetNodeGroupResponse], error) {
+	group, err := cleanLabel(req.Msg.GetGroup())
+	if err != nil {
+		return nil, err
+	}
+	id := req.Msg.GetNodeId()
+	if n, err := s.Q.GetNode(ctx, id); err != nil || n.Revoked != 0 {
+		return nil, nodeNotFound()
+	}
+	if err := s.Q.SetNodeGroup(ctx, id, group); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.SetNodeGroupResponse{}), nil
+}
+
+func (s *nodeService) RenameNodeGroup(ctx context.Context, req *connect.Request[nagiv1.RenameLabelRequest]) (*connect.Response[nagiv1.RenameLabelResponse], error) {
+	from, to, err := renameLabel(ctx, req.Msg, s.Q.NodeGroupExists)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Q.RenameNodeGroup(ctx, from, to); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.RenameLabelResponse{}), nil
 }
 
 func (s *nodeService) RenameNodeTag(ctx context.Context, req *connect.Request[nagiv1.RenameLabelRequest]) (*connect.Response[nagiv1.RenameLabelResponse], error) {

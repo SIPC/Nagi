@@ -19,7 +19,7 @@ import { EnvEditor } from "@/components/env-editor";
 import { AlertRulesForm, containerRules } from "@/components/alert-rules";
 import { useUnsaved } from "@/components/unsaved";
 import { toast } from "sonner";
-import { GroupSelect, groupsOf } from "@/components/labels";
+import { EditProjectTags, GroupSelect, groupsOf, projectTagsOf } from "@/components/labels";
 import { EgressSection } from "@/pages/project-egress";
 import { containerLabel } from "@/pages/project-containers";
 
@@ -181,7 +181,8 @@ function GeneralSettings({ project }: { project: Project }) {
   // 分组归「成员」权限。
   const isAdmin = useRole().can("panel.members");
   const update = useUpdateSettings(project);
-  const [editing, setEditing] = useState<"name" | "network" | "group" | null>(null);
+  // 标签只整理项目页，和其他基本设置一样要「项目管理」（这一页本来就要）。
+  const [editing, setEditing] = useState<"name" | "network" | "group" | "tags" | null>(null);
   const close = () => setEditing(null);
   const edit = (what: typeof editing) => (
     <Button variant="outline" onClick={() => setEditing(what)}>
@@ -204,6 +205,9 @@ function GeneralSettings({ project }: { project: Project }) {
             {edit("group")}
           </SettingRow>
         )}
+        <SettingRow label={t.labels.tags} help={t.labels.projectTagsHint} description={project.tags.length > 0 ? project.tags.join("、") : t.labels.noGroup}>
+          {edit("tags")}
+        </SettingRow>
       </SettingRows>
       {editing === "name" && (
         <TextSettingDialog
@@ -232,8 +236,17 @@ function GeneralSettings({ project }: { project: Project }) {
         />
       )}
       {editing === "group" && <GroupDialog project={project} onClose={close} />}
+      <Dialog open={editing === "tags"} onClose={close} title={t.labels.editTags} description={t.labels.projectTagsHint}>
+        <ProjectTagsForm project={project} onDone={close} />
+      </Dialog>
     </Section>
   );
+}
+
+// ProjectTagsForm：项目的标签，别的项目已有的标签作为候选。
+function ProjectTagsForm({ project, onDone }: { project: Project; onDone: () => void }) {
+  const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}) });
+  return <EditProjectTags project={project} allTags={projectTagsOf(projects.data?.projects).map((x) => x.name)} onDone={onDone} />;
 }
 
 // GroupDialog：编辑项目的分组，可以新建一个分组。

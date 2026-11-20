@@ -184,6 +184,95 @@ func (q *Queries) NodesWithTags(ctx context.Context, tags []string) ([]string, e
 	return q.strings(ctx, `SELECT DISTINCT node_id FROM node_tags WHERE tag IN (`+placeholders(len(tags))+`)`, anyArgs(tags)...)
 }
 
+// ---- 项目标签 ----
+
+// ProjectTags 返回项目的标签，按名称排序。
+func (q *Queries) ProjectTags(ctx context.Context, projectID string) ([]string, error) {
+	return q.strings(ctx, `SELECT tag FROM project_tags WHERE project_id = ? ORDER BY tag`, projectID)
+}
+
+// SetProjectTags 替换项目的标签。
+func (q *Queries) SetProjectTags(ctx context.Context, projectID string, tags []string) error {
+	return q.inTx(ctx, func(q *Queries) error {
+		if _, err := q.db.ExecContext(ctx, `DELETE FROM project_tags WHERE project_id = ?`, projectID); err != nil {
+			return err
+		}
+		for _, t := range tags {
+			if _, err := q.db.ExecContext(ctx, `INSERT OR IGNORE INTO project_tags (project_id, tag) VALUES (?, ?)`, projectID, t); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// RenameProjectTag 重命名项目标签（新名称已存在时合并）。to 为空表示删除标签，从所有项目上去掉。
+func (q *Queries) RenameProjectTag(ctx context.Context, from, to string) error {
+	if from == to {
+		return nil
+	}
+	return q.inTx(ctx, func(q *Queries) error {
+		if to != "" {
+			if _, err := q.db.ExecContext(ctx, `UPDATE OR IGNORE project_tags SET tag = ? WHERE tag = ?`, to, from); err != nil {
+				return err
+			}
+		}
+		// 新名称已经有了的（UPDATE OR IGNORE 跳过的）和删除标签时，删掉旧的。
+		_, err := q.db.ExecContext(ctx, `DELETE FROM project_tags WHERE tag = ?`, from)
+		return err
+	})
+}
+
+// ProjectTagExists 判断项目标签是否存在（有项目带着它）。
+func (q *Queries) ProjectTagExists(ctx context.Context, tag string) (bool, error) {
+	var n int64
+	err := q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM project_tags WHERE tag = ?`, tag).Scan(&n)
+	return n > 0, err
+}
+
+// ---- 节点分组 ----
+
+// NodeGroup 返回节点所在的分组，未分组时为空。
+func (q *Queries) NodeGroup(ctx context.Context, nodeID string) (string, error) {
+	var name string
+	err := q.db.QueryRowContext(ctx, `SELECT name FROM node_groups WHERE node_id = ?`, nodeID).Scan(&name)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return name, err
+}
+
+// SetNodeGroup 把节点放进分组，name 为空表示移出分组（也用于移除节点时）。
+func (q *Queries) SetNodeGroup(ctx context.Context, nodeID, name string) error {
+	if name == "" {
+		_, err := q.db.ExecContext(ctx, `DELETE FROM node_groups WHERE node_id = ?`, nodeID)
+		return err
+	}
+	_, err := q.db.ExecContext(ctx, `INSERT INTO node_groups (node_id, name) VALUES (?, ?)
+		ON CONFLICT (node_id) DO UPDATE SET name = excluded.name`, nodeID, name)
+	return err
+}
+
+// RenameNodeGroup 重命名节点分组（新名称已存在时合并）。to 为空表示删除分组，里面的节点变成未分组。
+func (q *Queries) RenameNodeGroup(ctx context.Context, from, to string) error {
+	if from == to {
+		return nil
+	}
+	if to == "" {
+		_, err := q.db.ExecContext(ctx, `DELETE FROM node_groups WHERE name = ?`, from)
+		return err
+	}
+	_, err := q.db.ExecContext(ctx, `UPDATE node_groups SET name = ? WHERE name = ?`, to, from)
+	return err
+}
+
+// NodeGroupExists 判断节点分组是否存在（有节点在里面）。
+func (q *Queries) NodeGroupExists(ctx context.Context, name string) (bool, error) {
+	var n int64
+	err := q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM node_groups WHERE name = ?`, name).Scan(&n)
+	return n > 0, err
+}
+
 // ---- 访问范围里的分组和标签 ----
 
 func (q *Queries) ListUserProjectGroups(ctx context.Context, userID int64) ([]string, error) {

@@ -101,7 +101,9 @@ type Project struct {
 	// 从节点缓存拼回的时间（见 docs/panel.md#项目数据）；没拼回过时为空。拼回的项目原来的创建时间不知道。
 	RebuiltAt *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=rebuilt_at,json=rebuiltAt,proto3" json:"rebuilt_at,omitempty"`
 	// 所在的分组，为空表示未分组（见 docs/panel.md#分组和标签）。只在面板上，不下发给节点。
-	Group         string `protobuf:"bytes,14,opt,name=group,proto3" json:"group,omitempty"`
+	Group string `protobuf:"bytes,14,opt,name=group,proto3" json:"group,omitempty"`
+	// 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+	Tags          []string `protobuf:"bytes,15,rep,name=tags,proto3" json:"tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -232,6 +234,13 @@ func (x *Project) GetGroup() string {
 		return x.Group
 	}
 	return ""
+}
+
+func (x *Project) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
 }
 
 type LinkedProject struct {
@@ -5892,7 +5901,7 @@ var File_nagi_v1_common_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc3\x04\n" +
+	"\x14nagi/v1/common.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd7\x04\n" +
 	"\aProject\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12!\n" +
@@ -5912,7 +5921,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x05links\x18\f \x03(\v2\x16.nagi.v1.LinkedProjectR\x05links\x129\n" +
 	"\n" +
 	"rebuilt_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\trebuiltAt\x12\x14\n" +
-	"\x05group\x18\x0e \x01(\tR\x05group\"e\n" +
+	"\x05group\x18\x0e \x01(\tR\x05group\x12\x12\n" +
+	"\x04tags\x18\x0f \x03(\tR\x04tags\"e\n" +
 	"\rLinkedProject\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x12\n" +

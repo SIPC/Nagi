@@ -569,6 +569,7 @@ type projectView struct {
 	Name        string          `json:"name"`
 	NetworkName string          `json:"network_name"`
 	Group       string          `json:"group,omitempty"`
+	Tags        []string        `json:"tags,omitempty"`
 	Containers  []containerView `json:"containers"`
 }
 
@@ -591,7 +592,7 @@ func toolListProjects(c *call, in ListProjectsArgs) (any, error) {
 		if in.Group != "" && p.GetGroup() != in.Group {
 			continue
 		}
-		v := projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Group: p.GetGroup(), Containers: []containerView{}}
+		v := projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Group: p.GetGroup(), Tags: p.GetTags(), Containers: []containerView{}}
 		for _, m := range p.GetContainers() {
 			v.Containers = append(v.Containers, containerSummary(s, m, nodes))
 		}
@@ -657,7 +658,7 @@ func toolGetProject(c *call, in ProjectArg) (any, error) {
 		SnapshotLimit    uint32       `json:"snapshot_limit"`
 		AlertRules       any          `json:"alert_rules"`
 		Egress           any          `json:"egress,omitempty"`
-	}{projectView: projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Group: p.GetGroup(), Containers: []containerView{}},
+	}{projectView: projectView{ID: p.GetId(), Name: p.GetName(), NetworkName: p.GetNetworkName(), Group: p.GetGroup(), Tags: p.GetTags(), Containers: []containerView{}},
 		Routes: []routeView{}, Links: []link{}, SharedVariables: envNames(p.GetSettings().GetSharedEnv()), InternalPorts: p.GetSettings().GetInternalPorts(),
 		Revision: p.GetRevision(), SnapshotSchedule: scheduleOf(spec.ProjectSnapshotSchedule(p.GetSettings())),
 		SnapshotLimit: spec.SnapshotLimit(p.GetSettings().GetSnapshotLimit()), AlertRules: alertView(p.GetSettings().GetAlertRules(), alert.ContainerRules)}

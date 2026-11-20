@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronRight, CircleArrowUp, GripVertical, Plus } from "lucide-react";
+import { CircleArrowUp, Plus } from "lucide-react";
 import { rectSortingStrategy, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { authClient, errorMessage, orOther, knownNodes, nodeClient, projectClient, settingsClient, toDate } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
@@ -24,6 +24,7 @@ import {
   Field,
   HelpTip,
   Input,
+  Menu,
   Notice,
   QueryError,
   Roll,
@@ -38,8 +39,8 @@ import type { ProjectSummary } from "@/gen/nagi/v1/common_pb";
 import { checkName } from "@/lib/config";
 import { useStandbys } from "@/pages/standby";
 import { useRole } from "@/components/role";
-import { GroupSelect, groupsOf, ManageLabels } from "@/components/labels";
-import { Reorder, useProjectOrder, useReorderItem, type ProjectSort } from "@/pages/project-order";
+import { GroupSelect, groupsOf, ManageLabels, projectTagsOf, TagChip, TagFilter } from "@/components/labels";
+import { GroupSection, Reorder, useCollapsed, useProjectOrder, useReorderItem, type ProjectSort } from "@/pages/project-order";
 
 // Attention：需要处理的事聚合成一行：数量、名单和「查看」，点开后逐项显示（说明和操作）。
 // 顺序固定：节点离线、备用面板未连接、两步验证、主密钥。后两项可以「不再提醒」（只记在这个浏览器里）。
@@ -175,7 +176,17 @@ function ProjectCard({ summary, nodes, draggable }: { summary: ProjectSummary; n
         {/* 没有容器时不写状态，下面的内容区已经写了「暂无容器」。 */}
         {p.containers.length > 0 && <ProjectState services={services} deployed={deployed} offline={offlineNodeNames(p.containers, nodes)} />}
       </div>
-      <div className="-mt-2 truncate text-[13px] leading-5 text-muted-foreground">{p.networkName}</div>
+      {/* 标签跟在网络名后面，放不下的整个折到下一行藏起来，不截断半个（同节点列表）。 */}
+      <div className="-mt-2 flex min-w-0 items-center gap-2">
+        <span className="max-w-full shrink-0 truncate text-[13px] leading-5 text-muted-foreground">{p.networkName}</span>
+        {p.tags.length > 0 && (
+          <span className="flex h-5 min-w-0 flex-1 flex-wrap gap-1 overflow-hidden" title={p.tags.join(", ")} aria-label={`${t.labels.tags}: ${p.tags.join(", ")}`}>
+            {p.tags.map((x) => (
+              <TagChip key={x} name={x} />
+            ))}
+          </span>
+        )}
+      </div>
       <div className="grid gap-1 max-md:hidden">
         {p.containers.length === 0 ? (
           <div className="text-[13px] text-muted-foreground">{t.projects.card.noContainers}</div>
@@ -235,30 +246,6 @@ function CardsSkeleton() {
   );
 }
 
-// 收起的分组记在这个浏览器里。
-const collapsedKey = "nagi.projects.collapsed";
-
-function useCollapsed() {
-  const [collapsed, setCollapsed] = useState<string[]>(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(collapsedKey) ?? "[]");
-      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-    } catch {
-      return [];
-    }
-  });
-  const toggle = (key: string) => {
-    const next = collapsed.includes(key) ? collapsed.filter((k) => k !== key) : [...collapsed, key];
-    setCollapsed(next);
-    try {
-      localStorage.setItem(collapsedKey, JSON.stringify(next));
-    } catch {
-      // 存不了就只在这次有效。
-    }
-  };
-  return { collapsed, toggle };
-}
-
 // SortableCard：调整顺序时可以拖动的项目卡片，整张卡片都能按住拖，边框变成虚线，点击不打开项目。
 // 拖动中的卡片浮在上面、带阴影。
 function SortableCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node[] | undefined }) {
@@ -276,59 +263,6 @@ function SortableCard({ summary, nodes }: { summary: ProjectSummary; nodes: Node
   );
 }
 
-// GroupSection：一个分组：标题行和卡片。调整顺序时按住标题行上下拖动调整分组的顺序。
-function GroupSection({ id, name, count, open, onToggle, children }: { id: string; name: string; count: number; open: boolean; onToggle: () => void; children: React.ReactNode }) {
-  const r = useReorderItem(id);
-  return (
-    <section ref={r.ref} style={r.style} className={cn("min-w-0", r.dragging && "relative z-10 rounded-lg bg-background shadow-lg")}>
-      <GroupHeader name={name} count={count} open={open} onToggle={onToggle} handle={r.handle} handleRef={r.handleRef} sortable={r.enabled} />
-      {/* 展开、收起时高度和透明度一起过渡，下面的分组跟着移动（ui.md 的 Collapse）。间距放在里面，收起后不留空。 */}
-      <Collapse open={open}>
-        <div className="pt-2">{children}</div>
-      </Collapse>
-    </section>
-  );
-}
-
-// GroupHeader：分组的标题行，点击展开或收起。参考 Grafana 的文件夹行：箭头、名称、数量。
-function GroupHeader({
-  name,
-  count,
-  open,
-  onToggle,
-  handle,
-  handleRef,
-  sortable,
-}: {
-  name: string;
-  count: number;
-  open: boolean;
-  onToggle: () => void;
-  handle?: React.HTMLAttributes<HTMLElement>;
-  handleRef?: (el: HTMLElement | null) => void;
-  sortable?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      ref={handleRef}
-      {...handle}
-      aria-expanded={open}
-      aria-label={open ? t.labels.collapse(name) : t.labels.expand(name)}
-      className={cn(
-        "-mx-2 flex h-8 w-fit max-w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left outline-none hover:bg-accent focus-ring",
-        sortable && "cursor-grab touch-manipulation active:cursor-grabbing",
-      )}
-      onClick={onToggle}
-    >
-      {sortable && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-      <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-240", open && "rotate-90")} />
-      <span className="truncate font-medium">{name}</span>
-      <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">{count}</span>
-    </button>
-  );
-}
-
 export function ProjectsPage({ creating }: { creating?: boolean }) {
   const projects = useQuery({
     queryKey: ["projects"],
@@ -341,10 +275,10 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   const canCreate = can("project.manage");
   // 备用面板在设置里，只有管理员能处理。
   const offlineStandbys = (useStandbys().data?.standbys ?? []).filter((s) => isAdmin && !s.connected).map((s) => s.name);
-  const search = useSearch({ strict: false }) as { q?: string; group?: string; ungrouped?: true };
-  const { collapsed, toggle } = useCollapsed();
+  const search = useSearch({ strict: false }) as { q?: string; group?: string; ungrouped?: true; tags?: string[] };
+  const { collapsed, toggle } = useCollapsed("nagi.projects.collapsed");
   const order = useProjectOrder();
-  const [managing, setManaging] = useState(false);
+  const [managing, setManaging] = useState<"groups" | "tags" | null>(null);
   const navigateList = useNavigate();
   const sort = order.sort;
   // 调整顺序：点「调整顺序」进入，可以拖动分组和卡片；点「完成」退出。进入时排序换成「自定义」。
@@ -361,15 +295,19 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   // 筛选的分组已经没有了（例如被删除）时，当作全部。
   const groupFilter = search.ungrouped ? "" : search.group && groups.some((g) => g.name === search.group) ? search.group : undefined;
   const q = query.trim().toLowerCase();
+  const tags = projectTagsOf(all);
+  // 筛选里已经没有的标签（例如被删除）不算。
+  const activeTags = (search.tags ?? []).filter((x) => tags.some((tag) => tag.name === x));
   const shownProjects = all
     .filter(({ project: p }) => groupFilter === undefined || (p?.group ?? "") === groupFilter)
-    .filter(({ project: p }) => !q || [p?.name, p?.networkName, p?.group, ...(p?.containers ?? []).map((c) => c.name)].some((v) => v?.toLowerCase().includes(q)))
+    .filter(({ project: p }) => activeTags.length === 0 || (p?.tags ?? []).some((x) => activeTags.includes(x)))
+    .filter(({ project: p }) => !q || [p?.name, p?.networkName, p?.group, ...(p?.tags ?? []), ...(p?.containers ?? []).map((c) => c.name)].some((v) => v?.toLowerCase().includes(q)))
     .slice()
     .sort((a, b) => (sort === "name" ? (a.project?.name ?? "").localeCompare(b.project?.name ?? "") : Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)));
   const idOf = (s: ProjectSummary) => s.project?.id ?? "";
-  const shown = custom ? order.sortProjects(shownProjects, idOf) : shownProjects;
+  const shown = custom ? order.sortItems(shownProjects, idOf) : shownProjects;
   // 拖动只改动所在列表里的顺序，其余项目（别的分组、被筛选掉的）保持原位。
-  const allIds = () => order.sortProjects(all.slice().sort((a, b) => Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)), idOf).map(idOf);
+  const allIds = () => order.sortItems(all.slice().sort((a, b) => Number(b.project?.createdAt?.seconds ?? 0n) - Number(a.project?.createdAt?.seconds ?? 0n)), idOf).map(idOf);
   const projectName = (id: string) => all.find((s) => s.project?.id === id)?.project?.name ?? id;
 
   // 新建项目要「项目管理」。
@@ -393,7 +331,7 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
   const cards = (list: ProjectSummary[]) => {
     const ids = list.map(idOf);
     return (
-      <Reorder ids={ids} name={projectName} enabled={arranging} strategy={rectSortingStrategy} onMove={(a, o) => order.moveProject(allIds(), ids, a, o)}>
+      <Reorder ids={ids} name={projectName} enabled={arranging} strategy={rectSortingStrategy} onMove={(a, o) => order.moveItem(allIds(), ids, a, o)}>
         <CardGrid>{list.map((summary) => summary.project && <SortableCard key={summary.project.id} summary={summary} nodes={knownNodes(nodes.data)} />)}</CardGrid>
       </Reorder>
     );
@@ -411,18 +349,24 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
         actions={
           <>
             {newButton}
-            {/* 只有一项操作，不放进 ⋯ 菜单。 */}
-            {isAdmin && groups.length > 0 && (
-              <Button variant="outline" onClick={() => setManaging(true)}>
-                {t.labels.manageGroups}
-              </Button>
+            {/* 重命名、删除分组和标签会改到成员范围外的项目，只给管理员。 */}
+            {isAdmin && (groups.length > 0 || tags.length > 0) && (
+              <Menu
+                items={[
+                  ...(groups.length > 0 ? [{ label: t.labels.manageGroups, onSelect: () => setManaging("groups") }] : []),
+                  ...(tags.length > 0 ? [{ label: t.labels.manageTags, onSelect: () => setManaging("tags") }] : []),
+                ]}
+              />
             )}
           </>
         }
       />
       {creating && canCreate && <NewProjectDialog groups={groups.map((g) => g.name)} initialGroup={groupFilter} />}
-      <Dialog open={managing} onClose={() => setManaging(false)} title={t.labels.manageGroups}>
+      <Dialog open={managing === "groups"} onClose={() => setManaging(null)} title={t.labels.manageGroups}>
         <ManageLabels kind="group" labels={groups} />
+      </Dialog>
+      <Dialog open={managing === "tags"} onClose={() => setManaging(null)} title={t.labels.manageTags} description={t.labels.projectTagsHint}>
+        <ManageLabels kind="projectTag" labels={tags} />
       </Dialog>
       <div className="grid grid-cols-1 gap-6 max-md:gap-4">
         <Attention offlineNodes={offlineNodes} offlineStandbys={offlineStandbys} />
@@ -436,6 +380,9 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
           </Empty>
         ) : (
           <div className="grid gap-4">
+            {tags.length > 0 && (
+              <TagFilter tags={tags} value={activeTags} onChange={(v) => navigateList({ to: "/projects", search: (s) => ({ ...s, tags: v.length > 0 ? v : undefined }), replace: true })} />
+            )}
             {/* 手机上筛选框和排序同一行，筛选框占剩下的宽度；有分组筛选时放不下，筛选框单独一行，两个下拉平分下一行。 */}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t.projects.filter.placeholder} aria-label={t.projects.filter.label} autoComplete="off" className={cn("max-w-[280px] max-md:max-w-none max-md:min-w-0 max-md:flex-1", groups.length > 0 && "max-md:basis-full")} />
@@ -496,7 +443,7 @@ export function ProjectsPage({ creating }: { creating?: boolean }) {
                     variant="outline"
                     onClick={() => {
                       setQuery("");
-                      navigateList({ to: "/projects", search: (s) => ({ ...s, q: undefined, group: undefined, ungrouped: undefined }), replace: true });
+                      navigateList({ to: "/projects", search: (s) => ({ ...s, q: undefined, group: undefined, ungrouped: undefined, tags: undefined }), replace: true });
                     }}
                   >
                     {t.audit.clearFilters}

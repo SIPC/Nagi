@@ -30,6 +30,7 @@ export default {
   approveConfirm: (name: string, address: string) => `批准节点 ${name}（${address}）？节点将加入节点网络并接受面板管理，请确认是自有机器。`,
   title: "节点",
   columns: { node: "节点", containers: "容器" },
+  sort: { label: "排序", byJoined: "加入时间", byName: "按名称", byCustom: "自定义", reorderHint: "拖动分组标题或节点调整顺序。" },
   views: {
     label: "视图",
     cards: "列表",
@@ -88,6 +89,7 @@ export default {
   handover: "移交给其他面板",
   handoverDescription: "使用其他面板生成的接入码，将节点移交给该面板。",
   empty: "暂无节点",
+  noMatch: "没有匹配的节点",
   embedded: "面板内置",
   pendingHint: "通过接入码加入，批准后可用。",
   approve: "批准",

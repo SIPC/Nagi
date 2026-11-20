@@ -49,3 +49,28 @@ func TestProjectOrder(t *testing.T) {
 		t.Fatalf("删除成员后应一起删除：%+v", o)
 	}
 }
+
+// 节点页的排序和项目页的分开存。
+func TestNodeOrder(t *testing.T) {
+	ctx := context.Background()
+	q := open(t)
+	a, err := q.CreateUser(ctx, store.CreateUserParams{Username: "a", PasswordHash: "h", CreatedAt: 1, Role: "admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.SetProjectOrder(ctx, a, store.ProjectOrder{Sort: "name", Groups: []string{"项目组"}, Projects: []string{"p1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if o, err := q.GetNodeOrder(ctx, a); err != nil || o.Sort != "" || len(o.Groups) != 0 || len(o.Nodes) != 0 {
+		t.Fatalf("没保存过应为空：%+v %v", o, err)
+	}
+	if err := q.SetNodeOrder(ctx, a, store.NodeOrder{Sort: "custom", Groups: []string{"香港", "美国"}, Nodes: []string{"n2", "n1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if o, _ := q.GetNodeOrder(ctx, a); o.Sort != "custom" || !slices.Equal(o.Groups, []string{"香港", "美国"}) || !slices.Equal(o.Nodes, []string{"n2", "n1"}) {
+		t.Fatalf("节点页的排序：%+v", o)
+	}
+	if o, _ := q.GetProjectOrder(ctx, a); o.Sort != "name" || !slices.Equal(o.Groups, []string{"项目组"}) || !slices.Equal(o.Projects, []string{"p1"}) {
+		t.Fatalf("项目页的排序不受影响：%+v", o)
+	}
+}
