@@ -194,9 +194,20 @@ const (
 
 // pickNodeRelay 返回发给 p 用的中转节点，没有可用的时 ok 为 false。sending 为 true 时记下经它发了包。调用时持有 b.mu。
 func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, rp *peerState, ok bool) {
-	for _, r := range p.nodeRelays {
+	// 实际在用项先试，之后才是当前排名；不要把钉住的项写回候选，否则失败后会凭空复活。
+	for i := -1; i < len(p.nodeRelays); i++ {
+		r := p.activeRelay
+		if i >= 0 {
+			r = p.nodeRelays[i]
+		}
+		if r == (Key{}) || (i >= 0 && r == p.activeRelay) {
+			continue
+		}
 		rp := b.peers[r]
 		if rp == nil || !rp.directAlive(now) {
+			if p.activeRelay == r {
+				p.activeRelay = Key{}
+			}
 			continue
 		}
 		if p.relayHealth == nil {
@@ -208,10 +219,16 @@ func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, 
 			p.relayHealth[r] = h
 		}
 		if now.Before(h.badUntil) {
+			if p.activeRelay == r {
+				p.activeRelay = Key{}
+			}
 			continue
 		}
 		if !h.waitingSince.IsZero() && now.Sub(h.waitingSince) > relayProbe {
 			h.waitingSince, h.badUntil = time.Time{}, now.Add(relayBad)
+			if p.activeRelay == r {
+				p.activeRelay = Key{}
+			}
 			b.log.Debug("mesh 中转节点不通，暂时不用", "peer", p.key.Short(), "relay", r.Short())
 			continue
 		}
@@ -220,10 +237,6 @@ func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, 
 		}
 		if sending && rp.nodeRelayEnabled != nil && *rp.nodeRelayEnabled {
 			p.activeRelay = r
-			// 成功选中的备用中转成为在用项，不等下次面板刷新才稳定排序。
-			i := slices.Index(p.nodeRelays, r)
-			copy(p.nodeRelays[1:i+1], p.nodeRelays[:i])
-			p.nodeRelays[0] = r
 		}
 		return r, rp, true
 	}
@@ -916,7 +929,11 @@ func (b *Bind) setPeers(peers []Peer) {
 			p.candidates = p.candidates[:maxCandidates]
 		}
 		p.relays = pe.Relays
-		p.nodeRelayEnabled = pe.NodeRelayEnabled
+		p.nodeRelayEnabled = nil
+		if pe.NodeRelayEnabled != nil {
+			enabled := *pe.NodeRelayEnabled
+			p.nodeRelayEnabled = &enabled
+		}
 		p.nodeRelays = nil
 		for _, r := range pe.NodeRelays {
 			if r != b.pub && r != pe.Key {
@@ -939,10 +956,7 @@ func (b *Bind) setPeers(peers []Peer) {
 	for _, p := range b.peers {
 		// 排名出局不撤权；成员移除、显式 false、退回旧契约则立即解除钉住。
 		active := b.peers[p.activeRelay]
-		if active != nil && active.nodeRelayEnabled != nil && *active.nodeRelayEnabled {
-			p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool { return k == p.activeRelay })
-			p.nodeRelays = append([]Key{p.activeRelay}, p.nodeRelays...)
-		} else {
+		if active == nil || active.nodeRelayEnabled == nil || !*active.nodeRelayEnabled {
 			p.activeRelay = Key{}
 		}
 		p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool {
@@ -950,7 +964,7 @@ func (b *Bind) setPeers(peers []Peer) {
 			return r == nil || (r.nodeRelayEnabled != nil && !*r.nodeRelayEnabled)
 		})
 		for k := range p.relayHealth {
-			if !slices.Contains(p.nodeRelays, k) {
+			if k != p.activeRelay && !slices.Contains(p.nodeRelays, k) {
 				delete(p.relayHealth, k)
 			}
 		}
@@ -963,6 +977,16 @@ func (b *Bind) setPeers(peers []Peer) {
 		}
 		for _, r := range p.nodeRelays {
 			b.relayKeys[r] = true // 兼容旧面板：只有候选仍在时允许旧式中转。
+		}
+	}
+	// 撤权/删除不能在快速重新加回后让旧事务成功，也不把本地撤权误记为网络丢包。
+	for id, pending := range b.pathProbes {
+		p := pending.peer
+		allowed := pending.via == (Key{}) || (b.relayKeys[pending.via] &&
+			(p.activeRelay == pending.via || slices.Contains(p.nodeRelays, pending.via) || slices.Contains(p.relays, pending.via)))
+		if b.peers[p.key] != p || b.peers[pending.hop.key] != pending.hop || !allowed {
+			delete(b.pathProbes, id)
+			pending.result <- PathSample{Err: ErrProbePath}
 		}
 	}
 }

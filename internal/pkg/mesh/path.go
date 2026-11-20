@@ -35,7 +35,7 @@ type pathProbe struct {
 	sent     time.Time
 	deadline time.Time
 	epoch    uint64
-	result   chan time.Duration
+	result   chan PathSample
 }
 
 // PathSample 只表示一次固定路径往返，不代表业务验证或单向丢包率。
@@ -77,7 +77,7 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 		return
 	}
 	if via != (Key{}) {
-		if !slices.Contains(p.nodeRelays, via) && !slices.Contains(p.relays, via) {
+		if p.activeRelay != via && !slices.Contains(p.nodeRelays, via) && !slices.Contains(p.relays, via) {
 			b.mu.Unlock()
 			sample.Err = ErrProbePath
 			return
@@ -103,7 +103,7 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 	sample.NextHop, sample.Epoch = hop.direct, hop.directEpoch
 	sample.LocalPort = uint16(b.sock(hop.directConn).LocalAddr().(*net.UDPAddr).Port)
 	pending := &pathProbe{peer: p, hop: hop, via: via, addr: hop.direct, local: hop.directConn, epoch: hop.directEpoch,
-		size: size, sent: now, deadline: deadline, result: make(chan time.Duration, 1)}
+		size: size, sent: now, deadline: deadline, result: make(chan PathSample, 1)}
 	if b.pathProbes == nil {
 		b.pathProbes = make(map[[txidLen]byte]*pathProbe)
 	}
@@ -123,8 +123,8 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 	timer := time.NewTimer(time.Until(deadline))
 	defer timer.Stop()
 	select {
-	case rtt := <-pending.result:
-		sample.RTT = rtt
+	case result := <-pending.result:
+		sample.RTT, sample.Err = result.RTT, result.Err
 	case <-ctx.Done():
 		sample.Err = ctx.Err()
 	case <-timer.C:
@@ -251,7 +251,7 @@ func (b *Bind) handlePathProbe(c *net.UDPConn, local int, from netip.AddrPort, r
 			pending.addr == from && pending.local == local && pending.size == len(pkt) && now.Before(pending.deadline) &&
 			hop.direct == pending.addr && hop.directConn == pending.local && hop.directEpoch == pending.epoch {
 			delete(b.pathProbes, id) // 消费一次，重放不能再产生样本。
-			pending.result <- now.Sub(pending.sent)
+			pending.result <- PathSample{RTT: now.Sub(pending.sent)}
 		}
 		b.mu.Unlock()
 		return

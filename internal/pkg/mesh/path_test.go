@@ -33,18 +33,54 @@ func TestRelayAuthorizationAndPin(t *testing.T) {
 	if err := r.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}}); err != nil {
 		t.Fatal(err)
 	}
-	set(a, b, []Key{rk}, &on)
-	set(b, a, []Key{rk}, &on)
+	set(a, b, nil, &on)
+	set(b, a, nil, &on)
 	for _, pair := range []struct{ from, to testNode }{{a, r}, {b, r}, {r, a}, {r, b}} {
 		waitPath(t, pair.from.m, pair.to.m.PublicKey(), "direct")
 	}
-	echo(t, a, b)
+	// 和真实面板的候选条件一致：两段已确认后才提供 R，不把首次发现拓扑的竞态混入保留/撤权契约。
+	set(a, b, []Key{rk}, &on)
+	set(b, a, []Key{rk}, &on)
+	// 同一条业务连接跨过排名刷新和权限变更，而不是反复占用固定监听端口。
+	ln, err := b.m.Listen(7000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		if c, err := ln.Accept(); err == nil {
+			defer c.Close()
+			_, _ = io.Copy(c, c)
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	c, err := a.m.Dial(ctx, bk, 7000)
+	if err != nil {
+		for _, n := range []testNode{a, b, r} {
+			t.Logf("%s: %+v", n.m.PublicKey().Short(), n.m.Status())
+		}
+		t.Fatal(err)
+	}
+	defer c.Close()
+	exchange := func() {
+		t.Helper()
+		_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+		if _, err := c.Write([]byte("pinned")); err != nil {
+			t.Fatal(err)
+		}
+		buf := make([]byte, 6)
+		if _, err := io.ReadFull(c, buf); err != nil || string(buf) != "pinned" {
+			t.Fatalf("same connection: %q %v", buf, err)
+		}
+	}
+	exchange()
 	before := r.m.bind.relayRx.Load()
 	// 两端候选都刷新为空，但独立许可仍在；已有路径和双向收包不能跟着消失。
 	set(a, b, nil, &on)
 	set(b, a, nil, &on)
 	waitPath(t, a.m, bk, "node-relay")
-	echo(t, a, b)
+	exchange()
 	if r.m.bind.relayRx.Load() <= before {
 		t.Fatal("candidate refresh stopped the active relay")
 	}
@@ -58,15 +94,21 @@ func TestRelayAuthorizationAndPin(t *testing.T) {
 	if s := a.m.ProbePath(context.Background(), bk, rk, 256); !errors.Is(s.Err, ErrProbePath) {
 		t.Fatalf("explicit revocation ignored: %+v", s)
 	}
+	// 接收侧也撤权，即使对方仍保留许可并且继续经 R 发请求。
+	attempt, stop := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	if s := b.m.ProbePath(attempt, ak, rk, 256); !errors.Is(s.Err, context.DeadlineExceeded) {
+		t.Fatalf("receive revocation ignored: %+v", s)
+	}
+	stop()
 	// 回到旧面板契约：当前候选可用，但候选消失不能延长旧许可。
 	set(a, b, []Key{rk}, nil)
 	waitPath(t, a.m, bk, "node-relay")
-	echo(t, a, b)
+	exchange()
 	set(a, b, nil, nil)
 	waitPath(t, a.m, bk, "none")
 	// 删除成员也必须撤掉此前钉住的路径。
 	set(a, b, []Key{rk}, &on)
-	echo(t, a, b)
+	exchange()
 	if err := a.m.SetPeers([]Peer{{Key: bk, NodeRelays: []Key{rk}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +220,7 @@ func TestPathProbeResponseValidation(t *testing.T) {
 			p.confirmed[from], b.byAddr[from] = time.Now(), peer
 			id := [txidLen]byte{1, 7, 9}
 			pending := &pathProbe{peer: p, hop: p, addr: from, size: 256, sent: time.Now().Add(-time.Millisecond),
-				deadline: time.Now().Add(time.Second), result: make(chan time.Duration, 1)}
+				deadline: time.Now().Add(time.Second), result: make(chan PathSample, 1)}
 			b.pathProbes = map[[txidLen]byte]*pathProbe{id: pending}
 			pkt := encodePathProbe(typePathResponse, peer, b.pub, Key{}, id, 256, p.mac)
 			local := 0
@@ -199,6 +241,9 @@ func TestPathProbeResponseValidation(t *testing.T) {
 				p.directEpoch++
 			case "removed-peer":
 				b.setPeers(nil)
+				if result := <-pending.result; !errors.Is(result.Err, ErrProbePath) {
+					t.Fatalf("removed peer not canceled: %+v", result)
+				}
 				b.setPeers([]Peer{{Key: peer}})
 				fresh := b.peers[peer]
 				fresh.direct, fresh.directAt = from, time.Now()
@@ -212,6 +257,9 @@ func TestPathProbeResponseValidation(t *testing.T) {
 				t.Fatal("invalid response generated sample")
 			default:
 			}
+			if attack == "removed-peer" {
+				return // 重新加入同一公钥也不能恢复已经撤销的旧事务。
+			}
 			// 恢复同一活动事务后只接受一次正确应答，随后重放无效。
 			b.peers[peer] = p
 			b.byAddr[from] = peer
@@ -220,8 +268,8 @@ func TestPathProbeResponseValidation(t *testing.T) {
 			valid := encodePathProbe(typePathResponse, peer, b.pub, Key{}, id, 256, p.mac)
 			b.handleControl(nil, 0, from, valid)
 			select {
-			case rtt := <-pending.result:
-				if rtt <= 0 {
+			case result := <-pending.result:
+				if result.Err != nil || result.RTT < 0 {
 					t.Fatal("nonpositive RTT")
 				}
 			default:

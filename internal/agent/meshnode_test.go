@@ -55,10 +55,13 @@ func TestMeshRelayAuthorizationMerge(t *testing.T) {
 	n.retain([]string{"old"})
 	want(nil) // 旧面板不能延长新面板的钉住许可。
 	n.update("old", "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:]})
+	want(proto.Bool(false)) // 仅剩不可信面板的宽限记录不能回落到旧式许可。
 	// 成员宽限仍留着，但不保留授权。recent 保存原观测，真正下发不延长许可。
 	if len(m.Status()) == 0 {
 		t.Fatal("member grace was lost")
 	}
+	n.retain([]string{})
+	want(proto.Bool(false))
 }
 
 func randKey() mesh.Key {

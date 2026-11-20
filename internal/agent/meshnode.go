@@ -297,6 +297,7 @@ func (n *meshNode) apply() {
 	self := n.m.PublicKey()
 	n.mu.Lock()
 	merged := map[mesh.Key]*mesh.Peer{}
+	trustedMembers := map[mesh.Key]bool{}
 	seen := map[mesh.Key]map[netip.AddrPort]bool{}
 	var order []mesh.Key
 	// addEp 加一个直连地址，去重，每个成员最多 mesh.MaxEndpoints 个（多的 mesh 也不用）。
@@ -322,8 +323,12 @@ func (n *meshNode) apply() {
 				seen[k] = map[netip.AddrPort]bool{}
 				order = append(order, k)
 			}
+			trusted := n.trusted == nil || slices.Contains(n.trusted, fp)
+			if trusted {
+				trustedMembers[k] = true
+			}
 			// 多面板冲突时显式撤权优先；旧面板不覆盖新面板的许可。
-			if (n.trusted == nil || slices.Contains(n.trusted, fp)) && mp.NodeRelayEnabled != nil &&
+			if trusted && mp.NodeRelayEnabled != nil &&
 				(p.NodeRelayEnabled == nil || !mp.GetNodeRelayEnabled()) {
 				p.NodeRelayEnabled = proto.Bool(mp.GetNodeRelayEnabled())
 			}
@@ -368,6 +373,11 @@ func (n *meshNode) apply() {
 		}
 	}
 	for k, p := range merged {
+		if !trustedMembers[k] {
+			// 旧面板宽限可保连通，但不能降成 nil 后借旧候选继续提供中转许可。
+			p.NodeRelayEnabled = proto.Bool(false)
+			p.NodeRelays = nil
+		}
 		n.recent[k] = recentPeer{peer: *p, at: now}
 	}
 	later := false
