@@ -60,11 +60,12 @@ export function EgressSection({ project }: { project: Project }) {
   const [busy, setBusy] = useState("");
 
   // 最近 7 天被记录的目标：节点发出的出站告警（键 egress:<项目>/<容器>/<目标>）。
+  // 不按「egress:」搜索：非管理员的搜索不匹配参数，会一条也查不到。取本项目的告警，在下面按键筛。
   const hits = useQuery({
     queryKey: ["egress-hits", project.id],
     queryFn: () =>
       settingsClient.listAuditEvents({
-        filter: { projectId: project.id, categories: ["alert"], search: "egress:", from: timestampFromDate(new Date(Date.now() - week)) },
+        filter: { projectId: project.id, categories: ["alert"], from: timestampFromDate(new Date(Date.now() - week)) },
         limit: 200,
       }),
     refetchInterval: 30000,
@@ -73,9 +74,9 @@ export function EgressSection({ project }: { project: Project }) {
   for (const e of hits.data?.events ?? []) {
     try {
       const key: string = JSON.parse(e.params).key ?? "";
-      const [, rest] = key.split(":", 2);
+      if (!key.startsWith("egress:")) continue;
       const parts = key.slice("egress:".length).split("/");
-      if (!rest || parts.length < 3) continue;
+      if (parts.length < 3) continue;
       const target = parts.slice(2).join("/");
       if (!targets.has(target)) targets.set(target, { target, container: parts[1], time: toDate(e.time) });
     } catch {
