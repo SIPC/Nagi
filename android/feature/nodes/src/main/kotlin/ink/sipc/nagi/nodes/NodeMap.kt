@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.painter.Painter
@@ -240,7 +241,7 @@ internal fun MapCanvas(
 }
 
 private fun DrawScope.halo(text: TextLayoutResult, color: Color, topLeft: Offset, alpha: Float, dp: Float) {
-    // 文字下面垫一圈背景色，压在线上也看得清。
+    // 文字下面垫一圈背景色，压在线上也看得清。描边样式会留在这份排版结果上，之后画正文要显式传 Fill。
     drawText(text, color, topLeft, alpha = alpha, drawStyle = Stroke(4 * dp, join = StrokeJoin.Round))
 }
 
@@ -259,7 +260,7 @@ private fun DrawScope.drawPanel(c: NagiColors, at: Offset, alpha: Float, label: 
     }
     val top = Offset(at.x - label.size.width / 2f, at.y - 34 * dp - label.firstBaseline)
     halo(label, c.background, top, alpha, dp)
-    drawText(label, c.foreground, top, alpha = alpha)
+    drawText(label, c.foreground, top, alpha = alpha, drawStyle = Fill)
 }
 
 /**
@@ -341,11 +342,11 @@ private fun DrawScope.drawGlyph(
     }
     val nameTop = Offset(left(name), center.y + nameY * dp - name.firstBaseline)
     halo(name, c.background, nameTop, a, dp)
-    drawText(name, c.foreground, nameTop, alpha = a)
+    drawText(name, c.foreground, nameTop, alpha = a, drawStyle = Fill)
     if (sub != null) {
         val subTop = Offset(left(sub), center.y + subY * dp - sub.firstBaseline)
         halo(text.subHalo ?: sub, c.background, subTop, a, dp)
-        drawText(sub, c.mutedForeground, subTop, alpha = a)
+        drawText(sub, c.mutedForeground, subTop, alpha = a, drawStyle = Fill)
     }
 }
 
