@@ -1,6 +1,22 @@
 package nodes
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+func TestRelayAlertRequiresAlert(t *testing.T) {
+	panel := newSessionPanel(t)
+	p := &panelService{conn: &Conn{NodeID: panel.nodeID}, r: panel.r}
+	_, err := p.RelayAlert(context.Background(), &nagiv1.RelayAlertRequest{})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("empty alert: %v", err)
+	}
+}
 
 func TestAlertContainer(t *testing.T) {
 	for key, want := range map[string][2]string{

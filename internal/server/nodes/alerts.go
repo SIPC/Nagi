@@ -273,6 +273,9 @@ func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertReq
 	if p.conn.Pending() {
 		return nil, status.Error(codes.PermissionDenied, "节点尚未批准")
 	}
+	if req.GetAlert() == nil {
+		return nil, status.Error(codes.InvalidArgument, "缺少告警")
+	}
 	if !p.r.allowRelay(p.conn.NodeID) {
 		p.r.PanelViolation(ctx, p.conn, "relay_alert_limit", "")
 		return nil, status.Error(codes.ResourceExhausted, "代发的告警过多，请稍后重试")
