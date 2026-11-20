@@ -37,7 +37,7 @@
 
 ## 列表行
 
-可点的行一律用 `Modifier.rowClickable(onClick)`，不直接用 `clickable`：按下的底色左右各宽出 12（`RowInset`），圆角 8，内容位置不变。选中的一行传 `highlight`；列表外面包了 `SlidingSelection(rememberSelectionState())` 时再给每行一个 `selectionKey`，选中的底色由外面画，换一行时从上一行滑过去，这些行不再有按下的底色（宽屏设置菜单、节点列表）。`SelectionState.isBelowSelected(key)` 告诉右边的内容该往哪个方向滑。
+可点的行一律用 `Modifier.rowClickable(onClick)`，不直接用 `clickable`：按下的底色左右各宽出 12（`RowInset`），圆角 8，内容位置不变。选中的一行传 `highlight`；列表外面包了 `SlidingSelection(rememberSelectionState())` 时再给每行一个 `selectionKey`，选中的底色由外面画，换一行时从上一行滑过去，这些行不再有按下的底色（宽屏设置菜单、节点列表）。`SelectionState.isBelowSelected(key)` 告诉右边的内容该往哪个方向滑。传了 `onLongClick` 时长按也算一次操作（文件列表进入多选）。
 
 - `ListRow(title, detail, dot, density, onClick, trailing)`：一行列表项。
   - `dot`：左边的状态点颜色（`success` 正常、`warning` 注意、`destructive` 严重、`info` 提示），两行时和第一行对齐。
@@ -81,6 +81,15 @@
 
 - `NagiTextField(value, onValueChange, label, placeholder, error, maxLength, password)`：单行输入框，和网页的 Input 一样（高 40、圆角 6、1px 边框，获得焦点变深，出错变红）。`password` 时不显示内容、弹出密码键盘。
 - `NagiDialog(title, confirm, cancel, onConfirm, onDismiss, text, danger, busy)`：确认框，「取消」和操作按钮并排各占一半；删除、退出、吊销用 `danger`（红色按钮）。`content` 放在说明下面（输入框、错误）。
+
+## 终端和编辑器
+
+- `TerminalScreen(send, resize)`：一个终端的屏幕（Termux 的 `TerminalEmulator`）。`output(bytes)` 喂进收到的输出（视图还没建好时先存着），`sendText`、`sendKey` 发输入，`paste()`、`transcript()` 粘贴和取全部文字，`setColors(foreground, background, ansi)` 换配色（`TerminalAnsiDark`、`TerminalAnsiLight`）。在主线程上用。
+- `TerminalPane(screen, textSizeSp, onTextSize, onLongPress)`：画终端的视图。单指滚动、双指缩放字号（9 到 24）、鼠标滚轮；输入类型是 `TYPE_NULL`，按键直接发给终端。只在自己的范围里画（`AndroidView` 的画布不裁剪）。
+- `TerminalKeys(screen)`：键盘上方的一行按键（Esc、Tab、Ctrl、Alt、方向键、`|`、`/`、`-`、`~`），每个 44，放不下时横向滚动。
+- `CodeEditorPane(state, initial, language, readOnly, onChange)`：Sora Editor，等宽、行号、按 `editorLanguageFor(fileName)` 选语法高亮，配色跟随 App 的深浅色。返回键不归编辑器，交给页面处理。`CodeEditorState` 取文字、撤销、重做、在光标处输入、缩进。
+- `EditorKeys(state, labels)`：编辑器键盘上方的一行按键，尺寸同终端的按键行。
+- `lineDiff(old, new, context)`：按行比较，保存前的差异用，返回 `DiffLine` 的列表（前后各留 `context` 行）。
 
 ## 提示和状态
 
