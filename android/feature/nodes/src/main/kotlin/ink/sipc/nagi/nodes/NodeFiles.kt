@@ -500,6 +500,8 @@ private fun NameDialog(d: FileDialog.Name, onDismiss: () -> Unit, onDone: (Strin
         NagiTextField(
             value, { value = it },
             label = stringResource(if (d.kind == "goto") R.string.files_path else if (d.kind == "mkdir") R.string.files_dir_name else R.string.files_file_name),
+            // 路径和文件名多是英文：用网址类型的键盘，多数输入法会默认英文、不联想。
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
             onDone = { if (ok) onDone(value.trim()) },
         )
     }
