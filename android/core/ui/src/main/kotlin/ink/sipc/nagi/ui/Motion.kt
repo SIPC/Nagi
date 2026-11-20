@@ -1,6 +1,28 @@
 package ink.sipc.nagi.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterExitState
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
+import kotlin.math.roundToInt
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -20,6 +42,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -111,40 +136,116 @@ fun animatedDotColor(target: Color): State<Color> = animateColorAsState(target, 
 /**
  * 跳字（Roll）：会变的数据（监控数字、占用、速率、数量）只有变了的那几位上下滚动，变大从下面滚上来，变小从上面滚下来，
  * 从右往左依次错开 16ms；每一位的宽度也过渡，位数变化时后面的内容平滑让位。第一次显示不滚。
+ * 滚动的文字不在行的边缘硬切，上下渐隐、略微模糊（[rollTransform]、[rollFadeEdges]、[rollBlur]）。
  * 「移除动画」时只淡入淡出。
  */
 @Composable
 fun Roll(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
     val reduced = reducedMotion()
+    val density = LocalDensity.current
     // 上一次显示的值：用来判断变大还是变小。
     val last = remember { arrayOf(text) }
     val up = text == last[0] || (text.numberOrNull() ?: 0.0) >= (last[0].numberOrNull() ?: 0.0)
     SideEffect { last[0] = text }
-    Row(if (reduced) modifier else modifier.animateContentSize(tween(Motion.ROLL, easing = Motion.Enter))) {
+    val band = with(density) { (if (style.lineHeight.isSp) style.lineHeight else style.fontSize).toDp() } * ROLL_FADE
+    // 每一位是单独的 Text，无障碍里合成一个节点读整段文字：位数多时节点少很多，开着无障碍服务（例如系统截屏）时每帧不必重算这么多。
+    Row(
+        modifier
+            .rollWidth(!reduced)
+            .rollFadeEdges(band)
+            .clearAndSetSemantics { this.text = AnnotatedString(text) },
+    ) {
         val n = text.length
         text.forEachIndexed { i, ch ->
             // 按从右数第几位做 key：位数变了，个位还是个位。
             val fromRight = n - 1 - i
+            val d = Motion.ROLL_STAGGER * fromRight
             key(fromRight) {
                 AnimatedContent(
                     targetState = ch,
-                    transitionSpec = {
-                        val d = Motion.ROLL_STAGGER * fromRight
-                        if (reduced) {
-                            fadeIn(tween(Motion.ROLL, d)) togetherWith fadeOut(tween(100, d))
-                        } else {
-                            (slideInVertically(tween(Motion.ROLL, d, Motion.Enter)) { h -> if (up) h else -h } +
-                                fadeIn(tween(Motion.ROLL, d, Motion.Enter))) togetherWith
-                                (slideOutVertically(tween(Motion.ROLL, d, Motion.Enter)) { h -> if (up) -h else h } +
-                                    fadeOut(tween(Motion.ROLL / 2, d, Motion.Exit))) using
-                                SizeTransform(clip = true) { _, _ -> tween(Motion.ROLL, d, Motion.Enter) }
-                        }
-                    },
+                    transitionSpec = { rollTransform(up, reduced, d) },
                     label = "roll",
-                ) { c -> Text(c.toString(), style = style, color = color, maxLines = 1) }
+                ) { c -> Text(c.toString(), style = style, color = color, maxLines = 1, modifier = rollBlur(reduced, d)) }
             }
         }
     }
+}
+
+/** 滚动文字上下渐隐的那一段，是行高的几倍。 */
+internal const val ROLL_FADE = 0.4f
+
+/**
+ * 上下滚动的文字切换（跳字、竖向胶囊的名称共用）：新的从下面（[up]）或上面滑进来，旧的往反方向滑出去，同时淡入淡出。
+ * 不裁切，滚出去的部分由外面的 [rollFadeEdges] 渐隐。[delay] 是错开的毫秒数。
+ */
+internal fun <S> AnimatedContentTransitionScope<S>.rollTransform(up: Boolean, reduced: Boolean, delay: Int = 0): ContentTransform =
+    if (reduced) {
+        fadeIn(tween(Motion.ROLL, delay)) togetherWith fadeOut(tween(100, delay)) using SizeTransform(clip = false)
+    } else {
+        (slideInVertically(tween(Motion.ROLL, delay, Motion.Enter)) { h -> if (up) h else -h } +
+            fadeIn(tween(Motion.ROLL, delay, Motion.Enter))) togetherWith
+            (slideOutVertically(tween(Motion.ROLL, delay, Motion.Enter)) { h -> if (up) -h else h } +
+                fadeOut(tween(Motion.ROLL / 2, delay, Motion.Exit))) using
+            SizeTransform(clip = false) { _, _ -> tween(Motion.ROLL, delay, Motion.Enter) }
+    }
+
+/**
+ * 滚动文字的上下边缘：在原位置上下各多画 [band]（不占布局，不影响周围的排版），这一段从不透明渐变到透明，
+ * 滚出去的文字逐渐消失，不会被一刀切断。原来那一行里的文字不受影响。
+ */
+internal fun Modifier.rollFadeEdges(band: Dp): Modifier = this
+    .layout { m, c ->
+        val pad = band.roundToPx()
+        val p = m.measure(c.offset(vertical = 2 * pad))
+        layout(p.width, (p.height - 2 * pad).coerceAtLeast(0)) { p.place(0, -pad) }
+    }
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val f = (band.toPx() / size.height).coerceIn(0f, 0.5f)
+        drawRect(
+            Brush.verticalGradient(0f to Color.Transparent, f to Color.Black, 1f - f to Color.Black, 1f to Color.Transparent),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+    .padding(vertical = band)
+
+/** 滚动时最多模糊多少。 */
+private val ROLL_BLUR = 2.dp
+
+/**
+ * 滚动时的轻微模糊：滑进来的从模糊变清楚，滑出去的变模糊（最多 [ROLL_BLUR]），和滑动同一条曲线。
+ * 只在 Android 12 以上有（更早的系统没有模糊，只渐隐）；动画时只改图层，不重组。
+ */
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+internal fun AnimatedVisibilityScope.rollBlur(reduced: Boolean, delay: Int = 0): Modifier {
+    if (reduced || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return Modifier
+    val amount = transition.animateFloat({ tween(Motion.ROLL, delay, Motion.Enter) }, label = "blur") { if (it == EnterExitState.Visible) 0f else 1f }
+    return Modifier.graphicsLayer {
+        val r = ROLL_BLUR.toPx() * amount.value
+        renderEffect = if (r > 0.1f) BlurEffect(r, r, TileMode.Decal) else null
+    }
+}
+
+/**
+ * 宽度过渡（跳字的位数变化时）：和 animateContentSize 一样，但只在左右裁切，上下不裁，滚动的文字可以滚出这一行再渐隐。
+ */
+@Composable
+private fun Modifier.rollWidth(enabled: Boolean): Modifier {
+    if (!enabled) return this
+    val width = remember { Animatable(-1f) }
+    val scope = rememberCoroutineScope()
+    return this
+        .layout { m, c ->
+            val p = m.measure(c.copy(minWidth = 0))
+            val target = p.width.toFloat()
+            if (width.value < 0f) scope.launch { width.snapTo(target) }
+            else if (width.targetValue != target) scope.launch { width.animateTo(target, tween(Motion.ROLL, easing = Motion.Enter)) }
+            val w = (if (width.value < 0f) target else width.value).roundToInt().coerceIn(c.minWidth, c.maxWidth)
+            layout(w, p.height) { p.place(0, 0) }
+        }
+        .drawWithContent { clipRect(0f, -size.height, size.width, size.height * 2) { this@drawWithContent.drawContent() } }
 }
 
 private fun String.numberOrNull(): Double? = filter { it.isDigit() || it == '.' || it == '-' }.toDoubleOrNull()
@@ -165,27 +266,49 @@ class SlidingIndicator internal constructor(
     /** 上一帧画出来的位置。 */
     internal var drawn: Rect? = null
 
-    /** 按目标项当前的位置算出指示器的左右边；bounds 里还没有目标项时返回 null。 */
-    fun rect(bounds: Map<Int, Rect>): Rect? {
+    /**
+     * 按目标项当前的位置算出指示器的位置；bounds 里还没有目标项时返回 null。
+     * [vertical] 为 true 时沿上下滑（竖向的胶囊），否则沿左右。
+     */
+    fun rect(bounds: Map<Int, Rect>, vertical: Boolean = false): Rect? {
         val b = bounds[toState.value] ?: return null
         val a = start ?: b
-        val movingRight = b.center.x >= a.center.x
         // 朝移动方向的边用快的进度，另一条边用慢的。
-        val pLeft = if (movingRight) trail.value else lead.value
-        val pRight = if (movingRight) lead.value else trail.value
-        val r = Rect(lerp(a.left, b.left, pLeft), b.top, lerp(a.right, b.right, pRight), b.bottom)
+        val r = if (vertical) {
+            val movingDown = b.center.y >= a.center.y
+            val pTop = if (movingDown) trail.value else lead.value
+            val pBottom = if (movingDown) lead.value else trail.value
+            Rect(b.left, lerp(a.top, b.top, pTop), b.right, lerp(a.bottom, b.bottom, pBottom))
+        } else {
+            val movingRight = b.center.x >= a.center.x
+            val pLeft = if (movingRight) trail.value else lead.value
+            val pRight = if (movingRight) lead.value else trail.value
+            Rect(lerp(a.left, b.left, pLeft), b.top, lerp(a.right, b.right, pRight), b.bottom)
+        }
         drawn = r
         return r
     }
 
     /**
      * 拖尾：滑动时跟在指示器后面的一小段，由比两条边都慢的进度（ghostSpring）算出，最长 [maxLength]，
-     * 到位时缩回没有。返回拖尾的左右边（只在指示器后面那一侧）；没在滑动时返回 null。[r] 是这一帧的 [rect]。
+     * 到位时缩回没有。返回拖尾沿滑动方向的两端（只在指示器后面那一侧）；没在滑动时返回 null。[r] 是这一帧的 [rect]。
      */
-    fun tail(bounds: Map<Int, Rect>, r: Rect, maxLength: Float): Pair<Float, Float>? {
+    fun tail(bounds: Map<Int, Rect>, r: Rect, maxLength: Float, vertical: Boolean = false): Pair<Float, Float>? {
         val b = bounds[toState.value] ?: return null
         val a = start ?: return null
         if (ghost.value >= 1f) return null
+        if (vertical) {
+            val movingDown = b.center.y >= a.center.y
+            return if (movingDown) {
+                val end = lerp(a.top, b.top, ghost.value)
+                val from = maxOf(end, r.top - maxLength)
+                if (from >= r.top - 0.5f) null else from to r.top + r.width / 2
+            } else {
+                val end = lerp(a.bottom, b.bottom, ghost.value)
+                val to = minOf(end, r.bottom + maxLength)
+                if (to <= r.bottom + 0.5f) null else r.bottom - r.width / 2 to to
+            }
+        }
         val movingRight = b.center.x >= a.center.x
         return if (movingRight) {
             val end = lerp(a.left, b.left, ghost.value)

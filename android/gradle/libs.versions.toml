@@ -16,6 +16,8 @@ fragment = "1.8.9"
 coreKtx = "1.17.0"
 junit = "4.13.2"
 mockito = "5.18.0"
+termux = "v0.118.1"
+sora = "0.24.6"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -45,6 +47,10 @@ protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+termux-terminal-view = { module = "com.github.termux.termux-app:terminal-view", version.ref = "termux" }
+sora-editor = { module = "io.github.rosemoe:editor", version.ref = "sora" }
+sora-textmate = { module = "io.github.rosemoe:language-textmate", version.ref = "sora" }
+termux-terminal-emulator = { module = "com.github.termux.termux-app:terminal-emulator", version.ref = "termux" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -80,6 +80,9 @@ object NagiIcons {
             "M7 12h10",
         )
     }
+    // 文件管理（lucide file、x）
+    val File: ImageVector by lazy { icon("file", "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z", "M14 2v4a2 2 0 0 0 2 2h4") }
+    val X: ImageVector by lazy { icon("x", "M18 6 6 18", "m6 6 12 12") }
     val Copy: ImageVector by lazy { icon("copy", rect(8f, 8f, 14f, 14f, 2f), "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2") }
 
     // 二级页面顶部栏的 ⋯（lucide ellipsis）

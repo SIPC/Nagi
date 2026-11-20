@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.RowScope
 import ink.sipc.nagi.ui.Banner
 import ink.sipc.nagi.ui.UsageRow
+import ink.sipc.nagi.ui.UsageRing
 import ink.sipc.nagi.ui.InlineError
 import ink.sipc.nagi.ui.StatValue
 import ink.sipc.nagi.ui.RowDensity
@@ -107,6 +108,9 @@ private const val ATTENTION_LIMIT = 5
 interface HomeActions {
     fun openAttention(item: Attention)
     fun openNodes(offlineOnly: Boolean)
+
+    /** 打开一个节点的页面（节点状态里点一个节点）。 */
+    fun openNode(id: String)
     fun openProjects(notRunningOnly: Boolean)
     fun update(item: Attention)
 }
@@ -215,7 +219,9 @@ fun HomeContent(
                                     TrafficSection(traffic, range, vm::setRange, vm::loadTraffic)
                                     if (s.overview.nodes.isNotEmpty()) {
                                         SectionDivider()
-                                        NodesSection(s.overview.nodes, actions)
+                                        // 竖屏也两个一行（放不下三个环，不画磁盘），内容区太窄（340 以下）时才一个一行。
+                                        val two = this@BoxWithConstraints.maxWidth >= 340.dp
+                                        NodesSection(s.overview.nodes, actions, columns = if (two) 2 else 1, disk = !two)
                                     }
                                 }
                             }
@@ -481,12 +487,12 @@ private fun timeLabels(times: List<Long>, range: TrafficRange): List<String> {
  * 点一格去节点页。[columns] 为 2 时（宽屏左边一栏）两个一行。
  */
 @Composable
-private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: Int = 1) {
+private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: Int = 1, disk: Boolean = true) {
     SectionHeader(stringResource(R.string.nodes_title))
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         nodes.chunked(columns).forEach { group ->
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                group.forEach { n -> NodeCell(n, Modifier.weight(1f)) { actions.openNodes(offlineOnly = false) } }
+                group.forEach { n -> NodeCell(n, Modifier.weight(1f), disk) { actions.openNode(n.id) } }
                 // 最后一行只有一个时，空出另一半，宽度和上面的对齐。
                 repeat(columns - group.size) { Spacer(Modifier.weight(1f)) }
             }
@@ -495,7 +501,7 @@ private fun NodesSection(nodes: List<NodeStat>, actions: HomeActions, columns: I
 }
 
 @Composable
-private fun NodeCell(n: NodeStat, modifier: Modifier, onClick: () -> Unit) {
+private fun NodeCell(n: NodeStat, modifier: Modifier, disk: Boolean, onClick: () -> Unit) {
     val c = NagiTheme.colors
     val dot = when (n.status) {
         "online" -> c.success
@@ -517,46 +523,16 @@ private fun NodeCell(n: NodeStat, modifier: Modifier, onClick: () -> Unit) {
         if (n.status == "online") {
             Spacer(Modifier.width(8.dp))
             val cpu = if (n.cpus > 0) n.cpu / (n.cpus * 100) else n.cpu / 100
-            Ring("CPU", NagiIcons.Cpu, cpu)
+            UsageRing("CPU", NagiIcons.Cpu, cpu)
             Spacer(Modifier.width(8.dp))
-            Ring(stringResource(R.string.node_memory), NagiIcons.MemoryStick, n.memory / 100)
-            Spacer(Modifier.width(8.dp))
-            Ring(stringResource(R.string.node_disk), NagiIcons.HardDrive, if (n.diskTotal > 0) n.diskUsed / n.diskTotal else null)
+            UsageRing(stringResource(R.string.node_memory), NagiIcons.MemoryStick, n.memory / 100)
+            if (disk) {
+                Spacer(Modifier.width(8.dp))
+                UsageRing(stringResource(R.string.node_disk), NagiIcons.HardDrive, if (n.diskTotal > 0) n.diskUsed / n.diskTotal else null)
+            }
         }
     }
 }
-
-/**
- * 一个占用环：26 的圆环，中间是这一项的图标（CPU、内存、磁盘），不写数字。到 80% 变警告色、90% 变红；
- * 不知道总量时（[fraction] 为 null）只有灰色的底环。弧的长度变化有过渡。读屏读「CPU 16%」。
- */
-@Composable
-private fun Ring(label: String, icon: ImageVector, fraction: Double?) {
-    val c = NagiTheme.colors
-    val f = fraction?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)
-    val color = when {
-        f == null -> c.mutedForeground
-        f >= 0.9 -> c.destructive
-        f >= 0.8 -> c.warning
-        else -> c.brand
-    }
-    val sweep by animateFloatAsState(((f ?: 0.0) * 360).toFloat(), barSpec(), label = "ring")
-    Box(
-        Modifier.size(26.dp).semantics(mergeDescendants = true) { contentDescription = "$label ${f?.let { "%.0f%%".format(it * 100) } ?: "—"}" },
-        contentAlignment = Alignment.Center,
-    ) {
-        val track = c.muted
-        Canvas(Modifier.size(26.dp)) {
-            val stroke = 2.5.dp.toPx()
-            val inset = stroke / 2
-            val arc = Size(size.width - stroke, size.height - stroke)
-            drawArc(track, 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
-            if (sweep > 0f) drawArc(color, -90f, sweep, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
-        }
-        Icon(icon, contentDescription = null, tint = c.mutedForeground, modifier = Modifier.size(12.dp))
-    }
-}
-
 
 // ---- 流量最大的映射 ----
 

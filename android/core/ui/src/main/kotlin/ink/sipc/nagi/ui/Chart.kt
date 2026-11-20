@@ -69,6 +69,7 @@ fun LineChart(
 ) {
     val count = series.maxOfOrNull { it.values.size } ?: 0
     var hover by remember { mutableStateOf<Int?>(null) }
+    var hovering by remember { mutableStateOf(false) }
     if (hover != null && hover!! >= count) hover = null
     val density = LocalDensity.current
     val colors = NagiTheme.colors
@@ -77,14 +78,15 @@ fun LineChart(
         val widthPx = constraints.maxWidth.toFloat()
         val nearest = { x: Float -> if (count < 2) null else ((x / widthPx) * (count - 1)).roundToInt().coerceIn(0, count - 1) }
         val input = if (tipTime == null || count < 2) Modifier else Modifier
-            .mouseHover(onMove = { hover = nearest(it.x) }, onExit = { hover = null })
+            .mouseHover(onMove = { hovering = true; hover = nearest(it.x) }, onExit = { hovering = false; hover = null })
             .pointerInput(count, widthPx) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     // 1：松手（点一下）；2：被页面滚动拿走；null：按住超过长按时间。
                     val r = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { if (waitForUpOrCancellation() != null) 1 else 2 }
                     when (r) {
-                        1 -> { val i = nearest(down.position.x); hover = if (hover == i) null else i }
+                        // 悬浮着再点击（触控板、鼠标）不收起，免得点一下提示就没了。
+                        1 -> { val i = nearest(down.position.x); hover = if (hover == i && !hovering) null else i }
                         null -> {
                             hover = nearest(down.position.x)
                             while (true) {
