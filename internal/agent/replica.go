@@ -49,7 +49,7 @@ type replicaMeta struct {
 	ProjectID string `json:"project_id"`
 	Container string `json:"container"`
 	SourceKey []byte `json:"source_key"`
-	// ExtraSourceKeys：也接受这些节点的同步（设置了顶替时，运行容器的可能是另一个参与者）。
+	// ExtraSourceKeys：允许读取副本的其他参与者；写入仍须由面板或本机租约状态更新 SourceKey。
 	ExtraSourceKeys [][]byte `json:"extra_source_keys,omitempty"`
 	SourceNodeID    string   `json:"source_node_id"`
 	SourceName      string   `json:"source_name"`
@@ -59,7 +59,7 @@ type replicaMeta struct {
 type replicas struct {
 	dir  string // <节点目录>/replicas：没有设置默认目录时的存放位置
 	file string // <节点目录>/replica-dirs.json：默认目录和不在默认目录里的副本（见 replica_dirs.go）
-	// mu 保护 idx、locks、syncing。
+	// mu 保护 idx、locks、streams。
 	mu  sync.Mutex
 	idx replicaIndex
 	// broken：启动时 file 读不出来（损坏或读取出错），见 markCorrupt、markUnreadable；brokenCause 是原因，写进日志和告警。
@@ -82,8 +82,6 @@ type replicas struct {
 	// 每个副本一把锁：同步写入、查看快照、恢复不能同时进行。只在有请求用着（包括等着拿锁）时留在这里，
 	// 用完就删：没通过鉴权的请求（随便填的项目 ID 和容器名）不会让它一直变大。
 	locks map[string]*replicaLock
-	// syncing 记着每个副本正在同步的源节点和它最近一次请求的时间（见 claim）。
-	syncing map[string]replicaSync
 	// streams 是每个副本正在接收的 ReplicaPut 流（见 openStream），没有流时删掉。
 	streams map[string]*replicaStreams
 }
@@ -131,51 +129,6 @@ func (r *replicas) openStream(projectID, container, files string) (*metrics.Disk
 			}
 		})
 	}, nil
-}
-
-type replicaSync struct {
-	source []byte
-	at     time.Time
-}
-
-const (
-	// replicaSyncIdle：源节点这么久没有请求，就算这次同步结束了，别的源节点可以开始。
-	replicaSyncIdle = 2 * time.Minute
-	// replicaMassDelete：一次提交要删掉超过这个比例（并且超过 replicaMassDeleteMin 个）的文件时，只接受登记的源节点。
-	replicaMassDelete    = 0.5
-	replicaMassDeleteMin = 20
-)
-
-// claim 让 source 占用副本的同步。几个参与者都能同步同一个副本时（设置了顶替），接收端同时只接受一个源的会话：
-// 否则两个源交替 Put 和 Commit，A 的 Commit 会删掉 B 刚写入的文件。登记的源节点（容器所在的节点，primary）优先：
-// 它随时可以接手；另一方只在没有别的源在 replicaSyncIdle 内同步过时才能开始，被攻破的另一方挡不住正常同步。
-func (r *replicas) claim(projectID, container string, source []byte, primary bool, now time.Time) error {
-	id := projectID + "-" + container
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.syncing == nil {
-		r.syncing = map[string]replicaSync{}
-	}
-	if cur, ok := r.syncing[id]; ok && !primary && !slices.Equal(cur.source, source) && now.Sub(cur.at) < replicaSyncIdle {
-		return status.Error(codes.Aborted, "另一个节点正在同步这个副本，稍后重试")
-	}
-	r.syncing[id] = replicaSync{source: slices.Clone(source), at: now}
-	return nil
-}
-
-// release 在 source 提交以后结束它的同步。
-func (r *replicas) release(projectID, container string, source []byte) {
-	id := projectID + "-" + container
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if cur, ok := r.syncing[id]; ok && slices.Equal(cur.source, source) {
-		delete(r.syncing, id)
-	}
-}
-
-// massDelete 判断一次提交要不要删掉副本里的大部分文件。
-func massDelete(existing, removed int) bool {
-	return removed > replicaMassDeleteMin && float64(removed) > float64(existing)*replicaMassDelete
 }
 
 func replicaID(projectID, container string) (string, error) {
@@ -556,7 +509,7 @@ func (b *backupStates) failures(id string, targets []*nagiv1.BackupTarget) []str
 // ---- 目标节点：MeshService ----
 
 // authorizeReplica 校验调用方就是这个副本登记的源节点，返回副本的文件目录。write 表示要写入（Put、Commit），
-// 写入要占用这次同步（见 replicas.claim）；只读的请求（Manifest）不占用，也不续上占用。
+// 其他参与者只能读取清单，不能写入文件或提交删除。
 // 调用方先拿着副本的锁（rlock 或 lock）：副本可能被移到别的存放位置，拿锁以后返回的目录才不会变。
 func (s *meshService) authorizeReplica(ctx context.Context, projectID, container string, write bool) (string, error) {
 	caller, ok := mesh.Caller(ctx, s.M)
@@ -576,8 +529,8 @@ func (s *meshService) authorizeReplica(ctx context.Context, projectID, container
 		return "", status.Error(codes.PermissionDenied, "该容器的副本不接受来自此节点的同步")
 	}
 	if write {
-		if err := s.a.replicas.claim(projectID, container, caller[:], slices.Equal(m.SourceKey, caller[:]), time.Now()); err != nil {
-			return "", err
+		if !slices.Equal(m.SourceKey, caller[:]) {
+			return "", status.Error(codes.PermissionDenied, "只有登记的源节点可以修改副本，请等待面板更新源节点")
 		}
 	}
 	return filepath.Join(root, "files"), nil
@@ -889,17 +842,9 @@ func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaComm
 		return nil, err
 	}
 	defer root.Close()
-	existing, remove := replicaExtras(root, keep)
-	// 要删掉大部分文件（例如提交一个空列表）时只接受登记的源节点：顶替的另一个参与者平时不运行容器，
-	// 被攻破以后不能借此清空异地备份（见 docs/snapshot.md#备份节点的实现）。
-	if caller, ok := mesh.Caller(ctx, s.M); ok && !slices.Equal(m.SourceKey, caller[:]) && massDelete(existing, len(remove)) {
-		return nil, status.Errorf(codes.FailedPrecondition, "这次同步要删掉副本里 %d 个文件中的 %d 个，只接受容器所在节点的这种同步", existing, len(remove))
-	}
+	_, remove := replicaExtras(root, keep)
 	for _, rel := range remove {
 		root.Remove(rel)
-	}
-	if caller, ok := mesh.Caller(ctx, s.M); ok {
-		s.a.replicas.release(req.GetProjectId(), req.GetContainer(), caller[:])
 	}
 	m.LastSync = time.Now().Unix()
 	if err := s.a.replicas.save(m, nil); err != nil {

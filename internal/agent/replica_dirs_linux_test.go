@@ -5,6 +5,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,12 +17,55 @@ import (
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
 const testPID = "0123456789abcdef"
+
+func TestReplicaExtraSourceCannotCommit(t *testing.T) {
+	r, _ := testReplicas(t)
+	root := addReplica(t, r, "db")
+	m, err := mesh.New(mesh.Config{PrivateKey: randKey()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	extra := mesh.PublicKey(randKey())
+	if err := m.SetPeers([]mesh.Peer{{Key: extra}}); err != nil {
+		t.Fatal(err)
+	}
+	meta, _, _, _ := r.load(testPID, "db")
+	meta.ExtraSourceKeys = [][]byte{extra[:]}
+	if err := r.save(meta, nil); err != nil {
+		t.Fatal(err)
+	}
+	s := &meshService{Service: mesh.Service{M: m}, a: &agent{replicas: r, failovers: &failovers{m: map[string]*failoverState{}}}}
+	ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.IP(mesh.Address(extra).AsSlice()), Port: 1234}})
+	manifest, err := s.ReplicaManifest(ctx, &nagiv1.ReplicaManifestRequest{ProjectId: testPID, Container: "db"})
+	if err != nil || len(manifest.GetFiles()) != 3 {
+		t.Fatalf("read: %v %v", manifest, err)
+	}
+	_, err = s.ReplicaCommit(ctx, &nagiv1.ReplicaCommitRequest{ProjectId: testPID, Container: "db", Paths: []string{"repo/sub/q0002", "repo/kopia.repository"}})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("secondary source can modify backup: %v", err)
+	}
+	checkReplicaFiles(t, root, "db")
+	// 可信登记更新后，新持有者可以正常提交，而不是永久禁用额外参与者。
+	meta.SourceKey = extra[:]
+	if err := r.save(meta, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ReplicaCommit(ctx, &nagiv1.ReplicaCommitRequest{ProjectId: testPID, Container: "db", Paths: []string{"repo/sub/q0002", "repo/kopia.repository"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "files", "repo", "p0001")); !os.IsNotExist(err) {
+		t.Fatalf("new source cannot delete obsolete file: %v", err)
+	}
+}
 
 // testReplicas 建一个在临时目录里的 replicas：<tmp>/data 是节点目录。测试的临时目录在 /tmp 下面，
 // 所以系统目录里去掉 /tmp。
