@@ -56,10 +56,11 @@ type quicPacket struct {
 
 // quicPacketConn 是给 quic-go 用的 UDP 连接：收的包由 Bind 转进来，发的包从 Bind 的 UDP 端口发出去。
 type quicPacketConn struct {
-	b    *Bind
-	in   chan quicPacket
-	done chan struct{}
-	once sync.Once
+	b      *Bind
+	in     chan quicPacket
+	done   chan struct{}
+	once   sync.Once
+	routed bool // 单独的 Transport，绝不把旧物理地址连接的 CID 混入固定逻辑地址空间。
 }
 
 func (c *quicPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
@@ -78,6 +79,9 @@ func (c *quicPacketConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	}
 	ap := ua.AddrPort()
 	ap = netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port())
+	if c.routed {
+		return c.writeRouted(p, ap)
+	}
 	c.b.mu.Lock()
 	conn := c.b.sock(0)
 	// 和 WireGuard 一样走这个对端的直连用的本地端口：别的端口可能落在不通的链路上。
@@ -100,6 +104,9 @@ func (c *quicPacketConn) Close() error {
 }
 
 func (c *quicPacketConn) LocalAddr() net.Addr {
+	if c.routed {
+		return net.UDPAddrFromAddrPort(quicLogicalAddr(c.b.pub))
+	}
 	c.b.mu.Lock()
 	defer c.b.mu.Unlock()
 	if s := c.b.sock(0); s != nil {
@@ -128,6 +135,10 @@ type quicNet struct {
 	tr  *quic.Transport
 	ln  *quic.Listener
 	tls *tls.Config
+	// 实验协议和旧协议分流，不能因对端升级或中转伪造地址而迁移旧连接。
+	routedPC *quicPacketConn
+	routedTR *quic.Transport
+	routedLN *quic.Listener
 
 	mu        sync.Mutex
 	conns     map[Key]*quic.Conn
@@ -189,7 +200,18 @@ func newQUICNet(m *Mesh, priv Key) (*quicNet, error) {
 	if err != nil {
 		return nil, err
 	}
-	go q.accept()
+	if m.bind.caps&capQUICRoute != 0 {
+		q.routedPC = &quicPacketConn{b: m.bind, routed: true, in: make(chan quicPacket, 4096), done: make(chan struct{})}
+		routedReset := quic.StatelessResetKey(sha256.Sum256(append([]byte("nagi mesh routed quic reset v1"), priv[:]...)))
+		q.routedTR = &quic.Transport{Conn: q.routedPC, StatelessResetKey: &routedReset}
+		q.routedLN, err = q.routedTR.Listen(q.tls, routedQUICConfig())
+		if err != nil {
+			q.close()
+			return nil, err
+		}
+		go q.accept(q.routedLN)
+	}
+	go q.accept(q.ln)
 	return q, nil
 }
 
@@ -198,6 +220,13 @@ func (q *quicNet) close() {
 	q.closed = true
 	q.mu.Unlock()
 	q.closeAll()
+	if q.routedLN != nil {
+		_ = q.routedLN.Close()
+	}
+	if q.routedPC != nil {
+		_ = q.routedPC.Close()
+		_ = q.routedTR.Close()
+	}
 	_ = q.ln.Close()
 	// 先关包连接：Transport.Close 要等它的收包循环退出，收包循环停在 ReadFrom 上。
 	_ = q.pc.Close()
@@ -273,7 +302,19 @@ func (q *quicNet) peerFor(k Key) (netip.AddrPort, [32]byte, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	p := b.peers[k]
-	if p == nil || b.caps&capQUIC == 0 || !p.has(capQUIC, now) || !p.directAlive(now) {
+	if p == nil || b.caps&capQUIC == 0 || !p.has(capQUIC, now) {
+		return netip.AddrPort{}, [32]byte{}, false
+	}
+	if q.routedTR != nil && p.has(capQUICRoute, now) {
+		hop := p
+		if p.quicVia != (Key{}) {
+			hop = b.peers[p.quicVia]
+		}
+		if hop != nil && hop.directAlive(now) {
+			return quicLogicalAddr(k), p.mac, true
+		}
+	}
+	if !p.directAlive(now) {
 		return netip.AddrPort{}, [32]byte{}, false
 	}
 	return p.direct, p.mac, true
@@ -281,6 +322,15 @@ func (q *quicNet) peerFor(k Key) (netip.AddrPort, [32]byte, bool) {
 
 // conn 返回到 k 的 QUIC 连接，没有时现建（最多等 quicDialTimeout）。不能走 QUIC 时返回 nil。
 func (q *quicNet) conn(ctx context.Context, k Key) *quic.Conn {
+	if q.routedTR != nil {
+		// 已认证逻辑连接不依赖旧物理直连的能力包保活；成员移除和 SetQUIC(false) 仍会关闭它。
+		q.mu.Lock()
+		c := q.conns[k]
+		q.mu.Unlock()
+		if c != nil && c.RemoteAddr().String() == quicLogicalAddr(k).String() {
+			return c
+		}
+	}
 	addr, mac, ok := q.peerFor(k)
 	if !ok {
 		return nil
@@ -328,7 +378,11 @@ func (q *quicNet) conn(ctx context.Context, k Key) *quic.Conn {
 func (q *quicNet) dial(ctx context.Context, k Key, addr netip.AddrPort, mac [32]byte) (*quic.Conn, error) {
 	ctx, cancel := context.WithTimeout(ctx, quicDialTimeout)
 	defer cancel()
-	c, err := q.tr.Dial(ctx, net.UDPAddrFromAddrPort(addr), q.tls, quicConfig())
+	tr, cfg := q.tr, quicConfig()
+	if addr == quicLogicalAddr(k) && q.routedTR != nil {
+		tr, cfg = q.routedTR, routedQUICConfig()
+	}
+	c, err := tr.Dial(ctx, net.UDPAddrFromAddrPort(addr), q.tls, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -364,9 +418,9 @@ func (q *quicNet) dial(ctx context.Context, k Key, addr netip.AddrPort, mac [32]
 }
 
 // accept 接受别人建的 QUIC 连接。
-func (q *quicNet) accept() {
+func (q *quicNet) accept(ln *quic.Listener) {
 	for {
-		c, err := q.ln.Accept(context.Background())
+		c, err := ln.Accept(context.Background())
 		if err != nil {
 			return
 		}
@@ -396,6 +450,17 @@ func (q *quicNet) handshake(c *quic.Conn) {
 	from, _ := netip.ParseAddrPort(c.RemoteAddr().String())
 	// 对方有备用端口时，它发起连接用的端口不一定是我们发给它的那个，确认过的地址都算。
 	from = netip.AddrPortFrom(from.Addr().Unmap(), from.Port())
+	if q.routedTR != nil && from == quicLogicalAddr(k) {
+		// 物理来源和端到端 MAC 已由实验包入口验证；不能要求它恰好也是本方向的发包路径。
+		b := q.m.bind
+		b.mu.Lock()
+		p := b.peers[k]
+		ok = p != nil && b.caps&capQUIC != 0
+		if ok {
+			addr, mac = from, p.mac
+		}
+		b.mu.Unlock()
+	}
 	if !ok || (from != addr && !q.m.bind.confirmedFrom(k, from)) {
 		fail()
 		return

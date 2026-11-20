@@ -20,6 +20,7 @@ import (
 //	caps:          NAGI 5 发送方公钥(32) 能力(1) 看到的对方丢包率(4) MAC(16)
 //	path request:  NAGI 6 发送方公钥(32) 目的端(32) 中转(32) 事务号(12) 填充 MAC(16)
 //	path response: NAGI 7 发送方公钥(32) 目的端(32) 中转(32) 事务号(12) 填充 MAC(16)
+//	routed QUIC:   NAGI 8 发送方公钥(32) QUIC 数据(1～1200) MAC(16)，仅显式实验开启时处理
 //
 // caps 随直连的 ping 一起发：告诉对方自己支持 FEC、QUIC 中的哪些（旧版本不认识，直接忽略），
 // 以及这段时间收到的对方的包丢了多少（百万分之几，0xffffffff 表示样本不够，0xfffffffe 表示校验包没用），对方据此调整 FEC 冗余。
@@ -36,6 +37,7 @@ const (
 	typeCaps         = 5
 	typePathRequest  = 6
 	typePathResponse = 7
+	typeQUICRoute    = 8
 
 	headerLen = 4 + 1 + 32
 	txidLen   = 12
@@ -44,8 +46,9 @@ const (
 	pongLen   = headerLen + txidLen + 18 + macLen
 	capsLen   = headerLen + 1 + 4 + macLen
 
-	capFEC  = 1
-	capQUIC = 2
+	capFEC       = 1
+	capQUIC      = 2
+	capQUICRoute = 4
 
 	lossUnknown = 0xffffffff
 	// lossUseless：校验包救不回丢掉的包（成串地丢，多半是线路拥堵），请对方先别加。
@@ -143,6 +146,11 @@ func parse(pkt []byte) (parsed, bool) {
 		p.observed = netip.AddrPortFrom(netip.AddrFrom16(ip).Unmap(), port)
 	case typeRelaySend, typeRelayDeliver:
 		p.payload = rest
+	case typeQUICRoute:
+		if len(rest) <= macLen || len(rest) > routedQUICMTU+macLen {
+			return p, false
+		}
+		p.payload = rest[:len(rest)-macLen]
 	case typePathRequest, typePathResponse:
 		// 固定两种尺寸，MAC 覆盖填充；请求和应答等长，不能用小请求放大流量。
 		if len(pkt) != pathProbeSmall && len(pkt) != pathProbeLarge {

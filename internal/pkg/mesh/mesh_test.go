@@ -68,9 +68,16 @@ func dropFor(t *testing.T, f func(fromPort uint16, to netip.AddrPort) bool) {
 
 func newNode(t *testing.T, relay bool) testNode {
 	t.Helper()
-	var priv Key
-	_, _ = rand.Read(priv[:])
-	m, err := New(Config{PrivateKey: priv, Relay: relay, NoQUIC: testNoQUIC, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	return newNodeConfig(t, Config{Relay: relay, NoQUIC: testNoQUIC})
+}
+
+func newNodeConfig(t *testing.T, cfg Config) testNode {
+	t.Helper()
+	_, _ = rand.Read(cfg.PrivateKey[:])
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	m, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

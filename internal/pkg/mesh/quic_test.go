@@ -134,20 +134,28 @@ func TestQUICOldPeer(t *testing.T) {
 // TestQUICBadProof：拿不出和对方的共享密钥（冒充别人）时，QUIC 连接建不起来。
 func TestQUICBadProof(t *testing.T) {
 	t.Parallel()
-	_, a, b := setup(t)
-	waitPath(t, a.m, b.m.PublicKey(), "direct")
-	addr, _, ok := a.m.quic.peerFor(b.m.PublicKey())
-	for i := 0; !ok && i < 50; i++ {
-		time.Sleep(100 * time.Millisecond)
-		addr, _, ok = a.m.quic.peerFor(b.m.PublicKey())
-	}
-	if !ok {
-		t.Fatal("B 应该支持 QUIC")
-	}
-	var wrong [32]byte
-	_, _ = rand.Read(wrong[:])
-	if _, err := a.m.quic.dial(context.Background(), b.m.PublicKey(), addr, wrong); err == nil {
-		t.Fatal("身份证明不对也连上了")
+	for name, routed := range map[string]bool{"legacy": false, "routed": true} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			a := newNodeConfig(t, Config{ExperimentalQUICRouting: routed})
+			b := newNodeConfig(t, Config{ExperimentalQUICRouting: routed})
+			_ = a.m.SetPeers([]Peer{{Key: b.m.PublicKey(), Endpoints: local(b.port)}})
+			_ = b.m.SetPeers([]Peer{{Key: a.m.PublicKey(), Endpoints: local(a.port)}})
+			waitPath(t, a.m, b.m.PublicKey(), "direct")
+			addr, _, ok := a.m.quic.peerFor(b.m.PublicKey())
+			for i := 0; !ok && i < 50; i++ {
+				time.Sleep(100 * time.Millisecond)
+				addr, _, ok = a.m.quic.peerFor(b.m.PublicKey())
+			}
+			if !ok || (addr == quicLogicalAddr(b.m.PublicKey())) != routed {
+				t.Fatalf("wrong QUIC address for %s: %v, available=%v", name, addr, ok)
+			}
+			var wrong [32]byte
+			_, _ = rand.Read(wrong[:])
+			if _, err := a.m.quic.dial(context.Background(), b.m.PublicKey(), addr, wrong); err == nil {
+				t.Fatal("身份证明不对也连上了")
+			}
+		})
 	}
 }
 

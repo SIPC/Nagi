@@ -94,6 +94,7 @@ type peerState struct {
 	// activeRelay 只保留实际发送过、且有独立显式许可的一个中转，不因候选排名刷新而删掉。
 	activeRelay      Key
 	nodeRelayEnabled *bool
+	quicVia          Key // 仅实验 API 明确指定；不影响 WireGuard 的选路或物理邻接。
 	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
 	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
@@ -144,19 +145,20 @@ type Bind struct {
 	// 备用端口只用来往外发，对方的回复是同一条流的回包，所以不用固定端口，也不用在防火墙上放行。
 	extra int
 
-	mu        sync.Mutex
-	conns     []*net.UDPConn // 第一个是主端口，其余是备用端口
-	port      uint16
-	peers     map[Key]*peerState
-	byAddr    map[netip.AddrPort]Key // 已确认的直连地址 → 对端
-	byMesh    map[netip.Addr]Key     // mesh 地址 → 对端
-	relayKeys map[Key]bool
-	links     map[Key]*Link
-	quic      *quicPacketConn       // 收到的 QUIC 包交给它（见 quic.go）
-	onCaps    func(Key)             // 对方刚表示支持 QUIC 时调用
-	observed  map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
-	recv      chan delivery
-	done      chan struct{}
+	mu         sync.Mutex
+	conns      []*net.UDPConn // 第一个是主端口，其余是备用端口
+	port       uint16
+	peers      map[Key]*peerState
+	byAddr     map[netip.AddrPort]Key // 已确认的直连地址 → 对端
+	byMesh     map[netip.Addr]Key     // mesh 地址 → 对端
+	relayKeys  map[Key]bool
+	links      map[Key]*Link
+	quic       *quicPacketConn       // 收到的 QUIC 包交给它（见 quic.go）
+	routedQUIC *quicPacketConn       // 显式开启的实验协议，和旧 QUIC Transport 隔离。
+	onCaps     func(Key)             // 对方刚表示支持 QUIC 时调用
+	observed   map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
+	recv       chan delivery
+	done       chan struct{}
 	// relayBudget：节点替每个来源中转的字节数配额（令牌桶，见 relayAllowed）。
 	relayBudget map[Key]*relayBucket
 	// 路径观测与 NAT ping、业务中转健康完全分开；仅显式调用时发起。
@@ -744,6 +746,8 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 	}
 	now := time.Now()
 	switch m.typ {
+	case typeQUICRoute:
+		b.handleRoutedQUIC(from, Key{}, pkt)
 	case typePathRequest, typePathResponse:
 		b.handlePathProbe(c, local, from, Key{}, pkt)
 	case typePing:
@@ -861,6 +865,19 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			b.mu.Unlock()
 			return nil, nil
 		}
+		if isControl(m.payload) && m.payload[4] == typeQUICRoute {
+			inner, valid := parse(m.payload)
+			if b.caps&capQUICRoute == 0 || !valid || inner.key != src || now.Sub(b.peers[src].confirmed[from]) >= directTimeout {
+				b.mu.Unlock()
+				return nil, nil
+			}
+			// 实验 QUIC 只能做一跳节点 UDP 中转，不能进面板 TLS 或递归转发。
+			b.mu.Unlock()
+			if b.nodeRelay.Load() {
+				b.forwardNode(src, m.key, m.payload, now)
+			}
+			return nil, nil
+		}
 		if m.key == b.pub {
 			ep := b.peers[src].ep
 			b.mu.Unlock()
@@ -878,6 +895,13 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 		p := b.peers[m.key]
 		if !ok || !b.relayKeys[relay] || p == nil {
 			b.mu.Unlock()
+			return nil, nil
+		}
+		if isControl(m.payload) && m.payload[4] == typeQUICRoute {
+			b.mu.Unlock()
+			if inner, valid := parse(m.payload); valid && inner.key == m.key {
+				b.handleRoutedQUIC(from, relay, m.payload)
+			}
 			return nil, nil
 		}
 		if isControl(m.payload) && (m.payload[4] == typePathRequest || m.payload[4] == typePathResponse) {
@@ -958,6 +982,9 @@ func (b *Bind) setPeers(peers []Peer) {
 		active := b.peers[p.activeRelay]
 		if active == nil || active.nodeRelayEnabled == nil || !*active.nodeRelayEnabled {
 			p.activeRelay = Key{}
+		}
+		if r := b.peers[p.quicVia]; r == nil || r.nodeRelayEnabled == nil || !*r.nodeRelayEnabled {
+			p.quicVia = Key{} // 明确撤权优先于实验路径，恢复默认直连；不迁移旧协议连接。
 		}
 		p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool {
 			r := b.peers[k]

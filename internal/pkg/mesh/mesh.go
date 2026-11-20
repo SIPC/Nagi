@@ -50,7 +50,10 @@ type Config struct {
 	// NoFEC、NoQUIC 关掉 FEC（见 fec.go）、QUIC（见 quic.go），只用于测试对比。
 	NoFEC  bool
 	NoQUIC bool
-	Logger *slog.Logger
+	// ExperimentalQUICRouting 启用固定逻辑地址/指定中转原型。端点和中转须分别显式开启，默认关闭。
+	// 仅提供 Go API 手动改路，不启动观察、自动切路或迁移旧 QUIC 连接。
+	ExperimentalQUICRouting bool
+	Logger                  *slog.Logger
 }
 
 // SetNodeRelay 开关替别的节点中转（节点的网络设置）。
@@ -117,6 +120,9 @@ func New(cfg Config) (*Mesh, error) {
 	if !cfg.NoQUIC {
 		caps |= capQUIC
 	}
+	if cfg.ExperimentalQUICRouting {
+		caps |= capQUICRoute
+	}
 	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, cfg.ExtraPorts, log)
 	bind.nodeRelay.Store(cfg.NodeRelay)
 	dev := device.NewDevice(tnet, bind, &device.Logger{
@@ -142,6 +148,7 @@ func New(cfg Config) (*Mesh, error) {
 		m.quic = q
 		bind.mu.Lock()
 		bind.quic = q.pc
+		bind.routedQUIC = q.routedPC
 		// 对方支持 QUIC 时提前建好连接，第一个 Dial 不用等。两边只由公钥小的一方去建，免得同时建两条。
 		// 对方刚打开 QUIC 时，之前连不上的记录作废。
 		bind.onCaps = func(k Key) {
