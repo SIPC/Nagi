@@ -406,6 +406,7 @@ func LoadCompose(ctx context.Context, text string, env []*nagiv1.EnvVar, dataDir
 		o.ResolvePaths = true
 		// 不读 env_file 的内容：面板上校验时文件不在，节点上 compose 运行时自己会读。
 		o.SkipResolveEnvironment = true
+		o.SkipResolveLabels = true
 	})
 }
 

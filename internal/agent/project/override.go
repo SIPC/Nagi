@@ -2,12 +2,16 @@ package project
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/SIPC/nagi/internal/agent/fileops"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/types"
 	"gopkg.in/yaml.v3"
 )
@@ -67,10 +71,69 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 			LabelContainer: in.container,
 			LabelVersion:   strconv.FormatInt(in.version, 10),
 		}
+		if len(svc.LabelFiles) > 0 {
+			fileLabels := map[string]string{}
+			remaining := int64(64 << 10)
+			for _, path := range svc.LabelFiles {
+				base := in.mp.root
+				if in.projectDir != "" {
+					base = in.projectDir
+				}
+				rel, err := filepath.Rel(base, path)
+				if err != nil {
+					return nil, invalid("无法读取标签文件")
+				}
+				// 显式引用容器目录以外的文件已由特权配置权限控制；目录以内的路径必须经约束根打开。
+				if !filepath.IsLocal(rel) {
+					base, rel = filepath.Dir(path), filepath.Base(path)
+				}
+				root, err := os.OpenRoot(base)
+				if err != nil {
+					return nil, invalid("无法读取标签文件")
+				}
+				info, err := root.Lstat(rel)
+				if err != nil || !info.Mode().IsRegular() || info.Size() > remaining {
+					root.Close()
+					return nil, invalid("标签文件必须是普通文件，且每个服务合计不能超过 64 KiB")
+				}
+				f, ok, err := fileops.OpenRegular(root, rel, info)
+				root.Close()
+				if err != nil || !ok {
+					return nil, invalid("无法安全读取标签文件")
+				}
+				data, err := io.ReadAll(io.LimitReader(f, remaining+1))
+				f.Close()
+				if err != nil || int64(len(data)) > remaining {
+					return nil, invalid("标签文件读取失败或超过 64 KiB")
+				}
+				remaining -= int64(len(data))
+				values, err := dotenv.ParseWithLookup(strings.NewReader(string(data)), func(key string) (string, bool) {
+					value, ok := fileLabels[key]
+					return value, ok
+				})
+				if err != nil {
+					return nil, invalid("标签文件格式不正确")
+				}
+				for k, v := range values {
+					fileLabels[k] = v
+				}
+			}
+			for k, v := range fileLabels {
+				labels[k] = strings.ReplaceAll(v, "$", "$$")
+			}
+			for k, v := range svc.Labels {
+				labels[k] = strings.ReplaceAll(v, "$", "$$")
+			}
+			labels[LabelProject], labels[LabelContainer], labels[LabelVersion] = in.projectID, in.container, strconv.FormatInt(in.version, 10)
+		}
 		if in.single {
 			labels[LabelSingle] = "1"
 		}
 		s := map[string]any{"labels": labels}
+		if len(svc.LabelFiles) > 0 {
+			// compose 不再打开可被容器替换的原文件，只使用上面安全读取的快照。
+			s["label_file"] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!reset", Style: yaml.FlowStyle}
+		}
 		if svc.Logging == nil {
 			s["logging"] = map[string]any{
 				"driver":  "json-file",
