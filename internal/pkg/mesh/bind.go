@@ -91,6 +91,9 @@ type peerState struct {
 	rtt         time.Duration
 	relays      []Key // 可以代为中转的面板
 	nodeRelays  []Key // 可以代为中转的节点，先于面板用
+	// activeRelay 只保留实际发送过、且有独立显式许可的一个中转，不因候选排名刷新而删掉。
+	activeRelay      Key
+	nodeRelayEnabled *bool
 	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
 	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
@@ -214,6 +217,13 @@ func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, 
 		}
 		if sending && h.waitingSince.IsZero() {
 			h.waitingSince = now
+		}
+		if sending && rp.nodeRelayEnabled != nil && *rp.nodeRelayEnabled {
+			p.activeRelay = r
+			// 成功选中的备用中转成为在用项，不等下次面板刷新才稳定排序。
+			i := slices.Index(p.nodeRelays, r)
+			copy(p.nodeRelays[1:i+1], p.nodeRelays[:i])
+			p.nodeRelays[0] = r
 		}
 		return r, rp, true
 	}
@@ -488,6 +498,7 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		return
 	}
 	if p.directAlive(now) {
+		p.activeRelay = Key{}
 		addr, c := p.direct, b.sock(p.directConn)
 		var enc *fecEncoder
 		if b.caps&capFEC != 0 && p.has(capFEC, now) {
@@ -506,6 +517,7 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		return
 	}
 	if link := b.links[dst]; link != nil {
+		p.activeRelay = Key{}
 		b.mu.Unlock()
 		_ = (*link)(b.pub, dst, pkt)
 		return
@@ -517,6 +529,7 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		b.write(c, encodeRelay(typeRelaySend, dst, pkt), addr)
 		return
 	}
+	p.activeRelay = Key{}
 	for _, r := range p.relays {
 		if rp := b.peers[r]; rp != nil && rp.directAlive(now) {
 			addr, c := rp.direct, b.sock(rp.directConn)
@@ -903,15 +916,12 @@ func (b *Bind) setPeers(peers []Peer) {
 			p.candidates = p.candidates[:maxCandidates]
 		}
 		p.relays = pe.Relays
+		p.nodeRelayEnabled = pe.NodeRelayEnabled
 		p.nodeRelays = nil
 		for _, r := range pe.NodeRelays {
 			if r != b.pub && r != pe.Key {
 				p.nodeRelays = append(p.nodeRelays, r)
 			}
-		}
-		// 中转方转来的包由 WireGuard 按原发送方验证，中转方伪造不了，所以只核对它是不是中转方。
-		for _, r := range append(append([]Key(nil), pe.Relays...), p.nodeRelays...) {
-			b.relayKeys[r] = true
 		}
 		b.byMesh[Address(pe.Key)] = pe.Key
 	}
@@ -924,6 +934,35 @@ func (b *Bind) setPeers(peers []Peer) {
 			}
 			delete(b.peers, k)
 			delete(b.probeSeen, k)
+		}
+	}
+	for _, p := range b.peers {
+		// 排名出局不撤权；成员移除、显式 false、退回旧契约则立即解除钉住。
+		active := b.peers[p.activeRelay]
+		if active != nil && active.nodeRelayEnabled != nil && *active.nodeRelayEnabled {
+			p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool { return k == p.activeRelay })
+			p.nodeRelays = append([]Key{p.activeRelay}, p.nodeRelays...)
+		} else {
+			p.activeRelay = Key{}
+		}
+		p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool {
+			r := b.peers[k]
+			return r == nil || (r.nodeRelayEnabled != nil && !*r.nodeRelayEnabled)
+		})
+		for k := range p.relayHealth {
+			if !slices.Contains(p.nodeRelays, k) {
+				delete(p.relayHealth, k)
+			}
+		}
+		// 接收许可不依赖本方向的排名：两端的候选可以不同；载荷仍由终点的 WireGuard / QUIC 校验。
+		if p.nodeRelayEnabled != nil && *p.nodeRelayEnabled {
+			b.relayKeys[p.key] = true
+		}
+		for _, r := range p.relays {
+			b.relayKeys[r] = true
+		}
+		for _, r := range p.nodeRelays {
+			b.relayKeys[r] = true // 兼容旧面板：只有候选仍在时允许旧式中转。
 		}
 	}
 }

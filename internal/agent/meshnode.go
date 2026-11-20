@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // meshNode 是节点的 mesh：成员列表来自每个信任的面板（面板自己和它管理的在线节点），合并后使用。
@@ -288,9 +289,7 @@ func (n *meshNode) retain(fingerprints []string) {
 		n.save()
 	}
 	n.mu.Unlock()
-	if changed {
-		n.apply()
-	}
+	n.apply() // 信任变更立即撤销旧面板的钉住许可，不等成员宽限结束。
 }
 
 // apply 合并所有面板的成员列表并应用到 mesh。
@@ -322,6 +321,11 @@ func (n *meshNode) apply() {
 				merged[k] = p
 				seen[k] = map[netip.AddrPort]bool{}
 				order = append(order, k)
+			}
+			// 多面板冲突时显式撤权优先；旧面板不覆盖新面板的许可。
+			if (n.trusted == nil || slices.Contains(n.trusted, fp)) && mp.NodeRelayEnabled != nil &&
+				(p.NodeRelayEnabled == nil || !mp.GetNodeRelayEnabled()) {
+				p.NodeRelayEnabled = proto.Bool(mp.GetNodeRelayEnabled())
 			}
 			for _, e := range mp.GetEndpoints() {
 				if ap, err := netip.ParseAddrPort(e); err == nil {
@@ -376,6 +380,8 @@ func (n *meshNode) apply() {
 			continue
 		}
 		p := r.peer
+		// 成员宽限只保留连通性，不延长中转授权或在用路径的钉住。
+		p.NodeRelayEnabled = proto.Bool(false)
 		merged[k] = &p
 		order = append(order, k)
 		later = true

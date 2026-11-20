@@ -4052,9 +4052,12 @@ type MeshPeer struct {
 	NodeId  string `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	IsPanel bool   `protobuf:"varint,5,opt,name=is_panel,json=isPanel,proto3" json:"is_panel,omitempty"`
 	// 可以替收到这份列表的节点中转到这个成员的节点（mesh 公钥），按两段延迟之和从低到高。面板按接收方分别算。
-	Relays        [][]byte `protobuf:"bytes,6,rep,name=relays,proto3" json:"relays,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Relays [][]byte `protobuf:"bytes,6,rep,name=relays,proto3" json:"relays,omitempty"`
+	// 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+	// 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+	NodeRelayEnabled *bool `protobuf:"varint,7,opt,name=node_relay_enabled,json=nodeRelayEnabled,proto3,oneof" json:"node_relay_enabled,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *MeshPeer) Reset() {
@@ -4127,6 +4130,13 @@ func (x *MeshPeer) GetRelays() [][]byte {
 		return x.Relays
 	}
 	return nil
+}
+
+func (x *MeshPeer) GetNodeRelayEnabled() bool {
+	if x != nil && x.NodeRelayEnabled != nil {
+		return *x.NodeRelayEnabled
+	}
+	return false
 }
 
 // MeshPeerStatus 是到一个 mesh 成员的连接状态。
@@ -6303,7 +6313,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\ais_self\x18\x04 \x01(\bR\x06isSelf\x12\x12\n" +
 	"\x04role\x18\x05 \x01(\tR\x04role\x12\x1d\n" +
 	"\n" +
-	"last_error\x18\x06 \x01(\tR\tlastError\"\xa7\x01\n" +
+	"last_error\x18\x06 \x01(\tR\tlastError\"\xf1\x01\n" +
 	"\bMeshPeer\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x1c\n" +
@@ -6311,7 +6321,9 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x17\n" +
 	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x19\n" +
 	"\bis_panel\x18\x05 \x01(\bR\aisPanel\x12\x16\n" +
-	"\x06relays\x18\x06 \x03(\fR\x06relays\"\x87\x05\n" +
+	"\x06relays\x18\x06 \x03(\fR\x06relays\x121\n" +
+	"\x12node_relay_enabled\x18\a \x01(\bH\x00R\x10nodeRelayEnabled\x88\x01\x01B\x15\n" +
+	"\x13_node_relay_enabled\"\x87\x05\n" +
 	"\x0eMeshPeerStatus\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x12\n" +
@@ -6688,6 +6700,7 @@ func file_nagi_v1_common_proto_init() {
 		(*DeployEvent_Output)(nil),
 		(*DeployEvent_Result)(nil),
 	}
+	file_nagi_v1_common_proto_msgTypes[39].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

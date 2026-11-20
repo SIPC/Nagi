@@ -235,7 +235,7 @@ func (b *Bind) handlePathProbe(c *net.UDPConn, local int, from netip.AddrPort, r
 	}
 	hop := p
 	if relay != (Key{}) {
-		if !slices.Contains(p.nodeRelays, relay) && !slices.Contains(p.relays, relay) {
+		if !b.relayKeys[relay] {
 			b.mu.Unlock()
 			return
 		}

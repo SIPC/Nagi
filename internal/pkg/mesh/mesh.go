@@ -30,6 +30,9 @@ type Peer struct {
 	Relays []Key
 	// NodeRelays 是可以代为中转的节点，按延迟从低到高，先于面板使用（见 docs/mesh.md#经节点中转）。
 	NodeRelays []Key
+	// NodeRelayEnabled 独立声明这个成员的中转许可。nil 兼容旧面板，但不允许跨候选刷新钉住它。
+	// 仅用于现有故障兜底；不授权性能中转或自动切路。
+	NodeRelayEnabled *bool
 }
 
 // Config 是 mesh 的配置。

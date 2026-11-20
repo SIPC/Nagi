@@ -35,6 +35,14 @@ func TestMeshPeersFiltersReportedEndpoints(t *testing.T) {
 	if !slices.Equal(list[0].Endpoints, want) {
 		t.Fatalf("地址不对：%v", list[0].Endpoints)
 	}
+	if list[0].NodeRelayEnabled == nil || list[0].GetNodeRelayEnabled() || peers[0].NodeRelayEnabled == nil || *peers[0].NodeRelayEnabled {
+		t.Fatal("disabled relay must be explicit, not a legacy missing field")
+	}
+	c.mesh.Relay = true
+	peers, list = r.meshPeers()
+	if !list[0].GetNodeRelayEnabled() || peers[0].NodeRelayEnabled == nil || !*peers[0].NodeRelayEnabled {
+		t.Fatal("relay permission must be independent of an empty candidate ranking")
+	}
 }
 
 func TestCleanEndpoints(t *testing.T) {

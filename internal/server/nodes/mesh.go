@@ -118,8 +118,8 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 				add(netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()))
 			}
 		}
-		peers = append(peers, mesh.Peer{Key: k, Endpoints: eps})
-		mp := &nagiv1.MeshPeer{PublicKey: k[:], Name: name, NodeId: c.NodeID}
+		peers = append(peers, mesh.Peer{Key: k, Endpoints: eps, NodeRelayEnabled: proto.Bool(info.GetRelay())})
+		mp := &nagiv1.MeshPeer{PublicKey: k[:], Name: name, NodeId: c.NodeID, NodeRelayEnabled: proto.Bool(info.GetRelay())}
 		for _, e := range eps {
 			mp.Endpoints = append(mp.Endpoints, e.String())
 		}

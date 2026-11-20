@@ -12,6 +12,67 @@ import (
 	"time"
 )
 
+func TestRelayAuthorizationAndPin(t *testing.T) {
+	t.Parallel()
+	r, a, b := newNode(t, false), newNode(t, false), newNode(t, false)
+	r.m.SetNodeRelay(true)
+	rk, ak, bk := r.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey()
+	on, off := true, false
+	set := func(n testNode, other testNode, candidates []Key, permission *bool) {
+		t.Helper()
+		if err := n.m.SetPeers([]Peer{
+			{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: permission},
+			{Key: other.m.PublicKey(), Endpoints: local(other.port), NodeRelays: candidates},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dropFor(t, func(from uint16, to netip.AddrPort) bool {
+		return (from == a.port && to.Port() == b.port) || (from == b.port && to.Port() == a.port)
+	})
+	if err := r.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}}); err != nil {
+		t.Fatal(err)
+	}
+	set(a, b, []Key{rk}, &on)
+	set(b, a, []Key{rk}, &on)
+	for _, pair := range []struct{ from, to testNode }{{a, r}, {b, r}, {r, a}, {r, b}} {
+		waitPath(t, pair.from.m, pair.to.m.PublicKey(), "direct")
+	}
+	echo(t, a, b)
+	before := r.m.bind.relayRx.Load()
+	// 两端候选都刷新为空，但独立许可仍在；已有路径和双向收包不能跟着消失。
+	set(a, b, nil, &on)
+	set(b, a, nil, &on)
+	waitPath(t, a.m, bk, "node-relay")
+	echo(t, a, b)
+	if r.m.bind.relayRx.Load() <= before {
+		t.Fatal("candidate refresh stopped the active relay")
+	}
+	// 有独立许可时，接收不依赖本方向有没有候选；固定观测仍经 R。
+	if s := a.m.ProbePath(context.Background(), bk, rk, 1180); s.Err != nil {
+		t.Fatalf("authorized pinned route: %+v", s)
+	}
+	// 即使旧候选仍列着 R，显式撤权也立即生效。
+	set(a, b, []Key{rk}, &off)
+	waitPath(t, a.m, bk, "none")
+	if s := a.m.ProbePath(context.Background(), bk, rk, 256); !errors.Is(s.Err, ErrProbePath) {
+		t.Fatalf("explicit revocation ignored: %+v", s)
+	}
+	// 回到旧面板契约：当前候选可用，但候选消失不能延长旧许可。
+	set(a, b, []Key{rk}, nil)
+	waitPath(t, a.m, bk, "node-relay")
+	echo(t, a, b)
+	set(a, b, nil, nil)
+	waitPath(t, a.m, bk, "none")
+	// 删除成员也必须撤掉此前钉住的路径。
+	set(a, b, []Key{rk}, &on)
+	echo(t, a, b)
+	if err := a.m.SetPeers([]Peer{{Key: bk, NodeRelays: []Key{rk}}}); err != nil {
+		t.Fatal(err)
+	}
+	waitPath(t, a.m, bk, "none")
+}
+
 func TestPathProbeFixedRoute(t *testing.T) {
 	t.Parallel()
 	r, a, b := newNode(t, false), newNode(t, false), newNode(t, false)
