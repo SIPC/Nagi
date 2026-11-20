@@ -103,6 +103,7 @@ var en = map[string]string{
 	"顶替设置不完整":       "The failover settings are incomplete",
 	"无法确认调用方":       "Can't verify the caller",
 	"一次投票请求太多":      "Too many votes in one request",
+	"缺少告警":          "The alert is missing",
 
 	// ---- 节点加入 ----
 	"节点的 WireGuard 公钥格式不正确，请在节点上重新执行加入命令":     "The node's WireGuard public key isn't valid. Run the join command on the node again",
@@ -298,6 +299,12 @@ var en = map[string]string{
 	"卷名不能是 %s":                                                            "Volume name can't be %s",
 	"请填写仓库地址，如 ghcr.io、registry.example.com:5000（Docker Hub 填 docker.io）": "Enter a registry address, such as ghcr.io or registry.example.com:5000 (docker.io for Docker Hub)",
 	"请填写用户名和密码（或访问令牌）":                                                    "Enter a username and password (or access token)",
+	"无法读取标签文件":                                                            "Can't read the label file",
+	"无法安全读取标签文件":                                                          "Can't read the label file safely",
+	"标签文件必须是普通文件，且每个服务合计不能超过 64 KiB":                                      "Label files must be regular files and total at most 64 KiB per service",
+	"标签文件读取失败或超过 64 KiB":                                                  "Couldn't read the label file, or it's larger than 64 KiB",
+	"标签文件展开预算不能超过 64 KiB":                                                 "Label file variable expansion can't exceed 64 KiB",
+	"标签文件格式不正确":                                                           "The label file format isn't valid",
 
 	// ---- 端口映射 ----
 	"端口映射名称只能用小写字母、数字、- 和 _，以字母或数字开头，不超过 63 个字符": "Port mapping names may only contain lowercase letters, digits, -, and _, must start with a letter or digit, and must be at most 63 characters",
@@ -331,10 +338,11 @@ var en = map[string]string{
 	"compose 中 %s 的端口 %d 未开放：%v": "Port %[2]d of %[1]s in the compose file isn't exposed: %[3]v",
 	"已按配置中的端口添加端口映射：%s":          "Added a port mapping from the configuration: %s",
 	"已按配置中的端口添加端口映射：%s（按端口推测为网站，以 HTTP 开放；如果不是，请在端口映射中改为 TCP）": "Added a port mapping from the configuration: %s (it looks like a website based on the port, so it's exposed over HTTP; if it isn't, change it to TCP in Port mappings)",
-	"没有入口节点，请编辑端口映射重新选择":  "No entry node. Edit the port mapping to choose one",
-	"节点没有启动 Caddy，无法申请证书": "The node isn't running Caddy, so it can't request certificates",
-	"刚重试过，请 %d 秒后重试":      "Retried just now. Try again in %d seconds",
-	"刚重试过，请 1 秒后重试":       "Retried just now. Try again in 1 second",
+	"没有入口节点，请编辑端口映射重新选择":         "No entry node. Edit the port mapping to choose one",
+	"从节点恢复的跨节点入口尚未确认，请编辑并保存端口映射": "The cross-node entry restored from a node hasn't been confirmed. Edit and save the port mapping",
+	"节点没有启动 Caddy，无法申请证书":        "The node isn't running Caddy, so it can't request certificates",
+	"刚重试过，请 %d 秒后重试":             "Retried just now. Try again in %d seconds",
+	"刚重试过，请 1 秒后重试":              "Retried just now. Try again in 1 second",
 
 	// ---- 部署与回滚 ----
 	"不能同时从 git 拉取和使用上传的文件":         "Can't pull from git and use uploaded files at the same time",
@@ -403,6 +411,7 @@ var en = map[string]string{
 	"此节点上已有容器 %s":                       "This node already has container %s",
 	"此节点上没有该容器的副本":                      "This node has no replica of this container",
 	"该容器的副本不接受来自此节点的同步":                 "This container's replica doesn't accept syncs from this node",
+	"只有登记的源节点可以修改副本，请等待面板更新源节点":         "Only the registered source node can change the replica. Wait for the panel to update the source node",
 	"下载链接无效":                            "The download link isn't valid",
 	"下载链接已过期，请重新下载":                     "The download link has expired. Download again",
 	"密钥太短":                                "The key is too short",
@@ -584,7 +593,7 @@ var en = map[string]string{
 	"客户端须使用 PKCE（S256）":         "The client must use PKCE (S256)",
 	"客户端标识须为网址":                 "The client ID must be a URL",
 	"无法获取客户端元数据，请检查客户端标识的网址":    "Can't fetch the client metadata. Check the client ID URL",
-	"无法获取客户端元数据（%s）":            "Can't fetch the client metadata (%s)",
+	"无法获取客户端元数据（%d）":            "Can't fetch the client metadata (HTTP %d)",
 	"客户端元数据须为 JSON":             "The client metadata must be JSON",
 	"客户端元数据中的 client_id 与网址不一致": "The client_id in the client metadata doesn't match its URL",
 	"客户端元数据中有不可用的回调地址":          "The client metadata contains a redirect URI that can't be used",
