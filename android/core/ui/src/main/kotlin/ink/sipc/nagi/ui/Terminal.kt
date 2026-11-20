@@ -1,7 +1,6 @@
 package ink.sipc.nagi.ui
 
 import android.annotation.SuppressLint
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Canvas
@@ -78,11 +77,10 @@ class TerminalScreen(private val send: (ByteArray) -> Unit, private val resize: 
     private val output = object : TerminalOutput() {
         override fun write(data: ByteArray, offset: Int, count: Int) = send(data.copyOfRange(offset, offset + count))
         override fun titleChanged(oldTitle: String?, newTitle: String?) {}
-        override fun onCopyTextToClipboard(text: String?) {
-            val v = view ?: return
-            v.context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(null, text.orEmpty()))
-        }
-        override fun onPasteTextFromClipboard() = paste()
+        // 远端写剪贴板（OSC 52）不接：输出来自节点上的程序、文件和容器日志，不能不经用户操作就换掉手机的剪贴板，
+        // 否则下次粘贴进终端时执行的是别人写的命令。网页的终端同样不接。
+        override fun onCopyTextToClipboard(text: String?) {}
+        override fun onPasteTextFromClipboard() {}
         override fun onBell() {}
         // 程序重设了颜色（OSC 104）：换回 App 的配色。
         override fun onColorsChanged() = applyPalette()
@@ -120,10 +118,18 @@ class TerminalScreen(private val send: (ByteArray) -> Unit, private val resize: 
         sendText(code)
     }
 
+    /**
+     * 粘贴剪贴板。交给解析器的 paste：去掉 ESC 和 C1 控制字符，换行写成回车，shell 开了括号粘贴模式时前后加上标记，
+     * 多行的内容不会一粘贴就执行（和网页的终端一样）。
+     */
     fun paste() {
         val v = view ?: return
+        val e = emulator ?: return
         val clip = v.context.getSystemService(ClipboardManager::class.java)?.primaryClip ?: return
-        sendText(clip.getItemAt(0)?.coerceToText(v.context)?.toString().orEmpty())
+        val text = clip.getItemAt(0)?.coerceToText(v.context)?.toString().orEmpty()
+        if (text.isEmpty()) return
+        v.scrollToBottom()
+        e.paste(text)
     }
 
     /** 屏幕上和回滚里的全部文字（复制）。 */
