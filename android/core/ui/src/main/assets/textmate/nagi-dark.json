@@ -2,7 +2,15 @@
   "name": "nagi-dark",
   "type": "dark",
   "colors": {
-    "editor.foreground": "#FAFAFA"
+    "editor.background": "#0A0A0A",
+    "editor.foreground": "#EDEDED",
+    "editorLineNumber.foreground": "#A1A1A1",
+    "editorLineNumber.activeForeground": "#EDEDED",
+    "editor.lineHighlightBackground": "#262626",
+    "editor.selectionBackground": "#EDEDED2E",
+    "editorCursor.foreground": "#EDEDED",
+    "editorIndentGuide.background": "#262626",
+    "editorGutter.background": "#0A0A0A"
   },
   "tokenColors": [
     {

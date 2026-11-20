@@ -2,7 +2,15 @@
   "name": "nagi-light",
   "type": "light",
   "colors": {
-    "editor.foreground": "#0A0A0A"
+    "editor.background": "#FFFFFF",
+    "editor.foreground": "#0A0A0A",
+    "editorLineNumber.foreground": "#737373",
+    "editorLineNumber.activeForeground": "#0A0A0A",
+    "editor.lineHighlightBackground": "#F5F5F5",
+    "editor.selectionBackground": "#0A0A0A2E",
+    "editorCursor.foreground": "#0A0A0A",
+    "editorIndentGuide.background": "#E5E5E5",
+    "editorGutter.background": "#FFFFFF"
   },
   "tokenColors": [
     {

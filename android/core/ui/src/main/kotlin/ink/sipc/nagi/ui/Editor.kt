@@ -76,6 +76,15 @@ private object TextMate {
     }
 }
 
+/** 返回键不归编辑器处理：交给页面（有没保存的修改时先问，见 FileEditor）。 */
+private class BackPassingEditor(context: Context) : CodeEditor(context) {
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) false else super.onKeyDown(keyCode, event)
+
+    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent): Boolean =
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) false else super.onKeyUp(keyCode, event)
+}
+
 /** 一个编辑器：拿到里面的文字、撤销和重做、在光标处输入（键盘上方的按键）。 */
 class CodeEditorState {
     internal var editor: CodeEditor? = null
@@ -135,11 +144,13 @@ fun CodeEditorPane(
     AndroidView(
         factory = { ctx ->
             TextMate.init(ctx)
-            CodeEditor(ctx).also { e ->
+            BackPassingEditor(ctx).also { e ->
                 e.typefaceText = Typeface.MONOSPACE
                 e.typefaceLineNumber = Typeface.MONOSPACE
                 e.setTextSize(13f)
                 e.isWordwrap = false
+                // 行号离屏幕左边留一点距离，和页面的边距对齐。
+                e.lineNumberMarginLeft = 12 * ctx.resources.displayMetrics.density
                 e.setText(initial)
                 e.subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
                     state.refresh()
