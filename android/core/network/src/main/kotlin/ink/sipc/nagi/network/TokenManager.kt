@@ -1,5 +1,6 @@
 package ink.sipc.nagi.network
 
+import android.os.SystemClock
 import com.connectrpc.Code
 import ink.sipc.nagi.proto.v1.AppChallengeRequest
 import ink.sipc.nagi.proto.v1.AppTokenRequest
@@ -22,13 +23,15 @@ class TokenManager(
     /** 记下的下一次换取用的挑战（App 重新打开时少一次往返）：读出和存入。 */
     private val loadChallenge: () -> Pair<String, Long>? = { null },
     private val saveChallenge: (String?, Long) -> Unit = { _, _ -> },
+    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
 ) {
     private val mutex = Mutex()
     private var token: String? = null
-
-    /** 上一次真正换到令牌的时间（[now] 的时钟），还没换过时为 0。在锁外读（[sinceExchangeMs]）。 */
-    @Volatile
     private var obtainedAt = 0L
+
+    /** 前台续期用单调时钟，不受手机校时影响；null 表示还没换过令牌。在锁外读（[sinceExchangeMs]）。 */
+    @Volatile
+    private var obtainedAtElapsed: Long? = null
     private var expiresAt = 0L
     private var challenge: String? = null
     private var challengeAt = 0L
@@ -57,7 +60,7 @@ class TokenManager(
      * 距上一次真正换到令牌（用设备密钥或确认密钥）过了多久，还没换过时为 [Long.MAX_VALUE]。
      * App 在前台时按它计时换新令牌（见 MainActivity.keepAlive）：别的请求、解锁时换过的也算，页面重建也不会从头算。
      */
-    fun sinceExchangeMs(): Long = obtainedAt.let { if (it == 0L) Long.MAX_VALUE else now() - it }
+    fun sinceExchangeMs(): Long = obtainedAtElapsed?.let { elapsedRealtime() - it } ?: Long.MAX_VALUE
 
     /** 丢掉令牌，下一次请求重新换取（网络切换、面板要求时）。 */
     fun invalidate() {
@@ -85,6 +88,7 @@ class TokenManager(
                 val res = client.app.token(req).orThrow()
                 token = res.token
                 obtainedAt = now()
+                obtainedAtElapsed = elapsedRealtime()
                 expiresAt = now() + (res.expiresAt.seconds * 1000 - System.currentTimeMillis()).coerceIn(60_000, 10 * 60_000)
                 challenge = res.nextChallenge
                 challengeAt = now()

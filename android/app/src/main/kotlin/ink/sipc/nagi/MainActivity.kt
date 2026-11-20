@@ -38,7 +38,7 @@ internal fun acceptsPairLinkOn(route: String?): Boolean = route == null || route
 
 internal const val KEEP_ALIVE_MS = 4 * 60_000L
 
-/** 距下一次换令牌还要等多久：上一次真正换到令牌（[sinceMs] 之前）后满 4 分钟，已经过了就不等；时钟往回调过时最多等 4 分钟。 */
+/** 距下一次换令牌还要等多久：按单调时钟距上一次真正换到令牌的时长 [sinceMs] 算，满 4 分钟就不等。 */
 internal fun keepAliveWait(sinceMs: Long): Long = (KEEP_ALIVE_MS - sinceMs).coerceIn(0, KEEP_ALIVE_MS)
 
 // BiometricPrompt 要 FragmentActivity。

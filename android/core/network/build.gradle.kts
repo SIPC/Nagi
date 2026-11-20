@@ -29,4 +29,5 @@ dependencies {
     implementation(project(":core:security"))
     implementation(libs.kotlinx.coroutines.android)
     testImplementation(libs.junit)
+    testImplementation(libs.mockito.core)
 }
