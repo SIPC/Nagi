@@ -20,6 +20,11 @@ import (
 
 var idRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
+// ValidAdvance 限制单次不可信投票通信允许推进的轮次，避免把异常的大数写入持久状态。
+func ValidAdvance(from, to uint64) bool {
+	return to > from && to-from <= 1024 && to < ^uint64(0)
+}
+
 type vote struct {
 	For     []byte    `json:"for"`
 	Epoch   uint64    `json:"epoch"`
@@ -82,7 +87,7 @@ func (v *Voter) Vote(project string, parties [][]byte, candidate []byte, epoch u
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	x := v.load(project, lease)
-	if !allowed {
+	if !allowed || (epoch != x.Epoch && !ValidAdvance(x.Epoch, epoch)) {
 		return false, x.For, x.Epoch
 	}
 	now := time.Now()
@@ -128,7 +133,7 @@ func (v *Voter) Handover(project string, parties [][]byte, caller, to []byte, ep
 	switch {
 	case bytes.Equal(x.For, to) && x.Epoch == epoch:
 		return true, x.For, x.Epoch // 已经转过了（重试）
-	case !allowed || !bytes.Equal(x.For, caller) || epoch != x.Epoch+1:
+	case !allowed || !bytes.Equal(x.For, caller) || !ValidAdvance(x.Epoch, epoch) || epoch != x.Epoch+1:
 		return false, x.For, x.Epoch
 	}
 	nx := &vote{For: append([]byte(nil), to...), Epoch: epoch, expires: time.Now().Add(lease)}
