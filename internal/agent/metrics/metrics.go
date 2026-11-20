@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -50,9 +51,10 @@ type Collector struct {
 	diskPath string
 	log      *slog.Logger
 
-	mu     sync.RWMutex
-	latest map[string]float64
-	disks  []Disk
+	mu       sync.RWMutex
+	latest   map[string]float64
+	latestAt time.Time
+	disks    []Disk
 
 	prevTime          time.Time
 	prevCPUTotal      uint64
@@ -153,6 +155,23 @@ func (c *Collector) Latest() map[string]float64 {
 	return out
 }
 
+// LatestFresh returns no values once sampling has stopped for three intervals.
+// A cached sample is not evidence that a fault has recovered.
+func (c *Collector) LatestFresh(now time.Time) map[string]float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.latestAt.IsZero() || now.Before(c.latestAt) || now.Sub(c.latestAt) > 3*Interval {
+		return nil
+	}
+	out := make(map[string]float64, len(c.latest))
+	for k, v := range c.latest {
+		if v >= 0 && !math.IsNaN(v) && !math.IsInf(v, 0) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // Run 每 10 秒采集一次，直到 ctx 取消。
 func (c *Collector) Run(ctx context.Context) {
 	t := time.NewTicker(Interval)
@@ -212,8 +231,11 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	if err == nil {
 		seen := map[string]bool{}
 		limits := map[string]*limitSum{}
+		missing := map[string]bool{}
+		missingCPU := map[string]bool{}
 		for _, ct := range containers {
 			prefix := "c:" + ct.Project + "/" + ct.Container + "/" + ct.Service + ":"
+			key := "l:" + ct.Project + "/" + ct.Container + ":"
 			rt, rtErr := c.docker.Runtime(ctx, ct.ID)
 			if rtErr == nil {
 				n := rt.RestartCount
@@ -227,17 +249,20 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 			}
 			st, err := c.docker.ContainerStats(ctx, ct.ID)
 			if err != nil {
+				missing[key] = true
 				continue
 			}
 			seen[ct.ID] = true
 			v[prefix+"mem"] += float64(st.MemUsed)
 			if rtErr == nil {
-				key := "l:" + ct.Project + "/" + ct.Container + ":"
 				if limits[key] == nil {
 					limits[key] = &limitSum{}
 				}
 				limits[key].add(rt, st)
+			} else {
+				missing[key] = true
 			}
+			cpuOK := false
 			if prev, ok := c.prevContainer[ct.ID]; ok && elapsed > 0 {
 				if st.SystemTotal > prev.SystemTotal && st.CPUTotal >= prev.CPUTotal {
 					cpus := float64(st.OnlineCPUs)
@@ -245,11 +270,15 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 						cpus = 1
 					}
 					v[prefix+"cpu"] += 100 * float64(st.CPUTotal-prev.CPUTotal) / float64(st.SystemTotal-prev.SystemTotal) * cpus
+					cpuOK = true
 				}
 				if st.NetRx >= prev.NetRx && st.NetTx >= prev.NetTx {
 					v[prefix+"net_rx"] += float64(st.NetRx-prev.NetRx) / elapsed
 					v[prefix+"net_tx"] += float64(st.NetTx-prev.NetTx) / elapsed
 				}
+			}
+			if !cpuOK {
+				missingCPU[key] = true
 			}
 			c.prevContainer[ct.ID] = st
 		}
@@ -259,10 +288,18 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 			}
 		}
 		for key, l := range limits {
+			// Never compare a partial group sum with a partial or full limit.
+			if missing[key] {
+				continue
+			}
 			cpu, mem := l.result(memTotal)
-			v[key+"cpu"] = cpu
+			if !missingCPU[key] {
+				v[key+"cpu"] = cpu
+			}
 			v[key+"mem"] = mem
 		}
+	} else {
+		clear(c.prevContainer)
 	}
 
 	if !first && elapsed > 0 {
@@ -276,6 +313,7 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	c.prevTime = now
 	c.mu.Lock()
 	c.latest = v
+	c.latestAt = now
 	c.mu.Unlock()
 	return v
 }

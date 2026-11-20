@@ -474,14 +474,14 @@ func (a *agent) applyProxy(ctx context.Context) {
 		err = a.proxy.Apply(routes)
 	}
 	if err == nil {
-		// 已经不用的域名，"申请证书失败"的告警标为已恢复。
+		// 域名移除不是证书恢复的证据，保留未确认恢复的记录。
 		domains := map[string]bool{}
 		for _, r := range routes {
 			for _, d := range r.Domains {
 				domains[d] = true
 			}
 		}
-		a.alerts.ResolveUnless(ctx, "cert_failed:", func(d string) bool { return domains[d] })
+		a.alerts.MarkUnavailableUnless("cert_failed:", func(d string) bool { return domains[d] })
 	}
 	if err != nil && ctx.Err() == nil {
 		a.log.Warn("更新对外访问规则失败", "err", err)
