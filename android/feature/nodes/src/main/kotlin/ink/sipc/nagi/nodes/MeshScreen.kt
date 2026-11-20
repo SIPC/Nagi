@@ -513,7 +513,7 @@ private fun LatencyMatrix(vm: MeshViewModel, nodes: List<Node>, snap: MeshSnapsh
     val picked = pick?.split("|")?.takeIf { p -> p.size == 2 && p.all { id -> nodes.any { it.id == id } } }
     val gap = 4.dp
     val head = 112.dp
-    val cell = maxOf(84.dp, (avail - head - gap * nodes.size) / nodes.size)
+    val cell = maxOf(76.dp, (avail - head - gap * nodes.size) / nodes.size)
     SectionHeader(stringResource(R.string.mesh_latency_title))
     Column(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(gap)) {
         Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
