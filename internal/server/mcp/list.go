@@ -46,7 +46,7 @@ var allTools = []tool{
 		procedures:  []string{nagiv1connect.NodeServiceListNodesProcedure}},
 		toolListNodes),
 	def(tool{name: "query_metrics", title: "Query metrics", idempotent: true,
-		description: "CPU, memory, network and restarts of a node or a container over a time range: min, average, max, last and up to 60 points per series.",
+		description: "CPU, memory, network and restarts of a node or a container, or requests, status codes, latency, connections and traffic of a project's port mapping, over a time range: min, average, max, last and up to 60 points per series.",
 		procedures: []string{nagiv1connect.ProjectServiceListProjectsProcedure, nagiv1connect.ProjectServiceGetProjectProcedure,
 			nagiv1connect.NodeServiceListNodesProcedure, nagiv1connect.NodeServiceQueryNodeMetricsProcedure}},
 		toolQueryMetrics),
@@ -944,9 +944,10 @@ func toolListNodes(c *call, in ListNodesArgs) (any, error) {
 }
 
 type MetricsArgs struct {
-	Node      string `json:"node,omitempty" jsonschema:"node name or ID; omit when asking about a container"`
-	Project   string `json:"project,omitempty" jsonschema:"project of the container"`
+	Node      string `json:"node,omitempty" jsonschema:"node name or ID; omit when asking about a container or port mapping"`
+	Project   string `json:"project,omitempty" jsonschema:"project of the container or port mapping"`
 	Container string `json:"container,omitempty" jsonschema:"container name"`
+	Route     string `json:"route,omitempty" jsonschema:"port mapping name, or * for every port mapping in the project; totals of all entry nodes"`
 	Minutes   int    `json:"minutes,omitempty" jsonschema:"time range in minutes, default 60, at most 10080 (7 days)"`
 }
 
@@ -956,11 +957,17 @@ func toolQueryMetrics(c *call, in MetricsArgs) (any, error) {
 		minutes = 60
 	}
 	minutes = min(minutes, 7*24*60)
-	nodes, err := c.nodes()
-	if err != nil {
-		return nil, err
+	step := int64(max(60, minutes*60/60))
+	now := time.Now()
+	from, to := timestamppb.New(now.Add(-time.Duration(minutes)*time.Minute)), timestamppb.New(now)
+	if in.Route != "" {
+		if in.Container != "" || in.Node != "" {
+			return nil, errors.New("give a route with only its project")
+		}
+		return queryRouteMetrics(c, in, step, from, to)
 	}
 	var nodeID, prefix string
+	var nodes *nagiv1.ListNodesResponse
 	switch {
 	case in.Container != "":
 		s, m, err := c.container(ContainerArg{Project: in.Project, Container: in.Container})
@@ -969,56 +976,185 @@ func toolQueryMetrics(c *call, in MetricsArgs) (any, error) {
 		}
 		nodeID, prefix = m.GetNodeId(), "c:"+s.GetProject().GetId()+"/"+m.GetName()+"/"
 	case in.Node != "":
+		var err error
+		nodes, err = c.nodes()
+		if err != nil {
+			return nil, err
+		}
 		n, err := findNode(nodes, in.Node)
 		if err != nil {
 			return nil, err
 		}
 		nodeID, prefix = n.GetId(), "node:"
 	default:
-		return nil, errors.New("give a node, or a project and container")
+		return nil, errors.New("give a node, a project and container, or a project and route")
 	}
-	step := int64(max(60, minutes*60/60))
-	now := time.Now()
 	res, err := c.h.clients.nodes.QueryNodeMetrics(c.ctx, connect.NewRequest(&nagiv1.QueryNodeMetricsRequest{
-		NodeId: nodeID, Prefix: prefix, From: timestamppb.New(now.Add(-time.Duration(minutes) * time.Minute)), To: timestamppb.New(now), Step: step,
+		NodeId: nodeID, Prefix: prefix, From: from, To: to, Step: step,
 	}))
 	if err != nil {
 		return nil, err
 	}
-	type series struct {
-		Name   string       `json:"name"`
-		Unit   string       `json:"unit"`
-		Min    float64      `json:"min"`
-		Avg    float64      `json:"avg"`
-		Max    float64      `json:"max"`
-		Last   float64      `json:"last"`
-		Points [][2]float64 `json:"points"`
-	}
 	out := struct {
-		Node        string   `json:"node"`
-		StepSeconds int64    `json:"step_seconds"`
-		Series      []series `json:"series"`
-	}{Node: nodeName(nodes, nodeID), StepSeconds: step, Series: []series{}}
+		Node        string          `json:"node"`
+		StepSeconds int64           `json:"step_seconds"`
+		Series      []metricSummary `json:"series"`
+	}{Node: metricNodeName(c, nodes, nodeID), StepSeconds: step, Series: []metricSummary{}}
 	for _, ms := range res.Msg.GetSeries() {
-		vals := ms.GetValues()
-		if len(vals) == 0 {
-			continue
-		}
 		name := strings.TrimPrefix(ms.GetName(), prefix)
-		sr := series{Name: name, Unit: metricUnit(name), Min: math.Inf(1), Max: math.Inf(-1), Last: round2(vals[len(vals)-1]), Points: [][2]float64{}}
-		sum := 0.0
-		for i, v := range vals {
-			sum += v
-			sr.Min, sr.Max = math.Min(sr.Min, v), math.Max(sr.Max, v)
-			if every := (len(vals) + 59) / 60; i%every == 0 {
-				sr.Points = append(sr.Points, [2]float64{float64(ms.GetTimes()[i]), round2(v)})
-			}
+		if sr, ok := summarizeMetric(name, metricUnit(name), ms.GetTimes(), ms.GetValues()); ok {
+			out.Series = append(out.Series, sr)
 		}
-		sr.Avg, sr.Min, sr.Max = round2(sum/float64(len(vals))), round2(sr.Min), round2(sr.Max)
-		out.Series = append(out.Series, sr)
 	}
 	sort.Slice(out.Series, func(i, j int) bool { return out.Series[i].Name < out.Series[j].Name })
 	return out, nil
+}
+
+type metricSummary struct {
+	Name   string       `json:"name"`
+	Unit   string       `json:"unit"`
+	Min    float64      `json:"min"`
+	Avg    float64      `json:"avg"`
+	Max    float64      `json:"max"`
+	Last   float64      `json:"last"`
+	Points [][2]float64 `json:"points"`
+}
+
+func summarizeMetric(name, unit string, times []int64, vals []float64) (metricSummary, bool) {
+	if len(vals) == 0 {
+		return metricSummary{}, false
+	}
+	sr := metricSummary{Name: name, Unit: unit, Min: math.Inf(1), Max: math.Inf(-1), Last: round2(vals[len(vals)-1]), Points: [][2]float64{}}
+	sum := 0.0
+	for i, v := range vals {
+		sum += v
+		sr.Min, sr.Max = math.Min(sr.Min, v), math.Max(sr.Max, v)
+		if every := (len(vals) + 59) / 60; i%every == 0 && i < len(times) {
+			sr.Points = append(sr.Points, [2]float64{float64(times[i]), round2(v)})
+		}
+	}
+	sr.Avg, sr.Min, sr.Max = round2(sum/float64(len(vals))), round2(sr.Min), round2(sr.Max)
+	return sr, true
+}
+
+func metricNodeName(c *call, nodes *nagiv1.ListNodesResponse, id string) string {
+	if nodes == nil {
+		var err error
+		if nodes, err = c.nodes(); err != nil {
+			return otherNode
+		}
+	}
+	return nodeName(nodes, id)
+}
+
+// queryRouteMetrics 查项目的端口映射。统计记在收到请求的入口节点上，这里和网页一样逐个节点查询，再把同一个映射的序列合起来。
+// 不读项目里的映射列表：它要「网络和域名」，只看监控的成员只有「查看」。
+func queryRouteMetrics(c *call, in MetricsArgs, step int64, from, to *timestamppb.Timestamp) (any, error) {
+	if in.Project == "" {
+		return nil, errors.New("give the project of the route")
+	}
+	s, err := c.project(in.Project)
+	if err != nil {
+		return nil, err
+	}
+	prefix := "r:" + s.GetProject().GetId() + "/"
+	var ids []string
+	if nodes, err := c.nodes(); err == nil {
+		for _, n := range nodes.GetNodes() {
+			ids = append(ids, n.GetId())
+		}
+	}
+	// 成员看不到的节点：不填节点 ID，面板查这个项目的容器和入口节点里他看不到的那些（管理员没有这种节点）。
+	ids = append(ids, "")
+	var series []*nagiv1.MetricSeries
+	for _, id := range ids {
+		res, err := c.h.clients.nodes.QueryNodeMetrics(c.ctx, connect.NewRequest(&nagiv1.QueryNodeMetricsRequest{
+			NodeId: id, Prefix: prefix, From: from, To: to, Step: step,
+		}))
+		if err != nil {
+			continue // 离线的节点跳过，和网页一样。
+		}
+		series = append(series, res.Msg.GetSeries()...)
+	}
+	type routeSeries struct {
+		times map[int64]float64
+		max   bool
+	}
+	merged := map[string]*routeSeries{}
+	for _, ms := range series {
+		name := strings.TrimPrefix(ms.GetName(), prefix)
+		route, metric, ok := strings.Cut(name, ":")
+		if !ok || in.Route != "*" && route != in.Route {
+			continue
+		}
+		rs := merged[name]
+		if rs == nil {
+			rs = &routeSeries{times: map[int64]float64{}, max: routeMaxMetric(metric)}
+			merged[name] = rs
+		}
+		for i, t := range ms.GetTimes() {
+			if i >= len(ms.GetValues()) {
+				break
+			}
+			v := ms.GetValues()[i]
+			if old, seen := rs.times[t]; seen && rs.max {
+				rs.times[t] = math.Max(old, v)
+			} else {
+				rs.times[t] = old + v
+			}
+		}
+	}
+	if in.Route != "*" && len(merged) == 0 {
+		return nil, fmt.Errorf("no metrics for route %q in project %s in this time range (check the route name; routes without traffic have no data)", in.Route, s.GetProject().GetName())
+	}
+	out := struct {
+		Project     string          `json:"project"`
+		Route       string          `json:"route"`
+		StepSeconds int64           `json:"step_seconds"`
+		Series      []metricSummary `json:"series"`
+	}{Project: s.GetProject().GetName(), Route: in.Route, StepSeconds: step, Series: []metricSummary{}}
+	for name, rs := range merged {
+		times := make([]int64, 0, len(rs.times))
+		for t := range rs.times {
+			times = append(times, t)
+		}
+		slices.Sort(times)
+		vals := make([]float64, len(times))
+		for i, t := range times {
+			vals[i] = rs.times[t]
+		}
+		if sr, ok := summarizeMetric(name, routeMetricUnit(name), times, vals); ok {
+			out.Series = append(out.Series, sr)
+		}
+	}
+	sort.Slice(out.Series, func(i, j int) bool { return out.Series[i].Name < out.Series[j].Name })
+	return out, nil
+}
+
+// routeMaxMetric：耗时不能在入口节点之间相加，取最大值；请求、连接、流量和当前连接数相加。
+func routeMaxMetric(metric string) bool {
+	switch metric {
+	case "lat", "p50", "p95", "p99":
+		return true
+	}
+	return false
+}
+
+func routeMetricUnit(name string) string {
+	_, metric, _ := strings.Cut(name, ":")
+	switch metric {
+	case "req", "2xx", "3xx", "4xx", "5xx":
+		return "requests/s"
+	case "conn", "fail":
+		return "connections/s"
+	case "active":
+		return "connections"
+	case "in", "out":
+		return "bytes/s"
+	case "lat", "p50", "p95", "p99":
+		return "ms"
+	}
+	return ""
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }

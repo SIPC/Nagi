@@ -107,6 +107,9 @@ func TestScopeCheckRequest(t *testing.T) {
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{Prefix: "node:"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:p2/"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:"}, connect.CodeNotFound},
+		// 端口映射的请求统计（记在入口节点上）同样只能查范围内的项目。
+		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{Prefix: "r:p1/"}, 0},
+		{"/nagi.v1.NodeService/QueryNodeMetrics", &nagiv1.QueryNodeMetricsRequest{Prefix: "r:p2/"}, connect.CodeNotFound},
 		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{2}}, connect.CodeNotFound},
 		// 不属于节点的对端（面板）只给管理员（A4）。
 		{"/nagi.v1.NodeService/PingNodeMesh", &nagiv1.PingNodeMeshRequest{NodeId: "n1", PublicKey: []byte{9}}, connect.CodeNotFound},
@@ -116,6 +119,28 @@ func TestScopeCheckRequest(t *testing.T) {
 		err := a.checkRequest(ctx, x, c.procedure, c.msg)
 		if got := connect.CodeOf(err); err == nil && c.want != 0 || err != nil && got != c.want {
 			t.Errorf("%s %v：得到 %v，想要 %v", c.procedure, c.msg, err, c.want)
+		}
+	}
+	// 只有「查看」、节点范围不限的成员（MCP 的只读令牌）：哪台节点都看不到，只能查自己项目的序列，查不了节点本身。
+	v, err := a.loadAccess(ctx, auth.User{ID: 2, Role: auth.RoleMember, Perms: auth.PermsOf(auth.PermView), LimitProjects: true})
+	if err != nil || v == nil {
+		t.Fatal(v, err)
+	}
+	for _, c := range []struct {
+		msg  *nagiv1.QueryNodeMetricsRequest
+		want connect.Code
+	}{
+		{&nagiv1.QueryNodeMetricsRequest{NodeId: "n1", Prefix: "node:"}, connect.CodeNotFound},
+		{&nagiv1.QueryNodeMetricsRequest{NodeId: "n2", Prefix: "c:p1/"}, 0},
+		{&nagiv1.QueryNodeMetricsRequest{NodeId: "n1", Prefix: "c:p1/"}, connect.CodeNotFound},
+		{&nagiv1.QueryNodeMetricsRequest{Prefix: "c:p1/web/"}, 0},
+		{&nagiv1.QueryNodeMetricsRequest{Prefix: "r:p1/"}, 0},
+		{&nagiv1.QueryNodeMetricsRequest{Prefix: "r:p2/"}, connect.CodeNotFound},
+		{&nagiv1.QueryNodeMetricsRequest{Prefix: "m:"}, connect.CodeNotFound},
+	} {
+		err := a.checkRequest(ctx, v, "/nagi.v1.NodeService/QueryNodeMetrics", c.msg)
+		if got := connect.CodeOf(err); err == nil && c.want != 0 || err != nil && got != c.want {
+			t.Errorf("只有查看：%v：得到 %v，想要 %v", c.msg, err, c.want)
 		}
 	}
 }

@@ -141,7 +141,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `list_registries` | 项目登录过的私有镜像仓库地址，不返回密码 | `ListRegistries` |
 | `list_backup_snapshots` | 一个备份节点（`backup_node`，默认第一个；容器有不止一台备份节点叫这个名称时报错，要求改用 ID，`sync_backup`、`restore_from_backup` 同样）上副本里的快照（截至上次同步） | `ListBackupSnapshots` |
 | `list_nodes` | 节点、标签、在线、占用、容器数，可以只列带某个标签的 | `ListNodes` |
-| `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数：最小、平均、最大、最新和不超过 60 个点 | `QueryNodeMetrics` |
+| `query_metrics` | 节点或容器在一段时间内（默认 60 分钟，最长 7 天）的 CPU、内存、磁盘、网络、重启次数；或者项目端口映射（`route`，`*` 是项目的全部映射）的请求数、各类状态码、耗时、连接数和流量：最小、平均、最大、最新和不超过 60 个点。端口映射的统计记在各个入口节点上，工具逐个节点查询后合起来（请求、连接、流量相加，耗时取最大），包括成员看不到的节点（不说是哪台）。查容器和端口映射只要项目的「查看」，不要「查看节点」「网络和域名」（不读映射列表，按 `r:<项目 ID>/` 前缀查）；查节点本身要「查看节点」 | `QueryNodeMetrics` |
 | `get_logs` | 最近的日志，默认 200 行、最多 1000 行，可以只看 stderr、按关键字过滤 | `StreamLogs`（不跟随） |
 | `list_snapshots` | 容器的快照：ID、类型、时间、大小，标出能不能用 `restore_snapshot` 恢复、能不能删除，以及项目的份数上限 | `ListSnapshots` |
 | `check_routes` | 端口映射的域名检查：是否解析到入口节点、证书状态。用面板自己的检查，不按 agent 给的地址发请求，不能被拿来探测内网 | `CheckDomains` |
