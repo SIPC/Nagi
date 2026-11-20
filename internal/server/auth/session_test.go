@@ -292,7 +292,11 @@ func TestSessionReverifyRestoresKey(t *testing.T) {
 
 // 标识是浏览器、TLS 握手却来自脚本工具（用 curl 带上 cookie）：直接退出并告警。
 func TestSessionToolFingerprint(t *testing.T) {
-	for _, fp := range []string{goFP, curlFP, "t13d1712h1_aaaaaaaaaaaa_bbbbbbbbbbbb", "t13d181700_aaaaaaaaaaaa_bbbbbbbbbbbb"} {
+	for _, fp := range []string{
+		goFP, curlFP, "t13d1712h1_aaaaaaaaaaaa_bbbbbbbbbbbb", "t13d181700_aaaaaaaaaaaa_bbbbbbbbbbbb",
+		// 合成的低扩展数指纹：声明 h3 或 q 不能成为绕过工具检测的凭据。
+		"t13d0311h3_55b375c5d22e_aaaaaaaaaaaa", "q13d0311h3_55b375c5d22e_aaaaaaaaaaaa",
+	} {
 		h := newSessionHarness(t)
 		token := h.login("admin", home)
 		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: fp}); !errors.Is(err, errLoggedOut) {
@@ -314,7 +318,7 @@ func TestSessionToolFingerprint(t *testing.T) {
 	}
 }
 
-// 同一个浏览器的握手只是扩展不同（会话恢复多出 pre_shared_key、有的握手带 padding）、或者走了 HTTP/3：
+// 同一个浏览器的握手只是扩展不同（会话恢复多出 pre_shared_key、有的握手带 padding）、或者声明了不同的 ALPN：
 // 不要求重新验证。手机网络下重连频繁，以前按完整指纹比较会反复弹出验证。
 func TestSessionTLSResumption(t *testing.T) {
 	h := newSessionHarness(t)
@@ -323,7 +327,7 @@ func TestSessionTLSResumption(t *testing.T) {
 		"t13d1517h2_8daaf6152771_cb7bf5808d99", // 会话恢复：多一个扩展，扩展哈希不同
 		"t13d1518h2_8daaf6152771_1234567890ab", // 恢复并带 early_data
 		"t13d1517h1_8daaf6152771_c4a234726a38", // WebSocket（终端）另开的连接只声明 http/1.1
-		"t13d1516h3_8daaf6152771_02713d6af862", // HTTP/3
+		"t13d1516h3_8daaf6152771_02713d6af862", // 仅改变 ALPN 的合成样本，不是真实 QUIC 握手
 		chromeFP,
 	} {
 		if _, err := h.check(token, RequestInfo{IP: home.IP, UserAgent: chromeUA, Fingerprint: fp}); err != nil {
@@ -332,7 +336,7 @@ func TestSessionTLSResumption(t *testing.T) {
 	}
 	for _, fp := range []string{"t13d1516h3_8daaf6152771_02713d6af862", "t13d1517h1_8daaf6152771_c4a234726a38"} {
 		if looksLikeTool(fp) {
-			t.Fatalf("%s：浏览器的 HTTP/3、WebSocket 连接不是脚本工具", fp)
+			t.Fatalf("%s：只改变 ALPN 不应被判为脚本工具", fp)
 		}
 	}
 }

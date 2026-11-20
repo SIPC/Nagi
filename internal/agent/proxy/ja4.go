@@ -97,6 +97,15 @@ func (ja4Header) CaddyModule() caddy.ModuleInfo {
 
 func (ja4Header) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	r.Header.Del(ja4HeaderName)
+	// 只在面板路由安装这个处理器。现有指纹规则只适用于 TCP，QUIC 的浏览器握手扩展较少，会被当成工具。
+	// 不放宽认证：停止为面板宣传 HTTP/3，已缓存替代服务的客户端收到 421 后可用 TCP 重试。
+	// 按服务端解析的 HTTP 版本判断，不信任客户端声明的 ALPN 或请求头；共享监听上的其他站点不受影响。
+	w.Header().Set("Alt-Svc", "clear")
+	if r.ProtoMajor == 3 {
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "Panel access requires HTTP/2 or HTTP/1.1", http.StatusMisdirectedRequest)
+		return nil
+	}
 	if r.TLS != nil {
 		if fp := lookupJA4(r.RemoteAddr); fp != "" {
 			r.Header.Set(ja4HeaderName, fp)
