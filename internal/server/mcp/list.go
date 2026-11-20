@@ -1021,6 +1021,15 @@ type metricSummary struct {
 }
 
 func summarizeMetric(name, unit string, times []int64, vals []float64) (metricSummary, bool) {
+	// 数据是节点给的：NaN、Inf 写不进 JSON，会让整个调用失败，跳过。
+	var keptT []int64
+	var keptV []float64
+	for i, v := range vals {
+		if !math.IsNaN(v) && !math.IsInf(v, 0) && i < len(times) {
+			keptT, keptV = append(keptT, times[i]), append(keptV, v)
+		}
+	}
+	times, vals = keptT, keptV
 	if len(vals) == 0 {
 		return metricSummary{}, false
 	}
@@ -1097,6 +1106,9 @@ func queryRouteMetrics(c *call, in MetricsArgs, step int64, from, to *timestampp
 				break
 			}
 			v := ms.GetValues()[i]
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				continue
+			}
 			if old, seen := rs.times[t]; seen && rs.max {
 				rs.times[t] = math.Max(old, v)
 			} else {

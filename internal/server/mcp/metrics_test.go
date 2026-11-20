@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -155,8 +156,8 @@ func TestQueryRouteMetricsMerge(t *testing.T) {
 	f := &metricsNodes{
 		visible: []*nagiv1.Node{{Id: "n1", Name: "hk"}, {Id: "n2", Name: "sg"}},
 		series: map[string][]*nagiv1.MetricSeries{
-			"n1": {series("r:p1/web:req", 3, 1), series("r:p1/web:p95", 100, 20), series("r:p1/api:req", 50)},
-			"n2": {series("r:p1/web:req", 5), series("r:p1/web:p95", 400)},
+			"n1": {series("r:p1/web:req", 3, 1), series("r:p1/web:p95", 100, 20), series("r:p1/api:req", 50), series("r:p1/web:in", 3)},
+			"n2": {series("r:p1/web:req", 5), series("r:p1/web:p95", 400), series("r:p1/web:in", math.NaN(), 8)},
 			"":   {series("r:p1/web:req", 7), series("r:p1/web:p95", 250)},
 		},
 	}
@@ -170,6 +171,10 @@ func TestQueryRouteMetricsMerge(t *testing.T) {
 	}
 	if s := findSeries(t, v, "web:p95"); s.Points[0][1] != 400 || s.Unit != "ms" {
 		t.Errorf("p95 应该取最大值：%+v", s)
+	}
+	// 节点给的 NaN 不能让整个调用失败，也不能吞掉别的节点同一时刻的值。
+	if s := findSeries(t, v, "web:in"); len(s.Points) != 2 || s.Points[0][1] != 3 || s.Last != 8 {
+		t.Errorf("web:in = %+v", s)
 	}
 	for _, s := range decodeMetrics(t, v).Series {
 		if strings.HasPrefix(s.Name, "api:") {
