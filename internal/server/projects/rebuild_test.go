@@ -10,9 +10,70 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
 )
+
+func TestRebuiltEntriesNeedConfirmation(t *testing.T) {
+	s := haTestService(t)
+	var err error
+	s.Sealer, err = sealer.Load(filepath.Join(t.TempDir(), "master.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	sp := &nagiv1.ContainerSpec{ProjectId: "aaaaaaaaaaaaaaaa", Name: "app", Config: &nagiv1.ContainerConfig{Compose: "services:\n  app:\n    image: alpine\n"}, Routes: []*nagiv1.Exposure{{Name: "app-80", Container: "app", Service: "app", Target: 80, Published: 18080, Protocol: "tcp", EntryNodes: []string{"n2"}}}}
+	if err := s.rebuildContainer(ctx, "n1", sp, nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.Q.ListRoutes(ctx, sp.ProjectId)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("%v %v", rows, err)
+	}
+	r := RouteProto(rows[0])
+	if len(r.EntryNodes) != 1 || r.EntryNodes[0] != "n2" || r.Error == "" {
+		t.Errorf("restored route must retain choices but require confirmation: %v", r)
+	}
+	all, _ := s.Q.ListAllContainers(ctx)
+	plan := &nagiv1.LinkPlan{}
+	if err := s.planEntries(ctx, "n2", all, map[string][]byte{"n1": {1}, "n2": {2}}, nil, plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Entries) != 0 {
+		t.Fatal("unconfirmed cross-node entry activated")
+	}
+	// 待确认的映射不能阻止其他项目正常分配端口。
+	if err := s.checkConflicts(ctx, "n2", "other", "", r); err != nil {
+		t.Fatal(err)
+	}
+	// 确认后可以下发；没有跨节点入口的缓存照常恢复。
+	r.Error = ""
+	if err := s.upsertRoute(ctx, sp.ProjectId, r); err != nil {
+		t.Fatal(err)
+	}
+	plan = &nagiv1.LinkPlan{}
+	if err := s.planEntries(ctx, "n2", all, map[string][]byte{"n1": {1}, "n2": {2}}, nil, plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Entries) != 1 {
+		t.Fatal("confirmed entry did not activate")
+	}
+	sp.Name, sp.Routes[0].Name, sp.Routes[0].EntryNodes = "local", "local-80", nil
+	sp.Routes[0].Published = 18081
+	if err := s.rebuildContainer(ctx, "n1", sp, nil); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = s.Q.ListRoutes(ctx, sp.ProjectId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if RouteProto(row).GetError() != "" {
+			t.Fatalf("local or confirmed route disabled: %v", row)
+		}
+	}
+}
 
 // 节点缓存里的项目连接只在两边都是刚拼回的项目、代理所属的项目又在这个节点上时才连回去；
 // 节点不能凭缓存把面板上本来就有的项目连起来。
