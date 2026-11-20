@@ -93,6 +93,13 @@ public interface AuthServiceClientInterface {
   public suspend fun setProjectOrder(request: ProjectOrder, headers: Headers = emptyMap()): ResponseMessage<SetProjectOrderResponse>
 
   /**
+   *  自己的节点页排序，同项目页。
+   */
+  public suspend fun getNodeOrder(request: GetNodeOrderRequest, headers: Headers = emptyMap()): ResponseMessage<NodeOrder>
+
+  public suspend fun setNodeOrder(request: NodeOrder, headers: Headers = emptyMap()): ResponseMessage<SetNodeOrderResponse>
+
+  /**
    *  添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
    */
   public suspend fun createAppPairing(request: CreateAppPairingRequest, headers: Headers = emptyMap()): ResponseMessage<CreateAppPairingResponse>

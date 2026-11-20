@@ -99,6 +99,36 @@ public class ProjectServiceClient(
 
 
   /**
+   *  替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+   */
+  override suspend fun setProjectTags(request: SetProjectTagsRequest, headers: Headers): ResponseMessage<Project> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.ProjectService/SetProjectTags",
+      ink.sipc.nagi.proto.v1.SetProjectTagsRequest::class,
+      ink.sipc.nagi.proto.v1.Project::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  重命名或删除项目标签（new_name 为空），所有项目一起改。
+   */
+  override suspend fun renameProjectTag(request: RenameLabelRequest, headers: Headers): ResponseMessage<RenameLabelResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.ProjectService/RenameProjectTag",
+      ink.sipc.nagi.proto.v1.RenameLabelRequest::class,
+      ink.sipc.nagi.proto.v1.RenameLabelResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
    *  保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
    */
   override suspend fun saveSharedEnv(request: SaveSharedEnvRequest, headers: Headers): ResponseMessage<SaveSharedEnvResponse> = client.unary(

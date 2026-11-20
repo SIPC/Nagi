@@ -261,4 +261,45 @@ public interface ProjectOrBuilder extends
    */
   com.google.protobuf.ByteString
       getGroupBytes();
+
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @return A list containing the tags.
+   */
+  java.util.List<java.lang.String>
+      getTagsList();
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @return The count of tags.
+   */
+  int getTagsCount();
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param index The index of the element to return.
+   * @return The tags at the given index.
+   */
+  java.lang.String getTags(int index);
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param index The index of the element to return.
+   * @return The tags at the given index.
+   */
+  com.google.protobuf.ByteString
+      getTagsBytes(int index);
 }

@@ -190,6 +190,16 @@ public interface NodeServiceClientInterface {
   public suspend fun renameNodeTag(request: RenameLabelRequest, headers: Headers = emptyMap()): ResponseMessage<RenameLabelResponse>
 
   /**
+   *  把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+   */
+  public suspend fun setNodeGroup(request: SetNodeGroupRequest, headers: Headers = emptyMap()): ResponseMessage<SetNodeGroupResponse>
+
+  /**
+   *  重命名或删除节点分组（new_name 为空），所有节点一起改。
+   */
+  public suspend fun renameNodeGroup(request: RenameLabelRequest, headers: Headers = emptyMap()): ResponseMessage<RenameLabelResponse>
+
+  /**
    *  隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
    *  只有管理员能用，要先做高权限确认并输入节点名。
    */

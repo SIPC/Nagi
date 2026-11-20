@@ -260,4 +260,24 @@ public interface NodeOrBuilder extends
    * @return The isolated.
    */
   boolean getIsolated();
+
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   * @return The group.
+   */
+  java.lang.String getGroup();
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   * @return The bytes for group.
+   */
+  com.google.protobuf.ByteString
+      getGroupBytes();
 }

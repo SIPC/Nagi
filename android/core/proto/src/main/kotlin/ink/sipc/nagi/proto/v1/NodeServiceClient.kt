@@ -639,6 +639,36 @@ public class NodeServiceClient(
 
 
   /**
+   *  把节点放进分组（见 docs/panel.md#分组和标签）。节点分组只用来整理节点页，不影响访问范围。
+   */
+  override suspend fun setNodeGroup(request: SetNodeGroupRequest, headers: Headers): ResponseMessage<SetNodeGroupResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.NodeService/SetNodeGroup",
+      ink.sipc.nagi.proto.v1.SetNodeGroupRequest::class,
+      ink.sipc.nagi.proto.v1.SetNodeGroupResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  重命名或删除节点分组（new_name 为空），所有节点一起改。
+   */
+  override suspend fun renameNodeGroup(request: RenameLabelRequest, headers: Headers): ResponseMessage<RenameLabelResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.NodeService/RenameNodeGroup",
+      ink.sipc.nagi.proto.v1.RenameLabelRequest::class,
+      ink.sipc.nagi.proto.v1.RenameLabelResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
    *  隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
    *  只有管理员能用，要先做高权限确认并输入节点名。
    */

@@ -34,6 +34,16 @@ public interface ProjectServiceClientInterface {
   public suspend fun renameProjectGroup(request: RenameLabelRequest, headers: Headers = emptyMap()): ResponseMessage<RenameLabelResponse>
 
   /**
+   *  替换项目的标签（见 docs/panel.md#分组和标签）。项目标签只用来整理项目页，不影响访问范围。
+   */
+  public suspend fun setProjectTags(request: SetProjectTagsRequest, headers: Headers = emptyMap()): ResponseMessage<Project>
+
+  /**
+   *  重命名或删除项目标签（new_name 为空），所有项目一起改。
+   */
+  public suspend fun renameProjectTag(request: RenameLabelRequest, headers: Headers = emptyMap()): ResponseMessage<RenameLabelResponse>
+
+  /**
    *  保存共享变量的草稿，返回引用了改动变量的容器（部署共享变量时默认一起部署）。
    */
   public suspend fun saveSharedEnv(request: SaveSharedEnvRequest, headers: Headers = emptyMap()): ResponseMessage<SaveSharedEnvResponse>

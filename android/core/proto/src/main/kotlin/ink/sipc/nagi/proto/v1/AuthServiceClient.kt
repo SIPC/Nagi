@@ -298,6 +298,33 @@ public class AuthServiceClient(
 
 
   /**
+   *  自己的节点页排序，同项目页。
+   */
+  override suspend fun getNodeOrder(request: GetNodeOrderRequest, headers: Headers): ResponseMessage<NodeOrder> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AuthService/GetNodeOrder",
+      ink.sipc.nagi.proto.v1.GetNodeOrderRequest::class,
+      ink.sipc.nagi.proto.v1.NodeOrder::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  override suspend fun setNodeOrder(request: NodeOrder, headers: Headers): ResponseMessage<SetNodeOrderResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AuthService/SetNodeOrder",
+      ink.sipc.nagi.proto.v1.NodeOrder::class,
+      ink.sipc.nagi.proto.v1.SetNodeOrderResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
    *  添加手机（见 docs/android.md#扫码）：生成配对码和二维码内容。要先用密码或验证码做高权限确认。
    */
   override suspend fun createAppPairing(request: CreateAppPairingRequest, headers: Headers): ResponseMessage<CreateAppPairingResponse> = client.unary(

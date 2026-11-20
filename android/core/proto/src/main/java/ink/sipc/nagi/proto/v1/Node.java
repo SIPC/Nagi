@@ -21,6 +21,7 @@ public  final class Node extends
     unknownContainers_ = emptyProtobufList();
     staleProjects_ = emptyProtobufList();
     tags_ = emptyProtobufList();
+    group_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1020,6 +1021,73 @@ public  final class Node extends
   private void clearIsolated() {
 
     isolated_ = false;
+  }
+
+  public static final int GROUP_FIELD_NUMBER = 16;
+  private java.lang.String group_;
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   * @return The group.
+   */
+  @java.lang.Override
+  public java.lang.String getGroup() {
+    return group_;
+  }
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   * @return The bytes for group.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getGroupBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(group_);
+  }
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   * @param value The group to set.
+   */
+  private void setGroup(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    group_ = value;
+  }
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   */
+  private void clearGroup() {
+
+    group_ = getDefaultInstance().getGroup();
+  }
+  /**
+   * <pre>
+   * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+   * </pre>
+   *
+   * <code>string group = 16 [json_name = "group"];</code>
+   * @param value The bytes for group to set.
+   */
+  private void setGroupBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    group_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.Node parseFrom(
@@ -2167,6 +2235,75 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+     * </pre>
+     *
+     * <code>string group = 16 [json_name = "group"];</code>
+     * @return The group.
+     */
+    @java.lang.Override
+    public java.lang.String getGroup() {
+      return instance.getGroup();
+    }
+    /**
+     * <pre>
+     * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+     * </pre>
+     *
+     * <code>string group = 16 [json_name = "group"];</code>
+     * @return The bytes for group.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getGroupBytes() {
+      return instance.getGroupBytes();
+    }
+    /**
+     * <pre>
+     * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+     * </pre>
+     *
+     * <code>string group = 16 [json_name = "group"];</code>
+     * @param value The group to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGroup(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setGroup(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+     * </pre>
+     *
+     * <code>string group = 16 [json_name = "group"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGroup() {
+      copyOnWrite();
+      instance.clearGroup();
+      return this;
+    }
+    /**
+     * <pre>
+     * 所在的分组，未分组时为空（见 docs/panel.md#分组和标签）。
+     * </pre>
+     *
+     * <code>string group = 16 [json_name = "group"];</code>
+     * @param value The bytes for group to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGroupBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setGroupBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.Node)
   }
   @java.lang.Override
@@ -2201,12 +2338,13 @@ public  final class Node extends
             "alertRules_",
             "tags_",
             "isolated_",
+            "group_",
           };
           java.lang.String info =
-              "\u0000\u000f\u0000\u0001\u0001\u000f\u000f\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0010\u0000\u0001\u0001\u0010\u0010\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0007\u0004\u1009\u0000\u0005\u1009\u0001\u0006\u0208\u0007\u0007\b\u1009" +
               "\u0002\t\u0004\n\u001b\u000b\u0007\f\u001b\r\u1009\u0003\u000e\u021a\u000f\u0007" +
-              "";
+              "\u0010\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -28,6 +28,7 @@ public  final class Project extends
     sharedEnvDraft_ = emptyProtobufList();
     links_ = emptyProtobufList();
     group_ = "";
+    tags_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1102,6 +1103,135 @@ public  final class Project extends
     checkByteStringIsUtf8(value);
     group_ = value.toStringUtf8();
 
+  }
+
+  public static final int TAGS_FIELD_NUMBER = 15;
+  private com.google.protobuf.Internal.ProtobufList<java.lang.String> tags_;
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @return A list containing the tags.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.String> getTagsList() {
+    return tags_;
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @return The count of tags.
+   */
+  @java.lang.Override
+  public int getTagsCount() {
+    return tags_.size();
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param index The index of the element to return.
+   * @return The tags at the given index.
+   */
+  @java.lang.Override
+  public java.lang.String getTags(int index) {
+    return tags_.get(index);
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param index The index of the value to return.
+   * @return The bytes of the tags at the given index.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getTagsBytes(int index) {
+    return com.google.protobuf.ByteString.copyFromUtf8(
+        tags_.get(index));
+  }
+  private void ensureTagsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<java.lang.String> tmp =
+        tags_;  if (!tmp.isModifiable()) {
+      tags_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param index The index to set the value at.
+   * @param value The tags to set.
+   */
+  private void setTags(
+      int index, java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTagsIsMutable();
+    tags_.set(index, value);
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param value The tags to add.
+   */
+  private void addTags(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTagsIsMutable();
+    tags_.add(value);
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param values The tags to add.
+   */
+  private void addAllTags(
+      java.lang.Iterable<java.lang.String> values) {
+    ensureTagsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, tags_);
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   */
+  private void clearTags() {
+    tags_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+   * </pre>
+   *
+   * <code>repeated string tags = 15 [json_name = "tags"];</code>
+   * @param value The bytes of the tags to add.
+   */
+  private void addTagsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    ensureTagsIsMutable();
+    tags_.add(value.toStringUtf8());
   }
 
   public static ink.sipc.nagi.proto.v1.Project parseFrom(
@@ -2346,6 +2476,134 @@ public  final class Project extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @return A list containing the tags.
+     */
+    @java.lang.Override
+    public java.util.List<java.lang.String>
+        getTagsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getTagsList());
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @return The count of tags.
+     */
+    @java.lang.Override
+    public int getTagsCount() {
+      return instance.getTagsCount();
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @param index The index of the element to return.
+     * @return The tags at the given index.
+     */
+    @java.lang.Override
+    public java.lang.String getTags(int index) {
+      return instance.getTags(index);
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @param index The index of the value to return.
+     * @return The bytes of the tags at the given index.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getTagsBytes(int index) {
+      return instance.getTagsBytes(index);
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @param index The index to set the value at.
+     * @param value The tags to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTags(
+        int index, java.lang.String value) {
+      copyOnWrite();
+      instance.setTags(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @param value The tags to add.
+     * @return This builder for chaining.
+     */
+    public Builder addTags(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.addTags(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @param values The tags to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllTags(
+        java.lang.Iterable<java.lang.String> values) {
+      copyOnWrite();
+      instance.addAllTags(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTags() {
+      copyOnWrite();
+      instance.clearTags();
+      return this;
+    }
+    /**
+     * <pre>
+     * 标签，按名称排序。只用来整理项目页，不影响访问范围；只在面板上，不下发给节点。
+     * </pre>
+     *
+     * <code>repeated string tags = 15 [json_name = "tags"];</code>
+     * @param value The bytes of the tags to add.
+     * @return This builder for chaining.
+     */
+    public Builder addTagsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.addTagsBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.Project)
   }
   @java.lang.Override
@@ -2381,11 +2639,12 @@ public  final class Project extends
             ink.sipc.nagi.proto.v1.LinkedProject.class,
             "rebuiltAt_",
             "group_",
+            "tags_",
           };
           java.lang.String info =
-              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u000f\u0000\u0001\u0001\u000f\u000f\u0000\u0005\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0002\u0005\u1009\u0000\u0006\u001b\u0007\u0007\b\u001b\t\u1009" +
-              "\u0001\n\u0007\u000b\u001b\f\u001b\r\u1009\u0002\u000e\u0208";
+              "\u0001\n\u0007\u000b\u001b\f\u001b\r\u1009\u0002\u000e\u0208\u000f\u021a";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
