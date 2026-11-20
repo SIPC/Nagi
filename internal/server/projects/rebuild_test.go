@@ -8,11 +8,14 @@ import (
 	"testing"
 	"time"
 
+	nodeproject "github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestRebuiltEntriesNeedConfirmation(t *testing.T) {
@@ -34,6 +37,53 @@ func TestRebuiltEntriesNeedConfirmation(t *testing.T) {
 	r := RouteProto(rows[0])
 	if len(r.EntryNodes) != 1 || r.EntryNodes[0] != "n2" || r.Error == "" {
 		t.Errorf("restored route must retain choices but require confirmation: %v", r)
+	}
+	// 面板生成下发配置，写入节点实际使用的 SQLite 缓存，再由节点读取、上报给新面板。
+	p, err := s.Q.GetProject(ctx, sp.ProjectId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// haTestService 为已有项目放的是空 settings 占位，生成配置前使用真实加密格式。
+	p.Settings, err = s.seal(&nagiv1.ProjectSettings{}, settingsCtx(p.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Q.GetContainer(ctx, store.GetContainerParams{ProjectID: sp.ProjectId, Name: sp.Name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	down, err := s.specFor(ctx, p, c, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := proto.Marshal(down)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeDB, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nodeDB.Close()
+	if err := nodestore.New(nodeDB).UpsertContainer(ctx, nodestore.UpsertContainerParams{ProjectID: down.ProjectId, Name: down.Name, Spec: data}); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := nodeproject.NewManager(nodeDB, nil, nodeproject.DefaultSubnetPool, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := manager.List(ctx)
+	if len(cache) != 1 || len(cache[0].Spec.Routes) != 1 || cache[0].Spec.Routes[0].GetError() != r.Error {
+		t.Fatalf("pending state lost in node cache: %v", cache)
+	}
+	restored := haTestService(t)
+	restored.Sealer = s.Sealer
+	if err := restored.rebuildContainer(ctx, "n1", cache[0].Spec, nil); err != nil {
+		t.Fatal(err)
+	}
+	back, err := restored.Q.ListRoutes(ctx, sp.ProjectId)
+	if err != nil || len(back) != 1 || back[0].PendingConfirmation != 1 {
+		t.Fatalf("pending state lost on second recovery: %v %v", back, err)
 	}
 	all, _ := s.Q.ListAllContainers(ctx)
 	plan := &nagiv1.LinkPlan{}

@@ -383,6 +383,8 @@ type voteResult struct {
 	// selfHigher 是某一方记着「票投给了本节点」的更高轮次（没有时为 0）：例如本节点调高轮次以后、
 	// 记下新轮次之前重启了，投票人记着的比本节点自己记着的新，按本节点的旧轮次续约时就不同意。
 	selfHigher uint64
+	// catchup 是超出单次上限的回复给出的有界追赶提示，不算授票或已确认的持有者。
+	catchup uint64
 }
 
 // collect 并行向 others 要票。
@@ -398,12 +400,14 @@ func (a *agent) collect(ctx context.Context, self []byte, others []*nagiv1.Failo
 			if err != nil {
 				return
 			}
-			if resp.GetEpoch() > epoch && !lease.ValidAdvance(epoch, resp.GetEpoch()+1) {
-				a.log.Warn("忽略异常租约轮次，请检查投票节点或重新设置顶替", "epoch", resp.GetEpoch(), "current", epoch)
-				return
-			}
 			mu.Lock()
 			defer mu.Unlock()
+			if resp.GetEpoch() > epoch && !lease.ValidAdvance(epoch, resp.GetEpoch()+1) {
+				if bytes.Equal(resp.GetHolder(), self) || isOtherParticipant(cfg, self, resp.GetHolder()) {
+					r.catchup = max(r.catchup, lease.Advance(epoch, resp.GetEpoch()+1))
+				}
+				return
+			}
 			// 回复里的持有方不是另一个参与者时不算更高的轮次：被攻破的见证人回复「持有方是任意公钥 X」，
 			// 本节点会撤掉容器、把 X 登记成副本的源节点；回复「持有方是本节点自己」，本节点也会撤掉容器。
 			switch {
@@ -435,6 +439,9 @@ func raisedEpoch(r voteResult, ok bool, epoch uint64) uint64 {
 	}
 	if r.selfHigher > epoch && lease.ValidAdvance(epoch, r.selfHigher+1) && (ok || r.higher == nil) {
 		to = max(to, r.selfHigher+1)
+	}
+	if lease.ValidAdvance(epoch, r.catchup) && (ok || r.higher == nil) {
+		to = max(to, r.catchup)
 	}
 	return to
 }
@@ -711,6 +718,15 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 	sent := time.Now()
 	r := a.collect(ctx, me.GetKey(), []*nagiv1.FailoverParticipant{cfg.GetWitness(), other}, cfg, newEpoch)
 	if r.granted == 0 {
+		// 只追赶自己的已过期票，不启动容器。下一轮仍须拿到远端票才可顶替。
+		to := r.catchup
+		if r.higher != nil {
+			to = max(to, r.higher.GetEpoch()+1)
+		}
+		to = lease.Advance(epoch, to)
+		if to > epoch {
+			f.voter.CatchUp(id, to, L)
+		}
 		return
 	}
 	if ok, _, _ := f.voter.Vote(id, participants(cfg), me.GetKey(), newEpoch, L); !ok {

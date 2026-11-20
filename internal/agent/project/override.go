@@ -65,7 +65,8 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 	}
 	services := map[string]any{}
 	joinIntranet := in.single
-	for name, svc := range in.proj.Services {
+	// CLI 还可能通过 COMPOSE_PROFILES 或显式服务名启用 profile 服务。
+	for name, svc := range in.proj.AllServices() {
 		labels := map[string]string{
 			LabelProject:   in.projectID,
 			LabelContainer: in.container,
@@ -74,6 +75,7 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 		if len(svc.LabelFiles) > 0 {
 			fileLabels := map[string]string{}
 			remaining := int64(64 << 10)
+			expansionBudget := 64 << 10
 			for _, path := range svc.LabelFiles {
 				base := in.mp.root
 				if in.projectDir != "" {
@@ -107,10 +109,26 @@ func buildOverride(in overrideInput) (map[string]any, error) {
 					return nil, invalid("标签文件读取失败或超过 64 KiB")
 				}
 				remaining -= int64(len(data))
-				values, err := dotenv.ParseWithLookup(strings.NewReader(string(data)), func(key string) (string, bool) {
+				// 原文和所有被替换的值共享预算，在库拼接字符串之前扣除。
+				// 必须拦截同一文件内的引用，否则短小的倍增链仍能耗尽内存。
+				expansionBudget -= len(data)
+				exceeded := expansionBudget < 0
+				values := map[string]string{}
+				err = dotenv.ParseWithFormat(strings.NewReader(string(data)), "", values, func(key string) (string, bool) {
 					value, ok := fileLabels[key]
+					if !ok {
+						value, ok = values[key]
+					}
+					if exceeded || len(value) > expansionBudget {
+						exceeded = true
+						return "", true // 不允许库回退到内部 map 中未经预算检查的值。
+					}
+					expansionBudget -= len(value)
 					return value, ok
-				})
+				}, dotenv.DotEnv)
+				if exceeded {
+					return nil, invalid("标签文件展开预算不能超过 64 KiB")
+				}
 				if err != nil {
 					return nil, invalid("标签文件格式不正确")
 				}

@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,7 @@ func TestLabelFileSnapshotComposeMerge(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	text := "services:\n  app:\n    image: alpine\n    labels:\n      BASE: explicit\n    label_file: [./first, ./second]\n"
+	text := "services:\n  normal:\n    image: alpine\n    labels: {BASE: explicit}\n    label_file: [./first, ./second]\n  app:\n    profiles: [audit]\n    image: alpine\n    labels:\n      BASE: explicit\n    label_file: [./first, ./second]\n"
 	cp, err := spec.LoadCompose(context.Background(), text, nil, dir, "nagi-test")
 	if err != nil {
 		t.Fatal(err)
@@ -38,13 +39,18 @@ func TestLabelFileSnapshotComposeMerge(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	merged, err := loader.LoadWithContext(context.Background(), types.ConfigDetails{WorkingDir: dir, ConfigFiles: []types.ConfigFile{{Filename: "compose.yml", Content: []byte(text)}, {Filename: "override.yml", Content: data}}}, func(o *loader.Options) { o.SetProjectName("nagi-test", true) })
+	merged, err := loader.LoadWithContext(context.Background(), types.ConfigDetails{WorkingDir: dir, ConfigFiles: []types.ConfigFile{{Filename: "compose.yml", Content: []byte(text)}, {Filename: "override.yml", Content: data}}}, func(o *loader.Options) {
+		o.SetProjectName("nagi-test", true)
+		o.Profiles = []string{"audit"}
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	labels := merged.Services["app"].Labels
-	if labels["BASE"] != "explicit" || labels["REF"] != "from-first" || labels["CASH"] != "$literal" {
-		t.Fatalf("snapshot changed label semantics: %v", labels)
+	for _, name := range []string{"normal", "app"} {
+		labels := merged.Services[name].Labels
+		if labels["BASE"] != "explicit" || labels["REF"] != "from-first" || labels["CASH"] != "$literal" {
+			t.Fatalf("snapshot changed label semantics for %s: %v", name, labels)
+		}
 	}
 }
 
@@ -70,25 +76,44 @@ func TestLabelFilesAreBoundedAndConfined(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(data, "ok"), []byte("A=file\nB=preserved\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"link", "large", "bad", "ok"} {
-		cp, err := spec.LoadCompose(context.Background(), "services:\n  app:\n    image: alpine\n    labels:\n      A: explicit\n    label_file: ./"+name+"\n", nil, data, "nagi-test")
-		if err != nil {
+	var doubling strings.Builder
+	doubling.WriteString("V0=x\n")
+	for i := 1; i <= 18; i++ {
+		fmt.Fprintf(&doubling, "V%d=${V%d}${V%d}\n", i, i-1, i-1)
+	}
+	for name, text := range map[string]string{
+		"expanded":   doubling.String(),
+		"cross-file": "VALUE=" + strings.Repeat("${B}", 8000) + "\n",
+	} {
+		if err := os.WriteFile(filepath.Join(data, name), []byte(text), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		ov, err := buildOverride(overrideInput{proj: cp, mp: containerPaths{root: base}, projectID: "p", container: "app"})
-		if name != "ok" {
-			if err == nil {
-				t.Errorf("accepted %s", name)
-			} else if strings.Contains(err.Error(), "secret/key+value") {
-				t.Errorf("file contents leaked: %v", err)
+	}
+	for _, name := range []string{"link", "large", "bad", "expanded", "cross-file", "ok"} {
+		for _, profile := range []string{"", "    profiles: [audit]\n"} {
+			files := "./" + name
+			if name == "cross-file" {
+				files = "./ok, ./cross-file"
 			}
-		} else {
+			cp, err := spec.LoadCompose(context.Background(), "services:\n  normal:\n    image: alpine\n  app:\n"+profile+"    image: alpine\n    labels:\n      A: explicit\n    label_file: ["+files+"]\n", nil, data, "nagi-test")
 			if err != nil {
 				t.Fatal(err)
 			}
-			labels := ov["services"].(map[string]any)["app"].(map[string]any)["labels"].(map[string]string)
-			if labels["A"] != "explicit" || labels["B"] != "preserved" {
-				t.Fatalf("label precedence: %v", labels)
+			ov, err := buildOverride(overrideInput{proj: cp, mp: containerPaths{root: base}, projectID: "p", container: "app"})
+			if name != "ok" {
+				if err == nil {
+					t.Errorf("accepted %s", name)
+				} else if strings.Contains(err.Error(), "secret/key+value") {
+					t.Errorf("file contents leaked: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				labels := ov["services"].(map[string]any)["app"].(map[string]any)["labels"].(map[string]string)
+				if labels["A"] != "explicit" || labels["B"] != "preserved" {
+					t.Fatalf("label precedence: %v", labels)
+				}
 			}
 		}
 	}
