@@ -113,6 +113,10 @@ type Log struct {
 	hooks   []func(Event)
 
 	path string
+	// Capture 独立采集规范化后的本机审计事实，旧库写失败仍会调用。
+	// 启动时设置，运行时不修改，不能递归写本 Log；旧库失败时 ID/哈希为空。
+	// 检测规则和旧外送继续使用仅在旧库提交成功后运行的 OnRecord。
+	Capture func(Event)
 }
 
 // Open 打开（必要时创建）审计库。
@@ -166,8 +170,13 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 		return 0
 	}
 	normalize(&e)
+	if l.Capture != nil {
+		defer func() { l.Capture(e) }()
+	}
 	id, err := l.insert(context.WithoutCancel(ctx), &e)
 	if err != nil {
+		// insertTx 可能已经分配了 ID/计算了哈希，但事务没有提交，不能当成旧库证据。
+		e.ID, e.Hash, e.PrevHash = 0, "", ""
 		l.log.Warn("写入审计记录失败", "err", err, "action", e.Action)
 		return 0
 	}

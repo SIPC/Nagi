@@ -50,9 +50,9 @@ type Log struct {
 	f    *os.File
 	size int64
 	seq  int64
-	// OnRecord 在旧文件已写入后同步调用；启动时设置，运行时不修改，不能递归写本 Log。
-	// 用于过渡期把节点自己的审计也存入统一本地库，不改变旧 ReadAuditLog 的行为。
-	OnRecord func(Event)
+	// Capture 独立采集规范化后的审计事实，不以旧文件写成功为前提。
+	// 启动时设置，运行时不修改，不能递归写本 Log；序号不代表旧文件已保存。
+	Capture func(Event)
 }
 
 // Open 打开（必要时创建）审计目录，接着上次的序号写。
@@ -107,6 +107,9 @@ func (l *Log) Record(e Event) int64 {
 	defer l.mu.Unlock()
 	l.seq++
 	e.Seq = l.seq
+	if l.Capture != nil {
+		l.Capture(e)
+	}
 	b, err := json.Marshal(e)
 	if err != nil {
 		return 0
@@ -122,9 +125,6 @@ func (l *Log) Record(e Event) int64 {
 	l.size += int64(n)
 	if err != nil {
 		return 0
-	}
-	if l.OnRecord != nil {
-		l.OnRecord(e)
 	}
 	return e.Seq
 }

@@ -2,12 +2,69 @@ package audit
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
+
+func TestIndependentHistorySurvivesLegacyWriteFailure(t *testing.T) {
+	l := openTestLog(t)
+	history, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "history.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer history.Close()
+	l.Capture = func(e Event) {
+		history.Report(logstore.Event{Time: e.Time, Category: logstore.Audit, Kind: e.Action, Data: json.RawMessage(Canonical(e))})
+	}
+	if id := l.Record(t.Context(), Event{Action: "before"}); id != 1 {
+		t.Fatalf("旧库编号发生变化: %d", id)
+	}
+	if _, err := l.DB().Exec(`CREATE TRIGGER reject_audit BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'test write failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	// MCP 收集阶段不重复入库；最终父子记录即使旧库失败也各自留下事实。
+	ctx, children := WithCollector(t.Context())
+	l.Record(ctx, Event{Action: "child"})
+	if id := l.RecordWithChildren(ctx, Event{Action: "parent"}, children); id != 0 {
+		t.Fatalf("旧库写失败不能返回成功编号: %d", id)
+	}
+	rows, err := history.Query(t.Context(), logstore.Filter{Category: logstore.Audit})
+	if err != nil || len(rows) != 3 || rows[0].Kind != "before" || rows[1].Kind != "parent" || rows[2].Kind != "child" {
+		t.Fatalf("独立历史丢失或重复: %+v err=%v", rows, err)
+	}
+	for i, row := range rows {
+		var saved Event
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &saved); err != nil {
+			t.Fatal(err)
+		}
+		wantID := int64(0)
+		if i == 0 {
+			wantID = 1
+		}
+		if saved.ID != wantID || saved.Result != ResultOK {
+			t.Fatalf("不能把旧库未提交的编号当成证据: %+v", saved)
+		}
+	}
+	if result, err := l.Verify(t.Context()); err != nil || !result.OK() || result.Records != 1 {
+		t.Fatalf("失败写入不能破坏旧哈希链: %+v err=%v", result, err)
+	}
+	if _, err := l.DB().Exec(`DROP TRIGGER reject_audit`); err != nil {
+		t.Fatal(err)
+	}
+	history.Close()
+	if id := l.Record(t.Context(), Event{Action: "journal-unavailable"}); id != 2 {
+		t.Fatalf("新库失败不能阻断旧库或正常操作: %d", id)
+	}
+	if result, err := l.Verify(t.Context()); err != nil || !result.OK() || result.Records != 2 {
+		t.Fatalf("独立历史失败破坏旧审计: %+v err=%v", result, err)
+	}
+}
 
 func openTestLog(t *testing.T) *Log {
 	t.Helper()

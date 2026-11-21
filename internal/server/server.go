@@ -278,7 +278,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
-	s.audit.OnRecord(func(e audit.Event) {
+	s.audit.Capture = func(e audit.Event) {
 		category := logstore.Audit
 		if e.Category == audit.Security {
 			category = logstore.Security
@@ -287,7 +287,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		}
 		s.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: category, Kind: "panel." + e.Action,
 			Project: e.ProjectID, Object: e.TargetID, Data: json.RawMessage(audit.Canonical(e))})
-	})
+	}
 	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
 	s.auth = auth.New(s.q, s.sealer)
 	s.auth.SetAudit(s.audit)
