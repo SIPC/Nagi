@@ -103,6 +103,14 @@ func (s *Store) fail(category string, failed, lost uint64, err error) {
 	}
 }
 
+// NoteWriteFailure records the outcome of a store outside logs.db, such as the
+// panel's legacy audit chain, so the logs page shows it next to the journal's.
+func (s *Store) NoteWriteFailure(category string, failed, lost uint64, err error) {
+	if s != nil {
+		s.fail(category, failed, lost, err)
+	}
+}
+
 // WriteFailures returns a stable snapshot ordered by category.
 func (s *Store) WriteFailures() []WriteFailure {
 	if s == nil {

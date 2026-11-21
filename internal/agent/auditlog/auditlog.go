@@ -117,8 +117,10 @@ func (l *Log) Record(e Event) int64 {
 	err := l.budget.Reserve(ctx, 4, 64<<10)
 	cancel()
 	var seq int64
-	if !errors.Is(err, logstore.ErrCapacity) {
-		seq = l.record(&e)
+	if errors.Is(err, logstore.ErrCapacity) {
+		l.budget.NoteWriteFailure(logstore.Audit, 0, 1, fmt.Errorf("节点审计文件：%w", err))
+	} else if seq = l.record(&e); seq == 0 {
+		l.budget.NoteWriteFailure(logstore.Audit, 1, 1, errors.New("节点审计文件写入失败"))
 	}
 	if l.Capture != nil {
 		l.Capture(e)

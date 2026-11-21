@@ -16,10 +16,11 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Fixed an issue where alert state could not be saved while log writes were congested, which paused alert notifications and sync.
 - Fixed an issue where container monitoring charts on nodes and the panel had gaps under heavy load.
 - Fixed an issue where, when upgrading from an earlier version, migrating a large amount of legacy monitoring history blocked local log, audit, and alert state writes.
+- Fixed an issue where, on nodes with a lot of legacy monitoring history, the alert baseline query held the database for a long time during the post-upgrade migration, so the node repeatedly disconnected from and reconnected to the panel.
 
 ### Improvements
 
-- Audit, security, and alert records are retried automatically when a write fails temporarily, instead of being dropped after a timeout. Other logs are written in batches.
+- Audit, security, and alert records are retried automatically when a write fails temporarily, instead of being dropped after a timeout. Other logs are written in batches. If a long disk stall makes a single write to the panel audit database take more than 10 seconds, the record moves to a retry queue and is written later in its original order. It counts as confirmed lost, with the reason shown on the Logs page, only if the retry queue is full or the panel shuts down before it is written.
 - The collection details on the Logs page now show, per category, failed write attempts, records confirmed lost, and the latest reason and time.
 
 ### Behavior changes
