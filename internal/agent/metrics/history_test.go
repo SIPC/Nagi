@@ -78,6 +78,88 @@ func TestSeparateHistoryPreservesQueriesAndNodeState(t *testing.T) {
 	}
 }
 
+func TestBackgroundHistoryMigrationKeepsQueriesAndSwitchesWrites(t *testing.T) {
+	ctx, dir := t.Context(), t.TempDir()
+	legacy, err := db.OpenMigrated(ctx, filepath.Join(dir, "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	at := time.Now().Add(-4 * time.Hour).Truncate(time.Second)
+	if _, err := legacy.Exec(`WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n WHERE x<8192)
+		INSERT INTO metrics_raw SELECT 'node:cpu',?+x,x+0.25 FROM n`, at.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	journal, err := logstore.Open(ctx, filepath.Join(dir, "logs.db"), 32<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer journal.Close()
+	path := filepath.Join(dir, "metrics.db")
+	c := New(legacy, nil, "", nil)
+	if err := c.UseBudget(ctx, journal, path, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.store(ctx, at.Add(9000*time.Second), map[string]float64{"node:new": 71}); err == nil {
+		t.Fatal("pending migration wrote to the business database")
+	}
+	type result struct {
+		close func() error
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		closeHistory, err := c.MigrateHistory(ctx, path, journal)
+		done <- result{closeHistory, err}
+	}()
+	// Query the same collector across several batches and the final handoff.
+	// A stale pointer or early source deletion would return no point here.
+	sawCopy := false
+	deadline := time.After(time.Minute)
+	for {
+		data, err := c.Query(ctx, "node:cpu", at.Add(7*time.Second), at.Add(7500*time.Millisecond))
+		if err != nil || len(data["node:cpu"]) != 1 || data["node:cpu"][0].Value != 7.25 {
+			t.Fatalf("history disappeared during migration: %v %v", data, err)
+		}
+		for _, p := range journal.Migrations() {
+			if p.Phase == "copying" && p.Completed > 0 && p.Completed < p.Total {
+				sawCopy = true
+			}
+		}
+		select {
+		case r := <-done:
+			if r.close != nil {
+				defer r.close()
+			}
+			if r.err != nil {
+				t.Fatal(r.err)
+			}
+			if !sawCopy {
+				t.Fatal("did not serve a query while a partial copy was in progress")
+			}
+			p := journal.Migrations()
+			if len(p) != 1 || p[0].Phase != "complete" || p[0].Completed != 8193 || p[0].Total != 8193 {
+				t.Fatalf("incorrect completion progress: %+v", p)
+			}
+			if err := c.store(ctx, at.Add(9000*time.Second), map[string]float64{"node:new": 71}); err != nil {
+				t.Fatal(err)
+			}
+			data, err = c.Query(ctx, "node:", at, at.Add(9001*time.Second))
+			if err != nil || len(data["node:cpu"]) != 8193 || len(data["node:new"]) != 1 || data["node:new"][0].Value != 71 {
+				t.Fatalf("collector did not switch to complete history: old=%d new=%v err=%v", len(data["node:cpu"]), data["node:new"], err)
+			}
+			var n int
+			if err := legacy.QueryRow(`SELECT (SELECT count(*) FROM metrics_raw)+(SELECT count(*) FROM metrics_m5)`).Scan(&n); err != nil || n != 0 {
+				t.Fatalf("new samples reached the business database: %d %v", n, err)
+			}
+			return
+		case <-deadline:
+			t.Fatal("background migration did not finish")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
 func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 	ctx := t.Context()
 	dir := t.TempDir()
@@ -100,13 +182,13 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d, err := OpenHistory(ctx, path, legacy, nil); err == nil {
-		d.Close()
-		t.Fatal("冲突被静默覆盖")
-	}
 	c := New(legacy, nil, "", nil)
 	if err := c.UseBudget(ctx, nil, path, false); err != nil {
 		t.Fatal(err)
+	}
+	if closeHistory, err := c.MigrateHistory(ctx, path, nil); err == nil {
+		closeHistory()
+		t.Fatal("冲突被静默覆盖")
 	}
 	if err := c.store(ctx, time.Now(), map[string]float64{"node:new": 71}); err == nil {
 		t.Fatal("迁移失败后继续向业务库写指标")

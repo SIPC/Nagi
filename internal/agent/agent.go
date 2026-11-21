@@ -161,28 +161,6 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	defer nodeDB.Close()
 
-	var hadLegacyMetrics bool
-	if err := nodeDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM metrics_raw UNION ALL SELECT 1 FROM metrics_m5)`).Scan(&hadLegacyMetrics); err != nil {
-		log.Warn("无法检查旧监控历史", "err", err)
-	}
-	metricDB := nodeDB
-	if history, err := metrics.OpenHistory(ctx, filepath.Join(cfg.DataDir, "logs", "metrics.db"), nodeDB, cfg.Logs); err != nil {
-		log.Error("无法分离监控历史，旧库仅供查询；暂停图表历史写入，重启后重试迁移", "err", err)
-	} else {
-		metricDB = history
-		defer history.Close()
-		if hadLegacyMetrics {
-			st, statErr := os.Stat(filepath.Join(cfg.DataDir, "node.db"))
-			if statErr != nil {
-				log.Warn("监控历史已迁移，无法检查旧配置库大小", "err", statErr)
-			} else if err := metrics.CheckDisk(cfg.DataDir, st.Size()); err != nil {
-				log.Warn("监控历史已迁移，空间不足，暂不整理旧配置库", "err", err)
-			} else if _, err := nodeDB.ExecContext(ctx, `VACUUM`); err != nil {
-				log.Warn("监控历史已迁移，旧配置库空闲空间暂未回收", "err", err)
-			}
-		}
-	}
-
 	dc, err := docker.New()
 	if err != nil {
 		return fmt.Errorf("连接 Docker: %w", err)
@@ -287,8 +265,9 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 			}
 		}
 	}()
-	a.metrics = metrics.New(metricDB, dc, cfg.DataDir, log.With("component", "metrics"))
-	if err := a.metrics.UseBudget(ctx, cfg.Logs, filepath.Join(cfg.DataDir, "logs", "metrics.db"), metricDB != nodeDB); err != nil {
+	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	historyPath := filepath.Join(cfg.DataDir, "logs", "metrics.db")
+	if err := a.metrics.UseBudget(ctx, cfg.Logs, historyPath, false); err != nil {
 		log.Error("无法把监控历史接入统一本机容量", "err", err)
 	}
 	if cfg.Logs != nil {
@@ -308,10 +287,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		a.metrics.AddSource(routeMetrics())
 	}
 	a.metrics.AddSource(a.meshMetrics())
-	statistics := logging.Statistics{Store: cfg.Logs}
-	if metricDB != nodeDB {
-		statistics.History = a.metrics
-	}
+	statistics := logging.Statistics{Store: cfg.Logs, History: a.metrics}
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), statistics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert, cfg.Logs)
@@ -351,7 +327,10 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 			return nil
 		})
 	}
-	go a.metrics.Run(ctx)
+	metricsCtx, stopMetrics := context.WithCancel(ctx)
+	metricsDone := make(chan struct{})
+	go func() { defer close(metricsDone); a.metrics.Run(metricsCtx) }()
+	defer func() { stopMetrics(); <-metricsDone }()
 	copyCtx, stopCopies := context.WithCancel(ctx)
 	copiesDone := make(chan struct{})
 	go func() { defer close(copiesDone); a.logCopiesLoop(copyCtx) }()
@@ -404,6 +383,30 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		defer a.proxy.Stop()
 		go a.proxyLoop(ctx)
 	}
+
+	// Old graph history is never a startup prerequisite for control, containers
+	// or Caddy. Keep the stable collector read-only until its backend is ready.
+	cfg.Logs.SetMigration(logstore.Migration{ID: "metrics", Phase: "pending"})
+	historyCtx, stopHistory := context.WithCancel(ctx)
+	historyDone := make(chan struct{})
+	go func() {
+		defer close(historyDone)
+		started := time.Now()
+		log.Info("开始后台迁移监控历史，基础服务无需等待")
+		closeHistory, err := a.metrics.MigrateHistory(historyCtx, historyPath, cfg.Logs)
+		if err != nil && historyCtx.Err() == nil {
+			log.Error("监控历史后台迁移失败，历史只读；基础服务继续运行，重启后重试", "err", err)
+		} else if err == nil {
+			log.Info("监控历史后台迁移完成", "duration", time.Since(started))
+		}
+		if closeHistory != nil {
+			<-historyCtx.Done()
+			stopMetrics()
+			<-metricsDone
+			closeHistory()
+		}
+	}()
+	defer func() { stopHistory(); <-historyDone }()
 
 	cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.ready", Data: map[string]any{"version": cfg.Version, "hostname": hostname, "embedded": cfg.Embedded}})
 	a.superviseLoop(ctx)

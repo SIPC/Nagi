@@ -13,7 +13,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -98,6 +100,15 @@ type State struct {
 	Archives    []ArchiveUsage `json:"archives"`
 }
 
+// Migration describes live background work, not a durable checkpoint or a copy's state.
+type Migration struct {
+	ID        string
+	Phase     string
+	Completed int64
+	Total     int64
+	Error     string
+}
+
 type Store struct {
 	gate    chan struct{}
 	db      *sql.DB
@@ -108,8 +119,27 @@ type Store struct {
 	closed  bool
 	errors  atomic.Uint64
 	// Report 的失败仅写原始 stderr logger，不能递归写回自身。
-	lastError atomic.Int64
-	archives  []Archive
+	lastError  atomic.Int64
+	archives   []Archive
+	migrations sync.Map // string → immutable Migration; independent of the disk writer gate.
+}
+
+func (s *Store) SetMigration(m Migration) {
+	if s != nil {
+		s.migrations.Store(m.ID, m)
+	}
+}
+
+func (s *Store) Migrations() []Migration {
+	var out []Migration
+	if s != nil {
+		s.migrations.Range(func(_, v any) bool {
+			out = append(out, v.(Migration))
+			return true
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // Open 允许小额度供本地测试和未来近期副本使用；生产节点的 5～10 GiB 范围由 LoadConfig 校验。

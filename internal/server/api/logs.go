@@ -64,6 +64,15 @@ func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 	if q.GetAfter() > 0 && q.GetSource() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("无效的日志游标或分页大小"))
 	}
+	var migrations []*nagiv1.LogMigration
+	if req.GetPanelLocal() {
+		for _, m := range s.Logs.Migrations() {
+			migrations = append(migrations, &nagiv1.LogMigration{Id: m.ID, Phase: m.Phase, Completed: m.Completed, Total: m.Total, Error: m.Error})
+		}
+	}
+	if q.GetMigrationsOnly() {
+		return connect.NewResponse(&nagiv1.LogPage{RecentCopy: req.GetRecentCopy(), Migrations: migrations}), nil
+	}
 	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
 	for _, v := range []struct {
 		in  *timestamppb.Timestamp
@@ -97,7 +106,7 @@ func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	out := &nagiv1.LogPage{Source: p.State.Source, LatestSeq: p.State.Last, NextAfter: p.Next, More: p.More, RecentCopy: req.GetRecentCopy(), WriteErrors: p.State.WriteErrors, DiskBytes: p.State.DiskBytes, BudgetBytes: p.State.BudgetBytes}
+	out := &nagiv1.LogPage{Source: p.State.Source, LatestSeq: p.State.Last, NextAfter: p.Next, More: p.More, RecentCopy: req.GetRecentCopy(), WriteErrors: p.State.WriteErrors, DiskBytes: p.State.DiskBytes, BudgetBytes: p.State.BudgetBytes, Migrations: migrations}
 	for _, e := range p.Events {
 		data, err := json.Marshal(e.Data)
 		if err != nil {

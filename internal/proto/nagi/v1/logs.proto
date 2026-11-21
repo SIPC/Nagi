@@ -73,6 +73,8 @@ message LogQuery {
   string search = 9;
   // Literal prefix, e.g. host. for the selected host journal sources.
   string kind_prefix = 10;
+  // Live migration state only, without waiting for the log disk writer.
+  bool migrations_only = 11;
 }
 
 message NodeLogQuery {
@@ -116,4 +118,15 @@ message LogPage {
   bool recent_copy = 10;
   // Kept separate from pruned (panel-side expiry/capacity) to avoid double counts.
   repeated LogPruned source_pruned = 11;
+  // Live process state only; never replicated with recent copies.
+  repeated LogMigration migrations = 12;
+}
+
+message LogMigration {
+  string id = 1;
+  // pending, copying, cleanup, complete, or failed.
+  string phase = 2;
+  int64 completed = 3;
+  int64 total = 4;
+  string error = 5;
 }

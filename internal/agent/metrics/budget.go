@@ -11,9 +11,12 @@ import (
 // UseBudget enables quota-gated writes only to separated history. If migration
 // failed, the source remains queryable but cannot receive samples or maintenance.
 func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path string, separated bool) error {
+	c.historyMu.Lock()
+	defer c.historyMu.Unlock()
 	c.budget = budget
-	c.historyReadOnly = !separated
+	c.historyReadOnly = true
 	if budget == nil {
+		c.historyReadOnly = !separated
 		return nil
 	}
 	if !separated {
@@ -41,5 +44,6 @@ func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path 
 	}); err != nil {
 		return err
 	}
+	c.historyReadOnly = false
 	return nil
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http/cookiejar"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 	}
 	defer logs.Close()
 	h.a.Logs = logs
+	logs.SetMigration(logstore.Migration{ID: "metrics", Phase: "copying", Completed: 2048, Total: 8193})
 	if err := logs.Record(t.Context(), logstore.Event{Category: logstore.Runtime, Kind: "host.journal", Data: "local marker 20%"}); err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +74,27 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 			if localErr != nil || local.Msg.GetRecentCopy() || len(local.Msg.GetEntries()) != 1 {
 				t.Fatalf("local search: %v %v", local, localErr)
 			}
+			migrations := local.Msg.GetMigrations()
+			if len(migrations) != 1 || migrations[0].GetPhase() != "copying" || migrations[0].GetCompleted() != 2048 || migrations[0].GetTotal() != 8193 {
+				t.Fatalf("live migration progress lost: %v", migrations)
+			}
+			// A busy archive must not also block its own progress display.
+			func() {
+				entered, release := make(chan struct{}), make(chan struct{})
+				defer close(release)
+				go logs.WriteArchive(t.Context(), 2, 0, func() error {
+					close(entered)
+					<-release
+					return nil
+				})
+				<-entered
+				ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+				defer cancel()
+				progress, err := lc.QueryNodeLogs(ctx, connect.NewRequest(&nagiv1.NodeLogQuery{PanelLocal: true, Query: &nagiv1.LogQuery{MigrationsOnly: true, Limit: 1}}))
+				if err != nil || len(progress.Msg.GetMigrations()) != 1 || progress.Msg.GetMigrations()[0].GetCompleted() != 2048 || len(progress.Msg.GetEntries()) != 0 {
+					t.Fatalf("progress waited for the disk writer: %v %v", progress, err)
+				}
+			}()
 			_, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{PanelLocal: true, Query: &nagiv1.LogQuery{Source: "replaced-source"}}))
 			if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 				t.Fatalf("source replacement not detected: %v", err)
@@ -85,7 +108,7 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 			if connect.CodeOf(err) != connect.CodePermissionDenied {
 				t.Fatalf("copy permissions: %v", err)
 			}
-		} else if err != nil || !page.Msg.GetRecentCopy() || len(page.Msg.GetEntries()) != 1 || page.Msg.GetNextAfter() != 5 {
+		} else if err != nil || !page.Msg.GetRecentCopy() || len(page.Msg.GetEntries()) != 1 || page.Msg.GetNextAfter() != 5 || len(page.Msg.GetMigrations()) != 0 {
 			t.Fatalf("explicit offline copy: %v %v", page, err)
 		}
 		panel, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{NodeId: "panel:fingerprint", RecentCopy: true, Query: &nagiv1.LogQuery{Category: logstore.Audit, Search: "MARKER 20%", KindPrefix: "panel."}}))

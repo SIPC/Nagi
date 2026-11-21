@@ -29,6 +29,13 @@ func (s *meshService) QueryLogs(ctx context.Context, q *nagiv1.LogQuery) (*nagiv
 	if q.GetAfter() < 0 || q.GetLimit() < 0 || q.GetLimit() > 1000 || q.GetAfter() > 0 && q.GetSource() == "" {
 		return nil, status.Error(codes.InvalidArgument, "无效的日志游标或分页大小")
 	}
+	var migrations []*nagiv1.LogMigration
+	for _, m := range s.a.cfg.Logs.Migrations() {
+		migrations = append(migrations, &nagiv1.LogMigration{Id: m.ID, Phase: m.Phase, Completed: m.Completed, Total: m.Total, Error: m.Error})
+	}
+	if q.GetMigrationsOnly() {
+		return &nagiv1.LogPage{Migrations: migrations}, nil
+	}
 	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
 	for _, v := range []struct {
 		in  *timestamppb.Timestamp
@@ -59,7 +66,7 @@ func (s *meshService) QueryLogs(ctx context.Context, q *nagiv1.LogQuery) (*nagiv
 		return nil, toStatus(err)
 	}
 	out := &nagiv1.LogPage{Source: page.State.Source, LatestSeq: page.State.Last, NextAfter: page.Next, More: page.More,
-		WriteErrors: page.State.WriteErrors, DiskBytes: page.State.DiskBytes, BudgetBytes: page.State.BudgetBytes}
+		WriteErrors: page.State.WriteErrors, DiskBytes: page.State.DiskBytes, BudgetBytes: page.State.BudgetBytes, Migrations: migrations}
 	for _, e := range page.Events {
 		data, err := json.Marshal(e.Data)
 		if err != nil {
