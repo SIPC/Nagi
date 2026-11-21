@@ -149,6 +149,28 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer nodeDB.Close()
 
+	var hadLegacyMetrics bool
+	if err := nodeDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM metrics_raw UNION ALL SELECT 1 FROM metrics_m5)`).Scan(&hadLegacyMetrics); err != nil {
+		log.Warn("无法检查旧监控历史", "err", err)
+	}
+	metricDB := nodeDB
+	if history, err := metrics.OpenHistory(ctx, filepath.Join(cfg.DataDir, "logs", "metrics.db"), nodeDB); err != nil {
+		log.Error("无法分离监控历史，保留并继续使用旧库", "err", err)
+	} else {
+		metricDB = history
+		defer history.Close()
+		if hadLegacyMetrics {
+			st, statErr := os.Stat(filepath.Join(cfg.DataDir, "node.db"))
+			if statErr != nil {
+				log.Warn("监控历史已迁移，无法检查旧配置库大小", "err", statErr)
+			} else if err := metrics.CheckDisk(cfg.DataDir, st.Size()); err != nil {
+				log.Warn("监控历史已迁移，空间不足，暂不整理旧配置库", "err", err)
+			} else if _, err := nodeDB.ExecContext(ctx, `VACUUM`); err != nil {
+				log.Warn("监控历史已迁移，旧配置库空闲空间暂未回收", "err", err)
+			}
+		}
+	}
+
 	dc, err := docker.New()
 	if err != nil {
 		return fmt.Errorf("连接 Docker: %w", err)
@@ -242,7 +264,7 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 		}
 	}()
-	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	a.metrics = metrics.New(metricDB, dc, cfg.DataDir, log.With("component", "metrics"))
 	if cfg.Logs != nil {
 		a.metrics.OnSample = a.logMetrics()
 	}
