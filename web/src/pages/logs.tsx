@@ -17,6 +17,7 @@ import { t } from "@/i18n";
 import { toast } from "sonner";
 import { LogEntries } from "@/pages/log-entries";
 import { CurrentAlerts } from "@/pages/current-alerts";
+import { AlertBaselines } from "@/pages/alert-baselines";
 
 const pageSize = 50;
 
@@ -124,6 +125,7 @@ export function LogsPage() {
   return <>
     <PageHeader title={t.logs.title} description={t.logs.description} />
     <CurrentAlerts />
+    <AlertBaselines />
     {isAdmin && <Tabs className="mb-6" value={tab} onChange={(v) => navigate({ search: { tab: v === "audit" ? "audit" : undefined }, replace: true })} items={[{ value: "logs", label: t.logs.entries }, { value: "audit", label: t.logs.audit }]} />}
     {tab === "audit" ? <AuditList /> : <LogEntries />}
   </>;
