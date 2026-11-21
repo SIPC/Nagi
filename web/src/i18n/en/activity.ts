@@ -111,6 +111,8 @@ export default {
     DeleteNodeReplica: "Delete replica",
     UpgradeNode: "Upgrade node",
     UpgradeAllNodes: "Upgrade all nodes",
+    SetNodeUpdateChannel: "Change node update channel",
+    SetPanelUpdateChannel: "Change panel update channel",
     CancelNodeUpgrade: "Cancel node upgrade",
     SetNodeMirrors: "Set registry mirrors",
     SetNodeMeshOptions: "Edit node network settings",

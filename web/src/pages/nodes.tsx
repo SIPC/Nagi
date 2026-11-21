@@ -60,7 +60,7 @@ import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/na
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { requireElevation, withPrivilegedElevation } from "@/components/elevate";
-import { cancelable, progressText, updateActive, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { cancelable, isPrerelease, progressText, updateActive, UpdateChannelRow, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
@@ -336,7 +336,12 @@ export function NodesPage({
   const running = Object.values(states).filter(updateActive).length;
   const canCancel = Object.entries(states).some(([id, s]) => cancelable(s, list.find((n) => n.id === id)));
   const [canceling, setCanceling] = useState(false);
-  const behind = list.filter((n) => upgradeTarget(n, panelVersion) && !updateActive(states[n.id])).length;
+  // 批量升级的范围：全部或某个渠道的节点。正式版渠道的节点不会升到预发布版，面板另外核对（见 docs/development.md#预发布版本）。
+  const [upgradeChannel, setUpgradeChannel] = useState("");
+  const behindAll = list.filter((n) => upgradeTarget(n, panelVersion) && !updateActive(states[n.id]));
+  const behind = behindAll.filter((n) => !upgradeChannel || (n.updateChannel || "stable") === upgradeChannel).length;
+  // 有预发布渠道的节点时才显示渠道筛选。
+  const hasPreNodes = list.some((n) => n.updateChannel === "pre");
   const cancelAll = async () => {
     setCanceling(true);
     try {
@@ -352,7 +357,7 @@ export function NodesPage({
     if (!(await confirmAction(t.nodes.upgrade.allConfirm(behind, panelVersion), { action: t.nodes.upgrade.all }))) return;
     setStarting(true);
     try {
-      await nodeClient.upgradeAllNodes({});
+      await nodeClient.upgradeAllNodes({ channel: upgradeChannel });
       await status.refetch();
     } catch (err) {
       await notify(errorMessage(err));
@@ -519,6 +524,14 @@ export function NodesPage({
                 />
               </div>
             )}
+            {/* 有预发布渠道的节点时可以只升级某个渠道的节点。 */}
+            {isAdmin && hasPreNodes && running === 0 && behindAll.length > 0 && (
+              <Select aria-label={t.nodes.upgrade.channelFilter} value={upgradeChannel} onChange={(e) => setUpgradeChannel(e.target.value)} className="w-36">
+                <option value="">{t.nodes.upgrade.allChannels}</option>
+                <option value="stable">{t.update.channels.stable}</option>
+                <option value="pre">{t.update.channels.pre}</option>
+              </Select>
+            )}
             {/* 升级进行中、可以取消时只留「取消升级」，进度写在节点列表里。 */}
             {isAdmin && (running > 0 || behind > 0) && !(running > 0 && canCancel) && (
               <Button variant="outline" onClick={upgradeAll} disabled={starting || running > 0}>
@@ -652,6 +665,7 @@ function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: 
           <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", dotColor[tone])} />
           <span className="truncate">{n.name}</span>
           {n.info?.embedded && <Badge>{t.nodes.embedded}</Badge>}
+          {n.updateChannel === "pre" && <Badge>{t.update.channels.pre}</Badge>}
           {upgrade ? (
             <Badge tone={upgrade.phase === "failed" ? "warning" : "neutral"} title={upgrade.error || undefined}>
               {t.nodes.upgrade.phases[upgrade.phase as keyof typeof t.nodes.upgrade.phases]}
@@ -1170,6 +1184,7 @@ function NodeSettings({ n }: { n: Node }) {
   const isAdmin = can("node.manage");
   const details = can("node.details");
   const canRoot = can("node.root");
+  const panelVersion = usePanelVersion();
   const reclaim = useRun("");
   const moving = useRun("");
   const [editing, setEditing] = useState<"root" | "replicaDir" | "mirrors" | "alerts" | null>(null);
@@ -1236,6 +1251,18 @@ function NodeSettings({ n }: { n: Node }) {
             </Button>
           )}
         </SettingRow>
+        {/* 面板自带的节点随面板更新，没有自己的渠道；旧面板没有这一项。 */}
+        {!n.info?.embedded && n.updateChannel && (
+          <UpdateChannelRow
+            value={n.updateChannel}
+            help={isPrerelease(panelVersion) && n.updateChannel !== "pre" ? `${t.nodes.channelHelp} ${t.nodes.channelPanelPre}` : t.nodes.channelHelp}
+            canEdit={isAdmin}
+            onChange={async (channel) => {
+              await nodeClient.setNodeUpdateChannel({ nodeId: n.id, channel });
+              await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+            }}
+          />
+        )}
         <SettingRow label={t.alerts.rules} help={t.alerts.nodeRulesHelp} description={rulesSummary(nodeRules, n.alertRules)}>
           {isAdmin && (
             <Button variant="outline" onClick={() => setEditing("alerts")}>

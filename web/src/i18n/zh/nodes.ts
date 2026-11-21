@@ -116,6 +116,8 @@ export default {
   offlineTitle: "节点离线",
   noContainers: "暂无容器",
   offlineNotice: "节点离线时只能查看容器列表。",
+  channelHelp: "正式版渠道只升级到正式版。预发布渠道还可以升级到预发布版，面板是预发布版时只有预发布渠道的节点可以升级。",
+  channelPanelPre: "面板当前是预发布版，本节点不会升级到该版本。",
   upgrade: {
     badge: "可升级",
     title: (version: string) => `可升级到 ${version}`,
@@ -136,6 +138,8 @@ export default {
     all: "升级全部",
     allCount: (n: number) => `升级全部节点（${n}）`,
     allRunning: (n: number) => `升级中（剩余 ${n} 个）`,
+    channelFilter: "按更新渠道升级",
+    allChannels: "全部渠道",
     allConfirm: (n: number, version: string) => `将 ${n} 个节点逐个升级到 ${version}？先升级只保存副本的节点；某个节点升级后未恢复时停止，后面的节点不升级。`,
     cancel: "取消升级",
     canceling: "正在取消",

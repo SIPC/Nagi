@@ -1,6 +1,10 @@
 import type zh from "../zh/about";
 
 export default {
+  update: {
+    title: "Updates",
+    help: "The stable channel updates only to stable releases. The pre-release channel also updates to pre-releases, for trying changes before a stable release. This affects only this panel; standby panels and nodes are set separately.",
+  },
   tagline: "A self-hosted panel for deploying and managing containers across nodes.",
   links: {
     title: "Links",

@@ -2,6 +2,10 @@ import type zh from "../zh/update";
 
 export default {
   badge: "Update available",
+  channel: "Update channel",
+  channels: { stable: "Stable", pre: "Pre-release" },
+  channelConfirm: "Switch to the pre-release channel? Pre-releases are for trying changes before a stable release and may be unstable. After updating, you can't go back to the stable version from the panel.",
+  channelUsePre: "Use pre-release",
   check: "Check for updates",
   checkedAgo: (ago: string) => `Checked ${ago}`,
   moreInfo: "More info…",
