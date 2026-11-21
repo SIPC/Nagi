@@ -35,6 +35,9 @@ func (l *Log) UseBudget(ctx context.Context, budget *logstore.Store) error {
 		Trim: func(ctx context.Context) (bool, error) {
 			l.mu.Lock()
 			defer l.mu.Unlock()
+			if l.historyPending.Load() {
+				return false, nil
+			}
 			old := rotated(l.dir)
 			// 留最后一个轮换文件：当前文件可能刚轮换即写失败，重启仍需恢复旧序号。
 			if len(old) <= 1 {

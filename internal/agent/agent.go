@@ -202,7 +202,8 @@ func Run(ctx context.Context, cfg Config) error {
 	a.direct = newDirectDL(a)
 	a.egress = newEgress(a)
 	a.violations = newViolations(a)
-	a.openAudit(ctx)
+	closeAudit := a.openAudit(ctx)
+	defer closeAudit()
 	if cfg.Logs != nil {
 		logCtx, stopLogs := context.WithCancel(ctx)
 		logsDone := make(chan struct{})

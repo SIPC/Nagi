@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/logstore"
@@ -54,6 +55,8 @@ type Log struct {
 	size   int64
 	seq    int64
 	budget *logstore.Store
+	// Unimported source history stays protected if migration is interrupted.
+	historyPending atomic.Bool
 	// Capture 独立采集规范化后的审计事实，不以旧文件写成功为前提。
 	// 启动时设置，运行时不修改，不能递归写本 Log；序号不代表旧文件已保存。
 	Capture func(Event)
@@ -66,6 +69,7 @@ func Open(dir string) (*Log, error) {
 	}
 	l := &Log{dir: dir}
 	l.seq = lastSeq(dir)
+	l.historyPending.Store(l.seq > 0)
 	if err := l.openCurrent(); err != nil {
 		return nil, err
 	}

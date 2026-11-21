@@ -20,12 +20,13 @@ import (
 // 和被拒绝的越权请求在各自的处理函数里记（带上成员和来源地址）。
 
 // openAudit 打开本地审计。打不开时只记日志，节点照常工作。外送由面板代为进行（ReadAuditLog）。
-func (a *agent) openAudit(ctx context.Context) {
+func (a *agent) openAudit(ctx context.Context) func() {
 	l, err := auditlog.Open(filepath.Join(a.cfg.DataDir, "audit"))
 	if err != nil {
 		a.log.Warn("无法打开节点本地审计", "err", err)
-		return
+		return func() {}
 	}
+	through := l.Seq()
 	a.audit = l
 	l.Capture = func(e auditlog.Event) {
 		a.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: logstore.Audit, Kind: "node." + e.Action, Object: e.Target, Data: e})
@@ -37,10 +38,17 @@ func (a *agent) openAudit(ctx context.Context) {
 	if err := l.MigrateShipping(a.auditSinksPath()); err != nil {
 		a.log.Warn("无法删除旧的外送配置", "err", err)
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
+		defer l.Close()
+		if err := l.MigrateHistory(ctx, a.cfg.Logs, through); err != nil && ctx.Err() == nil {
+			a.log.Error("节点旧审计迁移未完成，保留源文件和已提交位置", "err", err)
+		}
 		<-ctx.Done()
-		l.Close()
 	}()
+	return func() { cancel(); <-done }
 }
 
 // auditSkip 是不记的方法：查询、上报、心跳、轮询（升级期间面板每秒问一次的 UpgradeProgress），
