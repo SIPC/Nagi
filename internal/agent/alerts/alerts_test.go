@@ -131,6 +131,49 @@ func TestHandlingSurvivesRestartWithoutSuppressingRecoveryOrNewOccurrence(t *tes
 	}
 }
 
+// v0.37.0 paused notifications and sync for as long as the shared log store was
+// congested. Now detection and delivery continue; only the published snapshot
+// waits until the newer version is committed.
+func TestCongestedStoreDoesNotPauseNotifications(t *testing.T) {
+	rcv := &receiver{}
+	srv := httptest.NewServer(rcv)
+	defer srv.Close()
+	e := newEngine(t, nil)
+	ctx := t.Context()
+	e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+	before := e.Snapshot()
+	held, release := make(chan struct{}), make(chan struct{})
+	go e.logs.WriteArchive(context.Background(), 4, 0, func() error { close(held); <-release; return nil })
+	<-held
+	var once sync.Once
+	unhold := func() { once.Do(func() { close(release) }) }
+	defer unhold()
+	fired := make(chan struct{})
+	go func() { e.Fire(ctx, "backup:p/web", "backup failed", "", "p"); close(fired) }()
+	select {
+	case <-fired:
+	case <-time.After(3 * time.Second):
+		t.Fatal("alert evaluation waited for the congested store")
+	}
+	if rcv.count() != 1 {
+		t.Fatalf("notification paused by congested store: %v", rcv.got)
+	}
+	if s := e.Snapshot(); s == nil || s.Revision != before.Revision || len(s.Current) != 0 {
+		t.Fatalf("published an uncommitted version: %v", s)
+	}
+	unhold()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if s := e.Snapshot(); s != nil && len(s.Current) == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("background save never committed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestLegacyCheckpointImportsOnceWithoutDeletingOriginal(t *testing.T) {
 	e := newEngine(t, nil)
 	ctx := t.Context()

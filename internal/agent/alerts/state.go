@@ -102,14 +102,93 @@ func (e *Engine) saveStates() {
 	if err == nil && e.logs == nil {
 		err = errors.New("告警日志库没有启动")
 	}
-	if err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		err = e.logs.SaveAlertLedger(ctx, "agent", data, logstore.Event{Kind: "alert.source_checkpoint", Data: map[string]any{"source": e.source, "revision": e.revision, "current": len(e.states), "history": len(e.history)}})
+	if err != nil {
+		e.finishSave(nil, err)
+		return
 	}
+	snap := &nagiv1.AlertSync{Source: e.source, Revision: e.revision, Complete: true}
+	for _, st := range e.states {
+		snap.Current = append(snap.Current, proto.CloneOf(st.alert))
+	}
+	for _, a := range e.history {
+		snap.History = append(snap.History, proto.CloneOf(a))
+	}
+	p := &pendingSave{data: data, snap: snap, event: logstore.Event{Kind: "alert.source_checkpoint", Data: map[string]any{"source": e.source, "revision": e.revision, "current": len(e.states), "history": len(e.history)}}}
+	if e.saving {
+		e.pending = p // the retrier writes only the newest version
+		return
+	}
+	// A healthy store commits within the short attempt. When the shared log
+	// store is congested the save continues in the background: detection and
+	// notifications keep running on the in-memory state, while Snapshot keeps
+	// publishing the last committed version until the newer one commits.
+	if err := e.writeState(p, time.Second); errors.Is(err, context.DeadlineExceeded) {
+		e.pending, e.saving = p, true
+		if time.Since(e.congestedLog) >= time.Minute {
+			e.congestedLog = time.Now()
+			e.log.Warn("告警状态写入拥堵，转入后台重试；告警判断与通知不暂停", "revision", snap.Revision)
+		}
+		go e.retrySaves()
+		return
+	} else {
+		e.finishSave(p, err)
+	}
+}
+
+// pendingSave is one complete source checkpoint and the sync snapshot that
+// may be published once it is committed.
+type pendingSave struct {
+	data  []byte
+	snap  *nagiv1.AlertSync
+	event logstore.Event
+}
+
+func (e *Engine) writeState(p *pendingSave, limit time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	return e.logs.SaveAlertLedger(ctx, "agent", p.data, p.event)
+}
+
+// finishSave records a final outcome; callers hold e.mu. Only errors other than
+// congestion (closed or full store, encoding) fail closed.
+func (e *Engine) finishSave(p *pendingSave, err error) {
 	e.stateErr = err
 	if err != nil {
 		e.log.Error("保存告警状态失败", "err", err)
+		return
+	}
+	if e.committed == nil || p.snap.Revision > e.committed.Revision {
+		e.committed = p.snap
+	}
+}
+
+// retrySaves is the only writer while e.saving is set, so versions commit in order.
+func (e *Engine) retrySaves() {
+	backoff := time.Second
+	for {
+		e.mu.Lock()
+		p := e.pending
+		e.pending = nil
+		e.mu.Unlock()
+		err := e.writeState(p, 30*time.Second)
+		e.mu.Lock()
+		if errors.Is(err, context.DeadlineExceeded) {
+			if e.pending == nil {
+				e.pending = p
+			}
+			e.mu.Unlock()
+			time.Sleep(backoff)
+			backoff = min(2*backoff, 10*time.Second)
+			continue
+		}
+		e.finishSave(p, err)
+		if err != nil || e.pending == nil {
+			e.saving, e.pending = false, nil
+			e.mu.Unlock()
+			return
+		}
+		e.mu.Unlock()
+		backoff = time.Second
 	}
 }
 
@@ -173,17 +252,10 @@ func (e *Engine) Snapshot() *nagiv1.AlertSync {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.source == "" || e.stateErr != nil {
+	if e.source == "" || e.stateErr != nil || e.committed == nil {
 		return nil
 	}
-	s := &nagiv1.AlertSync{Source: e.source, Revision: e.revision, Complete: true}
-	for _, st := range e.states {
-		s.Current = append(s.Current, proto.CloneOf(st.alert))
-	}
-	for _, a := range e.history {
-		s.History = append(s.History, proto.CloneOf(a))
-	}
-	return s
+	return proto.CloneOf(e.committed)
 }
 
 // ApplyHandling does not change detection or manufacture recovery. Only the
