@@ -139,6 +139,23 @@ func (e *Engine) Snapshot() *nagiv1.AlertSync {
 
 func (e *Engine) ruleEnabled(key string, fallback judge) bool {
 	kind, rest, _ := strings.Cut(key, ":")
+	if kind == "event" {
+		kind, rest, _ = strings.Cut(rest, ":")
+		switch kind {
+		case "cert_failed":
+			return fallback.on(alert.RuleCert)
+		case "snapshot", "maintain":
+			p, c, ok := strings.Cut(rest, "/")
+			if ok {
+				return e.forContainer(p, c, fallback).on(alert.RuleSnapshot)
+			}
+			return fallback.on(alert.RuleSnapshot)
+		case "backup", "standby":
+			return fallback.on(alert.RuleBackup)
+		default:
+			return true
+		}
+	}
 	if kind == "cert" && e.Domains != nil && !e.Domains()[rest] {
 		return true
 	} // absence alone isn't health

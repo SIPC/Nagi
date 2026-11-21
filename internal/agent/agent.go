@@ -269,7 +269,7 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Error("无法把监控历史接入统一本机容量", "err", err)
 	}
 	if cfg.Logs != nil {
-		a.metrics.OnSample = a.logMetrics()
+		a.metrics.OnSample = logging.CaptureMetrics(cfg.Logs, cfg.LogConfig)
 	}
 	a.metrics.ExtraRestarts = projects.ManagedRestartCount
 	a.metrics.ProjectDirs = func() []string { return projects.Dirs(context.Background()) }
@@ -281,8 +281,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	a.metrics.AddSource(a.meshMetrics())
 	go a.metrics.Run(ctx)
+	statistics := logging.Statistics{Store: cfg.Logs}
+	if metricDB != nodeDB {
+		statistics.History = a.metrics
+	}
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
-		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
+		filepath.Join(cfg.DataDir, "caddy"), statistics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
 	a.alerts.Report = a.reportAlert
 	a.alerts.ContainerRules = a.containerAlertRules

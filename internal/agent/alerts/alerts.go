@@ -24,6 +24,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -86,23 +87,16 @@ type restartSample struct {
 	count float64
 }
 
-// queued 是待补发的告警。
-type queued struct {
-	Alert   json.RawMessage `json:"alert"`
-	Channel json.RawMessage `json:"channel"`
-	Panel   string          `json:"panel"`
-}
-
 // New 创建告警引擎，读取本地保存的配置和待补发队列。
-func New(log *slog.Logger, node, dir, certDir string, m *metrics.Collector, dc *docker.Client, projectName func(string) string, relay Relay) *Engine {
+func New(log *slog.Logger, node, dir, certDir string, m metricSource, dc *docker.Client, projectName func(string) string, relay Relay) *Engine {
 	e := &Engine{
 		log: log, node: node, dir: dir, certDir: certDir, metrics: m, docker: dc,
 		projectName: projectName, relay: relay,
 		configs: map[string]*nagiv1.AlertConfig{}, states: map[string]*state{}, restarts: map[string][]restartSample{},
 	}
 	e.loadConfigs()
-	e.loadQueue()
 	e.loadStates()
+	e.loadQueue()
 	return e
 }
 
@@ -448,9 +442,7 @@ func (e *Engine) evaluate(ctx context.Context) {
 	}
 	for key, st := range e.states {
 		// 事件类告警（例如快照失败）由 Fire/Resolve 控制，这里只处理规则类告警。
-		if !isEventKey(key) && !e.ruleEnabled(key, node) {
-			e.end(key, "rule_disabled")
-		} else if st.firing && !isEventKey(key) && active[key] == nil && healthy[key] {
+		if st.firing && !isEventKey(key) && active[key] == nil && healthy[key] {
 			send = append(send, e.setResolved(key))
 		} else if !isEventKey(key) {
 			st.confirmed = active[key] != nil
@@ -626,13 +618,13 @@ func (e *Engine) Resolve(ctx context.Context, key string) {
 	}
 }
 
-// MarkUnavailableUnless ends explicitly removed objects, never as recovery.
+// MarkUnavailableUnless invalidates removed objects without inventing recovery.
 func (e *Engine) MarkUnavailableUnless(prefix string, keep func(rest string) bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for k, st := range e.states {
 		if rest, ok := strings.CutPrefix(k, "event:"+prefix); ok && st.firing && !keep(rest) {
-			e.end(k, "object_removed")
+			st.confirmed = false
 		}
 	}
 	e.saveStates()
@@ -654,7 +646,11 @@ func (e *Engine) setFiring(key string, a *nagiv1.Alert) *nagiv1.Alert {
 	st.confirmed = true
 	a.Status, a.Node, a.Time = "firing", e.nodeName(), timestamppb.New(now)
 	a.Occurrence, a.Source, a.Since, a.Validity = st.occurrence, e.source, timestamppb.New(st.since), "valid"
-	if st.firing && now.Sub(st.lastNotified) < alert.RepeatInterval {
+	pending := false
+	for _, q := range e.queue {
+		pending = pending || q.Source == e.source && q.Occurrence == st.occurrence
+	}
+	if st.firing && now.Sub(st.lastNotified) < alert.RepeatInterval && (!st.lastDelivered.IsZero() || pending || len(e.channels()) == 0) {
 		st.alert = a
 		return nil
 	}
@@ -691,13 +687,21 @@ func (e *Engine) end(key, reason string) *nagiv1.Alert {
 // dispatch 发到所有渠道。直接发送失败的，请配置它的面板代发；面板也不可达时放进队列。
 // 发送时不持有 e.mu，避免网络慢的时候卡住配置下发。
 func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
+	e.mu.Lock()
+	if a.GetStatus() != "info" {
+		a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
+	}
+	if a == nil {
+		e.mu.Unlock()
+		return
+	}
+	a = proto.CloneOf(a)
+	chans := e.channels()
+	e.mu.Unlock()
 	e.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle())
 	if e.Report != nil {
 		go e.Report(context.WithoutCancel(ctx), a)
 	}
-	e.mu.Lock()
-	chans := e.channels()
-	e.mu.Unlock()
 	accepted := len(chans) > 0
 	for _, c := range chans {
 		if !e.deliver(ctx, a, c.ch, c.panel) {
@@ -709,7 +713,7 @@ func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
 	}
 	if accepted && a.GetStatus() == "firing" {
 		e.mu.Lock()
-		if st := e.states[a.GetKey()]; st != nil && st.alert == a {
+		if st := e.states[a.GetKey()]; st != nil && st.occurrence == a.GetOccurrence() && st.confirmed {
 			st.lastDelivered = st.lastNotified
 			e.saveStates()
 		}
@@ -717,60 +721,39 @@ func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
 	}
 }
 
+// Revalidate between network attempts; config changes cannot redirect a delayed
+// relay to a replacement destination with the same channel ID.
+func (e *Engine) currentDelivery(a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string) (*nagiv1.Alert, *nagiv1.AlertChannel) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, current := range e.configs[panel].GetChannels() {
+		if current.GetId() != ch.GetId() || destination(current) != destination(ch) {
+			continue
+		}
+		if a.GetStatus() != "info" {
+			a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
+		}
+		if a != nil {
+			return proto.CloneOf(a), proto.CloneOf(current)
+		}
+	}
+	return nil, nil
+}
+
 // deliver 先直接发送，失败再请面板代发。
 func (e *Engine) deliver(ctx context.Context, a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string) bool {
+	a, ch = e.currentDelivery(a, ch, panel)
+	if a == nil || ch == nil {
+		return false
+	}
 	err := alert.Send(ctx, ch, a)
 	if err == nil {
 		return true
 	}
 	e.log.Warn("直接发送告警失败，交给面板代发", "channel", ch.GetName(), "err", err)
+	a, ch = e.currentDelivery(a, ch, panel)
+	if a == nil || ch == nil {
+		return false
+	}
 	return e.relay != nil && e.relay(ctx, panel, a, []string{ch.GetId()}) == nil
-}
-
-// enqueue 把发送失败的告警放进待补发队列。调用方持有 e.mu。
-func (e *Engine) enqueue(a *nagiv1.Alert, c channel) {
-	ab, _ := protojson.Marshal(a)
-	cb, _ := protojson.Marshal(c.ch)
-	e.queue = append(e.queue, queued{Alert: ab, Channel: cb, Panel: c.panel})
-	if len(e.queue) > 200 {
-		e.queue = e.queue[len(e.queue)-200:]
-	}
-	e.saveQueue()
-}
-
-func (e *Engine) saveQueue() {
-	data, _ := json.Marshal(e.queue)
-	_ = os.WriteFile(e.queueFile(), data, 0o600)
-}
-
-func (e *Engine) loadQueue() {
-	data, err := os.ReadFile(e.queueFile())
-	if err == nil {
-		_ = json.Unmarshal(data, &e.queue)
-	}
-}
-
-// flushQueue 补发队列里的告警。
-func (e *Engine) flushQueue(ctx context.Context) {
-	e.mu.Lock()
-	pending := e.queue
-	e.queue = nil
-	e.mu.Unlock()
-	if len(pending) == 0 {
-		return
-	}
-	var rest []queued
-	for _, q := range pending {
-		a, c := &nagiv1.Alert{}, &nagiv1.AlertChannel{}
-		if protojson.Unmarshal(q.Alert, a) != nil || protojson.Unmarshal(q.Channel, c) != nil {
-			continue
-		}
-		if !e.deliver(ctx, a, c, q.Panel) {
-			rest = append(rest, q)
-		}
-	}
-	e.mu.Lock()
-	e.queue = append(rest, e.queue...)
-	e.saveQueue()
-	e.mu.Unlock()
 }

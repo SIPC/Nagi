@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
@@ -19,8 +20,7 @@ func TestRawMetricHistoryKeepsFullChunksAndDoesNotInventMissingValues(t *testing
 	defer logs.Close()
 	cfg := logstore.DefaultConfig()
 	cfg.MetricsEverySeconds = 20
-	a := &agent{cfg: Config{Logs: logs, LogConfig: cfg}}
-	collect := a.logMetrics()
+	collect := logging.CaptureMetrics(logs, cfg)
 	start := time.Now().Add(-48 * time.Hour) // 新库不套用旧图表的 24 小时降采样规则。
 	values := map[string]float64{"node:cpu": 37.5, "bad": math.NaN(), "c:project/secret-service:mem": 12345}
 	for i := range 67 {
@@ -30,7 +30,7 @@ func TestRawMetricHistoryKeepsFullChunksAndDoesNotInventMissingValues(t *testing
 	collect(start.Add(10*time.Second), map[string]float64{"node:cpu": 99}) // 入库频率可配，不篡改采样频率。
 	collect(start.Add(20*time.Second), map[string]float64{"node:cpu": 42})
 	rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Metrics})
-	if err != nil || len(rows) != 4 {
+	if err != nil || len(rows) != 6 {
 		t.Fatalf("原始采样没有分块完整入库: rows=%d err=%v", len(rows), err)
 	}
 	seen := map[string]float64{}
