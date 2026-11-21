@@ -60,7 +60,7 @@ import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/na
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { requireElevation, withPrivilegedElevation } from "@/components/elevate";
-import { cancelable, progressText, updateActive, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { cancelable, lacksLogService, progressText, updateActive, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
@@ -154,6 +154,8 @@ function NodeResources({ n }: { n: Node }) {
     queryFn: () => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "node:", from: ago(r.seconds), step: BigInt(r.step) }),
     refetchInterval: 10_000,
     placeholderData: (prev) => prev,
+    // 已知版本过旧的节点没有图表历史，不去查，直接说明需要升级。
+    enabled: !lacksLogService(n.info?.version),
   });
   const ofTotal = (total: number) => (total ? (v: number) => `${sizeLabel((v / 100) * total)} / ${sizeLabel(total)}` : fmtPercent);
   const pointsOf = (name: string) => {
@@ -192,7 +194,9 @@ function NodeResources({ n }: { n: Node }) {
   const now = Date.now() / 1000;
   return (
     <Section title={t.metrics.resourceUsage} actions={<RangePicker value={range} onChange={setRange} />}>
-      {q.isPending ? (
+      {lacksLogService(n.info?.version) ? (
+        <Notice tone="warning">{t.nodes.tooOldMetrics}</Notice>
+      ) : q.isPending ? (
         <TilesSkeleton />
       ) : q.error ? (
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
@@ -860,6 +864,11 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
             </Notice>
           )}
           {/* 不能限制容器出站时（例如没有 nftables），这台节点上的项目按「关闭」处理（见 docs/agent.md#出站限制）。 */}
+          {n.online && lacksLogService(n.info?.version) && (
+            <Notice tone="warning" title={t.nodes.tooOld}>
+              {t.nodes.tooOldHint(n.info!.version)}
+            </Notice>
+          )}
           {n.info?.egressError && (
             <Notice tone="warning" title={t.nodes.egressUnavailable}>
               {n.info.egressError}

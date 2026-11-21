@@ -15,6 +15,8 @@ import (
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/standby"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
@@ -131,5 +133,18 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 	lc := nagiv1connect.NewNodeLogServiceClient(h.srv.Client(), h.srv.URL)
 	if _, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{NodeId: "n1"})); connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Fatalf("匿名查询没有被登录检查拦截: %v", err)
+	}
+}
+
+// 节点明确不认识 LogService 才提示升级；其他 mesh 错误照原样报，不能被当成旧节点吞掉。
+func TestLogErrorOnlyTreatsUnimplementedAsOutdated(t *testing.T) {
+	a, _ := scopeTestAPI(t)
+	err := a.logError("n2", status.Error(codes.Unimplemented, "unknown service nagi.v1.LogService"))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "版本过旧") || !strings.Contains(err.Error(), "b") {
+		t.Fatalf("旧节点应提示升级：%v", err)
+	}
+	err = a.logError("n2", status.Error(codes.Unavailable, "connection refused"))
+	if connect.CodeOf(err) != connect.CodeUnavailable || strings.Contains(err.Error(), "版本过旧") {
+		t.Fatalf("新节点的 mesh 错误不能说成版本过旧：%v", err)
 	}
 }

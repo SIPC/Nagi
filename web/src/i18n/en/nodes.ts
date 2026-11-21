@@ -16,6 +16,9 @@ export default {
     undone: "Isolation ended",
   },
   egressUnavailable: "Can't restrict container egress",
+  tooOld: "This node is out of date. Some features need a node upgrade",
+  tooOldMetrics: "This node is too old for metric charts. Upgrade the node",
+  tooOldHint: (version) => `Nagi ${version} doesn't support metric charts, unified logs, node-local recordings, or acknowledging and silencing alerts. Upgrade the node to use them. Terminals, files and deployments still work.`,
   tabs: {
     terminal: "Terminal",
     files: "Files",

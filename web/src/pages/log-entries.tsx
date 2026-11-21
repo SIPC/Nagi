@@ -9,6 +9,7 @@ import { RecordingDialog } from "@/components/recording";
 import { errorMessage, logClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import type { LogEntry, LogPage, LogQuery, NodeLogQuery } from "@/gen/nagi/v1/logs_pb";
+import { lacksLogService } from "@/pages/update";
 import { t } from "@/i18n";
 
 type Request = Pick<NodeLogQuery, "nodeId" | "panelLocal" | "recentCopy"> & { query: Pick<LogQuery, "category" | "kindPrefix" | "project" | "search" | "limit" | "from" | "to"> };
@@ -51,13 +52,16 @@ export function LogEntries() {
   }), [search.node, search.copy, search.category, search.project, search.q, search.from, search.to, revision]);
   useEffect(() => { setSelected(undefined); setReplaying(false); }, [request]);
   const invalid = !!(search.from && !Number.isFinite(Date.parse(search.from)) || search.to && !Number.isFinite(Date.parse(search.to)) || search.from && search.to && Date.parse(search.from) >= Date.parse(search.to));
+  // 版本过旧的节点没有统一日志：不查，只显示一条升级提示（旧审计在「审计与录制」）。
+  const tooOld = !request.recentCopy && lacksLogService(nodes.data?.nodes.find((node) => node.id === search.node)?.info?.version);
   const logs = useInfiniteQuery({
     // Protobuf timestamps contain bigint seconds; keep cache keys JSON-safe.
     queryKey: ["logs", search.node, search.copy, search.category, search.project, search.q, search.from, search.to, revision],
     initialPageParam: { source: "", after: 0n },
     queryFn: ({ pageParam, signal }) => logClient.queryNodeLogs({ ...request, query: { ...request.query, ...pageParam } }, { signal }),
     getNextPageParam: (last) => last.more ? { source: last.source, after: last.nextAfter } : undefined,
-    enabled: !invalid, retry: false, refetchOnWindowFocus: false,
+    // 选了节点时先等节点列表，才知道它是不是版本过旧。
+    enabled: !invalid && !tooOld && (!search.node || !nodes.isPending), retry: false, refetchOnWindowFocus: false,
   });
   const pages = logs.data?.pages ?? [];
   const events = pages.flatMap((page) => page.entries);
@@ -84,7 +88,7 @@ export function LogEntries() {
     { key: "to" as const, label: search.to && `${t.logs.to}: ${search.to.replace("T", " ")}` },
   ].filter((chip) => chip.label);
   return <div className="flex min-w-0 flex-col gap-4">
-    <MetricsMigration request={request} online={nodes.data?.nodes.find((node) => node.id === request.nodeId)?.online === true} />
+    {!tooOld && <MetricsMigration request={request} online={nodes.data?.nodes.find((node) => node.id === request.nodeId)?.online === true} />}
     <form className="flex items-center gap-2" onSubmit={(event) => {
       event.preventDefault(); apply();
     }}>
@@ -139,10 +143,11 @@ export function LogEntries() {
     </Dialog>
     {(nodes.error || projects.error) && <QueryError error={nodes.error || projects.error} />}
     {invalid && <Notice tone="danger">{t.logs.invalidTime}</Notice>}
+    {tooOld && <Notice tone="warning">{t.logs.tooOld(sourceName)}</Notice>}
     {offline && !request.recentCopy && <Notice tone="warning" actions={<Button readOnlyOk variant="outline" onClick={() => navigate({ search: { ...search, copy: true, category: search.category || "audit" }, replace: true })}>{t.logs.useCopy}</Button>}>{t.logs.offlineHelp}</Notice>}
-    {!invalid && <LogCoverage key={revision} request={request} state={state} onOpen={(e, source) => { setSelected(e); setSelectedSource(source); setReplaying(false); }} />}
+    {!invalid && !tooOld && <LogCoverage key={revision} request={request} state={state} onOpen={(e, source) => { setSelected(e); setSelectedSource(source); setReplaying(false); }} />}
     {logs.error && <QueryError error={logs.error} onRetry={reset} />}
-    {!invalid && logs.isPending ? <RowsSkeleton count={5} /> : state && <>
+    {tooOld ? null : !invalid && logs.isPending ? <RowsSkeleton count={5} /> : state && <>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-muted-foreground"><span>{sourceName}</span><span>{t.logs.order}</span></div>
       {!events.length ? <EmptyRow action={<Button readOnlyOk variant="outline" onClick={() => navigate({ search: {}, replace: true })}>{t.audit.clearFilters}</Button>}>{t.logs.empty}</EmptyRow> : <Table compact className="table-fixed">
         <thead><tr><Th className="md:w-1/2">{t.logs.event}</Th><Th className="hidden w-28 lg:table-cell">{t.audit.detail.category}</Th><Th className="hidden w-32 xl:table-cell">{t.audit.detail.project}</Th><Th className="hidden md:table-cell">{t.audit.detail.time}</Th></tr></thead>

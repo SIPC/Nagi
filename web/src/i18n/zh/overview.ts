@@ -20,6 +20,7 @@ export default {
   // 有离线节点时，流量和端口映射只统计在线节点。
   offlineExcluded: (names: string) => `未包含离线节点 ${names}`,
   allOffline: "节点均离线，无法获取流量",
+  tooOld: (_n: number, names: string) => `节点 ${names} 版本过旧，不支持流量统计，未计入；请升级节点`,
   viewNodes: "查看节点",
   flow: {
     title: "实时流量",

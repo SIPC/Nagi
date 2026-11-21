@@ -103,6 +103,11 @@ export function isNotFound(err: unknown): boolean {
   return err instanceof ConnectError && err.code === Code.NotFound;
 }
 
+// isFailedPrecondition：前提不满足（例如节点版本过旧），重试也一样，不用重试。
+export function isFailedPrecondition(err: unknown): boolean {
+  return err instanceof ConnectError && err.code === Code.FailedPrecondition;
+}
+
 // isUnauthenticated：没登录或登录已失效。要求重新验证的不算（会话还在，验证后继续）。
 export function isUnauthenticated(err: unknown): boolean {
   return err instanceof ConnectError && err.code === Code.Unauthenticated && !reverifyReason(err);

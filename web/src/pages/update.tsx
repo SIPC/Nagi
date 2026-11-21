@@ -32,6 +32,13 @@ function isOlder(a: string, b: string) {
   return a !== b && x[4]?.startsWith("-") === true && !y[4]?.startsWith("-");
 }
 
+// lacksLogService：节点早于 v0.37.0，没有统一日志、图表历史、节点本地录制和告警处理（与 internal/server/api 的 logServiceMinVersion 一致）。
+// 和 release.Before 一样只比较主、次、修订号；本地编译的 dev 当作支持。
+export function lacksLogService(version: string | undefined) {
+  const x = versionRe.exec(version ?? "");
+  return !!x && (Number(x[1]) === 0 ? Number(x[2]) < 37 : false);
+}
+
 // upgradeTarget：节点可以一键升级到的版本（即面板的版本），不能升级时返回空串。
 // 只升不降；面板自带的节点随面板升级；只支持 Linux 节点（见 internal/agent/upgrade.go）。
 export function upgradeTarget(n: Node, panelVersion: string) {

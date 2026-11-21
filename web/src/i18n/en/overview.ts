@@ -20,6 +20,7 @@ export default {
   },
   offlineExcluded: (names) => `Excludes offline nodes: ${names}`,
   allOffline: "All nodes are offline. Traffic is unavailable",
+  tooOld: (n, names) => (n === 1 ? `Node ${names} is too old for traffic stats and isn't included. Upgrade the node` : `Nodes ${names} are too old for traffic stats and aren't included. Upgrade the nodes`),
   viewNodes: "View nodes",
   flow: {
     title: "Live traffic",

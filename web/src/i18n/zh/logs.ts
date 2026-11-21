@@ -1,6 +1,6 @@
 export default {
   endAlertEvent: "结束事件（非恢复）",
-  alerts: { title: "当前告警", count: (n: number) => `${n} 项未恢复`, handle: "查看与处理", acknowledged: "已确认", unacknowledged: "待确认", acknowledge: "确认告警", unacknowledge: "取消确认", note: "处理备注", saveNote: "保存备注", silence: "静默 1 小时", maintenance: "维护 1 小时", clearSilence: "取消静默", clearMaintenance: "结束维护", silenced: "已静默", maintaining: "维护中", stale: "来源已过期", unknown: "尚未确认", recent: "当前主面板不可达，显示近期副本；不能离线处理。", help: "确认与备注不代表故障恢复。静默、维护仅暂停本轮出现提醒，不停止检测；恢复通知仍会发送。", elevate: "处理告警前，请先验证身份。", saved: "处理已保存", recovered: "已恢复", ended: "已结束（非恢复）", history: "本源近期历史", historyHelp: "仅保留每个来源最近 200 个结束轮次；更早的变化受日志保留范围限制。", refresh: "刷新告警", received: "接收于", until: "到期", invalid: "状态不可用，请刷新后重试" },
+  alerts: { title: "当前告警", count: (n: number) => `${n} 项未恢复`, handle: "查看与处理", acknowledged: "已确认", unacknowledged: "待确认", acknowledge: "确认告警", unacknowledge: "取消确认", note: "处理备注", saveNote: "保存备注", silence: "静默 1 小时", maintenance: "维护 1 小时", clearSilence: "取消静默", clearMaintenance: "结束维护", silenced: "已静默", maintaining: "维护中", stale: "来源已过期", unknown: "尚未确认", recent: "当前主面板不可达，显示近期副本；不能离线处理。", help: "确认与备注不代表故障恢复。静默、维护仅暂停本轮出现提醒，不停止检测；恢复通知仍会发送。", elevate: "处理告警前，请先验证身份。", saved: "处理已保存", recovered: "已恢复", ended: "已结束（非恢复）", history: "本源近期历史", historyHelp: "仅保留每个来源最近 200 个结束轮次；更早的变化受日志保留范围限制。", refresh: "刷新告警", received: "接收于", until: "到期", invalid: "状态不可用，请刷新后重试", tooOld: (_n: number, names: string) => `节点 ${names} 版本过旧，告警不会显示在这里，也不能确认或静默；需升级节点。` },
   title: "日志", description: "查询面板与节点日志，查看审计记录和录制。",
   entries: "全部日志", audit: "审计与录制", auditHelp: "原审计链的记录、父子调用、导出和录制回放。统一日志中的脱敏副本不等于原审计链。",
   auditSummary: "原始审计记录与录制", search: "查询", event: "事件",
@@ -13,6 +13,7 @@ export default {
   from: "开始时间（本地）", to: "结束时间（不含，本地）", invalidTime: "请输入有效时间，开始时间必须早于结束时间。",
   readFrom: "读取位置", live: "节点原始日志（mesh）", copy: "面板近期副本", useCopy: "查询近期副本",
   copyHelp: "这不是节点完整历史：副本有容量和保留期限，可能尚未收到、已经过期或被清理。每次只查询一个类别；宿主机选项只查运行类别，SSH/sudo 请选安全类别。",
+  tooOld: (name: string) => `节点 ${name} 版本过旧，不支持统一日志和节点本地录制，请升级节点。旧版本的审计记录在「审计与录制」中查看。`,
   offlineHelp: "节点已离线。原始查询可能不可用；可显式改查面板近期副本，不会自动切换来源。",
   coverage: "无记录不代表无事发生。日志受采集范围、启动时间、断连和容量限制；清理摘要仅给出序号包络，不代表其中每条都被删除，也不能还原确切缺失时间段。",
   gaps: "采集与缺口", collectionEvidence: "采集边界记录（所选时间内，不受项目或关键字筛选影响）",

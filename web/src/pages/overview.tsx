@@ -8,6 +8,7 @@ import { PageHeader } from "@/pages/layout";
 import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, spanOf, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
+import { lacksLogService } from "@/pages/update";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status, Table, Td, Th } from "@/components/ui";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -624,17 +625,20 @@ export function OverviewPage() {
   const projects = useQuery({ queryKey: ["projects"], queryFn: () => projectClient.listProjects({}), refetchInterval: refresh, enabled: canProjects });
   const all = (nodes.data?.nodes ?? []).filter((n) => !n.pending);
   const online = all.filter((n) => n.online);
-  const onlineKey = online.map((n) => n.id).join(",");
+  // v0.36 及更早的节点没有图表历史接口：不去查，在各区块写明哪些节点未计入、需要升级，不当成 0。
+  const readable = online.filter((n) => !lacksLogService(n.info?.version));
+  const tooOld = online.filter((n) => lacksLogService(n.info?.version)).map((n) => n.name);
+  const onlineKey = readable.map((n) => n.id).join(",");
   const projectList = projects.data?.projects ?? [];
 
   // 当前的网卡速率：取最近 1 分钟最新的一个点。
   const live = useQuery({
     queryKey: ["overview-net", onlineKey],
     queryFn: async () => {
-      const parts = await Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "node:net_", from: ago(60) }).catch(() => null)));
-      return new Map(online.map((n, i) => [n.id, { rx: latest(parts[i]?.series.find((s) => s.name === "node:net_rx")), tx: latest(parts[i]?.series.find((s) => s.name === "node:net_tx")) }]));
+      const parts = await Promise.all(readable.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "node:net_", from: ago(60) })));
+      return new Map(readable.map((n, i) => [n.id, { rx: latest(parts[i]?.series.find((s) => s.name === "node:net_rx")), tx: latest(parts[i]?.series.find((s) => s.name === "node:net_tx")) }]));
     },
-    enabled: online.length > 0,
+    enabled: readable.length > 0,
     refetchInterval: refresh,
     placeholderData: (prev) => prev,
   });
@@ -669,8 +673,8 @@ export function OverviewPage() {
   // 当前的节点之间速率：最近 1 分钟最新的一个点。旧版本的节点没有 m: 序列。
   const liveMesh = useQuery({
     queryKey: ["overview-mesh", onlineKey],
-    queryFn: async () => Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "m:", from: ago(60) }).catch(() => null))),
-    enabled: online.length > 0,
+    queryFn: async () => Promise.all(readable.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "m:", from: ago(60) }))),
+    enabled: readable.length > 0,
     refetchInterval: refresh,
     placeholderData: (prev) => prev,
   });
@@ -678,8 +682,8 @@ export function OverviewPage() {
   // 节点之间的历史，和网卡历史同样的时间范围和步长，时刻对齐。
   const meshHistory = useQuery({
     queryKey: ["overview-mesh-history", onlineKey, range],
-    queryFn: async () => Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "m:", from: ago(r.seconds), step: BigInt(r.step) }).catch(() => null))),
-    enabled: online.length > 0,
+    queryFn: async () => Promise.all(readable.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "m:", from: ago(r.seconds), step: BigInt(r.step) }))),
+    enabled: readable.length > 0,
     refetchInterval: refresh,
     placeholderData: (prev) => prev,
   });
@@ -688,10 +692,10 @@ export function OverviewPage() {
   const history = useQuery({
     queryKey: ["overview-history", onlineKey, range],
     queryFn: async () => {
-      const parts = await Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "node:net_", from: ago(r.seconds), step: BigInt(r.step) }).catch(() => null)));
-      return online.map((n, i) => ({ id: n.id, series: parts[i]?.series ?? [] }));
+      const parts = await Promise.all(readable.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "node:net_", from: ago(r.seconds), step: BigInt(r.step) })));
+      return readable.map((n, i) => ({ id: n.id, series: parts[i]?.series ?? [] }));
     },
-    enabled: online.length > 0,
+    enabled: readable.length > 0,
     refetchInterval: refresh,
     placeholderData: (prev) => prev,
   });
@@ -701,7 +705,7 @@ export function OverviewPage() {
   const routeSeries = useQuery({
     queryKey: ["overview-routes", onlineKey],
     queryFn: async () => {
-      const parts = await Promise.all(online.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "r:", from: ago(86400), step: BigInt(routeStep) }).catch(() => null)));
+      const parts = await Promise.all(readable.map((n) => nodeClient.queryNodeMetrics({ nodeId: n.id, prefix: "r:", from: ago(86400), step: BigInt(routeStep) })));
       const totals = new Map<string, number>();
       const end = Date.now() / 1000;
       for (const p of parts) {
@@ -711,7 +715,7 @@ export function OverviewPage() {
       }
       return totals;
     },
-    enabled: online.length > 0,
+    enabled: readable.length > 0,
     refetchInterval: refresh,
     placeholderData: (prev) => prev,
   });
@@ -729,19 +733,27 @@ export function OverviewPage() {
   const allOffline = all.length > 0 && online.length === 0;
   // 实时流量里离线节点照常列出（变灰），只有端口映射需要说明。
   const offlineNotice = offlineNames.length > 0 && !allOffline && <Notice tone="warning">{o.offlineExcluded(t.common.list(offlineNames))}</Notice>;
+  const oldNotice = tooOld.length > 0 && (
+    <Notice tone="warning" actions={<ButtonLink to="/nodes" variant="outline" readOnlyOk>{o.viewNodes}</ButtonLink>}>
+      {o.tooOld(tooOld.length, t.common.list(tooOld))}
+    </Notice>
+  );
+  // 查询失败不画成空图或 0：在对应区块显示错误。
+  const flowError = live.error || liveMesh.error;
+  const trendError = history.error || meshHistory.error;
 
-  const sample = liveRates(online.map((n) => n.id), liveMesh.data, keys);
+  const sample = liveRates(readable.map((n) => n.id), liveMesh.data, keys);
   const ready = !!sample && !!live.data;
   // 要升级才有节点之间的数据：查询成功但没有 m: 序列。
-  const outdated = online.filter((_, i) => liveMesh.data?.[i]?.series.length === 0).map((n) => n.name);
+  const outdated = readable.filter((_, i) => liveMesh.data?.[i]?.series.length === 0).map((n) => n.name);
   const extRate = (id: string, dir: "rx" | "tx") => Math.max(0, (live.data?.get(id)?.[dir] ?? 0) - (sample?.[dir].get(id) ?? 0));
-  const extIn = online.reduce((sum, n) => sum + extRate(n.id, "rx"), 0);
-  const extOut = online.reduce((sum, n) => sum + extRate(n.id, "tx"), 0);
+  const extIn = readable.reduce((sum, n) => sum + extRate(n.id, "rx"), 0);
+  const extOut = readable.reduce((sum, n) => sum + extRate(n.id, "tx"), 0);
   const meshTotal = [...(sample?.pairs.values() ?? [])].reduce((sum, v) => sum + v, 0);
 
   const flows: Flow[] = [];
   if (ready) {
-    for (const n of online) {
+    for (const n of readable) {
       const inRate = extRate(n.id, "rx");
       const outRate = extRate(n.id, "tx");
       if (inRate >= 1) flows.push({ from: external, to: n.id, rate: inRate, kind: "ext" });
@@ -765,7 +777,7 @@ export function OverviewPage() {
   const buckets = new Map<number, MeshRates>();
   if (keys) {
     (meshHistory.data ?? []).forEach((part, i) => {
-      const id = online[i]?.id;
+      const id = readable[i]?.id;
       if (!part || !id) return;
       for (const series of part.series) {
         series.values.forEach((v, j) => {
@@ -909,6 +921,8 @@ export function OverviewPage() {
               />
             }
           >
+            {oldNotice}
+            {flowError && <QueryError error={errorMessage(flowError)} onRetry={() => { live.refetch(); liveMesh.refetch(); }} />}
             {outdated.length > 0 && (
               <Notice
                 tone="warning"
@@ -925,9 +939,9 @@ export function OverviewPage() {
               <RowsSkeleton />
             ) : allOffline ? (
               <EmptyRow>{o.allOffline}</EmptyRow>
-            ) : online.length === 0 ? (
-              <EmptyRow>{o.flow.empty}</EmptyRow>
-            ) : !ready ? (
+            ) : readable.length === 0 ? (
+              tooOld.length > 0 ? null : <EmptyRow>{o.flow.empty}</EmptyRow>
+            ) : flowError ? null : !ready ? (
               <RowsSkeleton />
             ) : flows.length === 0 ? (
               <EmptyRow>{o.flow.empty}</EmptyRow>
@@ -942,7 +956,8 @@ export function OverviewPage() {
               <RangePicker value={range} onChange={(v) => setSearch({ range: v === "1h" ? undefined : v })} />
             }
           >
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-8">
+            {oldNotice}
+            {trendError ? <QueryError error={errorMessage(trendError)} onRetry={() => { history.refetch(); meshHistory.refetch(); }} /> : <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-8">
               <TrendChart
                 title={o.trend.ext}
                 help={o.trend.extHelp}
@@ -956,7 +971,7 @@ export function OverviewPage() {
                 loading={extLoading}
               />
               <TrendChart title={o.trend.mesh} help={o.trend.meshHelp} from={now - r.seconds} to={now} step={r.step} series={pairSeries} loading={meshLoading} />
-            </div>
+            </div>}
           </Section>
 
           <Section
@@ -1014,8 +1029,11 @@ export function OverviewPage() {
           {!allOffline && (
             <Section title={o.routes.title} help={o.routes.help}>
               {offlineNotice}
-              {routeRows.length === 0 ? (
-                online.length > 0 && routeSeries.isPending ? (
+              {oldNotice}
+              {routeSeries.error ? (
+                <QueryError error={errorMessage(routeSeries.error)} onRetry={() => routeSeries.refetch()} />
+              ) : routeRows.length === 0 ? (
+                readable.length > 0 && routeSeries.isPending ? (
                   <RowsSkeleton count={1} />
                 ) : (
                   <EmptyRow>{o.routes.empty}</EmptyRow>

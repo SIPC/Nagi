@@ -819,16 +819,25 @@ func (s *nodeService) hiddenNodeMetrics(ctx context.Context, m *nagiv1.QueryNode
 	}
 	out := &nagiv1.QueryMetricsResponse{}
 	seen := map[string]bool{}
+	outdated := false
 	for _, id := range ids {
 		if seen[id] || x.node(id) {
 			continue
 		}
 		seen[id] = true
 		res, err := s.queryNodeMetrics(ctx, id, &nagiv1.QueryMetricsRequest{Prefix: m.GetPrefix(), From: m.GetFrom(), To: m.GetTo(), Step: m.GetStep()})
+		if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+			outdated = true
+			continue
+		}
 		if err != nil {
 			continue
 		}
 		out.Series = append(out.Series, res.GetSeries()...)
+	}
+	// 合计少了旧节点上的数据时不当作完整结果返回；不说是哪台节点。
+	if outdated {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("项目有容器在版本过旧的节点上，这部分监控无法读取，请升级节点"))
 	}
 	return connect.NewResponse(out), nil
 }

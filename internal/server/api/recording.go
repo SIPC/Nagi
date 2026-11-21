@@ -94,7 +94,7 @@ func (a *API) readNodeRecording(ctx context.Context, nodeID, id string, send fun
 	defer cc.Close()
 	stream, err := nagiv1.NewLogServiceClient(cc).ReadRecording(ctx, &nagiv1.LocalRecordingQuery{Id: id})
 	if err != nil {
-		return toConnect(err)
+		return a.logError(nodeID, err)
 	}
 	for {
 		chunk, err := stream.Recv()
@@ -102,7 +102,7 @@ func (a *API) readNodeRecording(ctx context.Context, nodeID, id string, send fun
 			return nil
 		}
 		if err != nil {
-			return toConnect(err)
+			return a.logError(nodeID, err)
 		}
 		if err := send(chunk.GetData()); err != nil {
 			return err
