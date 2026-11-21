@@ -220,7 +220,9 @@ type MeshConfig struct {
 	PanelKey []byte                 `protobuf:"bytes,1,opt,name=panel_key,json=panelKey,proto3" json:"panel_key,omitempty"`
 	Peers    []*MeshPeer            `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty"`
 	// 被隔离的节点的 mesh 公钥：立即从成员里去掉，不走保留期（见 docs/mesh.md#隔离）。
-	Isolated      [][]byte `protobuf:"bytes,3,rep,name=isolated,proto3" json:"isolated,omitempty"`
+	Isolated [][]byte `protobuf:"bytes,3,rep,name=isolated,proto3" json:"isolated,omitempty"`
+	// 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+	AutoRoute     bool `protobuf:"varint,4,opt,name=auto_route,json=autoRoute,proto3" json:"auto_route,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -274,6 +276,13 @@ func (x *MeshConfig) GetIsolated() [][]byte {
 		return x.Isolated
 	}
 	return nil
+}
+
+func (x *MeshConfig) GetAutoRoute() bool {
+	if x != nil {
+		return x.AutoRoute
+	}
+	return false
 }
 
 type RelayAlertRequest struct {
@@ -1037,12 +1046,14 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"MeshDirect\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12\x15\n" +
-	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\"n\n" +
+	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\"\x8d\x01\n" +
 	"\n" +
 	"MeshConfig\x12\x1b\n" +
 	"\tpanel_key\x18\x01 \x01(\fR\bpanelKey\x12'\n" +
 	"\x05peers\x18\x02 \x03(\v2\x11.nagi.v1.MeshPeerR\x05peers\x12\x1a\n" +
-	"\bisolated\x18\x03 \x03(\fR\bisolated\"Z\n" +
+	"\bisolated\x18\x03 \x03(\fR\bisolated\x12\x1d\n" +
+	"\n" +
+	"auto_route\x18\x04 \x01(\bR\tautoRoute\"Z\n" +
 	"\x11RelayAlertRequest\x12$\n" +
 	"\x05alert\x18\x01 \x01(\v2\x0e.nagi.v1.AlertR\x05alert\x12\x1f\n" +
 	"\vchannel_ids\x18\x02 \x03(\tR\n" +

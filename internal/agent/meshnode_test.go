@@ -89,6 +89,35 @@ func TestMeshRelayAuthorizationMerge(t *testing.T) {
 	wantPool(true) // 不再信任的面板没有否决权。
 	n.retain([]string{"b"})
 	wantPool(false) // 不信任的面板也不能把节点加进池。
+
+	// 自动切路总开关：同样要所有可信面板都打开；旧面板（没有这一项）、不可信面板都不能打开它。
+	route := func(fp string, on bool) {
+		n.update(fp, "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:], AutoRoute: on})
+	}
+	n.retain([]string{"a", "b"})
+	route("a", true)
+	route("b", false)
+	for range 12 {
+		n.apply()
+		if m.AutoRoute() {
+			t.Fatal("one trusted panel off must keep auto routing off")
+		}
+	}
+	route("b", true)
+	if !m.AutoRoute() {
+		t.Fatal("all trusted panels on")
+	}
+	route("old", false)
+	n.retain([]string{"a", "b"})
+	if !m.AutoRoute() {
+		t.Fatal("untrusted panel vetoed")
+	}
+	n.retain([]string{"old"})
+	route("old", true)
+	n.retain([]string{"c"})
+	if m.AutoRoute() {
+		t.Fatal("no trusted panel has spoken, but auto routing is on")
+	}
 }
 
 func randKey() mesh.Key {

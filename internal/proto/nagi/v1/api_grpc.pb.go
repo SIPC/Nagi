@@ -3393,6 +3393,7 @@ const (
 	SettingsService_UpdateSettings_FullMethodName           = "/nagi.v1.SettingsService/UpdateSettings"
 	SettingsService_SetPanelDomain_FullMethodName           = "/nagi.v1.SettingsService/SetPanelDomain"
 	SettingsService_SetPanelName_FullMethodName             = "/nagi.v1.SettingsService/SetPanelName"
+	SettingsService_SetMeshAutoRoute_FullMethodName         = "/nagi.v1.SettingsService/SetMeshAutoRoute"
 	SettingsService_GetAlertConfig_FullMethodName           = "/nagi.v1.SettingsService/GetAlertConfig"
 	SettingsService_UpdateAlertConfig_FullMethodName        = "/nagi.v1.SettingsService/UpdateAlertConfig"
 	SettingsService_TestAlertChannel_FullMethodName         = "/nagi.v1.SettingsService/TestAlertChannel"
@@ -3453,6 +3454,8 @@ type SettingsServiceClient interface {
 	SetPanelDomain(ctx context.Context, in *SetPanelDomainApiRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
 	SetPanelName(ctx context.Context, in *SetPanelNameRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
+	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+	SetMeshAutoRoute(ctx context.Context, in *SetMeshAutoRouteRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	GetAlertConfig(ctx context.Context, in *GetAlertConfigRequest, opts ...grpc.CallOption) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3578,6 +3581,16 @@ func (c *settingsServiceClient) SetPanelName(ctx context.Context, in *SetPanelNa
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateSettingsResponse)
 	err := c.cc.Invoke(ctx, SettingsService_SetPanelName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetMeshAutoRoute(ctx context.Context, in *SetMeshAutoRouteRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSettingsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_SetMeshAutoRoute_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4092,6 +4105,8 @@ type SettingsServiceServer interface {
 	SetPanelDomain(context.Context, *SetPanelDomainApiRequest) (*UpdateSettingsResponse, error)
 	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
 	SetPanelName(context.Context, *SetPanelNameRequest) (*UpdateSettingsResponse, error)
+	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+	SetMeshAutoRoute(context.Context, *SetMeshAutoRouteRequest) (*UpdateSettingsResponse, error)
 	GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -4194,6 +4209,9 @@ func (UnimplementedSettingsServiceServer) SetPanelDomain(context.Context, *SetPa
 }
 func (UnimplementedSettingsServiceServer) SetPanelName(context.Context, *SetPanelNameRequest) (*UpdateSettingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetPanelName not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetMeshAutoRoute(context.Context, *SetMeshAutoRouteRequest) (*UpdateSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetMeshAutoRoute not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAlertConfig not implemented")
@@ -4428,6 +4446,24 @@ func _SettingsService_SetPanelName_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SettingsServiceServer).SetPanelName(ctx, req.(*SetPanelNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetMeshAutoRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetMeshAutoRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetMeshAutoRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetMeshAutoRoute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetMeshAutoRoute(ctx, req.(*SetMeshAutoRouteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5304,6 +5340,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetPanelName",
 			Handler:    _SettingsService_SetPanelName_Handler,
+		},
+		{
+			MethodName: "SetMeshAutoRoute",
+			Handler:    _SettingsService_SetMeshAutoRoute_Handler,
 		},
 		{
 			MethodName: "GetAlertConfig",

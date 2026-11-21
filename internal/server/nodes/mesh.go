@@ -158,9 +158,10 @@ func (r *Registry) meshConfig(to *Conn) *nagiv1.MeshConfig {
 		list = r.withRelays(to, list)
 	}
 	return &nagiv1.MeshConfig{
-		PanelKey: self[:],
-		Peers:    append([]*nagiv1.MeshPeer{{PublicKey: self[:], Name: name, IsPanel: true}}, list...),
-		Isolated: r.isolatedKeys(),
+		PanelKey:  self[:],
+		Peers:     append([]*nagiv1.MeshPeer{{PublicKey: self[:], Name: name, IsPanel: true}}, list...),
+		Isolated:  r.isolatedKeys(),
+		AutoRoute: r.AutoRoute(context.Background()),
 	}
 }
 

@@ -89,5 +89,12 @@ export default {
   poolJoin: "Join",
   poolLeave: "Leave",
   poolConfirm: "Leave the relay pool? Connections rerouted through this node will go back to their direct paths.",
+  autoTitle: "Automatic routing",
+  autoHelp: "When on, nodes periodically compare latency, loss and stability of the direct path against relaying through relay pool nodes. They switch to a relay when it's clearly better, and switch back within seconds when it gets worse or fails. Only affects node pairs that can connect directly; existing QUIC connections aren't migrated, only new connections use the new path. Each comparison sends a small amount of probe traffic.",
+  autoOn: "On",
+  autoOff: "Off",
+  autoEnable: "Turn on",
+  autoDisable: "Turn off",
+  autoConfirm: "Turn off automatic routing? All rerouted connections will go back to their direct paths immediately.",
   quicConfirm: "Turn off the QUIC fast path? TCP connections between this node and other nodes and the panel will use WireGuard, and transfers in progress will be interrupted.",
 } satisfies typeof zh;

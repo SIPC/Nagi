@@ -38,6 +38,9 @@ type meshNode struct {
 	isolated  map[string][][]byte
 	panelKeys map[string]mesh.Key // 面板指纹 → 面板的 WireGuard 公钥
 	panelAddr map[string]string   // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
+	// autoRoute 是各面板的自动切路总开关（见 docs/mesh.md#自动切路）。不写盘：节点重启后
+	// 等信任的面板重新说打开才运行，不靠旧面板留下的记录打开。
+	autoRoute map[string]bool
 	names     map[mesh.Key]string
 	file      string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
 	// trusted 是现在信任的面板。移除的面板告诉我们的成员先留着，直到某个信任的面板给了成员列表：
@@ -214,6 +217,10 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 		n.isolated = map[string][][]byte{}
 	}
 	n.isolated[fingerprint] = cfg.GetIsolated()
+	if n.autoRoute == nil {
+		n.autoRoute = map[string]bool{}
+	}
+	n.autoRoute[fingerprint] = cfg.GetAutoRoute()
 	n.panelPeers[fingerprint] = cfg.GetPeers()
 	n.panelKeys[fingerprint] = pk
 	n.panelAddr[fingerprint] = address
@@ -382,6 +389,17 @@ func (n *meshNode) apply() {
 			}
 		}
 	}
+	// 自动切路：至少一个可信面板给过成员列表，而且给过的可信面板都打开了才运行（和中转池一样，任一面板没开就不开）。
+	auto := false
+	for fp := range n.panelPeers {
+		if n.trusted == nil || slices.Contains(n.trusted, fp) {
+			if !n.autoRoute[fp] {
+				auto = false
+				break
+			}
+			auto = true
+		}
+	}
 	for k, p := range merged {
 		p.RelayPool = poolVotes[k] == 1
 		if !trustedMembers[k] {
@@ -424,6 +442,7 @@ func (n *meshNode) apply() {
 	if err := n.m.SetPeers(peers); err != nil {
 		n.log.Warn("更新 mesh 成员失败", "err", err)
 	}
+	n.m.SetAutoRoute(auto)
 }
 
 func resolve(hostport string) (netip.AddrPort, bool) {

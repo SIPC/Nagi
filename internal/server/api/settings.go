@@ -19,6 +19,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -69,7 +70,9 @@ func (p *PanelInfo) PublicHostPort(ctx context.Context) string {
 }
 
 func (p *PanelInfo) settings(ctx context.Context) *nagiv1.PanelSettings {
+	auto, _ := p.Q.GetSetting(ctx, nodes.SettingMeshAutoRoute)
 	return &nagiv1.PanelSettings{
+		MeshAutoRoute: auto == "1",
 		PublicAddress: p.PublicAddress(ctx),
 		Port:          uint32(p.Port),
 		Fingerprint:   p.Fingerprint,
@@ -100,6 +103,14 @@ func (s *settingsService) SetPanelName(ctx context.Context, req *connect.Request
 		return nil, err
 	}
 	s.Nodes.Changes.Bump()
+	return connect.NewResponse(&nagiv1.UpdateSettingsResponse{Settings: s.Panel.settings(ctx)}), nil
+}
+
+// SetMeshAutoRoute 打开或关闭 mesh 自动切路（见 docs/mesh.md#自动切路），立即推给各节点。
+func (s *settingsService) SetMeshAutoRoute(ctx context.Context, req *connect.Request[nagiv1.SetMeshAutoRouteRequest]) (*connect.Response[nagiv1.UpdateSettingsResponse], error) {
+	if err := s.Nodes.SetAutoRoute(ctx, req.Msg.GetEnabled()); err != nil {
+		return nil, err
+	}
 	return connect.NewResponse(&nagiv1.UpdateSettingsResponse{Settings: s.Panel.settings(ctx)}), nil
 }
 

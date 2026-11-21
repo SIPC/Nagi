@@ -240,6 +240,8 @@ var adminProcedures = map[string]bool{
 	// 节点信任的面板（地址、指纹）、移交节点、面板的 mesh（面板的地址和所有对端）。
 	"/nagi.v1.NodeService/ListNodePanels": true, "/nagi.v1.NodeService/HandoverNodes": true,
 	"/nagi.v1.NodeService/RemoveNodePanel": true, "/nagi.v1.NodeService/GetPanelMesh": true,
+	// mesh 自动切路总开关：改变所有节点之间的线路，设置页的 mesh 标签也只给管理员。
+	"/nagi.v1.SettingsService/SetMeshAutoRoute": true,
 	// 升级全部节点：会升级范围外的节点。
 	"/nagi.v1.NodeService/UpgradeAllNodes": true,
 	// 重命名、删除分组和标签：会改到成员范围外的项目和节点。

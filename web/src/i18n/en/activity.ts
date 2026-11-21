@@ -136,6 +136,7 @@ export default {
     AdoptNodeContainer: "Adopt container",
     UpdateSettings: "Edit panel settings",
     SetPanelName: "Rename panel",
+    SetMeshAutoRoute: "Turn automatic routing on or off",
     SetPanelDomain: "Bind panel domain",
     UpdateAlertConfig: "Edit alert settings",
     TestAlertChannel: "Test alert channel",

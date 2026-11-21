@@ -547,6 +547,8 @@ service SettingsService {
   rpc SetPanelDomain(SetPanelDomainApiRequest) returns (UpdateSettingsResponse);
   // 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
   rpc SetPanelName(SetPanelNameRequest) returns (UpdateSettingsResponse);
+  // 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+  rpc SetMeshAutoRoute(SetMeshAutoRouteRequest) returns (UpdateSettingsResponse);
   rpc GetAlertConfig(GetAlertConfigRequest) returns (GetAlertConfigResponse);
   rpc UpdateAlertConfig(UpdateAlertConfigRequest) returns (UpdateAlertConfigResponse);
   // 用面板发一条测试消息到某个渠道。
@@ -830,6 +832,12 @@ message PanelSettings {
   // 面板名称，和没有设置时用的默认名称（面板机器的主机名）。
   string name = 7;
   string default_name = 8;
+  // mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+  bool mesh_auto_route = 9;
+}
+
+message SetMeshAutoRouteRequest {
+  bool enabled = 1;
 }
 
 message SetPanelNameRequest {

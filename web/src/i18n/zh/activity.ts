@@ -136,6 +136,7 @@ export default {
     AdoptNodeContainer: "接管容器",
     UpdateSettings: "编辑面板设置",
     SetPanelName: "修改面板名称",
+    SetMeshAutoRoute: "开关自动切路",
     SetPanelDomain: "绑定面板域名",
     UpdateAlertConfig: "编辑告警配置",
     TestAlertChannel: "测试告警渠道",

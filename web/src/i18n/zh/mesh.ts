@@ -89,5 +89,12 @@ export default {
   poolJoin: "加入",
   poolLeave: "退出",
   poolConfirm: "退出中转池？正在经本节点改道的连接将改回直连。",
+  autoTitle: "自动切路",
+  autoHelp: "开启后，节点会定期比较直连和经「中转池」里节点转发的延迟、丢包和稳定性，明显更好时自动改经中转，变差或中转出问题时几秒内改回直连。只影响能直连的节点对；已建立的 QUIC 连接不迁移，新连接才走新线路。每次比较会产生少量探测流量。",
+  autoOn: "已开启",
+  autoOff: "已关闭",
+  autoEnable: "开启",
+  autoDisable: "关闭",
+  autoConfirm: "关闭自动切路？所有改道的连接将立即改回直连。",
   quicConfirm: "关闭 QUIC 快速通道？本节点与其他节点和面板之间的 TCP 连接将改经 WireGuard 传输，进行中的传输会中断。",
 };
