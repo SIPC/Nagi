@@ -177,6 +177,11 @@ func (e *Engine) Generate(ctx context.Context, cfg Config, actor int64, in Input
 	if errors.Is(callCtx.Err(), context.Canceled) {
 		r.Status, r.Failure = "canceled", "canceled"
 	}
+	// JSON escaping can expand output beyond the journal's 64 KiB record limit.
+	// Fail explicitly instead of allowing the journal to replace the report.
+	if b, err := json.Marshal(r); err != nil || len(b) > 60<<10 {
+		r.Content, r.Status, r.Failure = "", "failed", "response_too_large"
+	}
 	// Persist the terminal result even if the browser closed its request.
 	saveCtx, saveCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer saveCancel()

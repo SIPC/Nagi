@@ -229,6 +229,12 @@ var selfProcedures = map[string]bool{
 }
 
 var adminProcedures = map[string]bool{
+	// Reports combine cross-project host and alert evidence.
+	"/nagi.v1.ModelReportService/GetReportConfig":    true,
+	"/nagi.v1.ModelReportService/UpdateReportConfig": true,
+	"/nagi.v1.ModelReportService/GenerateReport":     true,
+	"/nagi.v1.ModelReportService/ListReports":        true,
+	"/nagi.v1.ModelReportService/GetReport":          true,
 	// 混合主机/审计/容器日志暂不向项目成员开放，避免跨项目正文泄露。
 	"/nagi.v1.NodeLogService/QueryNodeLogs": true,
 	// 节点接入码和安装命令里有面板的地址和指纹。

@@ -24,3 +24,9 @@ Manual only; 30-minute window plus outstanding alerts; serialized per panel; 15-
 每次保留触发原因、操作者、时间段、缺数据、实际外发材料与 SHA-256、请求模型和模板版本、起止/失败/超时/取消及最终报告。外部错误只记稳定类别/HTTP 状态码，不记录 URL、响应正文、Authorization 或私密推理。开始记录不能落盘则不外发；结果落盘失败明确返回失败，不能保证断电/磁盘损坏时保住未落盘结果。没有“采纳”按钮，采纳与否未跟踪。
 
 Each attempt retains its trigger, actor, time window, missing evidence, actual redacted material and digest, requested model/template version, start/end/outcome and final text. Provider errors retain only safe categories/status codes. Start persistence is required before sending. Result persistence failures are surfaced; no claim of crash-proof delivery or adoption tracking.
+
+## 本版材料覆盖 / Evidence coverage
+
+节点材料取已登记节点的告警账本及兼容的当前内存告警，面板告警取近 30 分钟统一日志中的 firing/resolved 元信息（最多查询 1000 条，达到上限注明缺失）。旧日志 key 已被统一脱敏时规则归 other，不从正文猜测。最多 60 条摘要、8 个相关节点，超过则拒绝本次收集；只查询这些节点的 node:cpu/mem/disk/net_rx/net_tx，每分钟聚合点的数量、最小/最大/均值与首尾时间，CPU/内存/磁盘单位为百分比、网络为字节/秒。没有样本、mesh 不通、历史可能淘汰均明确标注。本版不发送路由、容器、按来源 IP 统计或原始日志，不能靠这些材料确认 DDoS。材料内 N/A/M 是本次报告的节点/告警/统计引用，不对外发送映射表。
+
+Node evidence comes from registered-node ledgers and legacy active-alert memory. Panel lifecycle metadata comes from up to 1000 recent unified alert events; an archive-redacted key becomes other, never reconstructed from prose. More than 60 alerts or 8 related nodes rejects collection. Only those nodes' CPU/memory/disk percentages and network bytes/second are summarized from minute aggregates (count/min/max/mean/first/last). Missing samples, unreachable mesh and possibly pruned history are explicit. Route/container/source-IP statistics are not included in this version and the material cannot establish DDoS. Per-report N/A/M references have no outbound identity mapping.
