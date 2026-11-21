@@ -2,9 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
@@ -122,7 +124,33 @@ func auditResult(err error) (string, string) {
 func (a *agent) auditInterceptors(panel string) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	unary := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		method, ok := auditMethod(info.FullMethod)
+		started := time.Now()
 		resp, err := handler(ctx, req)
+		// Diagnostics are read-only and intentionally absent from the legacy
+		// operation chain, but their measured result belongs to this node.
+		if method == "MeshPing" || method == "MeshSpeedTest" {
+			in, _ := req.(*nagiv1.MeshPingRequest)
+			result, message := auditResult(err)
+			peer, mode := in.GetPublicKey(), in.GetSpeedVia()
+			data := map[string]any{"panel": panel, "method": method, "peer": hex.EncodeToString(peer[:min(len(peer), 32)]), "peer_bytes": len(peer), "mode": mode[:min(len(mode), 64)],
+				"result": result, "duration_ms": time.Since(started).Milliseconds()}
+			if err != nil {
+				data["error"] = message
+			} else {
+				switch out := resp.(type) {
+				case *nagiv1.MeshPingResponse:
+					data["rtt_ms"] = out.GetRttMs()
+				case *nagiv1.MeshSpeedResponse:
+					data["upload_bytes_per_second"], data["download_bytes_per_second"] = out.GetUpload(), out.GetDownload()
+					data["quic"], data["wireguard_tested"] = out.GetQuic(), out.GetWireguardTested()
+					data["quic_off_here"], data["quic_off_peer"] = out.GetQuicOffHere(), out.GetQuicOffPeer()
+					if out.GetWireguardTested() {
+						data["wireguard_upload_bytes_per_second"], data["wireguard_download_bytes_per_second"] = out.GetWireguardUpload(), out.GetWireguardDownload()
+					}
+				}
+			}
+			a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "mesh.diagnostic", Data: data})
+		}
 		if ok {
 			result, msg := auditResult(err)
 			a.audit.Record(auditlog.Event{Panel: panel, Action: method, Target: auditTarget(req), Result: result, Error: msg})

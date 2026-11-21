@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,8 +20,110 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
+
+type diagnosticHistoryServer struct {
+	nagiv1.UnimplementedAgentServiceServer
+}
+
+func (diagnosticHistoryServer) MeshPing(context.Context, *nagiv1.MeshPingRequest) (*nagiv1.MeshPingResponse, error) {
+	return &nagiv1.MeshPingResponse{RttMs: 12.75}, nil
+}
+
+func (diagnosticHistoryServer) MeshSpeedTest(_ context.Context, in *nagiv1.MeshPingRequest) (*nagiv1.MeshSpeedResponse, error) {
+	if string(in.GetPublicKey()) == "unreachable" {
+		return nil, status.Error(codes.Unavailable, "peer unavailable")
+	}
+	if in.GetSpeedVia() == "" {
+		return &nagiv1.MeshSpeedResponse{Upload: 4321, Download: 8765, Quic: true, WireguardTested: true, WireguardUpload: 2468, WireguardDownload: 1357}, nil
+	}
+	return &nagiv1.MeshSpeedResponse{Upload: 1234, Download: 5678, Quic: true, WireguardTested: false}, nil
+}
+
+func TestMeshDiagnosticHistoryRetainsActualResultsAndUnknowns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "logs.db")
+	logs, err := logstore.Open(t.Context(), path, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { logs.Close() }()
+	a := &agent{cfg: Config{Logs: logs}}
+	u, _ := a.auditInterceptors("authenticated-panel")
+	ln := bufconn.Listen(1 << 20)
+	defer ln.Close()
+	srv := grpc.NewServer(grpc.UnaryInterceptor(u))
+	nagiv1.RegisterAgentServiceServer(srv, diagnosticHistoryServer{})
+	go srv.Serve(ln)
+	defer srv.Stop()
+	cc, err := grpc.NewClient("passthrough:///fixture", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return ln.Dial() }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cc.Close()
+	c := nagiv1.NewAgentServiceClient(cc)
+	if out, err := c.MeshPing(t.Context(), &nagiv1.MeshPingRequest{PublicKey: []byte("peer")}); err != nil || out.GetRttMs() != 12.75 {
+		t.Fatalf("ping=%v err=%v", out, err)
+	}
+	if out, err := c.MeshSpeedTest(t.Context(), &nagiv1.MeshPingRequest{PublicKey: []byte("peer"), SpeedVia: "path"}); err != nil || out.GetDownload() != 5678 {
+		t.Fatalf("speed=%v err=%v", out, err)
+	}
+	if _, err := c.MeshSpeedTest(t.Context(), &nagiv1.MeshPingRequest{PublicKey: []byte("unreachable")}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("failure changed: %v", err)
+	}
+	if _, err := c.MeshSpeedTest(t.Context(), &nagiv1.MeshPingRequest{PublicKey: []byte("peer")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := logs.Close(); err != nil {
+		t.Fatal(err)
+	}
+	logs, err = logstore.Open(t.Context(), path, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Task})
+	if err != nil || len(rows) != 4 {
+		t.Fatalf("history=%+v err=%v", rows, err)
+	}
+	for i, row := range rows {
+		var d map[string]any
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &d); err != nil {
+			t.Fatal(err)
+		}
+		if row.Kind != "mesh.diagnostic" || d["panel"] != "authenticated-panel" {
+			t.Fatalf("source=%s", row.Data)
+		}
+		switch i {
+		case 0:
+			if d["rtt_ms"] != 12.75 || d["result"] != "ok" {
+				t.Fatalf("ping=%v", d)
+			}
+		case 1:
+			if d["upload_bytes_per_second"] != float64(1234) || d["download_bytes_per_second"] != float64(5678) || d["mode"] != "path" || d["wireguard_tested"] != false {
+				t.Fatalf("speed=%v", d)
+			}
+			if _, ok := d["wireguard_upload_bytes_per_second"]; ok {
+				t.Fatalf("untested was called zero: %v", d)
+			}
+		case 2:
+			if d["result"] != "failed" || d["error"] != "peer unavailable" {
+				t.Fatalf("failure=%v", d)
+			}
+			if _, ok := d["upload_bytes_per_second"]; ok {
+				t.Fatalf("failure became zero throughput: %v", d)
+			}
+		case 3:
+			if d["wireguard_tested"] != true || d["wireguard_upload_bytes_per_second"] != float64(2468) || d["wireguard_download_bytes_per_second"] != float64(1357) {
+				t.Fatalf("comparison=%v", d)
+			}
+		}
+	}
+}
 
 func TestBackupRequestPersistsTransferFailureWithoutViewer(t *testing.T) {
 	ctx := t.Context()
