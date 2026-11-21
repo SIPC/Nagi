@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ func RunHost(ctx context.Context, logs *logstore.Store, cfg logstore.Config) {
 		logs.Report(logstore.Event{Category: logstore.System, Kind: "host.journal.unavailable", Data: map[string]any{"error": "宿主机 journal 采集仅支持 Linux", "history_complete": false}})
 		return
 	}
-	runHost(ctx, logs, cfg, systemJournal{})
+	runHost(ctx, logs, cfg, systemJournal{cfg: cfg})
 }
 
 func runHost(ctx context.Context, logs *logstore.Store, cfg logstore.Config, src journalSource) {
@@ -57,34 +58,25 @@ func runHost(ctx context.Context, logs *logstore.Store, cfg logstore.Config, src
 		logs.Report(logstore.Event{Category: logstore.System, Kind: "host.journal.unavailable", Data: map[string]any{"error": err.Error(), "history_complete": false}})
 		return // Never silently reset an unreadable durable position.
 	}
+	writer, closeWriter := newHostWriter(ctx, logs, cfg, position)
+	defer closeWriter()
 	lastError := ""
 	for ctx.Err() == nil {
-		err := src.check(ctx, position)
+		err := writer.flush(ctx)
+		position = writer.current()
+		if err == nil {
+			err = src.check(ctx, position)
+		}
 		if errors.Is(err, errJournalCursor) {
 			// Keep the old durable cursor until a new selected fact is committed.
 			logs.Report(logstore.Event{Category: logstore.System, Kind: "host.journal.gap", Data: map[string]any{"error": err.Error(), "history_complete": false}})
 			position = ""
+			writer.resetPosition()
 			err = nil
 		}
 		if err == nil {
 			logs.Report(logstore.Event{Category: logstore.System, Kind: "host.journal.attaching", Data: map[string]any{"history_complete": false, "lookback_hours": cfg.HostLookbackHours, "resuming": position != ""}})
-			err = src.follow(ctx, position, time.Now().Add(-time.Duration(cfg.HostLookbackHours)*time.Hour), func(entry journalEntry) error {
-				e, keep := hostEvent(entry)
-				if !keep {
-					return nil
-				}
-				cursor := entry.text("__CURSOR")
-				if cursor == "" || len(cursor) > 2048 {
-					return fmt.Errorf("journal 记录缺少有效游标")
-				}
-				writeCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-				defer cancel()
-				if err := logs.RecordCheckpoint(writeCtx, e, key, cursor); err != nil {
-					return err
-				}
-				position = cursor
-				return nil
-			})
+			err = src.follow(ctx, position, time.Now().Add(-time.Duration(cfg.HostLookbackHours)*time.Hour), func(entry journalEntry) error { return writer.append(ctx, entry) })
 		}
 		if ctx.Err() != nil {
 			return
@@ -113,6 +105,10 @@ var hostUnits = []string{
 	"systemd-journald.service", "rsyslog.service", "logrotate.service",
 }
 
+// Docker/containerd often send every stderr line with journal priority INFO;
+// retain warnings expressed by their own structured/text logger as well.
+var daemonWarning = regexp.MustCompile(`(?i)(?:^|[\s,{])["']?level["']?\s*[:=]\s*["']?(warn(?:ing)?|error|fatal|panic)\b`)
+
 func listedUnit(unit string) bool {
 	for _, u := range hostUnits {
 		if unit == u {
@@ -132,6 +128,11 @@ func containsAny(text string, words ...string) bool {
 }
 
 func hostEvent(entry journalEntry) (logstore.Event, bool) {
+	// Docker's journald driver emits container output under docker.service too.
+	// It already belongs to the Docker API collector, not daemon diagnostics.
+	if entry.text("CONTAINER_ID") != "" || entry.text("CONTAINER_ID_FULL") != "" {
+		return logstore.Event{}, false
+	}
 	message := entry.text("MESSAGE")
 	unit := entry.text("_SYSTEMD_UNIT")
 	lower := strings.ToLower(message)
@@ -160,7 +161,7 @@ func hostEvent(entry journalEntry) (logstore.Event, bool) {
 	case listedUnit(unit):
 		switch unit {
 		case "docker.service", "containerd.service":
-			if warning {
+			if warning || daemonWarning.MatchString(message) {
 				kind = "daemon.warning"
 			}
 		case "nagi-agent.service", "nagi-server.service":
@@ -170,7 +171,7 @@ func hostEvent(entry journalEntry) (logstore.Event, bool) {
 				Time  string `json:"time"`
 				Msg   string `json:"msg"`
 			}
-			if json.Unmarshal([]byte(message), &structured) == nil && structured.Level != "" && structured.Time != "" {
+			if json.Unmarshal([]byte(message), &structured) == nil && structured.Level != "" && structured.Time != "" && !containsAny(structured.Msg, "本地日志入库失败", "无法打开本机日志") {
 				return logstore.Event{}, false
 			}
 			if strings.HasPrefix(message, "time=") && strings.Contains(message, " level=") && strings.Contains(message, " msg=") && !containsAny(message, "本地日志入库失败", "无法打开本机日志") {
@@ -178,7 +179,7 @@ func hostEvent(entry journalEntry) (logstore.Event, bool) {
 			}
 			kind = "nagi.output"
 		default:
-			if warning || containsAny(lower, "failed", "failure", "unreachable", "lost", "disconnected", "link down", "carrier", "clock change", "time jump", "time has been changed", "synchronized", "synchronised", "suppressed", "dropped", "corrupt", "no space left") {
+			if warning || containsAny(lower, "failed", "failure", "unreachable", "lost", "disconnected", "link down", "carrier", "clock change", "clock was stepped", "time jump", "time has been changed", "synchronized", "synchronised", "no suitable source", "degraded", "timed out", "suppressed", "dropped", "corrupt", "no space left") {
 				kind = "service.warning"
 			}
 		}
@@ -186,6 +187,11 @@ func hostEvent(entry journalEntry) (logstore.Event, bool) {
 	if kind == "" {
 		return logstore.Event{}, false
 	}
+	return journalEvent(entry, message, logstore.Runtime, "host."+kind), true
+}
+
+func journalEvent(entry journalEntry, message, category, kind string) logstore.Event {
+	unit := entry.text("_SYSTEMD_UNIT")
 	at, timeErr := strconv.ParseInt(entry.text("__REALTIME_TIMESTAMP"), 10, 64)
 	var eventTime time.Time
 	if timeErr == nil && at > 0 {
@@ -195,11 +201,11 @@ func hostEvent(entry journalEntry) (logstore.Event, bool) {
 	if truncated {
 		message = strings.ToValidUTF8(message[:8192], "")
 	}
-	return logstore.Event{Time: eventTime, Category: logstore.Runtime, Kind: "host." + kind, Object: unit,
-		Data: map[string]any{"message": message, "priority": entry.text("PRIORITY"), "unit": unit, "target_unit": entry.text("UNIT"), "boot_id": entry.text("_BOOT_ID"), "cursor": entry.text("__CURSOR"), "truncated": truncated, "timestamp_missing": eventTime.IsZero()}}, true
+	return logstore.Event{Time: eventTime, Category: category, Kind: kind, Object: unit,
+		Data: map[string]any{"message": message, "priority": entry.text("PRIORITY"), "unit": unit, "target_unit": entry.text("UNIT"), "boot_id": entry.text("_BOOT_ID"), "cursor": entry.text("__CURSOR"), "truncated": truncated, "timestamp_missing": eventTime.IsZero()}}
 }
 
-type systemJournal struct{}
+type systemJournal struct{ cfg logstore.Config }
 
 // cappedOutput bounds stderr without making a chatty child block on its pipe.
 type cappedOutput struct{ text []byte }
@@ -212,7 +218,7 @@ func (b *cappedOutput) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-const journalFields = "__CURSOR,__REALTIME_TIMESTAMP,_BOOT_ID,_TRANSPORT,_SYSTEMD_UNIT,_PID,UNIT,PRIORITY,MESSAGE,SYSLOG_IDENTIFIER"
+const journalFields = "__CURSOR,__REALTIME_TIMESTAMP,_BOOT_ID,_TRANSPORT,_SYSTEMD_UNIT,_PID,_COMM,UNIT,PRIORITY,MESSAGE,CONTAINER_ID,CONTAINER_ID_FULL"
 
 func (systemJournal) check(ctx context.Context, cursor string) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -242,13 +248,19 @@ func (systemJournal) check(ctx context.Context, cursor string) error {
 	return nil
 }
 
-func (systemJournal) follow(ctx context.Context, cursor string, since time.Time, emit func(journalEntry) error) error {
+func (s systemJournal) follow(ctx context.Context, cursor string, since time.Time, emit func(journalEntry) error) error {
 	args := []string{"--system", "--no-pager", "--no-tail", "--all", "--output=json", "--output-fields=" + journalFields}
 	// OR source matches, never a global priority filter: link/time/state events
 	// can be informational. Container output is not a separate source here.
 	args = append(args, "_TRANSPORT=kernel", "+", "_PID=1")
 	for _, unit := range hostUnits {
 		args = append(args, "+", "_SYSTEMD_UNIT="+unit)
+	}
+	if s.cfg.HostSSH {
+		args = append(args, "+", "_SYSTEMD_UNIT=ssh.service", "+", "_SYSTEMD_UNIT=sshd.service", "+", "_COMM=sshd", "+", "_COMM=sshd-session", "+", "_COMM=sshd-auth")
+	}
+	if s.cfg.HostSudo {
+		args = append(args, "+", "_COMM=sudo", "+", "_COMM=su")
 	}
 	read := func(follow bool) error {
 		opts := append([]string{}, args...)

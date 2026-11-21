@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +83,8 @@ func TestHostHistorySelectionRedactionAndDurableResume(t *testing.T) {
 		hostLine("18", "my-app.service", "business output", map[string]string{"PRIORITY": "3"}),
 		hostLine("19", "", "[UFW BLOCK] SRC=192.0.2.1", kernel),
 		hostLine("20", "nagi-agent.service", strings.Repeat("x", 9000), nil),
+		hostLine("daemon-encoded", "docker.service", `time=2026-11-21 level=error msg="daemon stderr uses journal info"`, nil),
+		hostLine("container-driver", "docker.service", `level=error app failure`, map[string]string{"CONTAINER_ID_FULL": "container-a", "PRIORITY": "3"}),
 	}
 	run := func(entries []journalEntry) string {
 		ctx, cancel := context.WithCancel(t.Context())
@@ -99,14 +102,14 @@ func TestHostHistorySelectionRedactionAndDurableResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	entries = append(entries, hostLine("21", "docker.service", "new warning", map[string]string{"PRIORITY": "4"}))
-	if after := run(entries); after != "20" {
+	if after := run(entries); after != "daemon-encoded" {
 		t.Fatalf("resume=%q", after)
 	}
 	rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Runtime})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"host.daemon.warning", "host.daemon.warning", "host.kernel.memory", "host.kernel.storage", "host.kernel.network", "host.service.state", "host.service.failed", "host.host.boot", "host.service.warning", "host.service.warning", "host.service.warning", "host.nagi.output", "host.nagi.output", "host.nagi.output", "host.daemon.warning"}
+	want := []string{"host.daemon.warning", "host.daemon.warning", "host.kernel.memory", "host.kernel.storage", "host.kernel.network", "host.service.state", "host.service.failed", "host.host.boot", "host.service.warning", "host.service.warning", "host.service.warning", "host.nagi.output", "host.nagi.output", "host.nagi.output", "host.daemon.warning", "host.daemon.warning"}
 	if len(rows) != len(want) {
 		t.Fatalf("rows=%d want=%d: %+v", len(rows), len(want), rows)
 	}
@@ -161,5 +164,140 @@ func TestHostUnavailableAndRotatedCursorAreExplicit(t *testing.T) {
 				t.Fatalf("checkpoint=%s want=%s err=%v", b, want, err)
 			}
 		})
+	}
+}
+
+func TestHostAuthSwitchesRedactionAndBoundedFailureCounts(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		ssh, sudo bool
+	}{
+		{"off", false, false}, {"ssh", true, false}, {"sudo", false, true}, {"both", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer logs.Close()
+			cfg := logstore.DefaultConfig()
+			cfg.HostSSH, cfg.HostSudo, cfg.HostSSHFailuresPerMinute = tc.ssh, tc.sudo, 2
+			var entries []journalEntry
+			for i := 1; i <= 8; i++ {
+				entries = append(entries, hostLine(strconv.Itoa(i), "ssh.service", "Failed publickey for alice from 192.0.2.4", map[string]string{"_COMM": "sshd"}))
+				if i == 3 {
+					entries = append(entries, hostLine("ordinary", "docker.service", "daemon warning", map[string]string{"PRIORITY": "4"}))
+				}
+			}
+			entries = append(entries,
+				hostLine("success", "ssh.service", "Accepted publickey for alice from 192.0.2.4", map[string]string{"_COMM": "sshd"}),
+				hostLine("sudo", "session-2.scope", "alice : TTY=pts/0 ; USER=root ; COMMAND=/usr/bin/tool arbitrary-private-value", map[string]string{"_COMM": "sudo"}),
+				hostLine("su", "session-2.scope", "pam_unix(su:session): session opened for user root by alice", map[string]string{"_COMM": "su"}),
+				hostLine("odd-sudo", "session-2.scope", "rejected command /bin/tool another-private-value", map[string]string{"_COMM": "sudo"}),
+				hostLine("tail", "session-2.scope", "Failed password for root", map[string]string{"_COMM": "sshd-auth"}),
+			)
+			run := func() {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				runHost(ctx, logs, cfg, &journalFixture{entries: entries, cancel: cancel})
+			}
+			run()
+			rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Security})
+			if err != nil {
+				t.Fatal(err)
+			}
+			failures, details, successes, sudos := 0, 0, 0, 0
+			for _, r := range rows {
+				b := r.Data.(json.RawMessage)
+				if strings.Contains(string(b), "private-value") {
+					t.Fatalf("sudo command leaked: %s", b)
+				}
+				var d struct {
+					Count int `json:"count"`
+				}
+				if err := json.Unmarshal(b, &d); err != nil {
+					t.Fatal(err)
+				}
+				switch r.Kind {
+				case "host.ssh.failed":
+					details++
+					failures += d.Count
+				case "host.ssh.failed.summary":
+					failures += d.Count
+				case "host.ssh.login":
+					successes++
+				case "host.sudo":
+					sudos++
+				default:
+					t.Fatalf("unexpected auth event: %s", r.Kind)
+				}
+			}
+			if tc.ssh && (failures != 9 || details != 2 || successes != 1) {
+				t.Fatalf("SSH details=%d failures=%d successes=%d", details, failures, successes)
+			}
+			if !tc.ssh && (failures != 0 || successes != 0) {
+				t.Fatal("SSH switch ignored")
+			}
+			if (tc.sudo && sudos != 3) || (!tc.sudo && sudos != 0) {
+				t.Fatalf("sudo switch: count=%d", sudos)
+			}
+			run()
+			after, _ := logs.Query(t.Context(), logstore.Filter{Category: logstore.Security})
+			if len(after) != len(rows) {
+				t.Fatalf("auth replay duplicated records: %d -> %d", len(rows), len(after))
+			}
+		})
+	}
+}
+
+func TestHostSSHIdleSummaryAndFailedWriteDoNotAcknowledgeUnsavedCounts(t *testing.T) {
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	cfg := logstore.DefaultConfig()
+	cfg.HostSSH = true
+	cfg.HostSSHFailuresPerMinute = 1
+	cfg.HostSSHSummarySeconds = 1
+	writer, closeWriter := newHostWriter(t.Context(), logs, cfg, "")
+	defer closeWriter()
+	failure := func(id string) journalEntry { return hostLine(id, "sshd.service", "Failed password for root", nil) }
+	if err := writer.append(t.Context(), failure("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.append(t.Context(), failure("pending")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := writer.append(ctx, hostLine("later", "docker.service", "warn", map[string]string{"PRIORITY": "4"})); err == nil {
+		t.Fatal("canceled write succeeded")
+	}
+	b, _ := logs.Checkpoint(t.Context(), "host.journal")
+	if string(b) != `"first"` && string(b) != `"pending"` {
+		t.Fatalf("acknowledged past unsaved count: %s", b)
+	}
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-deadline.C:
+			t.Fatal("idle SSH summary was not persisted")
+		case <-ticker.C:
+			b, err := logs.Checkpoint(t.Context(), "host.journal")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(b) == `"pending"` {
+				rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Security})
+				if err != nil || len(rows) != 2 || rows[1].Kind != "host.ssh.failed.summary" {
+					t.Fatalf("idle summary: %+v %v", rows, err)
+				}
+				return
+			}
+		}
 	}
 }

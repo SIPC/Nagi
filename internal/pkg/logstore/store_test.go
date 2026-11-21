@@ -241,10 +241,10 @@ func TestLocalConfigDefaultsAndCapacityRange(t *testing.T) {
 	if err != nil || c.CapacityGiB != 5 || c.MetricsEverySeconds != 10 || c.TransferProgressSeconds != 5 || c.RecordingFlushSeconds != 5 {
 		t.Fatalf("默认配置: %+v err=%v", c, err)
 	}
-	if !c.HostJournal || c.HostRetrySeconds != 30 || c.HostLookbackHours != 24 {
+	if !c.HostJournal || c.HostRetrySeconds != 30 || c.HostLookbackHours != 24 || c.HostSSH || c.HostSudo || c.HostSSHFailuresPerMinute != 100 || c.HostSSHSummarySeconds != 10 {
 		t.Fatalf("宿主机默认配置: %+v", c)
 	}
-	for _, input := range []string{`{"host_retry_seconds":0}`, `{"host_retry_seconds":3601}`, `{"host_lookback_hours":0}`, `{"host_lookback_hours":169}`} {
+	for _, input := range []string{`{"host_retry_seconds":0}`, `{"host_retry_seconds":3601}`, `{"host_lookback_hours":0}`, `{"host_lookback_hours":169}`, `{"host_ssh_failures_per_minute":0}`, `{"host_ssh_failures_per_minute":1001}`, `{"host_ssh_summary_seconds":0}`, `{"host_ssh_summary_seconds":61}`} {
 		if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(input), 0o600); err != nil {
 			t.Fatal(err)
 		}
