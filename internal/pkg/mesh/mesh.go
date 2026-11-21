@@ -149,7 +149,9 @@ func New(cfg Config) (*Mesh, error) {
 		m.quic = q
 		bind.mu.Lock()
 		bind.quic = q.pc
-		bind.routedQUIC = q.routedPC
+		if q.routing {
+			bind.routedQUIC = q.routedConn
+		}
 		// 对方支持 QUIC 时提前建好连接，第一个 Dial 不用等。两边只由公钥小的一方去建，免得同时建两条。
 		// 对方刚打开 QUIC 时，之前连不上的记录作废。
 		bind.onCaps = func(k Key) {

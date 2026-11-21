@@ -39,6 +39,9 @@ const msgInitiation = 1
 // （例如 FEC 的定时器），所以用原子指针（见 setDropUDP）。
 var dropUDP atomic.Pointer[func(fromPort uint16, to netip.AddrPort) bool]
 
+// tapUDP 只用于测试：可以改写或代发一个包（模拟恶意中转），返回 true 时原包不再发出。
+var tapUDP atomic.Pointer[func(c *net.UDPConn, pkt []byte, to netip.AddrPort) bool]
+
 // setDropUDP 换掉 dropUDP，nil 表示不丢。
 func setDropUDP(f func(fromPort uint16, to netip.AddrPort) bool) {
 	if f == nil {
@@ -153,10 +156,10 @@ type Bind struct {
 	byMesh     map[netip.Addr]Key     // mesh 地址 → 对端
 	relayKeys  map[Key]bool
 	links      map[Key]*Link
-	quic       *quicPacketConn       // 收到的 QUIC 包交给它（见 quic.go）
-	routedQUIC *quicPacketConn       // 显式开启的实验协议，和旧 QUIC Transport 隔离。
-	onCaps     func(Key)             // 对方刚表示支持 QUIC 时调用
-	observed   map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
+	quic       *quicPacketConn           // 收到的 QUIC 包交给它（见 quic.go）
+	routedQUIC func(Key) *quicPacketConn // 显式开启的实验协议，按发送方分到各自的 Transport，和旧 QUIC 隔离。
+	onCaps     func(Key)                 // 对方刚表示支持 QUIC 时调用
+	observed   map[pingKey]time.Time     // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
 	recv       chan delivery
 	done       chan struct{}
 	// relayBudget：节点替每个来源中转的字节数配额（令牌桶，见 relayAllowed）。
@@ -495,6 +498,9 @@ func (b *Bind) receiveRelayed(ch chan delivery, done chan struct{}) conn.Receive
 
 func (b *Bind) write(c *net.UDPConn, pkt []byte, to netip.AddrPort) {
 	if c == nil {
+		return
+	}
+	if tap := tapUDP.Load(); tap != nil && (*tap)(c, pkt, to) {
 		return
 	}
 	if drop := dropUDP.Load(); drop != nil && (*drop)(uint16(c.LocalAddr().(*net.UDPAddr).Port), to) {
