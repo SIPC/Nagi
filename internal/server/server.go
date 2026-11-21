@@ -70,12 +70,13 @@ const (
 type Server struct {
 	cfg Config
 	// mesh 是面板的 mesh，启动失败时为 nil。
-	mesh *mesh.Mesh
-	log  *slog.Logger
-	db   *sql.DB
-	q    *store.Queries
-	ca   *tlsutil.CA
-	cert tls.Certificate
+	mesh      *mesh.Mesh
+	panelMesh panelMeshState
+	log       *slog.Logger
+	db        *sql.DB
+	q         *store.Queries
+	ca        *tlsutil.CA
+	cert      tls.Certificate
 
 	fingerprint   string
 	port          int
@@ -382,6 +383,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	} else {
 		s.mesh = m
 		s.nodes.SetMesh(m, "面板 "+s.publicAddress)
+		s.nodes.AuthorizeLogPanel = s.authorizeLogPanel
 	}
 	return s, nil
 }
@@ -486,6 +488,12 @@ func (s *Server) Run(ctx context.Context) error {
 		} else {
 			s.nodes.LogCopies = copies
 			defer copies.Close()
+			if s.mesh != nil {
+				logCtx, stopLogs := context.WithCancel(ctx)
+				logDone := make(chan struct{})
+				go func() { defer close(logDone); s.panelLogsLoop(logCtx) }()
+				defer func() { stopLogs(); <-logDone }()
+			}
 			expiryCtx, stopExpiry := context.WithCancel(ctx)
 			expiryDone := make(chan struct{})
 			go func() {
@@ -742,6 +750,9 @@ func (s *Server) tlsConfig() *tls.Config {
 	// 备用面板的同步连接：同样要出示本面板 CA 签发的客户端证书（见 docs/standby.md）。
 	standbyCfg := agent.Clone()
 	standbyCfg.NextProtos = []string{standby.ALPN, standby.AuditALPN}
+	// Separate identity/mesh-packet channel; existing synchronization is unchanged.
+	meshCfg := agent.Clone()
+	meshCfg.NextProtos = []string{panelMeshALPN}
 	// 别的面板询问状态（/api/standby/status）：同样要出示本组 CA 签发的证书，之后按 HTTP/1.1 处理。
 	statusCfg := agent.Clone()
 	statusCfg.NextProtos = []string{standby.StatusALPN}
@@ -753,6 +764,9 @@ func (s *Server) tlsConfig() *tls.Config {
 		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 			auth.RecordFingerprint(hello)
 			for _, p := range hello.SupportedProtos {
+				if p == panelMeshALPN {
+					return meshCfg, nil
+				}
 				if p == tunnel.ALPN {
 					return agent, nil
 				}
@@ -792,6 +806,9 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 				return
 			}
 			switch conn.ConnectionState().NegotiatedProtocol {
+			case panelMeshALPN:
+				_ = s.servePanelMesh(ctx, conn, "")
+				return
 			case tunnel.ALPN:
 				s.nodes.Handle(ctx, conn)
 				return

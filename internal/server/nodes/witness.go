@@ -128,6 +128,7 @@ func (r *Registry) ClearWitness(projectID, container string) {
 type panelMesh struct {
 	mesh.Service
 	nagiv1.UnimplementedLogCopyServiceServer
+	nagiv1.UnimplementedPanelLogServiceServer
 	r *Registry
 }
 

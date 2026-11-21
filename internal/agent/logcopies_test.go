@@ -59,6 +59,9 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 	}
 	node, panel := newMesh(), newMesh()
 	ep := func(m *mesh.Mesh) []netip.AddrPort {
+		if standby {
+			return nil // No UDP path: standby protection must use its own mesh link.
+		}
 		return []netip.AddrPort{netip.AddrPortFrom(netip.MustParseAddr("127.0.0.1"), m.Port())}
 	}
 	if err := node.SetPeers([]mesh.Peer{{Key: panel.PublicKey(), Endpoints: ep(panel)}}); err != nil {
@@ -66,6 +69,20 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 	}
 	if err := panel.SetPeers([]mesh.Peer{{Key: node.PublicKey(), Endpoints: ep(node)}}); err != nil {
 		t.Fatal(err)
+	}
+	if standby {
+		// Exercise actual WireGuard over the same authenticated-link API used by
+		// control relays. Pin packet sources instead of trusting supplied headers.
+		detachNode := node.AttachLink(panel.PublicKey(), func(_, dst mesh.Key, payload []byte) error {
+			panel.HandleLink(node.PublicKey(), dst, payload)
+			return nil
+		})
+		defer detachNode()
+		detachPanel := panel.AttachLink(node.PublicKey(), func(_, dst mesh.Key, payload []byte) error {
+			node.HandleLink(panel.PublicKey(), dst, payload)
+			return nil
+		})
+		defer detachPanel()
 	}
 	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "panel.db"), store.Migrations)
 	if err != nil {
@@ -103,6 +120,13 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 	// First call waits for service startup; no TLS/control fallback exists.
 	if _, err := client.GetLogReceipt(ctx, &nagiv1.LogReceiptQuery{Source: "s", Category: logstore.Audit}, grpc.WaitForReady(true)); err != nil {
 		t.Fatal(err)
+	}
+	panelClient := nagiv1.NewPanelLogServiceClient(cc)
+	if _, err := panelClient.ListLogCopies(ctx, &nagiv1.PanelLogPosition{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("node upload permission granted panel inventory: %v", err)
+	}
+	if _, err := panelClient.ReadLogCopies(ctx, &nagiv1.PanelLogRead{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("node upload permission granted other origins' bodies: %v", err)
 	}
 	local, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 4<<20)
 	if err != nil {

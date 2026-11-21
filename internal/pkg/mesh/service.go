@@ -41,6 +41,9 @@ func Serve(ctx context.Context, m *Mesh, impl nagiv1.MeshServiceServer) error {
 	if copies, ok := impl.(nagiv1.LogCopyServiceServer); ok {
 		nagiv1.RegisterLogCopyServiceServer(srv, copies)
 	}
+	if panels, ok := impl.(nagiv1.PanelLogServiceServer); ok {
+		nagiv1.RegisterPanelLogServiceServer(srv, panels)
+	}
 	go func() {
 		<-ctx.Done()
 		srv.Stop()

@@ -133,14 +133,37 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 
 // updateMesh 按在线节点更新面板自己的 mesh 成员。
 func (r *Registry) updateMesh() {
+	r.meshUpdateMu.Lock()
+	defer r.meshUpdateMu.Unlock()
 	m := r.Mesh()
 	if m == nil {
 		return
 	}
 	peers, _ := r.meshPeers()
+	r.mu.RLock()
+	for _, p := range r.panelPeers {
+		peers = append(peers, p)
+	}
+	r.mu.RUnlock()
 	if err := m.SetPeers(peers); err != nil {
 		r.log.Warn("更新 mesh 成员失败", "err", err)
 	}
+}
+
+// SetPanelPeer is called only after the server authenticates a panel's pinned
+// certificate. A disconnected bootstrap link does not revoke its mesh identity.
+func (r *Registry) SetPanelPeer(fingerprint string, p mesh.Peer) {
+	r.mu.Lock()
+	if r.panelPeers == nil {
+		r.panelPeers = map[string]mesh.Peer{}
+	}
+	if p.Key == (mesh.Key{}) {
+		delete(r.panelPeers, fingerprint)
+	} else {
+		r.panelPeers[fingerprint] = p
+	}
+	r.mu.Unlock()
+	r.updateMesh()
 }
 
 // meshConfig 是告诉节点 to 的成员列表：面板自己加上所有在线节点。和 to 直连不通的节点，带上替 to 中转的节点。
