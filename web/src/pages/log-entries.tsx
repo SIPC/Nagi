@@ -195,20 +195,25 @@ function MetricsMigration({ request, online }: { request: Request; online: boole
   if (request.recentCopy) return <Notice>{t.logs.migration.copyHelp}</Notice>;
   if (!enabled) return null;
   if (status.isError) return <Notice tone="warning" title={t.logs.migration.title}>{t.logs.migration.unavailable}<span className="block wrap-anywhere">{errorMessage(status.error)}</span></Notice>;
+  const cleanups = (status.data?.migrations ?? []).filter((item) => item.id in t.logs.cleanup.targets && item.phase !== "complete");
+  const cleanupNotices = cleanups.map(({ id, phase, error }) => <Notice key={id} tone={phase === "failed" ? "warning" : "info"} title={t.logs.cleanup.title}>
+    <span className="inline-flex max-w-full items-center gap-2">{phase !== "failed" && <Spinner className="shrink-0" />}{phase === "failed" ? t.logs.cleanup.failed(t.logs.cleanup.targets[id as keyof typeof t.logs.cleanup.targets]) : t.logs.cleanup.running(t.logs.cleanup.targets[id as keyof typeof t.logs.cleanup.targets])}</span>
+    {phase === "failed" && <span className="block whitespace-pre-wrap wrap-anywhere">{error || t.logs.migration.unknownError}</span>}
+  </Notice>);
   const migration = status.data?.migrations?.find((item) => item.id === "metrics");
-  if (!migration) return null;
+  if (!migration) return cleanupNotices.length ? <>{cleanupNotices}</> : null;
   const { phase, completed, total, error } = migration;
   if (phase !== "pending" && phase !== "copying" && phase !== "cleanup" && phase !== "complete" && phase !== "failed") return null;
   const failed = phase === "failed";
   const complete = phase === "complete";
   const running = !failed && !complete;
-  return <Notice tone={failed ? "danger" : complete ? "success" : "info"} title={<span className="inline-flex items-center gap-1">{t.logs.migration.title}<HelpTip>{t.logs.migration.scope}</HelpTip></span>}>
+  return <><Notice tone={failed ? "danger" : complete ? "success" : "info"} title={<span className="inline-flex items-center gap-1">{t.logs.migration.title}<HelpTip>{t.logs.migration.scope}</HelpTip></span>}>
     <span className="inline-flex max-w-full items-center gap-2">{running && <Spinner className="shrink-0" />}{t.logs.migration.phases[phase]}</span>
     {phase === "copying" && <span className="block tabular-nums wrap-anywhere">{total > 0n ? t.logs.migration.progress(String(completed), String(total), String(completed * 100n / total)) : t.logs.migration.copied(String(completed))}</span>}
     {running && <span className="block">{t.logs.migration.background}</span>}
     {failed && <span className="block">{t.logs.migration.failedHelp}</span>}
     {failed && <span className="block whitespace-pre-wrap wrap-anywhere">{error || t.logs.migration.unknownError}</span>}
-  </Notice>;
+  </Notice>{cleanupNotices}</>;
 }
 
 // Node-wide evidence intentionally ignores the user's text/project/category filters.

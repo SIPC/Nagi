@@ -24,6 +24,12 @@ export default {
   writeErrors: (count) => `The source reports ${count} failed log writes. Records may be missing.`,
   sourcePruned: "Source pruning", copyPruned: "Copy expiry or pruning",
   pruned: (origin, category, first, last, count) => `${origin} · ${category}: ${count} entries removed within sequences ${first}–${last}; exact time range unknown.`,
+  cleanup: {
+    title: "Old data cleanup",
+    targets: { "cleanup.metrics": "the emptied old metric tables in the node's node.db", "cleanup.recordings": "the panel's old recording files" },
+    running: (what) => `Migrated and verified. Deleting ${what} and reclaiming space.`,
+    failed: (what) => `Couldn't delete ${what}. The originals are kept and it retries on the next start.`,
+  },
   migration: {
     title: "Metrics history migration",
     scope: "Live state of the selected source's current process, not a persisted task record.",

@@ -23,6 +23,12 @@ export default {
   writeErrors: (count: string) => `来源报告 ${count} 次日志写入失败，可能存在未保存的记录。`,
   sourcePruned: "源端清理", copyPruned: "副本过期或清理",
   pruned: (origin: string, category: string, first: string, last: string, count: string) => `${origin} · ${category}：序号 ${first}–${last} 范围内累计移除 ${count} 条，确切时间范围未知。`,
+  cleanup: {
+    title: "旧数据清理",
+    targets: { "cleanup.metrics": "节点 node.db 中迁移后清空的旧监控表", "cleanup.recordings": "面板旧录制文件" },
+    running: (what: string) => `已迁移并核验，正在删除${what}并回收空间。`,
+    failed: (what: string) => `删除${what}失败，原件已保留，下次启动重试。`,
+  },
   migration: {
     title: "监控历史迁移",
     scope: "所选来源本次进程的实时状态，不是持久化的任务记录。",
