@@ -1,0 +1,22 @@
+import type zh from "../zh/logs";
+export default {
+  title: "Logs", description: "Query local facts with explicit collection, retention and copy boundaries.",
+  entries: "All logs", audit: "Audit & recordings", auditHelp: "Original audit-chain records, child calls, exports and recording playback. Redacted unified copies are not the original audit chain.",
+  chainHelp: "Verifies only the original audit database hash chain, not unified logs, recent copies or exported redacted payloads.",
+  source: "Source", panel: "This panel's local logs", offline: "Offline", keyword: "Keyword", searchHelp: "Event, object or redacted payload",
+  from: "From (local time)", to: "Until (exclusive, local time)", invalidTime: "Enter valid dates. The start must be earlier than the end.",
+  readFrom: "Read from", live: "Original node logs (mesh)", copy: "Panel recent copy", useCopy: "Query recent copy",
+  copyHelp: "Not the node's full history: copies have retention and capacity limits and may not have arrived, may have expired or been pruned. Query one category at a time. Host selects runtime only; select Security for SSH/sudo.",
+  offlineHelp: "The node is offline. Original queries may fail; explicitly select the panel's recent copy. Sources never switch automatically.",
+  coverage: "No records does not mean nothing happened. Collection scope, startup, disconnections and capacity limit coverage. Pruning summaries give sequence envelopes, not a claim that every entry was deleted, and cannot establish exact missing time intervals.",
+  gaps: "Collection & gaps", collectionEvidence: "Collection boundaries (selected time window, regardless of project or keyword)",
+  noGapEvidence: "No collection-boundary records found; this does not prove complete history.", gap: "May be incomplete", gapHelp: "This record explicitly marks incomplete collection history. Reconnection does not prove missing history was recovered. Inspect the timestamp, reason and original boundaries such as since.",
+  refresh: "Refresh", order: "Collection sequence, oldest first", empty: "No saved records match. Check collection and pruning information as well.",
+  watermark: (source, seq) => `Source ${source} · confirmed sequence ${seq}`,
+  writeErrors: (count) => `The source reports ${count} failed log writes. Records may be missing.`,
+  sourcePruned: "Source pruning", copyPruned: "Copy expiry or pruning",
+  pruned: (origin, category, first, last, count) => `${origin} · ${category}: ${count} entries removed within sequences ${first}–${last}; exact time range unknown.`,
+  detail: "Log details", sequence: "Collection sequence", received: "Received at", payload: "Saved redacted payload", truncated: "This entry was truncated and is not the full payload.",
+  recordingNodeHelp: "This local entry does not identify its execution node. Select that node and find the recording to replay it over mesh.",
+  categories: { audit: "Audit", access: "Access", container: "Container output", task: "Tasks & events", security: "Security", alert: "Alerts", runtime: "Runtime", host: "Host", metrics: "Metric samples", logstore: "Log store & collection" },
+} satisfies typeof zh;

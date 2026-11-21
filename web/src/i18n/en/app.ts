@@ -5,7 +5,7 @@ export default {
     overview: "Overview",
     projects: "Projects",
     nodes: "Nodes",
-    audit: "Audit",
+    logs: "Logs",
     settings: "Settings",
     open: "Open navigation",
     close: "Close navigation",

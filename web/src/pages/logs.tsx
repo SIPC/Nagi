@@ -1,11 +1,10 @@
-// 审计日志（见 docs/audit.md#界面）：谁在什么时候、从哪里、通过什么做了什么。
-// 管理员看全部；操作员和只读成员只看访问范围内项目的记录（面板按权限筛，IP 和浏览器不返回）。
+// 日志入口（见 docs/logging.md）：统一日志仅管理员可查，原审计能力沿用 panel.audit。
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ChevronDown, ChevronRight, Download, ListFilter, Play, X } from "lucide-react";
-import { AutoHeight, Badge, Button, Check, CodeBlock, Collapse, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, QueryError, Row, RowsSkeleton, Select, Spinner, Status } from "@/components/ui";
+import { AutoHeight, Badge, Button, Check, CodeBlock, Collapse, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Select, Spinner, Status, Tabs } from "@/components/ui";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { RecordingDialog } from "@/components/recording";
 import { PageHeader } from "@/pages/layout";
@@ -16,6 +15,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { toast } from "sonner";
+import { LogEntries } from "@/pages/log-entries";
 
 const pageSize = 50;
 
@@ -35,6 +35,11 @@ export type AuditSearch = {
   failed?: boolean;
   q?: string;
   id?: number;
+  tab?: "audit";
+  category?: string;
+  copy?: boolean;
+  from?: string;
+  to?: string;
 };
 
 const rangeMs: Record<AuditRange, number> = { "1h": 3600e3, "24h": 86400e3, "7d": 7 * 86400e3, "30d": 30 * 86400e3 };
@@ -109,14 +114,22 @@ function toFilter(s: AuditSearch): AuditFilter {
 
 // 审计页要「审计日志」权限（见 docs/audit.md#权限）：没有时导航里没有入口，直接打开地址回到概览（main.tsx 的 auditRoute）。
 // 权限在使用中被收回时也一样。
-export function AuditPage() {
-  if (!useRole().can("panel.audit")) return <Navigate to="/overview" replace />;
-  return <AuditList />;
+export function LogsPage() {
+  const { can, isAdmin } = useRole();
+  const search = useSearch({ from: "/app/logs" });
+  const navigate = useNavigate({ from: "/logs" });
+  if (!can("panel.audit")) return <Navigate to="/overview" replace />;
+  const tab = !isAdmin || search.tab === "audit" || search.id || search.failed || search.cat ? "audit" : "logs";
+  return <>
+    <PageHeader title={t.logs.title} description={t.logs.description} />
+    {isAdmin && <Tabs className="mb-5" value={tab} onChange={(v) => navigate({ search: { tab: v === "audit" ? "audit" : undefined }, replace: true })} items={[{ value: "logs", label: t.logs.entries }, { value: "audit", label: t.logs.audit }]} />}
+    {tab === "audit" ? <AuditList /> : <LogEntries />}
+  </>;
 }
 
 function AuditList() {
-  const search = useSearch({ from: "/app/audit" });
-  const navigate = useNavigate({ from: "/audit" });
+  const search = useSearch({ from: "/app/logs" });
+  const navigate = useNavigate({ from: "/logs" });
   const { can } = useRole();
   const set = (patch: Partial<AuditSearch>) => navigate({ search: (s) => ({ ...s, ...patch }), replace: true });
 
@@ -183,16 +196,16 @@ function AuditList() {
 
   return (
     <>
-      <PageHeader
-        title={t.app.nav.audit}
-        description={t.audit.description}
-        actions={
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-xl text-muted-foreground">{t.logs.auditHelp}</p>
+        <div className="flex flex-wrap gap-2">
+          <AuditChain />
           <Button readOnlyOk variant="outline" disabled={exporting} onClick={exportJSONL}>
             {exporting ? <Spinner /> : <Download />}
             {t.audit.export}
           </Button>
-        }
-      />
+        </div>
+      </div>
       {/* 筛选：常用的筛选框和时间范围在一行，其余条件收进「筛选」对话框，生效的条件列在下面，可以单独去掉。 */}
       <div className="mb-4 grid gap-2">
         <div className="flex items-center justify-between gap-2">
@@ -224,7 +237,7 @@ function AuditList() {
                 </button>
               </Badge>
             ))}
-            <Button readOnlyOk variant="ghost" className="text-muted-foreground" onClick={() => navigate({ search: { range: search.range, q: search.q }, replace: true })}>
+            <Button readOnlyOk variant="ghost" className="text-muted-foreground" onClick={() => navigate({ search: { tab: "audit", range: search.range, q: search.q }, replace: true })}>
               {t.audit.clearFilters}
             </Button>
           </div>
@@ -243,7 +256,7 @@ function AuditList() {
                 <EmptyRow
                   action={
                     filtered && (
-                      <Button readOnlyOk variant="outline" onClick={() => navigate({ search: {}, replace: true })}>
+                      <Button readOnlyOk variant="outline" onClick={() => navigate({ search: { tab: "audit" }, replace: true })}>
                         {t.audit.clearFilters}
                       </Button>
                     )
@@ -285,7 +298,7 @@ function AuditRow({ e, onOpen, nested }: { e: AuditEvent; onOpen: (id: bigint) =
   return (
     <div className={cn(nested && "pl-6")}>
       {/* 记录行是真正的链接（地址里的 id 打开详情），能 Ctrl+点击在新标签打开。 */}
-      <Link to="/audit" search={((s: Record<string, unknown>) => ({ ...s, id: Number(e.id) })) as never} className="block w-full rounded-md border border-transparent text-left outline-none focus-ring">
+      <Link to="/logs" search={((s: Record<string, unknown>) => ({ ...s, tab: "audit", id: Number(e.id) })) as never} className="block w-full rounded-md border border-transparent text-left outline-none focus-ring">
         <Row
           title={
             <>
@@ -428,7 +441,7 @@ function AuditSheet({ id, onOpen }: { id?: number; onOpen: (id: bigint | undefin
 
 function SheetLink({ e }: { e: AuditEvent }) {
   return (
-    <Link to="/audit" search={((s: Record<string, unknown>) => ({ ...s, id: Number(e.id) })) as never} className="block w-full rounded-md border border-transparent text-left outline-none focus-ring">
+    <Link to="/logs" search={((s: Record<string, unknown>) => ({ ...s, tab: "audit", id: Number(e.id) })) as never} className="block w-full rounded-md border border-transparent text-left outline-none focus-ring">
       <Row title={<span className="min-w-0 truncate">{title(e)}</span>} sub={formatDateTime(toDate(e.time))} cols={[{ content: <Status tone={resultTone(e)}>{resultLabel(e)}</Status>, phone: true }]} />
     </Link>
   );
@@ -551,4 +564,18 @@ function formatDuration(ms: number): string {
   if (ms < 60_000) return d.durationS((Math.round(ms / 100) / 10).toLocaleString());
   const s = Math.round(ms / 1000);
   return d.durationMin(Math.floor(s / 60), s % 60);
+}
+
+function AuditChain() {
+  const [open, setOpen] = useState(false);
+  const chain = useQuery({ queryKey: ["logs-audit-chain"], queryFn: () => settingsClient.verifyAudit({}), enabled: open, retry: false });
+  const m = t.panelSecurity.chain;
+  return <>
+    <Button readOnlyOk variant="outline" onClick={() => setOpen(true)}>{m.verifyNow}</Button>
+    <Dialog open={open} onClose={() => setOpen(false)} title={m.title}>
+      <p className="mb-4 text-muted-foreground">{t.logs.chainHelp}</p>
+      {chain.isPending ? <RowsSkeleton /> : chain.error ? <QueryError error={chain.error} onRetry={() => chain.refetch()} /> : chain.data && <Notice tone={chain.data.ok ? "neutral" : "danger"}>{chain.data.ok ? m.ok(chain.data.records.toLocaleString(), timeAgo(toDate(chain.data.verifiedAt))) : chain.data.reason}</Notice>}
+      <DialogActions><Button readOnlyOk variant="outline" onClick={() => setOpen(false)}>{t.common.actions.close}</Button></DialogActions>
+    </Dialog>
+  </>;
 }

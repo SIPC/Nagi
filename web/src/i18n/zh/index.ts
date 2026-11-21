@@ -8,6 +8,7 @@ import access from "./access";
 import account from "./account";
 import activity from "./activity";
 import audit from "./audit";
+import logs from "./logs";
 import panelSecurity from "./panelSecurity";
 import members from "./members";
 import labels from "./labels";
@@ -45,6 +46,7 @@ export default {
   account,
   activity,
   audit,
+  logs,
   panelSecurity,
   members,
   labels,

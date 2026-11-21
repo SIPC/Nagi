@@ -99,9 +99,9 @@ export function CommandPalette({ canCreateProject }: { canCreateProject: boolean
                   </CommandItem>
                 )}
                 {can("panel.audit") && (
-                  <CommandItem value="audit" keywords={[t.app.nav.audit]} onSelect={() => go(() => navigate({ to: "/audit" }))}>
+                  <CommandItem value="logs" keywords={[t.app.nav.logs]} onSelect={() => go(() => navigate({ to: "/logs" }))}>
                     <navIcons.audit />
-                    {t.app.nav.audit}
+                    {t.app.nav.logs}
                   </CommandItem>
                 )}
               </CommandGroup>
