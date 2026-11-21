@@ -15,9 +15,6 @@ import (
 )
 
 func (p *panelMesh) logCopyNode(ctx context.Context) (string, error) {
-	if p.r.ReadOnly {
-		return "", status.Error(codes.Unavailable, "备用面板尚未接入日志 mesh")
-	}
 	key, ok := mesh.Caller(ctx, p.M)
 	if !ok {
 		return "", status.Error(codes.PermissionDenied, "无法确认日志来源")

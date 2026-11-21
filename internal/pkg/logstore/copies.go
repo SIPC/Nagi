@@ -33,8 +33,10 @@ type CopyReceipt struct {
 	Node, Source, Category string
 	Received               int64
 	After                  int64
-	Pruned                 []Pruned
-	WriteErrors            uint64
+	// Last includes panel-to-panel additions; only After acknowledges the node's prefix.
+	Last        int64
+	Pruned      []Pruned
+	WriteErrors uint64
 }
 
 var ErrCopyCursor = errors.New("近期副本确认位置不匹配，请重新读取确认位置")
@@ -65,7 +67,18 @@ func (s *Store) OpenCopies(ctx context.Context, cfg Config) (*Copies, error) {
 		return nil, err
 	}
 	c := &Copies{s: dest, budget: s, retention: time.Duration(cfg.RecentHours) * time.Hour}
-	_, err = dest.db.ExecContext(ctx, `
+	var deletedTable bool
+	if err := dest.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='copy_deleted')`).Scan(&deletedTable); err != nil {
+		dest.Close()
+		return nil, err
+	}
+	tx, err := dest.db.BeginTx(ctx, nil)
+	if err != nil {
+		dest.Close()
+		return nil, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
 		CREATE INDEX IF NOT EXISTS copy_received ON log_events(priority,received_ns,seq);
 		CREATE TABLE IF NOT EXISTS copy_origins (
 		 local_seq INTEGER PRIMARY KEY REFERENCES log_events(seq) ON DELETE CASCADE,
@@ -74,8 +87,21 @@ func (s *Store) OpenCopies(ctx context.Context, cfg Config) (*Copies, error) {
 		CREATE TABLE IF NOT EXISTS copy_pruned (
 		 node TEXT NOT NULL, origin TEXT NOT NULL, category TEXT NOT NULL,
 		 first_seq INTEGER NOT NULL, last_seq INTEGER NOT NULL, count INTEGER NOT NULL,
-		 PRIMARY KEY(node,origin,category));`)
+		 PRIMARY KEY(node,origin,category));
+		CREATE TABLE IF NOT EXISTS copy_deleted (
+		 node TEXT NOT NULL, origin TEXT NOT NULL, category TEXT NOT NULL,
+		 first_seq INTEGER NOT NULL, last_seq INTEGER NOT NULL,
+		 PRIMARY KEY(node,origin,category,first_seq));`)
+	if err == nil && !deletedTable {
+		// Old versions retained envelopes only. Conservatively protect those
+		// envelopes from resurrection; new deletions have exact ranges.
+		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO copy_deleted SELECT node,origin,category,first_seq,last_seq FROM copy_pruned`)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
 	if err != nil {
+		_ = tx.Rollback()
 		dest.Close()
 		return nil, err
 	}
@@ -182,6 +208,10 @@ func validCopyOrigin(node, source, category string) error {
 // never rewrite the first saved copy; a lost reply is safe to retry. Category
 // streams have independent positions, so noisy stdout cannot hold back audit.
 func (c *Copies) Receive(ctx context.Context, node string, b CopyBatch) (CopyReceipt, error) {
+	return c.receive(ctx, node, b, false)
+}
+
+func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPanel bool) (CopyReceipt, error) {
 	var receipt CopyReceipt
 	if c == nil {
 		return receipt, fmt.Errorf("近期副本没有启动")
@@ -243,7 +273,7 @@ func (c *Copies) Receive(ctx context.Context, node string, b CopyBatch) (CopyRec
 				return err
 			}
 		}
-		if b.Through <= receipt.After {
+		if !fromPanel && b.Through <= receipt.After {
 			for _, v := range entries {
 				var at int64
 				var category, kind, project, object string
@@ -261,7 +291,7 @@ func (c *Copies) Receive(ctx context.Context, node string, b CopyBatch) (CopyRec
 			}
 			return nil
 		}
-		if b.After != receipt.After {
+		if !fromPanel && b.After != receipt.After {
 			return ErrCopyCursor
 		}
 		if err := c.expire(ctx); err != nil {
@@ -298,7 +328,39 @@ func (c *Copies) Receive(ctx context.Context, node string, b CopyBatch) (CopyRec
 		now := time.Now().UTC().UnixNano()
 		for _, v := range entries {
 			e := v.e
-			res, err := tx.ExecContext(ctx, `INSERT INTO log_events(time_ns,received_ns,category,priority,kind,project,object,data) VALUES (?,?,?,?,?,?,?,?)`, e.Time.UnixNano(), now, e.Category, p, clipText(e.Kind, 200), clipText(e.Project, 200), clipText(e.Object, 1000), v.data)
+			var at int64
+			var category, kind, project, object string
+			var data []byte
+			err := tx.QueryRowContext(ctx, `SELECT e.time_ns,e.category,e.kind,e.project,e.object,e.data FROM log_events e JOIN copy_origins o ON o.local_seq=e.seq WHERE o.node=? AND o.origin=? AND o.remote_seq=?`, node, b.Source, e.Seq).Scan(&at, &category, &kind, &project, &object, &data)
+			if err == nil {
+				if at != e.Time.UnixNano() || category != e.Category || kind != clipText(e.Kind, 200) || project != clipText(e.Project, 200) || object != clipText(e.Object, 1000) || !bytes.Equal(data, v.data) {
+					return ErrCopyConflict
+				}
+				continue
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			received := now
+			if fromPanel {
+				received = e.Received.UnixNano()
+				if e.Received.IsZero() || received > now {
+					return fmt.Errorf("无效或超前的面板接收时间")
+				}
+				if received <= now-int64(c.retention) {
+					continue
+				}
+			}
+			// A node may reconnect behind a peer-recovered record that this
+			// panel has since pruned. Neither upload path may resurrect it.
+			var deleted bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?)`, node, b.Source, b.Category, e.Seq, e.Seq).Scan(&deleted); err != nil {
+				return err
+			}
+			if deleted {
+				continue
+			}
+			res, err := tx.ExecContext(ctx, `INSERT INTO log_events(time_ns,received_ns,category,priority,kind,project,object,data) VALUES (?,?,?,?,?,?,?,?)`, e.Time.UnixNano(), received, e.Category, p, clipText(e.Kind, 200), clipText(e.Project, 200), clipText(e.Object, 1000), v.data)
 			if err != nil {
 				return err
 			}
@@ -314,7 +376,11 @@ func (c *Copies) Receive(ctx context.Context, node string, b CopyBatch) (CopyRec
 		if len(b.Pruned) > 0 {
 			pruned = b.Pruned
 		}
-		receipt = CopyReceipt{Node: node, Source: b.Source, Category: b.Category, Received: now, After: b.Through, Pruned: pruned, WriteErrors: max(receipt.WriteErrors, b.WriteErrors)}
+		after := receipt.After
+		if !fromPanel {
+			after = b.Through
+		}
+		receipt = CopyReceipt{Node: node, Source: b.Source, Category: b.Category, Received: now, After: after, Last: max(receipt.Last, b.Through), Pruned: pruned, WriteErrors: max(receipt.WriteErrors, b.WriteErrors)}
 		data, err := json.Marshal(receipt)
 		if err != nil {
 			return err
@@ -398,6 +464,18 @@ func (c *Copies) trim(ctx context.Context, p int, before time.Time) (bool, error
 		return false, nil
 	}
 	for _, r := range batch {
+		// Merge adjacent exact tombstones, never the unreceived holes between
+		// them. This keeps sequential deletion metadata compact across restarts.
+		first, last := r.remote, r.remote
+		if err := tx.QueryRowContext(ctx, `SELECT min(?,coalesce(min(first_seq),?)),max(?,coalesce(max(last_seq),?)) FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?`, first, first, last, last, r.node, r.origin, r.category, last+1, first-1).Scan(&first, &last); err != nil {
+			return false, err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?`, r.node, r.origin, r.category, last, first); err != nil {
+			return false, err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO copy_deleted VALUES (?,?,?,?,?)`, r.node, r.origin, r.category, first, last); err != nil {
+			return false, err
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO copy_pruned VALUES (?,?,?,?,?,1) ON CONFLICT(node,origin,category) DO UPDATE SET first_seq=min(first_seq,excluded.first_seq),last_seq=max(last_seq,excluded.last_seq),count=count+1`, r.node, r.origin, r.category, r.remote, r.remote); err != nil {
 			return false, err
 		}
@@ -512,7 +590,7 @@ func (c *Copies) Read(ctx context.Context, node, source string, f Filter) (Page,
 			return page, nil, err
 		}
 		found = true
-		page.State.Last = max(page.State.Last, r.After)
+		page.State.Last = max(page.State.Last, r.After, r.Last)
 		page.State.WriteErrors = max(page.State.WriteErrors, r.WriteErrors)
 		sourcePruned = append(sourcePruned, r.Pruned...)
 	}

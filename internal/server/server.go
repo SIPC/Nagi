@@ -70,12 +70,13 @@ const (
 type Server struct {
 	cfg Config
 	// mesh 是面板的 mesh，启动失败时为 nil。
-	mesh *mesh.Mesh
-	log  *slog.Logger
-	db   *sql.DB
-	q    *store.Queries
-	ca   *tlsutil.CA
-	cert tls.Certificate
+	mesh      *mesh.Mesh
+	panelMesh panelMeshState
+	log       *slog.Logger
+	db        *sql.DB
+	q         *store.Queries
+	ca        *tlsutil.CA
+	cert      tls.Certificate
 
 	fingerprint   string
 	port          int
@@ -352,33 +353,37 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	s.nodes.Behind = s.behind
 	s.nodes.Self = s.fingerprint
 	if s.standby != nil {
-		// 备用面板只查询：不给节点补推配置、不下发告警配置，不进 mesh（见 docs/standby.md）。
+		// 备用面板只查询、接收本机近期副本，不补推配置、不下发告警配置。
 		s.nodes.ReadOnly = true
-		return s, nil
-	}
-	// 主备信息只由主面板告诉节点：备用面板（包括没提升成的）不发，节点不会因为它改认主面板。
-	s.nodes.Cluster = func(ctx context.Context) *nagiv1.PanelCluster {
-		addr := s.publicAddress
-		if v, err := s.q.GetSetting(ctx, api.SettingPublicAddress); err == nil && v != "" {
-			addr = v
+	} else {
+		// 主备信息只由主面板告诉节点：备用面板不发，节点不会因为它改认主面板。
+		s.nodes.Cluster = func(ctx context.Context) *nagiv1.PanelCluster {
+			addr := s.publicAddress
+			if v, err := s.q.GetSetting(ctx, api.SettingPublicAddress); err == nil && v != "" {
+				addr = v
+			}
+			return standby.Cluster(ctx, s.q, net.JoinHostPort(addr, strconv.Itoa(s.port)))
 		}
-		return standby.Cluster(ctx, s.q, net.JoinHostPort(addr, strconv.Itoa(s.port)))
+		if err := standby.Init(ctx, s.q, s.fingerprint); err != nil {
+			d.Close()
+			return nil, err
+		}
+		// 记下本面板（主面板）现在的地址，随同步传给备用面板。
+		if err := s.q.SetSetting(ctx, store.SetSettingParams{Key: standby.SettingPrimaryAddress, Value: s.hostPort(ctx)}); err != nil {
+			d.Close()
+			return nil, err
+		}
+		s.nodes.OnReport = s.projects.Sync
 	}
-	if err := standby.Init(ctx, s.q, s.fingerprint); err != nil {
-		d.Close()
-		return nil, err
-	}
-	// 记下本面板（主面板）现在的地址，随同步传给备用面板。
-	if err := s.q.SetSetting(ctx, store.SetSettingParams{Key: standby.SettingPrimaryAddress, Value: s.hostPort(ctx)}); err != nil {
-		d.Close()
-		return nil, err
-	}
-	s.nodes.OnReport = s.projects.Sync
+	// Every panel owns a persistent mesh identity, including a read-only standby.
+	// Node control connections authenticate each identity independently; log bodies
+	// and acknowledgements never travel over those control connections.
 	if m, err := s.startMesh(); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	} else {
 		s.mesh = m
 		s.nodes.SetMesh(m, "面板 "+s.publicAddress)
+		s.nodes.AuthorizeLogPanel = s.authorizeLogPanel
 	}
 	return s, nil
 }
@@ -483,6 +488,12 @@ func (s *Server) Run(ctx context.Context) error {
 		} else {
 			s.nodes.LogCopies = copies
 			defer copies.Close()
+			if s.mesh != nil {
+				logCtx, stopLogs := context.WithCancel(ctx)
+				logDone := make(chan struct{})
+				go func() { defer close(logDone); s.panelLogsLoop(logCtx) }()
+				defer func() { stopLogs(); <-logDone }()
+			}
 			expiryCtx, stopExpiry := context.WithCancel(ctx)
 			expiryDone := make(chan struct{})
 			go func() {
@@ -642,14 +653,14 @@ func (s *Server) Run(ctx context.Context) error {
 		ErrorLog:          slog.NewLogLogger(s.log.Handler(), slog.LevelDebug),
 	}
 	go s.acceptLoop(ctx, httpLn)
-	// 备用面板不发告警、不当 mesh 中转（节点还没连它，见 docs/standby.md）。
+	// 主备各自提供 mesh 日志服务；只有主面板迁移规则、发离线告警。
+	go s.nodes.ServeMesh(ctx)
 	if s.standby == nil {
 		// 旧版本的告警规则是全局的，搬到各个节点和项目上（见 docs/monitoring.md#告警）。
 		if err := s.nodes.MigrateAlertRules(ctx, func(r *nagiv1.AlertRules) error { return s.projects.MigrateAlertRules(ctx, r) }); err != nil {
 			s.log.Warn("搬迁告警规则失败", "err", err)
 		}
 		go s.nodes.RunOfflineAlerts(ctx)
-		go s.nodes.ServeMesh(ctx)
 	}
 	domainDone := make(chan struct{})
 	go func() {
@@ -739,6 +750,9 @@ func (s *Server) tlsConfig() *tls.Config {
 	// 备用面板的同步连接：同样要出示本面板 CA 签发的客户端证书（见 docs/standby.md）。
 	standbyCfg := agent.Clone()
 	standbyCfg.NextProtos = []string{standby.ALPN, standby.AuditALPN}
+	// Separate identity/mesh-packet channel; existing synchronization is unchanged.
+	meshCfg := agent.Clone()
+	meshCfg.NextProtos = []string{panelMeshALPN}
 	// 别的面板询问状态（/api/standby/status）：同样要出示本组 CA 签发的证书，之后按 HTTP/1.1 处理。
 	statusCfg := agent.Clone()
 	statusCfg.NextProtos = []string{standby.StatusALPN}
@@ -750,6 +764,9 @@ func (s *Server) tlsConfig() *tls.Config {
 		GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 			auth.RecordFingerprint(hello)
 			for _, p := range hello.SupportedProtos {
+				if p == panelMeshALPN {
+					return meshCfg, nil
+				}
 				if p == tunnel.ALPN {
 					return agent, nil
 				}
@@ -789,6 +806,9 @@ func (s *Server) acceptLoop(ctx context.Context, httpLn *chanListener) {
 				return
 			}
 			switch conn.ConnectionState().NegotiatedProtocol {
+			case panelMeshALPN:
+				_ = s.servePanelMesh(ctx, conn, "")
+				return
 			case tunnel.ALPN:
 				s.nodes.Handle(ctx, conn)
 				return

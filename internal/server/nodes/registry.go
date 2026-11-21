@@ -80,6 +80,9 @@ type Registry struct {
 	Audit *audit.Log
 	// LogCopies is local history, not part of standby configuration snapshots.
 	LogCopies *logstore.Copies
+	// AuthorizeLogPanel checks the current certificate-bound panel membership on
+	// every mesh reconciliation RPC, independently of node upload permissions.
+	AuthorizeLogPanel func(context.Context, mesh.Key) error
 	// OnIsolate 在节点被隔离或解除隔离后调用：面板据此重算各节点的代理计划，撤销它的项目放行。
 	OnIsolate func(ctx context.Context)
 	iso       isolation
@@ -87,10 +90,12 @@ type Registry struct {
 	mu    sync.RWMutex
 	conns map[string]*Conn
 	// sessions 是每个节点所有还没断开的控制连接（包括已被替换、正在断开的），移除节点时全部断开。
-	sessions map[string]map[*Conn]struct{}
-	mesh     *mesh.Mesh
-	meshName string
-	witness  *witness
+	sessions     map[string]map[*Conn]struct{}
+	mesh         *mesh.Mesh
+	meshName     string
+	panelPeers   map[string]mesh.Peer
+	witness      *witness
+	meshUpdateMu sync.Mutex
 
 	relayMu  sync.Mutex
 	relayed  map[string][]time.Time // 每个节点最近代发告警的时间

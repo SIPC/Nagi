@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+import "google/protobuf/timestamp.proto";
+import "nagi/v1/logs.proto";
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+option java_multiple_files = true;
+option java_package = "ink.sipc.nagi.proto.v1";
+
+// Mesh-only panel anti-entropy. A node's log-upload permission never grants
+// access here; callers must independently authenticate as current panel members.
+service PanelLogService {
+  rpc ListLogCopies(PanelLogPosition) returns (PanelLogInventory);
+  rpc ReadLogCopies(PanelLogRead) returns (PanelLogBodies);
+}
+
+// Positions belong to the sending panel's recent.db, not the original node.
+message PanelLogPosition {
+  string source = 1;
+  int64 after = 2;
+}
+
+message PanelLogIndex {
+  int64 cursor = 1;
+  string node = 2;
+  string source = 3;
+  string category = 4;
+  int64 seq = 5;
+  google.protobuf.Timestamp received = 6;
+  bytes hash = 7;
+}
+
+message PanelLogInventory {
+  PanelLogPosition position = 1;
+  repeated PanelLogIndex entries = 2;
+}
+
+// At most eight cursors per request; only missing bodies are requested.
+message PanelLogRead {
+  string source = 1;
+  repeated int64 cursors = 2;
+}
+
+message PanelLogBody {
+  int64 cursor = 1;
+  string node = 2;
+  string source = 3;
+  LogEntry entry = 4;
+}
+
+message PanelLogBodies {
+  repeated PanelLogBody entries = 1;
+}

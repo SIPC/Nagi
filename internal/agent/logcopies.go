@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/logstore"
@@ -17,6 +18,47 @@ func (a *agent) logCopiesLoop(ctx context.Context) {
 	if a.mesh == nil || a.cfg.Logs == nil {
 		return
 	}
+	// A dead primary must not serialize or delay the standby's uploads.
+	workers := map[string]context.CancelFunc{}
+	var done sync.WaitGroup
+	defer func() {
+		for _, cancel := range workers {
+			cancel()
+		}
+		done.Wait()
+	}()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		panels := map[string]bool{}
+		for _, p := range a.id.Panels() {
+			fp := p.Fingerprint
+			panels[fp] = true
+			if workers[fp] == nil {
+				work, cancel := context.WithCancel(ctx)
+				workers[fp] = cancel
+				done.Add(1)
+				go func() {
+					defer done.Done()
+					a.logCopiesToPanel(work, fp)
+				}()
+			}
+		}
+		for fp, cancel := range workers {
+			if !panels[fp] {
+				cancel()
+				delete(workers, fp)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (a *agent) logCopiesToPanel(ctx context.Context, fingerprint string) {
 	important, ordinary := a.cfg.LogConfig.CopyImportantSeconds, a.cfg.LogConfig.CopyOrdinarySeconds
 	if important == 0 {
 		important = 1
@@ -29,49 +71,46 @@ func (a *agent) logCopiesLoop(ctx context.Context) {
 	next := map[string]time.Time{}
 	var warned time.Time
 	for {
-		for _, p := range a.id.Panels() {
-			if a.role(p) == "standby" {
-				continue
-			}
+		if _, trusted := a.id.panel(fingerprint); trusted {
 			a.mesh.mu.Lock()
-			key, ok := a.mesh.panelKeys[p.Fingerprint]
+			key, ok := a.mesh.panelKeys[fingerprint]
 			a.mesh.mu.Unlock()
-			if !ok {
-				continue
-			}
-			cc, err := mesh.Client(a.mesh.m, key)
-			if err != nil {
-				continue
-			}
-			client := nagiv1.NewLogCopyServiceClient(cc)
-			for _, category := range []string{logstore.Audit, logstore.Security, logstore.Alert, logstore.System, logstore.Task, logstore.Runtime, logstore.Access, logstore.Container, logstore.Metrics} {
-				id := p.Fingerprint + ":" + category
-				if time.Now().Before(next[id]) {
-					continue
-				}
-				interval, bytes := ordinary, 256<<10
-				if category == logstore.Audit || category == logstore.Security || category == logstore.Alert || category == logstore.System {
-					interval, bytes = important, 64<<10
-				}
-				next[id] = time.Now().Add(time.Duration(interval) * time.Second)
-				// Recheck trust and role before each category. Removed panels must
-				// not receive a backlog merely because an old connection survives.
-				current, trusted := a.id.panel(p.Fingerprint)
-				if !trusted || a.role(current) == "standby" {
-					break
-				}
-				work, cancel := context.WithTimeout(ctx, 3*time.Second)
-				err := copyLogCategory(work, a.cfg.Logs, client, category, bytes)
-				cancel()
-				if err != nil {
-					if ctx.Err() == nil && time.Since(warned) >= time.Minute {
-						a.log.Warn("近期日志副本尚未确认，保留节点原件，稍后经 mesh 补传", "panel", p.Fingerprint, "err", err)
-						warned = time.Now()
+			if ok {
+				cc, err := mesh.Client(a.mesh.m, key)
+				if err == nil {
+					client := nagiv1.NewLogCopyServiceClient(cc)
+					for _, category := range []string{logstore.Audit, logstore.Security, logstore.Alert, logstore.System, logstore.Task, logstore.Runtime, logstore.Access, logstore.Container, logstore.Metrics} {
+						if time.Now().Before(next[category]) {
+							continue
+						}
+						interval, bytes := ordinary, 256<<10
+						if category == logstore.Audit || category == logstore.Security || category == logstore.Alert || category == logstore.System {
+							interval, bytes = important, 64<<10
+						}
+						next[category] = time.Now().Add(time.Duration(interval) * time.Second)
+						// Grace-retained peers confer no log permission. Recheck the
+						// current trust and key even on an already-open connection.
+						_, trusted := a.id.panel(fingerprint)
+						a.mesh.mu.Lock()
+						current := a.mesh.panelKeys[fingerprint]
+						a.mesh.mu.Unlock()
+						if !trusted || current != key || ctx.Err() != nil {
+							break
+						}
+						work, cancel := context.WithTimeout(ctx, 3*time.Second)
+						err := copyLogCategory(work, a.cfg.Logs, client, category, bytes)
+						cancel()
+						if err != nil {
+							if ctx.Err() == nil && time.Since(warned) >= time.Minute {
+								a.log.Warn("近期日志副本尚未确认，保留节点原件，稍后经 mesh 补传", "panel", fingerprint, "err", err)
+								warned = time.Now()
+							}
+							break
+						}
 					}
-					break
+					cc.Close()
 				}
 			}
-			cc.Close()
 		}
 		select {
 		case <-ctx.Done():

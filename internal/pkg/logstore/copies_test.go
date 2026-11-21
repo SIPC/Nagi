@@ -164,3 +164,110 @@ func TestRecentCopyExpiryDoesNotResetAcknowledgement(t *testing.T) {
 		t.Fatalf("expired evidence resurrected: %+v %v", p, err)
 	}
 }
+
+func TestPanelReconciliationFillsHolesWithoutResurrectingPrunedCopies(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+	s := openStore(t, filepath.Join(dir, "logs.db"), 32<<20)
+	cfg := logstore.Config{RecentCapacityMiB: 16, RecentHours: 1}
+	c, err := s.OpenCopies(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at, received := time.Now().Add(-72*time.Hour).Truncate(time.Second), time.Now().Add(-time.Minute).Truncate(time.Second)
+	event := func(seq int64) logstore.Event {
+		return logstore.Event{Seq: seq, Source: "original-disk", Time: at, Received: received, Category: logstore.Audit, Kind: "operation", Data: fmt.Sprint(seq)}
+	}
+	// This receiver saw 2 and 4, but 3 had already been pruned at the node.
+	if _, err := c.Receive(ctx, "node", logstore.CopyBatch{Source: "original-disk", Category: logstore.Audit, Through: 8, Events: []logstore.Event{event(2), event(4)}, Pruned: []logstore.Pruned{{Category: logstore.Audit, First: 3, Last: 3, Count: 1}}}); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	d, err := db.Open(filepath.Join(dir, "recent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.ExecContext(ctx, `UPDATE log_events SET received_ns=?`, time.Now().Add(-2*time.Hour).UnixNano())
+	d.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.OpenCopies(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	// Local pruning covers the envelope [2,4], but only 2 and 4 were deleted.
+	// A peer still has 3: do not confuse a genuine hole with local deletion.
+	for _, seq := range []int64{2, 3, 4} {
+		item := logstore.CopyItem{Node: "node", Event: event(seq)}
+		needed, err := c.Needs(ctx, item.Index())
+		if err != nil || needed != (seq == 3) {
+			t.Fatalf("needs %d: %v %v", seq, needed, err)
+		}
+		if err := c.Merge(ctx, "node", logstore.CopyBatch{Source: item.Event.Source, Category: logstore.Audit, Through: seq, Events: []logstore.Event{item.Event}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, _, err := c.Read(ctx, "node", "original-disk", logstore.Filter{Category: logstore.Audit})
+	if err != nil || len(p.Events) != 1 || p.Events[0].Seq != 3 || !p.Events[0].Received.Equal(event(3).Received) {
+		t.Fatalf("hole/expiry/first receipt: %+v %v", p, err)
+	}
+	if r, err := c.Receipt(ctx, "node", "original-disk", logstore.Audit); err != nil || r.After != 8 {
+		t.Fatalf("peer moved node receipt: %+v %v", r, err)
+	}
+	// A peer may be ahead of this panel's direct stream. Reconnect must still
+	// accept the real node's intervening events and deduplicate its overlap.
+	ahead := event(11)
+	if err := c.Merge(ctx, "node", logstore.CopyBatch{Source: ahead.Source, Category: ahead.Category, Through: 11, Events: []logstore.Event{ahead}}); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	d, err = db.Open(filepath.Join(dir, "recent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.ExecContext(ctx, `UPDATE log_events SET received_ns=? WHERE seq IN (SELECT local_seq FROM copy_origins WHERE remote_seq=11)`, time.Now().Add(-2*time.Hour).UnixNano())
+	d.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.OpenCopies(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	e := event(10)
+	if err := c.Merge(ctx, "node", logstore.CopyBatch{Source: e.Source, Category: e.Category, Through: 10, Events: []logstore.Event{e}}); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := c.Receipt(ctx, "node", e.Source, e.Category); err != nil || r.After != 8 {
+		t.Fatalf("future peer copy acknowledged missing node data: %+v %v", r, err)
+	}
+	if _, err := c.Receive(ctx, "node", logstore.CopyBatch{Source: e.Source, Category: e.Category, After: 8, Through: 12, Events: []logstore.Event{event(9), e, ahead, event(12)}}); err != nil {
+		t.Fatal(err)
+	}
+	p, _, err = c.Read(ctx, "node", e.Source, logstore.Filter{Category: e.Category})
+	if err != nil || len(p.Events) != 4 || p.Events[0].Seq != 3 || p.Events[1].Seq != 9 || p.Events[2].Seq != 10 || p.Events[3].Seq != 12 || p.Next != 12 {
+		t.Fatalf("node reconnection lost original identities: %+v %v", p, err)
+	}
+	e.Data = "conflicting body"
+	if err := c.Merge(ctx, "node", logstore.CopyBatch{Source: e.Source, Category: e.Category, Through: 10, Events: []logstore.Event{e}}); !errors.Is(err, logstore.ErrCopyConflict) {
+		t.Fatalf("peer overwrite accepted: %v", err)
+	}
+	if err := c.SaveSyncPosition(ctx, "peer", logstore.CopyPosition{Source: "peer-disk", After: 123}); err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	c, err = s.OpenCopies(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if pos, err := c.SyncPosition(ctx, "peer"); err != nil || pos.Source != "peer-disk" || pos.After != 123 {
+		t.Fatalf("lost durable peer position: %+v %v", pos, err)
+	}
+	if needed, err := c.Needs(ctx, (logstore.CopyItem{Node: "node", Event: event(2)}).Index()); err != nil || needed {
+		t.Fatalf("restart lost local deletion: %v %v", needed, err)
+	}
+}
