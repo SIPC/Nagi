@@ -8,26 +8,77 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
-## Unreleased
+## v0.37.0
 
 ### New features
 
-- Nodes can be put in groups. The nodes page shows groups as collapsible sections, can filter by group, and manages groups from the ⋯ menu. Node groups only organize the list and don't change member access.
-- Projects can have tags, edited in project settings. The projects page can filter by tag and manages tags from the ⋯ menu. Project tags only organize the list and don't change member access.
-- The nodes page can sort by join time, name, or a custom order. Click "Reorder" to drag groups and nodes. The order is saved on the panel for each member.
+- Added node groups, shown as collapsible sections on the Nodes page, with filtering and group management in the ⋯ menu. Groups only organize the list and do not change member access.
+- Added project tags, editable in project settings, with search, tag filtering, and tag management in the ⋯ menu on the Projects page. Tags only organize the list and do not change member access.
+- Added sorting by join time, name, or custom order on the Nodes page; select "Reorder" to drag groups and nodes. The panel saves each member's order separately.
+- Added a Logs page in place of the Audit entry, where administrators can search panel and node logs by source, category, project, time, and keyword. Existing audit queries, export, verification, and recording playback move to "Audit & recordings", and old bookmarks redirect with their filters intact.
+- Added continuous capture of container output, state, and Docker events without keeping the log page open. Saved progress and results are available for deployments, snapshots, backups, migrations, images, files, uploads, and upgrades.
+- Added troubleshooting history for Linux resource breakdowns, managed container instance resources, specific HTTP status codes and latency, TCP/UDP sessions, intranet forwarding, node networking, and failover.
+- Added collection of selected Linux system logs, including service failures, critical kernel faults, and Docker warnings and errors. SSH sign-in and sudo/su authentication history have separate optional switches, both off by default.
+- Added independent receipt of recent node logs by primary and standby panels, with reconciliation of copies still retained by either panel. Standby panels can query live node logs and metric history, and saved recent copies remain queryable when a node is offline.
+- Added filtering of recent panel log copies by the original panel's full certificate fingerprint to view retained records from before and after a role change.
+- Added the node "Join relay pool" and panel "Automatic routing" settings, both off by default. When enabled, routes are selected using observed direct and approved relay performance, with duplicate traffic sent over relay and direct paths during performance relaying.
+- Added current alerts and manual handling at the top of the Logs page when alerts are present, with acknowledgement, unacknowledgement, notes, and one-hour silence or maintenance periods that can be ended early. Both primary and standby panels can view and handle alerts and query retained history and handling records.
+- Added model-generated alert reports, letting administrators configure their own model endpoint to manually summarize available recent alerts and related node statistics, and inspect reports, outbound material, and missing data. This feature is off by default, provides advice only, and does not perform operations or block IP addresses.
+
+### Improvements
+
+- Retained unresolved alerts across node and panel restarts and reconciled current state when nodes reconnect to reduce duplicate notifications and false recoveries. Alert evaluation no longer depends on configuring a notification channel.
+- Changed local logs, integrated legacy history, metrics, and recordings to share a default 5 GiB budget, configurable from 5 to 10 GiB. Ordinary history is reclaimed first, with pruning summaries retained.
+- Changed terminal and command recordings to be encrypted on the executing node while retaining existing recording switches and playback permissions. Old panel recordings can still be migrated and played back on their original machine.
+- Added resumable batch imports of legacy audit, metric, and recording history. Required source data is retained on insufficient space or corruption, and incomplete migrations are not treated as successful.
+- Added notices for collection interruptions, truncation, write failures, and history pruning, distinguishing original node logs from recent panel copies.
+- Added English messages for new errors and displayed project tag separators in the current interface language.
 
 ### Fixes
 
+- Fixed alerts being incorrectly marked recovered when metrics are missing, stale, or unreadable. Starting containers, unknown health, and unreadable certificates are no longer considered evidence of recovery.
+- Fixed notification retries potentially sending obsolete failure messages by rechecking the current alert, channel, and destination before retrying.
+- Fixed relay candidate refreshes affecting approved routes still in use, and avoided making performance-routing decisions from direct connections that failed during observation.
+- Fixed HTTP/3 potentially causing login fingerprint mismatches when accessing the panel through its embedded proxy.
+- Fixed standby panels being unable to query live node logs and metric history.
+- Fixed standby panels being unable to display saved alert copies when the primary panel times out.
+- Fixed metric-history migration failures allowing further writes to the old business database; old history remains queryable while chart-history writes are paused.
 - Fixed known vulnerabilities and improved security.
+
+### Behavior changes
+
+- Restricted "All logs" to administrators. Other members with the "Audit log" permission retain existing audit capabilities without gaining cross-project log access.
+- Changed alert permissions: viewing requires audit access, and handling additionally requires alert permission and privileged verification; project-restricted members can only view and handle alerts for authorized projects. Alert history and handling records are stored only in the log store and are subject to its shared capacity and retention limits.
+- Distinguished acknowledgement from recovery: acknowledgement and notes do not change detection results, while silence and maintenance only pause reminders for the same incident, not recovery notifications or reminders for a new incident. One-off panel events can be ended manually, while persistent faults require health evidence before being marked recovered.
+- Changed recent copies to target 24-hour retention within at most 1 GiB of the shared budget, with earlier pruning possible under capacity pressure. Pruned, never-collected, or unrecoverable offline records are not treated as complete history.
+- Retained independent verification of original audit chains; sanitized copies in the unified log store are not audit-chain verification results. New node recording bodies are not replicated with recent log copies and cannot be played back when the node is offline or the body has been pruned.
+- Retained existing relay behavior on direct-path failure; "Join relay pool" only controls optional performance relaying. Duplicate performance-relay traffic increases egress and relay usage, existing QUIC connections do not migrate, and monthly traffic caps or small-packet-only duplication are not yet available.
+- Restricted model reports to manual generation using a separately configured public HTTPS model endpoint, without support for private-network models or environment proxies. Only limited alert summaries, report aliases, and numeric statistics are sent, not raw logs, free-form alert text, IP addresses, domains, project or container names, or credentials.
+- Limited report requests per panel to one at a time, at least 15 minutes apart, and at most 12 attempts per rolling 24 hours, including failures and timeouts. Reports target seven-day retention but may be pruned earlier for capacity.
+- Changed access to panel domains to use HTTP/2 or HTTP/1.1 instead of HTTP/3; clients without automatic retries may need to change protocols manually. This panel rule does not affect other project sites.
+
+### Known limitations
+
+- With high log volumes, recent copies on both primary and standby panels may fall significantly behind, by tens of minutes or longer under sustained high volume; catch-up performance will be improved in the next version. Replication delay itself does not delete node originals, which remain directly queryable while the node is online; originals are still subject to local log capacity and pruning rules.
+- When the primary panel is unreachable, the standby can only view recent alert copies already received and cannot acknowledge, annotate, silence, or maintain alerts offline. Asynchronous replication does not guarantee preservation of the last handling action, so check handling state after a role change.
+- Aggregated notifications are not yet supported; current alerts and manual handling do not provide combined alert delivery.
+- Model reports are separate from manual handling and may have incomplete material, containing only limited alert summaries and node resource and traffic statistics; they cannot confirm a DDoS attack. Group-wide primary/standby request quotas and replication of report bodies are not guaranteed.
+- Logs are not guaranteed to be complete or permanent; application-managed files, external log drivers unreadable by Docker, full host logs, and client diagnostics are not yet integrated. The absence of a log entry does not prove that nothing happened.
+- Existing automatic-routing validation uses simulated links on one machine and does not establish real cross-region benefits; coverage remains incomplete for rate limits, simultaneous path failures, and mixed-version operation. The experimental QUIC routing prototype is not an available feature.
+- The Android app does not yet provide native pages for the groups, unified logs, or model reports added in this release.
 
 ### Upgrade notes
 
-- Cross-node entries restored from node caches remain inactive until edited and saved in the container's Network tab. The pending state survives node caching. Existing panel records and local-only entries are unchanged.
-- This update includes a database migration. Update primary and standby panels to the same version; standby synchronization pauses across schema versions and resumes afterward. Downgrading requires restoring the pre-upgrade database backup.
-- Also upgrade nodes and node witnesses for complete label-file and failover epoch catch-up protection. Deployment checks label files even in inactive profile services and limits their variable expansion budget.
-- New node log and metric-history queries use mesh only. Older nodes lack these RPCs, so queries may be temporarily unavailable during mixed-version upgrades; there is no control-connection fallback. Back up data directories first, update primary and standby panels to the same version, then promptly upgrade all nodes and witnesses.
-- The first node upgrade copies metric history from `node.db` into `logs/metrics.db` in verified batches before clearing the old metric tables. On failure, old history stays queryable but receives no new samples; resolve disk or data conflicts and restart to retry. Original audit chains and recordings are retained under the [log migration policy](docs/logging.md), not deleted merely because they were imported.
-- Legacy-format pending alert queues are not replayed, avoiding obsolete messages and saved channel credentials. Unsent notifications must not be treated as delivered. Back up data directories before upgrading and use freshly evaluated alerts afterward.
+- Back up panel and node data directories and related keys before upgrading. This update includes database migrations, and downgrading requires restoring the pre-upgrade database backups.
+- Update primary and standby panels to the same version and upgrade all nodes and node witnesses as well. New logs and metric history may be temporarily unavailable during mixed-version operation, and current alert display and manual handling will not be fully functional.
+- Reserve disk space for the first history migration and check its results; resolve insufficient space or data conflicts, then restart to retry. Do not delete old history or originals before migration finishes.
+- Retain legacy audit compatibility files and their keys rather than deleting them after unified-log import; they are still used for existing verification and forwarding.
+- Edit and save cross-node entries restored from node caches in the container's Network tab before they take effect. Existing panel records and local-only entries are unaffected.
+- Check label files used by disabled Compose profile services and ensure that they exist and meet size and variable-expansion limits.
+- Check off-site backup synchronization after failover and, if necessary, wait for the panel to verify and update the registered source node.
+- Check freshly evaluated current alerts after upgrading; unsent notifications in legacy-format queues are not replayed and must not be treated as delivered.
+- Check bandwidth and traffic costs before enabling performance relaying, and outbound material and API costs before enabling model reports; neither feature is enabled automatically by an upgrade.
+- Disable the default Linux resource breakdown and selected system-log collection if not needed, or manually enable the default-off SSH and sudo/su authentication history collection as required; restart after changing local log configuration.
 
 ## v0.36.0
 
