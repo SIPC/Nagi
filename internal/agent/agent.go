@@ -284,6 +284,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if !cfg.DisableProxy {
 		proxy.OnAccess(a.logProxyAccess)
 		defer proxy.OnAccess(nil)
+		proxy.OnConnection(a.logProxyConnection)
+		defer proxy.OnConnection(nil)
 		a.metrics.AddSource(routeMetrics())
 	}
 	a.metrics.AddSource(a.meshMetrics())

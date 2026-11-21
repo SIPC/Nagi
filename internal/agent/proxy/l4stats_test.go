@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"io"
 	"net"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/caddyserver/caddy/v2"
 )
 
@@ -15,6 +17,15 @@ import (
 // 容器先关闭连接时，客户端照常收到 EOF（包装后的连接要把 CloseWrite 转给底层连接）。
 func TestL4Stats(t *testing.T) {
 	TakeStats()
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	OnConnection(func(e ConnectionRecord) {
+		logs.Report(logstore.Event{Time: e.Time, Category: logstore.Access, Kind: "proxy.l4." + e.Phase, Data: e})
+	})
+	defer OnConnection(nil)
 	tcpUp, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -140,5 +151,52 @@ func TestL4Stats(t *testing.T) {
 	}
 	if down.Conns != 1 || down.Fails != 1 {
 		t.Fatalf("down：%+v", down)
+	}
+	// Read back actual durable ingress events, not callback invocations. The
+	// still-open UDP session must not invent a close event or HTTP status.
+	var events []logstore.Event
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		events, err = logs.Query(t.Context(), logstore.Filter{Category: logstore.Access})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(events) == 5 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(events) != 5 {
+		t.Fatalf("want 3 opens and 2 closes, got %+v", events)
+	}
+	opens := map[string]ConnectionRecord{}
+	closed, udpOpen, rejected := false, false, false
+	for _, event := range events {
+		var e ConnectionRecord
+		if err := json.Unmarshal(event.Data.(json.RawMessage), &e); err != nil {
+			t.Fatal(err)
+		}
+		if e.ID == "" || e.Local == "" || e.Remote == "" {
+			t.Fatalf("missing identity/address: %+v", e)
+		}
+		if e.Phase == "open" {
+			opens[e.ID] = e
+			if e.Protocol == "udp" {
+				udpOpen = true
+			}
+			continue
+		}
+		start, ok := opens[e.ID]
+		if !ok || !e.Opened.Equal(start.Time) || e.Duration < 0 || e.Time.Before(start.Time) {
+			t.Fatalf("unmatched end %+v", e)
+		}
+		if e.Route == "p/game" && e.Protocol == "tcp" {
+			closed = e.BytesIn == 5 && e.BytesOut == 3 && e.EndReason == "observer_finished" && e.Error == ""
+		}
+		if e.Route == "p/down" {
+			rejected = e.EndReason == "handler_error" && e.Error != ""
+		}
+	}
+	if !closed || !udpOpen || !rejected {
+		t.Fatalf("missing TCP bytes/UDP open/upstream failure: %v %v %v", closed, udpOpen, rejected)
 	}
 }

@@ -68,11 +68,12 @@ func (s *RouteStats) Percentile(q float64) float64 {
 }
 
 type observerT struct {
-	mu       sync.Mutex
-	stats    map[string]*RouteStats
-	l4       map[string]*l4Counter
-	onCert   func(domain string, err error)
-	onAccess func(AccessRecord)
+	mu           sync.Mutex
+	stats        map[string]*RouteStats
+	l4           map[string]*l4Counter
+	onCert       func(domain string, err error)
+	onAccess     func(AccessRecord)
+	onConnection func(ConnectionRecord)
 }
 
 var observer = &observerT{stats: map[string]*RouteStats{}, l4: map[string]*l4Counter{}}

@@ -1,8 +1,10 @@
 package proxy
 
 import (
+	"fmt"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/mholt/caddy-l4/layer4"
@@ -28,6 +30,32 @@ type l4Stats struct {
 	Route string `json:"route,omitempty"`
 }
 
+// ConnectionRecord describes this ingress observer's lifetime, not the remote
+// application's success. UDP is one caddy-l4 session, never one packet/request.
+type ConnectionRecord struct {
+	ID        string    `json:"connection_id"`
+	Route     string    `json:"route"`
+	Time      time.Time `json:"time"`
+	Opened    time.Time `json:"opened"`
+	Phase     string    `json:"phase"`
+	Protocol  string    `json:"protocol"`
+	Local     string    `json:"local"`
+	Remote    string    `json:"remote"`
+	Duration  float64   `json:"duration_seconds"`
+	BytesIn   int64     `json:"bytes_in"`
+	BytesOut  int64     `json:"bytes_out"`
+	EndReason string    `json:"end_reason,omitempty"`
+	Error     string    `json:"error,omitempty"`
+}
+
+var connectionSequence atomic.Uint64
+
+func OnConnection(fn func(ConnectionRecord)) {
+	observer.mu.Lock()
+	observer.onConnection = fn
+	observer.mu.Unlock()
+}
+
 func (l4Stats) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "layer4.handlers.nagi_stats",
@@ -39,9 +67,31 @@ func (l4Stats) CaddyModule() caddy.ModuleInfo {
 func (h *l4Stats) Handle(cx *layer4.Connection, next layer4.Handler) error {
 	c := observer.l4Open(h.Route)
 	defer c.active.Add(-1)
-	err := next.Handle(cx.Wrap(&countingConn{Conn: cx.Conn, c: c}))
+	observer.mu.Lock()
+	fn := observer.onConnection
+	observer.mu.Unlock()
+	cc := &countingConn{Conn: cx.Conn, c: c}
+	e := ConnectionRecord{}
+	if fn != nil {
+		at := time.Now()
+		e = ConnectionRecord{ID: fmt.Sprintf("%d-%d", at.UnixNano(), connectionSequence.Add(1)),
+			Route: h.Route, Time: at, Opened: at, Phase: "open", Protocol: cx.RemoteAddr().Network(),
+			Local: cx.LocalAddr().String(), Remote: cx.RemoteAddr().String()}
+		fn(e)
+	}
+	err := next.Handle(cx.Wrap(cc))
 	if err != nil {
 		c.fails.Add(1)
+	}
+	if fn != nil {
+		e.Time, e.Phase = time.Now(), "close"
+		e.Duration = e.Time.Sub(e.Opened).Seconds()
+		e.BytesIn, e.BytesOut = cc.in.Load(), cc.out.Load()
+		e.EndReason = "observer_finished"
+		if err != nil {
+			e.EndReason, e.Error = "handler_error", err.Error()
+		}
+		fn(e)
 	}
 	return err
 }
@@ -81,18 +131,21 @@ func (o *observerT) takeL4(out map[string]RouteStats) {
 // countingConn 统计客户端一侧的收发字节：读到的是入站，写出的是出站。
 type countingConn struct {
 	net.Conn
-	c *l4Counter
+	c       *l4Counter
+	in, out atomic.Int64
 }
 
 func (cc *countingConn) Read(p []byte) (int, error) {
 	n, err := cc.Conn.Read(p)
 	cc.c.in.Add(int64(n))
+	cc.in.Add(int64(n))
 	return n, err
 }
 
 func (cc *countingConn) Write(p []byte) (int, error) {
 	n, err := cc.Conn.Write(p)
 	cc.c.out.Add(int64(n))
+	cc.out.Add(int64(n))
 	return n, err
 }
 
