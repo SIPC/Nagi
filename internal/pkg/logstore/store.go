@@ -211,7 +211,7 @@ func (s *Store) Close() error {
 
 // Record 同步落盘，调用方得到成功后记录已提交。失败不会外送，也不会自动改用控制连接。
 func (s *Store) Record(ctx context.Context, e Event) error {
-	return s.record(ctx, e, "", nil)
+	return s.record(ctx, e, "", nil, false)
 }
 
 // RecordCheckpoint 把已采到的记录和来源读取位置放在同一事务内。
@@ -224,7 +224,23 @@ func (s *Store) RecordCheckpoint(ctx context.Context, e Event, key string, posit
 	if key == "" || len(key) > 200 || len(b) > 4096 {
 		return fmt.Errorf("无效或过大的日志采集断点")
 	}
-	return s.record(ctx, e, key, b)
+	return s.record(ctx, e, key, b, false)
+}
+
+// ImportCheckpoint atomically reconciles an identical normalized historical
+// fact and advances its source position. Normal live writes never deduplicate:
+// identical container output lines still represent separate observed facts.
+// Data must include the original identity and timestamp. The indexed time match
+// allows millisecond precision in legacy SQLite audit stores.
+func (s *Store) ImportCheckpoint(ctx context.Context, e Event, key string, position any) error {
+	b, err := json.Marshal(position)
+	if err != nil {
+		return err
+	}
+	if key == "" || len(key) > 200 || len(b) > 4096 {
+		return fmt.Errorf("无效或过大的日志采集断点")
+	}
+	return s.record(ctx, e, key, b, true)
 }
 
 // Checkpoint 返回最近一次已随记录提交的位置；没有位置不等于过去没有日志。
@@ -241,7 +257,7 @@ func (s *Store) Checkpoint(ctx context.Context, key string) (json.RawMessage, er
 	return json.RawMessage(b), err
 }
 
-func (s *Store) record(ctx context.Context, e Event, key string, position []byte) (err error) {
+func (s *Store) record(ctx context.Context, e Event, key string, position []byte, reconcile bool) (err error) {
 	if s == nil {
 		return nil
 	}
@@ -285,8 +301,15 @@ func (s *Store) record(ctx context.Context, e Event, key string, position []byte
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO log_events(time_ns, received_ns, category, priority, kind, project, object, data)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, e.Time.UnixNano(), e.Received.UnixNano(), e.Category, p, e.Kind, e.Project, e.Object, b)
+	query := `INSERT INTO log_events(time_ns, received_ns, category, priority, kind, project, object, data)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?`
+	args := []any{e.Time.UnixNano(), e.Received.UnixNano(), e.Category, p, e.Kind, e.Project, e.Object, b}
+	if reconcile {
+		at := e.Time.Truncate(time.Millisecond)
+		query += ` WHERE NOT EXISTS (SELECT 1 FROM log_events WHERE time_ns>=? AND time_ns<? AND category=? AND kind=? AND project=? AND object=? AND data=?)`
+		args = append(args, at.UnixNano(), at.Add(time.Millisecond).UnixNano(), e.Category, e.Kind, e.Project, e.Object, b)
+	}
+	_, err = tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -113,8 +114,9 @@ type Log struct {
 	hooksMu sync.RWMutex
 	hooks   []func(Event)
 
-	path   string
-	budget *logstore.Store
+	path           string
+	budget         *logstore.Store
+	historyPending atomic.Bool
 	// Capture 独立采集规范化后的本机审计事实，旧库写失败仍会调用。
 	// 启动时设置，运行时不修改，不能递归写本 Log；旧库失败时 ID/哈希为空。
 	// 检测规则和旧外送继续使用仅在旧库提交成功后运行的 OnRecord。
@@ -142,6 +144,7 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Log, error) {
 		d.Close()
 		return nil, err
 	}
+	l.historyPending.Store(l.lastHash != "")
 	return l, nil
 }
 

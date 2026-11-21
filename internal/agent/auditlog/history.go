@@ -68,15 +68,9 @@ func (l *Log) MigrateHistory(ctx context.Context, dest *logstore.Store, through 
 				cursor = historyCursor{}
 				break
 			}
-			found, err := alreadyCaptured(ctx, dest, e)
-			if err != nil {
+			if err := dest.ImportCheckpoint(ctx, logstore.Event{Time: e.Time, Category: logstore.Audit,
+				Kind: "node." + e.Action, Object: e.Target, Data: e}, historyCheckpoint, struct{ Seq int64 }{e.Seq}); err != nil {
 				return err
-			}
-			if !found {
-				if err := dest.RecordCheckpoint(ctx, logstore.Event{Time: e.Time, Category: logstore.Audit,
-					Kind: "node." + e.Action, Object: e.Target, Data: e}, historyCheckpoint, struct{ Seq int64 }{e.Seq}); err != nil {
-					return err
-				}
 			}
 			after = e.Seq
 		}
@@ -88,32 +82,6 @@ func (l *Log) MigrateHistory(ctx context.Context, dest *logstore.Store, through 
 	}
 	l.historyPending.Store(false)
 	return nil
-}
-
-func alreadyCaptured(ctx context.Context, dest *logstore.Store, e Event) (bool, error) {
-	f := logstore.Filter{Category: logstore.Audit, From: e.Time, To: e.Time.Add(time.Nanosecond), Limit: 1000}
-	for {
-		rows, err := dest.Query(ctx, f)
-		if err != nil {
-			return false, err
-		}
-		for _, row := range rows {
-			if row.Kind != "node."+e.Action {
-				continue
-			}
-			var old struct{ Seq int64 }
-			if err := json.Unmarshal(row.Data.(json.RawMessage), &old); err != nil {
-				return false, err
-			}
-			if old.Seq == e.Seq {
-				return true, nil
-			}
-		}
-		if len(rows) < f.Limit {
-			return false, nil
-		}
-		f.After = rows[len(rows)-1].Seq
-	}
 }
 
 // The in-memory offset avoids rescanning each file for every 64-record batch.

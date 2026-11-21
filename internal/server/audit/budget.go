@@ -22,7 +22,7 @@ func (l *Log) UseBudget(ctx context.Context, budget *logstore.Store, replica boo
 		Name: l.path, Priority: 4, Size: func() (int64, error) { return logstore.FileBytes(l.path) },
 		Trim: func(ctx context.Context) (bool, error) {
 			// A replica cannot append its own prune records into the primary's ID space.
-			if replica || !reclaimable.Load() {
+			if replica || !reclaimable.Load() || l.historyPending.Load() {
 				return false, nil
 			}
 			var id int64

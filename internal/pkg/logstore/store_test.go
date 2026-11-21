@@ -207,6 +207,33 @@ func TestHistoryAndCheckpointCommitTogetherAcrossRestart(t *testing.T) {
 	}
 }
 
+func TestImportReconcilesHistoryWithoutCollapsingIdenticalLiveFacts(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	e := logstore.Event{Time: time.Date(2026, 11, 20, 1, 2, 3, 123456789, time.UTC),
+		Category: logstore.Audit, Kind: "panel.Deploy", Data: map[string]any{"id": 7, "time": 123}}
+	record(t, s, e)
+	old := e
+	old.Time = e.Time.Truncate(time.Millisecond)
+	if err := s.ImportCheckpoint(t.Context(), old, "legacy", 7); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(query(t, s, logstore.Filter{})); got != 1 {
+		t.Fatalf("millisecond legacy copy duplicated live fact: %d", got)
+	}
+	if b, err := s.Checkpoint(t.Context(), "legacy"); err != nil || string(b) != "7" {
+		t.Fatalf("reconciliation did not commit source position: %s %v", b, err)
+	}
+	// Same timestamp and payload is not enough to discard a live observation.
+	record(t, s, e)
+	old.Data = map[string]any{"id": 8, "time": 123}
+	if err := s.ImportCheckpoint(t.Context(), old, "legacy", 8); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(query(t, s, logstore.Filter{})); got != 3 {
+		t.Fatalf("distinct historical or identical live facts collapsed: %d", got)
+	}
+}
+
 func BenchmarkLocalJournal(b *testing.B) {
 	s, err := logstore.Open(context.Background(), filepath.Join(b.TempDir(), "logs.db"), 8<<20)
 	if err != nil {

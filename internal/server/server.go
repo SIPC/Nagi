@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -85,12 +84,13 @@ type Server struct {
 	auth  *auth.Service
 	audit *audit.Log
 	// auditReplica 是备用面板从主面板同步来的审计库（界面上看的是它），主面板上为 nil。
-	auditReplica *audit.Log
-	recordings   *audit.Recordings
-	nodes        *nodes.Registry
-	projects     *projects.Service
-	sealer       *sealer.Sealer
-	domainCh     chan string
+	auditReplica     *audit.Log
+	auditHistoryHead int64
+	recordings       *audit.Recordings
+	nodes            *nodes.Registry
+	projects         *projects.Service
+	sealer           *sealer.Sealer
+	domainCh         chan string
 
 	// 主备面板（见 docs/standby.md）：本面板是主面板时 primary 给备用面板发数据；是备用面板时 standby 不为空。
 	primary *standby.Primary
@@ -278,15 +278,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
+	if s.auditHistoryHead, err = s.audit.HistoryHead(ctx); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("读取面板旧审计迁移边界: %w", err)
+	}
 	s.audit.Capture = func(e audit.Event) {
-		category := logstore.Audit
-		if e.Category == audit.Security {
-			category = logstore.Security
-		} else if e.Category == audit.Alert {
-			category = logstore.Alert
-		}
-		s.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: category, Kind: "panel." + e.Action,
-			Project: e.ProjectID, Object: e.TargetID, Data: json.RawMessage(audit.Canonical(e))})
+		s.cfg.Logs.Report(audit.JournalEvent(e))
 	}
 	for _, l := range []*audit.Log{s.audit, s.auditReplica} {
 		if l != nil {
@@ -471,6 +468,17 @@ func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if s.cfg.Logs != nil {
+		historyCtx, stopHistory := context.WithCancel(ctx)
+		historyDone := make(chan struct{})
+		go func() {
+			defer close(historyDone)
+			if err := s.audit.MigrateHistory(historyCtx, s.cfg.Logs, s.auditHistoryHead); err != nil && historyCtx.Err() == nil {
+				s.log.Error("面板旧审计迁移未完成，保留原库和已提交位置", "err", err)
+			}
+		}()
+		defer func() { stopHistory(); <-historyDone }()
+	}
 	if s.standby != nil {
 		go s.standby.Run(ctx)
 		go s.standby.RunAudit(ctx, s.auditReplica, s.recordings)
