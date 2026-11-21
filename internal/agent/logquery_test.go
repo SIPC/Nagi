@@ -2,15 +2,20 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
+	"github.com/SIPC/nagi/internal/agent/nodefiles"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
@@ -137,6 +142,78 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 		}
 	}
 	recordingID := exerciseRecordingCapture(t, ctx, a, legacy, client)
+	if nodeAccessSupported() {
+		t.Run("chunk history over mesh", func(t *testing.T) {
+			a.files = &nodefiles.Service{StagingDir: filepath.Join(t.TempDir(), "staging"), BackupDir: t.TempDir()}
+			path := filepath.Join(t.TempDir(), "uploaded")
+			ref := &nagiv1.NodeFileRef{Path: path}
+			mc := nagiv1.NewMeshServiceClient(cc)
+			begin := &nagiv1.UploadBeginRequest{Node: ref, Size: 7, Key: "do-not-log-this-fingerprint"}
+			session, err := mc.NodeFileUploadBegin(ctx, begin)
+			if err != nil {
+				t.Fatal(err)
+			}
+			part := func(hash string) error {
+				stream, err := mc.NodeFileUploadPart(ctx)
+				if err != nil {
+					return err
+				}
+				if err := stream.Send(&nagiv1.UploadPartChunk{Node: ref, Id: session.Id, Sha256: hash, Data: []byte("payload")}); err != nil {
+					return err
+				}
+				_, err = stream.CloseAndRecv()
+				return err
+			}
+			if err := part(strings.Repeat("0", 64)); status.Code(err) != codes.DataLoss {
+				t.Fatalf("bad hash: %v", err)
+			}
+			hash := sha256.Sum256([]byte("payload"))
+			if err := part(hex.EncodeToString(hash[:])); err != nil {
+				t.Fatal(err)
+			}
+			again, err := mc.NodeFileUploadBegin(ctx, begin)
+			if err != nil || again.GetOffset() != 7 {
+				t.Fatalf("resume: %+v %v", again, err)
+			}
+			if _, err := mc.NodeFileUploadCommit(ctx, &nagiv1.UploadCommitRequest{Node: ref, Id: session.Id, Sha256: hex.EncodeToString(hash[:])}); err != nil {
+				t.Fatal(err)
+			}
+			if b, err := os.ReadFile(path); err != nil || string(b) != "payload" {
+				t.Fatalf("file: %q %v", b, err)
+			}
+			history, err := client.QueryLogs(ctx, &nagiv1.LogQuery{Category: logstore.Task})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var seen []string
+			for _, row := range history.GetEntries() {
+				if row.GetKind() != "files.upload" {
+					continue
+				}
+				body := string(row.DataJson)
+				if strings.Contains(body, "do-not-log-this-fingerprint") || strings.Contains(body, `"payload"`) {
+					t.Fatalf("leaked upload: %s", body)
+				}
+				var data struct {
+					Action, Result string
+					Stored         *int64 `json:"stored_offset"`
+				}
+				if err := json.Unmarshal(row.DataJson, &data); err != nil {
+					t.Fatal(err)
+				}
+				seen = append(seen, data.Action+":"+data.Result)
+				if data.Result == "failed" && data.Stored != nil {
+					t.Fatalf("failed chunk confirmed: %s", body)
+				}
+				if data.Action == "node.part" && data.Result == "ok" && (data.Stored == nil || *data.Stored != 7) {
+					t.Fatalf("offset: %s", body)
+				}
+			}
+			if strings.Join(seen, ",") != "node.begin:ok,node.part:failed,node.part:ok,node.begin:ok,node.commit:ok" {
+				t.Fatalf("history: %v", seen)
+			}
+		})
+	}
 	if _, err := id.removePanel("panel-fp", true, nil); err != nil {
 		t.Fatal(err)
 	}

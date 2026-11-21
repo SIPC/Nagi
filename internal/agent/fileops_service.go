@@ -162,6 +162,17 @@ func (s *agentService) ListNodeDirSizes(ctx context.Context, req *nagiv1.NodeDir
 
 var errNoTarget = status.Error(codes.InvalidArgument, "缺少上传的目标")
 
+// uploadHistory records the local operation, not delivery of its RPC response.
+// Do not copy file contents, the resumable fingerprint or full request parameters.
+func (s *meshService) uploadHistory(action, project, object, id string, data map[string]any, err error) {
+	data["action"], data["upload_id"], data["result"] = action, id, "ok"
+	if err != nil {
+		data["result"], data["error"] = "failed", err.Error()
+		delete(data, "stored_offset")
+	}
+	s.a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "files.upload", Project: project, Object: object, Data: data})
+}
+
 // partReader 把 UploadPart 的消息拼成一个流：先是第一条里的内容，再是后面各条的。
 func partReader(first *nagiv1.UploadPartChunk, recv func() (*nagiv1.UploadPartChunk, error)) *io.PipeReader {
 	pr, pw := io.Pipe()
@@ -198,6 +209,7 @@ func (s *meshService) VolumeUploadBegin(ctx context.Context, req *nagiv1.UploadB
 		return nil, toStatus(err)
 	}
 	info, err := s.a.projects.BeginVolumeUpload(ctx, ref, req.GetSize(), req.GetKey())
+	s.uploadHistory("volume.begin", ref.GetProjectId(), ref.GetContainer(), info.ID, map[string]any{"size": req.GetSize(), "stored_offset": info.Offset}, err)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -225,6 +237,11 @@ func (s *meshService) VolumeUploadPart(stream nagiv1.MeshService_VolumeUploadPar
 	pr := partReader(first, stream.Recv)
 	n, err := s.a.projects.AppendVolumeUpload(stream.Context(), ref, first.GetId(), first.GetOffset(), first.GetSha256(), pr)
 	pr.Close()
+	data := map[string]any{"requested_offset": first.GetOffset()}
+	if err == nil {
+		data["stored_offset"] = n
+	}
+	s.uploadHistory("volume.part", ref.GetProjectId(), ref.GetContainer(), first.GetId(), data, err)
 	if err != nil {
 		return toStatus(err)
 	}
@@ -244,6 +261,7 @@ func (s *meshService) VolumeUploadCommit(ctx context.Context, req *nagiv1.Upload
 		return nil, toStatus(err)
 	}
 	n, err := s.a.projects.CommitVolumeUpload(ctx, ref, req.GetId(), req.GetSha256(), check)
+	s.uploadHistory("volume.commit", ref.GetProjectId(), ref.GetContainer(), req.GetId(), map[string]any{"size": n}, err)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -257,7 +275,9 @@ func (s *meshService) VolumeUploadAbort(ctx context.Context, req *nagiv1.UploadA
 	if req.GetVolume() == nil {
 		return nil, errNoTarget
 	}
-	if err := s.a.projects.AbortVolumeUpload(ctx, req.GetVolume(), req.GetId()); err != nil {
+	err := s.a.projects.AbortVolumeUpload(ctx, req.GetVolume(), req.GetId())
+	s.uploadHistory("volume.abort", req.GetVolume().GetProjectId(), req.GetVolume().GetContainer(), req.GetId(), map[string]any{}, err)
+	if err != nil {
 		return nil, toStatus(err)
 	}
 	return &nagiv1.UploadSession{Id: req.GetId()}, nil
@@ -271,6 +291,7 @@ func (s *meshService) NodeFileUploadBegin(ctx context.Context, req *nagiv1.Uploa
 		return nil, errNoTarget
 	}
 	info, err := s.a.files.BeginUpload(req.GetNode().GetPath(), req.GetConfirmed(), req.GetSize(), req.GetKey())
+	s.uploadHistory("node.begin", "", "", info.ID, map[string]any{"size": req.GetSize(), "stored_offset": info.Offset}, err)
 	if err != nil {
 		return nil, err
 	}
@@ -296,6 +317,11 @@ func (s *meshService) NodeFileUploadPart(stream nagiv1.MeshService_NodeFileUploa
 	pr := partReader(first, stream.Recv)
 	n, err := s.a.files.AppendUpload(first.GetNode().GetPath(), first.GetId(), first.GetOffset(), first.GetSha256(), pr)
 	pr.Close()
+	data := map[string]any{"requested_offset": first.GetOffset()}
+	if err == nil {
+		data["stored_offset"] = n
+	}
+	s.uploadHistory("node.part", "", "", first.GetId(), data, err)
 	if err != nil {
 		return err
 	}
@@ -310,6 +336,7 @@ func (s *meshService) NodeFileUploadCommit(ctx context.Context, req *nagiv1.Uplo
 		return nil, errNoTarget
 	}
 	n, err := s.a.files.CommitUpload(req.GetNode().GetPath(), req.GetConfirmed(), req.GetId(), req.GetSha256())
+	s.uploadHistory("node.commit", "", "", req.GetId(), map[string]any{"size": n}, err)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +350,9 @@ func (s *meshService) NodeFileUploadAbort(ctx context.Context, req *nagiv1.Uploa
 	if req.GetNode() == nil {
 		return nil, errNoTarget
 	}
-	if err := s.a.files.AbortUpload(req.GetNode().GetPath(), req.GetId()); err != nil {
+	err := s.a.files.AbortUpload(req.GetNode().GetPath(), req.GetId())
+	s.uploadHistory("node.abort", "", "", req.GetId(), map[string]any{}, err)
+	if err != nil {
 		return nil, err
 	}
 	return &nagiv1.UploadSession{Id: req.GetId()}, nil
