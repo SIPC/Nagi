@@ -499,6 +499,7 @@ type Stats struct {
 	MemLimit    uint64
 	NetRx       uint64 // 累计字节
 	NetTx       uint64
+	Details     map[string]float64 // 仅实际提供的实例细分数据，缺项不补零。
 }
 
 // ContainerStats 对容器做一次资源采样（不等待，不连续输出）。
@@ -509,7 +510,25 @@ func (d *Client) ContainerStats(ctx context.Context, id string) (Stats, error) {
 	}
 	defer res.Body.Close()
 	var s container.StatsResponse
-	if err := json.NewDecoder(res.Body).Decode(&s); err != nil {
+	var raw json.RawMessage
+	if err := json.NewDecoder(res.Body).Decode(&raw); err != nil {
+		return Stats{}, err
+	}
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return Stats{}, err
+	}
+	// Raw leaves distinguish an explicitly measured zero from an absent
+	// cgroup feature. Keep existing aggregate behavior unchanged below.
+	var detail struct {
+		CPU struct {
+			Usage    map[string]json.RawMessage `json:"cpu_usage"`
+			Throttle map[string]json.RawMessage `json:"throttling_data"`
+		} `json:"cpu_stats"`
+		Memory   map[string]json.RawMessage            `json:"memory_stats"`
+		Pids     map[string]json.RawMessage            `json:"pids_stats"`
+		Networks map[string]map[string]json.RawMessage `json:"networks"`
+	}
+	if err := json.Unmarshal(raw, &detail); err != nil {
 		return Stats{}, err
 	}
 	out := Stats{
@@ -518,6 +537,46 @@ func (d *Client) ContainerStats(ctx context.Context, id string) (Stats, error) {
 		OnlineCPUs:  s.CPUStats.OnlineCPUs,
 		MemUsed:     s.MemoryStats.Usage,
 		MemLimit:    s.MemoryStats.Limit,
+		Details:     map[string]float64{},
+	}
+	selected := map[string]json.RawMessage{}
+	for field, name := range map[string]string{"total_usage": "cpu_nanoseconds_total", "usage_in_usermode": "cpu_user_nanoseconds_total", "usage_in_kernelmode": "cpu_kernel_nanoseconds_total"} {
+		selected[name] = detail.CPU.Usage[field]
+	}
+	for field, name := range map[string]string{"periods": "cpu_periods_total", "throttled_periods": "cpu_throttled_periods_total", "throttled_time": "cpu_throttled_nanoseconds_total"} {
+		selected[name] = detail.CPU.Throttle[field]
+	}
+	selected["pids"] = detail.Pids["current"]
+	selected["pids_limit"] = detail.Pids["limit"]
+	for field, name := range map[string]string{"usage": "memory_usage_bytes", "max_usage": "memory_peak_bytes", "limit": "memory_limit_bytes", "failcnt": "memory_limit_hits_total"} {
+		selected[name] = detail.Memory[field]
+	}
+	for iface, values := range detail.Networks {
+		for _, field := range []string{"rx_bytes", "tx_bytes", "rx_packets", "tx_packets", "rx_errors", "tx_errors", "rx_dropped", "tx_dropped"} {
+			selected["interface@"+iface+":"+field+"_total"] = values[field]
+		}
+	}
+	for name, raw := range selected {
+		if len(raw) == 0 {
+			continue
+		}
+		var n *uint64
+		if err := json.Unmarshal(raw, &n); err != nil {
+			return Stats{}, err
+		}
+		if n != nil {
+			out.Details[name] = float64(*n)
+		}
+	}
+	for name, entries := range map[string][]container.BlkioStatEntry{"io_bytes": s.BlkioStats.IoServiceBytesRecursive,
+		"io_ops": s.BlkioStats.IoServicedRecursive, "io_service_nanoseconds": s.BlkioStats.IoServiceTimeRecursive,
+		"io_wait_nanoseconds": s.BlkioStats.IoWaitTimeRecursive} {
+		for _, entry := range entries {
+			op := strings.ToLower(entry.Op)
+			if op == "read" || op == "write" {
+				out.Details[fmt.Sprintf("device@%d.%d:%s_%s_total", entry.Major, entry.Minor, name, op)] = float64(entry.Value)
+			}
+		}
 	}
 	// 页缓存可以被回收，不算作占用（cgroup v2 叫 inactive_file，v1 叫 cache）。
 	if c, ok := s.MemoryStats.Stats["inactive_file"]; ok && c < out.MemUsed {

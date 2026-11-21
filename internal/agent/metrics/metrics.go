@@ -263,9 +263,15 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 				continue
 			}
 			st, err := c.docker.ContainerStats(ctx, ct.ID)
+			instance := "i:" + ct.Project + "/" + ct.Container + "/" + ct.Service + "/" + ct.ID + ":"
 			if err != nil {
+				v[instance+"available"] = 0
 				missing[key] = true
 				continue
+			}
+			v[instance+"available"] = 1
+			for metric, value := range st.Details {
+				v[instance+metric] = value
 			}
 			seen[ct.ID] = true
 			v[prefix+"mem"] += float64(st.MemUsed)
