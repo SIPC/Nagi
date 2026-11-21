@@ -122,42 +122,63 @@ func TestRelocateKeepsWholeChainAndDeletesOriginalOnce(t *testing.T) {
 	if got, err := Relocate(ctx, old, dst, logs); err != nil || got != dst {
 		t.Fatalf("rerun: %s %v", got, err)
 	}
-	if k := kinds(t, logs, "legacy.cleanup.audit."); strings.Join(k, ",") != "legacy.cleanup.audit.copied,legacy.cleanup.audit.deleting,legacy.cleanup.audit.done" {
+	if k := kinds(t, logs, "legacy.cleanup.audit."); strings.Join(k, ",") != "legacy.cleanup.audit.moved" {
 		t.Fatalf("deletion log: %v", k)
 	}
 }
 
-// A tampered original is never moved or deleted: the panel keeps using it and
-// verification keeps reporting the tampered record.
+// A tampered chain is never destroyed or laundered. Renamed on the same file
+// system, its bytes are unchanged and the background check reports the tampered
+// record; copied across file systems, the original stays and nothing is logged
+// as moved or deleted.
 func TestRelocateKeepsTamperedOriginal(t *testing.T) {
 	ctx := t.Context()
 	dir := t.TempDir()
+	tamper := func(path string) []byte {
+		legacyChain(t, path, 40)
+		d, err := db.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := d.Exec(`UPDATE events SET actor_name='mallory' WHERE id=(SELECT max(id)-3 FROM events)`); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = d.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+		d.Close()
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
 	old := filepath.Join(dir, "audit.db")
 	dst := filepath.Join(dir, "new", "audit.db")
-	legacyChain(t, old, 40)
-	d, err := db.Open(old)
-	if err != nil {
-		t.Fatal(err)
+	before := tamper(old)
+	got, err := Relocate(ctx, old, dst, journal(t))
+	if err != nil || got != dst {
+		t.Fatalf("rename: %s %v", got, err)
 	}
-	if _, err := d.Exec(`UPDATE events SET actor_name='mallory' WHERE id=(SELECT max(id)-3 FROM events)`); err != nil {
-		t.Fatal(err)
+	if after, _ := os.ReadFile(dst); !bytes.Equal(before, after) {
+		t.Fatal("rename changed the tampered file")
 	}
-	d.Close()
-	logs := journal(t)
-	got, err := Relocate(ctx, old, dst, logs)
-	if err == nil || got != old || !strings.Contains(err.Error(), "可能被修改过") {
-		t.Fatalf("tampered chain must stay in place with an error: %s %v", got, err)
+	if err := VerifyMoved(ctx, dst); err == nil || !strings.Contains(err.Error(), "可能被修改过") {
+		t.Fatalf("tampering must be reported after the move: %v", err)
 	}
-	for _, p := range []string{dst, dst + ".tmp"} {
+
+	cold := filepath.Join(dir, "c", "audit.db")
+	cdst := filepath.Join(dir, "c-new", "audit.db")
+	tamper(cold)
+	if _, err := copyVerified(ctx, cold, cdst, func(ChainSummary) error { return nil }); err == nil || !strings.Contains(err.Error(), "可能被修改过") {
+		t.Fatalf("copy must refuse a tampered chain: %v", err)
+	}
+	for _, p := range []string{cdst, cdst + ".tmp"} {
 		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("%s must not exist", p)
 		}
 	}
-	if _, err := os.Stat(old); err != nil {
+	if _, err := os.Stat(cold); err != nil {
 		t.Fatal("tampered original deleted")
-	}
-	if k := kinds(t, logs, "legacy.cleanup.audit."); len(k) != 0 {
-		t.Fatalf("nothing may be logged as moved or deleted: %v", k)
 	}
 }
 

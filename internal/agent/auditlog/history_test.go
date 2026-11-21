@@ -162,16 +162,14 @@ func TestLegacyImportStopsAtCorruptionAndResumes(t *testing.T) {
 }
 
 // Deletion happens only after verification, and is logged once. A mismatch
-// keeps the files; so does an unfinished unified-log copy.
+// keeps the files.
 func TestCleanupLegacyOnlyAfterVerification(t *testing.T) {
 	dir := t.TempDir()
 	legacyDir := filepath.Join(dir, "audit")
 	writeLegacy(t, legacyDir, 1, 90)
 	logs := journalStore(t)
 	l := openTest(t, dir)
-	if err := l.CleanupLegacy(t.Context(), logs, false); err == nil || len(files(legacyDir)) == 0 {
-		t.Fatal("must wait for the unified-log copy")
-	}
+
 	// A legacy line edited after the import no longer matches the store.
 	path := filepath.Join(legacyDir, current)
 	b, _ := os.ReadFile(path)
@@ -179,19 +177,19 @@ func TestCleanupLegacyOnlyAfterVerification(t *testing.T) {
 	if err := os.WriteFile(path, edited, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := l.CleanupLegacy(t.Context(), logs, true); err == nil || len(files(legacyDir)) == 0 {
+	if err := l.CleanupLegacy(t.Context(), logs); err == nil || len(files(legacyDir)) == 0 {
 		t.Fatalf("mismatching files deleted: %v", err)
 	}
 	if err := os.WriteFile(path, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := l.CleanupLegacy(t.Context(), logs, true); err != nil {
+	if err := l.CleanupLegacy(t.Context(), logs); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(legacyDir); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("legacy directory left behind")
 	}
-	if err := l.CleanupLegacy(t.Context(), logs, true); err != nil {
+	if err := l.CleanupLegacy(t.Context(), logs); err != nil {
 		t.Fatal(err)
 	}
 	rows, _ := logs.Query(t.Context(), logstore.Filter{KindPrefix: "legacy.cleanup.node.audit.", Limit: 10})
@@ -215,7 +213,7 @@ func TestCleanupLegacyResumesAndCarriesRollbackLines(t *testing.T) {
 	if err := os.Remove(filepath.Join(legacyDir, rotated(legacyDir)[0])); err != nil { // killed after one removal
 		t.Fatal(err)
 	}
-	if err := l.CleanupLegacy(t.Context(), logs, true); err != nil {
+	if err := l.CleanupLegacy(t.Context(), logs); err != nil {
 		t.Fatal(err)
 	}
 	l.Record(Event{Action: "new"})
@@ -224,7 +222,7 @@ func TestCleanupLegacyResumesAndCarriesRollbackLines(t *testing.T) {
 	writeLegacy(t, legacyDir, 91, 92)
 	rollback, _ := os.ReadFile(filepath.Join(legacyDir, current))
 	l = openTest(t, dir)
-	if err := l.CleanupLegacy(t.Context(), logs, true); err != nil {
+	if err := l.CleanupLegacy(t.Context(), logs); err != nil {
 		t.Fatal(err)
 	}
 	lines, _, _ := l.After(0, 1000)
@@ -244,10 +242,15 @@ func TestCleanupLegacyResumesAndCarriesRollbackLines(t *testing.T) {
 	}
 }
 
-// The unified-log copy is resumable and skips chain bookkeeping records.
+// The unified-log copy is resumable, skips chain bookkeeping records, and
+// records sequences missing from the store as an explicit gap.
 func TestHistoryCopyResumesWithoutDuplicates(t *testing.T) {
 	dir := t.TempDir()
 	writeLegacy(t, filepath.Join(dir, "audit"), 1, 70)
+	// The oldest rotated file (1-40) was deleted by the old version.
+	if err := os.Remove(filepath.Join(dir, "audit", rotated(filepath.Join(dir, "audit"))[0])); err != nil {
+		t.Fatal(err)
+	}
 	l := openTest(t, dir)
 	dest := journalStore(t)
 	through := l.Seq()
@@ -260,8 +263,12 @@ func TestHistoryCopyResumesWithoutDuplicates(t *testing.T) {
 		t.Fatal("not marked done")
 	}
 	rows, err := dest.Query(t.Context(), logstore.Filter{Category: logstore.Audit, Limit: 1000})
-	if err != nil || len(rows) != 70 {
+	if err != nil || len(rows) != 30 {
 		t.Fatalf("lost or duplicated: %d %v", len(rows), err)
+	}
+	gaps, err := dest.Query(t.Context(), logstore.Filter{KindPrefix: "legacy.audit.gap", Limit: 10})
+	if err != nil || len(gaps) != 1 || !strings.Contains(string(gaps[0].Data.(json.RawMessage)), `"to":40`) {
+		t.Fatalf("missing sequences must be recorded once as a gap: %+v %v", gaps, err)
 	}
 	var e Event
 	if err := json.Unmarshal(rows[0].Data.(json.RawMessage), &e); err != nil || e.Detail != "[已隐藏]" {

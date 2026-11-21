@@ -179,13 +179,17 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 		defer func() { l.Capture(e) }()
 	}
 	persistCtx := context.WithoutCancel(ctx)
+	// The capacity gate is shared with every log writer; waiting for it is
+	// bounded so a busy log disk cannot stall the request. Once inside, the
+	// insert itself runs to completion: cancelling it would drop the record.
+	gateCtx := persistCtx
 	if l.budget != nil {
 		var cancel context.CancelFunc
-		persistCtx, cancel = context.WithTimeout(persistCtx, 500*time.Millisecond)
+		gateCtx, cancel = context.WithTimeout(persistCtx, 5*time.Second)
 		defer cancel()
 	}
 	var id int64
-	err := l.budget.WriteArchive(persistCtx, 4, 64<<10, func() error {
+	err := l.budget.WriteArchive(gateCtx, 4, 64<<10, func() error {
 		var err error
 		id, err = l.insert(persistCtx, &e)
 		if err == nil && l.budget != nil {

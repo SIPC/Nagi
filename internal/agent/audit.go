@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/auditlog"
@@ -55,25 +56,29 @@ func (a *agent) openAudit(ctx context.Context) func() {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); l.PruneLoop(ctx) }()
 	go func() {
-		defer close(done)
-		defer l.Close()
-		go l.PruneLoop(ctx)
+		defer wg.Done()
 		if err := l.MigrateHistory(ctx, a.cfg.Logs, through); err != nil && ctx.Err() == nil {
-			a.log.Error("节点审计的统一日志副本未导入完，保留旧文件和已提交位置", "err", err)
+			a.log.Error("节点审计的统一日志副本未导入完，保留已提交位置，下次启动继续", "err", err)
 		}
+	}()
+	go func() {
+		defer wg.Done()
 		select {
 		case <-ctx.Done():
 			return
 		case <-a.panelReached:
 		}
-		if err := l.CleanupLegacy(ctx, a.cfg.Logs, auditlog.HistoryDone(ctx, a.cfg.Logs, through)); err != nil && ctx.Err() == nil {
+		if err := l.CleanupLegacy(ctx, a.cfg.Logs); err != nil && ctx.Err() == nil {
 			a.log.Error("节点旧审计文件未删除：核对没有通过，已保留，下次启动重试", "err", err)
 		} else if err == nil && ctx.Err() == nil {
 			a.log.Info("节点旧审计文件已核对并删除")
 		}
-		<-ctx.Done()
 	}()
+	go func() { defer close(done); wg.Wait(); l.Close() }()
 	return func() { cancel(); <-done }
 }
 

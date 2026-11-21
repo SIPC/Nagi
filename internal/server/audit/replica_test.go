@@ -1,10 +1,16 @@
 package audit
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -106,5 +112,95 @@ func TestReplicaRecordingsFromDatabase(t *testing.T) {
 	var out bytes.Buffer
 	if err := recS.Read(s.ID, func(b []byte) error { out.Write(b); return nil }); err != nil || !bytes.Contains(out.Bytes(), []byte("replicated from the database")) {
 		t.Fatalf("standby cannot replay the replicated recording: %v", err)
+	}
+}
+
+// External delivery continues across failover without gaps or duplicates: the
+// standby receives the primary's sink cursor with the replication stream and
+// the promoted panel ships from there, including records the old primary had
+// not delivered yet and those written by the promotion. A cursor ahead of what
+// the replica holds is clamped, so missing records are never marked sent.
+func TestReplicaCarriesSinkCursorAcrossPromotion(t *testing.T) {
+	ctx := context.Background()
+	var mu sync.Mutex
+	got := map[float64]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		sc := bufio.NewScanner(r.Body)
+		for sc.Scan() {
+			var m map[string]any
+			if json.Unmarshal(sc.Bytes(), &m) == nil && m["type"] == nil {
+				got[m["id"].(float64)]++
+			}
+		}
+	}))
+	defer srv.Close()
+	sk := SinkConfig{ID: "h", Type: "http", URL: srv.URL}
+
+	primary, standby := openTestLog(t), openTestLog(t)
+	sync := func() {
+		for {
+			_, frame, err := primary.ReadBatch(ctx, standby.MaxID(ctx), 50, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := standby.MaxID(ctx)
+			if _, err := standby.ApplyFrame(ctx, frame, nil); err != nil {
+				t.Fatal(err)
+			}
+			if standby.MaxID(ctx) == before {
+				break
+			}
+		}
+		if _, err := standby.ApplyFrame(ctx, CursorFrame(primary.SinkCursors(ctx)), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	primary.Record(ctx, Event{Category: Operation, Action: "BeforeSink"})
+	sh := &Shipper{Log: primary}
+	sh.Configure(ctx, []SinkConfig{sk})
+	for range 20 {
+		primary.Record(ctx, Event{Category: Operation, Action: "Deploy"})
+	}
+	if !sh.Flush(primary.MaxID(ctx), 20*time.Second) {
+		t.Fatalf("primary did not deliver: %+v", sh.Status())
+	}
+	sh.Stop()
+	sync()
+	// Written on the primary after its last delivery, replicated, never sent.
+	for range 3 {
+		primary.Record(ctx, Event{Category: Operation, Action: "Undelivered"})
+	}
+	sync()
+
+	// A forged cursor beyond the replica's head is clamped to it.
+	if _, err := standby.ApplyFrame(ctx, CursorFrame(map[string]int64{"sink:h:cursor": 1 << 40}), nil); err != nil {
+		t.Fatal(err)
+	}
+	if v := standby.Meta(ctx, "sink:h:cursor"); v != strconv.FormatInt(standby.MaxID(ctx), 10) {
+		t.Fatalf("cursor past the replica's head: %s", v)
+	}
+	// Undo the forged cursor: in the real stream cursors come only from the primary.
+	_ = standby.SetMeta(ctx, "sink:h:cursor", "21")
+	standby.Close()
+	promoted, err := Open(ctx, standby.path, standby.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer promoted.Close()
+	promoted.Record(ctx, Event{Category: Operation, Action: "PromoteStandby"})
+	ps := &Shipper{Log: promoted}
+	ps.Configure(ctx, []SinkConfig{sk})
+	defer ps.Stop()
+	if !ps.Flush(promoted.MaxID(ctx), 20*time.Second) {
+		t.Fatalf("promoted panel did not deliver: %+v", ps.Status())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for id := int64(2); id <= promoted.MaxID(ctx); id++ {
+		if got[float64(id)] != 1 {
+			t.Fatalf("record %d delivered %d times across failover: %v", id, got[float64(id)], got)
+		}
 	}
 }

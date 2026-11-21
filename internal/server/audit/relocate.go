@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -20,8 +22,11 @@ import (
 // 审计库与业务库分离（见 docs/audit.md#存储保留与同步）：v0.37.1 起面板审计链在本机日志目录
 // <数据目录>/logs/audit/ 下，不在面板目录（业务库、主备快照）旁边。升级时把面板目录里的旧审计库整份搬过去：
 //
-//   - 用 VACUUM INTO 复制：原 id、prev_hash、hash、墓碑、清理记录和外送游标原样保留，不重算哈希，旧链完整接上；
-//   - 副本独立通过整条链的校验、并且和原库逐行一致（摘要相同），先把原库的摘要记进检查点，再把副本改名为正式文件；
+//   - 同一个文件系统上：先把预写日志合并进主文件，再整个改名过去（原子操作，被杀时文件只在两处之一）。文件的字节不变，
+//     原 id、prev_hash、hash、墓碑、清理记录和外送游标原样保留，不重算哈希，旧链完整接上；什么都没删，所以不必先校验，
+//     入口不等：面板起来以后在后台校验整条链（VerifyMoved），不通过时日志页提示，文件原样保留。
+//   - 跨文件系统时用 VACUUM INTO 复制：副本独立通过整条链的校验、并且和原库逐行一致（摘要相同），先把原库的摘要记进
+//     检查点，再把副本改名为正式文件；
 //   - 正式文件已在时，只要原库仍与检查点里的摘要一致，就记日志、删除原库；不一致（例如退回旧版本后又写过一条新链）
 //     时返回 ErrWrittenAfterMove，调用方把它当作另一份归档（audit-rollback-*.db）同样核验后搬走。
 //   - 任何一步之间被杀都安全：正式文件不在就丢掉临时副本重来；在就以它为准，不再退回原库。
@@ -87,6 +92,16 @@ func Relocate(ctx context.Context, old, dst string, logs *logstore.Store) (strin
 		}
 	}
 	if !haveDst {
+		// Same file system: rename the file itself. Its bytes, and so every id,
+		// hash, tombstone and cursor, stay exactly as they were; nothing is
+		// deleted, so no copy has to be verified first. The chain is verified
+		// in the background afterwards (VerifyMoved).
+		if err := renameDB(old, dst); err == nil {
+			return dst, logs.RecordCheckpoint(ctx, logstore.Event{Category: logstore.System, Kind: "legacy.cleanup.audit.moved",
+				Object: filepath.Base(old), Data: map[string]any{"from": old, "to": dst}}, key, relocateState{Phase: "done"})
+		} else if !errors.Is(err, errCrossDevice) {
+			return old, err
+		}
 		sum, err := copyVerified(ctx, old, dst, func(sum ChainSummary) error {
 			st = relocateState{Phase: "copied", Digest: sum.Digest}
 			return logs.RecordCheckpoint(ctx, logstore.Event{Category: logstore.System, Kind: "legacy.cleanup.audit.copied",
@@ -113,6 +128,68 @@ func Relocate(ctx context.Context, old, dst string, logs *logstore.Store) (strin
 		return dst, ErrWrittenAfterMove
 	}
 	return dst, deleteOriginal(ctx, logs, key, old, dst, sum)
+}
+
+var errCrossDevice = errors.New("cross-device")
+
+func isCrossDevice(err error) bool {
+	var e syscall.Errno
+	if !errors.As(err, &e) {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return e == 17 // ERROR_NOT_SAME_DEVICE
+	}
+	return e == syscall.EXDEV
+}
+
+// renameDB folds the WAL into the main file and renames it to dst. A rename
+// is atomic: a kill leaves the file at exactly one of the two paths.
+func renameDB(old, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return err
+	}
+	d, err := db.Open(old)
+	if err != nil {
+		return err
+	}
+	_, err = d.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	if err = errors.Join(err, d.Close()); err != nil {
+		return err
+	}
+	if st, err := os.Stat(old + "-wal"); err == nil && st.Size() > 0 {
+		return fmt.Errorf("%s: 预写日志没能合并，暂不迁移", filepath.Base(old))
+	}
+	if err := os.Rename(old, dst); err != nil {
+		var le *os.LinkError
+		if errors.As(err, &le) && isCrossDevice(le.Err) {
+			return errCrossDevice
+		}
+		return err
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		_ = os.Remove(old + suffix)
+	}
+	for _, dir := range []string{filepath.Dir(dst), filepath.Dir(old)} {
+		if f, err := os.Open(dir); err == nil {
+			_ = f.Sync() // best effort: Windows cannot fsync a directory
+			f.Close()
+		}
+	}
+	return nil
+}
+
+// VerifyMoved verifies a chain that was moved by rename. It runs after the
+// panel is up; a failure is the same failure VerifyAudit reports.
+func VerifyMoved(ctx context.Context, path string) error {
+	r, err := VerifyFile(ctx, path)
+	if err != nil {
+		return err
+	}
+	if !r.OK() {
+		return fmt.Errorf("审计链校验失败：%s", r.Reason)
+	}
+	return nil
 }
 
 func pick(useDst bool, dst, old string) string {

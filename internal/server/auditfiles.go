@@ -63,6 +63,41 @@ func (s *Server) relocateAudit(ctx context.Context, dir string) error {
 	if logs == nil || dir == s.cfg.DataDir {
 		return nil
 	}
+	if err := s.relocateLegacyAudit(ctx, dir, logs); err != nil {
+		return err
+	}
+	return nil
+}
+
+// verifyMovedAudit verifies, after startup, every chain moved by rename this
+// start. Nothing was deleted by the move, so the entrance did not wait for it;
+// a chain that fails stays as it is and is reported on the log page.
+func (s *Server) verifyMovedAudit(ctx context.Context) {
+	if len(s.movedAudit) == 0 {
+		return
+	}
+	logs := s.cfg.Logs
+	var failures []error
+	for _, path := range s.movedAudit {
+		if err := audit.VerifyMoved(ctx, path); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			failures = append(failures, fmt.Errorf("%s: %w", filepath.Base(path), err))
+			continue
+		}
+		_ = logs.Record(ctx, logstore.Event{Category: logstore.System, Kind: "legacy.cleanup.audit.verified", Object: filepath.Base(path)})
+	}
+	if err := errors.Join(failures...); err != nil {
+		s.log.Error("迁移后的审计库校验不通过，文件原样保留，请检查是否被篡改", "err", err)
+		logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "failed", Error: err.Error()})
+		return
+	}
+	s.log.Info("迁移后的审计库整链校验通过", "count", len(s.movedAudit))
+	logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "complete"})
+}
+
+func (s *Server) relocateLegacyAudit(ctx context.Context, dir string, logs *logstore.Store) error {
 	var legacy []string
 	for _, pattern := range []string{"audit.db", "audit-standby.db", "audit-term*.db", "audit-standby-*.imported.db", "audit-rollback-*.db"} {
 		paths, err := filepath.Glob(filepath.Join(s.cfg.DataDir, pattern))
@@ -93,13 +128,16 @@ func (s *Server) relocateAudit(ctx context.Context, dir string) error {
 			failures = append(failures, fmt.Errorf("%s: %w", filepath.Base(old), err))
 			continue
 		}
-		s.log.Info("面板旧审计库已核验并迁到本机日志目录，原库已删除", "from", old, "to", dst)
+		s.movedAudit = append(s.movedAudit, dst)
+		s.log.Info("面板旧审计库已迁到本机日志目录", "from", old, "to", dst)
 	}
 	if err := errors.Join(failures...); err != nil {
 		s.log.Error("面板旧审计库迁移未完成，未核验通过的原库已保留并继续使用，下次启动重试", "err", err)
 		logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "failed", Error: err.Error()})
 		return nil
 	}
-	logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "complete"})
+	if len(s.movedAudit) == 0 {
+		logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "complete"})
+	}
 	return nil
 }

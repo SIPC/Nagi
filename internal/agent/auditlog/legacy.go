@@ -326,10 +326,11 @@ func (l *Log) appendRawLocked(ctx context.Context, e Event) error {
 func (l *Log) LegacyPending() bool { return l != nil && l.pending.Load() }
 
 // CleanupLegacy deletes the legacy files once the store verifies on its own and
-// holds every legacy line unchanged. historyDone reports whether the unified-log
-// copy of the legacy lines is complete. Call only after the upgrade is
-// confirmed, so an automatic rollback still finds its files.
-func (l *Log) CleanupLegacy(ctx context.Context, logs *logstore.Store, historyDone bool) (err error) {
+// holds every legacy line unchanged. The unified-log copy for the log page is
+// read from the store, not from these files, so it does not have to finish
+// first. Call only after the upgrade is confirmed, so an automatic rollback
+// still finds its files.
+func (l *Log) CleanupLegacy(ctx context.Context, logs *logstore.Store) (err error) {
 	if l == nil || l.legacy == "" || logs == nil || l.pending.Load() {
 		return nil
 	}
@@ -344,9 +345,7 @@ func (l *Log) CleanupLegacy(ctx context.Context, logs *logstore.Store, historyDo
 			logs.SetMigration(logstore.Migration{ID: CleanupID, Phase: "failed", Error: err.Error()})
 		}
 	}()
-	if !historyDone {
-		return errors.New("统一日志页的旧审计副本还没导入完，保留旧文件")
-	}
+
 	res, err := l.Verify(ctx)
 	if err != nil {
 		return err

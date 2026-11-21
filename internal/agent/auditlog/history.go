@@ -47,10 +47,26 @@ func (l *Log) MigrateHistory(ctx context.Context, dest *logstore.Store, through 
 			}
 			batch = append(batch, e)
 		}
+		// Sequences missing from the store (rotated out before the upgrade, or
+		// trimmed since) get an explicit record, not just a jump in position.
+		gapTo := through
+		if len(batch) > 0 {
+			gapTo = batch[0].Seq - 1
+		}
+		if gapTo > after {
+			if err := dest.RecordCheckpoint(ctx, logstore.Event{Category: logstore.System, Kind: "legacy.audit.gap",
+				Data: map[string]any{"from": after + 1, "to": gapTo, "source": "节点审计库中没有这些序号；被清理的序号在审计链上有墓碑"}}, historyCheckpoint, struct{ Seq int64 }{gapTo}); err != nil {
+				return err
+			}
+			after = gapTo
+		}
 		if len(batch) == 0 {
 			break
 		}
 		for _, e := range batch {
+			if e.Seq > after+1 {
+				break // re-read from here so this gap is recorded too
+			}
 			if e.Action == legacyImport || e.Action == actionPruned {
 				after = e.Seq
 				continue

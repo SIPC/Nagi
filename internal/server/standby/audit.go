@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"maps"
 	"net"
 	"time"
 
@@ -45,14 +46,21 @@ func (p *Primary) ServeAudit(ctx context.Context, conn *tls.Conn, log *audit.Log
 	}
 	cursor := hello.After
 	lastSent := time.Now()
+	var sentCursors map[string]int64
 	for ctx.Err() == nil {
 		batch, frame, err := log.ReadBatch(ctx, cursor, auditBatchSize, rec)
 		if err != nil {
 			return
 		}
 		if len(batch.Events) == 0 && len(batch.Tombstones) == 0 {
-			// 追上了：隔一会儿再看，期间发心跳。
-			if time.Since(lastSent) >= heartbeat {
+			// 追上了：隔一会儿再看。外送游标变了就发过去，否则按时发心跳。
+			if c := log.SinkCursors(ctx); len(c) > 0 && !maps.Equal(c, sentCursors) {
+				_ = conn.SetWriteDeadline(time.Now().Add(time.Minute))
+				if writeFrame(conn, audit.CursorFrame(c)) != nil {
+					return
+				}
+				sentCursors, lastSent = c, time.Now()
+			} else if time.Since(lastSent) >= heartbeat {
 				_ = conn.SetWriteDeadline(time.Now().Add(time.Minute))
 				if writeFrame(conn, nil) != nil {
 					return

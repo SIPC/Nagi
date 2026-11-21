@@ -86,7 +86,9 @@ type Server struct {
 	auth  *auth.Service
 	audit *audit.Log
 	// auditReplica 是备用面板从主面板同步来的审计库（界面上看的是它），主面板上为 nil。
-	auditReplica     *audit.Log
+	auditReplica *audit.Log
+	// movedAudit lists audit databases renamed into the log directory this start, verified in the background.
+	movedAudit       []string
 	auditHistoryHead int64
 	recordings       *audit.Recordings
 	nodes            *nodes.Registry
@@ -571,6 +573,7 @@ func (s *Server) Run(ctx context.Context) error {
 	} else if err := s.printSetupLink(ctx); err != nil {
 		return err
 	}
+	go s.verifyMovedAudit(ctx)
 	go s.auth.CleanupLoop(ctx)
 	// 证明证书的吊销列表（见 docs/android.md#吊销列表）：每天取一次、复查已添加的手机。备用面板只读，不复查。
 	if s.standby == nil {

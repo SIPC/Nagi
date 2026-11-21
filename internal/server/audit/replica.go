@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/recording"
@@ -161,11 +163,40 @@ func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tom
 	return nil
 }
 
-// wireBatch 是同步连接上的一帧。
+// wireBatch 是同步连接上的一帧。Cursors 是主面板各外送目标的游标（v0.37.1 起；旧版本没有这一项、也不读它）：
+// 提升以后接着这些位置外送，提升前主面板没送到的记录照常送出，送到的不重发。
 type wireBatch struct {
-	Events     []replicaEvent `json:"events,omitempty"`
-	Tombstones []Tombstone    `json:"tombstones,omitempty"`
-	Chunks     []Chunk        `json:"chunks,omitempty"`
+	Events     []replicaEvent   `json:"events,omitempty"`
+	Tombstones []Tombstone      `json:"tombstones,omitempty"`
+	Chunks     []Chunk          `json:"chunks,omitempty"`
+	Cursors    map[string]int64 `json:"cursors,omitempty"`
+}
+
+// SinkCursors returns the primary's external delivery cursors (meta sink:*),
+// sent to standbys with each frame.
+func (l *Log) SinkCursors(ctx context.Context) map[string]int64 {
+	rows, err := l.db.QueryContext(ctx, `SELECT key, value FROM meta WHERE key LIKE 'sink:%:cursor'`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := map[string]int64{}
+	for rows.Next() {
+		var k, v string
+		if rows.Scan(&k, &v) != nil {
+			continue
+		}
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			out[k] = n
+		}
+	}
+	return out
+}
+
+// CursorFrame is a frame carrying only delivery cursors.
+func CursorFrame(cursors map[string]int64) []byte {
+	b, _ := json.Marshal(wireBatch{Cursors: cursors})
+	return b
 }
 
 func marshalReplica(events []replicaEvent, b Batch) []byte {
@@ -184,6 +215,23 @@ func (l *Log) ApplyFrame(ctx context.Context, frame []byte, rec *Recordings) (in
 	}
 	if err := l.WriteBatch(ctx, w.Events, w.Tombstones, w.Chunks, rec); err != nil {
 		return 0, err
+	}
+	// The cursors may only move forward and never past what this replica
+	// holds: a promoted panel must not believe records it lacks were sent.
+	if len(w.Cursors) > 0 {
+		have := l.MaxID(ctx)
+		for k, v := range w.Cursors {
+			if !strings.HasPrefix(k, "sink:") || !strings.HasSuffix(k, ":cursor") || strings.Contains(k, ":node:") {
+				continue
+			}
+			v = min(v, have)
+			if old, err := strconv.ParseInt(l.Meta(ctx, k), 10, 64); err == nil && old >= v {
+				continue
+			}
+			if err := l.SetMeta(ctx, k, strconv.FormatInt(v, 10)); err != nil {
+				return 0, err
+			}
+		}
 	}
 	return l.MaxID(ctx), nil
 }
