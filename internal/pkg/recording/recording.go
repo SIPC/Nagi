@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -48,6 +49,7 @@ type Recordings struct {
 	Enabled func(context.Context) bool
 	budget  *logstore.Store
 	active  sync.Map
+	db      *sql.DB // encrypted local bodies; nil keeps the legacy file reader/writer
 }
 
 var recordingIDRe = regexp.MustCompile(`^[0-9]{6}-[0-9a-f]{24}$`)
@@ -105,7 +107,13 @@ func (r *Recordings) Start(ctx context.Context, cols, rows int) *Recorder {
 	id := now.Format("200601") + "-" + hex.EncodeToString(b)
 	rec := &Recorder{r: r, id: id, dir: filepath.Join(r.Dir, id[:6], id), start: now, stop: make(chan struct{}), done: make(chan struct{})}
 	r.active.Store(id, true)
-	if err := os.MkdirAll(rec.dir, 0o700); err != nil {
+	var err error
+	if r.db != nil {
+		err = r.startDatabase(id, now)
+	} else {
+		err = os.MkdirAll(rec.dir, 0o700)
+	}
+	if err != nil {
 		r.active.Delete(id)
 		return nil
 	}
@@ -222,9 +230,16 @@ func (rec *Recorder) flushLocked() {
 	}
 	for total > tailLimit && len(rec.tail) > 1 {
 		old := rec.tail[0]
+		if rec.r.db != nil {
+			if err := rec.r.deleteChunk(rec.id, old.Seq); err != nil {
+				rec.err, rec.truncated = err, true
+				return // keep the hash and retry cleanup after the next chunk
+			}
+		} else {
+			_ = os.Remove(filepath.Join(rec.dir, ChunkName(old.Seq)))
+		}
 		rec.tail = rec.tail[1:]
 		total -= old.Bytes
-		_ = os.Remove(filepath.Join(rec.dir, ChunkName(old.Seq)))
 		rec.truncated = true
 	}
 }
@@ -247,7 +262,12 @@ func (r *Recordings) writeChunk(id, dir string, seq int, plain []byte) (chunkInf
 	path := filepath.Join(dir, ChunkName(seq))
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	if err := r.budget.WriteArchive(ctx, 3, int64(len(sealed))+4096, func() error { return os.WriteFile(path, sealed, 0o600) }); err != nil {
+	if r.db != nil {
+		err = r.putChunk(ctx, id, seq, sealed)
+	} else {
+		err = r.budget.WriteArchive(ctx, 3, int64(len(sealed))+4096, func() error { return os.WriteFile(path, sealed, 0o600) })
+	}
+	if err != nil {
 		return chunkInfo{}, err
 	}
 	sum := sha256.Sum256(sealed)
@@ -307,22 +327,23 @@ func (r *Recordings) Read(id string, fn func([]byte) error) error {
 	if !recordingIDRe.MatchString(id) {
 		return errors.New("录制不存在")
 	}
-	dir := filepath.Join(r.Dir, id[:6], id)
-	entries, err := os.ReadDir(dir)
+	seqs, database, err := r.chunkSequences(id)
 	if err != nil {
-		return errors.New("录制不存在")
-	}
-	var seqs []int
-	for _, e := range entries {
-		if n, err := strconv.Atoi(e.Name()); err == nil {
-			seqs = append(seqs, n)
-		}
+		return err
 	}
 	sort.Ints(seqs)
+	if len(seqs) == 0 || seqs[0] != 0 {
+		return errors.New("录制不存在或开头已清理")
+	}
 	prev := -1
 	var lastT float64
 	for _, seq := range seqs {
-		sealed, err := os.ReadFile(filepath.Join(dir, ChunkName(seq)))
+		var sealed []byte
+		if database {
+			err = r.db.QueryRow(`SELECT body FROM recording_chunks WHERE recording=? AND seq=?`, id, seq).Scan(&sealed)
+		} else {
+			sealed, err = os.ReadFile(filepath.Join(r.Dir, id[:6], id, ChunkName(seq)))
+		}
 		if err != nil {
 			return err
 		}
