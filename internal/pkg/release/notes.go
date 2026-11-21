@@ -36,7 +36,9 @@ type Section struct {
 }
 
 // Sections 取出更新日志里比 from 新、不比 to 新的版本（「## <版本>」到下一个「## 」之前），按文件里的顺序，新的在前。
+// to 是正式版时跳过预发布版的小节：正式版的条目已经包含各预发布版的改动（见 docs/development.md#预发布版本）。
 func Sections(md, from, to string) []Section {
+	skipPre := !IsPrerelease(to)
 	var out []Section
 	var cur *Section
 	var body []string
@@ -51,7 +53,7 @@ func Sections(md, from, to string) []Section {
 		if rest, ok := strings.CutPrefix(line, "## "); ok {
 			flush()
 			f := strings.Fields(rest)
-			if len(f) > 0 && IsVersion(f[0]) && Older(from, f[0]) && !Older(to, f[0]) {
+			if len(f) > 0 && IsVersion(f[0]) && Older(from, f[0]) && !Older(to, f[0]) && !(skipPre && IsPrerelease(f[0])) {
 				cur = &Section{Version: f[0]}
 			}
 			continue

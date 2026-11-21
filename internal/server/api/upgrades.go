@@ -278,6 +278,10 @@ func (a *API) runNodeUpgrade(ctx context.Context, id, target string) error {
 	}
 	var source string
 	err := func() error {
+		// 排队期间渠道可能被改回正式版：开始下载前再核对一次，正式版渠道的节点不会被升级到预发布版。
+		if !release.Allowed(a.nodeChannel(ctx, id), target) {
+			return i18n.Errorf("节点 %s 使用正式版更新渠道，不能升级到预发布版 %s", a.nodeRef(ctx, id), target)
+		}
 		if err := a.upgradableNode(id); err != nil {
 			return err
 		}
@@ -356,6 +360,14 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 	if !release.IsVersion(target) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，无法一键升级节点"))
 	}
+	// 渠道不允许（正式版渠道的节点、面板是预发布版）或者节点已经不旧了都不升级（见 channels.go）。
+	if !release.Allowed(s.nodeChannel(ctx, id), target) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 使用正式版更新渠道，不能升级到预发布版 %s", s.nodeRef(ctx, id), target))
+	}
+	// 只升不降：预发布渠道的节点可能比面板新（面板退回了正式版）。节点是本地编译的版本时照旧可以升级。
+	if v := s.nodeVersion(id); release.IsVersion(v) && !release.Older(v, target) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 已是 %s，不比面板的版本旧", s.nodeRef(ctx, id), v))
+	}
 	busy := false
 	s.withUpdates(ctx, func(r *updateRecords) {
 		if busy = r.Nodes[id].active(); !busy {
@@ -372,10 +384,15 @@ func (s *nodeService) UpgradeNode(ctx context.Context, req *connect.Request[nagi
 // UpgradeAllNodes 把所有落后于面板的节点升级到面板的版本。一个一个来：同时重启可能让顶替的租约续不上，
 // 先升级热备和备份节点（见 docs/control-plane.md）。下载阶段失败（包括超时）时节点还是原来的版本，记下原因接着升下一个；
 // 替换后没有用新版本回来就停下，后面的不动：可能是新版本在这些机器上有问题。
-func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[nagiv1.UpgradeAllNodesRequest]) (*connect.Response[nagiv1.UpgradeAllNodesResponse], error) {
+// 每个节点都按自己的更新渠道判断（nodeUpgradeTarget）：正式版渠道的节点不会被升级到预发布版，请求里的 channel 只能再缩小范围。
+func (s *nodeService) UpgradeAllNodes(ctx context.Context, req *connect.Request[nagiv1.UpgradeAllNodesRequest]) (*connect.Response[nagiv1.UpgradeAllNodesResponse], error) {
 	target := s.Panel.Version
 	if !release.IsVersion(target) {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("面板不是正式发布的版本，无法一键升级节点"))
+	}
+	only := req.Msg.GetChannel()
+	if only != "" && !release.IsChannel(only) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("更新渠道须为 stable 或 pre"))
 	}
 	rows, err := s.Q.ListNodes(ctx)
 	if err != nil {
@@ -383,7 +400,8 @@ func (s *nodeService) UpgradeAllNodes(ctx context.Context, _ *connect.Request[na
 	}
 	var ids []string
 	for _, row := range rows {
-		if s.upgradableNode(row.ID) == nil && release.Older(s.nodeVersion(row.ID), target) {
+		channel := s.nodeChannel(ctx, row.ID)
+		if (only == "" || only == channel) && s.upgradableNode(row.ID) == nil && nodeUpgradeTarget(target, channel, s.nodeVersion(row.ID)) != "" {
 			ids = append(ids, row.ID)
 		}
 	}

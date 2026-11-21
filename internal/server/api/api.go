@@ -408,6 +408,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		}
 		n.Isolated = s.Nodes.Isolated(ctx, row.ID)
 		n.RelayPool = s.Nodes.InRelayPool(ctx, row.ID)
+		n.UpdateChannel = s.nodeChannel(ctx, row.ID)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()
@@ -420,6 +421,9 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 			}
 		}
 		n.Info = egressSupport(n.Info)
+		if n.Online && !n.Pending && s.upgradableNode(row.ID) == nil {
+			n.UpgradeTarget = nodeUpgradeTarget(s.Panel.Version, n.UpdateChannel, n.GetInfo().GetVersion())
+		}
 		out.Nodes = append(out.Nodes, n)
 	}
 	return connect.NewResponse(out), nil
@@ -569,6 +573,10 @@ func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 		return err
 	}
 	if err := s.Q.SetNodeGroup(ctx, id, ""); err != nil {
+		return err
+	}
+	// 重新加入时回到正式版渠道（见 channels.go）。
+	if err := s.Q.DeleteSetting(ctx, nodeChannelPrefix+id); err != nil {
 		return err
 	}
 	s.Projects.ForgetEntryNode(ctx, id)

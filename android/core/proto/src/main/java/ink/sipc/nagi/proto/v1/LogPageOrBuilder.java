@@ -117,4 +117,30 @@ public interface LogPageOrBuilder extends
    * <code>repeated .nagi.v1.LogPruned source_pruned = 11 [json_name = "sourcePruned"];</code>
    */
   int getSourcePrunedCount();
+
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.LogMigration> 
+      getMigrationsList();
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  ink.sipc.nagi.proto.v1.LogMigration getMigrations(int index);
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  int getMigrationsCount();
 }

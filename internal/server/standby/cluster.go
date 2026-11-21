@@ -58,6 +58,9 @@ const SettingSeenTerm = "seen_term"
 // SettingUpdateState 是本面板记下的面板和节点更新状态（见 internal/server/api/upgrades.go），每个面板自己的。
 const SettingUpdateState = "update_state"
 
+// SettingUpdateChannel 是本面板的更新渠道（release.ChannelStable、ChannelPre），没有时是正式版。每个面板自己的，不同步。
+const SettingUpdateChannel = "update_channel"
+
 func seenTerm(ctx context.Context, q *store.Queries) uint64 {
 	v, _ := q.GetSetting(ctx, SettingSeenTerm)
 	n, _ := strconv.ParseUint(v, 10, 64)

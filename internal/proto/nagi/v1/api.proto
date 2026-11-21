@@ -297,6 +297,8 @@ service NodeService {
   rpc UpgradeAllNodes(UpgradeAllNodesRequest) returns (UpgradeAllNodesResponse);
   // 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
   rpc CancelNodeUpgrade(CancelNodeUpgradeRequest) returns (CancelNodeUpgradeResponse);
+  // 设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+  rpc SetNodeUpdateChannel(SetNodeUpdateChannelRequest) returns (SetNodeUpdateChannelResponse);
   // 节点的镜像加速地址。
   rpc GetNodeMirrors(NodeRef) returns (Mirrors);
   rpc SetNodeMirrors(SetNodeMirrorsRequest) returns (Mirrors);
@@ -465,7 +467,18 @@ message UpgradeNodeRequest {
   string node_id = 1;
 }
 
-message UpgradeAllNodesRequest {}
+message UpgradeAllNodesRequest {
+  // 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+  string channel = 1;
+}
+
+message SetNodeUpdateChannelRequest {
+  string node_id = 1;
+  // stable 或 pre。
+  string channel = 2;
+}
+
+message SetNodeUpdateChannelResponse {}
 
 message CancelNodeUpgradeRequest {
   // 为空时取消所有排队和下载中的升级。
@@ -549,6 +562,9 @@ service SettingsService {
   rpc SetPanelName(SetPanelNameRequest) returns (UpdateSettingsResponse);
   // 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
   rpc SetMeshAutoRoute(SetMeshAutoRouteRequest) returns (UpdateSettingsResponse);
+  // 设置本面板的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。只有管理员能用。
+  // 每个面板自己一份，不随备用面板同步；节点的渠道另外设置（NodeService.SetNodeUpdateChannel）。
+  rpc SetPanelUpdateChannel(SetPanelUpdateChannelRequest) returns (UpdateSettingsResponse);
   rpc GetAlertConfig(GetAlertConfigRequest) returns (GetAlertConfigResponse);
   rpc UpdateAlertConfig(UpdateAlertConfigRequest) returns (UpdateAlertConfigResponse);
   // 用面板发一条测试消息到某个渠道。
@@ -834,6 +850,13 @@ message PanelSettings {
   string default_name = 8;
   // mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
   bool mesh_auto_route = 9;
+  // 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+  string update_channel = 10;
+}
+
+message SetPanelUpdateChannelRequest {
+  // stable 或 pre。
+  string channel = 1;
 }
 
 message SetMeshAutoRouteRequest {
@@ -895,6 +918,11 @@ message Node {
   string group = 16;
   // 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
   bool relay_pool = 17;
+  // 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+  string update_channel = 18;
+  // 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+  // 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+  string upgrade_target = 19;
 }
 
 message SetNodeAlertRulesRequest {
@@ -1367,6 +1395,8 @@ message CheckPanelUpdateResponse {
   // 直接连不上 GitHub、经加速代理查到的最新版本时是这个代理的主机名，界面写明「查询自 <代理>」；直接从 GitHub 查到时为空。
   // 版本号由代理决定，下载时能连上 GitHub 就按 GitHub 上的校验值核对（见 docs/panel.md#更新面板）。
   string latest_source = 7;
+  // 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+  string channel = 8;
 }
 
 message GetPanelReleaseNotesRequest {}

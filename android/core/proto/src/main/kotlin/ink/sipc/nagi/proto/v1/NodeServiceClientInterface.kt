@@ -105,6 +105,11 @@ public interface NodeServiceClientInterface {
   public suspend fun cancelNodeUpgrade(request: CancelNodeUpgradeRequest, headers: Headers = emptyMap()): ResponseMessage<CancelNodeUpgradeResponse>
 
   /**
+   *  设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+   */
+  public suspend fun setNodeUpdateChannel(request: SetNodeUpdateChannelRequest, headers: Headers = emptyMap()): ResponseMessage<SetNodeUpdateChannelResponse>
+
+  /**
    *  节点的镜像加速地址。
    */
   public suspend fun getNodeMirrors(request: NodeRef, headers: Headers = emptyMap()): ResponseMessage<Mirrors>

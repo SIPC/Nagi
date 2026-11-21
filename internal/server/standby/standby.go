@@ -44,7 +44,8 @@ const (
 )
 
 // LocalSettings 是每个面板自己的设置，不随同步覆盖。
-var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", "proxy_secret", SettingSeenTerm, SettingUpdateState}
+// 面板的更新渠道（update_channel）也是：主、备用面板分别更新自己（见 docs/development.md#预发布版本）。
+var LocalSettings = []string{"port", "public_address", "panel_domain", "setup_token", "proxy_secret", SettingSeenTerm, SettingUpdateState, SettingUpdateChannel}
 
 // localTables 是不同步的表：登录会话和它的令牌是各面板自己的。
 var localTables = map[string]bool{"sessions": true, "session_tokens": true}

@@ -22,6 +22,7 @@ public  final class PanelSettings extends
     masterKeyPath_ = "";
     name_ = "";
     defaultName_ = "";
+    updateChannel_ = "";
   }
   public static final int PUBLIC_ADDRESS_FIELD_NUMBER = 1;
   private java.lang.String publicAddress_;
@@ -526,6 +527,73 @@ public  final class PanelSettings extends
   private void clearMeshAutoRoute() {
 
     meshAutoRoute_ = false;
+  }
+
+  public static final int UPDATE_CHANNEL_FIELD_NUMBER = 10;
+  private java.lang.String updateChannel_;
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   * @return The updateChannel.
+   */
+  @java.lang.Override
+  public java.lang.String getUpdateChannel() {
+    return updateChannel_;
+  }
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   * @return The bytes for updateChannel.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getUpdateChannelBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(updateChannel_);
+  }
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   * @param value The updateChannel to set.
+   */
+  private void setUpdateChannel(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    updateChannel_ = value;
+  }
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   */
+  private void clearUpdateChannel() {
+
+    updateChannel_ = getDefaultInstance().getUpdateChannel();
+  }
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   * @param value The bytes for updateChannel to set.
+   */
+  private void setUpdateChannelBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    updateChannel_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.PanelSettings parseFrom(
@@ -1148,6 +1216,75 @@ public  final class PanelSettings extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+     * </pre>
+     *
+     * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+     * @return The updateChannel.
+     */
+    @java.lang.Override
+    public java.lang.String getUpdateChannel() {
+      return instance.getUpdateChannel();
+    }
+    /**
+     * <pre>
+     * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+     * </pre>
+     *
+     * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+     * @return The bytes for updateChannel.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getUpdateChannelBytes() {
+      return instance.getUpdateChannelBytes();
+    }
+    /**
+     * <pre>
+     * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+     * </pre>
+     *
+     * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+     * @param value The updateChannel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpdateChannel(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setUpdateChannel(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+     * </pre>
+     *
+     * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearUpdateChannel() {
+      copyOnWrite();
+      instance.clearUpdateChannel();
+      return this;
+    }
+    /**
+     * <pre>
+     * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+     * </pre>
+     *
+     * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+     * @param value The bytes for updateChannel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpdateChannelBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setUpdateChannelBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.PanelSettings)
   }
   @java.lang.Override
@@ -1173,10 +1310,11 @@ public  final class PanelSettings extends
             "name_",
             "defaultName_",
             "meshAutoRoute_",
+            "updateChannel_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0000\u0000\u0001\u0208\u0002\u000b\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007";
+              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u000b\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

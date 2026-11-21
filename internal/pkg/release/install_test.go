@@ -117,6 +117,40 @@ func TestLatest(t *testing.T) {
 	}
 }
 
+// 预发布渠道从发布列表里取版本号最大的；正式版渠道不看发布列表。正文里提到的版本链接（转义过的 HTML）不算。
+func TestLatestInPre(t *testing.T) {
+	noKnownProxies(t)
+	oldFeed, oldLatest := feedURL, latestURL
+	t.Cleanup(func() { feedURL, latestURL = oldFeed, oldLatest })
+	entry := func(tag string) string {
+		return `<entry><link rel="alternate" type="text/html" href="https://github.com/SIPC/Nagi/releases/tag/` + tag + `"/><title>` + tag + `</title></entry>`
+	}
+	feed := `<feed><link type="text/html" rel="alternate" href="https://github.com/SIPC/Nagi/releases"/>` +
+		entry("v0.38.0-pre.2") + entry("v0.38.0-pre.10") + entry("v0.37.0") +
+		`<content type="html">&lt;a href=&quot;https://github.com/SIPC/Nagi/releases/tag/v9.0.0&quot;&gt;</content></feed>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/latest" {
+			w.Header().Set("Location", "https://github.com/SIPC/Nagi/releases/tag/v0.37.0")
+			w.WriteHeader(http.StatusFound)
+			return
+		}
+		w.Write([]byte(feed))
+	}))
+	defer srv.Close()
+	feedURL, latestURL = srv.URL+"/feed", srv.URL+"/latest"
+	if v, _, err := LatestIn(context.Background(), ChannelPre, ""); v != "v0.38.0-pre.10" || err != nil {
+		t.Errorf("预发布渠道：%q、%v", v, err)
+	}
+	if v, _, err := LatestIn(context.Background(), ChannelStable, ""); v != "v0.37.0" || err != nil {
+		t.Errorf("正式版渠道：%q、%v", v, err)
+	}
+	// 正式版发布以后，预发布渠道也拿到它（同号正式版比预发布版新）。
+	feed = `<feed>` + entry("v0.38.0") + entry("v0.38.0-pre.10") + `</feed>`
+	if v, _, _ := LatestIn(context.Background(), ChannelPre, ""); v != "v0.38.0" {
+		t.Errorf("正式版发布后：%q", v)
+	}
+}
+
 func TestOlder(t *testing.T) {
 	cases := []struct {
 		a, b string
@@ -130,6 +164,21 @@ func TestOlder(t *testing.T) {
 		{"v0.5.0", "v0.5.0-rc.1", false},
 		{"dev", "v0.5.0", false},
 		{"v0.5.0", "dev", false},
+		// 预发布号逐段比较，数字按数值：pre.2 < pre.10（按字符串会反过来）。
+		{"v0.37.1-pre.2", "v0.37.1-pre.10", true},
+		{"v0.37.1-pre.10", "v0.37.1-pre.2", false},
+		{"v0.37.1-pre.2", "v0.37.1-pre.2", false},
+		// 从预发布版可以升级到同号正式版，同号正式版不会被「升级」回预发布版。
+		{"v0.37.1-pre.2", "v0.37.1", true},
+		{"v0.37.1", "v0.37.1-pre.3", false},
+		// 上一个正式版早于下一个版本的预发布版，预发布版早于更高修订号的正式版。
+		{"v0.37.0", "v0.37.1-pre.1", true},
+		{"v0.37.1-pre.9", "v0.37.2", true},
+		// 数字段早于字母段，段数少的在前。
+		{"v1.0.0-pre.1", "v1.0.0-pre.x", true},
+		{"v1.0.0-pre", "v1.0.0-pre.1", true},
+		// 构建信息不参与比较。
+		{"v1.0.0+b1", "v1.0.0+b2", false},
 	}
 	for _, c := range cases {
 		if got := Older(c.a, c.b); got != c.want {

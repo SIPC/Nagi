@@ -20,6 +20,7 @@ public  final class CheckPanelUpdateResponse extends
     releaseUrl_ = "";
     unsupported_ = "";
     latestSource_ = "";
+    channel_ = "";
   }
   private int bitField0_;
   public static final int CURRENT_FIELD_NUMBER = 1;
@@ -464,6 +465,73 @@ public  final class CheckPanelUpdateResponse extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     latestSource_ = value.toStringUtf8();
+
+  }
+
+  public static final int CHANNEL_FIELD_NUMBER = 8;
+  private java.lang.String channel_;
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   * @return The channel.
+   */
+  @java.lang.Override
+  public java.lang.String getChannel() {
+    return channel_;
+  }
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   * @return The bytes for channel.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getChannelBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(channel_);
+  }
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   * @param value The channel to set.
+   */
+  private void setChannel(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    channel_ = value;
+  }
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   */
+  private void clearChannel() {
+
+    channel_ = getDefaultInstance().getChannel();
+  }
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   * @param value The bytes for channel to set.
+   */
+  private void setChannelBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    channel_ = value.toStringUtf8();
 
   }
 
@@ -1025,6 +1093,75 @@ public  final class CheckPanelUpdateResponse extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+     * </pre>
+     *
+     * <code>string channel = 8 [json_name = "channel"];</code>
+     * @return The channel.
+     */
+    @java.lang.Override
+    public java.lang.String getChannel() {
+      return instance.getChannel();
+    }
+    /**
+     * <pre>
+     * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+     * </pre>
+     *
+     * <code>string channel = 8 [json_name = "channel"];</code>
+     * @return The bytes for channel.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getChannelBytes() {
+      return instance.getChannelBytes();
+    }
+    /**
+     * <pre>
+     * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+     * </pre>
+     *
+     * <code>string channel = 8 [json_name = "channel"];</code>
+     * @param value The channel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChannel(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setChannel(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+     * </pre>
+     *
+     * <code>string channel = 8 [json_name = "channel"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearChannel() {
+      copyOnWrite();
+      instance.clearChannel();
+      return this;
+    }
+    /**
+     * <pre>
+     * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+     * </pre>
+     *
+     * <code>string channel = 8 [json_name = "channel"];</code>
+     * @param value The bytes for channel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChannelBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setChannelBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.CheckPanelUpdateResponse)
   }
   @java.lang.Override
@@ -1049,10 +1186,11 @@ public  final class CheckPanelUpdateResponse extends
             "unsupported_",
             "checkedAt_",
             "latestSource_",
+            "channel_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007\u0004\u0208\u0005\u0208\u0006\u1009\u0000\u0007\u0208";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0007" +
+              "\u0004\u0208\u0005\u0208\u0006\u1009\u0000\u0007\u0208\b\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

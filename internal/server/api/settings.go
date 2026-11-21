@@ -73,6 +73,7 @@ func (p *PanelInfo) settings(ctx context.Context) *nagiv1.PanelSettings {
 	auto, _ := p.Q.GetSetting(ctx, nodes.SettingMeshAutoRoute)
 	return &nagiv1.PanelSettings{
 		MeshAutoRoute: auto == "1",
+		UpdateChannel: p.UpdateChannel(ctx),
 		PublicAddress: p.PublicAddress(ctx),
 		Port:          uint32(p.Port),
 		Fingerprint:   p.Fingerprint,
