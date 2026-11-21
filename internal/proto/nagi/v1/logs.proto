@@ -5,11 +5,14 @@ package nagi.v1;
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 
 import "google/protobuf/timestamp.proto";
+import "nagi/v1/agent.proto";
 
 // Registered on mesh only. Existing trusted-panel authorization still applies;
 // standby membership/authorization is deliberately not added here.
 service LogService {
   rpc QueryLogs(LogQuery) returns (LogPage);
+  // Includes indexed metric history migrated from the old node database.
+  rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
 }
 
 // Browser-to-panel queries; the panel forwards through mesh, never the control RPC.

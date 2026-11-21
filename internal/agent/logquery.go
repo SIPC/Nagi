@@ -12,6 +12,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+func (s *meshService) QueryMetrics(ctx context.Context, q *nagiv1.QueryMetricsRequest) (*nagiv1.QueryMetricsResponse, error) {
+	if err := s.checkMeshPanel(ctx, nagiv1.LogService_QueryMetrics_FullMethodName); err != nil {
+		return nil, err
+	}
+	return queryMetrics(ctx, s.a.metrics, q)
+}
+
 func (s *meshService) QueryLogs(ctx context.Context, q *nagiv1.LogQuery) (*nagiv1.LogPage, error) {
 	if err := s.checkMeshPanel(ctx, nagiv1.LogService_QueryLogs_FullMethodName); err != nil {
 		return nil, err

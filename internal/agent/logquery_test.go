@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/metrics"
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -59,7 +62,29 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	a := &agent{id: id, cfg: Config{Logs: store}, mesh: &meshNode{m: node, panelKeys: map[string]mesh.Key{"panel-fp": panel.PublicKey()}}}
+	dir := t.TempDir()
+	legacy, err := db.OpenMigrated(ctx, filepath.Join(dir, "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	for _, sample := range []struct {
+		table, series string
+		at            time.Time
+		value         float64
+	}{{"metrics_raw", "c:p1/web:cpu", at, 7.25}, {"metrics_raw", "c:p2/web:cpu", at, 97.5},
+		{"metrics_m5", "c:p1/web:cpu", at.Add(-48 * time.Hour), 19.75}} {
+		if _, err := legacy.ExecContext(ctx, "INSERT INTO "+sample.table+" VALUES (?,?,?)", sample.series, sample.at.Unix(), sample.value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	history, err := metrics.OpenHistory(ctx, filepath.Join(dir, "logs", "metrics.db"), legacy, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer history.Close()
+	a := &agent{id: id, cfg: Config{Logs: store}, metrics: metrics.New(history, nil, "", logger),
+		mesh: &meshNode{m: node, panelKeys: map[string]mesh.Key{"panel-fp": panel.PublicKey()}}}
 	svc := &meshService{Service: mesh.Service{M: node}, a: a}
 	done := make(chan error, 1)
 	go func() { done <- mesh.Serve(ctx, node, svc) }()
@@ -93,10 +118,28 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 	if _, err := client.QueryLogs(ctx, &nagiv1.LogQuery{Source: "old-database", After: 999}); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("重建后沿用旧游标未拒绝: %v", err)
 	}
+	for _, sample := range []struct {
+		at    time.Time
+		value float64
+	}{{at, 7.25}, {at.Add(-48 * time.Hour), 19.75}} {
+		result, err := client.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{Prefix: "c:p1/",
+			From: timestamppb.New(sample.at.Add(-time.Second)), To: timestamppb.New(sample.at.Add(time.Second))})
+		if err != nil || len(result.GetSeries()) != 1 || result.Series[0].Name != "c:p1/web:cpu" || len(result.Series[0].Values) != 1 || result.Series[0].Values[0] != sample.value || result.Series[0].Times[0] != sample.at.Unix() {
+			t.Fatalf("迁移的统计历史没有经 mesh 原样读出: %+v %v", result, err)
+		}
+	}
+	for _, q := range []*nagiv1.QueryMetricsRequest{{Step: -1}, {Step: 1 << 62}, {From: timestamppb.New(at), To: timestamppb.New(at.Add(-time.Second))}, {From: &timestamppb.Timestamp{Seconds: 1 << 62}}} {
+		if _, err := client.QueryMetrics(ctx, q); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("错误统计查询应拒绝: %+v %v", q, err)
+		}
+	}
 	if _, err := id.removePanel("panel-fp", true, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.QueryLogs(ctx, &nagiv1.LogQuery{}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("现存 mesh 连接上的撤权未生效: %v", err)
+	}
+	if _, err := client.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("现存统计 mesh 连接上的撤权未生效: %v", err)
 	}
 }

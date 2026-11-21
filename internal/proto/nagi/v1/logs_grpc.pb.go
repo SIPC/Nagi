@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LogService_QueryLogs_FullMethodName = "/nagi.v1.LogService/QueryLogs"
+	LogService_QueryLogs_FullMethodName    = "/nagi.v1.LogService/QueryLogs"
+	LogService_QueryMetrics_FullMethodName = "/nagi.v1.LogService/QueryMetrics"
 )
 
 // LogServiceClient is the client API for LogService service.
@@ -30,6 +31,8 @@ const (
 // standby membership/authorization is deliberately not added here.
 type LogServiceClient interface {
 	QueryLogs(ctx context.Context, in *LogQuery, opts ...grpc.CallOption) (*LogPage, error)
+	// Includes indexed metric history migrated from the old node database.
+	QueryMetrics(ctx context.Context, in *QueryMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
 }
 
 type logServiceClient struct {
@@ -50,6 +53,16 @@ func (c *logServiceClient) QueryLogs(ctx context.Context, in *LogQuery, opts ...
 	return out, nil
 }
 
+func (c *logServiceClient) QueryMetrics(ctx context.Context, in *QueryMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryMetricsResponse)
+	err := c.cc.Invoke(ctx, LogService_QueryMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LogServiceServer is the server API for LogService service.
 // All implementations must embed UnimplementedLogServiceServer
 // for forward compatibility.
@@ -58,6 +71,8 @@ func (c *logServiceClient) QueryLogs(ctx context.Context, in *LogQuery, opts ...
 // standby membership/authorization is deliberately not added here.
 type LogServiceServer interface {
 	QueryLogs(context.Context, *LogQuery) (*LogPage, error)
+	// Includes indexed metric history migrated from the old node database.
+	QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error)
 	mustEmbedUnimplementedLogServiceServer()
 }
 
@@ -70,6 +85,9 @@ type UnimplementedLogServiceServer struct{}
 
 func (UnimplementedLogServiceServer) QueryLogs(context.Context, *LogQuery) (*LogPage, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryLogs not implemented")
+}
+func (UnimplementedLogServiceServer) QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method QueryMetrics not implemented")
 }
 func (UnimplementedLogServiceServer) mustEmbedUnimplementedLogServiceServer() {}
 func (UnimplementedLogServiceServer) testEmbeddedByValue()                    {}
@@ -110,6 +128,24 @@ func _LogService_QueryLogs_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LogService_QueryMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogServiceServer).QueryMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogService_QueryMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogServiceServer).QueryMetrics(ctx, req.(*QueryMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LogService_ServiceDesc is the grpc.ServiceDesc for LogService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -120,6 +156,10 @@ var LogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryLogs",
 			Handler:    _LogService_QueryLogs_Handler,
+		},
+		{
+			MethodName: "QueryMetrics",
+			Handler:    _LogService_QueryMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

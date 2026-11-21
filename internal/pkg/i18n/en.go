@@ -1012,6 +1012,8 @@ var en = map[string]string{
 	"告警不存在或已超出历史保留范围":       "The alert does not exist or its history has expired",
 	"缺少告警":                  "An alert is required",
 	"本机日志库没有启动":             "The local log database is not running",
+	"本机统计历史库没有启动":           "The local metric history database is not running",
+	"无效的统计时间范围或聚合步长":        "Invalid metric time range or aggregation step",
 	"无效的日志游标或分页大小":          "Invalid log cursor or page size",
 	"无效的日志时间":               "Invalid log time",
 	"日志时间超出支持范围":            "Log time is outside the supported range",

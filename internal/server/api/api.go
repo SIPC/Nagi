@@ -489,15 +489,11 @@ func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request
 	if req.Msg.GetNodeId() == "" {
 		return s.hiddenNodeMetrics(ctx, req.Msg)
 	}
-	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	resp, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{
+	resp, err := s.queryNodeMetrics(ctx, req.Msg.GetNodeId(), &nagiv1.QueryMetricsRequest{
 		Prefix: req.Msg.GetPrefix(), From: req.Msg.GetFrom(), To: req.Msg.GetTo(), Step: req.Msg.GetStep(),
 	})
 	if err != nil {
-		return nil, fromGRPC(err)
+		return nil, err
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -816,11 +812,7 @@ func (s *nodeService) hiddenNodeMetrics(ctx context.Context, m *nagiv1.QueryNode
 			continue
 		}
 		seen[id] = true
-		conn, err := s.Nodes.Get(id)
-		if err != nil {
-			continue
-		}
-		res, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{Prefix: m.GetPrefix(), From: m.GetFrom(), To: m.GetTo(), Step: m.GetStep()})
+		res, err := s.queryNodeMetrics(ctx, id, &nagiv1.QueryMetricsRequest{Prefix: m.GetPrefix(), From: m.GetFrom(), To: m.GetTo(), Step: m.GetStep()})
 		if err != nil {
 			continue
 		}

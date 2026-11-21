@@ -38,6 +38,19 @@ func (s *agentService) SetAlertConfig(_ context.Context, req *nagiv1.SetAlertCon
 }
 
 func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetricsRequest) (*nagiv1.QueryMetricsResponse, error) {
+	return queryMetrics(ctx, s.metrics, req)
+}
+
+// Both the legacy control API and mesh use the same local history and aggregation.
+func queryMetrics(ctx context.Context, collector *metrics.Collector, req *nagiv1.QueryMetricsRequest) (*nagiv1.QueryMetricsResponse, error) {
+	if collector == nil {
+		return nil, status.Error(codes.Unavailable, "本机统计历史库没有启动")
+	}
+	for _, ts := range []*timestamppb.Timestamp{req.GetFrom(), req.GetTo()} {
+		if ts != nil && ts.CheckValid() != nil {
+			return nil, status.Error(codes.InvalidArgument, "无效的日志时间")
+		}
+	}
 	to := time.Now()
 	if req.GetTo() != nil {
 		to = req.GetTo().AsTime()
@@ -46,7 +59,10 @@ func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetric
 	if req.GetFrom() != nil {
 		from = req.GetFrom().AsTime()
 	}
-	data, w, err := s.metrics.QueryWindow(ctx, req.GetPrefix(), from, to)
+	if !from.Before(to) || req.GetStep() < 0 || req.GetStep() > int64((30*24*time.Hour)/time.Second) {
+		return nil, status.Error(codes.InvalidArgument, "无效的统计时间范围或聚合步长")
+	}
+	data, w, err := collector.QueryWindow(ctx, req.GetPrefix(), from, to)
 	if err != nil {
 		return nil, toStatus(err)
 	}

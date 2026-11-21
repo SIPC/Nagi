@@ -455,7 +455,7 @@ var File_nagi_v1_logs_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\n" +
-	"\x12nagi/v1/logs.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf8\x01\n" +
+	"\x12nagi/v1/logs.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x13nagi/v1/agent.proto\"\xf8\x01\n" +
 	"\bLogQuery\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
 	"\x05after\x18\x02 \x01(\x03R\x05after\x12.\n" +
@@ -494,10 +494,11 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\x12\x1d\n" +
 	"\n" +
 	"disk_bytes\x18\b \x01(\x03R\tdiskBytes\x12!\n" +
-	"\fbudget_bytes\x18\t \x01(\x03R\vbudgetBytes2>\n" +
+	"\fbudget_bytes\x18\t \x01(\x03R\vbudgetBytes2\x8b\x01\n" +
 	"\n" +
 	"LogService\x120\n" +
-	"\tQueryLogs\x12\x11.nagi.v1.LogQuery\x1a\x10.nagi.v1.LogPage2J\n" +
+	"\tQueryLogs\x12\x11.nagi.v1.LogQuery\x1a\x10.nagi.v1.LogPage\x12K\n" +
+	"\fQueryMetrics\x12\x1c.nagi.v1.QueryMetricsRequest\x1a\x1d.nagi.v1.QueryMetricsResponse2J\n" +
 	"\x0eNodeLogService\x128\n" +
 	"\rQueryNodeLogs\x12\x15.nagi.v1.NodeLogQuery\x1a\x10.nagi.v1.LogPageB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
@@ -521,24 +522,28 @@ var file_nagi_v1_logs_proto_goTypes = []any{
 	(*LogPruned)(nil),             // 3: nagi.v1.LogPruned
 	(*LogPage)(nil),               // 4: nagi.v1.LogPage
 	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
+	(*QueryMetricsRequest)(nil),   // 6: nagi.v1.QueryMetricsRequest
+	(*QueryMetricsResponse)(nil),  // 7: nagi.v1.QueryMetricsResponse
 }
 var file_nagi_v1_logs_proto_depIdxs = []int32{
-	5, // 0: nagi.v1.LogQuery.from:type_name -> google.protobuf.Timestamp
-	5, // 1: nagi.v1.LogQuery.to:type_name -> google.protobuf.Timestamp
-	0, // 2: nagi.v1.NodeLogQuery.query:type_name -> nagi.v1.LogQuery
-	5, // 3: nagi.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
-	5, // 4: nagi.v1.LogEntry.received:type_name -> google.protobuf.Timestamp
-	2, // 5: nagi.v1.LogPage.entries:type_name -> nagi.v1.LogEntry
-	3, // 6: nagi.v1.LogPage.pruned:type_name -> nagi.v1.LogPruned
-	0, // 7: nagi.v1.LogService.QueryLogs:input_type -> nagi.v1.LogQuery
-	1, // 8: nagi.v1.NodeLogService.QueryNodeLogs:input_type -> nagi.v1.NodeLogQuery
-	4, // 9: nagi.v1.LogService.QueryLogs:output_type -> nagi.v1.LogPage
-	4, // 10: nagi.v1.NodeLogService.QueryNodeLogs:output_type -> nagi.v1.LogPage
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	5,  // 0: nagi.v1.LogQuery.from:type_name -> google.protobuf.Timestamp
+	5,  // 1: nagi.v1.LogQuery.to:type_name -> google.protobuf.Timestamp
+	0,  // 2: nagi.v1.NodeLogQuery.query:type_name -> nagi.v1.LogQuery
+	5,  // 3: nagi.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
+	5,  // 4: nagi.v1.LogEntry.received:type_name -> google.protobuf.Timestamp
+	2,  // 5: nagi.v1.LogPage.entries:type_name -> nagi.v1.LogEntry
+	3,  // 6: nagi.v1.LogPage.pruned:type_name -> nagi.v1.LogPruned
+	0,  // 7: nagi.v1.LogService.QueryLogs:input_type -> nagi.v1.LogQuery
+	6,  // 8: nagi.v1.LogService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
+	1,  // 9: nagi.v1.NodeLogService.QueryNodeLogs:input_type -> nagi.v1.NodeLogQuery
+	4,  // 10: nagi.v1.LogService.QueryLogs:output_type -> nagi.v1.LogPage
+	7,  // 11: nagi.v1.LogService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	4,  // 12: nagi.v1.NodeLogService.QueryNodeLogs:output_type -> nagi.v1.LogPage
+	10, // [10:13] is the sub-list for method output_type
+	7,  // [7:10] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_logs_proto_init() }
@@ -546,6 +551,7 @@ func file_nagi_v1_logs_proto_init() {
 	if File_nagi_v1_logs_proto != nil {
 		return
 	}
+	file_nagi_v1_agent_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

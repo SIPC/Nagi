@@ -37,6 +37,8 @@ const (
 const (
 	// LogServiceQueryLogsProcedure is the fully-qualified name of the LogService's QueryLogs RPC.
 	LogServiceQueryLogsProcedure = "/nagi.v1.LogService/QueryLogs"
+	// LogServiceQueryMetricsProcedure is the fully-qualified name of the LogService's QueryMetrics RPC.
+	LogServiceQueryMetricsProcedure = "/nagi.v1.LogService/QueryMetrics"
 	// NodeLogServiceQueryNodeLogsProcedure is the fully-qualified name of the NodeLogService's
 	// QueryNodeLogs RPC.
 	NodeLogServiceQueryNodeLogsProcedure = "/nagi.v1.NodeLogService/QueryNodeLogs"
@@ -45,6 +47,8 @@ const (
 // LogServiceClient is a client for the nagi.v1.LogService service.
 type LogServiceClient interface {
 	QueryLogs(context.Context, *connect.Request[v1.LogQuery]) (*connect.Response[v1.LogPage], error)
+	// Includes indexed metric history migrated from the old node database.
+	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 }
 
 // NewLogServiceClient constructs a client for the nagi.v1.LogService service. By default, it uses
@@ -64,12 +68,19 @@ func NewLogServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(logServiceMethods.ByName("QueryLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		queryMetrics: connect.NewClient[v1.QueryMetricsRequest, v1.QueryMetricsResponse](
+			httpClient,
+			baseURL+LogServiceQueryMetricsProcedure,
+			connect.WithSchema(logServiceMethods.ByName("QueryMetrics")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // logServiceClient implements LogServiceClient.
 type logServiceClient struct {
-	queryLogs *connect.Client[v1.LogQuery, v1.LogPage]
+	queryLogs    *connect.Client[v1.LogQuery, v1.LogPage]
+	queryMetrics *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
 }
 
 // QueryLogs calls nagi.v1.LogService.QueryLogs.
@@ -77,9 +88,16 @@ func (c *logServiceClient) QueryLogs(ctx context.Context, req *connect.Request[v
 	return c.queryLogs.CallUnary(ctx, req)
 }
 
+// QueryMetrics calls nagi.v1.LogService.QueryMetrics.
+func (c *logServiceClient) QueryMetrics(ctx context.Context, req *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
+	return c.queryMetrics.CallUnary(ctx, req)
+}
+
 // LogServiceHandler is an implementation of the nagi.v1.LogService service.
 type LogServiceHandler interface {
 	QueryLogs(context.Context, *connect.Request[v1.LogQuery]) (*connect.Response[v1.LogPage], error)
+	// Includes indexed metric history migrated from the old node database.
+	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
 }
 
 // NewLogServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -95,10 +113,18 @@ func NewLogServiceHandler(svc LogServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(logServiceMethods.ByName("QueryLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	logServiceQueryMetricsHandler := connect.NewUnaryHandler(
+		LogServiceQueryMetricsProcedure,
+		svc.QueryMetrics,
+		connect.WithSchema(logServiceMethods.ByName("QueryMetrics")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.LogService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case LogServiceQueryLogsProcedure:
 			logServiceQueryLogsHandler.ServeHTTP(w, r)
+		case LogServiceQueryMetricsProcedure:
+			logServiceQueryMetricsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -110,6 +136,10 @@ type UnimplementedLogServiceHandler struct{}
 
 func (UnimplementedLogServiceHandler) QueryLogs(context.Context, *connect.Request[v1.LogQuery]) (*connect.Response[v1.LogPage], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogService.QueryLogs is not implemented"))
+}
+
+func (UnimplementedLogServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogService.QueryMetrics is not implemented"))
 }
 
 // NodeLogServiceClient is a client for the nagi.v1.NodeLogService service.
