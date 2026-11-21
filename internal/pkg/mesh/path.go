@@ -151,7 +151,7 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 }
 
 // ObservePaths 显式进行一个完整 60 秒观察窗口，每秒交错测直连及最多两个中转的两种包长。
-// 无后台调度、无生产流量复制、无晋升或切路；中途取消时仍返回已有的全部尝试。
+// 无后台调度、无生产流量复制、无晋升或切路；中途取消时仍返回已完成的全部尝试。结果交给 ComparePaths 比较。
 // 每节点同一时间仅允许一个窗口，重叠调用返回 ErrProbeLimited；关闭 mesh 时及时停止。
 // 地址、socket 或候选授权改变时失败而非混入别的路径；后续策略须据失败/新鲜度重新观察。
 func (m *Mesh) ObservePaths(ctx context.Context, peer Key, relays []Key) ([]PathSample, error) {
@@ -204,9 +204,14 @@ func (m *Mesh) ObservePaths(ctx context.Context, peer Key, relays []Key) ([]Path
 						return
 					case <-delay.C:
 					}
-					attempt, stop := context.WithTimeout(ctx, 800*time.Millisecond)
+					// 窗口到点只停止发新的一轮，已经发出的等它自己的 800 ms，免得窗口末尾被截断的尝试记成丢包。
+					// 调用者取消或到期打断的那次尝试不记样本：它不是链路结果。
+					attempt, stop := context.WithTimeout(parent, 800*time.Millisecond)
 					defer stop()
 					s := m.ProbePath(attempt, peer, via, size)
+					if s.Err != nil && parent.Err() != nil {
+						return
+					}
 					mu.Lock()
 					samples = append(samples, s)
 					mu.Unlock()
