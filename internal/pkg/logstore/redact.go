@@ -12,6 +12,10 @@ import (
 
 const hidden = "[已隐藏]"
 
+// RedactJSON applies the same structured/text redaction used on log writes.
+// Callers sending data off-machine must first select an explicit safe schema.
+func RedactJSON(b []byte) ([]byte, error) { return sanitizeJSON(b) }
+
 // 支持引号、反斜杠转义和拼接的 shell 单词；只用于保守隐藏，不执行/解释命令。
 const textArgument = `(?:"(?:\\.|[^"\\])*\\?(?:"|$)|'[^']*(?:'|$)|\\.|[^\s,;|&()"'<>` + "`" + `\\])+`
 
