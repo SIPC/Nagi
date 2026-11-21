@@ -636,6 +636,20 @@ func (c *Collector) Query(ctx context.Context, prefix string, from, to time.Time
 	return data, err
 }
 
+// prefixEnd is the smallest string above every string starting with prefix,
+// so the series range uses the (series, ts) primary key instead of scanning the
+// ts index of a large legacy table. 0xFF never occurs in UTF-8, so it bounds all.
+func prefixEnd(prefix string) string {
+	b := []byte(prefix)
+	for i := len(b) - 1; i >= 0; i-- {
+		if b[i] < 0xFF {
+			b[i]++
+			return string(b[:i+1])
+		}
+	}
+	return "\xff"
+}
+
 // QueryWindow 查询以 prefix 开头的序列在一段时间内的数据，同时返回数据的精度和覆盖的时间段（给 Aggregate 用）。
 // 24 小时以内用 10 秒精度，更长用 5 分钟精度。
 func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to time.Time) (map[string][]Point, Window, error) {
@@ -647,7 +661,7 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 		out[series] = append(out[series], Point{Time: time.Unix(ts, 0), Value: value})
 	}
 	if to.Sub(from) <= keepRaw+rawSlack && from.After(now.Add(-keepRaw-rawSlack)) {
-		rows, err := c.q.QueryRaw(ctx, nodestore.QueryRawParams{Prefix: prefix, FromTs: from.Unix(), ToTs: to.Unix()})
+		rows, err := c.q.QueryRaw(ctx, nodestore.QueryRawParams{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
 		if err != nil {
 			return nil, Window{}, err
 		}
@@ -657,7 +671,7 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 		// 超过 keepRaw 的部分已经删掉了，不算在覆盖的时间段里。
 		return out, Window{Res: Interval, From: maxTime(from, now.Add(-keepRaw)), To: minTime(to, now)}, nil
 	}
-	rows, err := c.q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: prefix, FromTs: from.Unix(), ToTs: to.Unix()})
+	rows, err := c.q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
 	if err != nil {
 		return nil, Window{}, err
 	}

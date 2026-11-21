@@ -276,17 +276,23 @@ func (q *Queries) ListSubnets(ctx context.Context) ([]string, error) {
 
 const queryM5 = `-- name: QueryM5 :many
 SELECT series, ts, value FROM metrics_m5
-WHERE instr(series, ?1) = 1 AND ts >= ?2 AND ts <= ?3 ORDER BY series, ts
+WHERE series >= ?1 AND series < ?2 AND instr(series, ?1) = 1 AND ts >= ?3 AND ts <= ?4 ORDER BY series, ts
 `
 
 type QueryM5Params struct {
-	Prefix string
-	FromTs int64
-	ToTs   int64
+	Prefix    string
+	PrefixEnd string
+	FromTs    int64
+	ToTs      int64
 }
 
 func (q *Queries) QueryM5(ctx context.Context, arg QueryM5Params) ([]MetricsM5, error) {
-	rows, err := q.db.QueryContext(ctx, queryM5, arg.Prefix, arg.FromTs, arg.ToTs)
+	rows, err := q.db.QueryContext(ctx, queryM5,
+		arg.Prefix,
+		arg.PrefixEnd,
+		arg.FromTs,
+		arg.ToTs,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -310,17 +316,23 @@ func (q *Queries) QueryM5(ctx context.Context, arg QueryM5Params) ([]MetricsM5, 
 
 const queryRaw = `-- name: QueryRaw :many
 SELECT series, ts, value FROM metrics_raw
-WHERE instr(series, ?1) = 1 AND ts >= ?2 AND ts <= ?3 ORDER BY series, ts
+WHERE series >= ?1 AND series < ?2 AND instr(series, ?1) = 1 AND ts >= ?3 AND ts <= ?4 ORDER BY series, ts
 `
 
 type QueryRawParams struct {
-	Prefix string
-	FromTs int64
-	ToTs   int64
+	Prefix    string
+	PrefixEnd string
+	FromTs    int64
+	ToTs      int64
 }
 
 func (q *Queries) QueryRaw(ctx context.Context, arg QueryRawParams) ([]MetricsRaw, error) {
-	rows, err := q.db.QueryContext(ctx, queryRaw, arg.Prefix, arg.FromTs, arg.ToTs)
+	rows, err := q.db.QueryContext(ctx, queryRaw,
+		arg.Prefix,
+		arg.PrefixEnd,
+		arg.FromTs,
+		arg.ToTs,
+	)
 	if err != nil {
 		return nil, err
 	}
