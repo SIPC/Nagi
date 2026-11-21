@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -12,8 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/lease"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -80,10 +83,11 @@ type failoverState struct {
 }
 
 type failovers struct {
-	dir   string
-	voter *lease.Voter
-	mu    sync.Mutex
-	m     map[string]*failoverState // 项目 ID-容器名
+	dir     string
+	history *logging.Decisions
+	voter   *lease.Voter
+	mu      sync.Mutex
+	m       map[string]*failoverState // 项目 ID-容器名
 }
 
 func newFailovers(dataDir string) *failovers {
@@ -255,11 +259,19 @@ func (s *meshService) LeaseVotes(ctx context.Context, req *nagiv1.LeaseVotesRequ
 }
 
 // leaseVote 处理一个容器的投票请求。本节点没有这个容器的顶替设置时不同意。
-func (a *agent) leaseVote(caller mesh.Key, req *nagiv1.LeaseVoteRequest) *nagiv1.LeaseVoteResponse {
+func (a *agent) leaseVote(caller mesh.Key, req *nagiv1.LeaseVoteRequest) (out *nagiv1.LeaseVoteResponse) {
 	id, err := replicaID(req.GetProjectId(), req.GetContainer())
 	if err != nil {
 		return &nagiv1.LeaseVoteResponse{}
 	}
+	defer func() {
+		to := req.GetHandoverTo()
+		holder := out.GetHolder()
+		a.failovers.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.vote", Project: req.GetProjectId(), Object: req.GetContainer(), Data: map[string]any{
+			"caller": hex.EncodeToString(caller[:]), "requested_epoch": req.GetEpoch(), "handover_to": hex.EncodeToString(to[:min(len(to), 32)]), "handover_bytes": len(to),
+			"granted": out.GetGranted(), "holder": hex.EncodeToString(holder[:min(len(holder), 32)]), "holder_bytes": len(holder), "epoch": out.GetEpoch(),
+		}})
+	}()
 	f := a.failovers
 	st := f.get(id)
 	if st == nil {
@@ -278,7 +290,19 @@ func (a *agent) leaseVote(caller mesh.Key, req *nagiv1.LeaseVoteRequest) *nagiv1
 
 // requestVote 向另一个参与者要票；handoverTo 不为空时是请它把票转让给这一方。
 // 发给同一个成员的投票由 a.votes 合并成一次请求。
-func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, cfg *nagiv1.FailoverConfig, epoch uint64, handoverTo ...[]byte) (*nagiv1.LeaseVoteResponse, error) {
+func (a *agent) requestVote(ctx context.Context, m *nagiv1.FailoverParticipant, cfg *nagiv1.FailoverConfig, epoch uint64, handoverTo ...[]byte) (out *nagiv1.LeaseVoteResponse, voteErr error) {
+	defer func() {
+		if a.failovers == nil {
+			return
+		}
+		holder := out.GetHolder()
+		data := map[string]any{"peer": hex.EncodeToString(m.GetKey()), "requested_epoch": epoch, "granted": out.GetGranted(), "epoch": out.GetEpoch(), "holder": hex.EncodeToString(holder[:min(len(holder), 32)]), "holder_bytes": len(holder), "handover": len(handoverTo) > 0}
+		if voteErr != nil {
+			msg := voteErr.Error()
+			data["error"], data["error_truncated"] = strings.Clone(msg[:min(len(msg), 4096)]), len(msg) > 4096
+		}
+		a.failovers.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.vote.observed", Project: cfg.GetProjectId(), Object: cfg.GetContainer(), Data: data})
+	}()
 	k, err := mesh.ParseKey(m.GetKey())
 	if err != nil {
 		return nil, err
@@ -507,6 +531,11 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		} else if voteEpoch > epoch && bytes.Equal(voteFor, me.GetKey()) {
 			r.selfHigher = max(r.selfHigher, voteEpoch)
 		}
+		data := map[string]any{"requested_epoch": epoch, "votes": votes, "renewed": votes >= 2, "lease_seconds": L.Seconds(), "self_vote": self}
+		if votes >= 2 {
+			data["lease_until"] = sent.Add(L)
+		}
+		defer f.history.Report(logstore.Event{Time: time.Now(), Category: logstore.Task, Kind: "failover.renewal", Project: pid, Object: name, Data: data})
 		f.mu.Lock()
 		st.renewed = true
 		st.nextRenew = nextRenewAt(now, L)
@@ -556,7 +585,13 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 		}
 		if ok && wasFenced && a.projects.Has(ctx, pid, name) {
 			a.log.Info("重新拿到租约，启动容器", "project", pid, "container", name)
-			if err := a.projects.Unfence(ctx, pid, name, func(string) {}); err == nil {
+			err := a.projects.Unfence(ctx, pid, name, func(string) {})
+			data := map[string]any{"ok": err == nil}
+			if err != nil {
+				data["error"] = err.Error()
+			}
+			f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.unfence", Project: pid, Object: name, Data: data})
+			if err == nil {
 				f.mu.Lock()
 				st.fenced = false
 				f.mu.Unlock()
@@ -578,10 +613,15 @@ func (a *agent) holderTick(ctx context.Context, id string, st *failoverState, cf
 	if !fenced && !restoring && !failingBack && !grace && time.Now().After(leaseEnd.Add(-safetyMargin-stopTimeout)) && a.projects.Has(ctx, pid, name) {
 		a.log.Warn("续不上租约，停止容器", "project", pid, "container", name)
 		a.alerts.Fire(ctx, "lease:"+id, "容器 "+name+" 续不上顶替租约，已停止", "联系不上另一个节点和见证人；恢复后会自动重新启动", pid)
-		_ = a.projects.Fence(ctx, pid, name, leaseEnd.Add(-safetyMargin), func(string) {})
+		err := a.projects.Fence(ctx, pid, name, leaseEnd.Add(-safetyMargin), func(string) {})
 		f.mu.Lock()
 		st.fenced = true
 		f.mu.Unlock()
+		data := map[string]any{"ok": err == nil, "lease_until": leaseEnd, "reason": "renewal_deadline"}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.fence", Project: pid, Object: name, Data: data})
 		// 下面的代管重启不能用停止前读到的状态，否则会把刚停掉的容器又拉起来。
 		fenced = true
 		a.changed()
@@ -671,6 +711,7 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 		st.pending, st.confirmed = false, false
 		f.mu.Unlock()
 		if wasPending {
+			f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.confirmation.cleared", Project: pid, Object: name, Data: map[string]any{"reason": "holder_lease_valid"}})
 			a.changed()
 		}
 		a.alerts.Resolve(ctx, "takeover:"+id)
@@ -693,6 +734,7 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 			f.mu.Lock()
 			st.pending = true
 			f.mu.Unlock()
+			f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.confirmation.required", Project: pid, Object: name, Data: map[string]any{"reason": "stateful_holder_unreachable"}})
 			a.changed()
 			a.log.Warn("持有者失联，有状态容器等待确认顶替", "project", pid, "container", name)
 			a.alerts.Fire(ctx, "takeover:"+id, "容器 "+name+" 所在节点失联，等待确认顶替",
@@ -726,6 +768,7 @@ func (a *agent) standbyTick(ctx context.Context, id string, st *failoverState, c
 	st.pending, st.confirmed = false, false
 	_ = f.save(id, st)
 	f.mu.Unlock()
+	f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.takeover", Project: pid, Object: name, Data: map[string]any{"holder": hex.EncodeToString(me.GetKey()), "epoch": newEpoch, "remote_votes": r.granted, "restoring": true}})
 	a.alerts.Resolve(ctx, "takeover:"+id)
 
 	a.startFromReplica(ctx, id, st, me, safetyMargin, "已顶替容器", "原节点 "+participantName(cfg, holder)+" 失联，容器 "+name+" 已在本节点启动")
@@ -751,6 +794,11 @@ func (a *agent) startFromReplica(ctx context.Context, id string, st *failoverSta
 		case <-time.After(wait):
 		}
 		err := a.restoreFromReplica(ctx, pid, name, me.GetDir(), func(string) {})
+		data := map[string]any{"ok": err == nil}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.restore", Project: pid, Object: name, Data: data})
 		if err != nil && (!a.projects.Has(ctx, pid, name) || errors.Is(err, errAlreadyHere)) {
 			a.log.Error("用副本启动容器失败", "project", pid, "container", name, "err", err)
 			a.alerts.Fire(ctx, "takeover:"+id, "容器 "+name+" 用副本启动失败", err.Error(), pid)
@@ -812,6 +860,11 @@ func (a *agent) failback(ctx context.Context, id string) {
 	pid, name := cfg.GetProjectId(), cfg.GetContainer()
 	target := &nagiv1.BackupTarget{NodeId: other.GetNodeId(), Name: other.GetName(), Key: other.GetKey()}
 	done := func(err error) {
+		data := map[string]any{"ok": err == nil, "target_peer": hex.EncodeToString(other.GetKey()), "epoch": epoch}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.failback.finished", Project: pid, Object: name, Data: data})
 		f.mu.Lock()
 		st.failingBack = false
 		if err != nil {
@@ -826,6 +879,7 @@ func (a *agent) failback(ctx context.Context, id string) {
 		}
 	}
 	a.log.Info("原节点已稳定，切回容器", "project", pid, "container", name, "to", other.GetName())
+	f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.failback.started", Project: pid, Object: name, Data: map[string]any{"target_peer": hex.EncodeToString(other.GetKey()), "epoch": epoch}})
 	a.changed()
 	// 先在容器运行时同步一次，停止以后只需要同步很少的增量，停机时间短。
 	if _, err := a.syncTo(ctx, pid, name, target, nil); err != nil {
@@ -902,6 +956,7 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	pid, name := cfg.GetProjectId(), cfg.GetContainer()
 	// 新的持有方只能是另一个参与者：不是的话不撤容器、不改副本的源节点（collect 已经滤掉，这里再核对一次）。
 	if !isOtherParticipant(cfg, a.selfKey(), holder) {
+		f.history.Report(logstore.Event{Category: logstore.Security, Kind: "failover.demotion.rejected", Project: pid, Object: name, Data: map[string]any{"reason": "non_participant_holder", "epoch": epoch}})
 		a.log.Warn("新的持有方不是这份顶替的另一个参与者，忽略", "project", pid, "container", name, "epoch", epoch)
 		return
 	}
@@ -933,6 +988,7 @@ func (a *agent) demote(ctx context.Context, id string, holder []byte, epoch uint
 	st.fenced, st.renewed = false, false
 	_ = f.save(id, st)
 	f.mu.Unlock()
+	f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.role.updated", Project: pid, Object: name, Data: map[string]any{"role": "standby", "holder": hex.EncodeToString(holder), "epoch": epoch}})
 	a.changed()
 	a.alerts.Resolve(ctx, "lease:"+id)
 	if notify {
@@ -1136,5 +1192,6 @@ func (s *agentService) ConfirmTakeover(ctx context.Context, req *nagiv1.Containe
 	}
 	st.confirmed = true
 	f.mu.Unlock()
+	f.history.Report(logstore.Event{Category: logstore.Task, Kind: "failover.confirmation.accepted", Project: req.GetProjectId(), Object: req.GetContainer(), Data: map[string]any{"accepted": true}})
 	return s.node.failoverStatus(ctx, id), nil
 }

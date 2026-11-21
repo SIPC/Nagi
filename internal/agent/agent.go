@@ -251,6 +251,8 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.statuses
 	a.failovers = newFailovers(cfg.DataDir)
+	a.failovers.history = logging.NewDecisions(cfg.Logs, cfg.LogConfig.DecisionQueueEntries)
+	defer a.failovers.history.Close()
 	a.votes = &voteBatcher{a: a}
 	projects.ManagedRestart = a.managed
 	projects.FastSnapshot = a.managed

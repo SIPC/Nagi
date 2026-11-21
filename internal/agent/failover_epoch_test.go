@@ -3,13 +3,16 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"math"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/pkg/lease"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
@@ -53,6 +56,13 @@ func TestHolderRaisesEpochForOwnHigherVote(t *testing.T) {
 	st := &failoverState{cfg: cfg, holder: A, epoch: 5, restoring: true}
 	a.failovers = &failovers{dir: filepath.Join(dir, "failover"), voter: vA, m: map[string]*failoverState{id: st}}
 	ctx := context.Background()
+	logs, err := logstore.Open(ctx, filepath.Join(dir, "logs.db"), 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	a.failovers.history = logging.NewDecisions(logs, 64)
+	defer a.failovers.history.Close()
 
 	// 第一次续约：三方都不同意（记着 A 的第 7 轮），本节点把轮次调到 8。
 	a.holderTick(ctx, id, st, cfg, cfg.GetA(), cfg.GetB(), 5)
@@ -90,6 +100,33 @@ func TestHolderRaisesEpochForOwnHigherVote(t *testing.T) {
 		if epoch != 8 {
 			t.Fatalf("honest voter poisoned: %d", epoch)
 		}
+	}
+	a.failovers.history.Close()
+	rows, err := logs.Query(ctx, logstore.Filter{Category: logstore.Task})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var renewals []struct {
+		Votes   int
+		Renewed bool
+		Epoch   uint64 `json:"requested_epoch"`
+	}
+	for _, row := range rows {
+		if row.Kind != "failover.renewal" {
+			continue
+		}
+		var data struct {
+			Votes   int
+			Renewed bool
+			Epoch   uint64 `json:"requested_epoch"`
+		}
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+			t.Fatal(err)
+		}
+		renewals = append(renewals, data)
+	}
+	if len(renewals) != 4 || renewals[0].Renewed || renewals[0].Votes != 0 || renewals[0].Epoch != 5 || !renewals[1].Renewed || renewals[1].Votes != 3 || renewals[1].Epoch != 8 {
+		t.Fatalf("renewal evidence: %+v", renewals)
 	}
 }
 
