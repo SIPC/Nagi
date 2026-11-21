@@ -1,6 +1,10 @@
 // 设置页「版本更新」。
 export default {
   badge: "有新版本",
+  channel: "更新渠道",
+  channels: { stable: "正式版", pre: "预发布" },
+  channelConfirm: "改用预发布渠道？预发布版用于在正式发布前试用，可能不稳定，更新后不能在面板上退回正式版。",
+  channelUsePre: "使用预发布",
   check: "检查更新",
   checkedAgo: (ago: string) => `${ago}检查`,
   moreInfo: "更多信息…",

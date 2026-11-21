@@ -376,6 +376,21 @@ public class NodeServiceClient(
 
 
   /**
+   *  设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+   */
+  override suspend fun setNodeUpdateChannel(request: SetNodeUpdateChannelRequest, headers: Headers): ResponseMessage<SetNodeUpdateChannelResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.NodeService/SetNodeUpdateChannel",
+      ink.sipc.nagi.proto.v1.SetNodeUpdateChannelRequest::class,
+      ink.sipc.nagi.proto.v1.SetNodeUpdateChannelResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
    *  节点的镜像加速地址。
    */
   override suspend fun getNodeMirrors(request: NodeRef, headers: Headers): ResponseMessage<Mirrors> = client.unary(

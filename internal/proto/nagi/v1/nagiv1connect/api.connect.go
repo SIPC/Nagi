@@ -191,6 +191,9 @@ const (
 	// NodeServiceCancelNodeUpgradeProcedure is the fully-qualified name of the NodeService's
 	// CancelNodeUpgrade RPC.
 	NodeServiceCancelNodeUpgradeProcedure = "/nagi.v1.NodeService/CancelNodeUpgrade"
+	// NodeServiceSetNodeUpdateChannelProcedure is the fully-qualified name of the NodeService's
+	// SetNodeUpdateChannel RPC.
+	NodeServiceSetNodeUpdateChannelProcedure = "/nagi.v1.NodeService/SetNodeUpdateChannel"
 	// NodeServiceGetNodeMirrorsProcedure is the fully-qualified name of the NodeService's
 	// GetNodeMirrors RPC.
 	NodeServiceGetNodeMirrorsProcedure = "/nagi.v1.NodeService/GetNodeMirrors"
@@ -282,6 +285,9 @@ const (
 	// SettingsServiceSetMeshAutoRouteProcedure is the fully-qualified name of the SettingsService's
 	// SetMeshAutoRoute RPC.
 	SettingsServiceSetMeshAutoRouteProcedure = "/nagi.v1.SettingsService/SetMeshAutoRoute"
+	// SettingsServiceSetPanelUpdateChannelProcedure is the fully-qualified name of the
+	// SettingsService's SetPanelUpdateChannel RPC.
+	SettingsServiceSetPanelUpdateChannelProcedure = "/nagi.v1.SettingsService/SetPanelUpdateChannel"
 	// SettingsServiceGetAlertConfigProcedure is the fully-qualified name of the SettingsService's
 	// GetAlertConfig RPC.
 	SettingsServiceGetAlertConfigProcedure = "/nagi.v1.SettingsService/GetAlertConfig"
@@ -1492,6 +1498,8 @@ type NodeServiceClient interface {
 	UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error)
 	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
 	CancelNodeUpgrade(context.Context, *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error)
+	// 设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+	SetNodeUpdateChannel(context.Context, *connect.Request[v1.SetNodeUpdateChannelRequest]) (*connect.Response[v1.SetNodeUpdateChannelResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -1718,6 +1726,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("CancelNodeUpgrade")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeUpdateChannel: connect.NewClient[v1.SetNodeUpdateChannelRequest, v1.SetNodeUpdateChannelResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeUpdateChannelProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeUpdateChannel")),
+			connect.WithClientOptions(opts...),
+		),
 		getNodeMirrors: connect.NewClient[v1.NodeRef, v1.Mirrors](
 			httpClient,
 			baseURL+NodeServiceGetNodeMirrorsProcedure,
@@ -1912,6 +1926,7 @@ type nodeServiceClient struct {
 	upgradeNode           *connect.Client[v1.UpgradeNodeRequest, v1.UpgradeResponse]
 	upgradeAllNodes       *connect.Client[v1.UpgradeAllNodesRequest, v1.UpgradeAllNodesResponse]
 	cancelNodeUpgrade     *connect.Client[v1.CancelNodeUpgradeRequest, v1.CancelNodeUpgradeResponse]
+	setNodeUpdateChannel  *connect.Client[v1.SetNodeUpdateChannelRequest, v1.SetNodeUpdateChannelResponse]
 	getNodeMirrors        *connect.Client[v1.NodeRef, v1.Mirrors]
 	setNodeMirrors        *connect.Client[v1.SetNodeMirrorsRequest, v1.Mirrors]
 	reclaimNodeSnapshots  *connect.Client[v1.NodeRef, v1.DeployEvent]
@@ -2074,6 +2089,11 @@ func (c *nodeServiceClient) UpgradeAllNodes(ctx context.Context, req *connect.Re
 // CancelNodeUpgrade calls nagi.v1.NodeService.CancelNodeUpgrade.
 func (c *nodeServiceClient) CancelNodeUpgrade(ctx context.Context, req *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error) {
 	return c.cancelNodeUpgrade.CallUnary(ctx, req)
+}
+
+// SetNodeUpdateChannel calls nagi.v1.NodeService.SetNodeUpdateChannel.
+func (c *nodeServiceClient) SetNodeUpdateChannel(ctx context.Context, req *connect.Request[v1.SetNodeUpdateChannelRequest]) (*connect.Response[v1.SetNodeUpdateChannelResponse], error) {
+	return c.setNodeUpdateChannel.CallUnary(ctx, req)
 }
 
 // GetNodeMirrors calls nagi.v1.NodeService.GetNodeMirrors.
@@ -2255,6 +2275,8 @@ type NodeServiceHandler interface {
 	UpgradeAllNodes(context.Context, *connect.Request[v1.UpgradeAllNodesRequest]) (*connect.Response[v1.UpgradeAllNodesResponse], error)
 	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
 	CancelNodeUpgrade(context.Context, *connect.Request[v1.CancelNodeUpgradeRequest]) (*connect.Response[v1.CancelNodeUpgradeResponse], error)
+	// 设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+	SetNodeUpdateChannel(context.Context, *connect.Request[v1.SetNodeUpdateChannelRequest]) (*connect.Response[v1.SetNodeUpdateChannelResponse], error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error)
 	SetNodeMirrors(context.Context, *connect.Request[v1.SetNodeMirrorsRequest]) (*connect.Response[v1.Mirrors], error)
@@ -2477,6 +2499,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("CancelNodeUpgrade")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeUpdateChannelHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeUpdateChannelProcedure,
+		svc.SetNodeUpdateChannel,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeUpdateChannel")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceGetNodeMirrorsHandler := connect.NewUnaryHandler(
 		NodeServiceGetNodeMirrorsProcedure,
 		svc.GetNodeMirrors,
@@ -2695,6 +2723,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceUpgradeAllNodesHandler.ServeHTTP(w, r)
 		case NodeServiceCancelNodeUpgradeProcedure:
 			nodeServiceCancelNodeUpgradeHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeUpdateChannelProcedure:
+			nodeServiceSetNodeUpdateChannelHandler.ServeHTTP(w, r)
 		case NodeServiceGetNodeMirrorsProcedure:
 			nodeServiceGetNodeMirrorsHandler.ServeHTTP(w, r)
 		case NodeServiceSetNodeMirrorsProcedure:
@@ -2866,6 +2896,10 @@ func (UnimplementedNodeServiceHandler) CancelNodeUpgrade(context.Context, *conne
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.CancelNodeUpgrade is not implemented"))
 }
 
+func (UnimplementedNodeServiceHandler) SetNodeUpdateChannel(context.Context, *connect.Request[v1.SetNodeUpdateChannelRequest]) (*connect.Response[v1.SetNodeUpdateChannelResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeUpdateChannel is not implemented"))
+}
+
 func (UnimplementedNodeServiceHandler) GetNodeMirrors(context.Context, *connect.Request[v1.NodeRef]) (*connect.Response[v1.Mirrors], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.GetNodeMirrors is not implemented"))
 }
@@ -2984,6 +3018,9 @@ type SettingsServiceClient interface {
 	SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
 	SetMeshAutoRoute(context.Context, *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	// 设置本面板的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。只有管理员能用。
+	// 每个面板自己一份，不随备用面板同步；节点的渠道另外设置（NodeService.SetNodeUpdateChannel）。
+	SetPanelUpdateChannel(context.Context, *connect.Request[v1.SetPanelUpdateChannelRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3106,6 +3143,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+SettingsServiceSetMeshAutoRouteProcedure,
 			connect.WithSchema(settingsServiceMethods.ByName("SetMeshAutoRoute")),
+			connect.WithClientOptions(opts...),
+		),
+		setPanelUpdateChannel: connect.NewClient[v1.SetPanelUpdateChannelRequest, v1.UpdateSettingsResponse](
+			httpClient,
+			baseURL+SettingsServiceSetPanelUpdateChannelProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetPanelUpdateChannel")),
 			connect.WithClientOptions(opts...),
 		),
 		getAlertConfig: connect.NewClient[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse](
@@ -3406,6 +3449,7 @@ type settingsServiceClient struct {
 	setPanelDomain           *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
 	setPanelName             *connect.Client[v1.SetPanelNameRequest, v1.UpdateSettingsResponse]
 	setMeshAutoRoute         *connect.Client[v1.SetMeshAutoRouteRequest, v1.UpdateSettingsResponse]
+	setPanelUpdateChannel    *connect.Client[v1.SetPanelUpdateChannelRequest, v1.UpdateSettingsResponse]
 	getAlertConfig           *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
 	updateAlertConfig        *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
 	testAlertChannel         *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
@@ -3479,6 +3523,11 @@ func (c *settingsServiceClient) SetPanelName(ctx context.Context, req *connect.R
 // SetMeshAutoRoute calls nagi.v1.SettingsService.SetMeshAutoRoute.
 func (c *settingsServiceClient) SetMeshAutoRoute(ctx context.Context, req *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return c.setMeshAutoRoute.CallUnary(ctx, req)
+}
+
+// SetPanelUpdateChannel calls nagi.v1.SettingsService.SetPanelUpdateChannel.
+func (c *settingsServiceClient) SetPanelUpdateChannel(ctx context.Context, req *connect.Request[v1.SetPanelUpdateChannelRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return c.setPanelUpdateChannel.CallUnary(ctx, req)
 }
 
 // GetAlertConfig calls nagi.v1.SettingsService.GetAlertConfig.
@@ -3731,6 +3780,9 @@ type SettingsServiceHandler interface {
 	SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
 	SetMeshAutoRoute(context.Context, *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	// 设置本面板的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。只有管理员能用。
+	// 每个面板自己一份，不随备用面板同步；节点的渠道另外设置（NodeService.SetNodeUpdateChannel）。
+	SetPanelUpdateChannel(context.Context, *connect.Request[v1.SetPanelUpdateChannelRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3849,6 +3901,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		SettingsServiceSetMeshAutoRouteProcedure,
 		svc.SetMeshAutoRoute,
 		connect.WithSchema(settingsServiceMethods.ByName("SetMeshAutoRoute")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetPanelUpdateChannelHandler := connect.NewUnaryHandler(
+		SettingsServiceSetPanelUpdateChannelProcedure,
+		svc.SetPanelUpdateChannel,
+		connect.WithSchema(settingsServiceMethods.ByName("SetPanelUpdateChannel")),
 		connect.WithHandlerOptions(opts...),
 	)
 	settingsServiceGetAlertConfigHandler := connect.NewUnaryHandler(
@@ -4151,6 +4209,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceSetPanelNameHandler.ServeHTTP(w, r)
 		case SettingsServiceSetMeshAutoRouteProcedure:
 			settingsServiceSetMeshAutoRouteHandler.ServeHTTP(w, r)
+		case SettingsServiceSetPanelUpdateChannelProcedure:
+			settingsServiceSetPanelUpdateChannelHandler.ServeHTTP(w, r)
 		case SettingsServiceGetAlertConfigProcedure:
 			settingsServiceGetAlertConfigHandler.ServeHTTP(w, r)
 		case SettingsServiceUpdateAlertConfigProcedure:
@@ -4274,6 +4334,10 @@ func (UnimplementedSettingsServiceHandler) SetPanelName(context.Context, *connec
 
 func (UnimplementedSettingsServiceHandler) SetMeshAutoRoute(context.Context, *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetMeshAutoRoute is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetPanelUpdateChannel(context.Context, *connect.Request[v1.SetPanelUpdateChannelRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetPanelUpdateChannel is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error) {

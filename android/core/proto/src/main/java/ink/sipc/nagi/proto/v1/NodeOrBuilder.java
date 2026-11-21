@@ -290,4 +290,46 @@ public interface NodeOrBuilder extends
    * @return The relayPool.
    */
   boolean getRelayPool();
+
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   * @return The updateChannel.
+   */
+  java.lang.String getUpdateChannel();
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   * @return The bytes for updateChannel.
+   */
+  com.google.protobuf.ByteString
+      getUpdateChannelBytes();
+
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   * @return The upgradeTarget.
+   */
+  java.lang.String getUpgradeTarget();
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   * @return The bytes for upgradeTarget.
+   */
+  com.google.protobuf.ByteString
+      getUpgradeTargetBytes();
 }

@@ -571,7 +571,7 @@ func toolCheckPanelUpdate(c *call, _ empty) (any, error) {
 		return nil, err
 	}
 	r := res.Msg
-	out := map[string]any{"current": r.GetCurrent(), "latest": r.GetLatest(), "available": r.GetAvailable(), "release_url": r.GetReleaseUrl(), "checked_at": ts(r.GetCheckedAt())}
+	out := map[string]any{"current": r.GetCurrent(), "latest": r.GetLatest(), "available": r.GetAvailable(), "release_url": r.GetReleaseUrl(), "checked_at": ts(r.GetCheckedAt()), "update_channel": r.GetChannel()}
 	if r.GetUnsupported() != "" {
 		out["cannot_update"] = r.GetUnsupported()
 	}

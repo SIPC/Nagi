@@ -256,6 +256,8 @@ var adminProcedures = map[string]bool{
 	"/nagi.v1.NodeService/RemoveNodePanel": true, "/nagi.v1.NodeService/GetPanelMesh": true,
 	// mesh 自动切路总开关：改变所有节点之间的线路，设置页的 mesh 标签也只给管理员。
 	"/nagi.v1.SettingsService/SetMeshAutoRoute": true,
+	// 面板的更新渠道：决定一键更新面板时会不会装上预发布版。
+	"/nagi.v1.SettingsService/SetPanelUpdateChannel": true,
 	// 升级全部节点：会升级范围外的节点。
 	"/nagi.v1.NodeService/UpgradeAllNodes": true,
 	// 重命名、删除分组和标签：会改到成员范围外的项目和节点。
@@ -346,6 +348,8 @@ var procedurePerms = map[string]Perm{
 	"/nagi.v1.NodeService/TestNodeMeshSpeed": PermNodeManage, "/nagi.v1.NodeService/SetNodeMeshOptions": PermNodeManage,
 	// 中转池：同意这个节点为别的节点承担性能中转（流量计入它），和节点的网络设置一样要「节点管理」。
 	"/nagi.v1.NodeService/SetNodeRelayPool": PermNodeManage,
+	// 节点的更新渠道：决定节点能不能升级到预发布版，和升级节点一样要「节点管理」。
+	"/nagi.v1.NodeService/SetNodeUpdateChannel": PermNodeManage,
 
 	"/nagi.v1.NodeService/ListNodeImages": PermNodeImages, "/nagi.v1.NodeService/DeleteNodeImages": PermNodeImages,
 	"/nagi.v1.NodeService/PruneNodeImages": PermNodeImages, "/nagi.v1.NodeService/PullNodeImage": PermNodeImages,

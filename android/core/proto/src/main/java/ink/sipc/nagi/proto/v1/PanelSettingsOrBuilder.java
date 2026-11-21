@@ -153,4 +153,24 @@ public interface PanelSettingsOrBuilder extends
    * @return The meshAutoRoute.
    */
   boolean getMeshAutoRoute();
+
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   * @return The updateChannel.
+   */
+  java.lang.String getUpdateChannel();
+  /**
+   * <pre>
+   * 本面板的更新渠道：stable（默认）或 pre，用 SetPanelUpdateChannel 修改。
+   * </pre>
+   *
+   * <code>string update_channel = 10 [json_name = "updateChannel"];</code>
+   * @return The bytes for updateChannel.
+   */
+  com.google.protobuf.ByteString
+      getUpdateChannelBytes();
 }

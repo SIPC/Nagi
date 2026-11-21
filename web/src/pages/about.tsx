@@ -1,7 +1,9 @@
 import { ArrowUpRight } from "lucide-react";
-import { List, Row, Section } from "@/components/ui";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { List, Row, Section, SettingRows } from "@/components/ui";
 import { useRole } from "@/components/role";
-import { PanelVersion } from "@/pages/update";
+import { PanelVersion, UpdateChannelRow } from "@/pages/update";
+import { settingsClient } from "@/lib/api";
 import { t } from "@/i18n";
 
 const a = t.about;
@@ -33,11 +35,28 @@ function External({ href, children }: { href: string; children: React.ReactNode 
 // AboutCard：设置里的「关于」。所有角色都能看，只有管理员能检查和更新版本。
 export function AboutCard() {
   const { isAdmin } = useRole();
+  const queryClient = useQueryClient();
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
+  // 换渠道后面板清掉缓存的最新版本，这里重新检查（按新渠道）。
+  const setChannel = async (channel: string) => {
+    const r = await settingsClient.setPanelUpdateChannel({ channel });
+    queryClient.setQueryData(["settings"], (s: typeof settings.data) => s && { ...s, settings: r.settings });
+    await queryClient.invalidateQueries({ queryKey: ["panel-update"] });
+    await queryClient.invalidateQueries({ queryKey: ["panel-release-notes"] });
+  };
 
   return (
     <div>
       {/* 品牌和版本是第一个区块，下面的区块自带分隔线和上下 24。 */}
       <PanelVersion isAdmin={isAdmin} />
+      {/* 旧面板没有更新渠道（update_channel 为空），不显示。 */}
+      {settings.data?.settings?.updateChannel && (
+        <Section title={a.update.title}>
+          <SettingRows>
+            <UpdateChannelRow value={settings.data.settings.updateChannel} help={a.update.help} canEdit={isAdmin} onChange={setChannel} />
+          </SettingRows>
+        </Section>
+      )}
       <Section title={a.links.title}>
         <List>
           <Row className="relative" title={<External href={repo}>{a.links.source}</External>} cols={[{ phone: true, content: "GitHub" }]} />

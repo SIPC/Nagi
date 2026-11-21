@@ -1200,6 +1200,7 @@ const (
 	NodeService_UpgradeNode_FullMethodName           = "/nagi.v1.NodeService/UpgradeNode"
 	NodeService_UpgradeAllNodes_FullMethodName       = "/nagi.v1.NodeService/UpgradeAllNodes"
 	NodeService_CancelNodeUpgrade_FullMethodName     = "/nagi.v1.NodeService/CancelNodeUpgrade"
+	NodeService_SetNodeUpdateChannel_FullMethodName  = "/nagi.v1.NodeService/SetNodeUpdateChannel"
 	NodeService_GetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/GetNodeMirrors"
 	NodeService_SetNodeMirrors_FullMethodName        = "/nagi.v1.NodeService/SetNodeMirrors"
 	NodeService_ReclaimNodeSnapshots_FullMethodName  = "/nagi.v1.NodeService/ReclaimNodeSnapshots"
@@ -1275,6 +1276,8 @@ type NodeServiceClient interface {
 	UpgradeAllNodes(ctx context.Context, in *UpgradeAllNodesRequest, opts ...grpc.CallOption) (*UpgradeAllNodesResponse, error)
 	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
 	CancelNodeUpgrade(ctx context.Context, in *CancelNodeUpgradeRequest, opts ...grpc.CallOption) (*CancelNodeUpgradeResponse, error)
+	// 设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+	SetNodeUpdateChannel(ctx context.Context, in *SetNodeUpdateChannelRequest, opts ...grpc.CallOption) (*SetNodeUpdateChannelResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error)
 	SetNodeMirrors(ctx context.Context, in *SetNodeMirrorsRequest, opts ...grpc.CallOption) (*Mirrors, error)
@@ -1642,6 +1645,16 @@ func (c *nodeServiceClient) CancelNodeUpgrade(ctx context.Context, in *CancelNod
 	return out, nil
 }
 
+func (c *nodeServiceClient) SetNodeUpdateChannel(ctx context.Context, in *SetNodeUpdateChannelRequest, opts ...grpc.CallOption) (*SetNodeUpdateChannelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeUpdateChannelResponse)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeUpdateChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) GetNodeMirrors(ctx context.Context, in *NodeRef, opts ...grpc.CallOption) (*Mirrors, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Mirrors)
@@ -1985,6 +1998,8 @@ type NodeServiceServer interface {
 	UpgradeAllNodes(context.Context, *UpgradeAllNodesRequest) (*UpgradeAllNodesResponse, error)
 	// 取消升级：排队的不再升级，下载中的停止下载；已经替换、正在重启的不能取消。
 	CancelNodeUpgrade(context.Context, *CancelNodeUpgradeRequest) (*CancelNodeUpgradeResponse, error)
+	// 设置节点的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。存在面板上，节点离线也能改。
+	SetNodeUpdateChannel(context.Context, *SetNodeUpdateChannelRequest) (*SetNodeUpdateChannelResponse, error)
 	// 节点的镜像加速地址。
 	GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error)
 	SetNodeMirrors(context.Context, *SetNodeMirrorsRequest) (*Mirrors, error)
@@ -2126,6 +2141,9 @@ func (UnimplementedNodeServiceServer) UpgradeAllNodes(context.Context, *UpgradeA
 }
 func (UnimplementedNodeServiceServer) CancelNodeUpgrade(context.Context, *CancelNodeUpgradeRequest) (*CancelNodeUpgradeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelNodeUpgrade not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeUpdateChannel(context.Context, *SetNodeUpdateChannelRequest) (*SetNodeUpdateChannelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeUpdateChannel not implemented")
 }
 func (UnimplementedNodeServiceServer) GetNodeMirrors(context.Context, *NodeRef) (*Mirrors, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNodeMirrors not implemented")
@@ -2683,6 +2701,24 @@ func _NodeService_CancelNodeUpgrade_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NodeServiceServer).CancelNodeUpgrade(ctx, req.(*CancelNodeUpgradeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeService_SetNodeUpdateChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeUpdateChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeUpdateChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeUpdateChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeUpdateChannel(ctx, req.(*SetNodeUpdateChannelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3252,6 +3288,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NodeService_CancelNodeUpgrade_Handler,
 		},
 		{
+			MethodName: "SetNodeUpdateChannel",
+			Handler:    _NodeService_SetNodeUpdateChannel_Handler,
+		},
+		{
 			MethodName: "GetNodeMirrors",
 			Handler:    _NodeService_GetNodeMirrors_Handler,
 		},
@@ -3394,6 +3434,7 @@ const (
 	SettingsService_SetPanelDomain_FullMethodName           = "/nagi.v1.SettingsService/SetPanelDomain"
 	SettingsService_SetPanelName_FullMethodName             = "/nagi.v1.SettingsService/SetPanelName"
 	SettingsService_SetMeshAutoRoute_FullMethodName         = "/nagi.v1.SettingsService/SetMeshAutoRoute"
+	SettingsService_SetPanelUpdateChannel_FullMethodName    = "/nagi.v1.SettingsService/SetPanelUpdateChannel"
 	SettingsService_GetAlertConfig_FullMethodName           = "/nagi.v1.SettingsService/GetAlertConfig"
 	SettingsService_UpdateAlertConfig_FullMethodName        = "/nagi.v1.SettingsService/UpdateAlertConfig"
 	SettingsService_TestAlertChannel_FullMethodName         = "/nagi.v1.SettingsService/TestAlertChannel"
@@ -3456,6 +3497,9 @@ type SettingsServiceClient interface {
 	SetPanelName(ctx context.Context, in *SetPanelNameRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
 	SetMeshAutoRoute(ctx context.Context, in *SetMeshAutoRouteRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
+	// 设置本面板的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。只有管理员能用。
+	// 每个面板自己一份，不随备用面板同步；节点的渠道另外设置（NodeService.SetNodeUpdateChannel）。
+	SetPanelUpdateChannel(ctx context.Context, in *SetPanelUpdateChannelRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error)
 	GetAlertConfig(ctx context.Context, in *GetAlertConfigRequest, opts ...grpc.CallOption) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(ctx context.Context, in *UpdateAlertConfigRequest, opts ...grpc.CallOption) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3591,6 +3635,16 @@ func (c *settingsServiceClient) SetMeshAutoRoute(ctx context.Context, in *SetMes
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(UpdateSettingsResponse)
 	err := c.cc.Invoke(ctx, SettingsService_SetMeshAutoRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *settingsServiceClient) SetPanelUpdateChannel(ctx context.Context, in *SetPanelUpdateChannelRequest, opts ...grpc.CallOption) (*UpdateSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSettingsResponse)
+	err := c.cc.Invoke(ctx, SettingsService_SetPanelUpdateChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -4107,6 +4161,9 @@ type SettingsServiceServer interface {
 	SetPanelName(context.Context, *SetPanelNameRequest) (*UpdateSettingsResponse, error)
 	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
 	SetMeshAutoRoute(context.Context, *SetMeshAutoRouteRequest) (*UpdateSettingsResponse, error)
+	// 设置本面板的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。只有管理员能用。
+	// 每个面板自己一份，不随备用面板同步；节点的渠道另外设置（NodeService.SetNodeUpdateChannel）。
+	SetPanelUpdateChannel(context.Context, *SetPanelUpdateChannelRequest) (*UpdateSettingsResponse, error)
 	GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error)
 	UpdateAlertConfig(context.Context, *UpdateAlertConfigRequest) (*UpdateAlertConfigResponse, error)
 	// 用面板发一条测试消息到某个渠道。
@@ -4212,6 +4269,9 @@ func (UnimplementedSettingsServiceServer) SetPanelName(context.Context, *SetPane
 }
 func (UnimplementedSettingsServiceServer) SetMeshAutoRoute(context.Context, *SetMeshAutoRouteRequest) (*UpdateSettingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetMeshAutoRoute not implemented")
+}
+func (UnimplementedSettingsServiceServer) SetPanelUpdateChannel(context.Context, *SetPanelUpdateChannelRequest) (*UpdateSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPanelUpdateChannel not implemented")
 }
 func (UnimplementedSettingsServiceServer) GetAlertConfig(context.Context, *GetAlertConfigRequest) (*GetAlertConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAlertConfig not implemented")
@@ -4464,6 +4524,24 @@ func _SettingsService_SetMeshAutoRoute_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SettingsServiceServer).SetMeshAutoRoute(ctx, req.(*SetMeshAutoRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SettingsService_SetPanelUpdateChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPanelUpdateChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SettingsServiceServer).SetPanelUpdateChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SettingsService_SetPanelUpdateChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SettingsServiceServer).SetPanelUpdateChannel(ctx, req.(*SetPanelUpdateChannelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -5344,6 +5422,10 @@ var SettingsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetMeshAutoRoute",
 			Handler:    _SettingsService_SetMeshAutoRoute_Handler,
+		},
+		{
+			MethodName: "SetPanelUpdateChannel",
+			Handler:    _SettingsService_SetPanelUpdateChannel_Handler,
 		},
 		{
 			MethodName: "GetAlertConfig",

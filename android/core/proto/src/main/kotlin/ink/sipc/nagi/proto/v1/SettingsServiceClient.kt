@@ -83,6 +83,22 @@ public class SettingsServiceClient(
   )
 
 
+  /**
+   *  设置本面板的更新渠道（stable 正式版、pre 预发布，见 docs/development.md#预发布版本）。只有管理员能用。
+   *  每个面板自己一份，不随备用面板同步；节点的渠道另外设置（NodeService.SetNodeUpdateChannel）。
+   */
+  override suspend fun setPanelUpdateChannel(request: SetPanelUpdateChannelRequest, headers: Headers): ResponseMessage<UpdateSettingsResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/SetPanelUpdateChannel",
+      ink.sipc.nagi.proto.v1.SetPanelUpdateChannelRequest::class,
+      ink.sipc.nagi.proto.v1.UpdateSettingsResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
   override suspend fun getAlertConfig(request: GetAlertConfigRequest, headers: Headers): ResponseMessage<GetAlertConfigResponse> = client.unary(
     request,
     headers,

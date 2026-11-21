@@ -445,7 +445,25 @@ var latestURL = "https://github.com/" + Repo + "/releases/latest"
 // 版本：界面写明「查询自 <代理>」；下载时能连上 GitHub 就按 GitHub 上这个版本的 SHA256SUMS 核对，GitHub 上没有
 // 这个版本时不安装（见 fetchFirst）。节点升级的版本是面板自己正在运行的版本，不是这里查到的，所以这个版本号不会直接下发给节点。
 func Latest(ctx context.Context, proxy string) (version, via string, err error) {
-	v, err := latest(ctx, latestURL, 15*time.Second)
+	return viaProxies(ctx, proxy, latestURL, latest)
+}
+
+// feedURL 是发布列表的 Atom 订阅（最近的十几个版本，含预发布版），同样不占 GitHub API 的限额。
+var feedURL = "https://github.com/" + Repo + "/releases.atom"
+
+// LatestIn 返回渠道 channel 能用的最新版本：正式版渠道同 Latest；预发布渠道从发布列表里取版本号最大的一个
+// （含正式版：v0.37.1 发布后，v0.37.1-pre.2 的面板在预发布渠道里也能更新到它）。查询和经代理的规则同 Latest。
+func LatestIn(ctx context.Context, channel, proxy string) (version, via string, err error) {
+	if channel != ChannelPre {
+		return Latest(ctx, proxy)
+	}
+	return viaProxies(ctx, proxy, feedURL, newestInFeed)
+}
+
+// viaProxies 先直接查 url，连不上时先经 proxy（记着的代理，可以为空），再依次经 GitHubProxies 里的其他代理查。
+// 都查不到时返回直接查询的错误。
+func viaProxies(ctx context.Context, proxy, url string, get func(context.Context, string, time.Duration) (string, error)) (string, string, error) {
+	v, err := get(ctx, url, 15*time.Second)
 	if err == nil {
 		return v, "", nil
 	}
@@ -455,11 +473,34 @@ func Latest(ctx context.Context, proxy string) (version, via string, err error) 
 			continue
 		}
 		tried[p] = true
-		if pv, perr := latest(ctx, p+latestURL, 10*time.Second); perr == nil {
+		if pv, perr := get(ctx, p+url, 10*time.Second); perr == nil {
 			return pv, hostOf(p), nil
 		}
 	}
 	return "", "", err
+}
+
+// feedTagRe 只认每一项的链接属性：正文是转义过的 HTML（引号写成 &quot;），更新说明里提到的版本链接不会被当成发布。
+var feedTagRe = regexp.MustCompile(`href="https://github\.com/` + regexp.QuoteMeta(Repo) + `/releases/tag/([^"]+)"`)
+
+// newestInFeed 取发布列表里版本号最大的版本。
+func newestInFeed(ctx context.Context, url string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	b, err := fetch(ctx, url, 4<<20, nil, nil)
+	if err != nil {
+		return "", i18n.Detail(i18n.New("无法连接 GitHub，请检查面板的网络后重试"), err)
+	}
+	best := ""
+	for _, m := range feedTagRe.FindAllStringSubmatch(string(b), -1) {
+		if IsVersion(m[1]) && (best == "" || compare(best, m[1]) < 0) {
+			best = m[1]
+		}
+	}
+	if best == "" {
+		return "", i18n.New("GitHub 没有返回发布列表，请稍后重试")
+	}
+	return best, nil
 }
 
 func latest(ctx context.Context, url string, timeout time.Duration) (string, error) {
@@ -488,22 +529,72 @@ func PageURL(version string) string {
 	return "https://github.com/" + Repo + "/releases/tag/" + version
 }
 
-var versionPartsRe = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)([-+].*)?$`)
-
-// Older 判断版本 a 是否早于 b。不是正式版本号（例如本地编译的 dev）时不比较，返回 false。
-// 和 web/src/pages/update.tsx 的 isOlder 一致。
+// Older 判断版本 a 是否早于 b，按语义化版本号的先后（见 compare）。不是正式版本号（例如本地编译的 dev）时不比较，返回 false。
 func Older(a, b string) bool {
-	x, y := versionPartsRe.FindStringSubmatch(a), versionPartsRe.FindStringSubmatch(b)
-	if x == nil || y == nil {
+	if !IsVersion(a) || !IsVersion(b) {
 		return false
 	}
-	for i := 1; i <= 3; i++ {
-		p, _ := strconv.Atoi(x[i])
-		q, _ := strconv.Atoi(y[i])
-		if p != q {
-			return p < q
+	return compare(a, b) < 0
+}
+
+// compare 按语义化版本号比较两个版本号（都已经过 IsVersion），返回 -1、0、1：先比主、次、修订号；
+// 相同时预发布版早于正式版（v0.37.1-pre.2 < v0.37.1），两个预发布版逐段比较预发布号，数字段按数值
+// （pre.2 < pre.10），数字段早于字母段，前面都相同时段少的在前。「+」后面的构建信息不参与比较。
+func compare(a, b string) int {
+	coreA, preA := splitVersion(a)
+	coreB, preB := splitVersion(b)
+	for i := range coreA {
+		if c := cmpInt(coreA[i], coreB[i]); c != 0 {
+			return c
 		}
 	}
-	// 数字相同时，预发布版（v0.2.0-rc.1）早于正式版（v0.2.0）。
-	return a != b && strings.HasPrefix(x[4], "-") && !strings.HasPrefix(y[4], "-")
+	switch {
+	case preA == "" && preB == "":
+		return 0
+	case preA == "":
+		return 1
+	case preB == "":
+		return -1
+	}
+	x, y := strings.Split(preA, "."), strings.Split(preB, ".")
+	for i := 0; i < len(x) && i < len(y); i++ {
+		p, errP := strconv.Atoi(x[i])
+		q, errQ := strconv.Atoi(y[i])
+		var c int
+		switch {
+		case errP == nil && errQ == nil:
+			c = cmpInt(p, q)
+		case errP == nil:
+			c = -1
+		case errQ == nil:
+			c = 1
+		default:
+			c = strings.Compare(x[i], y[i])
+		}
+		if c != 0 {
+			return c
+		}
+	}
+	return cmpInt(len(x), len(y))
+}
+
+func cmpInt(a, b int) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
+}
+
+// splitVersion 拆出主、次、修订号和预发布号（不含「-」，没有时为空），去掉构建信息。
+func splitVersion(v string) ([3]int, string) {
+	v, _, _ = strings.Cut(strings.TrimPrefix(v, "v"), "+")
+	core, pre, _ := strings.Cut(v, "-")
+	var out [3]int
+	for i, p := range strings.SplitN(core, ".", 3) {
+		out[i], _ = strconv.Atoi(p)
+	}
+	return out, pre
 }

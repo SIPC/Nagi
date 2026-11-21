@@ -9,4 +9,24 @@ package ink.sipc.nagi.proto.v1;
 public interface UpgradeAllNodesRequestOrBuilder extends
     // @@protoc_insertion_point(interface_extends:nagi.v1.UpgradeAllNodesRequest)
     com.google.protobuf.MessageLiteOrBuilder {
+
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   * @return The channel.
+   */
+  java.lang.String getChannel();
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   * @return The bytes for channel.
+   */
+  com.google.protobuf.ByteString
+      getChannelBytes();
 }

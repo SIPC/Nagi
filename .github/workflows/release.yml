@@ -2,6 +2,10 @@
 # 连同面板安装脚本、卸载脚本和 SHA256SUMS 上传到 GitHub Release。
 # 安装脚本从 releases/latest/download/ 下载这些文件，文件名不要改。
 #
+# 预发布版（标签 vX.Y.Z-pre.N，见 docs/development.md#预发布版本）走同一个流程，测试、编译和签名都一样，只是在 GitHub 上标成
+# prerelease、不设为 latest：releases/latest 和正式版渠道看不到它。标签的格式和「同一版本号不重新发布」在 tag 任务里检查，
+# 规则在 scripts/release-tag.sh（internal/pkg/release 的 TestReleaseTagScript、TestReleaseWorkflow 检查）。
+#
 # 测试、漏洞检查和两个架构的编译同时进行，都通过后才发布。这里自己跑测试和漏洞检查，不依赖 ci.yml 的结果。
 # 测试和漏洞检查用 main 上 ci.yml 存下的 Go 缓存（标签上的流程只能读当前标签和默认分支的缓存，按 restore-keys
 # 用 main 上一次的）。产出发布文件的任务（build、android）不恢复任何缓存，从头下载依赖、从头编译：
@@ -18,8 +22,35 @@ permissions:
   contents: read
 
 jobs:
+  # 先核对标签：格式不对、这个版本已经发布过时停下，不浪费后面的编译。查不到 GitHub 上有没有这个版本时也停下：
+  # 发布会覆盖已有 Release 的文件，不能在不确定时继续。
+  tag:
+    runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check tag
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if out=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName 2>&1); then
+            released=$out
+          elif printf '%s' "$out" | grep -q 'release not found'; then
+            released=""
+          else
+            echo "::error::无法查询 $GITHUB_REF_NAME 是否已经发布：$out"
+            exit 1
+          fi
+          sh scripts/release-tag.sh "$GITHUB_REF_NAME" "$released" >> "$GITHUB_OUTPUT"
+
   # mesh 的测试单独一个任务：它的测试并行运行、很占 CPU，和别的包（agent 里按时间判定的端到端测试）挤在一台机器上会互相拖慢。
   test:
+    needs: tag
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -197,8 +228,8 @@ jobs:
   # 面板的测试、漏洞检查和编译都通过才发布。没配签名密钥时不带安卓 App；配了签名密钥时安卓 App 必须编译成功，
   # 否则不发布（App 的自动更新会找不到这个版本的 APK），修好后重新运行。
   release:
-    needs: [test, vuln, build, android]
-    if: ${{ !cancelled() && needs.test.result == 'success' && needs.vuln.result == 'success' && needs.build.result == 'success' }}
+    needs: [tag, test, vuln, build, android]
+    if: ${{ !cancelled() && needs.tag.result == 'success' && needs.test.result == 'success' && needs.vuln.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -279,7 +310,10 @@ jobs:
             printf '\n\n安卓 App 签名证书 SHA-256：`%s`\n' "$ANDROID_CERT" >> notes.md
           fi
 
+      # 预发布版标成 prerelease、不设为 latest；正式版设为 latest。
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*
           body_path: notes.md
+          prerelease: ${{ needs.tag.outputs.prerelease }}
+          make_latest: ${{ needs.tag.outputs.prerelease == 'true' && 'false' || 'true' }}

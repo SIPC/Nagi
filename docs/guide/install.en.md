@@ -53,6 +53,7 @@ To change how the panel is installed, append these options to the command, for e
 | `--no-agent` | Runs only the panel, without a built-in node. Use it to run the panel on a server of its own |
 | `--docker-mirror <name>` | Sets the package mirror used to install Docker: `Aliyun` or `AzureChinaCloud`. On mainland China networks, `Aliyun` is used by default |
 | `--download-url <url>` | Downloads nagi from a mirror or internal address. Use it when GitHub is unreachable; updates from the panel also download from this address |
-| `--version <version>` | Installs a specific version. By default, the latest version is installed |
+| `--version <version>` | Installs a specific version, such as `v0.38.0` or the pre-release `v0.38.0-pre.1`. By default, the latest stable version is installed |
+| `--channel <channel>` | Sets which channel's latest version to install when no version is given: `stable` (default) or `pre` (includes pre-releases). You can also use the `NAGI_CHANNEL` environment variable. The channel for later one-click updates is chosen in **Settings → About** on the panel |
 
 Next: [Add a node](add-node.en.md).

@@ -15,7 +15,75 @@ public  final class UpgradeAllNodesRequest extends
     // @@protoc_insertion_point(message_implements:nagi.v1.UpgradeAllNodesRequest)
     UpgradeAllNodesRequestOrBuilder {
   private UpgradeAllNodesRequest() {
+    channel_ = "";
   }
+  public static final int CHANNEL_FIELD_NUMBER = 1;
+  private java.lang.String channel_;
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   * @return The channel.
+   */
+  @java.lang.Override
+  public java.lang.String getChannel() {
+    return channel_;
+  }
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   * @return The bytes for channel.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getChannelBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(channel_);
+  }
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   * @param value The channel to set.
+   */
+  private void setChannel(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    channel_ = value;
+  }
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   */
+  private void clearChannel() {
+
+    channel_ = getDefaultInstance().getChannel();
+  }
+  /**
+   * <pre>
+   * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+   * </pre>
+   *
+   * <code>string channel = 1 [json_name = "channel"];</code>
+   * @param value The bytes for channel to set.
+   */
+  private void setChannelBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    channel_ = value.toStringUtf8();
+
+  }
+
   public static ink.sipc.nagi.proto.v1.UpgradeAllNodesRequest parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -113,6 +181,75 @@ public  final class UpgradeAllNodesRequest extends
     }
 
 
+    /**
+     * <pre>
+     * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+     * </pre>
+     *
+     * <code>string channel = 1 [json_name = "channel"];</code>
+     * @return The channel.
+     */
+    @java.lang.Override
+    public java.lang.String getChannel() {
+      return instance.getChannel();
+    }
+    /**
+     * <pre>
+     * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+     * </pre>
+     *
+     * <code>string channel = 1 [json_name = "channel"];</code>
+     * @return The bytes for channel.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getChannelBytes() {
+      return instance.getChannelBytes();
+    }
+    /**
+     * <pre>
+     * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+     * </pre>
+     *
+     * <code>string channel = 1 [json_name = "channel"];</code>
+     * @param value The channel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChannel(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setChannel(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+     * </pre>
+     *
+     * <code>string channel = 1 [json_name = "channel"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearChannel() {
+      copyOnWrite();
+      instance.clearChannel();
+      return this;
+    }
+    /**
+     * <pre>
+     * 只升级这个渠道的节点（stable、pre），为空时不按渠道筛选。不论筛不筛选，正式版渠道的节点都不会升级到预发布版。
+     * </pre>
+     *
+     * <code>string channel = 1 [json_name = "channel"];</code>
+     * @param value The bytes for channel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChannelBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setChannelBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.UpgradeAllNodesRequest)
   }
   @java.lang.Override
@@ -128,9 +265,11 @@ public  final class UpgradeAllNodesRequest extends
         return new Builder();
       }
       case BUILD_MESSAGE_INFO: {
-          java.lang.Object[] objects = null;
+          java.lang.Object[] objects = new java.lang.Object[] {
+            "channel_",
+          };
           java.lang.String info =
-              "\u0000\u0000";
+              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

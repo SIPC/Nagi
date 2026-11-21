@@ -118,6 +118,8 @@ export default {
   offlineTitle: "Node offline",
   noContainers: "No containers",
   offlineNotice: "Only the container list is available while the node is offline.",
+  channelHelp: "The stable channel upgrades only to stable releases. The pre-release channel can also upgrade to pre-releases; while the panel runs a pre-release, only nodes on the pre-release channel can be upgraded.",
+  channelPanelPre: "The panel runs a pre-release, so this node won't be upgraded to it.",
   upgrade: {
     badge: "Upgrade available",
     title: (version) => `Upgrade to ${version} available`,
@@ -138,6 +140,8 @@ export default {
     all: "Upgrade all",
     allCount: (n) => `Upgrade all nodes (${n})`,
     allRunning: (n) => `Upgrading (${n} left)`,
+    channelFilter: "Upgrade by update channel",
+    allChannels: "All channels",
     allConfirm: (n, version) => `Upgrade ${n} ${n === 1 ? "node" : "nodes"} to ${version} one at a time? Nodes that only hold replicas go first; if a node doesn't come back, the rest are skipped.`,
     cancel: "Cancel upgrade",
     canceling: "Canceling",

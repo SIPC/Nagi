@@ -16,6 +16,29 @@ var versionRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)
 // IsVersion 判断是不是正式发布的版本号（例如 v0.1.0）。本地编译的版本是 dev，没有对应的发布文件。
 func IsVersion(v string) bool { return versionRe.MatchString(v) }
 
+// 更新渠道（见 docs/development.md#预发布版本）：正式版渠道只用正式版（vX.Y.Z），预发布渠道还用预发布版（vX.Y.Z-pre.N）。
+const (
+	ChannelStable = "stable"
+	ChannelPre    = "pre"
+)
+
+// IsChannel 判断是不是认得的渠道名。
+func IsChannel(c string) bool { return c == ChannelStable || c == ChannelPre }
+
+// IsPrerelease 判断版本号是不是预发布版（带「-」后缀，例如 v0.37.1-pre.1）。
+func IsPrerelease(v string) bool {
+	if !IsVersion(v) {
+		return false
+	}
+	core, _, _ := strings.Cut(v, "+")
+	return strings.Contains(core, "-")
+}
+
+// Allowed 判断渠道 channel 能不能装版本 v：正式版渠道（以及认不出的渠道）永远不装预发布版。
+func Allowed(channel, v string) bool {
+	return IsVersion(v) && (channel == ChannelPre || !IsPrerelease(v))
+}
+
 // Before 判断正式版本 v 是不是早于 min（只比较主、次、修订号）。v 不是正式版本（例如本地编译的 dev）时返回 false。
 func Before(v, min string) bool {
 	a, ok1 := parts(v)

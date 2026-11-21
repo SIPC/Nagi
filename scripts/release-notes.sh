@@ -1,6 +1,7 @@
 #!/bin/sh
 # 打印 CHANGELOG.md 中某个版本的说明（「## <版本>」到下一个「## 」之前），供 GitHub Release 的正文使用。
-# 末尾附上通用的升级方式。没有这个版本时退出码为 1。
+# 末尾附上通用的升级方式。没有这个版本时退出码为 1。预发布版（v0.38.0-pre.1）的升级方式写成安装这个版本的命令，
+# 并说明它是预发布版（见 docs/development.md#预发布版本）。
 #
 #   scripts/release-notes.sh v0.3.0
 set -eu
@@ -19,6 +20,22 @@ BODY=$(printf '%s\n' "$BODY" | sed -e '/./,$!d')
 }
 
 printf '%s\n\n' "$BODY"
+case "$TAG" in
+  *-*)
+    cat <<EOF
+### 安装与升级
+
+这是预发布版，用于在正式发布前试用，可能不稳定，不会推送给使用正式版渠道的面板和节点。在面板服务器上以 root 执行以下命令安装或升级到这个版本：
+
+\`\`\`bash
+curl -fsSL https://github.com/SIPC/Nagi/releases/download/$TAG/install.sh | sudo sh -s -- --version $TAG
+\`\`\`
+
+也可以在面板的「设置 → 关于」中把更新渠道改为「预发布」后一键更新。节点要在节点设置中把更新渠道改为「预发布」才能升级到这个版本。完整的更新日志见 [CHANGELOG.md](https://github.com/SIPC/Nagi/blob/main/CHANGELOG.md)。
+EOF
+    exit 0
+    ;;
+esac
 cat <<'EOF'
 ### 安装与升级
 

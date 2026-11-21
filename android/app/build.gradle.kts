@@ -5,10 +5,15 @@ plugins {
 }
 
 // 版本号：发布时由 CI 传入 -PnagiVersion=<标签名去掉 v>，和面板同一个版本号；本地编译是 dev。
-// versionCode 由版本号算出：主版本 × 1000000 + 次版本 × 1000 + 修订号，一版比一版大。
+// versionCode 由版本号算出，一版比一版大：(主版本 × 1000000 + 次版本 × 1000 + 修订号) × 100，正式版再加 99，
+// 预发布版 x.y.z-pre.N 加 N（1～98）。这样 x.y.z-pre.1 < x.y.z-pre.2 < x.y.z，预发布版的 App 能直接升级到同号正式版；
+// v0.37.0 及以前的版本号按旧公式算，都比新公式小，已安装的 App 照常升级（见 docs/development.md#预发布版本）。
 val nagiVersion = (findProperty("nagiVersion") as String?)?.removePrefix("v") ?: "dev"
-val nagiVersionCode = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(nagiVersion)?.destructured
-    ?.let { (major, minor, patch) -> major.toInt() * 1_000_000 + minor.toInt() * 1_000 + patch.toInt() } ?: 1
+val nagiVersionCode = Regex("""^(\d+)\.(\d+)\.(\d+)(?:-pre\.(\d+))?$""").find(nagiVersion)?.destructured
+    ?.let { (major, minor, patch, pre) ->
+        val n = if (pre.isEmpty()) 99 else pre.toInt().also { require(it in 1..98) { "预发布序号须在 1～98 之间：$nagiVersion" } }
+        (major.toInt() * 1_000_000 + minor.toInt() * 1_000 + patch.toInt()) * 100 + n
+    } ?: 1
 
 // 发布签名：CI 从仓库的 Secrets 解出密钥库，用下面四个环境变量传入（见 docs/development.md#发布）。
 // 没有这些变量时不签名，release 构建产出未签名的 APK，CI 不上传它。

@@ -19,6 +19,12 @@ If you have standby panels, update each of them separately. While the versions d
 
 You can also run the install command on the server again to update the panel. The port, data directory and other settings stay the same.
 
+### Pre-releases
+
+Pre-releases let you try changes before a stable release and may be unstable. By default, the panel doesn't update to pre-releases. To try one, set **Update channel** to **Pre-release** in **Settings → About**, then check for updates. Each panel has its own setting, so change standby panels separately.
+
+Each node's update channel is chosen separately in the node's **Settings** and is **Stable** by default. While the panel runs a pre-release, only nodes set to **Pre-release** can be upgraded; the others stay on their stable version. Once the stable release with the same number is out, all nodes can be upgraded to it.
+
 ## Upgrade nodes
 
 After the panel is updated, nodes on an older version show **Upgrade available** on the **Nodes** page.

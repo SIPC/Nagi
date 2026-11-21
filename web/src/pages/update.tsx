@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { errorMessage, settingsClient } from "@/lib/api";
-import { Alert, AutoHeight, Button, dotColor, HelpTip, Skeleton, Spinner, textLink, Waves } from "@/components/ui";
+import { Alert, AutoHeight, Button, dotColor, HelpTip, Select, SettingRow, Skeleton, Spinner, textLink, Waves } from "@/components/ui";
 import { confirmAction } from "@/components/confirm";
 import { useStandbys } from "@/pages/standby";
 import { t } from "@/i18n";
@@ -18,8 +18,9 @@ import type { Node, UpdateState } from "@/gen/nagi/v1/api_pb";
 // 与 internal/pkg/release.IsVersion 一致。
 const versionRe = /^v(\d+)\.(\d+)\.(\d+)([-+][0-9A-Za-z.-]+)?$/;
 
-// isOlder：节点版本 a 是否早于面板版本 b。不是正式版本号（例如本地编译的 dev）时不比较。
-function isOlder(a: string, b: string) {
+// isOlder：节点版本 a 是否早于面板版本 b，按语义化版本号（和 internal/pkg/release.compare 一致）：预发布版早于同号正式版，
+// 预发布号逐段比较，数字段按数值（pre.2 < pre.10）。不是正式版本号（例如本地编译的 dev）时不比较。
+export function isOlder(a: string, b: string) {
   const x = versionRe.exec(a);
   const y = versionRe.exec(b);
   if (!x || !y) return false;
@@ -28,8 +29,30 @@ function isOlder(a: string, b: string) {
     const q = Number(y[i]);
     if (p !== q) return p < q;
   }
-  // 数字相同时，预发布版（v0.2.0-rc.1）早于正式版（v0.2.0）。
-  return a !== b && x[4]?.startsWith("-") === true && !y[4]?.startsWith("-");
+  const pa = prerelease(x[4]);
+  const pb = prerelease(y[4]);
+  if (pa === null || pb === null) return pa !== null && pb === null;
+  const sa = pa.split(".");
+  const sb = pb.split(".");
+  for (let i = 0; i < sa.length && i < sb.length; i++) {
+    const na = /^\d+$/.test(sa[i]);
+    const nb = /^\d+$/.test(sb[i]);
+    if (na && nb && Number(sa[i]) !== Number(sb[i])) return Number(sa[i]) < Number(sb[i]);
+    if (na !== nb) return na;
+    if (!na && sa[i] !== sb[i]) return sa[i] < sb[i];
+  }
+  return sa.length < sb.length;
+}
+
+// prerelease：版本号后缀里的预发布号（「-」之后、「+」之前），没有时为 null。
+function prerelease(suffix: string | undefined) {
+  if (!suffix?.startsWith("-")) return null;
+  return suffix.slice(1).split("+")[0];
+}
+
+// isPrerelease：预发布版（例如 v0.37.1-pre.1）。
+export function isPrerelease(v: string) {
+  return prerelease(versionRe.exec(v)?.[4]) !== null;
 }
 
 // lacksLogService：节点早于 v0.37.0，没有统一日志、图表历史、节点本地录制和告警处理（与 internal/server/api 的 logServiceMinVersion 一致）。
@@ -40,9 +63,11 @@ export function lacksLogService(version: string | undefined) {
 }
 
 // upgradeTarget：节点可以一键升级到的版本（即面板的版本），不能升级时返回空串。
-// 只升不降；面板自带的节点随面板升级；只支持 Linux 节点（见 internal/agent/upgrade.go）。
+// 只升不降；正式版渠道的节点不升到预发布版（见 docs/development.md#预发布版本），和面板的 Node.upgrade_target 一致；
+// 面板自带的节点随面板升级；只支持 Linux 节点（见 internal/agent/upgrade.go）。
 export function upgradeTarget(n: Node, panelVersion: string) {
   if (!n.online || n.pending || !n.info || n.info.embedded || n.info.os !== "linux") return "";
+  if (isPrerelease(panelVersion) && n.updateChannel !== "pre") return "";
   return isOlder(n.info.version, panelVersion) ? panelVersion : "";
 }
 
@@ -57,6 +82,39 @@ export function canStopDownload(version: string) {
     if (p !== since[i]) return p > since[i];
   }
   return true;
+}
+
+// UpdateChannelRow：更新渠道（正式版、预发布，见 docs/development.md#预发布版本）的设置行。面板和节点各用一个。
+// 选预发布要确认，改回正式版不用。只读的成员（没有权限）只看到当前渠道。
+export function UpdateChannelRow({ value, help, canEdit, onChange }: { value: string; help: React.ReactNode; canEdit: boolean; onChange: (channel: string) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const channel = value === "pre" ? "pre" : "stable";
+  const label = t.update.channels[channel];
+  const change = async (next: string) => {
+    if (next === channel) return;
+    if (next === "pre" && !(await confirmAction(t.update.channelConfirm, { action: t.update.channelUsePre }))) return;
+    setBusy(true);
+    try {
+      await onChange(next);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <SettingRow label={t.update.channel} help={help} description={canEdit ? undefined : label}>
+      {canEdit && (
+        <div className="flex items-center gap-2">
+          {busy && <Spinner />}
+          <Select aria-label={t.update.channel} value={channel} disabled={busy} onChange={(e) => change(e.target.value)} className="w-36">
+            <option value="stable">{t.update.channels.stable}</option>
+            <option value="pre">{t.update.channels.pre}</option>
+          </Select>
+        </div>
+      )}
+    </SettingRow>
+  );
 }
 
 // cancelable：这条升级能不能取消。已经替换、正在重启的不能。

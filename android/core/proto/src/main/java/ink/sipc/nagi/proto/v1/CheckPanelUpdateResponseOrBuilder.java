@@ -140,4 +140,24 @@ public interface CheckPanelUpdateResponseOrBuilder extends
    */
   com.google.protobuf.ByteString
       getLatestSourceBytes();
+
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   * @return The channel.
+   */
+  java.lang.String getChannel();
+  /**
+   * <pre>
+   * 查询用的更新渠道（stable、pre）：latest 是这个渠道里最新的版本。
+   * </pre>
+   *
+   * <code>string channel = 8 [json_name = "channel"];</code>
+   * @return The bytes for channel.
+   */
+  com.google.protobuf.ByteString
+      getChannelBytes();
 }

@@ -22,6 +22,8 @@ public  final class Node extends
     staleProjects_ = emptyProtobufList();
     tags_ = emptyProtobufList();
     group_ = "";
+    updateChannel_ = "";
+    upgradeTarget_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1126,6 +1128,145 @@ public  final class Node extends
   private void clearRelayPool() {
 
     relayPool_ = false;
+  }
+
+  public static final int UPDATE_CHANNEL_FIELD_NUMBER = 18;
+  private java.lang.String updateChannel_;
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   * @return The updateChannel.
+   */
+  @java.lang.Override
+  public java.lang.String getUpdateChannel() {
+    return updateChannel_;
+  }
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   * @return The bytes for updateChannel.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getUpdateChannelBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(updateChannel_);
+  }
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   * @param value The updateChannel to set.
+   */
+  private void setUpdateChannel(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    updateChannel_ = value;
+  }
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   */
+  private void clearUpdateChannel() {
+
+    updateChannel_ = getDefaultInstance().getUpdateChannel();
+  }
+  /**
+   * <pre>
+   * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+   * </pre>
+   *
+   * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+   * @param value The bytes for updateChannel to set.
+   */
+  private void setUpdateChannelBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    updateChannel_ = value.toStringUtf8();
+
+  }
+
+  public static final int UPGRADE_TARGET_FIELD_NUMBER = 19;
+  private java.lang.String upgradeTarget_;
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   * @return The upgradeTarget.
+   */
+  @java.lang.Override
+  public java.lang.String getUpgradeTarget() {
+    return upgradeTarget_;
+  }
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   * @return The bytes for upgradeTarget.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getUpgradeTargetBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(upgradeTarget_);
+  }
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   * @param value The upgradeTarget to set.
+   */
+  private void setUpgradeTarget(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    upgradeTarget_ = value;
+  }
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   */
+  private void clearUpgradeTarget() {
+
+    upgradeTarget_ = getDefaultInstance().getUpgradeTarget();
+  }
+  /**
+   * <pre>
+   * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+   * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+   * </pre>
+   *
+   * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+   * @param value The bytes for upgradeTarget to set.
+   */
+  private void setUpgradeTargetBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    upgradeTarget_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.Node parseFrom(
@@ -2382,6 +2523,149 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+     * </pre>
+     *
+     * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+     * @return The updateChannel.
+     */
+    @java.lang.Override
+    public java.lang.String getUpdateChannel() {
+      return instance.getUpdateChannel();
+    }
+    /**
+     * <pre>
+     * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+     * </pre>
+     *
+     * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+     * @return The bytes for updateChannel.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getUpdateChannelBytes() {
+      return instance.getUpdateChannelBytes();
+    }
+    /**
+     * <pre>
+     * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+     * </pre>
+     *
+     * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+     * @param value The updateChannel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpdateChannel(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setUpdateChannel(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+     * </pre>
+     *
+     * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearUpdateChannel() {
+      copyOnWrite();
+      instance.clearUpdateChannel();
+      return this;
+    }
+    /**
+     * <pre>
+     * 更新渠道：stable（默认）或 pre（见 docs/development.md#预发布版本）。
+     * </pre>
+     *
+     * <code>string update_channel = 18 [json_name = "updateChannel"];</code>
+     * @param value The bytes for updateChannel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpdateChannelBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setUpdateChannelBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+     * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+     * </pre>
+     *
+     * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+     * @return The upgradeTarget.
+     */
+    @java.lang.Override
+    public java.lang.String getUpgradeTarget() {
+      return instance.getUpgradeTarget();
+    }
+    /**
+     * <pre>
+     * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+     * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+     * </pre>
+     *
+     * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+     * @return The bytes for upgradeTarget.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getUpgradeTargetBytes() {
+      return instance.getUpgradeTargetBytes();
+    }
+    /**
+     * <pre>
+     * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+     * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+     * </pre>
+     *
+     * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+     * @param value The upgradeTarget to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpgradeTarget(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setUpgradeTarget(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+     * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+     * </pre>
+     *
+     * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearUpgradeTarget() {
+      copyOnWrite();
+      instance.clearUpgradeTarget();
+      return this;
+    }
+    /**
+     * <pre>
+     * 一键升级能升到的版本：面板的版本，且节点的渠道允许、比节点现在的版本新；不能升级时为空。
+     * 节点离线、未批准、是面板自带的节点、不是 Linux 时也为空。旧面板没有这个字段。
+     * </pre>
+     *
+     * <code>string upgrade_target = 19 [json_name = "upgradeTarget"];</code>
+     * @param value The bytes for upgradeTarget to set.
+     * @return This builder for chaining.
+     */
+    public Builder setUpgradeTargetBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setUpgradeTargetBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.Node)
   }
   @java.lang.Override
@@ -2418,12 +2702,14 @@ public  final class Node extends
             "isolated_",
             "group_",
             "relayPool_",
+            "updateChannel_",
+            "upgradeTarget_",
           };
           java.lang.String info =
-              "\u0000\u0011\u0000\u0001\u0001\u0011\u0011\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0013\u0000\u0001\u0001\u0013\u0013\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0007\u0004\u1009\u0000\u0005\u1009\u0001\u0006\u0208\u0007\u0007\b\u1009" +
               "\u0002\t\u0004\n\u001b\u000b\u0007\f\u001b\r\u1009\u0003\u000e\u021a\u000f\u0007" +
-              "\u0010\u0208\u0011\u0007";
+              "\u0010\u0208\u0011\u0007\u0012\u0208\u0013\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

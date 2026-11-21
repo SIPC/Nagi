@@ -111,6 +111,8 @@ export default {
     DeleteNodeReplica: "删除副本",
     UpgradeNode: "升级节点",
     UpgradeAllNodes: "升级全部节点",
+    SetNodeUpdateChannel: "更改节点更新渠道",
+    SetPanelUpdateChannel: "更改面板更新渠道",
     CancelNodeUpgrade: "取消升级节点",
     SetNodeMirrors: "设置镜像加速",
     SetNodeMeshOptions: "编辑节点网络设置",

@@ -32,17 +32,17 @@ func TestLatestCheckedVia(t *testing.T) {
 	old := latestFunc
 	t.Cleanup(func() { latestFunc = old })
 	via := "ghfast.top"
-	latestFunc = func(context.Context, string) (string, string, error) { return "v0.99.0", via, nil }
+	latestFunc = func(context.Context, string, string) (string, string, error) { return "v0.99.0", via, nil }
 	var u panelUpdates
-	c, err := u.getChecked(context.Background(), false, "")
+	c, err := u.getChecked(context.Background(), false, "stable", "")
 	if err != nil || c.version != "v0.99.0" || c.via != "ghfast.top" {
 		t.Fatalf("得到 %+v、%v", c, err)
 	}
 	via = ""
-	if c, _ := u.getChecked(context.Background(), false, ""); c.via != "ghfast.top" {
+	if c, _ := u.getChecked(context.Background(), false, "stable", ""); c.via != "ghfast.top" {
 		t.Fatalf("缓存的结果应带着查询的代理：%+v", c)
 	}
-	if c, _ := u.getChecked(context.Background(), true, ""); c.via != "" {
+	if c, _ := u.getChecked(context.Background(), true, "stable", ""); c.via != "" {
 		t.Fatalf("直接从 GitHub 查到时应清掉：%+v", c)
 	}
 }
