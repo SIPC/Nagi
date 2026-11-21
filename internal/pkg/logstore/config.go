@@ -11,7 +11,7 @@ import (
 const GiB int64 = 1 << 30
 
 // Config 是本机 logs/config.json 的配置。面板和它的内嵌节点共用一份额度。
-// 修改后重启生效；不包含业务库、旧日志库和 Docker 自己的轮换文件。
+// 修改后重启生效；包含接入的旧历史库，不包含业务库和 Docker 自己的轮换文件。
 type Config struct {
 	CapacityGiB            int    `json:"capacity_gib"`
 	MetricsEverySeconds    int    `json:"metrics_every_seconds"`

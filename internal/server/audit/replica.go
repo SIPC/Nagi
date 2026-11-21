@@ -104,6 +104,26 @@ func (l *Log) ReadBatch(ctx context.Context, after int64, limit int, rec *Record
 
 // WriteBatch 把同步来的一批写进备用面板的审计库：按原来的 id、prev_hash、hash 写入，录制的块写进录制目录。
 func (l *Log) WriteBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone, chunks []Chunk, rec *Recordings) error {
+	reserve := int64(64<<10) + int64(len(tombs))*256
+	for _, e := range events {
+		reserve += int64(len(Canonical(e.Event)))*2 + 4096
+	}
+	for _, c := range chunks {
+		reserve += int64(len(c.Data)) + 4096
+	}
+	return l.budget.WriteArchive(ctx, 4, reserve, func() error {
+		if err := l.writeBatch(ctx, events, tombs, chunks, rec); err != nil {
+			return err
+		}
+		if l.budget != nil {
+			_, err := l.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+			return err
+		}
+		return nil
+	})
+}
+
+func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone, chunks []Chunk, rec *Recordings) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	tx, err := l.db.BeginTx(ctx, nil)

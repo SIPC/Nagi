@@ -288,7 +288,34 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		s.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: category, Kind: "panel." + e.Action,
 			Project: e.ProjectID, Object: e.TargetID, Data: json.RawMessage(audit.Canonical(e))})
 	}
+	for _, l := range []*audit.Log{s.audit, s.auditReplica} {
+		if l != nil {
+			if err := l.UseBudget(ctx, cfg.Logs, l == s.auditReplica); err != nil {
+				log.Error("无法把旧面板审计接入统一本机容量", "err", err)
+			}
+		}
+	}
+	// Former panel terms remain evidence until explicitly migrated. Account for
+	// them too, but never silently unlink an unimported audit chain to make space.
+	archives, err := filepath.Glob(filepath.Join(cfg.DataDir, "audit-*.db"))
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range archives {
+		if s.auditReplica != nil && path == filepath.Join(cfg.DataDir, "audit-standby.db") {
+			continue
+		}
+		if err := cfg.Logs.RegisterArchive(ctx, logstore.Archive{Name: path, Priority: 4,
+			Size: func() (int64, error) { return logstore.FileBytes(path) },
+			Trim: func(context.Context) (bool, error) { return false, nil },
+		}); err != nil {
+			log.Error("无法把旧任期审计接入统一本机容量", "path", path, "err", err)
+		}
+	}
 	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
+	if err := s.recordings.UseBudget(ctx, cfg.Logs); err != nil {
+		log.Error("无法把终端录制接入统一本机容量", "err", err)
+	}
 	s.auth = auth.New(s.q, s.sealer)
 	s.auth.SetAudit(s.audit)
 	if cfg.DevAppKeys {

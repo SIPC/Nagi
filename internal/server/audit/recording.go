@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -45,6 +46,8 @@ type Recordings struct {
 	Sealer Sealer
 	// Enabled 判断现在要不要录制（「设置 → 安全 → 终端录制」）。
 	Enabled func(context.Context) bool
+	budget  *logstore.Store
+	active  sync.Map
 }
 
 var recordingIDRe = regexp.MustCompile(`^[0-9]{6}-[0-9a-f]{24}$`)
@@ -98,7 +101,9 @@ func (r *Recordings) Start(ctx context.Context, cols, rows int) *Recorder {
 	now := time.Now()
 	id := now.Format("200601") + "-" + hex.EncodeToString(b)
 	rec := &Recorder{r: r, id: id, dir: filepath.Join(r.Dir, id[:6], id), start: now, stop: make(chan struct{}), done: make(chan struct{})}
+	r.active.Store(id, true)
 	if err := os.MkdirAll(rec.dir, 0o700); err != nil {
+		r.active.Delete(id)
 		return nil
 	}
 	header, _ := json.Marshal(map[string]any{"version": 2, "width": cols, "height": rows, "timestamp": now.Unix()})
@@ -198,6 +203,7 @@ func (rec *Recorder) flushLocked() {
 	rec.seq++
 	if err != nil {
 		rec.err = err
+		rec.truncated = true
 		return
 	}
 	// 开头 8 MB 一直保留；之后的块只留最后 56 MB，攻击者先刷屏也挤不掉最后的操作。
@@ -235,7 +241,9 @@ func (r *Recordings) writeChunk(id, dir string, seq int, plain []byte) (chunkInf
 		return chunkInfo{}, err
 	}
 	path := filepath.Join(dir, chunkName(seq))
-	if err := os.WriteFile(path, sealed, 0o600); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := r.budget.WriteArchive(ctx, 3, int64(len(sealed))+4096, func() error { return os.WriteFile(path, sealed, 0o600) }); err != nil {
 		return chunkInfo{}, err
 	}
 	sum := sha256.Sum256(sealed)
@@ -259,6 +267,7 @@ func (rec *Recorder) Close() Summary {
 		rec.pending = nil
 	}
 	rec.flushLocked()
+	rec.r.active.Delete(rec.id)
 	rec.mu.Unlock()
 	close(rec.stop)
 	<-rec.done
@@ -355,6 +364,9 @@ func (r *Recordings) Prune(keep time.Duration, maxBytes int64, now time.Time) er
 	if r == nil {
 		return nil
 	}
+	if r.budget != nil {
+		return r.budget.WriteArchive(context.Background(), 3, 0, func() error { return nil })
+	}
 	months, _ := os.ReadDir(r.Dir)
 	type rec struct {
 		path string
@@ -384,6 +396,9 @@ func (r *Recordings) Prune(keep time.Duration, maxBytes int64, now time.Time) er
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].mod.Before(all[j].mod) })
 	for _, x := range all {
+		if _, active := r.active.Load(filepath.Base(x.path)); active {
+			continue
+		}
 		if now.Sub(x.mod) > keep || maxBytes > 0 && total > maxBytes {
 			if err := os.RemoveAll(x.path); err != nil {
 				return err

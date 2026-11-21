@@ -30,6 +30,9 @@ func (a *agent) openAudit(ctx context.Context) {
 	l.Capture = func(e auditlog.Event) {
 		a.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: logstore.Audit, Kind: "node." + e.Action, Object: e.Target, Data: e})
 	}
+	if err := l.UseBudget(ctx, a.cfg.Logs); err != nil {
+		a.log.Error("无法把节点旧审计接入统一本机容量", "err", err)
+	}
 	// 升级前节点自己外送，保存过面板的外送凭据：删掉。
 	if err := l.MigrateShipping(a.auditSinksPath()); err != nil {
 		a.log.Warn("无法删除旧的外送配置", "err", err)

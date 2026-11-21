@@ -87,12 +87,13 @@ type Pruned struct {
 }
 
 type State struct {
-	Source      string   `json:"source"`
-	Last        int64    `json:"last"`
-	DiskBytes   int64    `json:"disk_bytes"`
-	BudgetBytes int64    `json:"budget_bytes"`
-	WriteErrors uint64   `json:"write_errors"`
-	Pruned      []Pruned `json:"pruned"`
+	Source      string         `json:"source"`
+	Last        int64          `json:"last"`
+	DiskBytes   int64          `json:"disk_bytes"`
+	BudgetBytes int64          `json:"budget_bytes"`
+	WriteErrors uint64         `json:"write_errors"`
+	Pruned      []Pruned       `json:"pruned"`
+	Archives    []ArchiveUsage `json:"archives"`
 }
 
 type Store struct {
@@ -106,6 +107,7 @@ type Store struct {
 	errors  atomic.Uint64
 	// Report 的失败仅写原始 stderr logger，不能递归写回自身。
 	lastError atomic.Int64
+	archives  []Archive
 }
 
 // Open 允许小额度供本地测试和未来近期副本使用；生产节点的 5～10 GiB 范围由 LoadConfig 校验。
@@ -275,19 +277,8 @@ func (s *Store) record(ctx context.Context, e Event, key string, position []byte
 	if s.closed {
 		return sql.ErrConnDone
 	}
-	live, err := s.liveBytes(ctx)
-	if err != nil {
+	if err := s.prepare(ctx, p, int64(len(b))*2+(32<<10)); err != nil {
 		return err
-	}
-	// 正常记录不能为了给自己腾位置删除审计；重要记录可以在没有普通记录后淘汰最老审计。
-	maxPriority := min(p, 3)
-	if p == 4 {
-		maxPriority = 4
-	}
-	if live+int64(len(b))*2+(32<<10) > s.dbLimit*9/10 {
-		if err := s.prune(ctx, s.dbLimit*8/10, maxPriority); err != nil {
-			return err
-		}
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -339,10 +330,19 @@ func (s *Store) liveBytes(ctx context.Context) (int64, error) {
 			return 0, err
 		}
 	}
-	return (pages - free) * size, nil
+	total := (pages - free) * size
+	for _, a := range s.archives {
+		n, err := a.Size()
+		if err != nil {
+			return 0, err
+		}
+		total += n
+	}
+	return total, nil
 }
 
 func (s *Store) prune(ctx context.Context, target int64, maxPriority int) error {
+	exhausted := map[string]bool{}
 	for {
 		live, err := s.liveBytes(ctx)
 		if err != nil || live <= target {
@@ -351,11 +351,41 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int) error 
 		// 小批次删除，给 WAL 留足预算；每批与缺口摘要原子提交。
 		var seq int64
 		var category string
-		if err := s.db.QueryRowContext(ctx, `SELECT seq, category FROM log_events WHERE priority<=? ORDER BY priority, seq LIMIT 1`, maxPriority).Scan(&seq, &category); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return ErrCapacity
-			}
+		var p int
+		err = s.db.QueryRowContext(ctx, `SELECT seq, category, priority FROM log_events WHERE priority<=? ORDER BY priority, seq LIMIT 1`, maxPriority).Scan(&seq, &category, &p)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			p = maxPriority + 1
+		}
+		chosen := -1
+		for i, a := range s.archives {
+			if !exhausted[a.Name] && a.Priority <= maxPriority && a.Priority <= p {
+				chosen, p = i, a.Priority
+			}
+		}
+		if chosen >= 0 {
+			a := s.archives[chosen]
+			changed, err := a.Trim(ctx)
+			if err != nil {
+				return err
+			}
+			if !changed {
+				exhausted[a.Name] = true
+			}
+			if changed {
+				if _, err := s.db.ExecContext(ctx, `INSERT INTO log_meta(key,value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1`, "archive_pruned:"+a.Name); err != nil {
+					return err
+				}
+				if _, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if seq == 0 {
+			return ErrCapacity
 		}
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -380,10 +410,16 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int) error 
 }
 
 func (s *Store) compact(ctx context.Context) error {
+	return CompactHistory(ctx, s.db)
+}
+
+// CompactHistory incrementally reclaims a history-only SQLite database without
+// creating a second full-size copy. Its owner must serialize writers.
+func CompactHistory(ctx context.Context, d *sql.DB) error {
 	previous := int(^uint(0) >> 1)
 	for {
 		var free int
-		if err := s.db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil {
+		if err := d.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil {
 			return err
 		}
 		if free == 0 {
@@ -393,28 +429,28 @@ func (s *Store) compact(ctx context.Context) error {
 			return fmt.Errorf("日志库增量空间回收未推进")
 		}
 		previous = free
-		if _, err := s.db.ExecContext(ctx, `PRAGMA incremental_vacuum(128)`); err != nil {
+		if _, err := d.ExecContext(ctx, `PRAGMA incremental_vacuum(128)`); err != nil {
 			return err
 		}
-		if _, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		if _, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 			return err
 		}
 	}
-	_, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+	_, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
 	return err
 }
 
 func (s *Store) diskBytes() (int64, error) {
-	var size int64
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		st, err := os.Stat(s.path + suffix)
-		if os.IsNotExist(err) {
-			continue
-		}
+	size, err := FileBytes(s.path)
+	if err != nil {
+		return 0, err
+	}
+	for _, a := range s.archives {
+		n, err := a.Size()
 		if err != nil {
 			return 0, err
 		}
-		size += st.Size()
+		size += n
 	}
 	return size, nil
 }
@@ -474,6 +510,17 @@ func (s *Store) State(ctx context.Context) (State, error) {
 	var err error
 	if st.DiskBytes, err = s.diskBytes(); err != nil {
 		return st, err
+	}
+	for _, a := range s.archives {
+		n, err := a.Size()
+		if err != nil {
+			return st, err
+		}
+		u := ArchiveUsage{Name: a.Name, DiskBytes: n}
+		if err := s.db.QueryRowContext(ctx, `SELECT CAST(value AS INTEGER) FROM log_meta WHERE key=?`, "archive_pruned:"+a.Name).Scan(&u.PrunedBatches); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return st, err
+		}
+		st.Archives = append(st.Archives, u)
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT category,first_seq,last_seq,count FROM log_pruned ORDER BY category`)
 	if err != nil {

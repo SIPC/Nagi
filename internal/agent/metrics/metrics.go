@@ -25,6 +25,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
 // Interval 是采样间隔。
@@ -50,6 +51,7 @@ type Collector struct {
 	docker   *docker.Client
 	diskPath string
 	log      *slog.Logger
+	budget   *logstore.Store
 
 	mu       sync.RWMutex
 	latest   map[string]float64
@@ -369,6 +371,12 @@ func (c *Collector) store(ctx context.Context, now time.Time, values map[string]
 	if c.OnSample != nil {
 		c.OnSample(now, values)
 	}
+	return c.budget.WriteArchive(ctx, 2, int64(len(values))*16384+(64<<10), func() error {
+		return c.storeHistory(ctx, now, values)
+	})
+}
+
+func (c *Collector) storeHistory(ctx context.Context, now time.Time, values map[string]float64) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -381,7 +389,14 @@ func (c *Collector) store(ctx context.Context, now time.Time, values map[string]
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if c.budget != nil {
+		_, err := c.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+		return err
+	}
+	return nil
 }
 
 // maintain 把完整的 5 分钟窗口降采样，并清理过期数据。
@@ -404,12 +419,26 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 			if want := float64(bucket / Interval); rateSeries(r.Series) && float64(r.Samples) < want {
 				v *= float64(r.Samples) / want
 			}
-			_ = c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v})
+			if err := c.budget.WriteArchive(ctx, 2, 64<<10, func() error {
+				if err := c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v}); err != nil {
+					return err
+				}
+				if c.budget != nil {
+					_, err := c.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+					return err
+				}
+				return nil
+			}); err != nil {
+				return
+			}
 		}
 		c.lastDownsampledTo = to
 	}
-	_ = c.q.DeleteRawBefore(ctx, now.Add(-keepRaw).Unix())
-	_ = c.q.DeleteM5Before(ctx, now.Add(-keepM5).Unix())
+	// 统一预算接管后历史按容量淘汰，不再另套 24 小时/30 天过期规则。
+	if c.budget == nil {
+		_ = c.q.DeleteRawBefore(ctx, now.Add(-keepRaw).Unix())
+		_ = c.q.DeleteM5Before(ctx, now.Add(-keepM5).Unix())
+	}
 }
 
 // rateSeries 报告序列是不是端口映射按每秒速率记的计数：请求、各类状态码、连接、失败、流量。

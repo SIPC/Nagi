@@ -265,6 +265,11 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}()
 	a.metrics = metrics.New(metricDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	if metricDB != nodeDB {
+		if err := a.metrics.UseBudget(ctx, cfg.Logs, filepath.Join(cfg.DataDir, "logs", "metrics.db")); err != nil {
+			log.Error("无法把监控历史接入统一本机容量", "err", err)
+		}
+	}
 	if cfg.Logs != nil {
 		a.metrics.OnSample = a.logMetrics()
 	}
