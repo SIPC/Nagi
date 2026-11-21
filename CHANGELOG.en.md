@@ -25,6 +25,9 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Cross-node entries restored from node caches remain inactive until edited and saved in the container's Network tab. The pending state survives node caching. Existing panel records and local-only entries are unchanged.
 - This update includes a database migration. Update primary and standby panels to the same version; standby synchronization pauses across schema versions and resumes afterward. Downgrading requires restoring the pre-upgrade database backup.
 - Also upgrade nodes and node witnesses for complete label-file and failover epoch catch-up protection. Deployment checks label files even in inactive profile services and limits their variable expansion budget.
+- New node log and metric-history queries use mesh only. Older nodes lack these RPCs, so queries may be temporarily unavailable during mixed-version upgrades; there is no control-connection fallback. Back up data directories first, update primary and standby panels to the same version, then promptly upgrade all nodes and witnesses.
+- The first node upgrade copies metric history from `node.db` into `logs/metrics.db` in verified batches before clearing the old metric tables. On failure, old history stays queryable but receives no new samples; resolve disk or data conflicts and restart to retry. Original audit chains and recordings are retained under the [log migration policy](docs/logging.md), not deleted merely because they were imported.
+- Legacy-format pending alert queues are not replayed, avoiding obsolete messages and saved channel credentials. Unsent notifications must not be treated as delivered. Back up data directories before upgrading and use freshly evaluated alerts afterward.
 
 ## v0.36.0
 
