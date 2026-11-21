@@ -13,6 +13,58 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
+func TestJournalRedactsLiveAndImportedAuditWithoutChangingOldChain(t *testing.T) {
+	ctx := t.Context()
+	l := openTestLog(t)
+	dest, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dest.Close()
+	inputs := []string{
+		`{"nested":[{"password":"Sensitive123","command":"mysql -pSensitive456"}],"target":"safe-db"}`,
+		`mysql -p Sensitive123 --token Sensitive456 safe-db`,
+		`{"key":"Sensitive123", "target":"safe-db"`,
+	}
+	for i, params := range inputs {
+		if i > 0 {
+			l.Capture = func(e Event) { dest.Report(JournalEvent(e)) }
+		}
+		id := l.Record(ctx, Event{Category: Operation, Action: "Deploy", Params: params, Error: "failed mysql --password Sensitive789 postgres://u:SensitiveABC@safe-db/app"})
+		old, err := l.Get(ctx, id)
+		if err != nil || old.Params != params || !strings.Contains(old.Error, "Sensitive789") {
+			t.Fatalf("old evidence changed: %+v %v", old, err)
+		}
+	}
+	before, err := l.Get(ctx, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.MigrateHistory(ctx, dest, 3); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := dest.Query(ctx, logstore.Filter{Category: logstore.Audit})
+	if err != nil || len(rows) != 3 {
+		t.Fatalf("live/import reconciliation: %+v %v", rows, err)
+	}
+	for _, row := range rows {
+		var copy Event
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &copy); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(copy.Params+copy.Error, "Sensitive") || !strings.Contains(copy.Params, "safe-db") || !strings.Contains(copy.Error, "safe-db") {
+			t.Fatalf("unsafe or unusable audit copy: %+v", copy)
+		}
+	}
+	after, err := l.Get(ctx, 3)
+	if err != nil || before != after {
+		t.Fatalf("original event/hash modified: %+v %+v %v", before, after, err)
+	}
+	if result, err := l.Verify(ctx); err != nil || !result.OK() || result.Records != 3 {
+		t.Fatalf("old chain invalid: %+v %v", result, err)
+	}
+}
+
 func TestPanelHistoryReconcilesLiveCaptureAndPreservesEvidence(t *testing.T) {
 	ctx := t.Context()
 	l := openTestLog(t)

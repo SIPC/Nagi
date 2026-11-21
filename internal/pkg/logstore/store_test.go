@@ -42,6 +42,74 @@ func record(t *testing.T, s *logstore.Store, e logstore.Event) {
 	}
 }
 
+func TestNestedParamsAndCommandSecretsAreRedactedBeforeStorage(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	for _, input := range []string{
+		`mysql -pSensitive123 db01`,
+		`mysql -p Sensitive123 db01`,
+		`mysql --password Sensitive123 db01`,
+		"mysql --password=" + "Sensitive123 db01",
+		`mysql -p'Sensitive 123' db01`,
+		`mysql --password "Sensitive 123" db01`,
+		`mysql --password=Sensi'tive 123' db01`,
+		`mysql --password Sensi\ tive123 db01`,
+		"tool --token Sensitive123 --api-key=" + "Sensitive456 db01",
+		`tool -k Sensitive123 db01`,
+		`openssl enc -K Sensitive123 -in db01`,
+		`mysql --password "Sensi\"tive 123" db01`,
+		`db01 mysql --password "Sensitive 123`,
+		`db01 mysql --password 'Sensitive 123`,
+		`db01 mysql --password "Sensitive123\`,
+		`tool --access-token 'Sensitive 123' --secret-access-key Sensitive456 db01`,
+		`tool --private-key=Sensitive123 --credential Sensitive456 db01`,
+		`postgres://user:Sensitive123@db01:5432/app`,
+		`mongodb+srv://user:Sensitive123@db01/app`,
+		`user:Sensitive123@db01`,
+		`https://user:Sensitive123@db01/private?token=Sensitive456`,
+		`{"password":"Sensitive123", "target":"db01"`,
+		`{"target":"db01"} --password Sensitive123`,
+		`{"key":"Sensitive123","target":"db01"}`,
+		`[{"command":"Sensitive123","target":"db01"}]`,
+		`{"args":[{"private_key":"Sensitive123","target":"db01"}],"token":"Sensitive456"}`,
+		`{"args":[{"api-key":"Sensitive123","credential":{"nested":"Sensitive456"}}],"target":"db01"}`,
+		`{"\u0070assword":"Sensitive123","target":"db01","count":9007199254740993}`,
+	} {
+		t.Run(input, func(t *testing.T) {
+			record(t, s, logstore.Event{Category: logstore.Audit, Kind: "params.test", Data: map[string]any{"params": input, "error": input}})
+			rows := query(t, s, logstore.Filter{Category: logstore.Audit, Limit: 1000})
+			var data map[string]string
+			if err := json.Unmarshal(rows[len(rows)-1].Data.(json.RawMessage), &data); err != nil {
+				t.Fatal(err)
+			}
+			for _, field := range []string{"params", "error"} {
+				if strings.Contains(data[field], "Sensitive") || strings.Contains(data[field], "Sensi") || !strings.Contains(data[field], "db01") || data[field] == input {
+					t.Fatalf("%s retained a secret or lost safe context: %s", field, data[field])
+				}
+				if json.Valid([]byte(input)) && !json.Valid([]byte(data[field])) {
+					t.Fatalf("JSON became invalid: %s", data[field])
+				}
+				if strings.Contains(input, "9007199254740993") && !strings.Contains(data[field], "9007199254740993") {
+					t.Fatalf("JSON integer lost precision: %s", data[field])
+				}
+			}
+		})
+	}
+	// 普通参数不是秘密；引用编号按原规则保留，数组和多层 JSON 字符串也递归检查。
+	params := `{"target":"db01","token_id":"reference-only","args":[{"key":"Sensitive123","ok":true}]}`
+	wrapper, _ := json.Marshal(map[string]any{"payload": params, "name": "readable"})
+	record(t, s, logstore.Event{Category: logstore.Audit, Kind: "nested", Data: map[string]any{"params": string(wrapper), "error": "ordinary failure"}})
+	rows := query(t, s, logstore.Filter{Category: logstore.Audit, Limit: 1000})
+	body := string(rows[len(rows)-1].Data.(json.RawMessage))
+	for _, want := range []string{"reference-only", "ordinary failure", "readable", "db01"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("safe context %q was lost: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "Sensitive") {
+		t.Fatalf("nested JSON escaped redaction: %s", body)
+	}
+}
+
 func TestLocalHistorySurvivesRestartAndUsesExclusiveCursor(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "logs.db")
 	s := openStore(t, path, 2<<20)
