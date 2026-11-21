@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http/cookiejar"
 	"path/filepath"
 	"testing"
@@ -11,7 +12,44 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"google.golang.org/grpc"
 )
+
+func TestStandbyAlertAPIReturnsRecentCopyWhenPrimaryTimesOut(t *testing.T) {
+	h := newAuditHarness(t)
+	ctx := t.Context()
+	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 16<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { logs.Close() })
+	h.a.Nodes = nodes.NewRegistry(h.a.Q, h.a.Log, h.a.Sealer, nil)
+	h.a.Nodes.AlertLogs = logs
+	h.a.Nodes.PanelAlert(ctx, &nagiv1.Alert{Key: "saved-event", Title: "Saved before primary failure"})
+	h.a.Nodes.ReadOnly = true
+	h.a.Nodes.AlertPrimary = func(ctx context.Context) (*grpc.ClientConn, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "standby-test-password", auth.AdminRoleID); err != nil {
+		t.Fatal(err)
+	}
+	jar, _ := cookiejar.New(nil)
+	hc := *h.srv.Client()
+	hc.Jar = jar
+	ac := nagiv1connect.NewAuthServiceClient(&hc, h.srv.URL)
+	if _, err := ac.Login(ctx, connect.NewRequest(&nagiv1.LoginRequest{Username: "admin", Password: "standby-test-password"})); err != nil {
+		t.Fatal(err)
+	}
+	client := nagiv1connect.NewAlertServiceClient(&hc, h.srv.URL)
+	res, err := client.ListAlertStates(ctx, connect.NewRequest(&nagiv1.ListAlertStatesRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Msg.RecentCopy || len(res.Msg.Alerts) != 1 || res.Msg.Alerts[0].Alert.Key != "saved-event" {
+		t.Fatalf("saved alert unavailable after primary timeout: %v", res.Msg)
+	}
+}
 
 func TestAlertAPIEnforcesProjectScopePermissionsAndElevation(t *testing.T) {
 	h := newAuditHarness(t)

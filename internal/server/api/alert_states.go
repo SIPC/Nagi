@@ -69,12 +69,15 @@ func (s *alertService) ListAlertStates(ctx context.Context, req *connect.Request
 				ids = append(ids, n.ID)
 			}
 		}
+		// Reserve time to read the saved copy when the primary cannot be reached.
+		refreshCtx, refreshCancel := context.WithTimeout(ctx, 5*time.Second)
 		for _, id := range ids {
-			if err := s.Nodes.RefreshAlertReplica(ctx, id); err != nil {
+			if err := s.Nodes.RefreshAlertReplica(refreshCtx, id); err != nil {
 				recent = true
 				break
 			}
 		}
+		refreshCancel()
 	}
 	states, err := s.Nodes.AlertStates(ctx, req.Msg.NodeId, req.Msg.IncludeHistory)
 	if err != nil {
