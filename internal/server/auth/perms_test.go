@@ -17,7 +17,15 @@ func TestEveryProcedureRegistered(t *testing.T) {
 		services := file.Services()
 		for i := range services.Len() {
 			svc := services.Get(i)
-			if svc.FullName() == "nagi.v1.LogService" {
+			if svc.FullName() == "nagi.v1.LogService" || svc.FullName() == "nagi.v1.LogCopyService" {
+				// These services authenticate mesh members, never browser users.
+				// Even an administrator must not gain an HTTP permission for them.
+				for j := range svc.Methods().Len() {
+					p := "/nagi.v1." + string(svc.Name()) + "/" + string(svc.Methods().Get(j).Name())
+					if Allowed(PresetUser(RoleAdmin), p) || ProcedureAccess(p) != "" {
+						t.Errorf("mesh 专用接口 %s 不应登记浏览器权限", p)
+					}
+				}
 				continue
 			} // mesh only, not mounted on the panel HTTP API
 			for j := range svc.Methods().Len() {
