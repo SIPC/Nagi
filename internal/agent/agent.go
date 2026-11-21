@@ -167,7 +167,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	metricDB := nodeDB
 	if history, err := metrics.OpenHistory(ctx, filepath.Join(cfg.DataDir, "logs", "metrics.db"), nodeDB, cfg.Logs); err != nil {
-		log.Error("无法分离监控历史，保留并继续使用旧库", "err", err)
+		log.Error("无法分离监控历史，旧库仅供查询；暂停图表历史写入，重启后重试迁移", "err", err)
 	} else {
 		metricDB = history
 		defer history.Close()

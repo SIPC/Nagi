@@ -16,6 +16,7 @@ package metrics
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"math"
 	"runtime"
@@ -46,12 +47,13 @@ type Point struct {
 
 // Collector 定期采集指标。
 type Collector struct {
-	db       *sql.DB
-	q        *nodestore.Queries
-	docker   *docker.Client
-	diskPath string
-	log      *slog.Logger
-	budget   *logstore.Store
+	db              *sql.DB
+	q               *nodestore.Queries
+	docker          *docker.Client
+	diskPath        string
+	log             *slog.Logger
+	budget          *logstore.Store
+	historyReadOnly bool
 
 	mu       sync.RWMutex
 	latest   map[string]float64
@@ -387,6 +389,9 @@ func (c *Collector) store(ctx context.Context, now time.Time, values map[string]
 	if c.OnSample != nil {
 		c.OnSample(now, values)
 	}
+	if c.historyReadOnly {
+		return errors.New("监控历史迁移未完成，旧业务库只读")
+	}
 	return c.budget.WriteArchive(ctx, 2, int64(len(values))*16384+(64<<10), func() error {
 		return c.storeHistory(ctx, now, values)
 	})
@@ -417,6 +422,9 @@ func (c *Collector) storeHistory(ctx context.Context, now time.Time, values map[
 
 // maintain 把完整的 5 分钟窗口降采样，并清理过期数据。
 func (c *Collector) maintain(ctx context.Context, now time.Time) {
+	if c.historyReadOnly {
+		return
+	}
 	end := now.Truncate(bucket)
 	if c.lastDownsampledTo.IsZero() {
 		c.lastDownsampledTo = end

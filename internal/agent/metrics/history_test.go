@@ -104,6 +104,19 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 		d.Close()
 		t.Fatal("冲突被静默覆盖")
 	}
+	c := New(legacy, nil, "", nil)
+	if err := c.UseBudget(ctx, nil, path, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.store(ctx, time.Now(), map[string]float64{"node:new": 71}); err == nil {
+		t.Fatal("迁移失败后继续向业务库写指标")
+	}
+	c.lastDownsampledTo = time.Unix(0, 0)
+	c.maintain(ctx, time.Now())
+	data, err := c.Query(ctx, "node:", time.Unix(0, 0), time.Unix(300, 0))
+	if err != nil || len(data["node:cpu"]) != 1 || data["node:cpu"][0].Value != 34 {
+		t.Fatalf("只读旧历史不可查询: %+v %v", data, err)
+	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	if d, err := OpenHistory(cancelled, path, legacy, nil); err == nil {
@@ -214,8 +227,8 @@ func TestMigrationCopiesAndFallbackWritesShareCapacity(t *testing.T) {
 				for i := range 64 {
 					values[fmt.Sprint(i)] = float64(i)
 				}
-				if err := c.store(ctx, time.Now(), values); !errors.Is(err, logstore.ErrCapacity) {
-					t.Fatalf("fallback bypassed quota: %v", err)
+				if err := c.store(ctx, time.Now(), values); err == nil {
+					t.Fatal("failed migration allowed mixed history writes")
 				}
 			} else {
 				if migrateErr != nil {
