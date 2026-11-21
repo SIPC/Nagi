@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -187,25 +186,41 @@ func TestSafeName(t *testing.T) {
 
 func TestCommandFormat(t *testing.T) {
 	k := FileKey(bytes.Repeat([]byte{1}, 32), Claims{Node: "n"}, "e")
-	c := Command{URL: "http://203.0.113.5/.nagi/dl/abc.def", Name: "it's.txt", Key: k, SHA256: strings.Repeat("a", 64), Resume: true}
+	c := Command{URL: "http://203.0.113.5/.nagi/dl/abc.def", Name: "it's.txt", Key: k, SHA256: strings.Repeat("a", 64), Resume: true, Size: 1000}
 	s := c.String()
-	if strings.ContainsAny(s, "\n\r") {
-		t.Fatal("命令应该只有一行")
-	}
-	for _, want := range []string{"curl -fg -C - -o 'it'\\''s.txt." + k.Tag + ".part' 'http://203.0.113.5/.nagi/dl/abc.def'",
+	for _, want := range []string{"N=1\n", "out='it'\\''s.txt'", "base='it'\\''s.txt." + k.Tag + "'", "url='http://203.0.113.5/.nagi/dl/abc.def'",
+		"curl -4 -fgsS -r ", "2> \"$f.log\"", "NAGI_DOWNLOAD_DIR", "Saving to ",
 		"openssl enc -d -aes-256-ctr -K " + hex.EncodeToString(k.Key[:]) + " -iv " + hex.EncodeToString(k.IV[:]),
-		"-out 'it'\\''s.txt'", "rm -f -- ", "openssl dgst -sha256", "'" + strings.Repeat("a", 64) + "'"} {
+		"openssl dgst -sha256", "'" + strings.Repeat("a", 64) + "'", "within 5 minutes"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("命令里没有 %q：%s", want, s)
 		}
 	}
-	c.Resume, c.SHA256 = false, ""
-	if s := c.String(); strings.Contains(s, "-C -") || strings.Contains(s, "dgst") {
-		t.Errorf("目录打包不续传、不核对：%s", s)
+	c.Resume, c.SHA256, c.Size = false, "", 0
+	if s := c.String(); strings.Contains(s, "-r \"") || strings.Contains(s, "N=") || strings.Contains(s, "dgst") {
+		t.Errorf("目录打包不分段、不续传、不核对：%s", s)
 	}
 }
 
-// 文件名里的 shell 特殊字符不会被解释：用假的 curl、openssl、rm 记下各自收到的参数，看文件名原样传到。
+// fakeTools 在 bin 里放假的 curl、openssl：参数逐行记进 $LOG。openssl dgst 输出 sum。
+func fakeTools(t *testing.T, bin, sum string) {
+	t.Helper()
+	for _, tool := range []string{"curl", "openssl"} {
+		script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done >> \"$LOG\"\necho -- >> \"$LOG\"\n"
+		if tool == "openssl" {
+			// dgst 要输出哈希给后面比较；解密时把 -out 指向的文件写成 size 字节。
+			script += "if [ \"$1\" = dgst ]; then echo '(stdin)= " + sum + "'; exit 0; fi\n" +
+				"cat > /dev/null; while [ $# -gt 1 ]; do [ \"$1\" = -out ] && head -c \"$SIZE\" /dev/zero > \"$2\"; shift; done\n"
+		} else {
+			script += "printf 'x'\n"
+		}
+		if err := os.WriteFile(filepath.Join(bin, tool), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// 文件名里的 shell 特殊字符不会被解释：用假的 curl、openssl 记下各自收到的参数，看文件名原样传到。
 func TestCommandQuoting(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("需要 sh")
@@ -217,58 +232,73 @@ func TestCommandQuoting(t *testing.T) {
 	bin := t.TempDir()
 	// SHA-256 只认 64 位十六进制（见 ValidSHA256），假的 openssl dgst 输出同一个值。
 	sum := strings.Repeat("ab", 32)
-	for _, tool := range []string{"curl", "openssl", "rm"} {
-		script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done >> \"$LOG\"\necho -- >> \"$LOG\"\n"
-		if tool == "openssl" {
-			// dgst 要输出哈希给后面比较。
-			script += "if [ \"$1\" = dgst ]; then echo '(stdin)= " + sum + "'; fi\n"
-		}
-		if err := os.WriteFile(filepath.Join(bin, tool), []byte(script), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
+	fakeTools(t, bin, sum)
 	for _, name := range []string{"it's $(touch pwned) `touch pwned2` ; touch pwned3 && x", "-rf", "a\"b\\c", "$HOME*?[a]", "line\nbreak"} {
 		dir := t.TempDir()
-		log := filepath.Join(dir, "log")
-		// 假的 openssl 不写文件，先放一个解密后的文件给最后的核对读。
-		if err := os.WriteFile(filepath.Join(dir, SafeName(name)), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		c := Command{URL: "http://203.0.113.5/.nagi/dl/x.y", Name: name, Key: ArchiveKey([]byte("k"), Claims{}), SHA256: sum, Resume: true}
+		log := filepath.Join(t.TempDir(), "log")
+		c := Command{URL: "http://203.0.113.5/.nagi/dl/x.y", Name: name, Key: ArchiveKey([]byte("k"), Claims{}), SHA256: sum, Resume: true, Size: 1}
 		cmd := exec.Command(sh, "-c", c.String())
 		cmd.Dir = dir
-		cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "LOG=" + log, "HOME=/nonexistent"}
+		cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "LOG=" + log, "SIZE=1", "HOME=/nonexistent"}
 		out, err := cmd.CombinedOutput()
-		if err != nil {
+		if err != nil || !strings.Contains(string(out), "SHA-256 OK") {
 			t.Fatalf("%q：%v %s", name, err, out)
-		}
-		if !strings.Contains(string(out), "SHA-256 OK") {
-			t.Errorf("%q：没有核对通过：%s", name, out)
 		}
 		for _, f := range []string{"pwned", "pwned2", "pwned3"} {
 			if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
 				t.Fatalf("%q：文件名被 shell 执行了", name)
 			}
 		}
-		b, _ := os.ReadFile(log)
 		safe := SafeName(name)
-		args := strings.Split(string(b), "\n")
-		has := func(v string) bool {
-			for _, a := range args {
-				if a == v {
-					return true
-				}
-			}
-			return false
+		if _, err := os.Stat(filepath.Join(dir, safe)); err != nil {
+			t.Errorf("%q：没有按原样的文件名 %q 保存：%v", name, safe, err)
 		}
-		if !has(safe) || !has(safe+"."+c.Key.Tag+".part") {
-			t.Errorf("%q：参数里没有原样的文件名 %q：%q", name, safe, args)
+		b, _ := os.ReadFile(log)
+		if !strings.Contains(string(b), "\n-out\n"+safe+"\n") {
+			t.Errorf("%q：openssl 的参数里没有原样的文件名：%q", name, b)
 		}
 	}
 }
 
-// 端到端：用真的 curl 和 openssl 跑命令，从一个按 Range 发密文的 HTTP 服务下载、解密、核对 SHA-256，
-// 包括先下载一半、再运行同一条命令续传。没有 curl 或 openssl 时跳过。
+// 保存的位置：默认当前目录，不可写时 ~/Downloads，NAGI_DOWNLOAD_DIR 指定的目录不可写时报原因、不下载。
+func TestCommandSaveDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("需要 sh")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("root 不受目录权限限制")
+	}
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("没有 sh")
+	}
+	bin := t.TempDir()
+	sum := strings.Repeat("ab", 32)
+	fakeTools(t, bin, sum)
+	c := Command{URL: "http://203.0.113.5/.nagi/dl/x.y", Name: "a b.bin", Key: ArchiveKey([]byte("k"), Claims{}), SHA256: sum, Resume: true, Size: 1}
+	ro := t.TempDir()
+	if err := os.Chmod(ro, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(ro, 0o755)
+	home := t.TempDir()
+	run := func(env ...string) string {
+		cmd := exec.Command(sh, "-c", c.String())
+		cmd.Dir = ro
+		cmd.Env = append([]string{"PATH=" + bin + ":/usr/bin:/bin", "LOG=/dev/null", "SIZE=1", "HOME=" + home}, env...)
+		out, _ := cmd.CombinedOutput()
+		return string(out)
+	}
+	if out := run(); !strings.Contains(out, "Saved to "+filepath.Join(home, "Downloads", "a b.bin")) {
+		t.Errorf("当前目录不可写时应该存到 ~/Downloads：%s", out)
+	}
+	if out := run("NAGI_DOWNLOAD_DIR=" + filepath.Join(ro, "x")); !strings.Contains(out, "folder not writable") || strings.Contains(out, "Saving") {
+		t.Errorf("指定的目录不可写时应该说明：%s", out)
+	}
+}
+
+// 端到端：用真的 curl 和 openssl 跑一个连接的命令（小文件也是 1 段），从一个按 Range 发密文的 HTTP 服务下载、解密、
+// 核对 SHA-256，包括先下载一半、再运行同一条命令续传。没有 curl 或 openssl 时跳过。
 func TestCommandOpenSSL(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("需要 sh")
@@ -282,63 +312,54 @@ func TestCommandOpenSSL(t *testing.T) {
 	_, _ = rand.Read(plain)
 	sum := sha256.Sum256(plain)
 	k := FileKey(bytes.Repeat([]byte{9}, 32), Claims{Node: "n", Path: "x"}, `"1-2"`)
-	cipherText := make([]byte, len(plain))
-	k.Stream(0).XORKeyStream(cipherText, plain)
+	srv := &rangeServer{plain: plain, key: k}
+	hs := httptest.NewServer(srv)
+	defer hs.Close()
 
-	var mu sync.Mutex
-	var requests []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		requests = append(requests, r.Header.Get("Range"))
-		mu.Unlock()
-		// 每一段按它的起点重新加密（和节点一样：从 offset 开始的密钥流），不是从整段密文里切。
-		off := int64(0)
-		if rg := r.Header.Get("Range"); rg != "" {
-			fmt.Sscanf(rg, "bytes=%d-", &off)
-			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", off, len(plain)-1, len(plain)))
-			w.Header().Set("Content-Length", fmt.Sprint(int64(len(plain))-off))
-			w.WriteHeader(http.StatusPartialContent)
-		}
-		out := make([]byte, int64(len(plain))-off)
-		k.Stream(off).XORKeyStream(out, plain[off:])
-		_, _ = w.Write(out)
-	}))
-	defer srv.Close()
-
-	name := "data 'v1'.bin"
-	c := Command{URL: srv.URL + HTTPPathPrefix + "tok", Name: name, Key: k, SHA256: hex.EncodeToString(sum[:]), Resume: true}
+	name := "data 'v1' 中文.bin"
+	c := Command{URL: hs.URL + HTTPPathPrefix + "tok", Name: name, Key: k, SHA256: hex.EncodeToString(sum[:]), Resume: true, Size: int64(len(plain))}
 	dir := t.TempDir()
-	// 先放一半密文，模拟断开的下载。
-	part := filepath.Join(dir, name+"."+k.Tag+".part")
-	if err := os.WriteFile(part, cipherText[:1<<20+7], 0o644); err != nil {
+	// 先放一部分密文，模拟断开的下载。
+	enc := make([]byte, 1<<20+7)
+	k.Stream(0).XORKeyStream(enc, plain[:len(enc)])
+	part := filepath.Join(dir, c.partBase(name)+".1.part0")
+	if err := os.WriteFile(part, enc, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("sh", "-c", c.String())
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "SHA-256 OK") {
-		t.Fatalf("命令失败：%v\n%s\n%s", err, c.String(), out)
+		t.Fatalf("命令失败：%v\n%s", err, out)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil || !bytes.Equal(got, plain) {
 		t.Fatalf("解密的内容不对：%v", err)
 	}
-	if _, err := os.Stat(part); err == nil {
-		t.Error("密文应该删掉")
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Errorf("只应该留下解密的文件：%v", entries)
 	}
-	mu.Lock()
-	got1 := append([]string(nil), requests...)
-	mu.Unlock()
-	if len(got1) != 1 || got1[0] != fmt.Sprintf("bytes=%d-", 1<<20+7) {
-		t.Errorf("应该从断开的地方续传：%q", got1)
+	if want := fmt.Sprintf("bytes=%d-%d", len(enc), len(plain)-1); len(srv.requests) != 1 || srv.requests[0] != want {
+		t.Errorf("应该从断开的地方续传（%s）：%q", want, srv.requests)
 	}
 	// 内容不对时提示失败。
 	c.SHA256 = strings.Repeat("0", 64)
 	cmd = exec.Command("sh", "-c", c.String())
 	cmd.Dir = t.TempDir()
 	out, _ = cmd.CombinedOutput()
-	if !strings.Contains(string(out), "FAILED") {
+	if !strings.Contains(string(out), "FAILED: SHA-256 mismatch") {
 		t.Errorf("SHA-256 对不上时应该提示：%s", out)
+	}
+	// 链接被节点拒绝（404）时说明原因，不再重试，再运行提示重新生成。
+	srv404 := httptest.NewServer(http.NotFoundHandler())
+	defer srv404.Close()
+	c.URL = srv404.URL + HTTPPathPrefix + "tok"
+	cmd = exec.Command("sh", "-c", c.String())
+	cmd.Dir = t.TempDir()
+	out, _ = cmd.CombinedOutput()
+	if !strings.Contains(string(out), "rejected the link") || strings.Count(string(out), "rejected the link") != 1 {
+		t.Errorf("404 时应该说明一次原因：%s", out)
 	}
 }
 

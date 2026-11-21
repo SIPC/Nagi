@@ -1,6 +1,7 @@
 package directdl
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"strconv"
 	"strings"
@@ -14,7 +15,10 @@ import (
 //   - 最后用 Get-FileHash 核对 SHA-256，输出 SHA-256 OK 或 FAILED。
 //
 // 整段可以一次粘贴进 PowerShell 窗口：包在 & { } 里，出错时 return，不会关掉窗口，变量也不留在会话里。
-// 文件名放进单引号字符串（' 和弯引号成对写），先按 Windows 的规则清理（WinSafeName）。
+// 也可以由面板作为 .ps1 提供（见 ShortWindows），所以脚本只用 ASCII：Windows PowerShell 5.1 按控制台的代码页
+// 解码 curl.exe 的输出，非 ASCII 的文件名用 Base64 写（psString）。
+// 保存到下载文件夹（$env:NAGI_DOWNLOAD_DIR 可以改），不用当前目录：在 C:\Windows\System32 这样不可写的目录里
+// 运行时 curl.exe 写不进去（exit 23），换个目录运行也接不上之前下载的部分。
 
 // ctrType 是 C# 类型的名字，改了实现要换一个（同一个 PowerShell 会话里已经加载的类型不能重新定义）。
 const ctrType = "NagiCtr1"
@@ -83,9 +87,35 @@ public static class NagiCtr1 {
 // CTRSource 返回 C# 的实现（测试用）。
 func CTRSource() string { return ctrSource }
 
-// Windows 生成 PowerShell 的命令。分段下载（Segmented）时各段用 Start-Process 同时运行 curl.exe，每段先下到
-// 「<段>.tmp」，结束后接到「文件名.<标识>.<N>.part<i>」后面，再从收到的地方接着下载，最多 segmentRetries 轮；
-// 一个连接时下载到「文件名.<标识>.part」（普通文件 curl.exe -C - 续传）。同一条命令可以重复运行续传。
+// winPrelude 选保存的目录并确认能写：$env:NAGI_DOWNLOAD_DIR，没有时用当前用户的下载文件夹（注册表里的位置，
+// 被移到别处时也对），再没有时用 <用户目录>\Downloads。相对路径按 PowerShell 的当前目录算。
+const winPrelude = `$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
+`
+
+// winWhy 把 curl.exe 的退出码（和 --stderr 的日志）说成原因。节点对无效的链接一律回 404（见 docs/agent.md）。
+const winWhy = `function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "` + "`" + `n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+`
+
+// Windows 生成 PowerShell 的命令。普通文件分成 $N 段（不到 MultiThreshold 的文件 1 段），各段用 Start-Process 同时运行
+// curl.exe（-s，错误写进各自的 .log，输出不会混在一起），每段先下到「<段>.tmp」，结束后接到「文件名.<标识>.<N>.part<i>」
+// 后面，再从收到的地方接着下载，最多 segmentRetries 轮；同一条命令可以重复运行续传。目录打包用一个连接、不续传。
 func (c Command) Windows() string {
 	name := WinSafeName(SafeName(c.Name))
 	base := c.partBase(name)
@@ -93,66 +123,101 @@ func (c Command) Windows() string {
 	w := func(line string) { b.WriteString(line + "\n") }
 	w("# PowerShell (Windows 10/11). cmd.exe is not supported.")
 	w("& {")
+	w("$ErrorActionPreference = 'Stop'")
 	if c.Segmented() {
 		w("$N = " + strconv.Itoa(Threads))
+	} else if c.Resume {
+		w("$N = 1")
 	}
 	w("$url = " + psQuote(c.URL))
-	w("$out = " + psQuote(name))
-	w("$base = " + psQuote(base))
+	w("$out = " + psString(name))
+	w("$base = " + psString(base))
 	w("[long]$size = " + strconv.FormatInt(c.Size, 10))
-	w("$ErrorActionPreference = 'Stop'")
-	w("$dir = (Get-Location -PSProvider FileSystem).ProviderPath")
+	b.WriteString(winPrelude)
 	w("if (-not ('" + ctrType + "' -as [type])) {")
 	w("Add-Type -TypeDefinition @'")
 	b.WriteString(ctrSource)
 	w("'@")
 	w("}")
+	b.WriteString(winWhy)
 	flag := ipFlag(c.URL)
 	args := "'-fgS'"
 	if flag != "" {
 		args = "'" + flag + "', " + args
 	}
-	if c.Segmented() {
-		w("$seg = [long][math]::Floor(($size + $N - 1) / $N)")
+	again := "Run the same command again within " + ttlText() + " to resume; after that, generate a new command in the panel."
+	if c.Resume {
+		w("$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))")
 		w("$count = [int][math]::Ceiling($size / $seg)")
-		w("$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })")
+		w("$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })")
+		w("$have = 0; foreach ($f in $parts) { [" + ctrType + "]::Append($f + '.tmp', $f); $have += [" + ctrType + "]::Length($f) }")
+		w("$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }")
+		w("if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }")
+		w("$errs = @()")
 		w("for ($try = 0; $try -lt " + strconv.Itoa(segmentRetries) + "; $try++) {")
-		w("  $run = @()")
+		w("  $run = @(); $errs = @(); $fatal = $false")
 		w("  for ($i = 0; $i -lt $count; $i++) {")
 		w("    $f = $parts[$i]; [" + ctrType + "]::Append($f + '.tmp', $f)")
 		w("    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [" + ctrType + "]::Length($f)")
 		w("    if ($from -gt $e) { continue }")
 		w("    $p = Start-Process -FilePath curl.exe -ArgumentList @(" + strings.Replace(args, "-fgS", "-fgsS", 1) +
-			", '-r', ('{0}-{1}' -f $from, $e), '-o', ('\"' + $f + '.tmp\"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru")
-		w("    $null = $p.Handle; $run += $p")
+			", '-r', ('{0}-{1}' -f $from, $e), '-o', ('\"' + $f + '.tmp\"'), '--stderr', ('\"' + $f + '.log\"'), $url) -NoNewWindow -PassThru")
+		w("    $null = $p.Handle; $run += @{ p = $p; i = $i }")
 		w("  }")
 		w("  if ($run.Count -eq 0) { break }")
-		w("  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }")
+		w("  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {")
+		w("    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }")
+		w("    Write-Host -NoNewline (\"`r{0:N1} / {1:N1} MiB \" -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500")
+		w("  }")
+		w("  Write-Host ''")
+		w("  foreach ($r in $run) {")
+		w("    $r.p.WaitForExit(); $code = $r.p.ExitCode")
+		w("    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }")
+		w("  }")
+		w("  if ($fatal) { break }")
 		w("  if ($try -lt " + strconv.Itoa(segmentRetries-1) + ") { Start-Sleep -Seconds 1 }")
 		w("}")
 		w("$total = 0")
 		w("foreach ($f in $parts) { [" + ctrType + "]::Append($f + '.tmp', $f); $total += [" + ctrType + "]::Length($f) }")
-		w("if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }")
+		w("if ($total -ne $size) {")
+		w("  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }")
+		w("  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). " + again + "'); return")
+		w("}")
 	} else {
-		w("$parts = @(Join-Path $dir ($base + '.part'))")
-		if c.Resume {
-			args += ", '-C', '-'"
-		}
+		w("$parts = @([IO.Path]::Combine($dir, $base + '.part'))")
 		w("& curl.exe " + strings.ReplaceAll(args, ", ", " ") + " -o $parts[0] $url")
-		w("if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }")
+		w("if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }")
 	}
 	w("$aes = [Security.Cryptography.Aes]::Create()")
 	w("$aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [" + ctrType + "]::Hex('" + hex.EncodeToString(c.Key.Key[:]) + "')")
-	w("$o = Join-Path $dir $out")
-	w("[" + ctrType + "]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '" + hex.EncodeToString(c.Key.IV[:]) + "')")
-	w("foreach ($f in $parts) { Remove-Item -LiteralPath $f }")
+	w("try { [" + ctrType + "]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '" + hex.EncodeToString(c.Key.IV[:]) + "') }")
+	w("catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }")
+	w("foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }")
+	if c.Resume {
+		w("if ([" + ctrType + "]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }")
+	}
 	if ValidSHA256(c.SHA256) {
-		w("if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq " + psQuote(c.SHA256) + ") { 'SHA-256 OK' } else { Write-Host 'FAILED' }")
+		w("if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq " + psQuote(c.SHA256) + ") { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }")
 	} else {
 		w("'Done'")
 	}
+	w("Write-Host ('Saved to ' + $o)")
 	b.WriteString("}")
 	return b.String()
+}
+
+// ttlText 是链接的有效期，写进提示（「5 minutes」）。
+func ttlText() string { return strconv.Itoa(int(TTL.Minutes())) + " minutes" }
+
+// psString 写一个 PowerShell 的字符串：可打印的 ASCII 用单引号括起来（psQuote），否则写成 UTF-8 的 Base64 再解码，
+// 脚本整体保持 ASCII（见文件开头）。
+func psString(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return "[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + base64.StdEncoding.EncodeToString([]byte(s)) + "'))"
+		}
+	}
+	return psQuote(s)
 }
 
 // psQuote 用 PowerShell 的单引号括起来：单引号里只有引号本身需要处理，PowerShell 把弯单引号（‘ ’ ‚ ‛）也当单引号，

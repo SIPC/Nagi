@@ -1,12 +1,20 @@
 #### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
-$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
-$out = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt'
-$base = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt.e8788c81'
-[long]$size = 1000
 $ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$N = 1
+$url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
+$out = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aXQncyAkKHRvdWNoIHB3bmVkKSBgdG91Y2ggcHduZWQyYDsgJiBfIOKAmHHigJkgJGVudl9QQVRILnR4dA=='))
+$base = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aXQncyAkKHRvdWNoIHB3bmVkKSBgdG91Y2ggcHduZWQyYDsgJiBfIOKAmHHigJkgJGVudl9QQVRILnR4dC5lODc4OGM4MQ=='))
+[long]$size = 1000
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -68,26 +76,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
-$out = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt'
-$base = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt.e8788c81'
+$out = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aXQncyAkKHRvdWNoIHB3bmVkKSBgdG91Y2ggcHduZWQyYDsgJiBfIOKAmHHigJkgJGVudl9QQVRILnR4dA=='))
+$base = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aXQncyAkKHRvdWNoIHB3bmVkKSBgdG91Y2ggcHduZWQyYDsgJiBfIOKAmHHigJkgJGVudl9QQVRILnR4dC5lODc4OGM4MQ=='))
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -149,41 +209,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
-$url = 'http://203.0.113.5/.nagi/dl/abc.def'
-$out = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt'
-$base = 'it''s $(touch pwned) `touch pwned2`; & _ ‘‘q’’ $env_PATH.txt.e8788c81'
-[long]$size = 0
 $ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$url = 'http://203.0.113.5/.nagi/dl/abc.def'
+$out = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aXQncyAkKHRvdWNoIHB3bmVkKSBgdG91Y2ggcHduZWQyYDsgJiBfIOKAmHHigJkgJGVudl9QQVRILnR4dA=='))
+$base = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aXQncyAkKHRvdWNoIHB3bmVkKSBgdG91Y2ggcHduZWQyYDsgJiBfIOKAmHHigJkgJGVudl9QQVRILnR4dC5lODc4OGM4MQ=='))
+[long]$size = 0
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -245,25 +341,45 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }
 #### 1 "a<b>:c\"d|e?f*\\g.bin" size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
+$N = 1
 $url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
 $out = 'a_b__c_d_e_f__g.bin'
 $base = 'a_b__c_d_e_f__g.bin.e8788c81'
 [long]$size = 1000
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -325,26 +441,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 1 "a<b>:c\"d|e?f*\\g.bin" size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
 $out = 'a_b__c_d_e_f__g.bin'
 $base = 'a_b__c_d_e_f__g.bin.e8788c81'
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -406,41 +574,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 1 "a<b>:c\"d|e?f*\\g.bin" size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $url = 'http://203.0.113.5/.nagi/dl/abc.def'
 $out = 'a_b__c_d_e_f__g.bin'
 $base = 'a_b__c_d_e_f__g.bin.e8788c81'
 [long]$size = 0
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -502,25 +706,45 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }
 #### 2 "CON.txt" size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
+$N = 1
 $url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
 $out = '_CON.txt'
 $base = '_CON.txt.e8788c81'
 [long]$size = 1000
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -582,26 +806,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 2 "CON.txt" size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
 $out = '_CON.txt'
 $base = '_CON.txt.e8788c81'
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -663,41 +939,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 2 "CON.txt" size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $url = 'http://203.0.113.5/.nagi/dl/abc.def'
 $out = '_CON.txt'
 $base = '_CON.txt.e8788c81'
 [long]$size = 0
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -759,25 +1071,45 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }
 #### 3 "lpt1" size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
+$N = 1
 $url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
 $out = '_lpt1'
 $base = '_lpt1.e8788c81'
 [long]$size = 1000
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -839,26 +1171,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 3 "lpt1" size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
 $out = '_lpt1'
 $base = '_lpt1.e8788c81'
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -920,41 +1304,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 3 "lpt1" size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $url = 'http://203.0.113.5/.nagi/dl/abc.def'
 $out = '_lpt1'
 $base = '_lpt1.e8788c81'
 [long]$size = 0
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1016,25 +1436,45 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }
 #### 4 "trailing. . " size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
+$N = 1
 $url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
 $out = 'trailing'
 $base = 'trailing.e8788c81'
 [long]$size = 1000
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1096,26 +1536,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 4 "trailing. . " size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
 $out = 'trailing'
 $base = 'trailing.e8788c81'
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1177,41 +1669,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 4 "trailing. . " size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $url = 'http://203.0.113.5/.nagi/dl/abc.def'
 $out = 'trailing'
 $base = 'trailing.e8788c81'
 [long]$size = 0
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1273,25 +1801,45 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }
 #### 5 "line\nbreak\r\x00.bin" size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
+$N = 1
 $url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
 $out = 'line_break__.bin'
 $base = 'line_break__.bin.e8788c81'
 [long]$size = 1000
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1353,26 +1901,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 5 "line\nbreak\r\x00.bin" size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
 $out = 'line_break__.bin'
 $base = 'line_break__.bin.e8788c81'
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1434,41 +2034,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 5 "line\nbreak\r\x00.bin" size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $url = 'http://203.0.113.5/.nagi/dl/abc.def'
 $out = 'line_break__.bin'
 $base = 'line_break__.bin.e8788c81'
 [long]$size = 0
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1530,25 +2166,45 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }
 #### 6 "-rf" size=1000 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
+$N = 1
 $url = 'http://203.0.113.5:8080/.nagi/dl/abc.def'
 $out = '-rf'
 $base = '-rf.e8788c81'
 [long]$size = 1000
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1610,26 +2266,78 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
-& curl.exe '-4' '-fgS' '-C' '-' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
+$count = [int][math]::Ceiling($size / $seg)
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
+for ($try = 0; $try -lt 3; $try++) {
+  $run = @(); $errs = @(); $fatal = $false
+  for ($i = 0; $i -lt $count; $i++) {
+    $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
+    $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
+    if ($from -gt $e) { continue }
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-4', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
+  }
+  if ($run.Count -eq 0) { break }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
+  if ($try -lt 2) { Start-Sleep -Seconds 1 }
+}
+$total = 0
+foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 6 "-rf" size=67108864 resume=true
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $N = 4
 $url = 'http://[2001:db8::5]/.nagi/dl/abc.def'
 $out = '-rf'
 $base = '-rf.e8788c81'
 [long]$size = 67108864
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1691,41 +2399,77 @@ public static class NagiCtr1 {
 }
 '@
 }
-$seg = [long][math]::Floor(($size + $N - 1) / $N)
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$seg = [long][math]::Max(1, [math]::Floor(($size + $N - 1) / $N))
 $count = [int][math]::Ceiling($size / $seg)
-$parts = @(for ($i = 0; $i -lt $count; $i++) { Join-Path $dir ($base + '.' + $N + '.part' + $i) })
+$parts = @(for ($i = 0; $i -lt $count; $i++) { [IO.Path]::Combine($dir, $base + '.' + $N + '.part' + $i) })
+$have = 0; foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $have += [NagiCtr1]::Length($f) }
+$free = -1; try { $free = (New-Object IO.DriveInfo ([IO.Path]::GetPathRoot($o))).AvailableFreeSpace } catch { }
+if ($free -ge 0 -and $free -lt 2 * $size - $have) { Write-Host ('FAILED: not enough disk space for ' + $o + ': ' + [math]::Ceiling((2 * $size - $have) / 1MB) + ' MiB needed, ' + [math]::Floor($free / 1MB) + ' MiB free'); return }
+$errs = @()
 for ($try = 0; $try -lt 3; $try++) {
-  $run = @()
+  $run = @(); $errs = @(); $fatal = $false
   for ($i = 0; $i -lt $count; $i++) {
     $f = $parts[$i]; [NagiCtr1]::Append($f + '.tmp', $f)
     $a = $i * $seg; $e = [math]::Min($a + $seg, $size) - 1; $from = $a + [NagiCtr1]::Length($f)
     if ($from -gt $e) { continue }
-    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), $url) -WorkingDirectory $dir -NoNewWindow -PassThru
-    $null = $p.Handle; $run += $p
+    $p = Start-Process -FilePath curl.exe -ArgumentList @('-6', '-fgsS', '-r', ('{0}-{1}' -f $from, $e), '-o', ('"' + $f + '.tmp"'), '--stderr', ('"' + $f + '.log"'), $url) -NoNewWindow -PassThru
+    $null = $p.Handle; $run += @{ p = $p; i = $i }
   }
   if ($run.Count -eq 0) { break }
-  foreach ($p in $run) { $p.WaitForExit(); if ($p.ExitCode -ne 0) { Write-Host ('curl.exe exited with ' + $p.ExitCode) } }
+  while (@($run | Where-Object { -not $_.p.HasExited }).Count -gt 0) {
+    $got = 0; foreach ($f in $parts) { $got += (NagiLen $f) + (NagiLen ($f + '.tmp')) }
+    Write-Host -NoNewline ("`r{0:N1} / {1:N1} MiB " -f ($got / 1MB), ($size / 1MB)); Start-Sleep -Milliseconds 500
+  }
+  Write-Host ''
+  foreach ($r in $run) {
+    $r.p.WaitForExit(); $code = $r.p.ExitCode
+    if ($code -ne 0) { $errs += NagiWhy $code ($parts[$r.i] + '.log'); if ($code -in 22, 23) { $fatal = $true } }
+  }
+  if ($fatal) { break }
   if ($try -lt 2) { Start-Sleep -Seconds 1 }
 }
 $total = 0
 foreach ($f in $parts) { [NagiCtr1]::Append($f + '.tmp', $f); $total += [NagiCtr1]::Length($f) }
-if ($total -ne $size) { Write-Host 'FAILED: download incomplete, run the command again to resume'; return }
+if ($total -ne $size) {
+  foreach ($m in @($errs | Select-Object -Unique)) { Write-Host ('FAILED: ' + $m) }
+  Write-Host ('FAILED: download incomplete (' + $total + ' of ' + $size + ' bytes). Run the same command again within 5 minutes to resume; after that, generate a new command in the panel.'); return
+}
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
-if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED' }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
+if ([NagiCtr1]::Length($o) -ne $size) { Write-Host 'FAILED: the decrypted file has the wrong size'; return }
+if ((Get-FileHash -LiteralPath $o -Algorithm SHA256).Hash -eq 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') { 'SHA-256 OK' } else { Write-Host 'FAILED: SHA-256 mismatch'; return }
+Write-Host ('Saved to ' + $o)
 }
 #### 6 "-rf" size=0 resume=false
 # PowerShell (Windows 10/11). cmd.exe is not supported.
 & {
+$ErrorActionPreference = 'Stop'
 $url = 'http://203.0.113.5/.nagi/dl/abc.def'
 $out = '-rf'
 $base = '-rf.e8788c81'
 [long]$size = 0
-$ErrorActionPreference = 'Stop'
-$dir = (Get-Location -PSProvider FileSystem).ProviderPath
+$dir = $env:NAGI_DOWNLOAD_DIR
+if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
+if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+$dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
+try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
+$o = [IO.Path]::Combine($dir, $out)
+Write-Host ('Saving to ' + $o)
 if (-not ('NagiCtr1' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
@@ -1787,13 +2531,25 @@ public static class NagiCtr1 {
 }
 '@
 }
-$parts = @(Join-Path $dir ($base + '.part'))
+function NagiWhy([int]$code, [string]$log) {
+  $msg = ''; if ($log -and [IO.File]::Exists($log)) { $msg = [IO.File]::ReadAllText($log).Trim() }
+  $http = ''; if ($msg -match 'error: (\d{3})') { $http = $Matches[1] }
+  if ($code -eq 22 -and $http -eq '409') { return 'the file changed on the node: generate a new command in the panel' }
+  if ($code -eq 22) { return 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' }
+  if ($code -eq 23) { return 'cannot write the file (folder not writable or disk full)' }
+  if ($code -in 5, 6, 7) { return 'cannot connect to the node (port blocked or node offline)' }
+  if ($code -in 18, 28, 52, 55, 56) { return 'the connection was interrupted: run the command again to resume' }
+  $r = 'curl.exe exited with ' + $code; if ($msg) { $r += ': ' + ($msg -split "`n")[-1].Trim() }; return $r
+}
+function NagiLen([string]$p) { try { $s = [IO.File]::Open($p, 'Open', 'Read', 'ReadWrite, Delete'); try { $s.Length } finally { $s.Dispose() } } catch { 0 } }
+$parts = @([IO.Path]::Combine($dir, $base + '.part'))
 & curl.exe '-4' '-fgS' -o $parts[0] $url
-if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED: download incomplete, run the command again'; return }
+if ($LASTEXITCODE -ne 0) { Write-Host ('FAILED: ' + (NagiWhy $LASTEXITCODE '')); return }
 $aes = [Security.Cryptography.Aes]::Create()
 $aes.Mode = 'ECB'; $aes.Padding = 'None'; $aes.Key = [NagiCtr1]::Hex('16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6')
-$o = Join-Path $dir $out
-[NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86')
-foreach ($f in $parts) { Remove-Item -LiteralPath $f }
+try { [NagiCtr1]::Decrypt([string[]]$parts, $o, $aes.CreateEncryptor(), '432f9d55692b3550b434409a062c7b86') }
+catch { Write-Host ('FAILED: cannot write ' + $o + ': ' + $_.Exception.GetBaseException().Message); return }
+foreach ($f in $parts) { Remove-Item -LiteralPath $f; if ([IO.File]::Exists($f + '.log')) { [IO.File]::Delete($f + '.log') } }
 'Done'
+Write-Host ('Saved to ' + $o)
 }

@@ -172,57 +172,76 @@ func ipFlag(rawURL string) string {
 // partBase 是下载到一半的密文的文件名前缀：「文件名.<标识>」。
 func (c Command) partBase(name string) string { return name + "." + c.Key.Tag }
 
-// String 生成 POSIX sh 的命令。一个连接时是一行：先把密文下载到「文件名.<标识>.part」（同一条命令可以重复运行续传），
-// 完整后用 openssl 解密成文件名，删掉密文；有 SHA-256 时最后核对。分段下载时见 segmentedPOSIX。
-// 每个参数都用单引号括起来，文件名里的控制字符换掉，不会被 shell 解释。
-func (c Command) String() string {
-	name := SafeName(c.Name)
-	if c.Segmented() {
-		return c.segmentedPOSIX(name)
-	}
-	part := c.partBase(name) + ".part"
-	curl := "curl -fg "
-	if c.Resume {
-		curl += "-C - "
-	}
-	s := curl + "-o " + shellQuote(part) + " " + shellQuote(c.URL) +
-		" && openssl enc -d -aes-256-ctr -K " + hex.EncodeToString(c.Key.Key[:]) + " -iv " + hex.EncodeToString(c.Key.IV[:]) +
-		" -in " + shellQuote(part) + " -out " + shellQuote(name) +
-		" && rm -f -- " + shellQuote(part)
-	return s + c.posixCheck(shellQuote(name))
-}
-
-// posixCheck 是最后核对 SHA-256 的部分。openssl dgst 各版本输出的格式不同（OpenSSL 1.1、3、LibreSSL），哈希总在最后一个字段。
-func (c Command) posixCheck(name string) string {
-	if !ValidSHA256(c.SHA256) {
-		return ""
-	}
-	return ` && [ "$(openssl dgst -sha256 < ` + name + ` | awk '{print $NF}')" = ` + shellQuote(c.SHA256) + ` ]` +
-		` && echo 'SHA-256 OK' || echo 'FAILED' >&2`
-}
-
 // segmentRetries：每段最多试这么多次（每次从已经收到的地方接着下载）。链接发出的字节有上限（文件大小加 4 MiB），
 // 各段不重叠，重试只重发断开时在路上、没收到的部分，所以次数要有限。都失败时可以再运行一次命令接着下载。
 const segmentRetries = 3
 
-// segmentedPOSIX 生成分段下载的脚本：密文按 Range 分成 N 段，各自用后台的 curl 追加到「文件名.<标识>.<N>.part<i>」，
-// 断开后从已经收到的地方接着下载（同一条命令可以重复运行）；等所有段完成（检查每个的退出状态和大小）后按顺序 cat 起来交给
-// openssl 解密：CTR 的密钥流只和位置有关，拼起来的密文和一个连接下载的一样。整个脚本在子 shell 里运行，粘贴到终端里
-// 出错时不会关掉终端。
-func (c Command) segmentedPOSIX(name string) string {
+// posixPrelude 选保存的目录并确认能写：$NAGI_DOWNLOAD_DIR，没有时用当前目录，当前目录不可写时用 ~/Downloads；
+// 进入这个目录，写明保存的位置。why 把 curl 的退出码（和它写的日志）说成原因：节点对无效的链接一律回 404。
+const posixPrelude = `nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+`
+
+// String 生成 POSIX sh 的命令（Linux、macOS，要有 curl 和 openssl），整段在子 shell ( … ) 里运行，粘贴进终端出错时
+// 不会关掉终端，也可以由面板作为 .sh 提供（见 ShortPOSIX）。普通文件按 HTTP Range 分成 N 段（不到 MultiThreshold 的
+// 文件 1 段），各自用后台的 curl 追加到「文件名.<标识>.<N>.part<i>」，错误写进各自的 .log（几个 curl 的输出不混在
+// 一起），断开后从已经收到的地方接着下载（同一条命令可以重复运行）；所有段完成（检查每段的大小，总大小要等于文件大小）
+// 后按顺序 cat 起来交给 openssl 解密：CTR 的密钥流只和位置有关，拼起来的密文和一个连接下载的一样。解密后核对大小，
+// 有 SHA-256 时核对。目录打包是现生成的流：一个连接，不续传。
+// 每个值都用单引号括起来，文件名里的控制字符换掉，不会被 shell 解释。
+func (c Command) String() string {
+	name := SafeName(c.Name)
 	var b strings.Builder
 	flag := ipFlag(c.URL)
 	if flag != "" {
 		flag += " "
 	}
 	w := func(line string) { b.WriteString(line + "\n") }
+	dec := "openssl enc -d -aes-256-ctr -K " + hex.EncodeToString(c.Key.Key[:]) + " -iv " + hex.EncodeToString(c.Key.IV[:])
+	again := "run the same command again within " + ttlText() + " to resume; after that, generate a new command in the panel"
 	w("(")
-	w("N=" + strconv.Itoa(Threads))
+	if c.Segmented() {
+		w("N=" + strconv.Itoa(Threads))
+	} else if c.Resume {
+		w("N=1")
+	}
 	w("url=" + shellQuote(c.URL))
 	w("out=" + shellQuote(name))
 	w("base=" + shellQuote(c.partBase(name)))
 	w("size=" + strconv.FormatInt(c.Size, 10))
-	w("seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))")
+	b.WriteString(posixPrelude)
+	if !c.Resume {
+		w("rm -f -- \"$base.part\"")
+		w("curl " + flag + "-fgS -o \"$base.part\" \"$url\" || { rc=$?; echo \"FAILED: $(why \"$rc\" '')\" >&2; exit 1; }")
+		w(dec + " -in \"$base.part\" -out \"$out\" || { echo \"FAILED: cannot write $(pwd)/$out\" >&2; exit 1; }")
+		w("rm -f -- \"$base.part\"")
+		w("echo 'Done'")
+		w("echo \"Saved to $(pwd)/$out\"")
+		b.WriteString(")")
+		return b.String()
+	}
+	w("seg=$(( (size + N - 1) / N )); [ \"$seg\" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))")
+	w("have=0; i=0")
+	w("while [ \"$i\" -lt \"$count\" ]; do f=\"$base.$N.part$i\"; rm -f -- \"$f.rc\" \"$f.log\"; [ -f \"$f\" ] && have=$((have + $(wc -c < \"$f\"))); i=$((i + 1)); done")
+	w("free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')")
+	w("if [ -n \"$free\" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then")
+	w("  echo \"FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free\" >&2; exit 1")
+	w("fi")
 	w("i=0; pids=")
 	w("while [ \"$i\" -lt \"$count\" ]; do")
 	w("  (")
@@ -233,24 +252,34 @@ func (c Command) segmentedPOSIX(name string) string {
 	w("      [ $((a + have)) -le \"$b\" ] || exit 0")
 	w("      [ \"$tries\" -lt " + strconv.Itoa(segmentRetries) + " ] || exit 1")
 	w("      tries=$((tries + 1))")
-	w("      curl " + flag + "-fgsS -r \"$((a + have))-$b\" \"$url\" >> \"$f\" || sleep 1")
+	w("      curl " + flag + "-fgsS -r \"$((a + have))-$b\" \"$url\" >> \"$f\" 2> \"$f.log\" && continue")
+	w("      rc=$?; echo \"$rc\" > \"$f.rc\"")
+	w("      case \"$rc\" in 22|23) exit 1 ;; esac")
+	w("      sleep 1")
 	w("    done")
 	w("  ) &")
 	w("  pids=\"$pids $!\"; i=$((i + 1))")
 	w("done")
-	w("ok=1")
-	w("for p in $pids; do wait \"$p\" || ok=0; done")
+	w("echo \"Downloading $count segment(s) of $size bytes\"")
+	w("for p in $pids; do wait \"$p\"; done")
 	w("set --; total=0; i=0")
 	w("while [ \"$i\" -lt \"$count\" ]; do")
 	w("  f=\"$base.$N.part$i\"; set -- \"$@\" \"$f\"")
 	w("  [ -f \"$f\" ] && total=$((total + $(wc -c < \"$f\"))); i=$((i + 1))")
 	w("done")
-	w("if [ \"$ok\" = 1 ] && [ \"$total\" -eq \"$size\" ]; then")
-	w("  cat -- \"$@\" | openssl enc -d -aes-256-ctr -K " + hex.EncodeToString(c.Key.Key[:]) + " -iv " + hex.EncodeToString(c.Key.IV[:]) +
-		" -out \"$out\" && rm -f -- \"$@\"" + c.posixCheck("\"$out\""))
-	w("else")
-	w("  echo 'FAILED: download incomplete, run the command again to resume' >&2")
+	w("if [ \"$total\" -ne \"$size\" ]; then")
+	w("  for f in \"$@\"; do [ -f \"$f.rc\" ] && echo \"FAILED: $(why \"$(cat \"$f.rc\")\" \"$f.log\")\"; done | sort -u >&2")
+	w("  echo \"FAILED: download incomplete ($total of $size bytes), " + again + "\" >&2; exit 1")
 	w("fi")
+	w("cat -- \"$@\" < /dev/null | " + dec + " -out \"$out\" || { echo \"FAILED: cannot write $(pwd)/$out\" >&2; exit 1; }")
+	w("[ \"$(($(wc -c < \"$out\")))\" -eq \"$size\" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }")
+	w("for f in \"$@\"; do rm -f -- \"$f\" \"$f.rc\" \"$f.log\"; done")
+	if ValidSHA256(c.SHA256) {
+		w("if [ \"$(openssl dgst -sha256 < \"$out\" | awk '{print $NF}')\" = " + shellQuote(c.SHA256) + " ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi")
+	} else {
+		w("echo 'Done'")
+	}
+	w("echo \"Saved to $(pwd)/$out\"")
 	b.WriteString(")")
 	return b.String()
 }

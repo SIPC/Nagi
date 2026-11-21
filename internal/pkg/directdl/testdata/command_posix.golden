@@ -1,5 +1,69 @@
 #### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=1000 resume=true
-curl -fg -C - -o 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' -out 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt' && rm -f -- 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' && [ "$(openssl dgst -sha256 < 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt'
+base='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=67108864 resume=true
 (
 N=4
@@ -7,7 +71,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt'
 base='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -18,28 +105,127 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 0 "it's $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt" size=0 resume=false
-curl -fg -o 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part' -out 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt' && rm -f -- 'it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt'
+base='it'\''s $(touch pwned) `touch pwned2`; & | ‘q’ $env:PATH.txt.e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
 #### 1 "a<b>:c\"d|e?f*\\g.bin" size=1000 resume=true
-curl -fg -C - -o 'a<b>:c"d|e?f*\g.bin.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'a<b>:c"d|e?f*\g.bin.e8788c81.part' -out 'a<b>:c"d|e?f*\g.bin' && rm -f -- 'a<b>:c"d|e?f*\g.bin.e8788c81.part' && [ "$(openssl dgst -sha256 < 'a<b>:c"d|e?f*\g.bin' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='a<b>:c"d|e?f*\g.bin'
+base='a<b>:c"d|e?f*\g.bin.e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 1 "a<b>:c\"d|e?f*\\g.bin" size=67108864 resume=true
 (
 N=4
@@ -47,7 +233,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='a<b>:c"d|e?f*\g.bin'
 base='a<b>:c"d|e?f*\g.bin.e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -58,28 +267,127 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 1 "a<b>:c\"d|e?f*\\g.bin" size=0 resume=false
-curl -fg -o 'a<b>:c"d|e?f*\g.bin.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'a<b>:c"d|e?f*\g.bin.e8788c81.part' -out 'a<b>:c"d|e?f*\g.bin' && rm -f -- 'a<b>:c"d|e?f*\g.bin.e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='a<b>:c"d|e?f*\g.bin'
+base='a<b>:c"d|e?f*\g.bin.e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
 #### 2 "CON.txt" size=1000 resume=true
-curl -fg -C - -o 'CON.txt.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'CON.txt.e8788c81.part' -out 'CON.txt' && rm -f -- 'CON.txt.e8788c81.part' && [ "$(openssl dgst -sha256 < 'CON.txt' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='CON.txt'
+base='CON.txt.e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 2 "CON.txt" size=67108864 resume=true
 (
 N=4
@@ -87,7 +395,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='CON.txt'
 base='CON.txt.e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -98,28 +429,127 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 2 "CON.txt" size=0 resume=false
-curl -fg -o 'CON.txt.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'CON.txt.e8788c81.part' -out 'CON.txt' && rm -f -- 'CON.txt.e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='CON.txt'
+base='CON.txt.e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
 #### 3 "lpt1" size=1000 resume=true
-curl -fg -C - -o 'lpt1.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'lpt1.e8788c81.part' -out 'lpt1' && rm -f -- 'lpt1.e8788c81.part' && [ "$(openssl dgst -sha256 < 'lpt1' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='lpt1'
+base='lpt1.e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 3 "lpt1" size=67108864 resume=true
 (
 N=4
@@ -127,7 +557,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='lpt1'
 base='lpt1.e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -138,28 +591,127 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 3 "lpt1" size=0 resume=false
-curl -fg -o 'lpt1.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'lpt1.e8788c81.part' -out 'lpt1' && rm -f -- 'lpt1.e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='lpt1'
+base='lpt1.e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
 #### 4 "trailing. . " size=1000 resume=true
-curl -fg -C - -o 'trailing. . .e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'trailing. . .e8788c81.part' -out 'trailing. . ' && rm -f -- 'trailing. . .e8788c81.part' && [ "$(openssl dgst -sha256 < 'trailing. . ' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='trailing. . '
+base='trailing. . .e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 4 "trailing. . " size=67108864 resume=true
 (
 N=4
@@ -167,7 +719,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='trailing. . '
 base='trailing. . .e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -178,28 +753,127 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 4 "trailing. . " size=0 resume=false
-curl -fg -o 'trailing. . .e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'trailing. . .e8788c81.part' -out 'trailing. . ' && rm -f -- 'trailing. . .e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='trailing. . '
+base='trailing. . .e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
 #### 5 "line\nbreak\r\x00.bin" size=1000 resume=true
-curl -fg -C - -o 'line_break__.bin.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'line_break__.bin.e8788c81.part' -out 'line_break__.bin' && rm -f -- 'line_break__.bin.e8788c81.part' && [ "$(openssl dgst -sha256 < 'line_break__.bin' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='line_break__.bin'
+base='line_break__.bin.e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 5 "line\nbreak\r\x00.bin" size=67108864 resume=true
 (
 N=4
@@ -207,7 +881,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='line_break__.bin'
 base='line_break__.bin.e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -218,28 +915,127 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 5 "line\nbreak\r\x00.bin" size=0 resume=false
-curl -fg -o 'line_break__.bin.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in 'line_break__.bin.e8788c81.part' -out 'line_break__.bin' && rm -f -- 'line_break__.bin.e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='line_break__.bin'
+base='line_break__.bin.e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
 #### 6 "-rf" size=1000 resume=true
-curl -fg -C - -o '-rf.e8788c81.part' 'http://203.0.113.5:8080/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in '-rf.e8788c81.part' -out '-rf' && rm -f -- '-rf.e8788c81.part' && [ "$(openssl dgst -sha256 < '-rf' | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
+(
+N=1
+url='http://203.0.113.5:8080/.nagi/dl/abc.def'
+out='-rf'
+base='-rf.e8788c81'
+size=1000
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
+i=0; pids=
+while [ "$i" -lt "$count" ]; do
+  (
+    a=$((i * seg)); b=$((a + seg - 1)); [ "$b" -lt "$size" ] || b=$((size - 1))
+    f="$base.$N.part$i"; tries=0
+    while :; do
+      have=0; [ -f "$f" ] && have=$(($(wc -c < "$f")))
+      [ $((a + have)) -le "$b" ] || exit 0
+      [ "$tries" -lt 3 ] || exit 1
+      tries=$((tries + 1))
+      curl -4 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
+    done
+  ) &
+  pids="$pids $!"; i=$((i + 1))
+done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
+set --; total=0; i=0
+while [ "$i" -lt "$count" ]; do
+  f="$base.$N.part$i"; set -- "$@" "$f"
+  [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
+done
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
+fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
+)
 #### 6 "-rf" size=67108864 resume=true
 (
 N=4
@@ -247,7 +1043,30 @@ url='http://[2001:db8::5]/.nagi/dl/abc.def'
 out='-rf'
 base='-rf.e8788c81'
 size=67108864
-seg=$(( (size + N - 1) / N )); count=$(( (size + seg - 1) / seg ))
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+seg=$(( (size + N - 1) / N )); [ "$seg" -gt 0 ] || seg=1; count=$(( (size + seg - 1) / seg ))
+have=0; i=0
+while [ "$i" -lt "$count" ]; do f="$base.$N.part$i"; rm -f -- "$f.rc" "$f.log"; [ -f "$f" ] && have=$((have + $(wc -c < "$f"))); i=$((i + 1)); done
+free=$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -n "$free" ] && [ $((free * 1024)) -lt $((2 * size - have)) ]; then
+  echo "FAILED: not enough disk space in $(pwd): $(( (2 * size - have) / 1048576 + 1 )) MiB needed, $((free / 1024)) MiB free" >&2; exit 1
+fi
 i=0; pids=
 while [ "$i" -lt "$count" ]; do
   (
@@ -258,23 +1077,58 @@ while [ "$i" -lt "$count" ]; do
       [ $((a + have)) -le "$b" ] || exit 0
       [ "$tries" -lt 3 ] || exit 1
       tries=$((tries + 1))
-      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" || sleep 1
+      curl -6 -fgsS -r "$((a + have))-$b" "$url" >> "$f" 2> "$f.log" && continue
+      rc=$?; echo "$rc" > "$f.rc"
+      case "$rc" in 22|23) exit 1 ;; esac
+      sleep 1
     done
   ) &
   pids="$pids $!"; i=$((i + 1))
 done
-ok=1
-for p in $pids; do wait "$p" || ok=0; done
+echo "Downloading $count segment(s) of $size bytes"
+for p in $pids; do wait "$p"; done
 set --; total=0; i=0
 while [ "$i" -lt "$count" ]; do
   f="$base.$N.part$i"; set -- "$@" "$f"
   [ -f "$f" ] && total=$((total + $(wc -c < "$f"))); i=$((i + 1))
 done
-if [ "$ok" = 1 ] && [ "$total" -eq "$size" ]; then
-  cat -- "$@" | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" && rm -f -- "$@" && [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ] && echo 'SHA-256 OK' || echo 'FAILED' >&2
-else
-  echo 'FAILED: download incomplete, run the command again to resume' >&2
+if [ "$total" -ne "$size" ]; then
+  for f in "$@"; do [ -f "$f.rc" ] && echo "FAILED: $(why "$(cat "$f.rc")" "$f.log")"; done | sort -u >&2
+  echo "FAILED: download incomplete ($total of $size bytes), run the same command again within 5 minutes to resume; after that, generate a new command in the panel" >&2; exit 1
 fi
+cat -- "$@" < /dev/null | openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+[ "$(($(wc -c < "$out")))" -eq "$size" ] || { echo 'FAILED: the decrypted file has the wrong size' >&2; exit 1; }
+for f in "$@"; do rm -f -- "$f" "$f.rc" "$f.log"; done
+if [ "$(openssl dgst -sha256 < "$out" | awk '{print $NF}')" = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' ]; then echo 'SHA-256 OK'; else echo 'FAILED: SHA-256 mismatch' >&2; exit 1; fi
+echo "Saved to $(pwd)/$out"
 )
 #### 6 "-rf" size=0 resume=false
-curl -fg -o '-rf.e8788c81.part' 'http://203.0.113.5/.nagi/dl/abc.def' && openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in '-rf.e8788c81.part' -out '-rf' && rm -f -- '-rf.e8788c81.part'
+(
+url='http://203.0.113.5/.nagi/dl/abc.def'
+out='-rf'
+base='-rf.e8788c81'
+size=0
+nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
+if ! nagi_w "$dir" || ! cd -- "$dir"; then
+  echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
+fi
+echo "Saving to $(pwd)/$out"
+why() {
+  m=$(tail -n 1 "$2" 2>/dev/null)
+  case "$1" in
+    22) case "$m" in *409*) echo 'the file changed on the node: generate a new command in the panel' ;;
+        *) echo 'the node rejected the link (expired, used from another network address, or used up): generate a new command in the panel' ;; esac ;;
+    23) echo 'cannot write the file (folder not writable or disk full)' ;;
+    5|6|7) echo 'cannot connect to the node (port blocked or node offline)' ;;
+    18|28|52|55|56) echo 'the connection was interrupted: run the command again to resume' ;;
+    *) echo "curl exited with $1: $m" ;;
+  esac
+}
+rm -f -- "$base.part"
+curl -4 -fgS -o "$base.part" "$url" || { rc=$?; echo "FAILED: $(why "$rc" '')" >&2; exit 1; }
+openssl enc -d -aes-256-ctr -K 16032e574efaafec7fe17092cf96c6385d115e0d07dbefd6ca0fe8324d7f7fa6 -iv 432f9d55692b3550b434409a062c7b86 -in "$base.part" -out "$out" || { echo "FAILED: cannot write $(pwd)/$out" >&2; exit 1; }
+rm -f -- "$base.part"
+echo 'Done'
+echo "Saved to $(pwd)/$out"
+)
