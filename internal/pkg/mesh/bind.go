@@ -99,6 +99,9 @@ type peerState struct {
 	nodeRelayEnabled *bool
 	relayPool        bool // 这个成员在中转池里（还要 nodeRelayEnabled 为 true），见 poolRelay。
 	quicVia          Key  // 仅实验 API 明确指定；不影响 WireGuard 的选路或物理邻接。
+	// perfVia：自动切路选定的性能中转（见 autoroute.go）。只在直连可用、它仍在中转池里时用，否则发包时回到直连。
+	perfVia Key
+	perfRTT time.Duration // 选它的那个窗口里经它的往返中位数，Status 显示
 	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
 	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
@@ -143,6 +146,7 @@ type Bind struct {
 	relay     bool // 是否替别人中转（面板）
 	// nodeRelay：节点替别的节点中转（网络设置里可以关）。只经直连的 UDP 转发，不经控制连接，按来源限速。
 	nodeRelay atomic.Bool
+	autoRoute bool // 自动切路打开（见 autoroute.go），持有 mu 时读写
 	// relayRx、relayTx：替别人中转收到、转出的字节数（面板），不属于任何一个对端，Status 里没有。
 	relayRx, relayTx atomic.Uint64
 	caps             byte // 自己启用的能力
@@ -526,6 +530,13 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 	}
 	if p.directAlive(now) {
 		p.activeRelay = Key{}
+		// 自动切路选了性能中转：WireGuard 的包经它走。对端公钥不变，隧道里的连接不断。
+		if rp := b.perfHop(p, now); rp != nil {
+			addr, c := rp.direct, b.sock(rp.directConn)
+			b.mu.Unlock()
+			b.write(c, encodeRelay(typeRelaySend, dst, pkt), addr)
+			return
+		}
 		addr, c := p.direct, b.sock(p.directConn)
 		var enc *fecEncoder
 		if b.caps&capFEC != 0 && p.has(capFEC, now) {
@@ -999,6 +1010,9 @@ func (b *Bind) setPeers(peers []Peer) {
 		if !b.peers[p.quicVia].poolRelay() {
 			p.quicVia = Key{} // 撤权或退出中转池优先于实验路径，恢复默认直连；不迁移旧协议连接。
 		}
+		if !b.peers[p.perfVia].poolRelay() {
+			p.perfVia = Key{} // 同上：退出中转池、撤权或移除时自动切路的路线立即回到直连。
+		}
 		p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool {
 			r := b.peers[k]
 			return r == nil || (r.nodeRelayEnabled != nil && !*r.nodeRelayEnabled)
@@ -1074,6 +1088,7 @@ func (b *Bind) maintain(now time.Time) {
 		}
 		if p.direct.IsValid() {
 			b.log.Debug("mesh 直连断开", "peer", p.key.Short(), "addr", p.direct)
+			p.perfVia = Key{} // 直连不通时交给原来的故障兜底，不再算性能路线。
 			delete(p.confirmed, p.direct)
 			if b.byAddr[p.direct] == p.key {
 				delete(b.byAddr, p.direct)
@@ -1212,6 +1227,9 @@ func (b *Bind) status() []PeerStatus {
 			}
 		}
 		switch {
+		case p.directAlive(now) && b.perfHop(p, now) != nil:
+			// 直连还在（PhysicalDirect 照填），业务走的是自动切路选的中转。
+			s.Path, s.Via, s.RTT = "node-relay", p.perfVia, p.perfRTT
 		case p.directAlive(now):
 			s.Path, s.Direct, s.RTT = "direct", p.direct, p.rtt
 			if c := b.sock(p.directConn); c != nil {

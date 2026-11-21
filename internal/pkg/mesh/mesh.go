@@ -100,7 +100,8 @@ type Mesh struct {
 
 	mu         sync.Mutex
 	configured map[Key]bool
-	observing  bool // 显式观察每节点同时只运行一个窗口，不随调用者数量放大开销。
+	observing  bool               // 显式观察每节点同时只运行一个窗口，不随调用者数量放大开销。
+	autoStop   context.CancelFunc // 自动切路在运行时停止它（见 autoroute.go），关闭时为 nil
 	done       chan struct{}
 	closeOnce  sync.Once
 }
@@ -263,7 +264,13 @@ func (m *Mesh) QUIC() bool {
 // Close 停止 mesh。可以重复调用。
 func (m *Mesh) Close() {
 	m.closeOnce.Do(func() {
+		m.mu.Lock()
 		close(m.done)
+		if m.autoStop != nil {
+			m.autoStop()
+			m.autoStop = nil
+		}
+		m.mu.Unlock()
 		if m.quic != nil {
 			m.quic.close()
 		}
@@ -392,8 +399,9 @@ func (m *Mesh) Listen(port uint16) (net.Listener, error) {
 }
 
 // Dial 经 mesh 连接某个成员的 TCP 端口：能走 QUIC 就走 QUIC，否则走 WireGuard 里的 TCP。
+// 自动切路正把到 k 的业务经中转发时，新连接走 WireGuard 跟着走中转；已有的 QUIC 连接留在直连，不迁移。
 func (m *Mesh) Dial(ctx context.Context, k Key, port uint16) (net.Conn, error) {
-	if m.quic != nil {
+	if m.quic != nil && !m.perfRouted(k) {
 		if c, err := m.quic.open(ctx, k, port); err == nil {
 			return c, nil
 		}
