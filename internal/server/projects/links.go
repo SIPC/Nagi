@@ -280,6 +280,10 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 		if !spec.IsSingle(cfg) {
 			name = r.GetService() + "." + c.Name
 		}
+		var routeRules map[string]*nagiv1.EffectiveAlertRules
+		if isEntry && s.Nodes != nil {
+			routeRules = s.Nodes.RouteAlertRules(ctx, row.ProjectID, row.Container)
+		}
 		// tcp+udp 的映射拆成 tcp、udp 两条同名的入口（见 spec.SplitRoute）。
 		for _, r := range spec.SplitRoute(r) {
 			if isEntry {
@@ -289,6 +293,9 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 					ProxyProtocol: r.GetProxyProtocol(),
 				}
 				e.EffectiveAlertRules, e.AlertRules = s.containerRules(ctx, settingsOf(row.ProjectID), c)
+				if own := routeRules[r.GetName()]; own != nil && e.EffectiveAlertRules != nil {
+					e.EffectiveAlertRules = own
+				}
 				for _, n := range failoverNodes(c) {
 					if len(keys[n]) > 0 {
 						e.Nodes = append(e.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})

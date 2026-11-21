@@ -202,7 +202,7 @@ public interface LinkEntryOrBuilder extends
 
   /**
    * <pre>
-   * 同上，新版本节点用它。
+   * 这条映射生效的规则（含映射层的覆盖），新版本节点用它。
    * </pre>
    *
    * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
@@ -211,7 +211,7 @@ public interface LinkEntryOrBuilder extends
   boolean hasEffectiveAlertRules();
   /**
    * <pre>
-   * 同上，新版本节点用它。
+   * 这条映射生效的规则（含映射层的覆盖），新版本节点用它。
    * </pre>
    *
    * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>

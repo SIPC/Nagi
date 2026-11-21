@@ -19,6 +19,7 @@ public  final class SetAlertOverrideRequest extends
     nodeId_ = "";
     projectId_ = "";
     container_ = "";
+    route_ = "";
   }
   public static final int SCOPE_FIELD_NUMBER = 1;
   private java.lang.String scope_;
@@ -329,6 +330,53 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
   private void clearBaseRevision() {
 
     baseRevision_ = 0L;
+  }
+
+  public static final int ROUTE_FIELD_NUMBER = 7;
+  private java.lang.String route_;
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @return The route.
+   */
+  @java.lang.Override
+  public java.lang.String getRoute() {
+    return route_;
+  }
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @return The bytes for route.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRouteBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(route_);
+  }
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @param value The route to set.
+   */
+  private void setRoute(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    route_ = value;
+  }
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   */
+  private void clearRoute() {
+
+    route_ = getDefaultInstance().getRoute();
+  }
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @param value The bytes for route to set.
+   */
+  private void setRouteBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    route_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.SetAlertOverrideRequest parseFrom(
@@ -752,6 +800,55 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
       return this;
     }
 
+    /**
+     * <code>string route = 7 [json_name = "route"];</code>
+     * @return The route.
+     */
+    @java.lang.Override
+    public java.lang.String getRoute() {
+      return instance.getRoute();
+    }
+    /**
+     * <code>string route = 7 [json_name = "route"];</code>
+     * @return The bytes for route.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRouteBytes() {
+      return instance.getRouteBytes();
+    }
+    /**
+     * <code>string route = 7 [json_name = "route"];</code>
+     * @param value The route to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRoute(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRoute(value);
+      return this;
+    }
+    /**
+     * <code>string route = 7 [json_name = "route"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRoute() {
+      copyOnWrite();
+      instance.clearRoute();
+      return this;
+    }
+    /**
+     * <code>string route = 7 [json_name = "route"];</code>
+     * @param value The bytes for route to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRouteBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRouteBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.SetAlertOverrideRequest)
   }
   @java.lang.Override
@@ -775,10 +872,11 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
             "rules_",
             RulesDefaultEntryHolder.defaultEntry,
             "baseRevision_",
+            "route_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0001\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u00052\u0006\u0002";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0001\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u00052\u0006\u0002\u0007\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

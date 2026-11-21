@@ -19,8 +19,10 @@ const baselineRefresh = 5 * time.Minute
 
 // loadState 是需要跨判断保留的数据（不保存）。
 type loadState struct {
-	restarts   map[string][]restartSample
-	baseline   map[string]float64 // 映射 → 过去 24 小时的平均请求量（请求/秒）
+	restarts map[string][]restartSample
+	// baseline：http 映射 → 过去 24 小时的请求量基线；l4Base：tcp/udp 映射 → 新连接基线（见 sources.go）。
+	baseline   map[string]routeBaseline
+	l4Base     map[string]routeBaseline
 	baselineAt time.Time
 }
 
@@ -66,11 +68,15 @@ func (e *Engine) observe(ctx context.Context, now time.Time) map[string]*obs {
 		}
 	}
 
+	observeHost(latest, node, out)
 	e.mu.Lock()
 	e.observeRestarts(now, latest, out)
 	e.observeContainerCPU(latest, out)
+	e.observeCounts(now, out)
 	e.mu.Unlock()
 	e.observeRoutes(ctx, now, out)
+	e.observeL4(ctx, now, out)
+	e.observeFacts(ctx, now, out)
 
 	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
 		e.mu.Lock()
@@ -169,9 +175,9 @@ func (e *Engine) observeRoutes(ctx context.Context, now time.Time, out map[strin
 	e.mu.Lock()
 	refresh := now.Sub(e.load.baselineAt) >= baselineRefresh
 	e.mu.Unlock()
-	var base map[string]float64
+	var base, l4 map[string]routeBaseline
 	if refresh {
-		base = e.baselines(ctx, now)
+		base, l4 = e.computeBaselines(ctx, now)
 	}
 	// 统计窗口按规则可以不同，同一个窗口只查一次。
 	cache := map[time.Duration]map[string]routeWindow{}
@@ -184,8 +190,8 @@ func (e *Engine) observeRoutes(ctx context.Context, now time.Time, out map[strin
 		return w
 	}
 	e.mu.Lock()
-	if refresh {
-		e.load.baseline, e.load.baselineAt = base, now
+	if refresh && base != nil {
+		e.load.baseline, e.load.l4Base, e.load.baselineAt = base, l4, now
 	}
 	routes := map[string]bool{}
 	for route := range window(alert.ErrorWindowDefault) {
@@ -227,7 +233,7 @@ func (e *Engine) observeRoutes(ctx context.Context, now time.Time, out map[strin
 				o.message = requestsNote(set.lang, x.requests, span)
 			case alert.RuleTraffic:
 				rate := x.requests / span.Seconds()
-				b := baseline[route]
+				b := baseline[route].rate
 				if b <= 0 { // 没有历史：不判断
 					continue
 				}
@@ -314,27 +320,6 @@ func (e *Engine) windowRates(ctx context.Context, now time.Time, span time.Durat
 		if valid && now.Sub(previous) <= 3*metrics.Interval {
 			out[route] = x
 		}
-	}
-	return out
-}
-
-// baselines 算每条 http 映射过去 24 小时的平均请求量（请求/秒），不算最近 5 分钟。
-func (e *Engine) baselines(ctx context.Context, now time.Time) map[string]float64 {
-	data, err := e.metrics.Query(ctx, "r:", now.Add(-24*time.Hour), now.Add(-alert.ErrorWindowDefault))
-	if err != nil {
-		return nil
-	}
-	out := map[string]float64{}
-	for series, points := range data {
-		route, kind, ok := cutLast(strings.TrimPrefix(series, "r:"), ":")
-		if !ok || kind != "req" || len(points) == 0 {
-			continue
-		}
-		var sum float64
-		for _, p := range points {
-			sum += p.Value
-		}
-		out[route] = sum / float64(len(points))
 	}
 	return out
 }

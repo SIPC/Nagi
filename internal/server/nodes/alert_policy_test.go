@@ -145,3 +145,96 @@ func TestSetAlertOverrideValidation(t *testing.T) {
 		t.Errorf("同时改恢复阈值就可以：%v", err)
 	}
 }
+
+// 映射层的覆盖：只能放按映射判断的规则，只影响这条映射，盖在容器（和项目）之上；删掉映射时一起删掉。
+func TestRouteAlertOverride(t *testing.T) {
+	ctx := context.Background()
+	r, q := newTestRegistry(t)
+	if err := q.CreateNode(ctx, store.CreateNodeParams{ID: "n1", Name: "n1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.InsertProject(ctx, store.InsertProjectParams{ID: "p", Name: "p", NetworkName: "p", Settings: []byte{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.InsertContainer(ctx, store.InsertContainerParams{ProjectID: "p", Name: "web", NodeID: "n1", Secrets: []byte{}, WebhookHash: "h"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"tcp", "other"} {
+		if err := q.UpsertRoute(ctx, store.UpsertRouteParams{ProjectID: "p", Name: name, Container: "web", Target: 80, Protocol: "tcp", Domains: "[]", EntryNodes: "[]"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	set := func(scope, route string, rules map[string]*nagiv1.AlertRule) error {
+		_, err := r.SetAlertOverride(ctx, &nagiv1.AlertOverride{Scope: scope, ProjectId: "p", Container: "web", Route: route, Rules: rules}, 0)
+		return err
+	}
+	if err := set("route", "tcp", map[string]*nagiv1.AlertRule{alert.RuleRestart: {Threshold: proto.Float64(2)}}); err == nil {
+		t.Error("容器规则不能放在映射上")
+	}
+	if err := set("route", "missing", map[string]*nagiv1.AlertRule{alert.RuleL4Fail: {Threshold: proto.Float64(30)}}); err == nil {
+		t.Error("不存在的映射应该被拒绝")
+	}
+	// 容器把失败比例改成 40%（恢复 10%），映射 tcp 再改成 60%：other 跟随容器，tcp 用自己的阈值、容器的恢复阈值。
+	if err := set("container", "", map[string]*nagiv1.AlertRule{alert.RuleL4Fail: {Threshold: proto.Float64(40), RecoverThreshold: proto.Float64(10)}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := set("route", "tcp", map[string]*nagiv1.AlertRule{alert.RuleL4Fail: {Threshold: proto.Float64(60)}}); err != nil {
+		t.Fatal(err)
+	}
+	got := r.RouteAlertRules(ctx, "p", "web")
+	if len(got) != 1 {
+		t.Fatalf("只有有覆盖的映射单独下发：%v", got)
+	}
+	if f := got["tcp"].GetRules()[alert.RuleL4Fail]; f.GetThreshold() != 60 || f.GetRecoverThreshold() != 10 {
+		t.Fatalf("映射应盖在容器之上：%v", f)
+	}
+	if err := q.DeleteRoute(ctx, store.DeleteRouteParams{ProjectID: "p", Name: "tcp"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.RouteAlertRules(ctx, "p", "web"); len(got) != 0 {
+		t.Fatalf("删掉映射后覆盖应一起删掉：%v", got)
+	}
+}
+
+// 事件通知的开关：版本不对时拒绝；关掉时 before 在保存之前调用；旧的三个登录安全开关升级时只迁移一次。
+func TestAlertNotificationSwitches(t *testing.T) {
+	ctx := context.Background()
+	r, q := newTestRegistry(t)
+	if err := q.SetSetting(ctx, store.SetSettingParams{Key: "alert_login_ratelimit", Value: "0"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.MigrateAlertPolicy(ctx, func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error) { return nil, nil, nil }); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := r.AlertPolicy(ctx)
+	if v, ok := p.GetNotifications()["login_ratelimit"]; !ok || v {
+		t.Fatalf("关掉的登录限速应迁移成关掉的通知：%v", p.GetNotifications())
+	}
+	if !r.NoticeOn(ctx, "totp:alice") || r.NoticeOn(ctx, "ratelimit:hour") {
+		t.Fatal("只有登录限速被关掉")
+	}
+	if _, err := r.SetAlertNotification(ctx, "takeover", false, p.GetRevision()-1, nil); err != ErrAlertConflict {
+		t.Fatalf("旧版本应被拒绝：%v", err)
+	}
+	var savedBefore bool
+	p, err := r.SetAlertNotification(ctx, "takeover", false, p.GetRevision(), func() {
+		cur, _ := r.AlertPolicy(ctx)
+		_, savedBefore = cur.GetNotifications()["takeover"]
+	})
+	if err != nil || savedBefore {
+		t.Fatalf("before 应在保存之前调用：%v %v", savedBefore, err)
+	}
+	if eff := alert.Effective(p, true); eff.GetNotifications()["takeover"] || len(eff.GetNotifications()) != 1 {
+		t.Fatalf("节点只收到关掉的节点通知（顶替），面板的登录限速不下发：%v", eff.GetNotifications())
+	}
+	// 用户之后重新打开登录限速：再次启动不应再按旧设置关掉。
+	if p, err = r.SetAlertNotification(ctx, "login_ratelimit", true, p.GetRevision(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.MigrateAlertPolicy(ctx, func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error) { return nil, nil, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if !r.NoticeOn(ctx, "ratelimit:hour") {
+		t.Fatal("登录限速的迁移只做一次")
+	}
+}

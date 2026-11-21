@@ -217,6 +217,121 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     flapCount_ = 0;
   }
 
+  public static final int NOTIFICATIONS_FIELD_NUMBER = 5;
+  private static final class NotificationsDefaultEntryHolder {
+    static final com.google.protobuf.MapEntryLite<
+        java.lang.String, java.lang.Boolean> defaultEntry =
+            com.google.protobuf.MapEntryLite
+            .<java.lang.String, java.lang.Boolean>newDefaultInstance(
+                com.google.protobuf.WireFormat.FieldType.STRING,
+                "",
+                com.google.protobuf.WireFormat.FieldType.BOOL,
+                false);
+  }
+  private com.google.protobuf.MapFieldLite<
+      java.lang.String, java.lang.Boolean> notifications_ =
+          com.google.protobuf.MapFieldLite.emptyMapField();
+  private com.google.protobuf.MapFieldLite<java.lang.String, java.lang.Boolean>
+  internalGetNotifications() {
+    return notifications_;
+  }
+  private com.google.protobuf.MapFieldLite<java.lang.String, java.lang.Boolean>
+  internalGetMutableNotifications() {
+    if (!notifications_.isMutable()) {
+      notifications_ = notifications_.mutableCopy();
+    }
+    return notifications_;
+  }
+  @java.lang.Override
+
+  public int getNotificationsCount() {
+    return internalGetNotifications().size();
+  }
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  @java.lang.Override
+
+  public boolean containsNotifications(
+      java.lang.String key) {
+    java.util.Objects.requireNonNull(key);
+    return internalGetNotifications().containsKey(key);
+  }
+  /**
+   * Use {@link #getNotificationsMap()} instead.
+   */
+  @java.lang.Override
+  @java.lang.Deprecated
+  public java.util.Map<java.lang.String, java.lang.Boolean> getNotifications() {
+    return getNotificationsMap();
+  }
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  @java.lang.Override
+
+  public java.util.Map<java.lang.String, java.lang.Boolean> getNotificationsMap() {
+    return java.util.Collections.unmodifiableMap(
+        internalGetNotifications());
+  }
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  @java.lang.Override
+
+  public boolean getNotificationsOrDefault(
+      java.lang.String key,
+      boolean defaultValue) {
+    java.util.Objects.requireNonNull(key);
+    java.util.Map<java.lang.String, java.lang.Boolean> map =
+        internalGetNotifications();
+    java.lang.Boolean v = map.get(key);
+    return v != null ? v : defaultValue;
+  }
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  @java.lang.Override
+
+  public boolean getNotificationsOrThrow(
+      java.lang.String key) {
+    java.util.Objects.requireNonNull(key);
+    java.util.Map<java.lang.String, java.lang.Boolean> map =
+        internalGetNotifications();
+    java.lang.Boolean v = map.get(key);
+    if (v == null) {
+      throw new java.lang.IllegalArgumentException();
+    }
+    return v;
+  }
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  private java.util.Map<java.lang.String, java.lang.Boolean>
+  getMutableNotificationsMap() {
+    return internalGetMutableNotifications();
+  }
+
   public static ink.sipc.nagi.proto.v1.EffectiveAlertRules parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -523,6 +638,132 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
       return this;
     }
 
+    @java.lang.Override
+
+    public int getNotificationsCount() {
+      return instance.getNotificationsMap().size();
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+    @java.lang.Override
+
+    public boolean containsNotifications(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      return instance.getNotificationsMap().containsKey(key);
+    }
+
+    public Builder clearNotifications() {
+      copyOnWrite();
+      instance.getMutableNotificationsMap().clear();
+      return this;
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+
+    public Builder removeNotifications(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      copyOnWrite();
+      instance.getMutableNotificationsMap().remove(key);
+      return this;
+    }
+    /**
+     * Use {@link #getNotificationsMap()} instead.
+     */
+    @java.lang.Override
+    @java.lang.Deprecated
+    public java.util.Map<java.lang.String, java.lang.Boolean> getNotifications() {
+      return getNotificationsMap();
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+    @java.lang.Override
+    public java.util.Map<java.lang.String, java.lang.Boolean> getNotificationsMap() {
+      return java.util.Collections.unmodifiableMap(
+          instance.getNotificationsMap());
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+    @java.lang.Override
+
+    public boolean getNotificationsOrDefault(
+        java.lang.String key,
+        boolean defaultValue) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Map<java.lang.String, java.lang.Boolean> map =
+          instance.getNotificationsMap();
+      return map.containsKey(key) ? map.get(key) : defaultValue;
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+    @java.lang.Override
+
+    public boolean getNotificationsOrThrow(
+        java.lang.String key) {
+      java.util.Objects.requireNonNull(key);
+      java.util.Map<java.lang.String, java.lang.Boolean> map =
+          instance.getNotificationsMap();
+      if (!map.containsKey(key)) {
+        throw new java.lang.IllegalArgumentException();
+      }
+      return map.get(key);
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+    public Builder putNotifications(
+        java.lang.String key,
+        boolean value) {
+      java.util.Objects.requireNonNull(key);
+
+      copyOnWrite();
+      instance.getMutableNotificationsMap().put(key, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+     * </pre>
+     *
+     * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+     */
+    public Builder putAllNotifications(
+        java.util.Map<java.lang.String, java.lang.Boolean> values) {
+      copyOnWrite();
+      instance.getMutableNotificationsMap().putAll(values);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.EffectiveAlertRules)
   }
   @java.lang.Override
@@ -544,10 +785,12 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
             "language_",
             "flapWindowMinutes_",
             "flapCount_",
+            "notifications_",
+            NotificationsDefaultEntryHolder.defaultEntry,
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0001\u0000\u0000\u00012\u0002\u0208\u0003" +
-              "\u000b\u0004\u000b";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0002\u0000\u0000\u00012\u0002\u0208\u0003" +
+              "\u000b\u0004\u000b\u00052";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

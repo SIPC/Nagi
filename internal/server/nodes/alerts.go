@@ -443,7 +443,7 @@ func (r *Registry) sendLogged(ctx context.Context, a *nagiv1.Alert) {
 	}
 	r.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle(), "node", a.GetNode())
 	r.recordAlert(ctx, a.GetNode(), "", a)
-	if !send && err == nil {
+	if !send && err == nil || !r.NoticeOn(ctx, a.GetKey()) {
 		return
 	}
 	if err := r.SendAlert(ctx, a, nil); err != nil {

@@ -17,7 +17,8 @@ import (
 
 // 账号、凭据和集群变更的告警（见 docs/audit.md#安全告警）：接口调用记进审计以后，按方法判断要不要通知。
 // 这些都是攻击者拿到管理员后最先做的事（关掉告警、生成令牌留后门、关掉两步验证、加节点、部署特权容器），
-// 一律通知，不能关。告警配置的修改在处理函数里先用旧配置通知（见 UpdateAlertConfig）。
+// 默认都通知；每一项都能在「设置 → 告警」里单独关（见 alert.Notices，关闭本身也通知）。删除成员、角色的通知
+// 在处理函数里发（调用之后名称就查不到了）。告警配置的修改在处理函数里先用旧配置通知（见 UpdateAlertConfig）。
 
 // notifyChanges 在一次成功的接口调用以后，按方法发出通知。
 func (a *API) notifyChanges(ctx context.Context, method string, req proto.Message) {
@@ -82,6 +83,29 @@ func (a *API) notifyChanges(ctx context.Context, method string, req proto.Messag
 			names = append(names, a.nodeName(ctx, id))
 		}
 		a.notify(ctx, "node-handover", i18n.Errorf("节点 %s 已移交给其他面板", strings.Join(names, "、")).Error(), "")
+	case *nagiv1.RemoveNodeRequest:
+		a.notify(ctx, "node-removed", i18n.Errorf("节点 %s 已删除", a.nodeName(ctx, m.GetNodeId())).Error(), "")
+	case *nagiv1.RemoveNodePanelRequest:
+		a.notify(ctx, "node-panel-removed", i18n.Errorf("从节点 %s 移除了一个面板", a.nodeName(ctx, m.GetNodeId())).Error(), i18n.Errorf("面板指纹：%s", m.GetFingerprint()).Error())
+	case *nagiv1.CreateEnrollCommandRequest:
+		a.notify(ctx, "enroll-command", i18n.Errorf("账号 %s 生成了添加节点的命令", u.Name).Error(), "")
+	case *nagiv1.CreateInviteRequest:
+		a.notify(ctx, "enroll-command", i18n.Errorf("账号 %s 生成了面板邀请", u.Name).Error(), "")
+	case *nagiv1.SessionPolicy:
+		a.notify(ctx, "session-policy", i18n.Errorf("账号 %s 修改了会话策略", u.Name).Error(),
+			i18n.Errorf("空闲超时 %d 分钟，登录有效期 %d 小时，网络绑定 %s", m.GetIdleMinutes(), m.GetMaxHours(), m.GetBind()).Error())
+	case *nagiv1.SetFailoverApiRequest:
+		a.notify(ctx, "ha-settings", i18n.Errorf("修改了顶替设置：%s / %s", a.projectName(ctx, m.GetProjectId()), m.GetContainer()).Error(), "")
+	case *nagiv1.SetBackupNodesRequest:
+		a.notify(ctx, "ha-settings", i18n.Errorf("修改了备份节点：%s / %s", a.projectName(ctx, m.GetProjectId()), m.GetContainer()).Error(), "")
+	case *nagiv1.SetNodeMeshOptionsRequest:
+		a.notify(ctx, "ha-settings", i18n.Errorf("修改了节点 %s 的网络设置", a.nodeName(ctx, m.GetNodeId())).Error(), "")
+	case *nagiv1.SetNodeRelayPoolRequest:
+		title := i18n.Errorf("节点 %s 退出了中转池", a.nodeName(ctx, m.GetNodeId())).Error()
+		if m.GetEnabled() {
+			title = i18n.Errorf("节点 %s 加入了中转池", a.nodeName(ctx, m.GetNodeId())).Error()
+		}
+		a.notify(ctx, "ha-settings", title, "")
 	case *nagiv1.CreateStandbyCodeRequest:
 		a.notify(ctx, "standby-code", i18n.New("生成了备用面板的配对码").Error(), "")
 	case *nagiv1.PromoteStandbyRequest:
@@ -109,15 +133,19 @@ func (a *API) notifyPrivileged(ctx context.Context, what, projectID, container s
 	if len(reasons) == 0 {
 		return
 	}
-	project := projectID
-	if p, err := a.Q.GetProject(ctx, projectID); err == nil {
-		project = p.Name
-	}
+	project := a.projectName(ctx, projectID)
 	title := i18n.Errorf("保存了带特权内容的配置：%s / %s", project, container).Error()
 	if what == "deploy" {
 		title = i18n.Errorf("部署了带特权内容的配置：%s / %s", project, container).Error()
 	}
 	a.notify(ctx, "privileged", title, i18n.Errorf("特权原因：%s", privilegeReasons(reasons).String()).Error())
+}
+
+func (a *API) projectName(ctx context.Context, id string) string {
+	if p, err := a.Q.GetProject(ctx, id); err == nil {
+		return p.Name
+	}
+	return id
 }
 
 func (a *API) userName(ctx context.Context, id int64) string {
@@ -138,6 +166,9 @@ func (a *API) AlertPanelTool(ctx context.Context, u auth.User, tool string) {
 }
 
 func (a *API) notify(ctx context.Context, key, title, detail string) {
+	if a.Nodes == nil || a.Panel == nil || a.Panel.Standby != nil {
+		return
+	}
 	u := auth.CurrentUser(ctx)
 	m := auth.RequestMeta(ctx)
 	msg := i18n.Errorf("成员：%s；来源：%s", u.Name, m.IP).Error()

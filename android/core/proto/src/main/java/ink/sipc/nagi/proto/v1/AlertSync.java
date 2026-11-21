@@ -22,6 +22,7 @@ public  final class AlertSync extends
     source_ = "";
     current_ = emptyProtobufList();
     history_ = emptyProtobufList();
+    baselines_ = emptyProtobufList();
   }
   public static final int SOURCE_FIELD_NUMBER = 1;
   private java.lang.String source_;
@@ -308,6 +309,182 @@ public  final class AlertSync extends
   private void clearComplete() {
 
     complete_ = false;
+  }
+
+  public static final int BASELINES_FIELD_NUMBER = 6;
+  private com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertBaseline> baselines_;
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<ink.sipc.nagi.proto.v1.AlertBaseline> getBaselinesList() {
+    return baselines_;
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertBaselineOrBuilder> 
+      getBaselinesOrBuilderList() {
+    return baselines_;
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  @java.lang.Override
+  public int getBaselinesCount() {
+    return baselines_.size();
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.AlertBaseline getBaselines(int index) {
+    return baselines_.get(index);
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  public ink.sipc.nagi.proto.v1.AlertBaselineOrBuilder getBaselinesOrBuilder(
+      int index) {
+    return baselines_.get(index);
+  }
+  private void ensureBaselinesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertBaseline> tmp = baselines_;
+    if (!tmp.isModifiable()) {
+      baselines_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  private void setBaselines(
+      int index, ink.sipc.nagi.proto.v1.AlertBaseline value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBaselinesIsMutable();
+    baselines_.set(index, value);
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  private void addBaselines(ink.sipc.nagi.proto.v1.AlertBaseline value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBaselinesIsMutable();
+    baselines_.add(value);
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  private void addBaselines(
+      int index, ink.sipc.nagi.proto.v1.AlertBaseline value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBaselinesIsMutable();
+    baselines_.add(index, value);
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  private void addAllBaselines(
+      java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertBaseline> values) {
+    ensureBaselinesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, baselines_);
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  private void clearBaselines() {
+    baselines_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  private void removeBaselines(int index) {
+    ensureBaselinesIsMutable();
+    baselines_.remove(index);
+  }
+
+  public static final int BASELINES_SUPPORTED_FIELD_NUMBER = 7;
+  private boolean baselinesSupported_;
+  /**
+   * <pre>
+   * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+   * </pre>
+   *
+   * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+   * @return The baselinesSupported.
+   */
+  @java.lang.Override
+  public boolean getBaselinesSupported() {
+    return baselinesSupported_;
+  }
+  /**
+   * <pre>
+   * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+   * </pre>
+   *
+   * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+   * @param value The baselinesSupported to set.
+   */
+  private void setBaselinesSupported(boolean value) {
+    
+    baselinesSupported_ = value;
+  }
+  /**
+   * <pre>
+   * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+   * </pre>
+   *
+   * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+   */
+  private void clearBaselinesSupported() {
+
+    baselinesSupported_ = false;
   }
 
   public static ink.sipc.nagi.proto.v1.AlertSync parseFrom(
@@ -720,6 +897,196 @@ public  final class AlertSync extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<ink.sipc.nagi.proto.v1.AlertBaseline> getBaselinesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getBaselinesList());
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    @java.lang.Override
+    public int getBaselinesCount() {
+      return instance.getBaselinesCount();
+    }/**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.AlertBaseline getBaselines(int index) {
+      return instance.getBaselines(index);
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder setBaselines(
+        int index, ink.sipc.nagi.proto.v1.AlertBaseline value) {
+      copyOnWrite();
+      instance.setBaselines(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder setBaselines(
+        int index, ink.sipc.nagi.proto.v1.AlertBaseline.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBaselines(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder addBaselines(ink.sipc.nagi.proto.v1.AlertBaseline value) {
+      copyOnWrite();
+      instance.addBaselines(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder addBaselines(
+        int index, ink.sipc.nagi.proto.v1.AlertBaseline value) {
+      copyOnWrite();
+      instance.addBaselines(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder addBaselines(
+        ink.sipc.nagi.proto.v1.AlertBaseline.Builder builderForValue) {
+      copyOnWrite();
+      instance.addBaselines(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder addBaselines(
+        int index, ink.sipc.nagi.proto.v1.AlertBaseline.Builder builderForValue) {
+      copyOnWrite();
+      instance.addBaselines(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder addAllBaselines(
+        java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertBaseline> values) {
+      copyOnWrite();
+      instance.addAllBaselines(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder clearBaselines() {
+      copyOnWrite();
+      instance.clearBaselines();
+      return this;
+    }
+    /**
+     * <pre>
+     * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+     */
+    public Builder removeBaselines(int index) {
+      copyOnWrite();
+      instance.removeBaselines(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+     * </pre>
+     *
+     * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+     * @return The baselinesSupported.
+     */
+    @java.lang.Override
+    public boolean getBaselinesSupported() {
+      return instance.getBaselinesSupported();
+    }
+    /**
+     * <pre>
+     * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+     * </pre>
+     *
+     * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+     * @param value The baselinesSupported to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBaselinesSupported(boolean value) {
+      copyOnWrite();
+      instance.setBaselinesSupported(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+     * </pre>
+     *
+     * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBaselinesSupported() {
+      copyOnWrite();
+      instance.clearBaselinesSupported();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.AlertSync)
   }
   @java.lang.Override
@@ -743,10 +1110,13 @@ public  final class AlertSync extends
             "history_",
             ink.sipc.nagi.proto.v1.Alert.class,
             "complete_",
+            "baselines_",
+            ink.sipc.nagi.proto.v1.AlertBaseline.class,
+            "baselinesSupported_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0002\u0000\u0001\u0208\u0002\u0003" +
-              "\u0003\u001b\u0004\u001b\u0005\u0007";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0003\u0000\u0001\u0208\u0002\u0003" +
+              "\u0003\u001b\u0004\u001b\u0005\u0007\u0006\u001b\u0007\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -418,6 +418,8 @@ message ContainerSpec {
   repeated BackupTarget backups = 27;
   // 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
   EffectiveAlertRules effective_alert_rules = 28;
+  // 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+  map<string, EffectiveAlertRules> route_alert_rules = 29;
 }
 
 // BackupTarget 是接收副本的节点。
@@ -662,6 +664,8 @@ message AlertPolicy {
   uint32 flap_count = 4;
   // 修订号：修改时带上读到的，被别人改过时拒绝。
   int64 revision = 5;
+  // 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+  map<string, bool> notifications = 6;
 }
 
 // AlertOverride 是一个节点、项目或容器上改过的规则字段。
@@ -673,6 +677,8 @@ message AlertOverride {
   string container = 4;
   map<string, AlertRule> rules = 5;
   int64 revision = 6;
+  // scope 为 route 时的映射名。
+  string route = 7;
 }
 
 // EffectiveAlertRules 是面板算好、下发给节点的生效规则（每条规则的每个字段都有值）。
@@ -681,6 +687,8 @@ message EffectiveAlertRules {
   string language = 2;
   uint32 flap_window_minutes = 3;
   uint32 flap_count = 4;
+  // 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+  map<string, bool> notifications = 5;
 }
 
 // Alert 是一条告警或恢复通知。
@@ -992,7 +1000,7 @@ message LinkEntry {
   bool proxy_protocol = 13;
   // 目标容器生效的告警规则：入口节点按它判断这条映射的 5xx 比例（容器不一定在入口节点上）。
   AlertRules alert_rules = 12;
-  // 同上，新版本节点用它。
+  // 这条映射生效的规则（含映射层的覆盖），新版本节点用它。
   EffectiveAlertRules effective_alert_rules = 14;
 }
 

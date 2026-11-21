@@ -17,6 +17,11 @@ service AlertService {
   // 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
   // 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
   rpc SetAlertOverride(SetAlertOverrideRequest) returns (AlertOverride);
+  // 关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+  // 关掉之前先发一条通知到当前渠道，并记入审计。
+  rpc SetAlertNotification(SetAlertNotificationRequest) returns (AlertPolicy);
+  // 基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+  rpc ListAlertBaselines(ListAlertBaselinesRequest) returns (ListAlertBaselinesResponse);
 }
 
 // Authenticated current cluster panels only; never exposed on public HTTP.
@@ -35,6 +40,27 @@ message AlertSync {
   repeated Alert current = 3;
   repeated Alert history = 4;
   bool complete = 5;
+  // 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+  repeated AlertBaseline baselines = 6;
+  // 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+  bool baselines_supported = 7;
+}
+
+// AlertBaseline 是一条规则在一个对象上的基线进度，节点按自己的指标算好上报。
+message AlertBaseline {
+  // 规则（traffic、l4_conn_surge、restart、snapshot_stale、backup_lag）。
+  string rule = 1;
+  // 项目 ID（容器、映射的规则），节点的规则为空。
+  string project_id = 2;
+  // 对象：映射名、容器名。
+  string subject = 3;
+  // 需要的数据时长和已经积累的（秒）。
+  uint32 required_seconds = 4;
+  uint32 collected_seconds = 5;
+  // building：建立中；ready：可用；stalled：最近 10 分钟没有新数据。
+  string status = 6;
+  // 最近一个样本的时间。
+  google.protobuf.Timestamp last_sample = 7;
 }
 
 message AlertState {
@@ -72,8 +98,52 @@ message GetAlertRulesResponse {
   AlertPolicy policy = 2;
   repeated AlertOverride overrides = 3;
   bool can_edit_policy = 4;
+  // 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+  repeated AlertRuleDef defs = 5;
+  // 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+  repeated AlertNoticeDef notices = 6;
+  // 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+  bool can_edit_security_notices = 7;
+  bool can_edit_notices = 8;
+}
+message AlertRuleDef {
+  string name = 1;
+  // node：节点规则；route：按端口映射判断（可以在映射上覆盖）；panel：只有全局一层。
+  bool node = 2;
+  bool route = 3;
+  bool panel = 4;
+  string unit = 5;
+  // lower：值越低越糟（证书剩余天数）。
+  bool lower = 6;
+  // 有意义的字段（threshold、for_seconds、recover_threshold、recover_seconds、repeat_minutes、window_minutes、min_requests）。
+  repeated string fields = 7;
+}
+message AlertNoticeDef {
+  string key = 1;
+  // account、session、cluster、settings、failover。
+  string category = 2;
+  bool recovers = 3;
+  // 关掉以后，攻击者的这类操作不会通知你。
+  bool risky = 4;
+  // 安全类：只有管理员能改开关。
+  bool security = 5;
+  string zh = 6;
+  string en = 7;
 }
 message UpdateAlertPolicyRequest { AlertPolicy policy = 1; int64 base_revision = 2; }
+message SetAlertNotificationRequest { string key = 1; bool enabled = 2; int64 base_revision = 3; }
+message ListAlertBaselinesRequest {}
+message ListAlertBaselinesResponse { repeated AlertBaselineState baselines = 1; }
+message AlertBaselineState {
+  string node_id = 1;
+  // 节点名称；看不到的节点为空。
+  string node = 2;
+  // 项目名称（项目 ID 在 baseline 里）。
+  string project = 3;
+  AlertBaseline baseline = 4;
+  // 节点版本不支持上报基线（v0.37）。
+  bool unsupported = 5;
+}
 message SetAlertOverrideRequest {
   string scope = 1;
   string node_id = 2;
@@ -81,4 +151,5 @@ message SetAlertOverrideRequest {
   string container = 4;
   map<string, AlertRule> rules = 5;
   int64 base_revision = 6;
+  string route = 7;
 }

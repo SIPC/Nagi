@@ -107,4 +107,24 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue);
    * @return The revision.
    */
   long getRevision();
+
+  /**
+   * <pre>
+   * scope 为 route 时的映射名。
+   * </pre>
+   *
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @return The route.
+   */
+  java.lang.String getRoute();
+  /**
+   * <pre>
+   * scope 为 route 时的映射名。
+   * </pre>
+   *
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @return The bytes for route.
+   */
+  com.google.protobuf.ByteString
+      getRouteBytes();
 }

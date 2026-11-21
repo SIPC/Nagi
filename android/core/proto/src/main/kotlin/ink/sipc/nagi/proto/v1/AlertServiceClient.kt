@@ -85,4 +85,35 @@ public class AlertServiceClient(
     ),
   )
 
+
+  /**
+   *  关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+   *  关掉之前先发一条通知到当前渠道，并记入审计。
+   */
+  override suspend fun setAlertNotification(request: SetAlertNotificationRequest, headers: Headers): ResponseMessage<AlertPolicy> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/SetAlertNotification",
+      ink.sipc.nagi.proto.v1.SetAlertNotificationRequest::class,
+      ink.sipc.nagi.proto.v1.AlertPolicy::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+   */
+  override suspend fun listAlertBaselines(request: ListAlertBaselinesRequest, headers: Headers): ResponseMessage<ListAlertBaselinesResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/ListAlertBaselines",
+      ink.sipc.nagi.proto.v1.ListAlertBaselinesRequest::class,
+      ink.sipc.nagi.proto.v1.ListAlertBaselinesResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
 }

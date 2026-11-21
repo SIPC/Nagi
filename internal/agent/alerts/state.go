@@ -175,13 +175,14 @@ func (e *Engine) Snapshot() *nagiv1.AlertSync {
 	if e.source == "" || e.stateErr != nil {
 		return nil
 	}
-	s := &nagiv1.AlertSync{Source: e.source, Revision: e.revision, Complete: true}
+	s := &nagiv1.AlertSync{Source: e.source, Revision: e.revision, Complete: true, BaselinesSupported: true}
 	for _, st := range e.states {
 		s.Current = append(s.Current, proto.CloneOf(st.alert))
 	}
 	for _, a := range e.history {
 		s.History = append(s.History, proto.CloneOf(a))
 	}
+	s.Baselines = e.baselines()
 	return s
 }
 

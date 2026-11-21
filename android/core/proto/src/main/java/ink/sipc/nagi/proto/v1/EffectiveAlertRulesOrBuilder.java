@@ -69,4 +69,58 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue);
    * @return The flapCount.
    */
   int getFlapCount();
+
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  int getNotificationsCount();
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  boolean containsNotifications(
+      java.lang.String key);
+  /**
+   * Use {@link #getNotificationsMap()} instead.
+   */
+  @java.lang.Deprecated
+  java.util.Map<java.lang.String, java.lang.Boolean>
+  getNotifications();
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+  java.util.Map<java.lang.String, java.lang.Boolean>
+  getNotificationsMap();
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+
+  boolean getNotificationsOrDefault(
+      java.lang.String key,
+      boolean defaultValue);
+  /**
+   * <pre>
+   * 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 5 [json_name = "notifications"];</code>
+   */
+
+  boolean getNotificationsOrThrow(
+      java.lang.String key);
 }

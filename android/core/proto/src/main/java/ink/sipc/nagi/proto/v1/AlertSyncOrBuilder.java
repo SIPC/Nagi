@@ -61,4 +61,40 @@ public interface AlertSyncOrBuilder extends
    * @return The complete.
    */
   boolean getComplete();
+
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.AlertBaseline> 
+      getBaselinesList();
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  ink.sipc.nagi.proto.v1.AlertBaseline getBaselines(int index);
+  /**
+   * <pre>
+   * 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
+   */
+  int getBaselinesCount();
+
+  /**
+   * <pre>
+   * 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+   * </pre>
+   *
+   * <code>bool baselines_supported = 7 [json_name = "baselinesSupported"];</code>
+   * @return The baselinesSupported.
+   */
+  boolean getBaselinesSupported();
 }

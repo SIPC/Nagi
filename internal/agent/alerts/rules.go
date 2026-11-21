@@ -16,6 +16,8 @@ import (
 // ruleSet 是一个节点或容器生效的规则。
 type ruleSet struct {
 	rules      map[string]*nagiv1.AlertRule
+	// off 是关掉的事件通知（见 alert.Notices）。
+	off        map[string]bool
 	lang       string
 	flapWindow time.Duration
 	flapCount  int
@@ -25,7 +27,7 @@ func (s ruleSet) get(name string) *nagiv1.AlertRule { return alert.Rule(s.rules,
 func (s ruleSet) on(name string) bool               { return alert.On(s.get(name)) }
 
 func fromEffective(eff *nagiv1.EffectiveAlertRules) ruleSet {
-	s := ruleSet{rules: eff.GetRules(), lang: alert.Language(eff.GetLanguage()),
+	s := ruleSet{rules: eff.GetRules(), off: eff.GetNotifications(), lang: alert.Language(eff.GetLanguage()),
 		flapWindow: time.Duration(eff.GetFlapWindowMinutes()) * time.Minute, flapCount: int(eff.GetFlapCount())}
 	if s.flapWindow <= 0 {
 		s.flapWindow = alert.DefaultFlapWindowMinutes * time.Minute
@@ -63,7 +65,14 @@ func (e *Engine) nodeRules() ruleSet {
 }
 
 func strictest(a, b ruleSet) ruleSet {
-	out := ruleSet{rules: map[string]*nagiv1.AlertRule{}, lang: a.lang, flapWindow: max(a.flapWindow, b.flapWindow), flapCount: min(a.flapCount, b.flapCount)}
+	// 事件通知：任何一个面板开着就发（只有都关掉了才不发）。
+	off := map[string]bool{}
+	for k := range a.off {
+		if _, ok := b.off[k]; ok {
+			off[k] = false
+		}
+	}
+	out := ruleSet{rules: map[string]*nagiv1.AlertRule{}, off: off, lang: a.lang, flapWindow: max(a.flapWindow, b.flapWindow), flapCount: min(a.flapCount, b.flapCount)}
 	for _, d := range alert.Defs {
 		if a.rules[d.Name] == nil && b.rules[d.Name] == nil {
 			continue
@@ -179,10 +188,20 @@ func ruleOf(key string) (rule, project, object string) {
 	case "errors", "4xx", "traffic":
 		p, r := splitContainer(rest)
 		return kind, p, r
-	case "health", "restart", "container_cpu":
+	case "health", "restart", "container_cpu", alert.RuleContainerOOM, alert.RuleSnapshotStale, alert.RuleBackupLag:
 		p, c := splitContainer(rest)
 		c, _, _ = strings.Cut(c, "/")
 		return kind, p, c
+	}
+	if d, ok := alert.DefOf(kind); ok {
+		if d.Route { // l4_*:<项目>/<映射>[/in|out]
+			p, r := splitContainer(rest)
+			r, _, _ = strings.Cut(r, "/")
+			return kind, p, r
+		}
+		if d.Node {
+			return kind, "", ""
+		}
 	}
 	return "", "", ""
 }
@@ -190,10 +209,11 @@ func ruleOf(key string) (rule, project, object string) {
 // rulesFor 返回告警键所用的规则集。调用方持有 e.mu。
 func (e *Engine) rulesFor(key string) (string, ruleSet) {
 	rule, p, o := ruleOf(key)
-	switch rule {
-	case alert.RuleErrors, alert.RuleClientErrors, alert.RuleTraffic:
+	d, _ := alert.DefOf(rule)
+	switch {
+	case d.Route:
 		return rule, e.forRoute(p, o)
-	case alert.RuleHealth, alert.RuleRestart, alert.RuleContainerCPU, alert.RuleSnapshot, alert.RuleBackup:
+	case rule != "" && !d.Node:
 		if p != "" {
 			return rule, e.forContainer(p, o)
 		}

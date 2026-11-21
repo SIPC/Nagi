@@ -57,6 +57,8 @@ type Engine struct {
 	// 都没有下发时 ok 为 false，按告警配置里的规则判断。RouteRules 同样返回 http 映射所属容器的规则。
 	ContainerRules func(projectID, container string) (eff *nagiv1.EffectiveAlertRules, legacy *nagiv1.AlertRules, ok bool)
 	RouteRules     func(projectID, route string) (eff *nagiv1.EffectiveAlertRules, legacy *nagiv1.AlertRules, ok bool)
+	// Probes 返回 agent 报告的状态类事实（mesh 成员、见证人、日志库、节点证书、快照、副本，见 sources.go）。
+	Probes Probes
 
 	mu         sync.Mutex
 	configs    map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
@@ -75,6 +77,8 @@ type Engine struct {
 	mutedKeys map[string]time.Time
 	// egressSent：出站拦截通知最近一次发送的时间（按 egress 键），用来按规则的提醒间隔去重。
 	egressSent map[string]time.Time
+	// counts：次数类规则的发生时间（见 Count）。
+	counts map[string]*counted
 	// clock 只给测试用：推进状态机的时间（为 nil 时用 time.Now）。
 	clock func() time.Time
 }
@@ -325,6 +329,10 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 	}
 	e.mu.Lock()
 	_, set := e.rulesFor(a.Key)
+	if !alert.NoticeOn(e.nodeRules().off, a.Key) {
+		e.mu.Unlock()
+		return // 这项事件通知被关掉了（见 alert.Notices）
+	}
 	send := e.setFiring(a.Key, a, set, time.Now())
 	e.saveStates()
 	e.mu.Unlock()
@@ -336,8 +344,11 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 // Notify 发一条一次性的通知（例如"已顶替项目"），不跟踪状态，也没有"已恢复"。
 func (e *Engine) Notify(ctx context.Context, title, message, projectID string) {
 	e.mu.Lock()
-	node := e.nodeName()
+	node, on := e.nodeName(), alert.NoticeOn(e.nodeRules().off, "notice")
 	e.mu.Unlock()
+	if !on {
+		return
+	}
 	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now(), Language: e.language()}
 	if projectID != "" {
 		a.Project = e.projectName(projectID)

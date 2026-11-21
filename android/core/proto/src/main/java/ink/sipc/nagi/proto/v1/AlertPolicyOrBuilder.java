@@ -91,4 +91,58 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue);
    * @return The revision.
    */
   long getRevision();
+
+  /**
+   * <pre>
+   * 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 6 [json_name = "notifications"];</code>
+   */
+  int getNotificationsCount();
+  /**
+   * <pre>
+   * 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 6 [json_name = "notifications"];</code>
+   */
+  boolean containsNotifications(
+      java.lang.String key);
+  /**
+   * Use {@link #getNotificationsMap()} instead.
+   */
+  @java.lang.Deprecated
+  java.util.Map<java.lang.String, java.lang.Boolean>
+  getNotifications();
+  /**
+   * <pre>
+   * 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 6 [json_name = "notifications"];</code>
+   */
+  java.util.Map<java.lang.String, java.lang.Boolean>
+  getNotificationsMap();
+  /**
+   * <pre>
+   * 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 6 [json_name = "notifications"];</code>
+   */
+
+  boolean getNotificationsOrDefault(
+      java.lang.String key,
+      boolean defaultValue);
+  /**
+   * <pre>
+   * 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+   * </pre>
+   *
+   * <code>map&lt;string, bool&gt; notifications = 6 [json_name = "notifications"];</code>
+   */
+
+  boolean getNotificationsOrThrow(
+      java.lang.String key);
 }

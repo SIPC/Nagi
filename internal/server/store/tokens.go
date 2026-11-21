@@ -255,3 +255,21 @@ func (q *Queries) AccessTokenNames(ctx context.Context) (map[int64]string, error
 	}
 	return out, rows.Err()
 }
+
+// ListAllAccessTokens 列出所有成员的令牌（令牌到期提醒用）。
+func (q *Queries) ListAllAccessTokens(ctx context.Context) ([]AccessToken, error) {
+	rows, err := q.db.QueryContext(ctx, "SELECT "+accessTokenColumns+" FROM api_tokens ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AccessToken
+	for rows.Next() {
+		t, err := scanAccessToken(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}

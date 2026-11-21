@@ -30,4 +30,15 @@ public interface AlertServiceClientInterface {
    *  项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
    */
   public suspend fun setAlertOverride(request: SetAlertOverrideRequest, headers: Headers = emptyMap()): ResponseMessage<AlertOverride>
+
+  /**
+   *  关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+   *  关掉之前先发一条通知到当前渠道，并记入审计。
+   */
+  public suspend fun setAlertNotification(request: SetAlertNotificationRequest, headers: Headers = emptyMap()): ResponseMessage<AlertPolicy>
+
+  /**
+   *  基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+   */
+  public suspend fun listAlertBaselines(request: ListAlertBaselinesRequest, headers: Headers = emptyMap()): ResponseMessage<ListAlertBaselinesResponse>
 }

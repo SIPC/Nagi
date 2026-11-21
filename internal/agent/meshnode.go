@@ -689,3 +689,21 @@ func (s *agentService) SetMesh(_ context.Context, req *nagiv1.MeshConfig) (*nagi
 	n.update(s.panel, addr, req)
 	return &nagiv1.SetMeshResponse{}, nil
 }
+
+// nodePeers 返回信任的面板现在列出的节点成员（面板只列在线的节点，见 docs/mesh.md）。mesh 成员断开告警只看这些。
+func (n *meshNode) nodePeers() map[mesh.Key]bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	out := map[mesh.Key]bool{}
+	for fp, peers := range n.panelPeers {
+		if n.trusted != nil && !slices.Contains(n.trusted, fp) {
+			continue
+		}
+		for _, mp := range peers {
+			if k, err := mesh.ParseKey(mp.GetPublicKey()); err == nil && !mp.GetIsPanel() {
+				out[k] = true
+			}
+		}
+	}
+	return out
+}

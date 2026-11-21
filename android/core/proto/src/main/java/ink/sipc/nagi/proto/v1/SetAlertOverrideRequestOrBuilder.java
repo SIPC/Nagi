@@ -99,4 +99,16 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue);
    * @return The baseRevision.
    */
   long getBaseRevision();
+
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @return The route.
+   */
+  java.lang.String getRoute();
+  /**
+   * <code>string route = 7 [json_name = "route"];</code>
+   * @return The bytes for route.
+   */
+  com.google.protobuf.ByteString
+      getRouteBytes();
 }

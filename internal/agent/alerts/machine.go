@@ -112,6 +112,9 @@ func (e *Engine) step(key string, o *obs, now time.Time) *nagiv1.Alert {
 			tr.badSince = now
 		}
 		hold := time.Duration(r.GetForSeconds()) * time.Second
+		if d, _ := alert.DefOf(o.rule); d.Unit == "seconds" && !d.Has(alert.FieldFor) {
+			hold = time.Duration(r.GetThreshold()) * time.Second // mesh 成员断开、见证人失联：阈值就是要持续多久
+		}
 		if now.Sub(tr.badSince) < hold {
 			return nil
 		}

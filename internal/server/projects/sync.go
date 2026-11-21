@@ -59,6 +59,9 @@ func (s *Service) specFor(ctx context.Context, p store.Project, c store.Containe
 	}
 	sp.SnapshotIntervalMinutes = spec.LegacySnapshotInterval(sp.SnapshotSchedule)
 	sp.EffectiveAlertRules, sp.AlertRules = s.containerRules(ctx, settings, c)
+	if s.Nodes != nil && sp.EffectiveAlertRules != nil {
+		sp.RouteAlertRules = s.Nodes.RouteAlertRules(ctx, c.ProjectID, c.Name)
+	}
 	var v store.Version
 	if version > 0 {
 		v, err = s.Q.GetVersion(ctx, store.GetVersionParams{ProjectID: p.ID, Container: c.Name, Version: version})

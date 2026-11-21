@@ -36,36 +36,71 @@ const (
 // Def 说明一条规则：哪一层设置、单位、哪些字段有意义。
 type Def struct {
 	Name string
-	// Node：节点的规则（在节点上判断）；否则是容器的规则（按容器、端口映射判断）。
+	// Node：节点的规则（在节点上判断，或面板按节点判断）；否则是容器的规则（按容器、端口映射判断）。
 	Node bool
-	// Unit：percent、seconds、days、count、ratio，没有阈值时为空。
+	// Route：按端口映射判断，可以在映射上覆盖（全局 → 项目 → 容器 → 映射）。
+	Route bool
+	// Unit：percent、seconds、days、count、ratio、conn_rate、connections、mbps、ms，没有阈值时为空。
 	Unit string
 	// Lower：值越低越糟（证书剩余天数）。
-	Lower  bool
+	Lower bool
+	// Panel：面板自己判断的整个面板的规则（审计链校验、令牌到期），只有全局一层，不下发给节点。
+	Panel bool
+	// Off：默认关闭（阈值因环境而异或误报多，需要用户自己打开）。
+	Off    bool
 	Fields []string
 }
 
 var (
 	thresholdFields = []string{FieldThreshold, FieldFor, FieldRecoverThreshold, FieldRecoverSeconds, FieldRepeat}
 	rateFields      = []string{FieldThreshold, FieldWindow, FieldMinRequests, FieldFor, FieldRecoverThreshold, FieldRecoverSeconds, FieldRepeat}
+	// countFields：窗口内的次数（事件数、增量），没有回差阈值，恢复看「连续多久没有新的」。
+	countFields = []string{FieldThreshold, FieldWindow, FieldRecoverSeconds, FieldRepeat}
+	// eventFields：一次失败就是一轮，下一次成功恢复。
+	eventFields = []string{FieldRepeat}
 )
 
 // Defs 是全部规则，顺序就是界面上的顺序。
 var Defs = []Def{
 	{Name: RuleMem, Node: true, Unit: "percent", Fields: thresholdFields},
 	{Name: RuleDisk, Node: true, Unit: "percent", Fields: thresholdFields},
+	{Name: RuleInode, Node: true, Unit: "percent", Fields: thresholdFields},
 	{Name: RuleCPU, Node: true, Unit: "percent", Fields: thresholdFields},
 	{Name: RuleOffline, Node: true, Unit: "seconds", Fields: []string{FieldThreshold, FieldRecoverSeconds, FieldRepeat}},
 	{Name: RuleCert, Node: true, Unit: "days", Lower: true, Fields: []string{FieldThreshold, FieldRecoverThreshold, FieldRepeat}},
+	{Name: RuleNodeCert, Node: true, Unit: "days", Lower: true, Fields: []string{FieldThreshold, FieldRepeat}},
+	{Name: RuleUpgrade, Node: true, Fields: eventFields},
+	{Name: RuleLogWrite, Node: true, Unit: "count", Fields: []string{FieldThreshold, FieldWindow, FieldFor, FieldRecoverSeconds, FieldRepeat}},
+	{Name: RuleLogFull, Node: true, Unit: "percent", Fields: thresholdFields},
+	{Name: RuleMigration, Node: true, Fields: eventFields},
+	{Name: RuleMeshPeer, Node: true, Unit: "seconds", Fields: []string{FieldThreshold, FieldRecoverSeconds, FieldRepeat}},
+	{Name: RuleMeshLoss, Node: true, Unit: "percent", Off: true, Fields: thresholdFields},
+	{Name: RuleMeshRTT, Node: true, Unit: "ms", Off: true, Fields: thresholdFields},
+	{Name: RuleWitness, Node: true, Unit: "seconds", Fields: []string{FieldThreshold, FieldRecoverSeconds, FieldRepeat}},
+	{Name: RuleKernelStorage, Node: true, Unit: "count", Fields: countFields},
+	{Name: RuleKernelOOM, Node: true, Unit: "count", Fields: countFields},
+	{Name: RuleNIC, Node: true, Unit: "percent", Off: true, Fields: thresholdFields},
+	{Name: RuleConntrack, Node: true, Unit: "percent", Fields: thresholdFields},
+	{Name: RuleClockSkew, Node: true, Unit: "seconds_skew", Fields: thresholdFields},
 	{Name: RuleRestart, Unit: "count", Fields: []string{FieldThreshold, FieldWindow, FieldRepeat}},
-	{Name: RuleErrors, Unit: "percent", Fields: rateFields},
-	{Name: RuleClientErrors, Unit: "percent", Fields: rateFields},
-	{Name: RuleTraffic, Unit: "ratio", Fields: rateFields},
-	{Name: RuleContainerCPU, Unit: "percent", Fields: thresholdFields},
+	{Name: RuleContainerOOM, Unit: "count", Fields: countFields},
 	{Name: RuleHealth, Fields: []string{FieldFor, FieldRecoverSeconds, FieldRepeat}},
-	{Name: RuleSnapshot, Fields: []string{FieldRepeat}},
-	{Name: RuleBackup, Fields: []string{FieldRepeat}},
-	{Name: RuleEgress, Fields: []string{FieldRepeat}},
+	{Name: RuleContainerCPU, Unit: "percent", Fields: thresholdFields},
+	{Name: RuleErrors, Route: true, Unit: "percent", Fields: rateFields},
+	{Name: RuleClientErrors, Route: true, Unit: "percent", Fields: rateFields},
+	{Name: RuleTraffic, Route: true, Unit: "ratio", Fields: rateFields},
+	{Name: RuleL4Surge, Route: true, Unit: "ratio", Fields: rateFields},
+	{Name: RuleL4Active, Route: true, Unit: "connections", Off: true, Fields: thresholdFields},
+	{Name: RuleL4Fail, Route: true, Unit: "percent", Fields: rateFields},
+	{Name: RuleL4Bandwidth, Route: true, Unit: "mbps", Off: true, Fields: []string{FieldThreshold, FieldWindow, FieldFor, FieldRecoverThreshold, FieldRecoverSeconds, FieldRepeat}},
+	{Name: RuleL4Listen, Route: true, Fields: []string{FieldFor, FieldRecoverSeconds, FieldRepeat}},
+	{Name: RuleSnapshot, Fields: eventFields},
+	{Name: RuleSnapshotStale, Unit: "ratio", Fields: []string{FieldThreshold, FieldRepeat}},
+	{Name: RuleBackup, Fields: eventFields},
+	{Name: RuleBackupLag, Unit: "ratio", Fields: []string{FieldThreshold, FieldRepeat}},
+	{Name: RuleEgress, Fields: eventFields},
+	{Name: RuleAuditVerify, Panel: true, Fields: eventFields},
+	{Name: RuleTokenExpiry, Panel: true, Unit: "days", Lower: true, Off: true, Fields: []string{FieldThreshold, FieldRepeat}},
 }
 
 // DefOf 返回规则的说明，没有这条规则时 ok 为 false。
@@ -84,32 +119,57 @@ func f(v float64) *float64 { return &v }
 func u(v uint32) *uint32   { return &v }
 func b(v bool) *bool       { return &v }
 
-// builtin 是内置默认值：触发、恢复（回差）、持续时间和重复提醒间隔。
+// builtin 是内置默认值：触发、恢复（回差）、持续时间和重复提醒间隔（见 docs/monitoring.md#告警 的默认值表）。
 func builtin() map[string]*nagiv1.AlertRule {
 	const repeat = 240
 	return map[string]*nagiv1.AlertRule{
-		RuleMem:          {Threshold: f(90), ForSeconds: u(300), RecoverThreshold: f(85), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleDisk:         {Threshold: f(90), ForSeconds: u(120), RecoverThreshold: f(85), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleCPU:          {Threshold: f(90), ForSeconds: u(600), RecoverThreshold: f(80), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleOffline:      {Threshold: f(60), RecoverSeconds: u(60), RepeatMinutes: u(repeat)},
-		RuleCert:         {Threshold: f(7), RecoverThreshold: f(7), RepeatMinutes: u(repeat)},
-		RuleRestart:      {Threshold: f(3), WindowMinutes: u(10), RepeatMinutes: u(repeat)},
-		RuleErrors:       {Threshold: f(5), WindowMinutes: u(5), MinRequests: f(20), ForSeconds: u(0), RecoverThreshold: f(2), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleClientErrors: {Threshold: f(50), WindowMinutes: u(5), MinRequests: f(200), ForSeconds: u(0), RecoverThreshold: f(30), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleTraffic:      {Threshold: f(10), WindowMinutes: u(5), MinRequests: f(50), ForSeconds: u(0), RecoverThreshold: f(3), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleContainerCPU: {Threshold: f(90), ForSeconds: u(600), RecoverThreshold: f(80), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
-		RuleHealth:       {ForSeconds: u(0), RecoverSeconds: u(60), RepeatMinutes: u(repeat)},
-		RuleSnapshot:     {RepeatMinutes: u(repeat)},
-		RuleBackup:       {RepeatMinutes: u(repeat)},
-		RuleEgress:       {RepeatMinutes: u(10)},
+		RuleMem:           {Threshold: f(90), ForSeconds: u(300), RecoverThreshold: f(85), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleDisk:          {Threshold: f(90), ForSeconds: u(120), RecoverThreshold: f(85), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleInode:         {Threshold: f(90), ForSeconds: u(300), RecoverThreshold: f(85), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleCPU:           {Threshold: f(90), ForSeconds: u(600), RecoverThreshold: f(80), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleOffline:       {Threshold: f(60), RecoverSeconds: u(60), RepeatMinutes: u(repeat)},
+		RuleCert:          {Threshold: f(7), RecoverThreshold: f(7), RepeatMinutes: u(repeat)},
+		RuleNodeCert:      {Threshold: f(7), RepeatMinutes: u(repeat)},
+		RuleUpgrade:       {RepeatMinutes: u(0)},
+		RuleLogWrite:      {Threshold: f(10), WindowMinutes: u(5), ForSeconds: u(600), RecoverSeconds: u(600), RepeatMinutes: u(repeat)},
+		RuleLogFull:       {Threshold: f(90), ForSeconds: u(1800), RecoverThreshold: f(85), RecoverSeconds: u(1800), RepeatMinutes: u(repeat)},
+		RuleMigration:     {RepeatMinutes: u(0)},
+		RuleMeshPeer:      {Threshold: f(300), RecoverSeconds: u(120), RepeatMinutes: u(repeat)},
+		RuleMeshLoss:      {Threshold: f(5), ForSeconds: u(600), RecoverThreshold: f(2), RecoverSeconds: u(600), RepeatMinutes: u(repeat)},
+		RuleMeshRTT:       {Threshold: f(500), ForSeconds: u(600), RecoverThreshold: f(300), RecoverSeconds: u(600), RepeatMinutes: u(repeat)},
+		RuleWitness:       {Threshold: f(300), RecoverSeconds: u(60), RepeatMinutes: u(repeat)},
+		RuleKernelStorage: {Threshold: f(2), WindowMinutes: u(10), RecoverSeconds: u(3600), RepeatMinutes: u(repeat)},
+		RuleKernelOOM:     {Threshold: f(1), WindowMinutes: u(10), RecoverSeconds: u(1800), RepeatMinutes: u(repeat)},
+		RuleNIC:           {Threshold: f(0.1), ForSeconds: u(600), RecoverThreshold: f(0.05), RecoverSeconds: u(600), RepeatMinutes: u(repeat)},
+		RuleConntrack:     {Threshold: f(80), ForSeconds: u(300), RecoverThreshold: f(70), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleClockSkew:     {Threshold: f(5), ForSeconds: u(300), RecoverThreshold: f(2), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleRestart:       {Threshold: f(3), WindowMinutes: u(10), RepeatMinutes: u(repeat)},
+		RuleContainerOOM:  {Threshold: f(1), WindowMinutes: u(10), RecoverSeconds: u(1800), RepeatMinutes: u(repeat)},
+		RuleHealth:        {ForSeconds: u(0), RecoverSeconds: u(60), RepeatMinutes: u(repeat)},
+		RuleContainerCPU:  {Threshold: f(90), ForSeconds: u(600), RecoverThreshold: f(80), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleErrors:        {Threshold: f(5), WindowMinutes: u(5), MinRequests: f(20), ForSeconds: u(0), RecoverThreshold: f(2), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleClientErrors:  {Threshold: f(50), WindowMinutes: u(5), MinRequests: f(200), ForSeconds: u(0), RecoverThreshold: f(30), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleTraffic:       {Threshold: f(10), WindowMinutes: u(5), MinRequests: f(50), ForSeconds: u(0), RecoverThreshold: f(3), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleL4Surge:       {Threshold: f(10), WindowMinutes: u(5), MinRequests: f(20), ForSeconds: u(120), RecoverThreshold: f(3), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleL4Active:      {Threshold: f(5000), ForSeconds: u(300), RecoverThreshold: f(4000), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleL4Fail:        {Threshold: f(20), WindowMinutes: u(5), MinRequests: f(20), ForSeconds: u(0), RecoverThreshold: f(5), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleL4Bandwidth:   {Threshold: f(100), WindowMinutes: u(5), ForSeconds: u(120), RecoverThreshold: f(80), RecoverSeconds: u(300), RepeatMinutes: u(repeat)},
+		RuleL4Listen:      {ForSeconds: u(30), RecoverSeconds: u(60), RepeatMinutes: u(repeat)},
+		RuleSnapshot:      {RepeatMinutes: u(repeat)},
+		RuleSnapshotStale: {Threshold: f(2), RepeatMinutes: u(repeat)},
+		RuleBackup:        {RepeatMinutes: u(repeat)},
+		RuleBackupLag:     {Threshold: f(2), RepeatMinutes: u(repeat)},
+		RuleEgress:        {RepeatMinutes: u(10)},
+		RuleAuditVerify:   {RepeatMinutes: u(0)},
+		RuleTokenExpiry:   {Threshold: f(7), RepeatMinutes: u(0)},
 	}
 }
 
-// Builtin 返回内置默认值（每条规则都开着，每个有意义的字段都有值）。
+// Builtin 返回内置默认值（除了 Def.Off 的规则都开着，每个有意义的字段都有值）。
 func Builtin() map[string]*nagiv1.AlertRule {
 	out := builtin()
-	for _, r := range out {
-		r.Enabled = b(true)
+	for _, d := range Defs {
+		out[d.Name].Enabled = b(!d.Off)
 	}
 	return out
 }
@@ -169,9 +229,12 @@ func Effective(policy *nagiv1.AlertPolicy, node bool, layers ...map[string]*nagi
 	out := &nagiv1.EffectiveAlertRules{Rules: map[string]*nagiv1.AlertRule{}, Language: Language(policy.GetLanguage()),
 		FlapWindowMinutes: or(policy.GetFlapWindowMinutes(), DefaultFlapWindowMinutes), FlapCount: or(policy.GetFlapCount(), DefaultFlapCount)}
 	for _, d := range Defs {
-		if d.Node == node {
+		if d.Node == node && !d.Panel {
 			out.Rules[d.Name] = all[d.Name]
 		}
+	}
+	if node {
+		out.Notifications = NodeNotices(policy)
 	}
 	return out
 }
@@ -205,16 +268,19 @@ var fieldBounds = map[string]bound{
 
 var unitBounds = map[string]bound{
 	"percent": {0, 100}, "seconds": {10, 86400}, "days": {1, 365}, "count": {1, 1000}, "ratio": {1, 1000},
+	"connections": {1, 1e7}, "mbps": {1, 1e5}, "ms": {1, 60000}, "seconds_skew": {1, 3600},
 }
 
 // CheckLayer 检查一层设置：规则名、字段是否适用、范围；再检查和 below（下面各层）合并以后，恢复阈值不比触发阈值糟。
-func CheckLayer(layer map[string]*nagiv1.AlertRule, node, container bool, below ...map[string]*nagiv1.AlertRule) error {
+// scope 是这一层：空（全局，什么规则都行）、node、project、container、route（只有按映射判断的规则）。
+func CheckLayer(layer map[string]*nagiv1.AlertRule, scope string, below ...map[string]*nagiv1.AlertRule) error {
 	for name, r := range layer {
 		d, ok := DefOf(name)
 		if !ok {
 			return i18n.Errorf("没有告警规则 %s", name)
 		}
-		if d.Node && !node || !d.Node && !container {
+		allowed := scope == "" || scope == "node" && d.Node || (scope == "project" || scope == "container") && !d.Node && !d.Panel || scope == "route" && d.Route
+		if !allowed {
 			return i18n.Errorf("告警规则 %s 不能在这里设置", name)
 		}
 		if r == nil {

@@ -2257,8 +2257,10 @@ type ContainerSpec struct {
 	Backups []*BackupTarget `protobuf:"bytes,27,rep,name=backups,proto3" json:"backups,omitempty"`
 	// 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
 	EffectiveAlertRules *EffectiveAlertRules `protobuf:"bytes,28,opt,name=effective_alert_rules,json=effectiveAlertRules,proto3" json:"effective_alert_rules,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+	RouteAlertRules map[string]*EffectiveAlertRules `protobuf:"bytes,29,rep,name=route_alert_rules,json=routeAlertRules,proto3" json:"route_alert_rules,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ContainerSpec) Reset() {
@@ -2483,6 +2485,13 @@ func (x *ContainerSpec) GetBackups() []*BackupTarget {
 func (x *ContainerSpec) GetEffectiveAlertRules() *EffectiveAlertRules {
 	if x != nil {
 		return x.EffectiveAlertRules
+	}
+	return nil
+}
+
+func (x *ContainerSpec) GetRouteAlertRules() map[string]*EffectiveAlertRules {
+	if x != nil {
+		return x.RouteAlertRules
 	}
 	return nil
 }
@@ -3994,7 +4003,9 @@ type AlertPolicy struct {
 	FlapWindowMinutes uint32 `protobuf:"varint,3,opt,name=flap_window_minutes,json=flapWindowMinutes,proto3" json:"flap_window_minutes,omitempty"`
 	FlapCount         uint32 `protobuf:"varint,4,opt,name=flap_count,json=flapCount,proto3" json:"flap_count,omitempty"`
 	// 修订号：修改时带上读到的，被别人改过时拒绝。
-	Revision      int64 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`
+	Revision int64 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`
+	// 事件通知的开关（键见 alert.Notices），只记关掉的（false）；没记的都开着。
+	Notifications map[string]bool `protobuf:"bytes,6,rep,name=notifications,proto3" json:"notifications,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4064,16 +4075,25 @@ func (x *AlertPolicy) GetRevision() int64 {
 	return 0
 }
 
+func (x *AlertPolicy) GetNotifications() map[string]bool {
+	if x != nil {
+		return x.Notifications
+	}
+	return nil
+}
+
 // AlertOverride 是一个节点、项目或容器上改过的规则字段。
 type AlertOverride struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// node、project、container。
-	Scope         string                `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
-	NodeId        string                `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	ProjectId     string                `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
-	Container     string                `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
-	Rules         map[string]*AlertRule `protobuf:"bytes,5,rep,name=rules,proto3" json:"rules,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Revision      int64                 `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`
+	Scope     string                `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	NodeId    string                `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ProjectId string                `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container string                `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
+	Rules     map[string]*AlertRule `protobuf:"bytes,5,rep,name=rules,proto3" json:"rules,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Revision  int64                 `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`
+	// scope 为 route 时的映射名。
+	Route         string `protobuf:"bytes,7,opt,name=route,proto3" json:"route,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4150,6 +4170,13 @@ func (x *AlertOverride) GetRevision() int64 {
 	return 0
 }
 
+func (x *AlertOverride) GetRoute() string {
+	if x != nil {
+		return x.Route
+	}
+	return ""
+}
+
 // EffectiveAlertRules 是面板算好、下发给节点的生效规则（每条规则的每个字段都有值）。
 type EffectiveAlertRules struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
@@ -4157,8 +4184,10 @@ type EffectiveAlertRules struct {
 	Language          string                 `protobuf:"bytes,2,opt,name=language,proto3" json:"language,omitempty"`
 	FlapWindowMinutes uint32                 `protobuf:"varint,3,opt,name=flap_window_minutes,json=flapWindowMinutes,proto3" json:"flap_window_minutes,omitempty"`
 	FlapCount         uint32                 `protobuf:"varint,4,opt,name=flap_count,json=flapCount,proto3" json:"flap_count,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 关掉的事件通知（见 AlertPolicy.notifications），节点上的事件（顶替等）按它判断。
+	Notifications map[string]bool `protobuf:"bytes,5,rep,name=notifications,proto3" json:"notifications,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EffectiveAlertRules) Reset() {
@@ -4217,6 +4246,13 @@ func (x *EffectiveAlertRules) GetFlapCount() uint32 {
 		return x.FlapCount
 	}
 	return 0
+}
+
+func (x *EffectiveAlertRules) GetNotifications() map[string]bool {
+	if x != nil {
+		return x.Notifications
+	}
+	return nil
 }
 
 // Alert 是一条告警或恢复通知。
@@ -6012,7 +6048,7 @@ type LinkEntry struct {
 	ProxyProtocol bool `protobuf:"varint,13,opt,name=proxy_protocol,json=proxyProtocol,proto3" json:"proxy_protocol,omitempty"`
 	// 目标容器生效的告警规则：入口节点按它判断这条映射的 5xx 比例（容器不一定在入口节点上）。
 	AlertRules *AlertRules `protobuf:"bytes,12,opt,name=alert_rules,json=alertRules,proto3" json:"alert_rules,omitempty"`
-	// 同上，新版本节点用它。
+	// 这条映射生效的规则（含映射层的覆盖），新版本节点用它。
 	EffectiveAlertRules *EffectiveAlertRules `protobuf:"bytes,14,opt,name=effective_alert_rules,json=effectiveAlertRules,proto3" json:"effective_alert_rules,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -6656,7 +6692,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\tcontainer\x18\x05 \x01(\tR\tcontainer\"l\n" +
 	"\x0eProjectSummary\x12*\n" +
 	"\aproject\x18\x01 \x01(\v2\x10.nagi.v1.ProjectR\aproject\x12.\n" +
-	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xf8\t\n" +
+	"\x06status\x18\x02 \x01(\v2\x16.nagi.v1.ProjectStatusR\x06status\"\xb3\v\n" +
 	"\rContainerSpec\x12\x1d\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tR\tprojectId\x12!\n" +
@@ -6690,10 +6726,14 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x11snapshot_schedule\x18\x19 \x01(\v2\x19.nagi.v1.SnapshotScheduleR\x10snapshotSchedule\x12U\n" +
 	"\x19project_snapshot_schedule\x18\x1a \x01(\v2\x19.nagi.v1.SnapshotScheduleR\x17projectSnapshotSchedule\x12/\n" +
 	"\abackups\x18\x1b \x03(\v2\x15.nagi.v1.BackupTargetR\abackups\x12P\n" +
-	"\x15effective_alert_rules\x18\x1c \x01(\v2\x1c.nagi.v1.EffectiveAlertRulesR\x13effectiveAlertRules\x1a9\n" +
+	"\x15effective_alert_rules\x18\x1c \x01(\v2\x1c.nagi.v1.EffectiveAlertRulesR\x13effectiveAlertRules\x12W\n" +
+	"\x11route_alert_rules\x18\x1d \x03(\v2+.nagi.v1.ContainerSpec.RouteAlertRulesEntryR\x0frouteAlertRules\x1a9\n" +
 	"\vImagesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a`\n" +
+	"\x14RouteAlertRulesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x122\n" +
+	"\x05value\x18\x02 \x01(\v2\x1c.nagi.v1.EffectiveAlertRulesR\x05value:\x028\x01\"M\n" +
 	"\fBackupTarget\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -6847,18 +6887,22 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x10_recover_secondsB\x11\n" +
 	"\x0f_repeat_minutesB\x11\n" +
 	"\x0f_window_minutesB\x0f\n" +
-	"\r_min_requests\"\x99\x02\n" +
+	"\r_min_requests\"\xaa\x03\n" +
 	"\vAlertPolicy\x125\n" +
 	"\x05rules\x18\x01 \x03(\v2\x1f.nagi.v1.AlertPolicy.RulesEntryR\x05rules\x12\x1a\n" +
 	"\blanguage\x18\x02 \x01(\tR\blanguage\x12.\n" +
 	"\x13flap_window_minutes\x18\x03 \x01(\rR\x11flapWindowMinutes\x12\x1d\n" +
 	"\n" +
 	"flap_count\x18\x04 \x01(\rR\tflapCount\x12\x1a\n" +
-	"\brevision\x18\x05 \x01(\x03R\brevision\x1aL\n" +
+	"\brevision\x18\x05 \x01(\x03R\brevision\x12M\n" +
+	"\rnotifications\x18\x06 \x03(\v2'.nagi.v1.AlertPolicy.NotificationsEntryR\rnotifications\x1aL\n" +
 	"\n" +
 	"RulesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
-	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x01\"\x9e\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x01\x1a@\n" +
+	"\x12NotificationsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"\xb4\x02\n" +
 	"\rAlertOverride\x12\x14\n" +
 	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1d\n" +
@@ -6866,21 +6910,26 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x1c\n" +
 	"\tcontainer\x18\x04 \x01(\tR\tcontainer\x127\n" +
 	"\x05rules\x18\x05 \x03(\v2!.nagi.v1.AlertOverride.RulesEntryR\x05rules\x12\x1a\n" +
-	"\brevision\x18\x06 \x01(\x03R\brevision\x1aL\n" +
+	"\brevision\x18\x06 \x01(\x03R\brevision\x12\x14\n" +
+	"\x05route\x18\a \x01(\tR\x05route\x1aL\n" +
 	"\n" +
 	"RulesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
-	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x01\"\x8d\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x01\"\xa6\x03\n" +
 	"\x13EffectiveAlertRules\x12=\n" +
 	"\x05rules\x18\x01 \x03(\v2'.nagi.v1.EffectiveAlertRules.RulesEntryR\x05rules\x12\x1a\n" +
 	"\blanguage\x18\x02 \x01(\tR\blanguage\x12.\n" +
 	"\x13flap_window_minutes\x18\x03 \x01(\rR\x11flapWindowMinutes\x12\x1d\n" +
 	"\n" +
-	"flap_count\x18\x04 \x01(\rR\tflapCount\x1aL\n" +
+	"flap_count\x18\x04 \x01(\rR\tflapCount\x12U\n" +
+	"\rnotifications\x18\x05 \x03(\v2/.nagi.v1.EffectiveAlertRules.NotificationsEntryR\rnotifications\x1aL\n" +
 	"\n" +
 	"RulesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
-	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x01\"\x96\x06\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x01\x1a@\n" +
+	"\x12NotificationsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"\x96\x06\n" +
 	"\x05Alert\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
@@ -7139,7 +7188,7 @@ func file_nagi_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_nagi_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
+var file_nagi_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 74)
 var file_nagi_v1_common_proto_goTypes = []any{
 	(Stateful)(0),                 // 0: nagi.v1.Stateful
 	(*Project)(nil),               // 1: nagi.v1.Project
@@ -7208,116 +7257,123 @@ var file_nagi_v1_common_proto_goTypes = []any{
 	nil,                           // 64: nagi.v1.Version.ImagesEntry
 	nil,                           // 65: nagi.v1.Deployment.VersionsEntry
 	nil,                           // 66: nagi.v1.ContainerSpec.ImagesEntry
-	nil,                           // 67: nagi.v1.DeployResult.ImagesEntry
-	nil,                           // 68: nagi.v1.AlertRules.EnabledEntry
-	nil,                           // 69: nagi.v1.AlertPolicy.RulesEntry
-	nil,                           // 70: nagi.v1.AlertOverride.RulesEntry
-	nil,                           // 71: nagi.v1.EffectiveAlertRules.RulesEntry
-	(*timestamppb.Timestamp)(nil), // 72: google.protobuf.Timestamp
+	nil,                           // 67: nagi.v1.ContainerSpec.RouteAlertRulesEntry
+	nil,                           // 68: nagi.v1.DeployResult.ImagesEntry
+	nil,                           // 69: nagi.v1.AlertRules.EnabledEntry
+	nil,                           // 70: nagi.v1.AlertPolicy.RulesEntry
+	nil,                           // 71: nagi.v1.AlertPolicy.NotificationsEntry
+	nil,                           // 72: nagi.v1.AlertOverride.RulesEntry
+	nil,                           // 73: nagi.v1.EffectiveAlertRules.RulesEntry
+	nil,                           // 74: nagi.v1.EffectiveAlertRules.NotificationsEntry
+	(*timestamppb.Timestamp)(nil), // 75: google.protobuf.Timestamp
 }
 var file_nagi_v1_common_proto_depIdxs = []int32{
-	72, // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	14, // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
-	7,  // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
-	3,  // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
-	15, // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
-	2,  // 5: nagi.v1.Project.links:type_name -> nagi.v1.LinkedProject
-	72, // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
-	15, // 7: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
-	36, // 8: nagi.v1.ProjectSettings.alert_rules:type_name -> nagi.v1.AlertRules
-	6,  // 9: nagi.v1.ProjectSettings.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
-	4,  // 10: nagi.v1.ProjectSettings.egress:type_name -> nagi.v1.Egress
-	4,  // 11: nagi.v1.ProjectEgress.egress:type_name -> nagi.v1.Egress
-	72, // 12: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 13: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
-	9,  // 14: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
-	51, // 15: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
-	54, // 16: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
-	55, // 17: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
-	55, // 18: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
-	36, // 19: nagi.v1.Container.alert_rules:type_name -> nagi.v1.AlertRules
-	6,  // 20: nagi.v1.Container.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
-	8,  // 21: nagi.v1.Container.pending_ha:type_name -> nagi.v1.PendingHA
-	51, // 22: nagi.v1.Container.backups:type_name -> nagi.v1.BackupStatus
-	62, // 23: nagi.v1.Container.backup_replica_dirs:type_name -> nagi.v1.Container.BackupReplicaDirsEntry
-	54, // 24: nagi.v1.PendingHA.failover:type_name -> nagi.v1.FailoverConfig
-	15, // 25: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
-	63, // 26: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
-	17, // 27: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
-	13, // 28: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
-	0,  // 29: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
-	72, // 30: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
-	72, // 31: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
-	64, // 32: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
-	72, // 33: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
-	65, // 34: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
-	72, // 35: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
-	15, // 36: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
-	18, // 37: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
-	15, // 38: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
-	19, // 39: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
-	21, // 40: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	72, // 41: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	1,  // 42: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
-	20, // 43: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
-	9,  // 44: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
-	15, // 45: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
-	66, // 46: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
-	14, // 47: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
-	24, // 48: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
-	36, // 49: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
-	6,  // 50: nagi.v1.ContainerSpec.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
-	6,  // 51: nagi.v1.ContainerSpec.project_snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
-	24, // 52: nagi.v1.ContainerSpec.backups:type_name -> nagi.v1.BackupTarget
-	41, // 53: nagi.v1.ContainerSpec.effective_alert_rules:type_name -> nagi.v1.EffectiveAlertRules
-	19, // 54: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
-	21, // 55: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
-	72, // 56: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
-	51, // 57: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
-	51, // 58: nagi.v1.ContainerStatus.backups:type_name -> nagi.v1.BackupStatus
-	27, // 59: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
-	29, // 60: nagi.v1.NodeInfo.direct_download:type_name -> nagi.v1.DirectDownload
-	72, // 61: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
-	72, // 62: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
-	33, // 63: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
-	67, // 64: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
-	68, // 65: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
-	35, // 66: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
-	36, // 67: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
-	41, // 68: nagi.v1.AlertConfig.effective:type_name -> nagi.v1.EffectiveAlertRules
-	69, // 69: nagi.v1.AlertPolicy.rules:type_name -> nagi.v1.AlertPolicy.RulesEntry
-	70, // 70: nagi.v1.AlertOverride.rules:type_name -> nagi.v1.AlertOverride.RulesEntry
-	71, // 71: nagi.v1.EffectiveAlertRules.rules:type_name -> nagi.v1.EffectiveAlertRules.RulesEntry
-	72, // 72: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	72, // 73: nagi.v1.Alert.since:type_name -> google.protobuf.Timestamp
-	72, // 74: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
-	45, // 75: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	72, // 76: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	72, // 77: nagi.v1.BackupStatus.started_at:type_name -> google.protobuf.Timestamp
-	72, // 78: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	53, // 79: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	53, // 80: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	53, // 81: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	54, // 82: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	72, // 83: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	59, // 84: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	61, // 85: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	57, // 86: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
-	58, // 87: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
-	5,  // 88: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
-	60, // 89: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
-	36, // 90: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
-	41, // 91: nagi.v1.LinkEntry.effective_alert_rules:type_name -> nagi.v1.EffectiveAlertRules
-	60, // 92: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	16, // 93: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	38, // 94: nagi.v1.AlertPolicy.RulesEntry.value:type_name -> nagi.v1.AlertRule
-	38, // 95: nagi.v1.AlertOverride.RulesEntry.value:type_name -> nagi.v1.AlertRule
-	38, // 96: nagi.v1.EffectiveAlertRules.RulesEntry.value:type_name -> nagi.v1.AlertRule
-	97, // [97:97] is the sub-list for method output_type
-	97, // [97:97] is the sub-list for method input_type
-	97, // [97:97] is the sub-list for extension type_name
-	97, // [97:97] is the sub-list for extension extendee
-	0,  // [0:97] is the sub-list for field type_name
+	75,  // 0: nagi.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	14,  // 1: nagi.v1.Project.routes:type_name -> nagi.v1.Exposure
+	7,   // 2: nagi.v1.Project.containers:type_name -> nagi.v1.Container
+	3,   // 3: nagi.v1.Project.settings:type_name -> nagi.v1.ProjectSettings
+	15,  // 4: nagi.v1.Project.shared_env_draft:type_name -> nagi.v1.EnvVar
+	2,   // 5: nagi.v1.Project.links:type_name -> nagi.v1.LinkedProject
+	75,  // 6: nagi.v1.Project.rebuilt_at:type_name -> google.protobuf.Timestamp
+	15,  // 7: nagi.v1.ProjectSettings.shared_env:type_name -> nagi.v1.EnvVar
+	36,  // 8: nagi.v1.ProjectSettings.alert_rules:type_name -> nagi.v1.AlertRules
+	6,   // 9: nagi.v1.ProjectSettings.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
+	4,   // 10: nagi.v1.ProjectSettings.egress:type_name -> nagi.v1.Egress
+	4,   // 11: nagi.v1.ProjectEgress.egress:type_name -> nagi.v1.Egress
+	75,  // 12: nagi.v1.Container.created_at:type_name -> google.protobuf.Timestamp
+	9,   // 13: nagi.v1.Container.config:type_name -> nagi.v1.ContainerConfig
+	9,   // 14: nagi.v1.Container.draft:type_name -> nagi.v1.ContainerConfig
+	51,  // 15: nagi.v1.Container.backup:type_name -> nagi.v1.BackupStatus
+	54,  // 16: nagi.v1.Container.failover:type_name -> nagi.v1.FailoverConfig
+	55,  // 17: nagi.v1.Container.failover_holder:type_name -> nagi.v1.FailoverStatus
+	55,  // 18: nagi.v1.Container.failover_standby:type_name -> nagi.v1.FailoverStatus
+	36,  // 19: nagi.v1.Container.alert_rules:type_name -> nagi.v1.AlertRules
+	6,   // 20: nagi.v1.Container.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
+	8,   // 21: nagi.v1.Container.pending_ha:type_name -> nagi.v1.PendingHA
+	51,  // 22: nagi.v1.Container.backups:type_name -> nagi.v1.BackupStatus
+	62,  // 23: nagi.v1.Container.backup_replica_dirs:type_name -> nagi.v1.Container.BackupReplicaDirsEntry
+	54,  // 24: nagi.v1.PendingHA.failover:type_name -> nagi.v1.FailoverConfig
+	15,  // 25: nagi.v1.ContainerConfig.env:type_name -> nagi.v1.EnvVar
+	63,  // 26: nagi.v1.ContainerConfig.service_env:type_name -> nagi.v1.ContainerConfig.ServiceEnvEntry
+	17,  // 27: nagi.v1.ContainerConfig.form:type_name -> nagi.v1.ImageForm
+	13,  // 28: nagi.v1.ContainerConfig.source:type_name -> nagi.v1.Source
+	0,   // 29: nagi.v1.ContainerConfig.stateful:type_name -> nagi.v1.Stateful
+	75,  // 30: nagi.v1.Version.created_at:type_name -> google.protobuf.Timestamp
+	75,  // 31: nagi.v1.Version.deployed_at:type_name -> google.protobuf.Timestamp
+	64,  // 32: nagi.v1.Version.images:type_name -> nagi.v1.Version.ImagesEntry
+	75,  // 33: nagi.v1.Deployment.time:type_name -> google.protobuf.Timestamp
+	65,  // 34: nagi.v1.Deployment.versions:type_name -> nagi.v1.Deployment.VersionsEntry
+	75,  // 35: nagi.v1.Snapshot.time:type_name -> google.protobuf.Timestamp
+	15,  // 36: nagi.v1.EnvList.vars:type_name -> nagi.v1.EnvVar
+	18,  // 37: nagi.v1.ImageForm.ports:type_name -> nagi.v1.PortMapping
+	15,  // 38: nagi.v1.ImageForm.env:type_name -> nagi.v1.EnvVar
+	19,  // 39: nagi.v1.ProjectStatus.services:type_name -> nagi.v1.ServiceStatus
+	21,  // 40: nagi.v1.ProjectStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	75,  // 41: nagi.v1.ProjectStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	1,   // 42: nagi.v1.ProjectSummary.project:type_name -> nagi.v1.Project
+	20,  // 43: nagi.v1.ProjectSummary.status:type_name -> nagi.v1.ProjectStatus
+	9,   // 44: nagi.v1.ContainerSpec.config:type_name -> nagi.v1.ContainerConfig
+	15,  // 45: nagi.v1.ContainerSpec.shared_env:type_name -> nagi.v1.EnvVar
+	66,  // 46: nagi.v1.ContainerSpec.images:type_name -> nagi.v1.ContainerSpec.ImagesEntry
+	14,  // 47: nagi.v1.ContainerSpec.routes:type_name -> nagi.v1.Exposure
+	24,  // 48: nagi.v1.ContainerSpec.backup:type_name -> nagi.v1.BackupTarget
+	36,  // 49: nagi.v1.ContainerSpec.alert_rules:type_name -> nagi.v1.AlertRules
+	6,   // 50: nagi.v1.ContainerSpec.snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
+	6,   // 51: nagi.v1.ContainerSpec.project_snapshot_schedule:type_name -> nagi.v1.SnapshotSchedule
+	24,  // 52: nagi.v1.ContainerSpec.backups:type_name -> nagi.v1.BackupTarget
+	41,  // 53: nagi.v1.ContainerSpec.effective_alert_rules:type_name -> nagi.v1.EffectiveAlertRules
+	67,  // 54: nagi.v1.ContainerSpec.route_alert_rules:type_name -> nagi.v1.ContainerSpec.RouteAlertRulesEntry
+	19,  // 55: nagi.v1.ContainerStatus.services:type_name -> nagi.v1.ServiceStatus
+	21,  // 56: nagi.v1.ContainerStatus.image_updates:type_name -> nagi.v1.ImageUpdate
+	75,  // 57: nagi.v1.ContainerStatus.images_checked_at:type_name -> google.protobuf.Timestamp
+	51,  // 58: nagi.v1.ContainerStatus.backup:type_name -> nagi.v1.BackupStatus
+	51,  // 59: nagi.v1.ContainerStatus.backups:type_name -> nagi.v1.BackupStatus
+	27,  // 60: nagi.v1.NodeUsage.disks:type_name -> nagi.v1.DiskUsage
+	29,  // 61: nagi.v1.NodeInfo.direct_download:type_name -> nagi.v1.DirectDownload
+	75,  // 62: nagi.v1.DomainCert.not_after:type_name -> google.protobuf.Timestamp
+	75,  // 63: nagi.v1.LogLine.time:type_name -> google.protobuf.Timestamp
+	33,  // 64: nagi.v1.DeployEvent.result:type_name -> nagi.v1.DeployResult
+	68,  // 65: nagi.v1.DeployResult.images:type_name -> nagi.v1.DeployResult.ImagesEntry
+	69,  // 66: nagi.v1.AlertRules.enabled:type_name -> nagi.v1.AlertRules.EnabledEntry
+	35,  // 67: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
+	36,  // 68: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
+	41,  // 69: nagi.v1.AlertConfig.effective:type_name -> nagi.v1.EffectiveAlertRules
+	70,  // 70: nagi.v1.AlertPolicy.rules:type_name -> nagi.v1.AlertPolicy.RulesEntry
+	71,  // 71: nagi.v1.AlertPolicy.notifications:type_name -> nagi.v1.AlertPolicy.NotificationsEntry
+	72,  // 72: nagi.v1.AlertOverride.rules:type_name -> nagi.v1.AlertOverride.RulesEntry
+	73,  // 73: nagi.v1.EffectiveAlertRules.rules:type_name -> nagi.v1.EffectiveAlertRules.RulesEntry
+	74,  // 74: nagi.v1.EffectiveAlertRules.notifications:type_name -> nagi.v1.EffectiveAlertRules.NotificationsEntry
+	75,  // 75: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
+	75,  // 76: nagi.v1.Alert.since:type_name -> google.protobuf.Timestamp
+	75,  // 77: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	45,  // 78: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	75,  // 79: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	75,  // 80: nagi.v1.BackupStatus.started_at:type_name -> google.protobuf.Timestamp
+	75,  // 81: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	53,  // 82: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	53,  // 83: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	53,  // 84: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	54,  // 85: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	75,  // 86: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	59,  // 87: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	61,  // 88: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	57,  // 89: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	58,  // 90: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	5,   // 91: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
+	60,  // 92: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	36,  // 93: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
+	41,  // 94: nagi.v1.LinkEntry.effective_alert_rules:type_name -> nagi.v1.EffectiveAlertRules
+	60,  // 95: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	16,  // 96: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	41,  // 97: nagi.v1.ContainerSpec.RouteAlertRulesEntry.value:type_name -> nagi.v1.EffectiveAlertRules
+	38,  // 98: nagi.v1.AlertPolicy.RulesEntry.value:type_name -> nagi.v1.AlertRule
+	38,  // 99: nagi.v1.AlertOverride.RulesEntry.value:type_name -> nagi.v1.AlertRule
+	38,  // 100: nagi.v1.EffectiveAlertRules.RulesEntry.value:type_name -> nagi.v1.AlertRule
+	101, // [101:101] is the sub-list for method output_type
+	101, // [101:101] is the sub-list for method input_type
+	101, // [101:101] is the sub-list for extension type_name
+	101, // [101:101] is the sub-list for extension extendee
+	0,   // [0:101] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }
@@ -7338,7 +7394,7 @@ func file_nagi_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_common_proto_rawDesc), len(file_nagi_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   71,
+			NumMessages:   74,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

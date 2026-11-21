@@ -59,4 +59,72 @@ public interface GetAlertRulesResponseOrBuilder extends
    * @return The canEditPolicy.
    */
   boolean getCanEditPolicy();
+
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.AlertRuleDef> 
+      getDefsList();
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  ink.sipc.nagi.proto.v1.AlertRuleDef getDefs(int index);
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  int getDefsCount();
+
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.AlertNoticeDef> 
+      getNoticesList();
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  ink.sipc.nagi.proto.v1.AlertNoticeDef getNotices(int index);
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  int getNoticesCount();
+
+  /**
+   * <pre>
+   * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+   * </pre>
+   *
+   * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+   * @return The canEditSecurityNotices.
+   */
+  boolean getCanEditSecurityNotices();
+
+  /**
+   * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+   * @return The canEditNotices.
+   */
+  boolean getCanEditNotices();
 }

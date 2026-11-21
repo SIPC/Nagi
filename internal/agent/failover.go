@@ -80,6 +80,8 @@ type failoverState struct {
 	// 自动切回：原节点从什么时候起每次续约都投了票（零值表示现在不稳定），以及是否正在切回。
 	preferredSince time.Time
 	failingBack    bool
+	// witnessSeen：最近一次收到见证人回应（投票结果，同意或不同意都算）的时间；watchSince：开始等见证人的时间（见证人失联告警用）。
+	witnessSeen, watchSince time.Time
 }
 
 type failovers struct {
@@ -422,6 +424,9 @@ func (a *agent) collect(ctx context.Context, self []byte, others []*nagiv1.Failo
 			resp, err := a.requestVote(ctx, m, cfg, epoch)
 			if err != nil {
 				return
+			}
+			if bytes.Equal(m.GetKey(), cfg.GetWitness().GetKey()) {
+				a.witnessResponded(cfg)
 			}
 			mu.Lock()
 			defer mu.Unlock()

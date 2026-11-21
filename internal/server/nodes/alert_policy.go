@@ -3,6 +3,7 @@ package nodes
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 
 	"github.com/SIPC/nagi/internal/pkg/alert"
@@ -37,7 +38,7 @@ func (r *Registry) AlertPolicy(ctx context.Context) (*nagiv1.AlertPolicy, error)
 
 // SetAlertPolicy 保存全局设置并下发给所有节点；base 是读到的修订号。项目和容器的生效规则由 onChange 重新下发。
 func (r *Registry) SetAlertPolicy(ctx context.Context, p *nagiv1.AlertPolicy, base int64) (*nagiv1.AlertPolicy, error) {
-	if err := alert.CheckLayer(p.GetRules(), true, true); err != nil {
+	if err := alert.CheckLayer(p.GetRules(), ""); err != nil {
 		return nil, err
 	}
 	if n := p.GetFlapCount(); n != 0 && (n < 2 || n > 20) {
@@ -59,16 +60,60 @@ func (r *Registry) SetAlertPolicy(ctx context.Context, p *nagiv1.AlertPolicy, ba
 		return nil, ErrAlertConflict
 	}
 	next := &nagiv1.AlertPolicy{Rules: alert.Clean(p.GetRules()), Language: p.GetLanguage(), FlapWindowMinutes: p.GetFlapWindowMinutes(),
-		FlapCount: p.GetFlapCount(), Revision: cur.GetRevision() + 1}
-	b, err := protojson.Marshal(next)
-	if err != nil {
-		return nil, err
-	}
-	if err := r.q.SetSetting(ctx, store.SetSettingParams{Key: settingAlertPolicy, Value: string(b)}); err != nil {
+		FlapCount: p.GetFlapCount(), Revision: cur.GetRevision() + 1, Notifications: cur.GetNotifications()} // 通知开关只由 SetAlertNotification 改
+	if err := r.savePolicy(ctx, next); err != nil {
 		return nil, err
 	}
 	r.pushAllAlertConfigs()
 	return next, nil
+}
+
+// NoticeOn 判断告警键对应的事件通知开着没有（见 alert.Notices）。读不到设置时照常发送。
+func (r *Registry) NoticeOn(ctx context.Context, key string) bool {
+	p, err := r.AlertPolicy(ctx)
+	return err != nil || alert.NoticeOn(p.GetNotifications(), key)
+}
+
+// SetAlertNotification 打开或关掉一项事件通知；before 在保存之前调用（关掉时用来先发通知到当前渠道）。
+func (r *Registry) SetAlertNotification(ctx context.Context, key string, enabled bool, base int64, before func()) (*nagiv1.AlertPolicy, error) {
+	if _, ok := alert.NoticeByKey(key); !ok {
+		return nil, i18n.Errorf("没有事件通知 %s", key)
+	}
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
+	cur, err := r.AlertPolicy(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if cur.GetRevision() != base {
+		return nil, ErrAlertConflict
+	}
+	next := proto.CloneOf(cur)
+	next.Revision++
+	if enabled {
+		delete(next.Notifications, key)
+	} else {
+		if next.Notifications == nil {
+			next.Notifications = map[string]bool{}
+		}
+		next.Notifications[key] = false
+	}
+	if before != nil {
+		before()
+	}
+	if err := r.savePolicy(ctx, next); err != nil {
+		return nil, err
+	}
+	r.pushAllAlertConfigs()
+	return next, nil
+}
+
+func (r *Registry) savePolicy(ctx context.Context, p *nagiv1.AlertPolicy) error {
+	b, err := protojson.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return r.q.SetSetting(ctx, store.SetSettingParams{Key: settingAlertPolicy, Value: string(b)})
 }
 
 // AlertOverrides 返回全部覆盖。
@@ -89,7 +134,7 @@ func overrideProto(row store.AlertOverride) *nagiv1.AlertOverride {
 	if len(row.Rules) > 0 {
 		_ = proto.Unmarshal(row.Rules, o) // 存的就是 AlertOverride，只用它的 rules
 	}
-	return &nagiv1.AlertOverride{Scope: row.Scope, NodeId: row.NodeID, ProjectId: row.ProjectID, Container: row.Container, Rules: o.GetRules(), Revision: row.Revision}
+	return &nagiv1.AlertOverride{Scope: row.Scope, NodeId: row.NodeID, ProjectId: row.ProjectID, Container: row.Container, Route: row.Route, Rules: o.GetRules(), Revision: row.Revision}
 }
 
 // alertOverride 读一条覆盖，没有时返回 nil 的 rules。
@@ -159,13 +204,13 @@ func (r *Registry) SetAlertOverride(ctx context.Context, o *nagiv1.AlertOverride
 			return nil, i18n.New("节点不存在")
 		}
 		row.ProjectID, row.Container = "", ""
-		err = alert.CheckLayer(o.GetRules(), true, false, below...)
+		err = alert.CheckLayer(o.GetRules(), "node", below...)
 	case "project":
 		if _, err := r.q.GetProject(ctx, row.ProjectID); err != nil {
 			return nil, i18n.New("项目不存在")
 		}
 		row.NodeID, row.Container = "", ""
-		err = alert.CheckLayer(o.GetRules(), false, true, below...)
+		err = alert.CheckLayer(o.GetRules(), "project", below...)
 	case "container":
 		if _, err := r.q.GetContainer(ctx, store.GetContainerParams{ProjectID: row.ProjectID, Name: row.Container}); err != nil {
 			return nil, i18n.New("容器不存在")
@@ -175,9 +220,25 @@ func (r *Registry) SetAlertOverride(ctx context.Context, o *nagiv1.AlertOverride
 		if perr != nil {
 			return nil, perr
 		}
-		err = alert.CheckLayer(o.GetRules(), false, true, append(below, project)...)
+		err = alert.CheckLayer(o.GetRules(), "container", append(below, project)...)
+	case "route":
+		routes, rerr := r.q.ListRoutes(ctx, row.ProjectID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		i := slices.IndexFunc(routes, func(x store.Route) bool { return x.Name == o.GetRoute() })
+		if i < 0 {
+			return nil, i18n.New("端口映射不存在")
+		}
+		rt := routes[i]
+		row.NodeID, row.Container, row.Route = "", "", rt.Name
+		_, layers, lerr := r.AlertLayers(ctx, row.ProjectID, rt.Container)
+		if lerr != nil {
+			return nil, lerr
+		}
+		err = alert.CheckLayer(o.GetRules(), "route", append(below, layers...)...)
 	default:
-		return nil, i18n.New("覆盖只能设置在节点、项目或容器上")
+		return nil, i18n.New("覆盖只能设置在节点、项目、容器或端口映射上")
 	}
 	if err != nil {
 		return nil, err
@@ -200,7 +261,34 @@ func (r *Registry) SetAlertOverride(ctx context.Context, o *nagiv1.AlertOverride
 			go r.pushAlertConfig(context.Background(), c, nil)
 		}
 	}
-	return &nagiv1.AlertOverride{Scope: row.Scope, NodeId: row.NodeID, ProjectId: row.ProjectID, Container: row.Container, Rules: rules, Revision: rev}, nil
+	return &nagiv1.AlertOverride{Scope: row.Scope, NodeId: row.NodeID, ProjectId: row.ProjectID, Container: row.Container, Route: row.Route, Rules: rules, Revision: rev}, nil
+}
+
+// RouteAlertRules 返回容器下有映射层覆盖的映射生效的规则（键是映射名）；没有覆盖的映射不在里面，用容器的。
+func (r *Registry) RouteAlertRules(ctx context.Context, projectID, container string) map[string]*nagiv1.EffectiveAlertRules {
+	routes, err := r.q.ListRoutes(ctx, projectID)
+	if err != nil {
+		return nil
+	}
+	var out map[string]*nagiv1.EffectiveAlertRules
+	for _, rt := range routes {
+		if rt.Container != container {
+			continue
+		}
+		own, err := r.alertOverride(ctx, store.AlertOverride{Scope: "route", ProjectID: projectID, Route: rt.Name})
+		if err != nil || len(own) == 0 {
+			continue
+		}
+		policy, layers, err := r.AlertLayers(ctx, projectID, container)
+		if err != nil {
+			continue
+		}
+		if out == nil {
+			out = map[string]*nagiv1.EffectiveAlertRules{}
+		}
+		out[rt.Name] = alert.Effective(policy, false, append(layers, own)...)
+	}
+	return out
 }
 
 // ForgetNodeAlertRules 删除被移除的节点的覆盖。
@@ -232,6 +320,9 @@ type LegacyContainerRules struct {
 func (r *Registry) MigrateAlertPolicy(ctx context.Context, projects func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error)) error {
 	if r.ReadOnly {
 		return nil
+	}
+	if err := r.migrateLoginNotices(ctx); err != nil {
+		return err
 	}
 	if v, err := r.q.GetSetting(ctx, settingAlertPolicyMigrated); err == nil && v != "" {
 		return nil
@@ -292,6 +383,43 @@ func (r *Registry) MigrateAlertPolicy(ctx context.Context, projects func(context
 	return nil
 }
 
+// legacyLoginNotices 是以前 设置 → 告警 → 登录安全 的三个开关（设置项为 "0" 表示关闭）和对应的事件通知。
+var legacyLoginNotices = map[string]string{
+	"alert_totp_failures":   "login_totp",
+	"alert_login_ratelimit": "login_ratelimit",
+	"alert_admin_network":   "login_new_network",
+}
+
+// migrateLoginNotices 把以前关掉的登录安全开关换成事件通知的开关（只做一次；旧设置项保留，回滚到旧版本时还在）。
+func (r *Registry) migrateLoginNotices(ctx context.Context) error {
+	const done = "alert_notices_migrated"
+	if v, err := r.q.GetSetting(ctx, done); err == nil && v != "" {
+		return nil
+	}
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
+	p, err := r.AlertPolicy(ctx)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for setting, key := range legacyLoginNotices {
+		if v, err := r.q.GetSetting(ctx, setting); err == nil && v == "0" {
+			if p.Notifications == nil {
+				p.Notifications = map[string]bool{}
+			}
+			p.Notifications[key], changed = false, true
+		}
+	}
+	if changed {
+		p.Revision++
+		if err := r.savePolicy(ctx, p); err != nil {
+			return err
+		}
+	}
+	return r.q.SetSetting(ctx, store.SetSettingParams{Key: done, Value: "1"})
+}
+
 // diffLegacy 返回容器单独设置的规则里和项目生效值不一样的字段。
 // 以前容器单独设置的规则整组替换项目的，没写的字段用内置默认值（不是项目的），所以按「内置默认 + 容器自己的」比较。
 func diffLegacy(project, own *nagiv1.AlertRules) map[string]*nagiv1.AlertRule {
@@ -333,7 +461,7 @@ func diffEffective(base, mine map[string]*nagiv1.AlertRule, names []string) map[
 // ReplaceAlertOverride 不检查修订号，直接替换一条覆盖（旧接口用：它们按整组提交，没有修订号）。
 func (r *Registry) ReplaceAlertOverride(ctx context.Context, o *nagiv1.AlertOverride) error {
 	for range 3 {
-		cur, err := r.q.GetAlertOverride(ctx, store.AlertOverride{Scope: o.GetScope(), NodeID: o.GetNodeId(), ProjectID: o.GetProjectId(), Container: o.GetContainer()})
+		cur, err := r.q.GetAlertOverride(ctx, store.AlertOverride{Scope: o.GetScope(), NodeID: o.GetNodeId(), ProjectID: o.GetProjectId(), Container: o.GetContainer(), Route: o.GetRoute()})
 		if err != nil {
 			return err
 		}

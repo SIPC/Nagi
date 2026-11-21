@@ -16,6 +16,8 @@ public  final class GetAlertRulesResponse extends
     GetAlertRulesResponseOrBuilder {
   private GetAlertRulesResponse() {
     overrides_ = emptyProtobufList();
+    defs_ = emptyProtobufList();
+    notices_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int BUILTIN_FIELD_NUMBER = 1;
@@ -250,6 +252,346 @@ public  final class GetAlertRulesResponse extends
   private void clearCanEditPolicy() {
 
     canEditPolicy_ = false;
+  }
+
+  public static final int DEFS_FIELD_NUMBER = 5;
+  private com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertRuleDef> defs_;
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<ink.sipc.nagi.proto.v1.AlertRuleDef> getDefsList() {
+    return defs_;
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertRuleDefOrBuilder> 
+      getDefsOrBuilderList() {
+    return defs_;
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  @java.lang.Override
+  public int getDefsCount() {
+    return defs_.size();
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.AlertRuleDef getDefs(int index) {
+    return defs_.get(index);
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  public ink.sipc.nagi.proto.v1.AlertRuleDefOrBuilder getDefsOrBuilder(
+      int index) {
+    return defs_.get(index);
+  }
+  private void ensureDefsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertRuleDef> tmp = defs_;
+    if (!tmp.isModifiable()) {
+      defs_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  private void setDefs(
+      int index, ink.sipc.nagi.proto.v1.AlertRuleDef value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDefsIsMutable();
+    defs_.set(index, value);
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  private void addDefs(ink.sipc.nagi.proto.v1.AlertRuleDef value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDefsIsMutable();
+    defs_.add(value);
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  private void addDefs(
+      int index, ink.sipc.nagi.proto.v1.AlertRuleDef value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDefsIsMutable();
+    defs_.add(index, value);
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  private void addAllDefs(
+      java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertRuleDef> values) {
+    ensureDefsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, defs_);
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  private void clearDefs() {
+    defs_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+   */
+  private void removeDefs(int index) {
+    ensureDefsIsMutable();
+    defs_.remove(index);
+  }
+
+  public static final int NOTICES_FIELD_NUMBER = 6;
+  private com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertNoticeDef> notices_;
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<ink.sipc.nagi.proto.v1.AlertNoticeDef> getNoticesList() {
+    return notices_;
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertNoticeDefOrBuilder> 
+      getNoticesOrBuilderList() {
+    return notices_;
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  @java.lang.Override
+  public int getNoticesCount() {
+    return notices_.size();
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.AlertNoticeDef getNotices(int index) {
+    return notices_.get(index);
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  public ink.sipc.nagi.proto.v1.AlertNoticeDefOrBuilder getNoticesOrBuilder(
+      int index) {
+    return notices_.get(index);
+  }
+  private void ensureNoticesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertNoticeDef> tmp = notices_;
+    if (!tmp.isModifiable()) {
+      notices_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  private void setNotices(
+      int index, ink.sipc.nagi.proto.v1.AlertNoticeDef value) {
+    java.util.Objects.requireNonNull(value);
+    ensureNoticesIsMutable();
+    notices_.set(index, value);
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  private void addNotices(ink.sipc.nagi.proto.v1.AlertNoticeDef value) {
+    java.util.Objects.requireNonNull(value);
+    ensureNoticesIsMutable();
+    notices_.add(value);
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  private void addNotices(
+      int index, ink.sipc.nagi.proto.v1.AlertNoticeDef value) {
+    java.util.Objects.requireNonNull(value);
+    ensureNoticesIsMutable();
+    notices_.add(index, value);
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  private void addAllNotices(
+      java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertNoticeDef> values) {
+    ensureNoticesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, notices_);
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  private void clearNotices() {
+    notices_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+   */
+  private void removeNotices(int index) {
+    ensureNoticesIsMutable();
+    notices_.remove(index);
+  }
+
+  public static final int CAN_EDIT_SECURITY_NOTICES_FIELD_NUMBER = 7;
+  private boolean canEditSecurityNotices_;
+  /**
+   * <pre>
+   * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+   * </pre>
+   *
+   * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+   * @return The canEditSecurityNotices.
+   */
+  @java.lang.Override
+  public boolean getCanEditSecurityNotices() {
+    return canEditSecurityNotices_;
+  }
+  /**
+   * <pre>
+   * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+   * </pre>
+   *
+   * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+   * @param value The canEditSecurityNotices to set.
+   */
+  private void setCanEditSecurityNotices(boolean value) {
+    
+    canEditSecurityNotices_ = value;
+  }
+  /**
+   * <pre>
+   * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+   * </pre>
+   *
+   * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+   */
+  private void clearCanEditSecurityNotices() {
+
+    canEditSecurityNotices_ = false;
+  }
+
+  public static final int CAN_EDIT_NOTICES_FIELD_NUMBER = 8;
+  private boolean canEditNotices_;
+  /**
+   * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+   * @return The canEditNotices.
+   */
+  @java.lang.Override
+  public boolean getCanEditNotices() {
+    return canEditNotices_;
+  }
+  /**
+   * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+   * @param value The canEditNotices to set.
+   */
+  private void setCanEditNotices(boolean value) {
+    
+    canEditNotices_ = value;
+  }
+  /**
+   * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+   */
+  private void clearCanEditNotices() {
+
+    canEditNotices_ = false;
   }
 
   public static ink.sipc.nagi.proto.v1.GetAlertRulesResponse parseFrom(
@@ -597,6 +939,374 @@ public  final class GetAlertRulesResponse extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<ink.sipc.nagi.proto.v1.AlertRuleDef> getDefsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getDefsList());
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    @java.lang.Override
+    public int getDefsCount() {
+      return instance.getDefsCount();
+    }/**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.AlertRuleDef getDefs(int index) {
+      return instance.getDefs(index);
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder setDefs(
+        int index, ink.sipc.nagi.proto.v1.AlertRuleDef value) {
+      copyOnWrite();
+      instance.setDefs(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder setDefs(
+        int index, ink.sipc.nagi.proto.v1.AlertRuleDef.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDefs(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder addDefs(ink.sipc.nagi.proto.v1.AlertRuleDef value) {
+      copyOnWrite();
+      instance.addDefs(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder addDefs(
+        int index, ink.sipc.nagi.proto.v1.AlertRuleDef value) {
+      copyOnWrite();
+      instance.addDefs(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder addDefs(
+        ink.sipc.nagi.proto.v1.AlertRuleDef.Builder builderForValue) {
+      copyOnWrite();
+      instance.addDefs(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder addDefs(
+        int index, ink.sipc.nagi.proto.v1.AlertRuleDef.Builder builderForValue) {
+      copyOnWrite();
+      instance.addDefs(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder addAllDefs(
+        java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertRuleDef> values) {
+      copyOnWrite();
+      instance.addAllDefs(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder clearDefs() {
+      copyOnWrite();
+      instance.clearDefs();
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
+     */
+    public Builder removeDefs(int index) {
+      copyOnWrite();
+      instance.removeDefs(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<ink.sipc.nagi.proto.v1.AlertNoticeDef> getNoticesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getNoticesList());
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    @java.lang.Override
+    public int getNoticesCount() {
+      return instance.getNoticesCount();
+    }/**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.AlertNoticeDef getNotices(int index) {
+      return instance.getNotices(index);
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder setNotices(
+        int index, ink.sipc.nagi.proto.v1.AlertNoticeDef value) {
+      copyOnWrite();
+      instance.setNotices(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder setNotices(
+        int index, ink.sipc.nagi.proto.v1.AlertNoticeDef.Builder builderForValue) {
+      copyOnWrite();
+      instance.setNotices(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder addNotices(ink.sipc.nagi.proto.v1.AlertNoticeDef value) {
+      copyOnWrite();
+      instance.addNotices(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder addNotices(
+        int index, ink.sipc.nagi.proto.v1.AlertNoticeDef value) {
+      copyOnWrite();
+      instance.addNotices(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder addNotices(
+        ink.sipc.nagi.proto.v1.AlertNoticeDef.Builder builderForValue) {
+      copyOnWrite();
+      instance.addNotices(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder addNotices(
+        int index, ink.sipc.nagi.proto.v1.AlertNoticeDef.Builder builderForValue) {
+      copyOnWrite();
+      instance.addNotices(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder addAllNotices(
+        java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertNoticeDef> values) {
+      copyOnWrite();
+      instance.addAllNotices(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder clearNotices() {
+      copyOnWrite();
+      instance.clearNotices();
+      return this;
+    }
+    /**
+     * <pre>
+     * 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
+     */
+    public Builder removeNotices(int index) {
+      copyOnWrite();
+      instance.removeNotices(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+     * </pre>
+     *
+     * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+     * @return The canEditSecurityNotices.
+     */
+    @java.lang.Override
+    public boolean getCanEditSecurityNotices() {
+      return instance.getCanEditSecurityNotices();
+    }
+    /**
+     * <pre>
+     * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+     * </pre>
+     *
+     * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+     * @param value The canEditSecurityNotices to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanEditSecurityNotices(boolean value) {
+      copyOnWrite();
+      instance.setCanEditSecurityNotices(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+     * </pre>
+     *
+     * <code>bool can_edit_security_notices = 7 [json_name = "canEditSecurityNotices"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanEditSecurityNotices() {
+      copyOnWrite();
+      instance.clearCanEditSecurityNotices();
+      return this;
+    }
+
+    /**
+     * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+     * @return The canEditNotices.
+     */
+    @java.lang.Override
+    public boolean getCanEditNotices() {
+      return instance.getCanEditNotices();
+    }
+    /**
+     * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+     * @param value The canEditNotices to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanEditNotices(boolean value) {
+      copyOnWrite();
+      instance.setCanEditNotices(value);
+      return this;
+    }
+    /**
+     * <code>bool can_edit_notices = 8 [json_name = "canEditNotices"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanEditNotices() {
+      copyOnWrite();
+      instance.clearCanEditNotices();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.GetAlertRulesResponse)
   }
   @java.lang.Override
@@ -619,10 +1329,16 @@ public  final class GetAlertRulesResponse extends
             "overrides_",
             ink.sipc.nagi.proto.v1.AlertOverride.class,
             "canEditPolicy_",
+            "defs_",
+            ink.sipc.nagi.proto.v1.AlertRuleDef.class,
+            "notices_",
+            ink.sipc.nagi.proto.v1.AlertNoticeDef.class,
+            "canEditSecurityNotices_",
+            "canEditNotices_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0001\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u1009\u0000\u0002" +
-              "\u1009\u0001\u0003\u001b\u0004\u0007";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0003\u0000\u0001\u1009\u0000\u0002\u1009\u0001" +
+              "\u0003\u001b\u0004\u0007\u0005\u001b\u0006\u001b\u0007\u0007\b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

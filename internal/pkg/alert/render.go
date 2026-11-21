@@ -87,6 +87,20 @@ func unitOf(a *nagiv1.Alert, v float64) string {
 			return Num(v) + "×"
 		}
 		return Num(v) + " 倍"
+	case "connections":
+		if en {
+			return Num(v) + " connections"
+		}
+		return Num(v) + " 个连接"
+	case "mbps":
+		return Num(v) + " Mbit/s"
+	case "ms":
+		return Num(v) + " ms"
+	case "seconds_skew":
+		if en {
+			return Num(v) + " s"
+		}
+		return Num(v) + " 秒"
 	}
 	return Num(v)
 }
@@ -118,8 +132,74 @@ func what(a *nagiv1.Alert) string {
 		return pick("映射 "+s+" 的 4xx 比例", "4xx share of mapping "+s)
 	case RuleTraffic:
 		return pick("映射 "+s+" 的请求量", "Requests to mapping "+s)
+	case RuleInode:
+		return pick("磁盘 "+s+" 的 inode 使用", "Inode usage on "+s)
+	case RuleLogFull:
+		return pick("日志库容量使用", "Log store usage")
+	case RuleMeshLoss:
+		return pick("到 "+s+" 的节点网络丢包", "Node network loss to "+s)
+	case RuleMeshRTT:
+		return pick("到 "+s+" 的节点网络延迟", "Node network latency to "+s)
+	case RuleNIC:
+		return pick("网卡 "+s+" 的错误和丢包", "Errors and drops on "+s)
+	case RuleConntrack:
+		return pick("连接跟踪表使用", "Connection tracking table usage")
+	case RuleClockSkew:
+		return pick("节点时钟偏差", "Node clock skew")
+	case RuleL4Surge:
+		return pick("映射 "+s+" 的新连接", "New connections to mapping "+s)
+	case RuleL4Active:
+		return pick("映射 "+s+" 的活跃连接", "Active connections on mapping "+s)
+	case RuleL4Fail:
+		return pick("映射 "+s+" 的连接失败比例（连不上容器或转发出错）", "Failed connection share of mapping "+s+" (container unreachable or forwarding error)")
+	case RuleL4Bandwidth:
+		return pick("映射 "+s+" 的带宽", "Bandwidth of mapping "+s)
 	}
 	return s
+}
+
+// countText 是「窗口内的次数」类规则（日志库写入失败、内核磁盘错误、OOM）的出现文字。
+func countText(a *nagiv1.Alert, en bool) string {
+	s, n, w := a.GetSubject(), Num(a.GetValue()), Num(a.GetThreshold())
+	pick := func(zh, e string) string {
+		if en {
+			return e
+		}
+		return zh
+	}
+	switch a.GetRule() {
+	case RuleLogWrite:
+		return pick("日志库写入失败 "+n+" 次（阈值 "+w+" 次）", "Log store writes failed "+n+" times (threshold "+w+")")
+	case RuleKernelStorage:
+		return pick("内核报告磁盘错误 "+n+" 次（阈值 "+w+" 次）", "Kernel reported "+n+" storage errors (threshold "+w+")")
+	case RuleKernelOOM:
+		return pick("内核因内存不足杀掉进程 "+n+" 次", "Kernel OOM-killed processes "+n+" times")
+	case RuleContainerOOM:
+		return pick(s+" 因内存不足被杀 "+n+" 次", s+" was OOM-killed "+n+" times")
+	}
+	return s
+}
+
+// countRecovered 是这类规则的恢复文字。
+func countRecovered(a *nagiv1.Alert, en bool) string {
+	quiet := Duration(secs(a.GetRecoverSeconds()), en)
+	pick := func(zh, e string) string {
+		if en {
+			return e
+		}
+		return zh
+	}
+	switch a.GetRule() {
+	case RuleLogWrite:
+		return pick("日志库写入已恢复，"+quiet+"没有新的失败", "Log store writes recovered: no failures for "+quiet)
+	case RuleKernelStorage:
+		return pick("内核 "+quiet+"没有再报告磁盘错误", "No kernel storage errors for "+quiet)
+	case RuleKernelOOM:
+		return pick("内核 "+quiet+"没有再因内存不足杀进程", "No kernel OOM kills for "+quiet)
+	case RuleContainerOOM:
+		return pick(a.GetSubject()+" "+quiet+"没有再因内存不足被杀", a.GetSubject()+" not OOM-killed for "+quiet)
+	}
+	return a.GetSubject()
 }
 
 // Render 返回规则告警的标题和补充说明，非规则告警（事件、一次性通知、旧版本节点）原样返回。
@@ -129,7 +209,9 @@ func Render(a *nagiv1.Alert) (title, detail string) {
 	default: // 已结束、反复出现、一次性通知：节点拼好了文字
 		return a.GetTitle(), a.GetMessage()
 	}
-	if a.GetRule() == "" || a.Value == nil && a.GetRule() != RuleHealth && a.GetRule() != RuleOffline {
+	valueless := map[string]bool{RuleHealth: true, RuleOffline: true, RuleL4Listen: true, RuleMeshPeer: true, RuleWitness: true,
+		RuleUpgrade: true, RuleAuditVerify: true, RuleMigration: true}
+	if a.GetRule() == "" || a.Value == nil && !valueless[a.GetRule()] {
 		if isEn(a) {
 			return i18n.Text(i18n.En, a.GetTitle()), a.GetMessage()
 		}
@@ -186,11 +268,77 @@ func Render(a *nagiv1.Alert) (title, detail string) {
 			return pick(a.GetSubject()+" 已恢复稳定，最近一个统计窗口内没有重启", a.GetSubject()+" is stable again: no restarts in the last window"), lasted
 		}
 		return pick(a.GetSubject()+" 重启了 "+Num(v)+" 次（阈值 "+Num(th)+" 次）", a.GetSubject()+" restarted "+Num(v)+" times (threshold "+Num(th)+")"), a.GetMessage()
+	case RuleLogWrite, RuleKernelStorage, RuleKernelOOM, RuleContainerOOM:
+		if resolved {
+			return countRecovered(a, en), lasted
+		}
+		return countText(a, en), a.GetMessage()
+	case RuleL4Listen:
+		if resolved {
+			return pick("映射 "+a.GetSubject()+" 的端口已恢复监听", "Mapping "+a.GetSubject()+" is listening again") + stable, lasted
+		}
+		return pick("映射 "+a.GetSubject()+" 的端口无法监听", "Mapping "+a.GetSubject()+" cannot listen on its port"), a.GetMessage()
+	case RuleMeshPeer:
+		if resolved {
+			return pick("到 "+a.GetSubject()+" 的节点网络已恢复", "Node network to "+a.GetSubject()+" restored") + stable, lasted
+		}
+		return pick("到 "+a.GetSubject()+" 的节点网络不通已 "+dur+"（双方都连着面板）", "No node network path to "+a.GetSubject()+" for "+dur+" (both connected to the panel)"), a.GetMessage()
+	case RuleWitness:
+		if resolved {
+			return pick(a.GetSubject()+" 的见证人已恢复回应", "Witness for "+a.GetSubject()+" responds again") + stable, lasted
+		}
+		return pick(a.GetSubject()+" 的见证人已 "+dur+"没有回应", "Witness for "+a.GetSubject()+" has not responded for "+dur), a.GetMessage()
+	case RuleUpgrade:
+		if resolved {
+			return pick("节点 "+a.GetNode()+" 已升级成功", "Node "+a.GetNode()+" upgraded successfully"), lasted
+		}
+		return pick("节点 "+a.GetNode()+" 升级到 "+a.GetSubject()+" 失败", "Node "+a.GetNode()+" failed to upgrade to "+a.GetSubject()), a.GetMessage()
+	case RuleAuditVerify:
+		if resolved {
+			return pick("审计链校验已通过", "Audit chain verification passes again"), lasted
+		}
+		return pick("审计链定时校验未通过", "Scheduled audit chain verification failed"), a.GetMessage()
+	case RuleMigration:
+		if resolved {
+			return pick(a.GetSubject()+" 迁移已完成", a.GetSubject()+" migration completed"), lasted
+		}
+		return pick(a.GetSubject()+" 迁移失败", a.GetSubject()+" migration failed"), a.GetMessage()
+	case RuleTokenExpiry:
+		if resolved {
+			return pick("访问令牌 "+a.GetSubject()+" 已续期或删除", "Access token "+a.GetSubject()+" renewed or deleted"), lasted
+		}
+		return pick("访问令牌 "+a.GetSubject()+" "+Num(v)+" 天后过期", "Access token "+a.GetSubject()+" expires in "+Num(v)+" days"), a.GetMessage()
+	case RuleNodeCert:
+		if resolved {
+			return pick("节点证书已续期", "Node certificate renewed"), lasted
+		}
+		return pick("节点证书续期失败，"+Num(v)+" 天后过期", "Node certificate renewal failed; expires in "+Num(v)+" days"), a.GetMessage()
+	case RuleSnapshotStale, RuleBackupLag:
+		subject := a.GetSubject()
+		if resolved {
+			if a.GetRule() == RuleBackupLag {
+				return pick(subject+" 的副本已重新同步", "Replica of "+subject+" synced again"), lasted
+			}
+			return pick(subject+" 已重新成功快照", subject+" snapshotted successfully again"), lasted
+		}
+		if a.GetRule() == RuleBackupLag {
+			return pick(subject+" 的副本已 "+dur+"没有同步成功（阈值 "+Num(th)+" 个间隔）", "Replica of "+subject+" not synced for "+dur+" (threshold "+Num(th)+" intervals)"), a.GetMessage()
+		}
+		return pick(subject+" 已 "+dur+"没有成功快照（阈值 "+Num(th)+" 个间隔）", subject+" has had no successful snapshot for "+dur+" (threshold "+Num(th)+" intervals)"), a.GetMessage()
 	}
+	d, _ := DefOf(a.GetRule())
 	if resolved {
-		return what(a) + pick("降到 ", " down to ") + unitOf(a, v) + pick("（恢复阈值 ", " (recovery threshold ") + unitOf(a, rec) + stable + pick("）", ")"), lasted
+		verb := pick("降到 ", " down to ")
+		if d.Lower {
+			verb = pick("回到 ", " back to ")
+		}
+		return what(a) + verb + unitOf(a, v) + pick("（恢复阈值 ", " (recovery threshold ") + unitOf(a, rec) + stable + pick("）", ")"), lasted
 	}
-	t := what(a) + pick(" ", " ") + unitOf(a, v) + pick("，超过 ", ", above ") + unitOf(a, th)
+	over := pick("，超过 ", ", above ")
+	if d.Lower {
+		over = pick("，低于 ", ", below ")
+	}
+	t := what(a) + pick(" ", " ") + unitOf(a, v) + over + unitOf(a, th)
 	if a.GetDurationSeconds() > 0 {
 		t += pick(" 已 ", " for ") + dur
 	}

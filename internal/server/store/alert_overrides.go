@@ -8,12 +8,13 @@ import (
 	"errors"
 )
 
-// AlertOverride 是一条覆盖：Scope 是 node、project 或 container。Rules 是 protobuf（map<string, AlertRule> 包在 AlertOverride 里）。
+// AlertOverride 是一条覆盖：Scope 是 node、project、container 或 route。Rules 是 protobuf（map<string, AlertRule> 包在 AlertOverride 里）。
 type AlertOverride struct {
 	Scope     string
 	NodeID    string
 	ProjectID string
 	Container string
+	Route     string // Scope 为 route 时（迁移 0032）
 	Rules     []byte
 	Revision  int64
 }
@@ -27,6 +28,8 @@ func overrideWhere(o AlertOverride) (table, where string, args []any) {
 		return "alert_node_overrides", "node_id = ?", []any{o.NodeID}
 	case "project":
 		return "alert_project_overrides", "project_id = ?", []any{o.ProjectID}
+	case "route":
+		return "alert_route_overrides", "project_id = ? AND route = ?", []any{o.ProjectID, o.Route}
 	default:
 		return "alert_container_overrides", "project_id = ? AND container = ?", []any{o.ProjectID, o.Container}
 	}
@@ -39,6 +42,7 @@ func (q *Queries) ListAlertOverrides(ctx context.Context) ([]AlertOverride, erro
 		{"node", "SELECT node_id, '', '', rules, revision FROM alert_node_overrides ORDER BY node_id"},
 		{"project", "SELECT '', project_id, '', rules, revision FROM alert_project_overrides ORDER BY project_id"},
 		{"container", "SELECT '', project_id, container, rules, revision FROM alert_container_overrides ORDER BY project_id, container"},
+		{"route", "SELECT '', project_id, route, rules, revision FROM alert_route_overrides ORDER BY project_id, route"},
 	} {
 		rows, err := q.db.QueryContext(ctx, part.query)
 		if err != nil {
@@ -49,6 +53,9 @@ func (q *Queries) ListAlertOverrides(ctx context.Context) ([]AlertOverride, erro
 			if err := rows.Scan(&o.NodeID, &o.ProjectID, &o.Container, &o.Rules, &o.Revision); err != nil {
 				rows.Close()
 				return nil, err
+			}
+			if o.Scope == "route" {
+				o.Route, o.Container = o.Container, ""
 			}
 			out = append(out, o)
 		}
@@ -94,6 +101,8 @@ func (q *Queries) SetAlertOverride(ctx context.Context, o AlertOverride, base in
 			_, err = q.db.ExecContext(ctx, "INSERT OR REPLACE INTO alert_node_overrides (node_id, rules, revision) VALUES (?, ?, ?)", o.NodeID, o.Rules, next)
 		case "project":
 			_, err = q.db.ExecContext(ctx, "INSERT OR REPLACE INTO alert_project_overrides (project_id, rules, revision) VALUES (?, ?, ?)", o.ProjectID, o.Rules, next)
+		case "route":
+			_, err = q.db.ExecContext(ctx, "INSERT OR REPLACE INTO alert_route_overrides (project_id, route, rules, revision) VALUES (?, ?, ?, ?)", o.ProjectID, o.Route, o.Rules, next)
 		default:
 			_, err = q.db.ExecContext(ctx, "INSERT OR REPLACE INTO alert_container_overrides (project_id, container, rules, revision) VALUES (?, ?, ?, ?)", o.ProjectID, o.Container, o.Rules, next)
 		}
