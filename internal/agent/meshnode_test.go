@@ -62,6 +62,33 @@ func TestMeshRelayAuthorizationMerge(t *testing.T) {
 	}
 	n.retain([]string{})
 	want(proto.Bool(false))
+
+	// 中转池：所有可信面板都开了才算；任一可信面板没开、旧面板（没有这一项）或者只剩不可信面板时都不是。
+	pool := func(fp string, on bool) {
+		n.update(fp, "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:], Peers: []*nagiv1.MeshPeer{{PublicKey: x[:], NodeRelayEnabled: proto.Bool(true), RelayPool: on}}})
+	}
+	wantPool := func(value bool) {
+		t.Helper()
+		n.mu.Lock()
+		got := n.recent[x].peer.RelayPool
+		n.mu.Unlock()
+		if got != value {
+			t.Fatalf("relay pool got %v want %v", got, value)
+		}
+	}
+	n.retain([]string{"a", "b"})
+	pool("a", true)
+	pool("b", true)
+	wantPool(true)
+	pool("b", false)
+	for range 12 {
+		n.apply()
+		wantPool(false)
+	}
+	n.retain([]string{"a"})
+	wantPool(true) // 不再信任的面板没有否决权。
+	n.retain([]string{"b"})
+	wantPool(false) // 不信任的面板也不能把节点加进池。
 }
 
 func randKey() mesh.Key {

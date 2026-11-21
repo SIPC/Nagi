@@ -395,6 +395,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 			return nil, err
 		}
 		n.Isolated = s.Nodes.Isolated(ctx, row.ID)
+		n.RelayPool = s.Nodes.InRelayPool(ctx, row.ID)
 		if conn, err := s.Nodes.Peek(row.ID); err == nil && conn.LastReport() != nil {
 			n.Info = conn.LastReport().GetNode()
 			n.Usage = conn.LastReport().GetUsage()

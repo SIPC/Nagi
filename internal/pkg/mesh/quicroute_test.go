@@ -21,9 +21,10 @@ func TestQUICRoutedStream(t *testing.T) {
 	r := newNodeConfig(t, Config{ExperimentalQUICRouting: true, NodeRelay: true, NoQUIC: true})
 	ak, bk, rk := a.m.PublicKey(), b.m.PublicKey(), r.m.PublicKey()
 	on, off := true, false
+	pool := true
 	set := func(n, other testNode, candidates []Key, permission *bool) {
 		t.Helper()
-		if err := n.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: permission},
+		if err := n.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: permission, RelayPool: pool},
 			{Key: other.m.PublicKey(), Endpoints: local(other.port), NodeRelays: candidates}}); err != nil {
 			t.Fatal(err)
 		}
@@ -78,16 +79,28 @@ func TestQUICRoutedStream(t *testing.T) {
 	if s := a.m.ProbePath(context.Background(), bk, rk, 1253); s.Err != nil {
 		t.Fatalf("selected QUIC route must remain observable after ranking removal: %+v", s)
 	}
-	exchange() // 排名移除不撤销手动选择且仍有独立许可的实验路径。
+	exchange() // 故障兜底的排名和性能路线无关，排名移除不撤销中转池里的路线。
 	blockDirect.Store(false)
 	if err := a.m.SetQUICRoute(bk, Key{}); err != nil {
 		t.Fatal(err)
 	}
 	exchange() // 显式恢复直连不要求对方同时恢复。
-	if err := a.m.SetQUICRoute(bk, rk); !errors.Is(err, ErrQUICRoute) {
-		t.Fatal("released route outside candidate ranking was resurrected")
+	if err := a.m.SetQUICRoute(bk, rk); err != nil {
+		t.Fatal(err)
 	}
-	set(a, b, []Key{rk}, &on)
+	pool = false // 退出中转池：在用的性能路线按撤权处理，立即恢复直连，仍是原流。
+	set(a, b, nil, &on)
+	set(b, a, nil, &on)
+	exchange()
+	if err := a.m.SetQUICRoute(bk, rk); !errors.Is(err, ErrQUICRoute) {
+		t.Fatal("relay outside the pool accepted for a performance route")
+	}
+	if s := a.m.ProbePath(context.Background(), bk, rk, 256); !errors.Is(s.Err, ErrProbePath) {
+		t.Fatalf("relay outside the pool and ranking must not be observable: %+v", s)
+	}
+	pool = true
+	set(a, b, nil, &on)
+	set(b, a, nil, &on)
 	if err := a.m.SetQUICRoute(bk, rk); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +134,7 @@ func TestQUICRouteRelayCannotHijack(t *testing.T) {
 	on := true
 	set := func(n, other testNode, candidates []Key) {
 		t.Helper()
-		if err := n.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: &on},
+		if err := n.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: &on, RelayPool: true},
 			{Key: other.m.PublicKey(), Endpoints: local(other.port), NodeRelays: candidates}}); err != nil {
 			t.Fatal(err)
 		}
@@ -207,7 +220,7 @@ func TestQUICRouteRelayCannotHijack(t *testing.T) {
 }
 
 func TestQUICRouteRequiresExplicitOptIn(t *testing.T) {
-	for _, missing := range []string{"local", "peer", "relay", "permission", "candidate"} {
+	for _, missing := range []string{"local", "peer", "relay", "permission", "pool"} {
 		t.Run(missing, func(t *testing.T) {
 			t.Parallel()
 			a := newNodeConfig(t, Config{ExperimentalQUICRouting: missing != "local"})
@@ -215,14 +228,12 @@ func TestQUICRouteRequiresExplicitOptIn(t *testing.T) {
 			r := newNodeConfig(t, Config{ExperimentalQUICRouting: missing != "relay", NodeRelay: true, NoQUIC: true})
 			ak, bk, rk := a.m.PublicKey(), b.m.PublicKey(), r.m.PublicKey()
 			permission := missing != "permission"
-			candidates := []Key{rk}
-			if missing == "candidate" {
-				candidates = nil
-			}
+			// 故障兜底候选里有 R 也不够：性能路线只认中转池。
+			candidates, pool := []Key{rk}, missing != "pool"
 			_ = r.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}})
-			_ = a.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: &permission},
+			_ = a.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: &permission, RelayPool: pool},
 				{Key: bk, Endpoints: local(b.port), NodeRelays: candidates}})
-			_ = b.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: &permission},
+			_ = b.m.SetPeers([]Peer{{Key: rk, Endpoints: local(r.port), NodeRelayEnabled: &permission, RelayPool: pool},
 				{Key: ak, Endpoints: local(a.port), NodeRelays: candidates}})
 			for _, pair := range []struct{ from, to testNode }{{a, b}, {b, a}, {a, r}, {b, r}, {r, a}, {r, b}} {
 				waitPath(t, pair.from.m, pair.to.m.PublicKey(), "direct")
@@ -244,12 +255,12 @@ func TestQUICRouteRequiresExplicitOptIn(t *testing.T) {
 }
 
 func TestQUICRouteAuthenticatedDemux(t *testing.T) {
-	for _, attack := range []string{"mac", "target", "relay", "source", "unconfirmed", "expired", "revoked", "disabled", "oversized"} {
+	for _, attack := range []string{"mac", "target", "relay", "source", "unconfirmed", "expired", "revoked", "unpooled", "disabled", "oversized"} {
 		t.Run(attack, func(t *testing.T) {
 			b := newBind(Key{8}, false, capQUIC|capQUICRoute, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 			peer, relay := PublicKey(Key{16}), PublicKey(Key{24})
 			on := true
-			b.setPeers([]Peer{{Key: peer}, {Key: relay, NodeRelayEnabled: &on}})
+			b.setPeers([]Peer{{Key: peer}, {Key: relay, NodeRelayEnabled: &on, RelayPool: true}})
 			p, r := b.peers[peer], b.peers[relay]
 			from := netip.MustParseAddrPort("127.0.0.1:12345")
 			r.direct, r.directAt, r.caps, r.capsAt = from, time.Now(), capQUICRoute, time.Now()
@@ -286,6 +297,8 @@ func TestQUICRouteAuthenticatedDemux(t *testing.T) {
 			case "revoked":
 				off := false
 				r.nodeRelayEnabled = &off
+			case "unpooled":
+				r.relayPool = false
 			case "disabled":
 				b.routedQUIC = nil
 			case "oversized":
@@ -302,7 +315,7 @@ func TestQUICRouteAuthenticatedDemux(t *testing.T) {
 				t.Fatal("routed packet reached legacy transport")
 			}
 			// 正确包只进入逻辑地址空间，不把 R 写成 peer 的物理地址。
-			r.nodeRelayEnabled = &on
+			r.nodeRelayEnabled, r.relayPool = &on, true
 			r.confirmed[from] = time.Now()
 			b.routedQUIC = routed
 			payload = payload[:1200]

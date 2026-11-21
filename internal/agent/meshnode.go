@@ -298,6 +298,7 @@ func (n *meshNode) apply() {
 	n.mu.Lock()
 	merged := map[mesh.Key]*mesh.Peer{}
 	trustedMembers := map[mesh.Key]bool{}
+	poolVotes := map[mesh.Key]int{} // 1：可信面板都列进了中转池；-1：有可信面板没列；0：还没有可信面板说过
 	seen := map[mesh.Key]map[netip.AddrPort]bool{}
 	var order []mesh.Key
 	// addEp 加一个直连地址，去重，每个成员最多 mesh.MaxEndpoints 个（多的 mesh 也不用）。
@@ -322,6 +323,7 @@ func (n *meshNode) apply() {
 				merged[k] = p
 				seen[k] = map[netip.AddrPort]bool{}
 				order = append(order, k)
+				poolVotes[k] = 0
 			}
 			trusted := n.trusted == nil || slices.Contains(n.trusted, fp)
 			if trusted {
@@ -331,6 +333,14 @@ func (n *meshNode) apply() {
 			if trusted && mp.NodeRelayEnabled != nil &&
 				(p.NodeRelayEnabled == nil || !mp.GetNodeRelayEnabled()) {
 				p.NodeRelayEnabled = proto.Bool(mp.GetNodeRelayEnabled())
+			}
+			// 中转池：每个可信面板都把它列进池里才算（任一面板没开就不是），旧面板没有这一项，等于没开。
+			if trusted {
+				if mp.GetRelayPool() && poolVotes[k] >= 0 {
+					poolVotes[k] = 1
+				} else {
+					poolVotes[k] = -1
+				}
 			}
 			for _, e := range mp.GetEndpoints() {
 				if ap, err := netip.ParseAddrPort(e); err == nil {
@@ -373,6 +383,7 @@ func (n *meshNode) apply() {
 		}
 	}
 	for k, p := range merged {
+		p.RelayPool = poolVotes[k] == 1
 		if !trustedMembers[k] {
 			// 旧面板宽限可保连通，但不能降成 nil 后借旧候选继续提供中转许可。
 			p.NodeRelayEnabled = proto.Bool(false)
@@ -390,8 +401,8 @@ func (n *meshNode) apply() {
 			continue
 		}
 		p := r.peer
-		// 成员宽限只保留连通性，不延长中转授权或在用路径的钉住。
-		p.NodeRelayEnabled = proto.Bool(false)
+		// 成员宽限只保留连通性，不延长中转授权、中转池或在用路径的钉住。
+		p.NodeRelayEnabled, p.RelayPool = proto.Bool(false), false
 		merged[k] = &p
 		order = append(order, k)
 		later = true

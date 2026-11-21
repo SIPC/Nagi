@@ -33,6 +33,9 @@ type Peer struct {
 	// NodeRelayEnabled 独立声明这个成员的中转许可。nil 兼容旧面板，但不允许跨候选刷新钉住它。
 	// 仅用于现有故障兜底；不授权性能中转或自动切路。
 	NodeRelayEnabled *bool
+	// RelayPool：管理员把这个成员加入了中转池（默认关闭），同意它为直连可用的节点对承担性能中转。
+	// 只在 NodeRelayEnabled 也为 true 时有效；关闭时立即解除经它的实验 QUIC 路线，正在进行的观察以路径不可用结束。
+	RelayPool bool
 }
 
 // Config 是 mesh 的配置。

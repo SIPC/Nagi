@@ -53,6 +53,17 @@ type PathSample struct {
 	Err       error
 }
 
+// probeVia 判断能不能经 via 测到 p：面板给的故障兜底候选、正在用的中转，或者中转池里的节点（用来给直连可用的节点对
+// 找性能更好的路线）。最后一种只在 via 加入了中转池、有显式许可时才行，不把「愿意故障中转」当成同意性能中转。
+// 调用时持有 b.mu。
+func (b *Bind) probeVia(p *peerState, via Key) bool {
+	if !b.relayKeys[via] {
+		return false
+	}
+	return p.activeRelay == via || p.quicVia == via || slices.Contains(p.nodeRelays, via) ||
+		slices.Contains(p.relays, via) || b.peers[via].poolRelay()
+}
+
 func validProbeSize(size int) bool {
 	return size == pathProbeSmall || size == 1180 || size == pathProbeLarge
 }
@@ -81,7 +92,7 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 		return
 	}
 	if via != (Key{}) {
-		if p.activeRelay != via && p.quicVia != via && !slices.Contains(p.nodeRelays, via) && !slices.Contains(p.relays, via) {
+		if !b.probeVia(p, via) {
 			b.mu.Unlock()
 			sample.Err = ErrProbePath
 			return

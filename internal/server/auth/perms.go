@@ -328,6 +328,8 @@ var procedurePerms = map[string]Perm{
 	"/nagi.v1.NodeService/SetNodeAlertRules": PermNodeManage, "/nagi.v1.NodeService/IsolateNode": PermNodeManage,
 	"/nagi.v1.NodeService/UnisolateNode": PermNodeManage, "/nagi.v1.NodeService/DeleteNodeReplica": PermNodeManage,
 	"/nagi.v1.NodeService/TestNodeMeshSpeed": PermNodeManage, "/nagi.v1.NodeService/SetNodeMeshOptions": PermNodeManage,
+	// 中转池：同意这个节点为别的节点承担性能中转（流量计入它），和节点的网络设置一样要「节点管理」。
+	"/nagi.v1.NodeService/SetNodeRelayPool": PermNodeManage,
 
 	"/nagi.v1.NodeService/ListNodeImages": PermNodeImages, "/nagi.v1.NodeService/DeleteNodeImages": PermNodeImages,
 	"/nagi.v1.NodeService/PruneNodeImages": PermNodeImages, "/nagi.v1.NodeService/PullNodeImage": PermNodeImages,

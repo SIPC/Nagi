@@ -128,6 +128,7 @@ export default {
     SetNodeTags: "编辑节点标签",
     RenameNodeTag: "重命名或删除标签",
     SetNodeGroup: "编辑节点分组",
+    SetNodeRelayPool: "加入或退出中转池",
     SetProjectTags: "编辑项目标签",
     RenameProjectTag: "重命名或删除项目标签",
     RenameNodeGroup: "重命名或删除节点分组",

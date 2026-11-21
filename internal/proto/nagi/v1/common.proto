@@ -668,6 +668,9 @@ message MeshPeer {
   // 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
   // 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
   optional bool node_relay_enabled = 7;
+  // 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+  // 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+  bool relay_pool = 8;
 }
 
 // MeshPeerStatus 是到一个 mesh 成员的连接状态。

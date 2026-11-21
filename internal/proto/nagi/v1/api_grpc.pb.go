@@ -1220,6 +1220,7 @@ const (
 	NodeService_RenameNodeTag_FullMethodName         = "/nagi.v1.NodeService/RenameNodeTag"
 	NodeService_SetNodeGroup_FullMethodName          = "/nagi.v1.NodeService/SetNodeGroup"
 	NodeService_RenameNodeGroup_FullMethodName       = "/nagi.v1.NodeService/RenameNodeGroup"
+	NodeService_SetNodeRelayPool_FullMethodName      = "/nagi.v1.NodeService/SetNodeRelayPool"
 	NodeService_IsolateNode_FullMethodName           = "/nagi.v1.NodeService/IsolateNode"
 	NodeService_UnisolateNode_FullMethodName         = "/nagi.v1.NodeService/UnisolateNode"
 	NodeService_ListNodeImages_FullMethodName        = "/nagi.v1.NodeService/ListNodeImages"
@@ -1313,6 +1314,8 @@ type NodeServiceClient interface {
 	SetNodeGroup(ctx context.Context, in *SetNodeGroupRequest, opts ...grpc.CallOption) (*SetNodeGroupResponse, error)
 	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
 	RenameNodeGroup(ctx context.Context, in *RenameLabelRequest, opts ...grpc.CallOption) (*RenameLabelResponse, error)
+	// 加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+	SetNodeRelayPool(ctx context.Context, in *SetNodeRelayPoolRequest, opts ...grpc.CallOption) (*SetNodeRelayPoolResponse, error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error)
@@ -1857,6 +1860,16 @@ func (c *nodeServiceClient) RenameNodeGroup(ctx context.Context, in *RenameLabel
 	return out, nil
 }
 
+func (c *nodeServiceClient) SetNodeRelayPool(ctx context.Context, in *SetNodeRelayPoolRequest, opts ...grpc.CallOption) (*SetNodeRelayPoolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeRelayPoolResponse)
+	err := c.cc.Invoke(ctx, NodeService_SetNodeRelayPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *nodeServiceClient) IsolateNode(ctx context.Context, in *IsolateNodeRequest, opts ...grpc.CallOption) (*IsolateNodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IsolateNodeResponse)
@@ -2011,6 +2024,8 @@ type NodeServiceServer interface {
 	SetNodeGroup(context.Context, *SetNodeGroupRequest) (*SetNodeGroupResponse, error)
 	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
 	RenameNodeGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error)
+	// 加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+	SetNodeRelayPool(context.Context, *SetNodeRelayPoolRequest) (*SetNodeRelayPoolResponse, error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error)
@@ -2171,6 +2186,9 @@ func (UnimplementedNodeServiceServer) SetNodeGroup(context.Context, *SetNodeGrou
 }
 func (UnimplementedNodeServiceServer) RenameNodeGroup(context.Context, *RenameLabelRequest) (*RenameLabelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameNodeGroup not implemented")
+}
+func (UnimplementedNodeServiceServer) SetNodeRelayPool(context.Context, *SetNodeRelayPoolRequest) (*SetNodeRelayPoolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeRelayPool not implemented")
 }
 func (UnimplementedNodeServiceServer) IsolateNode(context.Context, *IsolateNodeRequest) (*IsolateNodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IsolateNode not implemented")
@@ -3015,6 +3033,24 @@ func _NodeService_RenameNodeGroup_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NodeService_SetNodeRelayPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeRelayPoolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeServiceServer).SetNodeRelayPool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeService_SetNodeRelayPool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeServiceServer).SetNodeRelayPool(ctx, req.(*SetNodeRelayPoolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NodeService_IsolateNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IsolateNodeRequest)
 	if err := dec(in); err != nil {
@@ -3286,6 +3322,10 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RenameNodeGroup",
 			Handler:    _NodeService_RenameNodeGroup_Handler,
+		},
+		{
+			MethodName: "SetNodeRelayPool",
+			Handler:    _NodeService_SetNodeRelayPool_Handler,
 		},
 		{
 			MethodName: "IsolateNode",

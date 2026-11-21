@@ -87,6 +87,7 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 	var peers []mesh.Peer
 	var list []*nagiv1.MeshPeer
 	iso := r.isolatedNodes(context.Background())
+	pool := r.relayPool(context.Background())
 	for _, c := range conns {
 		// 被隔离的节点不在任何人的成员列表里（见 docs/mesh.md#隔离）。
 		if _, bad := iso[c.NodeID]; bad {
@@ -118,8 +119,10 @@ func (r *Registry) meshPeers() ([]mesh.Peer, []*nagiv1.MeshPeer) {
 				add(netip.AddrPortFrom(ap.Addr().Unmap(), ap.Port()))
 			}
 		}
-		peers = append(peers, mesh.Peer{Key: k, Endpoints: eps, NodeRelayEnabled: proto.Bool(info.GetRelay())})
-		mp := &nagiv1.MeshPeer{PublicKey: k[:], Name: name, NodeId: c.NodeID, NodeRelayEnabled: proto.Bool(info.GetRelay())}
+		// 中转池还要节点自己愿意中转：节点关了「中转其他节点」时，池开关不起作用。
+		inPool := pool[c.NodeID] && info.GetRelay()
+		peers = append(peers, mesh.Peer{Key: k, Endpoints: eps, NodeRelayEnabled: proto.Bool(info.GetRelay()), RelayPool: inPool})
+		mp := &nagiv1.MeshPeer{PublicKey: k[:], Name: name, NodeId: c.NodeID, NodeRelayEnabled: proto.Bool(info.GetRelay()), RelayPool: inPool}
 		for _, e := range eps {
 			mp.Endpoints = append(mp.Endpoints, e.String())
 		}

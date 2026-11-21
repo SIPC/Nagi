@@ -247,6 +247,9 @@ const (
 	// NodeServiceRenameNodeGroupProcedure is the fully-qualified name of the NodeService's
 	// RenameNodeGroup RPC.
 	NodeServiceRenameNodeGroupProcedure = "/nagi.v1.NodeService/RenameNodeGroup"
+	// NodeServiceSetNodeRelayPoolProcedure is the fully-qualified name of the NodeService's
+	// SetNodeRelayPool RPC.
+	NodeServiceSetNodeRelayPoolProcedure = "/nagi.v1.NodeService/SetNodeRelayPool"
 	// NodeServiceIsolateNodeProcedure is the fully-qualified name of the NodeService's IsolateNode RPC.
 	NodeServiceIsolateNodeProcedure = "/nagi.v1.NodeService/IsolateNode"
 	// NodeServiceUnisolateNodeProcedure is the fully-qualified name of the NodeService's UnisolateNode
@@ -1525,6 +1528,8 @@ type NodeServiceClient interface {
 	SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error)
 	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
 	RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+	SetNodeRelayPool(context.Context, *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
@@ -1830,6 +1835,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeGroup")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeRelayPool: connect.NewClient[v1.SetNodeRelayPoolRequest, v1.SetNodeRelayPoolResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeRelayPoolProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeRelayPool")),
+			connect.WithClientOptions(opts...),
+		),
 		isolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
 			httpClient,
 			baseURL+NodeServiceIsolateNodeProcedure,
@@ -1918,6 +1929,7 @@ type nodeServiceClient struct {
 	renameNodeTag         *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 	setNodeGroup          *connect.Client[v1.SetNodeGroupRequest, v1.SetNodeGroupResponse]
 	renameNodeGroup       *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
+	setNodeRelayPool      *connect.Client[v1.SetNodeRelayPoolRequest, v1.SetNodeRelayPoolResponse]
 	isolateNode           *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	unisolateNode         *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	listNodeImages        *connect.Client[v1.NodeRef, v1.NodeImages]
@@ -2161,6 +2173,11 @@ func (c *nodeServiceClient) RenameNodeGroup(ctx context.Context, req *connect.Re
 	return c.renameNodeGroup.CallUnary(ctx, req)
 }
 
+// SetNodeRelayPool calls nagi.v1.NodeService.SetNodeRelayPool.
+func (c *nodeServiceClient) SetNodeRelayPool(ctx context.Context, req *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error) {
+	return c.setNodeRelayPool.CallUnary(ctx, req)
+}
+
 // IsolateNode calls nagi.v1.NodeService.IsolateNode.
 func (c *nodeServiceClient) IsolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
 	return c.isolateNode.CallUnary(ctx, req)
@@ -2274,6 +2291,8 @@ type NodeServiceHandler interface {
 	SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error)
 	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
 	RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+	SetNodeRelayPool(context.Context, *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
@@ -2575,6 +2594,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeGroup")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeRelayPoolHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeRelayPoolProcedure,
+		svc.SetNodeRelayPool,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeRelayPool")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceIsolateNodeHandler := connect.NewUnaryHandler(
 		NodeServiceIsolateNodeProcedure,
 		svc.IsolateNode,
@@ -2707,6 +2732,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceSetNodeGroupHandler.ServeHTTP(w, r)
 		case NodeServiceRenameNodeGroupProcedure:
 			nodeServiceRenameNodeGroupHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeRelayPoolProcedure:
+			nodeServiceSetNodeRelayPoolHandler.ServeHTTP(w, r)
 		case NodeServiceIsolateNodeProcedure:
 			nodeServiceIsolateNodeHandler.ServeHTTP(w, r)
 		case NodeServiceUnisolateNodeProcedure:
@@ -2914,6 +2941,10 @@ func (UnimplementedNodeServiceHandler) SetNodeGroup(context.Context, *connect.Re
 
 func (UnimplementedNodeServiceHandler) RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeGroup is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) SetNodeRelayPool(context.Context, *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeRelayPool is not implemented"))
 }
 
 func (UnimplementedNodeServiceHandler) IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {

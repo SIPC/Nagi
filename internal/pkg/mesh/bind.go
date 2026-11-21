@@ -97,7 +97,8 @@ type peerState struct {
 	// activeRelay 只保留实际发送过、且有独立显式许可的一个中转，不因候选排名刷新而删掉。
 	activeRelay      Key
 	nodeRelayEnabled *bool
-	quicVia          Key // 仅实验 API 明确指定；不影响 WireGuard 的选路或物理邻接。
+	relayPool        bool // 这个成员在中转池里（还要 nodeRelayEnabled 为 true），见 poolRelay。
+	quicVia          Key  // 仅实验 API 明确指定；不影响 WireGuard 的选路或物理邻接。
 	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
 	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
@@ -116,6 +117,11 @@ type peerState struct {
 	dec      *fecDecoder
 	// quicRx、quicTx：和对方之间收发的 QUIC 包的字节数。QUIC 不经过 WireGuard，要另外算进流量里。
 	quicRx, quicTx uint64
+}
+
+// poolRelay：这个成员可以承担性能中转：在中转池里，而且有显式的中转许可。
+func (p *peerState) poolRelay() bool {
+	return p != nil && p.relayPool && p.nodeRelayEnabled != nil && *p.nodeRelayEnabled
 }
 
 func (p *peerState) has(c byte, now time.Time) bool {
@@ -964,6 +970,7 @@ func (b *Bind) setPeers(peers []Peer) {
 			enabled := *pe.NodeRelayEnabled
 			p.nodeRelayEnabled = &enabled
 		}
+		p.relayPool = pe.RelayPool
 		p.nodeRelays = nil
 		for _, r := range pe.NodeRelays {
 			if r != b.pub && r != pe.Key {
@@ -989,8 +996,8 @@ func (b *Bind) setPeers(peers []Peer) {
 		if active == nil || active.nodeRelayEnabled == nil || !*active.nodeRelayEnabled {
 			p.activeRelay = Key{}
 		}
-		if r := b.peers[p.quicVia]; r == nil || r.nodeRelayEnabled == nil || !*r.nodeRelayEnabled {
-			p.quicVia = Key{} // 明确撤权优先于实验路径，恢复默认直连；不迁移旧协议连接。
+		if !b.peers[p.quicVia].poolRelay() {
+			p.quicVia = Key{} // 撤权或退出中转池优先于实验路径，恢复默认直连；不迁移旧协议连接。
 		}
 		p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool {
 			r := b.peers[k]
@@ -1015,8 +1022,7 @@ func (b *Bind) setPeers(peers []Peer) {
 	// 撤权/删除不能在快速重新加回后让旧事务成功，也不把本地撤权误记为网络丢包。
 	for id, pending := range b.pathProbes {
 		p := pending.peer
-		allowed := pending.via == (Key{}) || (b.relayKeys[pending.via] &&
-			(p.activeRelay == pending.via || p.quicVia == pending.via || slices.Contains(p.nodeRelays, pending.via) || slices.Contains(p.relays, pending.via)))
+		allowed := pending.via == (Key{}) || b.probeVia(p, pending.via)
 		if b.peers[p.key] != p || b.peers[pending.hop.key] != pending.hop || !allowed {
 			delete(b.pathProbes, id)
 			pending.result <- PathSample{Err: ErrProbePath}

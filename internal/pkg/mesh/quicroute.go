@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/netip"
-	"slices"
 	"time"
 
 	"github.com/apernet/quic-go"
@@ -85,7 +84,7 @@ func (q *quicNet) routedConn(k Key) *quicPacketConn {
 }
 
 // SetQUICRoute 手动改变已建立的实验逻辑连接的下一跳；via 为零恢复直连。
-// 两端必须事先显式启用 ExperimentalQUICRouting，指定 R 还要求 R 显式启用原型、独立许可为 true 且在候选内。
+// 两端必须事先显式启用 ExperimentalQUICRouting，指定 R 还要求 R 显式启用原型、有独立许可且加入了中转池。
 // 不改变 WireGuard 路径，不迁移旧协议连接，不自动选择、检查健康或回退。业务调用方当前没有接入此入口。
 func (m *Mesh) SetQUICRoute(peer, via Key) error {
 	q := m.quic
@@ -111,8 +110,8 @@ func (m *Mesh) SetQUICRoute(peer, via Key) error {
 	}
 	if via != (Key{}) {
 		r := b.peers[via]
-		if r == nil || r.nodeRelayEnabled == nil || !*r.nodeRelayEnabled || !r.directAlive(time.Now()) ||
-			!r.has(capQUICRoute, time.Now()) || (!slices.Contains(p.nodeRelays, via) && p.quicVia != via) {
+		// 性能路线只经管理员加入中转池的节点；故障兜底的候选排名不算同意。
+		if !r.poolRelay() || !r.directAlive(time.Now()) || !r.has(capQUICRoute, time.Now()) {
 			return ErrQUICRoute
 		}
 	}
@@ -145,7 +144,7 @@ func (c *quicPacketConn) writeRouted(data []byte, addr netip.AddrPort) (int, err
 	hop := p
 	if p.quicVia != (Key{}) {
 		hop = b.peers[p.quicVia]
-		if hop == nil || hop.nodeRelayEnabled == nil || !*hop.nodeRelayEnabled || !hop.has(capQUICRoute, now) {
+		if !hop.poolRelay() || !hop.has(capQUICRoute, now) {
 			b.mu.Unlock()
 			return len(data), nil
 		}
@@ -181,7 +180,7 @@ func (b *Bind) handleRoutedQUIC(from netip.AddrPort, relay Key, pkt []byte) {
 	hop := p
 	if relay != (Key{}) {
 		hop = b.peers[relay]
-		if hop == nil || hop.nodeRelayEnabled == nil || !*hop.nodeRelayEnabled || !hop.has(capQUICRoute, now) {
+		if !hop.poolRelay() || !hop.has(capQUICRoute, now) {
 			b.mu.Unlock()
 			return
 		}

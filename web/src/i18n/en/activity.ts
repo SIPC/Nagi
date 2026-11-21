@@ -128,6 +128,7 @@ export default {
     SetNodeTags: "Edit node tags",
     RenameNodeTag: "Rename or delete tag",
     SetNodeGroup: "Change node group",
+    SetNodeRelayPool: "Join or leave relay pool",
     SetProjectTags: "Edit project tags",
     RenameProjectTag: "Rename or delete project tag",
     RenameNodeGroup: "Rename or delete node group",

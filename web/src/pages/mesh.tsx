@@ -458,6 +458,39 @@ export function NodeRelay({ nodeId, online }: { nodeId: string; online: boolean 
   return <MeshOption nodeId={nodeId} online={online} field="relayOff" title={t.mesh.relayTitle} help={t.mesh.relayHelp} confirm={t.mesh.relayConfirm} />;
 }
 
+// NodeRelayPool：加入中转池（见 docs/mesh.md#中转池），默认关闭。存在面板上，节点离线也能改。
+// 还要节点自己开着「中转其他节点」才生效；节点关了时写明暂不生效，不替用户去开。
+export function NodeRelayPool({ node }: { node: Node }) {
+  const isAdmin = useRole().can("node.manage");
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const mesh = useQuery({ queryKey: ["node-mesh", node.id], queryFn: () => nodeClient.getNodeMesh({ nodeId: node.id }), enabled: node.online && node.relayPool });
+  const on = node.relayPool;
+  const toggle = async () => {
+    if (on && !(await confirmAction(t.mesh.poolConfirm, { action: t.mesh.poolLeave }))) return;
+    setBusy(true);
+    try {
+      await nodeClient.setNodeRelayPool({ nodeId: node.id, enabled: !on });
+      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+    } catch (err) {
+      await notify(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const status = !on ? t.mesh.poolOff : mesh.data?.relayOff ? <span className="text-warning-text">{t.mesh.poolNeedsRelay}</span> : t.mesh.poolOn;
+  return (
+    <SettingRow label={t.mesh.poolTitle} help={t.mesh.poolHelp} description={status}>
+      {isAdmin && (
+        <Button variant="outline" disabled={busy} onClick={toggle}>
+          {busy && <Spinner />}
+          {on ? t.mesh.poolLeave : t.mesh.poolJoin}
+        </Button>
+      )}
+    </SettingRow>
+  );
+}
+
 // NodeDirectDownload：直连下载（见 docs/agent.md#直连下载），唯一的开关。开着时写现在用 HTTPS 还是加密 HTTP、不能直连的原因；
 // 开着时多一个「HTTP 端口」，设置 HTTPS 不能用时加密 HTTP 下载用的端口（见 docs/agent.md#加密-http-下载）。
 export function NodeDirectDownload({ node }: { node: Node }) {

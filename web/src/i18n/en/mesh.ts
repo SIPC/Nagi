@@ -81,5 +81,13 @@ export default {
   relayTitle: "Relay for other nodes",
   relayHelp: "When two nodes can't connect directly, traffic goes through a node connected directly to both, which is closer than relaying through the panel. Relayed traffic counts toward this node.",
   relayConfirm: "Stop relaying for other nodes? Connections relayed through this node will go through other nodes or the panel instead.",
+  poolTitle: "Join relay pool",
+  poolHelp: "When on, two nodes that can connect directly may route through this node instead if it's faster and more stable. Relayed traffic counts toward this node, so this isn't recommended for machines billed by traffic. Relay for other nodes must also be on.",
+  poolOn: "Joined",
+  poolOff: "Not joined",
+  poolNeedsRelay: "Joined, but Relay for other nodes is off, so it has no effect",
+  poolJoin: "Join",
+  poolLeave: "Leave",
+  poolConfirm: "Leave the relay pool? Connections rerouted through this node will go back to their direct paths.",
   quicConfirm: "Turn off the QUIC fast path? TCP connections between this node and other nodes and the panel will use WireGuard, and transfers in progress will be interrupted.",
 } satisfies typeof zh;

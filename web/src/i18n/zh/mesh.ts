@@ -81,5 +81,13 @@ export default {
   relayTitle: "中转其他节点",
   relayHelp: "两个节点无法直连时，经与两端都直连的节点转发，比经面板中转更近。转发的流量计入本节点。",
   relayConfirm: "不再中转其他节点？经本节点中转的连接将改经其他节点或面板中转。",
+  poolTitle: "加入中转池",
+  poolHelp: "开启后，两个节点能直连、但经本节点转发更快更稳时，可以改经本节点转发。转发的流量计入本节点，按流量计费的机器不建议开启。需要同时开启「中转其他节点」。",
+  poolOn: "已加入",
+  poolOff: "未加入",
+  poolNeedsRelay: "已加入，但「中转其他节点」已关闭，暂不生效",
+  poolJoin: "加入",
+  poolLeave: "退出",
+  poolConfirm: "退出中转池？正在经本节点改道的连接将改回直连。",
   quicConfirm: "关闭 QUIC 快速通道？本节点与其他节点和面板之间的 TCP 连接将改经 WireGuard 传输，进行中的传输会中断。",
 };

@@ -27,6 +27,8 @@ type isolation struct {
 	mu     sync.RWMutex
 	loaded bool
 	nodes  map[string][]byte
+	// pool 是加入了中转池的节点（见 docs/mesh.md#中转池），和隔离一起从数据库加载、随备用面板同步。
+	pool map[string]bool
 	// windows 是每个发起方 10 分钟的告警窗口。
 	windows map[string]time.Time
 	// audits 是面板发现的越权写审计的窗口（见 PanelViolation），窗口结束时删掉。
@@ -57,21 +59,47 @@ func (r *Registry) isolatedNodes(ctx context.Context) map[string][]byte {
 
 func (r *Registry) reloadIsolation(ctx context.Context) {
 	m := map[string][]byte{}
-	if r.q == nil {
-		r.iso.mu.Lock()
-		r.iso.nodes, r.iso.loaded = m, true
-		r.iso.mu.Unlock()
-		return
-	}
-	if ids, keys, err := r.q.IsolatedNodes(ctx); err == nil {
-		for i, id := range ids {
-			k, _ := mesh.ParseKey(keys[i])
-			m[id] = k[:]
+	pool := map[string]bool{}
+	if r.q != nil {
+		if ids, keys, err := r.q.IsolatedNodes(ctx); err == nil {
+			for i, id := range ids {
+				k, _ := mesh.ParseKey(keys[i])
+				m[id] = k[:]
+			}
+		}
+		// 读不出来时按都不在池里：默认关闭，不能因为一次查询失败把节点加进池。
+		if p, err := r.q.RelayPoolNodes(ctx); err == nil {
+			pool = p
 		}
 	}
 	r.iso.mu.Lock()
-	r.iso.nodes, r.iso.loaded = m, true
+	r.iso.nodes, r.iso.pool, r.iso.loaded = m, pool, true
 	r.iso.mu.Unlock()
+}
+
+// relayPool 返回加入了中转池的节点。
+func (r *Registry) relayPool(ctx context.Context) map[string]bool {
+	r.isolatedNodes(ctx) // 没加载过时一起加载
+	r.iso.mu.RLock()
+	defer r.iso.mu.RUnlock()
+	return r.iso.pool
+}
+
+// InRelayPool 判断节点有没有加入中转池。
+func (r *Registry) InRelayPool(ctx context.Context, nodeID string) bool {
+	return r.relayPool(ctx)[nodeID]
+}
+
+// SetRelayPool 让节点加入或退出中转池（见 docs/mesh.md#中转池），立即把新的成员列表推给各节点：
+// 退出时各节点马上解除经它的性能路线、结束经它的观察，不等下一次上报。
+func (r *Registry) SetRelayPool(ctx context.Context, nodeID string, on bool) error {
+	if err := r.q.SetNodeRelayPool(ctx, nodeID, on); err != nil {
+		return err
+	}
+	r.reloadIsolation(ctx)
+	r.updateMesh()
+	r.pushMesh(ctx)
+	return nil
 }
 
 // ReloadIsolation 从数据库重新加载隔离状态，并更新 mesh 成员。备用面板每次同步主面板的数据以后调用
