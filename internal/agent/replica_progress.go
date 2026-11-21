@@ -174,6 +174,8 @@ type syncRun struct {
 	ctx      context.Context
 	cancel   context.CancelCauseFunc
 	progress *syncProgress
+	logID    string
+	queuedAt time.Time
 	// again：同步进行中又有人请求（新的快照、「立即同步」），这次结束后再同步一次。
 	again bool
 	// done 在这个备份节点的同步（包括 again 的那次）都结束后关闭。
@@ -182,7 +184,99 @@ type syncRun struct {
 
 func newSyncRun(parent context.Context) *syncRun {
 	ctx, cancel := context.WithCancelCause(parent)
-	return &syncRun{ctx: ctx, cancel: cancel, progress: &syncProgress{}, done: make(chan struct{})}
+	return &syncRun{ctx: ctx, cancel: cancel, progress: &syncProgress{}, done: make(chan struct{}), logID: rand.Text(), queuedAt: time.Now()}
+}
+
+// queueLog 在状态锁外记录；排队被取消也必须有结束，不能假装开始传过文件。
+func (a *agent) queueLog(projectID, container string, target *nagiv1.BackupTarget, run *syncRun, phase string, err error) {
+	if a.cfg.Logs == nil {
+		return
+	}
+	data := map[string]any{"phase": phase, "target_node": target.GetNodeId(), "target_name": target.GetName()}
+	if run != nil {
+		data["task_id"], data["elapsed_ms"] = run.logID, time.Since(run.queuedAt).Milliseconds()
+	}
+	if phase == "finished" {
+		data["result"] = "ok"
+		if err != nil {
+			data["result"], data["error"] = "failed", err.Error()
+			if run.ctx.Err() != nil {
+				data["result"], data["cancel_cause"] = "interrupted", context.Cause(run.ctx).Error()
+				if errors.Is(context.Cause(run.ctx), errSyncStopped) {
+					data["result"] = "stopped"
+				}
+			}
+		}
+	}
+	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "replica.queue", Project: projectID, Object: container, Data: data})
+}
+
+// receivedBytes 是传输层实际收到的正文，不是已落盘或已提交的快照字节。
+type replicaLogStream struct {
+	nagiv1.MeshService_ReplicaPutServer
+	receivedBytes atomic.Int64
+	files         atomic.Uint32
+}
+
+func (s *replicaLogStream) Recv() (*nagiv1.ReplicaChunk, error) {
+	c, err := s.MeshService_ReplicaPutServer.Recv()
+	if c != nil {
+		s.receivedBytes.Add(int64(len(c.GetData())))
+	}
+	return c, err
+}
+
+func (s *replicaLogStream) SendAndClose(r *nagiv1.ReplicaPutResponse) error {
+	s.files.Store(r.GetFiles())
+	return s.MeshService_ReplicaPutServer.SendAndClose(r)
+}
+
+// receiveLog 只在来源鉴权和接收名额检查通过后启动，不保存路径或文件正文。
+func (a *agent) receiveLog(stream *replicaLogStream, projectID, container string) func(error) {
+	if a.cfg.Logs == nil {
+		return func(error) {}
+	}
+	id, started := rand.Text(), time.Now()
+	record := func(phase string, err error) {
+		data := map[string]any{"task_id": id, "phase": phase, "received_bytes": stream.receivedBytes.Load()}
+		if phase == "finished" {
+			data["result"], data["duration_ms"] = "files_received", time.Since(started).Milliseconds()
+			data["files"] = stream.files.Load()
+			if err != nil {
+				data["result"], data["error"] = "failed", err.Error()
+				if stream.Context().Err() != nil {
+					data["result"] = "interrupted"
+				}
+			}
+		}
+		a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "replica.receive", Project: projectID, Object: container, Data: data})
+	}
+	record("started", nil)
+	seconds := a.cfg.LogConfig.TransferProgressSeconds
+	if seconds == 0 {
+		seconds = logstore.DefaultConfig().TransferProgressSeconds
+	}
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		t := time.NewTicker(time.Duration(seconds) * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-stream.Context().Done():
+				return
+			case <-t.C:
+				record("progress", nil)
+			}
+		}
+	}()
+	return func(err error) {
+		close(stop)
+		<-done
+		record("finished", err)
+	}
 }
 
 // claim 让容器 id 到 target 的同步开始：没有在同步时登记一个新的返回；已经在同步时让它结束后再来一次，返回 nil。

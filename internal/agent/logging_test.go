@@ -65,10 +65,10 @@ func TestBackupRequestPersistsTransferFailureWithoutViewer(t *testing.T) {
 	}
 	defer logs.Close()
 	rows, err := logs.Query(ctx, logstore.Filter{Category: logstore.Task, Project: spec.ProjectId})
-	if err != nil || len(rows) != 2 {
+	if err != nil || len(rows) != 5 {
 		t.Fatalf("transfer history: %+v %v", rows, err)
 	}
-	var taskID string
+	taskIDs := map[string]string{}
 	for i, row := range rows {
 		var data struct {
 			TaskID               string `json:"task_id"`
@@ -78,13 +78,13 @@ func TestBackupRequestPersistsTransferFailureWithoutViewer(t *testing.T) {
 		if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
 			t.Fatal(err)
 		}
-		if i == 0 {
-			taskID = data.TaskID
+		if taskIDs[row.Kind] == "" {
+			taskIDs[row.Kind] = data.TaskID
 		}
-		if taskID == "" || taskID != data.TaskID || data.Target != "target-a" || row.Object != "web" || row.Kind != "replica.transfer" || data.Phase != []string{"started", "finished"}[i] {
+		if data.TaskID == "" || taskIDs[row.Kind] != data.TaskID || data.Target != "target-a" || row.Object != "web" || data.Phase != []string{"queued", "active", "started", "finished", "finished"}[i] {
 			t.Fatalf("association: %+v %s", row, row.Data)
 		}
-		if i == 1 && (data.Result != "failed" || data.Error != st.LastError) {
+		if data.Phase == "finished" && (data.Result != "failed" || data.Error != st.LastError) {
 			t.Fatalf("failure lost: %s", row.Data)
 		}
 	}
