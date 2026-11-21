@@ -39,6 +39,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Fixes
 
+- Fixed legacy metric-history migration blocking access to the panel website on its first start; migration now runs in the background while the website remains accessible.
 - Fixed alerts being incorrectly marked recovered when metrics are missing, stale, or unreadable. Starting containers, unknown health, and unreadable certificates are no longer considered evidence of recovery.
 - Fixed notification retries potentially sending obsolete failure messages by rechecking the current alert, channel, and destination before retrying.
 - Fixed relay candidate refreshes affecting approved routes still in use, and avoided making performance-routing decisions from direct connections that failed during observation.
