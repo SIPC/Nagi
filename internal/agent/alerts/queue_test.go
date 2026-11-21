@@ -58,7 +58,7 @@ func TestPendingNotificationsFollowCurrentStateAndConfiguration(t *testing.T) {
 				want = 0
 			}
 			// Persisted event state and pending intent both survive restart.
-			e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+			e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
 			r.mu.Lock()
 			r.fail = false
 			r.mu.Unlock()
@@ -86,7 +86,7 @@ func TestLegacyNotificationQueueDoesNotReplaySavedPayloads(t *testing.T) {
 	if err := os.WriteFile(e.queueFile(), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
-	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
 	e.flushQueue(context.Background())
 	if r.count() != 0 {
 		t.Fatal("legacy full message queue sent obsolete notification")

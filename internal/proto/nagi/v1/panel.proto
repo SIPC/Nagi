@@ -106,6 +106,8 @@ message ReportResponse {
   MeshConfig mesh = 1;
   // 主备面板的信息（见 docs/standby.md）。
   PanelCluster cluster = 2;
+  // Only the current primary may supply notification suppression for this source.
+  repeated AlertState alert_handling = 3;
 }
 
 // PanelCluster：任期、主面板，以及主面板和所有备用面板。节点只执行主面板的修改，自动连接备用面板。

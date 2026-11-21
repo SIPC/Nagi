@@ -23,4 +23,10 @@ public interface ListAlertStatesResponseOrBuilder extends
    * <code>repeated .nagi.v1.AlertState alerts = 1 [json_name = "alerts"];</code>
    */
   int getAlertsCount();
+
+  /**
+   * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+   * @return The recentCopy.
+   */
+  boolean getRecentCopy();
 }

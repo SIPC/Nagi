@@ -41,6 +41,7 @@ const elevationHeader = "X-Nagi-Elevation"
 
 // elevationRequired 是要先做高权限确认的接口。
 var elevationRequired = map[string]bool{
+	nagiv1connect.AlertServiceHandleAlertProcedure: true,
 	// 测试外送会把保存的凭据发到填写的地址（见 docs/audit.md#外送）。
 	nagiv1connect.SettingsServiceTestAuditSinkProcedure:     true,
 	nagiv1connect.NodeServiceListNodeDirProcedure:           true,

@@ -39,4 +39,30 @@ public interface ReportResponseOrBuilder extends
    * @return The cluster.
    */
   ink.sipc.nagi.proto.v1.PanelCluster getCluster();
+
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.AlertState> 
+      getAlertHandlingList();
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  ink.sipc.nagi.proto.v1.AlertState getAlertHandling(int index);
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  int getAlertHandlingCount();
 }

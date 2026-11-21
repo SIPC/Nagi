@@ -54,7 +54,8 @@ public interface HandleAlertRequestOrBuilder extends
 
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>
@@ -63,7 +64,8 @@ public interface HandleAlertRequestOrBuilder extends
   java.lang.String getAction();
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>

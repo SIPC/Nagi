@@ -126,6 +126,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewAuthServiceHandler(&authService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewNodeServiceHandler(&nodeService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewNodeLogServiceHandler(&nodeLogService{a}, interceptors))
+	mux.Handle(nagiv1connect.NewAlertServiceHandler(&alertService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(&projectService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewEnrollServiceHandler(&enrollService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))

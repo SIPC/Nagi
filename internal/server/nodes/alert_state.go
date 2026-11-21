@@ -2,12 +2,12 @@ package nodes
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
@@ -20,6 +20,8 @@ import (
 // One atomic SQLite value per authenticated node avoids partial snapshot writes.
 // Terminal history is bounded; a durable snapshot floor rejects evicted deltas.
 type alertLedger struct {
+	Term        uint64               `json:"term"`
+	Revision    uint64               `json:"revision"`
 	Source      string               `json:"source"`
 	Snapshot    uint64               `json:"snapshot"`
 	Current     []*nagiv1.AlertState `json:"-"`
@@ -32,14 +34,17 @@ func alertStateKey(node string) string { return "alerts/state/" + node }
 
 func (r *Registry) loadAlertLedger(ctx context.Context, node string) (*alertLedger, error) {
 	l := &alertLedger{}
-	v, err := r.q.GetSetting(ctx, alertStateKey(node))
-	if errors.Is(err, sql.ErrNoRows) {
-		return l, nil
+	if r.AlertLogs == nil {
+		return nil, status.Error(codes.Unavailable, "告警日志库没有启动")
 	}
+	v, err := r.AlertLogs.Checkpoint(ctx, alertStateKey(node))
 	if err != nil {
 		return nil, err
 	}
-	if err = json.Unmarshal([]byte(v), l); err != nil {
+	if len(v) == 0 {
+		return l, nil
+	}
+	if err = json.Unmarshal(v, l); err != nil {
 		return nil, err
 	}
 	for _, pair := range []struct {
@@ -58,13 +63,31 @@ func (r *Registry) loadAlertLedger(ctx context.Context, node string) (*alertLedg
 	return l, nil
 }
 
-func (r *Registry) saveAlertLedger(ctx context.Context, node string, l *alertLedger) error {
+func (r *Registry) saveAlertLedger(ctx context.Context, node string, l *alertLedger, event logstore.Event) error {
+	if r.Cluster != nil {
+		l.Term = r.Cluster(ctx).GetTerm()
+	}
+	l.Revision++
 	l.CurrentJSON, l.HistoryJSON = nil, nil
 	for _, pair := range []struct {
 		in  []*nagiv1.AlertState
 		out *[]json.RawMessage
 	}{{l.Current, &l.CurrentJSON}, {l.History, &l.HistoryJSON}} {
 		for _, a := range pair.in {
+			for _, text := range []*string{&a.Alert.Title, &a.Alert.Message, &a.Conclusion} {
+				raw, _ := json.Marshal(map[string]string{"text": *text})
+				b, err := logstore.RedactJSON(raw)
+				if err != nil {
+					return err
+				}
+				var v struct {
+					Text string `json:"text"`
+				}
+				if err := json.Unmarshal(b, &v); err != nil {
+					return err
+				}
+				*text = v.Text
+			}
 			b, err := protojson.Marshal(a)
 			if err != nil {
 				return err
@@ -76,7 +99,7 @@ func (r *Registry) saveAlertLedger(ctx context.Context, node string, l *alertLed
 	if err != nil {
 		return err
 	}
-	return r.q.SetSetting(ctx, store.SetSettingParams{Key: alertStateKey(node), Value: string(b)})
+	return r.AlertLogs.SaveAlertLedger(ctx, node, b, event)
 }
 
 func validSourceAlert(a *nagiv1.Alert, source string, revision uint64, current bool) bool {
@@ -135,14 +158,14 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 	}
 	latest := map[string]uint64{}
 	for _, a := range append(append([]*nagiv1.AlertState{}, l.History...), l.Current...) {
-		latest[a.Alert.Key] = max(latest[a.Alert.Key], a.Alert.Revision)
+		latest[a.Alert.Key+"\x00"+a.Alert.Occurrence] = max(latest[a.Alert.Key+"\x00"+a.Alert.Occurrence], a.Alert.Revision)
 	}
 	now := timestamppb.Now()
 	apply := func(a *nagiv1.Alert, active bool) {
 		old := current[a.Key]
 		// Equal snapshot entries refresh receipt time, but never overwrite content.
-		if a.Revision <= latest[a.Key] {
-			if !delta && old != nil && old.Alert.Revision == a.Revision && proto.Equal(old.Alert, a) {
+		if a.Revision <= latest[a.Key+"\x00"+a.Occurrence] {
+			if !delta && old != nil && old.Alert.Occurrence == a.Occurrence && old.Alert.Revision == a.Revision {
 				old.ReceivedAt = now
 			}
 			return
@@ -150,6 +173,23 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 		v := &nagiv1.AlertState{NodeId: node, Alert: proto.CloneOf(a), ReceivedAt: now}
 		v.Alert.Title, v.Alert.Message = clipText(a.Title, 120), clipText(a.Message, 2000)
 		v.Alert.Node, v.Alert.Project = "", "" // never trust source-supplied names as object references
+		if project, container := alertContainer(a.Key); container != "" {
+			kind, _, _ := strings.Cut(a.Key, ":")
+			if kind == "errors" || kind == "4xx" || kind == "traffic" {
+				container = ""
+				if routes, err := r.q.ListRoutes(ctx, project); err == nil {
+					for _, route := range routes {
+						if route.Name == strings.TrimPrefix(a.Key, kind+":"+project+"/") {
+							container = route.Container
+							break
+						}
+					}
+				}
+			}
+			if row, err := r.q.GetContainer(ctx, store.GetContainerParams{ProjectID: project, Name: container}); err == nil && row.NodeID == node {
+				v.Alert.Project = project
+			}
+		}
 		if old != nil && old.Alert.Occurrence == a.Occurrence {
 			v.Acknowledged, v.Conclusion, v.SilenceUntil, v.MaintenanceUntil, v.HandlingRevision = old.Acknowledged, old.Conclusion, old.SilenceUntil, old.MaintenanceUntil, old.HandlingRevision
 		} else if old != nil && active {
@@ -161,7 +201,7 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 			old.Alert.Validity = "unknown"
 			l.History = append(l.History, old)
 		}
-		latest[a.Key] = a.Revision
+		latest[a.Key+"\x00"+a.Occurrence] = a.Revision
 		if active {
 			current[a.Key] = v
 		} else {
@@ -199,7 +239,7 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 	if len(l.History) > 200 {
 		l.History = l.History[len(l.History)-200:]
 	}
-	if err := r.saveAlertLedger(ctx, node, l); err != nil {
+	if err := r.saveAlertLedger(ctx, node, l, logstore.Event{Kind: "alert.snapshot", Object: node, Data: map[string]any{"source": l.Source, "revision": s.Revision, "current": len(l.Current), "history": len(l.History)}}); err != nil {
 		return err
 	}
 	r.Changes.Bump()
@@ -218,7 +258,7 @@ func (r *Registry) AlertStates(ctx context.Context, node string, history bool) (
 		if err != nil {
 			return nil, err
 		}
-		ids = nil
+		ids = []string{""}
 		for _, n := range rows {
 			ids = append(ids, n.ID)
 		}
@@ -252,7 +292,7 @@ func (r *Registry) AlertStates(ctx context.Context, node string, history bool) (
 	return out, nil
 }
 
-func (r *Registry) HandleAlert(ctx context.Context, req *nagiv1.HandleAlertRequest) (*nagiv1.AlertState, error) {
+func (r *Registry) HandleAlert(ctx context.Context, req *nagiv1.HandleAlertRequest, actor string) (*nagiv1.AlertState, error) {
 	r.alerts.mu.Lock()
 	defer r.alerts.mu.Unlock()
 	l, err := r.loadAlertLedger(ctx, req.NodeId)
@@ -269,6 +309,8 @@ func (r *Registry) HandleAlert(ctx context.Context, req *nagiv1.HandleAlertReque
 		switch req.Action {
 		case "acknowledge":
 			a.Acknowledged = true
+		case "unacknowledge":
+			a.Acknowledged = false
 		case "conclusion":
 			if len(req.Conclusion) > 2000 {
 				return nil, status.Error(codes.InvalidArgument, "处理结论过长")
@@ -287,11 +329,28 @@ func (r *Registry) HandleAlert(ctx context.Context, req *nagiv1.HandleAlertReque
 			a.SilenceUntil = nil
 		case "clear_maintenance":
 			a.MaintenanceUntil = nil
+		case "end":
+			// One-off panel security events have no future health probe. Ending
+			// those records is not recovery; continuous detections cannot be hidden.
+			if req.NodeId != "" || a.Alert.Source != "panel" || a.Alert.Status != "firing" || strings.HasPrefix(a.Alert.Key, "offline:") || strings.HasPrefix(a.Alert.Key, "audit-sink:") {
+				return nil, status.Error(codes.InvalidArgument, "不支持的处理动作")
+			}
+			a.Alert.Status, a.Alert.EndReason, a.Alert.Time = "ended", "manual", timestamppb.Now()
+			for i, v := range l.Current {
+				if v == a {
+					l.Current = append(l.Current[:i], l.Current[i+1:]...)
+					break
+				}
+			}
+			l.History = append(l.History, a)
+			if len(l.History) > 200 {
+				l.History = l.History[len(l.History)-200:]
+			}
 		default:
 			return nil, status.Error(codes.InvalidArgument, "不支持的处理动作")
 		}
 		a.HandlingRevision++
-		if err := r.saveAlertLedger(ctx, req.NodeId, l); err != nil {
+		if err := r.saveAlertLedger(ctx, req.NodeId, l, logstore.Event{Kind: "alert.handled", Object: req.NodeId, Project: a.Alert.Project, Data: map[string]any{"actor": actor, "action": req.Action, "alert_key": req.Key, "occurrence": req.Occurrence, "handling_revision": a.HandlingRevision, "conclusion": a.Conclusion, "silence_until": a.SilenceUntil, "maintenance_until": a.MaintenanceUntil}}); err != nil {
 			return nil, err
 		}
 		r.Changes.Bump()

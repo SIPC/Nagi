@@ -193,7 +193,8 @@ public  final class HandleAlertRequest extends
   private java.lang.String action_;
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>
@@ -205,7 +206,8 @@ public  final class HandleAlertRequest extends
   }
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>
@@ -218,7 +220,8 @@ public  final class HandleAlertRequest extends
   }
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>
@@ -232,7 +235,8 @@ public  final class HandleAlertRequest extends
   }
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>
@@ -243,7 +247,8 @@ public  final class HandleAlertRequest extends
   }
   /**
    * <pre>
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    * </pre>
    *
    * <code>string action = 5 [json_name = "action"];</code>
@@ -624,7 +629,8 @@ public  final class HandleAlertRequest extends
 
     /**
      * <pre>
-     * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+     * acknowledge / unacknowledge / conclusion / silence / maintenance /
+     * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
      * </pre>
      *
      * <code>string action = 5 [json_name = "action"];</code>
@@ -636,7 +642,8 @@ public  final class HandleAlertRequest extends
     }
     /**
      * <pre>
-     * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+     * acknowledge / unacknowledge / conclusion / silence / maintenance /
+     * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
      * </pre>
      *
      * <code>string action = 5 [json_name = "action"];</code>
@@ -649,7 +656,8 @@ public  final class HandleAlertRequest extends
     }
     /**
      * <pre>
-     * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+     * acknowledge / unacknowledge / conclusion / silence / maintenance /
+     * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
      * </pre>
      *
      * <code>string action = 5 [json_name = "action"];</code>
@@ -664,7 +672,8 @@ public  final class HandleAlertRequest extends
     }
     /**
      * <pre>
-     * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+     * acknowledge / unacknowledge / conclusion / silence / maintenance /
+     * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
      * </pre>
      *
      * <code>string action = 5 [json_name = "action"];</code>
@@ -677,7 +686,8 @@ public  final class HandleAlertRequest extends
     }
     /**
      * <pre>
-     * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+     * acknowledge / unacknowledge / conclusion / silence / maintenance /
+     * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
      * </pre>
      *
      * <code>string action = 5 [json_name = "action"];</code>

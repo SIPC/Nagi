@@ -219,6 +219,9 @@ func alertContainer(key string) (project, container string) {
 	if !ok {
 		return "", ""
 	}
+	if kind == "event" || kind == "restart" && strings.HasPrefix(rest, "c:") {
+		_, rest, _ = strings.Cut(rest, ":")
+	}
 	if kind == "lease" {
 		project, container, _ = strings.Cut(rest, "-")
 		return project, container
@@ -301,6 +304,13 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 		name     string
 	}
 	firing := map[string]*offline{}
+	if states, err := r.AlertStates(ctx, "", false); err == nil {
+		for _, a := range states {
+			if id, ok := strings.CutPrefix(a.Alert.Key, "offline:"); ok && a.Alert.Source == "panel" {
+				firing[id] = &offline{notified: a.Alert.Time.AsTime(), name: a.Alert.Node}
+			}
+		}
+	}
 	t := time.NewTicker(15 * time.Second)
 	defer t.Stop()
 	for {
@@ -308,10 +318,6 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-		}
-		cfg, err := r.AlertConfig(ctx)
-		if err != nil || len(cfg.GetChannels()) == 0 {
-			continue
 		}
 		list, err := r.q.ListNodes(ctx)
 		if err != nil {
@@ -329,13 +335,18 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 			if r.Online(n.ID) {
 				if st != nil {
 					delete(firing, n.ID)
-					r.sendLogged(ctx, &nagiv1.Alert{Key: "offline", Status: "resolved", Title: "节点已重新连上面板",
+					r.sendLogged(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "resolved", Title: "节点已重新连上面板",
 						Node: name, Time: timestamppb.New(now)})
 				}
 				continue
 			}
 			nodeRules := NodeAlertRules(n)
 			if !alert.Enabled(nodeRules, alert.RuleOffline) {
+				if st != nil {
+					if _, err := r.trackPanelAlert(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "ended", EndReason: "rule_disabled", Node: name}); err != nil {
+						r.log.Warn("保存告警快照失败", "err", err)
+					}
+				}
 				delete(firing, n.ID)
 				continue
 			}
@@ -350,10 +361,13 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 				continue
 			}
 			if st != nil && now.Sub(st.notified) < alert.RepeatInterval {
+				if _, err := r.trackPanelAlert(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "firing", Title: fmt.Sprintf("节点失联超过 %d 秒", int(down.Seconds())), Node: name, Time: timestamppb.New(st.notified)}); err != nil {
+					r.log.Warn("保存告警快照失败", "err", err)
+				}
 				continue
 			}
 			firing[n.ID] = &offline{notified: now, name: name}
-			r.sendLogged(ctx, &nagiv1.Alert{Key: "offline", Status: "firing",
+			r.sendLogged(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "firing",
 				Title:   fmt.Sprintf("节点失联超过 %d 秒", int(down.Seconds())),
 				Message: "最后在线：" + time.Unix(n.LastSeen, 0).Local().Format("2006-01-02 15:04:05"),
 				Node:    name, Time: timestamppb.New(now)})
@@ -361,6 +375,9 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 		// 已被移除的节点不再跟踪。
 		for id := range firing {
 			if !seen[id] {
+				if _, err := r.trackPanelAlert(ctx, &nagiv1.Alert{Key: "offline:" + id, Status: "ended", EndReason: "object_removed"}); err != nil {
+					r.log.Warn("保存告警快照失败", "err", err)
+				}
 				delete(firing, id)
 			}
 		}
@@ -368,8 +385,18 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 }
 
 func (r *Registry) sendLogged(ctx context.Context, a *nagiv1.Alert) {
+	if a.Status == "" {
+		a.Status = "firing"
+	}
+	send, err := r.trackPanelAlert(ctx, a)
+	if err != nil {
+		r.log.Warn("保存告警快照失败", "err", err)
+	}
 	r.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle(), "node", a.GetNode())
 	r.recordAlert(ctx, a.GetNode(), "", a)
+	if !send && err == nil {
+		return
+	}
 	if err := r.SendAlert(ctx, a, nil); err != nil {
 		r.log.Warn("发送告警失败", "err", err)
 	}

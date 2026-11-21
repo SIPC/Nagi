@@ -46,6 +46,9 @@ func (e *Engine) notificationAlert(q queued) *nagiv1.Alert {
 		return nil
 	}
 	if st := e.states[q.Key]; st != nil {
+		if time.Now().Before(e.suppressed[q.Occurrence]) {
+			return nil
+		}
 		if q.Status == "firing" && st.confirmed && st.occurrence == q.Occurrence && e.ruleEnabled(q.Key, judge{e.rules(), e.nodeEnabled}) {
 			return st.alert
 		}

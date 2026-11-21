@@ -78,6 +78,10 @@ func TestCleanedFieldsRegistered(t *testing.T) {
 			walk(m.Output())
 		}
 	}
+	alertMethods := nagiv1.File_nagi_v1_alert_state_proto.Services().ByName("AlertService").Methods()
+	for i := range alertMethods.Len() {
+		walk(alertMethods.Get(i).Output())
+	}
 	sort.Strings(missing)
 	for _, k := range slices.Compact(missing) {
 		t.Errorf("回复字段 %s 带地址或节点引用，没有登记在 cleanedFields（clean.go）", k)

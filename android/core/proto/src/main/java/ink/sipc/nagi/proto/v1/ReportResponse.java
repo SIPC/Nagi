@@ -15,6 +15,7 @@ public  final class ReportResponse extends
     // @@protoc_insertion_point(message_implements:nagi.v1.ReportResponse)
     ReportResponseOrBuilder {
   private ReportResponse() {
+    alertHandling_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int MESH_FIELD_NUMBER = 1;
@@ -129,6 +130,144 @@ public  final class ReportResponse extends
   private void clearCluster() {
     cluster_ = null;
     bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
+  public static final int ALERT_HANDLING_FIELD_NUMBER = 3;
+  private com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertState> alertHandling_;
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<ink.sipc.nagi.proto.v1.AlertState> getAlertHandlingList() {
+    return alertHandling_;
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertStateOrBuilder> 
+      getAlertHandlingOrBuilderList() {
+    return alertHandling_;
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  @java.lang.Override
+  public int getAlertHandlingCount() {
+    return alertHandling_.size();
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.AlertState getAlertHandling(int index) {
+    return alertHandling_.get(index);
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  public ink.sipc.nagi.proto.v1.AlertStateOrBuilder getAlertHandlingOrBuilder(
+      int index) {
+    return alertHandling_.get(index);
+  }
+  private void ensureAlertHandlingIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.AlertState> tmp = alertHandling_;
+    if (!tmp.isModifiable()) {
+      alertHandling_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  private void setAlertHandling(
+      int index, ink.sipc.nagi.proto.v1.AlertState value) {
+    java.util.Objects.requireNonNull(value);
+    ensureAlertHandlingIsMutable();
+    alertHandling_.set(index, value);
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  private void addAlertHandling(ink.sipc.nagi.proto.v1.AlertState value) {
+    java.util.Objects.requireNonNull(value);
+    ensureAlertHandlingIsMutable();
+    alertHandling_.add(value);
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  private void addAlertHandling(
+      int index, ink.sipc.nagi.proto.v1.AlertState value) {
+    java.util.Objects.requireNonNull(value);
+    ensureAlertHandlingIsMutable();
+    alertHandling_.add(index, value);
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  private void addAllAlertHandling(
+      java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertState> values) {
+    ensureAlertHandlingIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, alertHandling_);
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  private void clearAlertHandling() {
+    alertHandling_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * Only the current primary may supply notification suppression for this source.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+   */
+  private void removeAlertHandling(int index) {
+    ensureAlertHandlingIsMutable();
+    alertHandling_.remove(index);
   }
 
   public static ink.sipc.nagi.proto.v1.ReportResponse parseFrom(
@@ -346,6 +485,156 @@ public  final class ReportResponse extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<ink.sipc.nagi.proto.v1.AlertState> getAlertHandlingList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getAlertHandlingList());
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    @java.lang.Override
+    public int getAlertHandlingCount() {
+      return instance.getAlertHandlingCount();
+    }/**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.AlertState getAlertHandling(int index) {
+      return instance.getAlertHandling(index);
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder setAlertHandling(
+        int index, ink.sipc.nagi.proto.v1.AlertState value) {
+      copyOnWrite();
+      instance.setAlertHandling(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder setAlertHandling(
+        int index, ink.sipc.nagi.proto.v1.AlertState.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAlertHandling(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder addAlertHandling(ink.sipc.nagi.proto.v1.AlertState value) {
+      copyOnWrite();
+      instance.addAlertHandling(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder addAlertHandling(
+        int index, ink.sipc.nagi.proto.v1.AlertState value) {
+      copyOnWrite();
+      instance.addAlertHandling(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder addAlertHandling(
+        ink.sipc.nagi.proto.v1.AlertState.Builder builderForValue) {
+      copyOnWrite();
+      instance.addAlertHandling(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder addAlertHandling(
+        int index, ink.sipc.nagi.proto.v1.AlertState.Builder builderForValue) {
+      copyOnWrite();
+      instance.addAlertHandling(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder addAllAlertHandling(
+        java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.AlertState> values) {
+      copyOnWrite();
+      instance.addAllAlertHandling(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder clearAlertHandling() {
+      copyOnWrite();
+      instance.clearAlertHandling();
+      return this;
+    }
+    /**
+     * <pre>
+     * Only the current primary may supply notification suppression for this source.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.AlertState alert_handling = 3 [json_name = "alertHandling"];</code>
+     */
+    public Builder removeAlertHandling(int index) {
+      copyOnWrite();
+      instance.removeAlertHandling(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.ReportResponse)
   }
   @java.lang.Override
@@ -365,10 +654,12 @@ public  final class ReportResponse extends
             "bitField0_",
             "mesh_",
             "cluster_",
+            "alertHandling_",
+            ink.sipc.nagi.proto.v1.AlertState.class,
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0001\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u1009\u0000\u0002" +
-              "\u1009\u0001";
+              "\u0000\u0003\u0000\u0001\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u1009\u0000\u0002" +
+              "\u1009\u0001\u0003\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

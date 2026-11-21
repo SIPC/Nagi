@@ -314,7 +314,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), statistics, dc,
-		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
+		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert, cfg.Logs)
 	a.alerts.Report = a.reportAlert
 	a.alerts.ContainerRules = a.containerAlertRules
 	a.alerts.RouteRules = a.routeAlertRules
@@ -785,6 +785,9 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 			return err
 		}
 		switched := a.applyCluster(p, resp.GetCluster())
+		if a.role(p) != "standby" && a.alerts != nil {
+			a.alerts.ApplyHandling(resp.GetAlertHandling())
+		}
 		if key, ok := a.mesh.update(p.Fingerprint, p.Address, resp.GetMesh()); ok && !relaying {
 			relaying = true
 			go a.mesh.relayLoop(sctx, panel, key)
@@ -839,7 +842,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 		primaryAddr = pp.Address
 	}
 	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage,
-		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels()), Certs: a.certStatuses(ctx)})
+		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels()), Certs: a.certStatuses(ctx), Alerts: a.alerts.Snapshot()})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。

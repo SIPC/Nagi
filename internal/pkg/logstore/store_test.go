@@ -342,6 +342,40 @@ func TestExpireObjectPreservesOtherHistoryAndCheckpoint(t *testing.T) {
 	}
 }
 
+func TestAlertLedgersShareQuotaAndFailAtomically(t *testing.T) {
+	const budget = 2 << 20
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), budget)
+	ctx := t.Context()
+	ledger := []byte(`{"current":"` + strings.Repeat("x", 768<<10) + `"}`)
+	committed := 0
+	for i := range 5 {
+		node := fmt.Sprint(i)
+		err := s.SaveAlertLedger(ctx, node, ledger, logstore.Event{Kind: "alert.test", Object: node})
+		state, stateErr := s.State(ctx)
+		if stateErr != nil || state.DiskBytes > budget {
+			t.Fatalf("alert ledger exceeded shared disk quota: %+v %v", state, stateErr)
+		}
+		b, readErr := s.Checkpoint(ctx, "alerts/state/"+node)
+		if err != nil {
+			if readErr != nil || len(b) != 0 {
+				t.Fatalf("failed ledger left a partial checkpoint: %s %v", b, readErr)
+			}
+			if events := query(t, s, logstore.Filter{Category: logstore.Alert, Object: node}); len(events) != 0 {
+				t.Fatalf("failed ledger left a history event: %v", events)
+			}
+			if committed == 0 {
+				t.Fatalf("fresh store rejected the first bounded ledger: %v", err)
+			}
+			return
+		}
+		committed++
+		if readErr != nil || string(b) != string(ledger) {
+			t.Fatalf("committed alert ledger changed: %v", readErr)
+		}
+	}
+	t.Fatal("checkpoints did not consume shared quota")
+}
+
 func BenchmarkLocalJournal(b *testing.B) {
 	s, err := logstore.Open(context.Background(), filepath.Join(b.TempDir(), "logs.db"), 8<<20)
 	if err != nil {

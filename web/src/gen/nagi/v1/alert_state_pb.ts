@@ -2,8 +2,8 @@
 // @generated from file nagi/v1/alert_state.proto (package nagi.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Alert } from "./common_pb";
@@ -14,7 +14,68 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/alert_state.proto.
  */
 export const file_nagi_v1_alert_state: GenFile = /*@__PURE__*/
-  fileDesc("ChluYWdpL3YxL2FsZXJ0X3N0YXRlLnByb3RvEgduYWdpLnYxIoEBCglBbGVydFN5bmMSDgoGc291cmNlGAEgASgJEhAKCHJldmlzaW9uGAIgASgEEh8KB2N1cnJlbnQYAyADKAsyDi5uYWdpLnYxLkFsZXJ0Eh8KB2hpc3RvcnkYBCADKAsyDi5uYWdpLnYxLkFsZXJ0EhAKCGNvbXBsZXRlGAUgASgIIq4CCgpBbGVydFN0YXRlEg8KB25vZGVfaWQYASABKAkSHQoFYWxlcnQYAiABKAsyDi5uYWdpLnYxLkFsZXJ0EhQKDGFja25vd2xlZGdlZBgDIAEoCBISCgpjb25jbHVzaW9uGAQgASgJEjEKDXNpbGVuY2VfdW50aWwYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjUKEW1haW50ZW5hbmNlX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIZChFoYW5kbGluZ19yZXZpc2lvbhgHIAEoBBIvCgtyZWNlaXZlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIdmFsaWRpdHkYCSABKAkiQgoWTGlzdEFsZXJ0U3RhdGVzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhcKD2luY2x1ZGVfaGlzdG9yeRgCIAEoCCI+ChdMaXN0QWxlcnRTdGF0ZXNSZXNwb25zZRIjCgZhbGVydHMYASADKAsyEy5uYWdpLnYxLkFsZXJ0U3RhdGUisAEKEkhhbmRsZUFsZXJ0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEgsKA2tleRgCIAEoCRISCgpvY2N1cnJlbmNlGAMgASgJEhkKEWhhbmRsaW5nX3JldmlzaW9uGAQgASgEEg4KBmFjdGlvbhgFIAEoCRISCgpjb25jbHVzaW9uGAYgASgJEikKBXVudGlsGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCI5ChNIYW5kbGVBbGVydFJlc3BvbnNlEiIKBWFsZXJ0GAEgASgLMhMubmFnaS52MS5BbGVydFN0YXRlQk4KFmluay5zaXBjLm5hZ2kucHJvdG8udjFQAVoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChluYWdpL3YxL2FsZXJ0X3N0YXRlLnByb3RvEgduYWdpLnYxIiYKE0FsZXJ0UmVwbGljYVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSI0CgxBbGVydFJlcGxpY2ESDwoHbm9kZV9pZBgBIAEoCRITCgtsZWRnZXJfanNvbhgCIAEoDCJWChdSZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBIsCgdyZXF1ZXN0GAEgASgLMhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QSDQoFYWN0b3IYAiABKAkigQEKCUFsZXJ0U3luYxIOCgZzb3VyY2UYASABKAkSEAoIcmV2aXNpb24YAiABKAQSHwoHY3VycmVudBgDIAMoCzIOLm5hZ2kudjEuQWxlcnQSHwoHaGlzdG9yeRgEIAMoCzIOLm5hZ2kudjEuQWxlcnQSEAoIY29tcGxldGUYBSABKAgirgIKCkFsZXJ0U3RhdGUSDwoHbm9kZV9pZBgBIAEoCRIdCgVhbGVydBgCIAEoCzIOLm5hZ2kudjEuQWxlcnQSFAoMYWNrbm93bGVkZ2VkGAMgASgIEhIKCmNvbmNsdXNpb24YBCABKAkSMQoNc2lsZW5jZV91bnRpbBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoRbWFpbnRlbmFuY2VfdW50aWwYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhkKEWhhbmRsaW5nX3JldmlzaW9uGAcgASgEEi8KC3JlY2VpdmVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh2YWxpZGl0eRgJIAEoCSJCChZMaXN0QWxlcnRTdGF0ZXNSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSFwoPaW5jbHVkZV9oaXN0b3J5GAIgASgIIlMKF0xpc3RBbGVydFN0YXRlc1Jlc3BvbnNlEiMKBmFsZXJ0cxgBIAMoCzITLm5hZ2kudjEuQWxlcnRTdGF0ZRITCgtyZWNlbnRfY29weRgCIAEoCCKwAQoSSGFuZGxlQWxlcnRSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSCwoDa2V5GAIgASgJEhIKCm9jY3VycmVuY2UYAyABKAkSGQoRaGFuZGxpbmdfcmV2aXNpb24YBCABKAQSDgoGYWN0aW9uGAUgASgJEhIKCmNvbmNsdXNpb24YBiABKAkSKQoFdW50aWwYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIjkKE0hhbmRsZUFsZXJ0UmVzcG9uc2USIgoFYWxlcnQYASABKAsyEy5uYWdpLnYxLkFsZXJ0U3RhdGUyrgEKDEFsZXJ0U2VydmljZRJUCg9MaXN0QWxlcnRTdGF0ZXMSHy5uYWdpLnYxLkxpc3RBbGVydFN0YXRlc1JlcXVlc3QaIC5uYWdpLnYxLkxpc3RBbGVydFN0YXRlc1Jlc3BvbnNlEkgKC0hhbmRsZUFsZXJ0EhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QaHC5uYWdpLnYxLkhhbmRsZUFsZXJ0UmVzcG9uc2UyqQEKEVBhbmVsQWxlcnRTZXJ2aWNlEkcKEFJlYWRBbGVydFJlcGxpY2ESHC5uYWdpLnYxLkFsZXJ0UmVwbGljYVJlcXVlc3QaFS5uYWdpLnYxLkFsZXJ0UmVwbGljYRJLChBSZWxheUhhbmRsZUFsZXJ0EiAubmFnaS52MS5SZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBoVLm5hZ2kudjEuQWxlcnRSZXBsaWNhQk4KFmluay5zaXBjLm5hZ2kucHJvdG8udjFQAVoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+
+/**
+ * @generated from message nagi.v1.AlertReplicaRequest
+ */
+export type AlertReplicaRequest = Message<"nagi.v1.AlertReplicaRequest"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+};
+
+/**
+ * Describes the message nagi.v1.AlertReplicaRequest.
+ * Use `create(AlertReplicaRequestSchema)` to create a new message.
+ */
+export const AlertReplicaRequestSchema: GenMessage<AlertReplicaRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 0);
+
+/**
+ * @generated from message nagi.v1.AlertReplica
+ */
+export type AlertReplica = Message<"nagi.v1.AlertReplica"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: bytes ledger_json = 2;
+   */
+  ledgerJson: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.AlertReplica.
+ * Use `create(AlertReplicaSchema)` to create a new message.
+ */
+export const AlertReplicaSchema: GenMessage<AlertReplica> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 1);
+
+/**
+ * @generated from message nagi.v1.RelayHandleAlertRequest
+ */
+export type RelayHandleAlertRequest = Message<"nagi.v1.RelayHandleAlertRequest"> & {
+  /**
+   * @generated from field: nagi.v1.HandleAlertRequest request = 1;
+   */
+  request?: HandleAlertRequest | undefined;
+
+  /**
+   * @generated from field: string actor = 2;
+   */
+  actor: string;
+};
+
+/**
+ * Describes the message nagi.v1.RelayHandleAlertRequest.
+ * Use `create(RelayHandleAlertRequestSchema)` to create a new message.
+ */
+export const RelayHandleAlertRequestSchema: GenMessage<RelayHandleAlertRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 2);
 
 /**
  * 当前快照先于有界历史。完整也不允许把缺席解释成健康，只能标记 unknown。
@@ -53,7 +114,7 @@ export type AlertSync = Message<"nagi.v1.AlertSync"> & {
  * Use `create(AlertSyncSchema)` to create a new message.
  */
 export const AlertSyncSchema: GenMessage<AlertSync> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 0);
+  messageDesc(file_nagi_v1_alert_state, 3);
 
 /**
  * @generated from message nagi.v1.AlertState
@@ -112,7 +173,7 @@ export type AlertState = Message<"nagi.v1.AlertState"> & {
  * Use `create(AlertStateSchema)` to create a new message.
  */
 export const AlertStateSchema: GenMessage<AlertState> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 1);
+  messageDesc(file_nagi_v1_alert_state, 4);
 
 /**
  * @generated from message nagi.v1.ListAlertStatesRequest
@@ -134,7 +195,7 @@ export type ListAlertStatesRequest = Message<"nagi.v1.ListAlertStatesRequest"> &
  * Use `create(ListAlertStatesRequestSchema)` to create a new message.
  */
 export const ListAlertStatesRequestSchema: GenMessage<ListAlertStatesRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 2);
+  messageDesc(file_nagi_v1_alert_state, 5);
 
 /**
  * @generated from message nagi.v1.ListAlertStatesResponse
@@ -144,6 +205,11 @@ export type ListAlertStatesResponse = Message<"nagi.v1.ListAlertStatesResponse">
    * @generated from field: repeated nagi.v1.AlertState alerts = 1;
    */
   alerts: AlertState[];
+
+  /**
+   * @generated from field: bool recent_copy = 2;
+   */
+  recentCopy: boolean;
 };
 
 /**
@@ -151,7 +217,7 @@ export type ListAlertStatesResponse = Message<"nagi.v1.ListAlertStatesResponse">
  * Use `create(ListAlertStatesResponseSchema)` to create a new message.
  */
 export const ListAlertStatesResponseSchema: GenMessage<ListAlertStatesResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 3);
+  messageDesc(file_nagi_v1_alert_state, 6);
 
 /**
  * @generated from message nagi.v1.HandleAlertRequest
@@ -178,7 +244,8 @@ export type HandleAlertRequest = Message<"nagi.v1.HandleAlertRequest"> & {
   handlingRevision: bigint;
 
   /**
-   * acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+   * acknowledge / unacknowledge / conclusion / silence / maintenance /
+   * clear_silence / clear_maintenance / end (one-off panel event, not recovery)
    *
    * @generated from field: string action = 5;
    */
@@ -200,7 +267,7 @@ export type HandleAlertRequest = Message<"nagi.v1.HandleAlertRequest"> & {
  * Use `create(HandleAlertRequestSchema)` to create a new message.
  */
 export const HandleAlertRequestSchema: GenMessage<HandleAlertRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 4);
+  messageDesc(file_nagi_v1_alert_state, 7);
 
 /**
  * @generated from message nagi.v1.HandleAlertResponse
@@ -217,5 +284,55 @@ export type HandleAlertResponse = Message<"nagi.v1.HandleAlertResponse"> & {
  * Use `create(HandleAlertResponseSchema)` to create a new message.
  */
 export const HandleAlertResponseSchema: GenMessage<HandleAlertResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 5);
+  messageDesc(file_nagi_v1_alert_state, 8);
+
+/**
+ * Browser API. Scope and elevation are enforced on the receiving panel.
+ *
+ * @generated from service nagi.v1.AlertService
+ */
+export const AlertService: GenService<{
+  /**
+   * @generated from rpc nagi.v1.AlertService.ListAlertStates
+   */
+  listAlertStates: {
+    methodKind: "unary";
+    input: typeof ListAlertStatesRequestSchema;
+    output: typeof ListAlertStatesResponseSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.AlertService.HandleAlert
+   */
+  handleAlert: {
+    methodKind: "unary";
+    input: typeof HandleAlertRequestSchema;
+    output: typeof HandleAlertResponseSchema;
+  },
+}> = /*@__PURE__*/
+  serviceDesc(file_nagi_v1_alert_state, 0);
+
+/**
+ * Authenticated current cluster panels only; never exposed on public HTTP.
+ *
+ * @generated from service nagi.v1.PanelAlertService
+ */
+export const PanelAlertService: GenService<{
+  /**
+   * @generated from rpc nagi.v1.PanelAlertService.ReadAlertReplica
+   */
+  readAlertReplica: {
+    methodKind: "unary";
+    input: typeof AlertReplicaRequestSchema;
+    output: typeof AlertReplicaSchema;
+  },
+  /**
+   * @generated from rpc nagi.v1.PanelAlertService.RelayHandleAlert
+   */
+  relayHandleAlert: {
+    methodKind: "unary";
+    input: typeof RelayHandleAlertRequestSchema;
+    output: typeof AlertReplicaSchema;
+  },
+}> = /*@__PURE__*/
+  serviceDesc(file_nagi_v1_alert_state, 1);
 

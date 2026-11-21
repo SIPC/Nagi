@@ -153,7 +153,7 @@ func TestBackupRequestPersistsTransferFailureWithoutViewer(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	a := &agent{ctx: ctx, cfg: Config{Logs: logs, LogConfig: logstore.DefaultConfig()}, projects: projects,
 		backups: newBackupStates(filepath.Join(t.TempDir(), "backup-status.json")), log: logger,
-		alerts: alerts.New(logger, "test", t.TempDir(), "", nil, nil, nil, nil)}
+		alerts: alerts.New(logger, "test", t.TempDir(), "", nil, nil, nil, nil, logs)}
 	a.alerts.ContainerRules = func(string, string) (*nagiv1.AlertRules, bool) {
 		return &nagiv1.AlertRules{Enabled: map[string]bool{"backup": false}}, true
 	}

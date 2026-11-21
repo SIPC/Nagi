@@ -1045,5 +1045,7 @@ var en = map[string]string{
 	"近期日志副本没有启动":            "Recent log copies are not running",
 	"日志补缺请求过大":              "The log reconciliation request is too large",
 	"数字不正确":                 "Incorrect number",
+	"告警处理需要连接当前主面板":         "Alert handling requires a connection to the current primary panel",
+	"告警日志库没有启动":             "The alert log store is not running",
 	"账号 %s 的密码可能已泄露：密码正确，但登录的手机确认连续 %d 次没有通过。来源 IP：%s": "The password for %s may be leaked: the password was correct but the phone confirmation for sign-in failed %d times in a row. Source IP: %s",
 }

@@ -16,6 +16,7 @@ import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { toast } from "sonner";
 import { LogEntries } from "@/pages/log-entries";
+import { CurrentAlerts } from "@/pages/current-alerts";
 
 const pageSize = 50;
 
@@ -122,6 +123,7 @@ export function LogsPage() {
   const tab = !isAdmin || search.tab === "audit" || search.id || search.failed || search.cat ? "audit" : "logs";
   return <>
     <PageHeader title={t.logs.title} description={t.logs.description} />
+    <CurrentAlerts />
     {isAdmin && <Tabs className="mb-6" value={tab} onChange={(v) => navigate({ search: { tab: v === "audit" ? "audit" : undefined }, replace: true })} items={[{ value: "logs", label: t.logs.entries }, { value: "audit", label: t.logs.audit }]} />}
     {tab === "audit" ? <AuditList /> : <LogEntries />}
   </>;

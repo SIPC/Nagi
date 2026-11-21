@@ -129,6 +129,7 @@ type panelMesh struct {
 	mesh.Service
 	nagiv1.UnimplementedLogCopyServiceServer
 	nagiv1.UnimplementedPanelLogServiceServer
+	nagiv1.UnimplementedPanelAlertServiceServer
 	r *Registry
 }
 

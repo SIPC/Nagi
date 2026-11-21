@@ -111,6 +111,32 @@ public  final class ListAlertStatesResponse extends
     alerts_.remove(index);
   }
 
+  public static final int RECENT_COPY_FIELD_NUMBER = 2;
+  private boolean recentCopy_;
+  /**
+   * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+   * @return The recentCopy.
+   */
+  @java.lang.Override
+  public boolean getRecentCopy() {
+    return recentCopy_;
+  }
+  /**
+   * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+   * @param value The recentCopy to set.
+   */
+  private void setRecentCopy(boolean value) {
+    
+    recentCopy_ = value;
+  }
+  /**
+   * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+   */
+  private void clearRecentCopy() {
+
+    recentCopy_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.ListAlertStatesResponse parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -310,6 +336,34 @@ public  final class ListAlertStatesResponse extends
       return this;
     }
 
+    /**
+     * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+     * @return The recentCopy.
+     */
+    @java.lang.Override
+    public boolean getRecentCopy() {
+      return instance.getRecentCopy();
+    }
+    /**
+     * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+     * @param value The recentCopy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRecentCopy(boolean value) {
+      copyOnWrite();
+      instance.setRecentCopy(value);
+      return this;
+    }
+    /**
+     * <code>bool recent_copy = 2 [json_name = "recentCopy"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRecentCopy() {
+      copyOnWrite();
+      instance.clearRecentCopy();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.ListAlertStatesResponse)
   }
   @java.lang.Override
@@ -328,9 +382,11 @@ public  final class ListAlertStatesResponse extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "alerts_",
             ink.sipc.nagi.proto.v1.AlertState.class,
+            "recentCopy_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0001\u0000\u0001\u001b";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0001\u0000\u0001\u001b\u0002\u0007" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

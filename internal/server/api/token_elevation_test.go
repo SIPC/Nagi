@@ -20,6 +20,7 @@ import (
 // "" 表示令牌一律不算确认过；"write" 要勾「可修改」；"node" 要勾「节点终端」；"node+write" 两项都要。都只给管理员。
 // elevationRequired 里新加接口时，这里要跟着写明，否则测试失败。
 var tokenElevationRules = map[string]string{
+	nagiv1connect.AlertServiceHandleAlertProcedure:                 "",
 	nagiv1connect.SettingsServiceTestAuditSinkProcedure:            "",
 	nagiv1connect.SettingsServiceCreateAccessTokenProcedure:        "",
 	nagiv1connect.SettingsServiceBeginTOTPProcedure:                "",

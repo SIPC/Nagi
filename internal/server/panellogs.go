@@ -20,12 +20,37 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/standby"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
 // This separate control protocol exchanges only mesh identities and encrypted
 // WireGuard packets. Neither the snapshot nor the legacy audit protocol changes.
 const panelMeshALPN = "nagi-panel-mesh/1"
+
+func (s *Server) alertPrimary(ctx context.Context) (*grpc.ClientConn, error) {
+	if s.standby == nil || s.mesh == nil {
+		return nil, errors.New("告警处理需要连接当前主面板")
+	}
+	fp := s.standby.Info.PrimaryFingerprint
+	if current, err := s.q.GetSetting(ctx, standby.SettingPrimary); err == nil && current != "" {
+		fp = current
+	}
+	members, err := s.logPanelMembers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := members[fp]; !ok {
+		return nil, errors.New("主备日志成员已撤权或无法核验")
+	}
+	s.panelMesh.mu.Lock()
+	p, ok := s.panelMesh.peers[fp]
+	s.panelMesh.mu.Unlock()
+	if !ok {
+		return nil, errors.New("告警处理需要连接当前主面板")
+	}
+	return mesh.Client(s.mesh, p.Key)
+}
 
 type panelMeshState struct {
 	mu    sync.Mutex

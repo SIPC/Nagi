@@ -6,6 +6,21 @@ option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 option java_multiple_files = true;
 option java_package = "ink.sipc.nagi.proto.v1";
 
+// Browser API. Scope and elevation are enforced on the receiving panel.
+service AlertService {
+  rpc ListAlertStates(ListAlertStatesRequest) returns (ListAlertStatesResponse);
+  rpc HandleAlert(HandleAlertRequest) returns (HandleAlertResponse);
+}
+
+// Authenticated current cluster panels only; never exposed on public HTTP.
+service PanelAlertService {
+  rpc ReadAlertReplica(AlertReplicaRequest) returns (AlertReplica);
+  rpc RelayHandleAlert(RelayHandleAlertRequest) returns (AlertReplica);
+}
+message AlertReplicaRequest { string node_id = 1; }
+message AlertReplica { string node_id = 1; bytes ledger_json = 2; }
+message RelayHandleAlertRequest { HandleAlertRequest request = 1; string actor = 2; }
+
 // 当前快照先于有界历史。完整也不允许把缺席解释成健康，只能标记 unknown。
 message AlertSync {
   string source = 1;
@@ -29,13 +44,14 @@ message AlertState {
 }
 
 message ListAlertStatesRequest { string node_id = 1; bool include_history = 2; }
-message ListAlertStatesResponse { repeated AlertState alerts = 1; }
+message ListAlertStatesResponse { repeated AlertState alerts = 1; bool recent_copy = 2; }
 message HandleAlertRequest {
   string node_id = 1;
   string key = 2;
   string occurrence = 3;
   uint64 handling_revision = 4;
-  // acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+  // acknowledge / unacknowledge / conclusion / silence / maintenance /
+  // clear_silence / clear_maintenance / end (one-off panel event, not recovery)
   string action = 5;
   string conclusion = 6;
   google.protobuf.Timestamp until = 7;

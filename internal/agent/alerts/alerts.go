@@ -22,6 +22,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -43,6 +44,7 @@ type containerSource interface {
 // Engine 是节点的告警引擎。
 type Engine struct {
 	log         *slog.Logger
+	logs        *logstore.Store
 	node        string // 主机名；面板下发了节点名称时用面板的（见 nodeName）
 	dir         string // 保存告警配置和待补发队列
 	certDir     string // Caddy 的证书目录
@@ -59,17 +61,18 @@ type Engine struct {
 	ContainerRules func(projectID, container string) (*nagiv1.AlertRules, bool)
 	RouteRules     func(projectID, route string) (*nagiv1.AlertRules, bool)
 
-	mu       sync.Mutex
-	configs  map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
-	states   map[string]*state
-	restarts map[string][]restartSample
-	memSince time.Time
-	load     loadState
-	queue    []queued
-	source   string
-	revision uint64
-	history  []*nagiv1.Alert
-	stateErr error // fail closed: never publish an uncommitted source version
+	mu         sync.Mutex
+	configs    map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
+	states     map[string]*state
+	restarts   map[string][]restartSample
+	memSince   time.Time
+	load       loadState
+	queue      []queued
+	source     string
+	revision   uint64
+	history    []*nagiv1.Alert
+	stateErr   error                // fail closed: never publish an uncommitted source version
+	suppressed map[string]time.Time // occurrence -> bounded primary-authorized mute
 }
 
 type state struct {
@@ -88,9 +91,9 @@ type restartSample struct {
 }
 
 // New 创建告警引擎，读取本地保存的配置和待补发队列。
-func New(log *slog.Logger, node, dir, certDir string, m metricSource, dc *docker.Client, projectName func(string) string, relay Relay) *Engine {
+func New(log *slog.Logger, node, dir, certDir string, m metricSource, dc *docker.Client, projectName func(string) string, relay Relay, logs *logstore.Store) *Engine {
 	e := &Engine{
-		log: log, node: node, dir: dir, certDir: certDir, metrics: m, docker: dc,
+		log: log, logs: logs, node: node, dir: dir, certDir: certDir, metrics: m, docker: dc,
 		projectName: projectName, relay: relay,
 		configs: map[string]*nagiv1.AlertConfig{}, states: map[string]*state{}, restarts: map[string][]restartSample{},
 	}

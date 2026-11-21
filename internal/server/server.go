@@ -334,6 +334,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	s.nodes = nodes.NewRegistry(s.q, log, s.sealer, s.ca)
 	s.nodes.Audit = s.audit
+	s.nodes.AlertLogs = cfg.Logs
+	s.nodes.AlertPrimary = s.alertPrimary
 	if s.standby != nil {
 		s.standby.OnApply = func() { s.nodes.ReloadIsolation(context.Background()) }
 	}
@@ -549,6 +551,10 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	if s.standby != nil {
 		go s.standby.Run(ctx)
+		alertCtx, stopAlerts := context.WithCancel(ctx)
+		alertsDone := make(chan struct{})
+		go func() { defer close(alertsDone); s.nodes.RunAlertReplica(alertCtx) }()
+		defer func() { stopAlerts(); <-alertsDone }()
 		go s.standby.RunAudit(ctx, s.auditReplica, s.recordings)
 		go s.watchPrimary(ctx)
 	} else if err := s.printSetupLink(ctx); err != nil {

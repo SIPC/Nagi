@@ -367,6 +367,8 @@ var procedurePerms = map[string]Perm{
 	"/nagi.v1.SettingsService/GetUpdateStatus": PermSettings,
 
 	"/nagi.v1.SettingsService/GetAuditEvent": PermAudit,
+	"/nagi.v1.AlertService/ListAlertStates":  PermAudit,
+	"/nagi.v1.AlertService/HandleAlert":      PermAlerts,
 	"/nagi.v1.SettingsService/ListActivity":  PermAudit, "/nagi.v1.SettingsService/ExportAuditEvents": PermAudit,
 	"/nagi.v1.SettingsService/VerifyAudit": PermAudit, "/nagi.v1.SettingsService/GetRecording": PermAudit,
 

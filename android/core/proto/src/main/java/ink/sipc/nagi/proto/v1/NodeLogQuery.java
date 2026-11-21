@@ -173,7 +173,7 @@ public  final class NodeLogQuery extends
    * @param value The panelLocal to set.
    */
   private void setPanelLocal(boolean value) {
-
+    
     panelLocal_ = value;
   }
   /**
@@ -539,3 +539,4 @@ public  final class NodeLogQuery extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
+

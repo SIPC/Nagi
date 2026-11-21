@@ -200,6 +200,39 @@ func TestPairedPanelsReconcileLogsAcrossPromotionAndOldPrimaryReturn(t *testing.
 	if _, err := client.ListLogCopies(ctx, &nagiv1.PanelLogPosition{}); err != nil {
 		t.Fatal(err)
 	}
+	a.s.nodes.PanelAlert(ctx, &nagiv1.Alert{Key: "upgrade-alert", Title: "Upgrade fixture failure"})
+	if err := b.s.nodes.RefreshAlertReplica(ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	alerts, err := b.s.nodes.AlertStates(ctx, "", false)
+	if err != nil || len(alerts) != 1 {
+		t.Fatalf("standby alert snapshot: %v %v", alerts, err)
+	}
+	alert := alerts[0]
+	beforeHandling, err := b.s.nodes.AlertReplica(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	alertClient := nagiv1.NewPanelAlertServiceClient(cc)
+	handled, err := alertClient.RelayHandleAlert(ctx, &nagiv1.RelayHandleAlertRequest{Actor: b.s.fingerprint + ":42", Request: &nagiv1.HandleAlertRequest{Key: alert.Alert.Key, Occurrence: alert.Alert.Occurrence, Action: "acknowledge"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.s.nodes.ImportAlertReplica(ctx, handled); err != nil {
+		t.Fatal(err)
+	}
+	alerts, err = b.s.nodes.AlertStates(ctx, "", false)
+	if err != nil || len(alerts) != 1 || !alerts[0].Acknowledged {
+		t.Fatalf("standby forwarded handling: %v %v", alerts, err)
+	}
+	// An out-of-order response cannot roll handling backwards.
+	if err := b.s.nodes.ImportAlertReplica(ctx, beforeHandling); err != nil {
+		t.Fatal(err)
+	}
+	alerts, err = b.s.nodes.AlertStates(ctx, "", false)
+	if err != nil || len(alerts) != 1 || !alerts[0].Acknowledged {
+		t.Fatalf("old replica overwrote handling: %v %v", alerts, err)
+	}
 	// Live connections do not outlive revocation, even while the stale mesh key
 	// and link are still cached. Restore this fixture afterwards to test failover.
 	if err := standby.AddRemoved(ctx, a.s.q, b.s.fingerprint); err != nil {
@@ -210,6 +243,12 @@ func TestPairedPanelsReconcileLogsAcrossPromotionAndOldPrimaryReturn(t *testing.
 	}
 	if _, err := client.ReadLogCopies(ctx, &nagiv1.PanelLogRead{}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("revoked bodies accepted: %v", err)
+	}
+	if _, err := alertClient.ReadAlertReplica(ctx, &nagiv1.AlertReplicaRequest{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("revoked alert read accepted: %v", err)
+	}
+	if _, err := alertClient.RelayHandleAlert(ctx, &nagiv1.RelayHandleAlertRequest{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("revoked alert handling accepted: %v", err)
 	}
 	if err := a.s.q.SetSetting(ctx, store.SetSettingParams{Key: standby.SettingRemoved, Value: "[]"}); err != nil {
 		t.Fatal(err)
@@ -246,6 +285,13 @@ func TestPairedPanelsReconcileLogsAcrossPromotionAndOldPrimaryReturn(t *testing.
 	if promoted.s.standby != nil || promoted.s.nodes.ReadOnly {
 		t.Fatal("promotion did not preserve primary role")
 	}
+	alerts, err = promoted.s.nodes.AlertStates(ctx, "", false)
+	if err != nil || len(alerts) != 1 || !alerts[0].Acknowledged || alerts[0].HandlingRevision != 1 {
+		t.Fatalf("promotion lost handling: %v %v", alerts, err)
+	}
+	if _, err := promoted.s.nodes.HandleAlert(ctx, &nagiv1.HandleAlertRequest{Key: alert.Alert.Key, Occurrence: alert.Alert.Occurrence, HandlingRevision: 1, Action: "conclusion", Conclusion: "checked after promotion"}, "user:43"); err != nil {
+		t.Fatal(err)
+	}
 	if rows := read(promoted.s, "panel:"+a.s.fingerprint, aState.Source, "primary.before.failure"); len(rows) != 1 || rows[0].Seq != first.Seq || !rows[0].Received.Equal(first.Received) {
 		t.Fatalf("promotion replaced retained history: %+v", rows)
 	}
@@ -262,5 +308,9 @@ func TestPairedPanelsReconcileLogsAcrossPromotionAndOldPrimaryReturn(t *testing.
 	}
 	wait("new primary history on returned old primary", func() bool {
 		return len(read(returned.s, "panel:"+promoted.s.fingerprint, bState.Source, "standby.while.primary.down")) == 1
+	})
+	wait("new primary handling on returned old primary", func() bool {
+		states, err := returned.s.nodes.AlertStates(ctx, "", false)
+		return err == nil && len(states) == 1 && states[0].Conclusion == "checked after promotion" && states[0].HandlingRevision == 2
 	})
 }

@@ -78,6 +78,10 @@ type Registry struct {
 	ca     *tlsutil.CA
 	// Audit 是审计日志（见 docs/audit.md），节点和面板发出的告警记在这里。
 	Audit *audit.Log
+	// AlertLogs owns lifecycle checkpoints and human handling, never settings.
+	AlertLogs *logstore.Store
+	// AlertPrimary connects only to the current authenticated primary when standby.
+	AlertPrimary func(context.Context) (*grpc.ClientConn, error)
 	// LogCopies is local history, not part of standby configuration snapshots.
 	LogCopies *logstore.Copies
 	// AuthorizeLogPanel checks the current certificate-bound panel membership on
@@ -810,6 +814,13 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		return &nagiv1.ReportResponse{}, nil
 	}
 	resp := &nagiv1.ReportResponse{Mesh: p.r.meshConfig(p.conn)}
+	if !p.r.ReadOnly && accepts && !p.r.Isolated(ctx, p.conn.NodeID) && req.GetAlerts() != nil && p.r.AlertLogs != nil {
+		if err := p.r.syncAlerts(ctx, p.conn.NodeID, req.Alerts, false); err != nil {
+			p.r.log.Warn("保存告警快照失败", "node", p.conn.NodeID, "err", err)
+		} else if !p.r.ReadOnly && accepts {
+			resp.AlertHandling, _ = p.r.AlertStates(ctx, p.conn.NodeID, false)
+		}
+	}
 	if p.r.Cluster != nil {
 		resp.Cluster = p.r.Cluster(ctx)
 	}

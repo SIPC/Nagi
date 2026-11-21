@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type receiver struct {
@@ -46,8 +49,13 @@ func (r *receiver) count() int {
 
 func newEngine(t *testing.T, relay Relay) *Engine {
 	alert.AllowLoopbackForTest(t) // 收告警的 httptest 服务在本机
+	logs, err := logstore.Open(context.Background(), filepath.Join(t.TempDir(), "logs.db"), 16<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { logs.Close() })
 	return New(slog.New(slog.NewTextHandler(io.Discard, nil)), "node1", t.TempDir(), t.TempDir(), nil, nil,
-		func(id string) string { return "name-" + id }, relay)
+		func(id string) string { return "name-" + id }, relay, logs)
 }
 
 func TestFireResolveAndDedupe(t *testing.T) {
@@ -81,6 +89,81 @@ func TestFireResolveAndDedupe(t *testing.T) {
 	e2.loadConfigs()
 	if len(e2.channels()) != 1 {
 		t.Fatalf("重新读取配置后渠道数 %d", len(e2.channels()))
+	}
+}
+
+func TestHandlingSurvivesRestartWithoutSuppressingRecoveryOrNewOccurrence(t *testing.T) {
+	e := newEngine(t, nil)
+	ctx := t.Context()
+	e.Fire(ctx, "backup:p/web", "backup failed", "", "p")
+	snapshot := e.Snapshot()
+	if snapshot == nil || len(snapshot.Current) != 1 {
+		t.Fatal("channel-free detection missing")
+	}
+	e.ApplyHandling([]*nagiv1.AlertState{{Alert: snapshot.Current[0], SilenceUntil: timestamppb.New(time.Now().Add(time.Hour))}})
+	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
+	rcv := &receiver{}
+	srv := httptest.NewServer(rcv)
+	defer srv.Close()
+	e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+	e.Fire(ctx, "backup:p/web", "still failed", "", "p")
+	if rcv.count() != 0 {
+		t.Fatal("restart lost silence")
+	}
+	e.Resolve(ctx, "backup:p/web")
+	terminal := e.Snapshot()
+	if len(terminal.History) != 1 || terminal.History[0].Revision == 0 || rcv.count() != 1 {
+		t.Fatalf("missing terminal version or recovery: %v", terminal)
+	}
+	e.Fire(ctx, "backup:p/web", "new failure", "", "p")
+	if rcv.count() != 2 {
+		t.Fatal("old silence leaked to new occurrence")
+	}
+	if _, err := os.Stat(e.stateFile()); !os.IsNotExist(err) {
+		t.Fatalf("new state leaked outside logs.db: %v", err)
+	}
+	if err := e.logs.Close(); err != nil {
+		t.Fatal(err)
+	}
+	e.Fire(ctx, "backup:p/web", "failed", "", "p")
+	if e.Snapshot() != nil {
+		t.Fatal("failed store published uncommitted state")
+	}
+}
+
+func TestLegacyCheckpointImportsOnceWithoutDeletingOriginal(t *testing.T) {
+	e := newEngine(t, nil)
+	ctx := t.Context()
+	e.Fire(ctx, "backup:p/web", "backup failed", "", "p")
+	before := e.Snapshot()
+	legacy, err := e.logs.Checkpoint(ctx, "alerts/state/agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	file := filepath.Join(dir, "alerts-state.json")
+	if err := os.WriteFile(file, legacy, 0600); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 16<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	restart := func() *Engine { return New(e.log, e.node, dir, e.certDir, nil, nil, e.projectName, nil, logs) }
+	migrated := restart()
+	after := migrated.Snapshot()
+	if after == nil || after.Source != before.Source || len(after.Current) != 1 || after.Current[0].Occurrence != before.Current[0].Occurrence {
+		t.Fatalf("legacy state not preserved: %v", after)
+	}
+	migrated.Resolve(ctx, "backup:p/web")
+	after = restart().Snapshot()
+	if after == nil || len(after.Current) != 0 || len(after.History) != 1 || after.History[0].Status != "resolved" {
+		t.Fatalf("restart reimported obsolete legacy state: %v", after)
+	}
+	retained, err := os.ReadFile(file)
+	if err != nil || string(retained) != string(legacy) {
+		t.Fatalf("legacy file was modified or removed: %v", err)
 	}
 }
 
@@ -277,7 +360,7 @@ func TestRecoveryRequiresPositiveEvidence(t *testing.T) {
 			if rcv.count() != 4 {
 				t.Fatalf("%s sent a false recovery: %v", failure, rcv.got)
 			}
-			e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+			e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
 			e.metrics, e.docker = o, o
 			e.evaluate(context.Background())
 			if rcv.count() != 4 {
@@ -313,7 +396,7 @@ func TestOccurrenceSurvivesRestartAndRemovalDoesNotResolve(t *testing.T) {
 	before := e.states["event:cert_failed:example.com"].occurrence
 
 	restart := func() *Engine {
-		return New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+		return New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
 	}
 	e = restart()
 	e.Fire(ctx, "cert_failed:example.com", "certificate still failed", "", "")
@@ -335,7 +418,7 @@ func TestOccurrenceSurvivesRestartAndRemovalDoesNotResolve(t *testing.T) {
 	if rcv.count() != 3 || e.states["event:cert_failed:example.com"].occurrence == before {
 		t.Fatal("a new failure must have a new occurrence")
 	}
-	if data, err := os.ReadFile(e.stateFile()); err != nil || !json.Valid(data) {
+	if data, err := e.logs.Checkpoint(ctx, "alerts/state/agent"); err != nil || !json.Valid(data) {
 		t.Fatalf("state checkpoint invalid: %s %v", data, err)
 	}
 }
@@ -376,7 +459,7 @@ func TestNoChannelDoesNotCheckpointDelivery(t *testing.T) {
 	e := newEngine(t, nil)
 	ctx := context.Background()
 	e.Fire(ctx, "backup:p/web", "backup failed", "", "")
-	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
 	rcv := &receiver{}
 	srv := httptest.NewServer(rcv)
 	defer srv.Close()
