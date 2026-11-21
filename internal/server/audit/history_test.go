@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -12,6 +13,96 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
+
+func TestArchiveImportIsReadOnlyResumableAndRenameStable(t *testing.T) {
+	ctx := t.Context()
+	l := openTestLog(t)
+	for i := range 137 {
+		l.Record(ctx, Event{Category: Operation, Action: "Deploy", ActorName: "old-role", Params: `{"password":"Sensitive123","target":"db"}`})
+		if i == 68 {
+			l.Record(ctx, Event{Category: Security, Action: "LoginRejected"})
+		}
+	}
+	// No journal_source metadata, as on an installation predating the module.
+	path := l.path
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destPath := filepath.Join(t.TempDir(), "logs.db")
+	dest, err := logstore.Open(ctx, destPath, 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ImportArchive(ctx, path, dest); err != nil {
+		t.Fatal(err)
+	}
+	if err := dest.Close(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("original database modified: %v", err)
+	}
+	renamed := path + ".archive"
+	if err := os.Rename(path, renamed); err != nil {
+		t.Fatal(err)
+	}
+	dest, err = logstore.Open(ctx, destPath, 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dest.Close()
+	if err := ImportArchive(ctx, renamed, dest); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := dest.Query(ctx, logstore.Filter{Category: logstore.Audit, Limit: 1000})
+	if err != nil || len(rows) != 137 {
+		t.Fatalf("renaming/restarting duplicated history: %d %v", len(rows), err)
+	}
+	for _, row := range rows {
+		if strings.Contains(string(row.Data.(json.RawMessage)), "Sensitive123") {
+			t.Fatal("archive import bypassed redaction")
+		}
+	}
+	security, err := dest.Query(ctx, logstore.Filter{Category: logstore.Security})
+	if err != nil || len(security) != 1 {
+		t.Fatalf("lost security history: %v %v", security, err)
+	}
+	if err := ImportArchive(ctx, filepath.Join(t.TempDir(), "missing.db"), dest); err == nil {
+		t.Fatal("missing source treated as empty")
+	}
+}
+
+func TestArchiveImportReadsWALAndReusesExistingSourceIdentity(t *testing.T) {
+	ctx := t.Context()
+	l := openTestLog(t)
+	dest, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dest.Close()
+	l.Record(ctx, Event{Category: Operation, Action: "Deploy"})
+	if err := l.MigrateHistory(ctx, dest, 1); err != nil {
+		t.Fatal(err)
+	}
+	// Leave the writer open so the second event is still in WAL. An immutable
+	// main-file reader would silently miss this event after an unclean shutdown.
+	l.Record(ctx, Event{Category: Operation, Action: "Stop"})
+	if err := ImportArchive(ctx, l.path, dest); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := dest.Query(ctx, logstore.Filter{Category: logstore.Audit})
+	if err != nil || len(rows) != 2 || rows[1].Kind != "panel.Stop" {
+		t.Fatalf("WAL lost/source identity changed: %+v %v", rows, err)
+	}
+	if result, err := l.Verify(ctx); err != nil || !result.OK() || result.Records != 2 {
+		t.Fatalf("original chain: %+v %v", result, err)
+	}
+}
 
 func TestJournalRedactsLiveAndImportedAuditWithoutChangingOldChain(t *testing.T) {
 	ctx := t.Context()

@@ -504,6 +504,23 @@ func (s *Server) Run(ctx context.Context) error {
 			if err := s.audit.MigrateHistory(historyCtx, s.cfg.Logs, s.auditHistoryHead); err != nil && historyCtx.Err() == nil {
 				s.log.Error("面板旧审计迁移未完成，保留原库和已提交位置", "err", err)
 			}
+			// Only closed former-role archives, never the actively replicated
+			// primary chain. One broken file must not hide the other archives.
+			for _, pattern := range []string{"audit-term*.db", "audit-standby-*.imported.db"} {
+				paths, err := filepath.Glob(filepath.Join(s.cfg.DataDir, pattern))
+				if err != nil {
+					s.log.Error("查找旧角色审计归档失败", "err", err)
+					continue
+				}
+				for _, path := range paths {
+					if historyCtx.Err() != nil {
+						return
+					}
+					if err := audit.ImportArchive(historyCtx, path, s.cfg.Logs); err != nil && historyCtx.Err() == nil {
+						s.log.Error("旧角色审计归档迁移未完成，保留原库和已提交位置", "path", path, "err", err)
+					}
+				}
+			}
 		}()
 		defer func() { stopHistory(); <-historyDone }()
 	}

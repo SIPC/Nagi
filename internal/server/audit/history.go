@@ -3,8 +3,13 @@ package audit
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
+	"path/filepath"
 
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
@@ -51,6 +56,53 @@ func (l *Log) MigrateHistory(ctx context.Context, dest *logstore.Store, through 
 	}); err != nil {
 		return err
 	}
+	if err := l.migrateHistory(ctx, dest, through, origin); err != nil {
+		return err
+	}
+	l.historyPending.Store(false)
+	return nil
+}
+
+// ImportArchive imports a closed former-role chain without migrations, metadata
+// writes or re-signing. mode=ro (not immutable) includes a leftover WAL after a
+// crash; an unreadable WAL is an error, never permission to skip its history.
+// Archived files remain protected evidence even after this normalized copy.
+func ImportArchive(ctx context.Context, path string, dest *logstore.Store) error {
+	if dest == nil {
+		return nil
+	}
+	q := url.Values{"mode": {"ro"}, "_pragma": {"query_only(1)", "busy_timeout(500)"}}
+	d, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?"+q.Encode())
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	d.SetMaxOpenConns(1)
+	l := &Log{db: d}
+	through, err := l.HistoryHead(ctx)
+	if err != nil || through == 0 {
+		return err
+	}
+	var origin string
+	err = d.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='journal_source'`).Scan(&origin)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && origin == "" {
+		// The first surviving chain hash/tombstone identifies pre-journal files
+		// across renames without adding anything to their original metadata.
+		var hash string
+		if err := d.QueryRowContext(ctx, `SELECT hash FROM (SELECT id,hash FROM events UNION ALL SELECT id,hash FROM tombstones) ORDER BY id LIMIT 1`).Scan(&hash); err != nil {
+			return err
+		}
+		if hash == "" {
+			return fmt.Errorf("旧角色审计缺少来源和链摘要，保留原库")
+		}
+		origin = fmt.Sprintf("archive-%x", sha256.Sum256([]byte(hash)))
+	} else if err != nil {
+		return err
+	}
+	return l.migrateHistory(ctx, dest, through, origin)
+}
+
+func (l *Log) migrateHistory(ctx context.Context, dest *logstore.Store, through int64, origin string) error {
 	key := "legacy.panel.audit." + origin
 	b, err := dest.Checkpoint(ctx, key)
 	if err != nil {
@@ -112,6 +164,5 @@ func (l *Log) MigrateHistory(ctx context.Context, dest *logstore.Store, through 
 			after = e.ID
 		}
 	}
-	l.historyPending.Store(false)
 	return nil
 }
