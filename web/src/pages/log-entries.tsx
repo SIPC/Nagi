@@ -6,7 +6,7 @@ import { ListFilter, Play, RefreshCw, Search, X } from "lucide-react";
 import { Badge, Button, CodeBlock, Collapse, Dialog, DialogActions, EmptyRow, Field, FormBody, FormRow, HelpTip, Input, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Select, Spinner, Status, Table, Td, Th } from "@/components/ui";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { RecordingDialog } from "@/components/recording";
-import { logClient, nodeClient, projectClient, toDate } from "@/lib/api";
+import { errorMessage, logClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import type { LogEntry, LogPage, LogQuery, NodeLogQuery } from "@/gen/nagi/v1/logs_pb";
 import { t } from "@/i18n";
@@ -84,6 +84,7 @@ export function LogEntries() {
     { key: "to" as const, label: search.to && `${t.logs.to}: ${search.to.replace("T", " ")}` },
   ].filter((chip) => chip.label);
   return <div className="flex min-w-0 flex-col gap-4">
+    <MetricsMigration request={request} online={nodes.data?.nodes.find((node) => node.id === request.nodeId)?.online === true} />
     <form className="flex items-center gap-2" onSubmit={(event) => {
       event.preventDefault(); apply();
     }}>
@@ -176,6 +177,33 @@ export function LogEntries() {
       </>}</SheetBody>
     </SheetContent></Sheet>
   </div>;
+}
+
+function MetricsMigration({ request, online }: { request: Request; online: boolean }) {
+  // Only poll the live source, independently of log filters and pagination.
+  const enabled = !request.recentCopy && (request.panelLocal || online);
+  const status = useQuery({
+    queryKey: ["log-migrations", request.nodeId, request.panelLocal],
+    queryFn: ({ signal }) => logClient.queryNodeLogs({ nodeId: request.nodeId, panelLocal: request.panelLocal, query: { limit: 1, migrationsOnly: true } }, { signal }),
+    enabled, refetchInterval: 2000, retry: false, refetchOnWindowFocus: false, gcTime: 0,
+  });
+  if (request.recentCopy) return <Notice>{t.logs.migration.copyHelp}</Notice>;
+  if (!enabled) return null;
+  if (status.isError) return <Notice tone="warning" title={t.logs.migration.title}>{t.logs.migration.unavailable}<span className="block wrap-anywhere">{errorMessage(status.error)}</span></Notice>;
+  const migration = status.data?.migrations?.find((item) => item.id === "metrics");
+  if (!migration) return null;
+  const { phase, completed, total, error } = migration;
+  if (phase !== "pending" && phase !== "copying" && phase !== "cleanup" && phase !== "complete" && phase !== "failed") return null;
+  const failed = phase === "failed";
+  const complete = phase === "complete";
+  const running = !failed && !complete;
+  return <Notice tone={failed ? "danger" : complete ? "success" : "info"} title={<span className="inline-flex items-center gap-1">{t.logs.migration.title}<HelpTip>{t.logs.migration.scope}</HelpTip></span>}>
+    <span className="inline-flex max-w-full items-center gap-2">{running && <Spinner className="shrink-0" />}{t.logs.migration.phases[phase]}</span>
+    {phase === "copying" && <span className="block tabular-nums wrap-anywhere">{total > 0n ? t.logs.migration.progress(String(completed), String(total), String(completed * 100n / total)) : t.logs.migration.copied(String(completed))}</span>}
+    {running && <span className="block">{t.logs.migration.background}</span>}
+    {failed && <span className="block">{t.logs.migration.failedHelp}</span>}
+    {failed && <span className="block whitespace-pre-wrap wrap-anywhere">{error || t.logs.migration.unknownError}</span>}
+  </Notice>;
 }
 
 // Node-wide evidence intentionally ignores the user's text/project/category filters.
