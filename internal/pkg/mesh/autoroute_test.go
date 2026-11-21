@@ -5,7 +5,9 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -105,9 +107,32 @@ func TestAutoRouteSwitchAndFallBack(t *testing.T) {
 	roundTrip(fresh, "fresh")
 	_ = fresh.Close()
 
-	// R 不再转发给 B（例如 R 和 B 之间断了）：健康检查连续失败，回到直连，之后不再选 R。
+	// 双发：直连 A → B 断了（R 还通），同一条连接照样马上收到回显，经 R 的那份送到了。
+	cutDirect := atomic.Bool{}
+	dropFor(t, func(from uint16, to netip.AddrPort) bool {
+		return cutDirect.Load() && from == a.port && to.Port() == b.port
+	})
+	cutDirect.Store(true)
+	quick := func(what string) {
+		t.Helper()
+		start := time.Now()
+		roundTrip(wg, what)
+		// 健康检查每次探测最多等 800 ms、连续 3 次才回退；只发一条路时要等它回退再等 TCP 重传，远超这个时间。
+		if d := time.Since(start); d > 500*time.Millisecond {
+			t.Fatalf("%s took %v", what, d)
+		}
+	}
+	quick("direct-cut")
+	cutDirect.Store(false)
+
+	// R 不再转发给 B（例如 R 和 B 之间断了）：双发的直连那份马上送到，不等回退；
+	// 健康检查连续失败后回到直连，之后不再选 R。
 	r.m.SetNodeRelay(false)
 	start := time.Now()
+	quick("relay-cut")
+	if p := pathTo(a.m, bk); p != "node-relay" {
+		t.Fatalf("fell back before the relay-cut echo was checked: %s", p)
+	}
 	waitPath(t, a.m, bk, "direct")
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("fallback took %v", d)

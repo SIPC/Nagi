@@ -530,12 +530,13 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 	}
 	if p.directAlive(now) {
 		p.activeRelay = Key{}
-		// 自动切路选了性能中转：WireGuard 的包经它走。对端公钥不变，隧道里的连接不断。
+		// 自动切路选了性能中转：WireGuard 的包经它走，同时照常从直连再发一份（双发）。对端公钥不变，隧道里的连接不断。
+		// 接收方的 WireGuard 防重放窗口丢掉后到的那份，哪条路先到用哪条；任一条路断了另一份已经在路上，
+		// 不用等健康检查确认（见 docs/mesh.md#自动切路）。
+		var relayAddr netip.AddrPort
+		var relayConn *net.UDPConn
 		if rp := b.perfHop(p, now); rp != nil {
-			addr, c := rp.direct, b.sock(rp.directConn)
-			b.mu.Unlock()
-			b.write(c, encodeRelay(typeRelaySend, dst, pkt), addr)
-			return
+			relayAddr, relayConn = rp.direct, b.sock(rp.directConn)
 		}
 		addr, c := p.direct, b.sock(p.directConn)
 		var enc *fecEncoder
@@ -543,6 +544,9 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 			enc = p.enc
 		}
 		b.mu.Unlock()
+		if relayConn != nil {
+			b.write(relayConn, encodeRelay(typeRelaySend, dst, pkt), relayAddr)
+		}
 		if enc == nil {
 			b.write(c, pkt, addr)
 			return
