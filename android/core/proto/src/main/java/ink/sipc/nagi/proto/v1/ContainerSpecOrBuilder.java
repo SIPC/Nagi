@@ -487,4 +487,23 @@ java.lang.String defaultValue);
    * <code>repeated .nagi.v1.BackupTarget backups = 27 [json_name = "backups"];</code>
    */
   int getBackupsCount();
+
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   * @return Whether the effectiveAlertRules field is set.
+   */
+  boolean hasEffectiveAlertRules();
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   * @return The effectiveAlertRules.
+   */
+  ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules();
 }

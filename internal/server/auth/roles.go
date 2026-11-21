@@ -134,6 +134,9 @@ var tokenAccount = map[string]tokenNeed{
 	"/nagi.v1.SettingsService/GetUpdateStatus": panelRead, "/nagi.v1.SettingsService/UpdatePanel": panelWrite,
 	"/nagi.v1.SettingsService/GetStandbys": panelRead,
 	"/nagi.v1.SettingsService/ListUsers":   panelRead,
+	// 告警规则：读取不用额外选项（只返回能管的部分），修改要「可修改」。
+	"/nagi.v1.AlertService/GetAlertRules": {}, "/nagi.v1.AlertService/UpdateAlertPolicy": {write: true},
+	"/nagi.v1.AlertService/SetAlertOverride": {write: true},
 }
 
 // tokenScopeAdmin：项目分组和节点标签决定成员的访问范围，属于面板管理，令牌要勾「管理面板」和「可修改」

@@ -10,6 +10,13 @@ option java_package = "ink.sipc.nagi.proto.v1";
 service AlertService {
   rpc ListAlertStates(ListAlertStatesRequest) returns (ListAlertStatesResponse);
   rpc HandleAlert(HandleAlertRequest) returns (HandleAlertResponse);
+  // 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+  rpc GetAlertRules(GetAlertRulesRequest) returns (GetAlertRulesResponse);
+  // 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+  rpc UpdateAlertPolicy(UpdateAlertPolicyRequest) returns (AlertPolicy);
+  // 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+  // 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+  rpc SetAlertOverride(SetAlertOverrideRequest) returns (AlertOverride);
 }
 
 // Authenticated current cluster panels only; never exposed on public HTTP.
@@ -57,3 +64,21 @@ message HandleAlertRequest {
   google.protobuf.Timestamp until = 7;
 }
 message HandleAlertResponse { AlertState alert = 1; }
+
+message GetAlertRulesRequest {}
+message GetAlertRulesResponse {
+  // 内置默认值（每条规则每个字段都有值）。
+  AlertPolicy builtin = 1;
+  AlertPolicy policy = 2;
+  repeated AlertOverride overrides = 3;
+  bool can_edit_policy = 4;
+}
+message UpdateAlertPolicyRequest { AlertPolicy policy = 1; int64 base_revision = 2; }
+message SetAlertOverrideRequest {
+  string scope = 1;
+  string node_id = 2;
+  string project_id = 3;
+  string container = 4;
+  map<string, AlertRule> rules = 5;
+  int64 base_revision = 6;
+}

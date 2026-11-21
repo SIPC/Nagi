@@ -101,7 +101,7 @@ func TestReportedAlertsPersistHandlingAndRecoveryOutsideBusinessDB(t *testing.T)
 		t.Fatal(err)
 	}
 	var count int
-	if err := business.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND (name LIKE '%alert%' OR name GLOB 'log_*' OR name GLOB 'logs*' OR name LIKE '%audit%')`).Scan(&count); err != nil || count != 0 {
+	if err := business.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT IN ('alert_node_overrides', 'alert_project_overrides', 'alert_container_overrides') AND (name LIKE '%alert%' OR name GLOB 'log_*' OR name GLOB 'logs*' OR name LIKE '%audit%')`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("log tables in business DB: %d %v", count, err)
 	}
 }

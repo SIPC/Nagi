@@ -762,6 +762,73 @@ public  final class LinkEntry extends
     bitField0_ = (bitField0_ & ~0x00000001);
   }
 
+  public static final int EFFECTIVE_ALERT_RULES_FIELD_NUMBER = 14;
+  private ink.sipc.nagi.proto.v1.EffectiveAlertRules effectiveAlertRules_;
+  /**
+   * <pre>
+   * 同上，新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   */
+  @java.lang.Override
+  public boolean hasEffectiveAlertRules() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * 同上，新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules() {
+    return effectiveAlertRules_ == null ? ink.sipc.nagi.proto.v1.EffectiveAlertRules.getDefaultInstance() : effectiveAlertRules_;
+  }
+  /**
+   * <pre>
+   * 同上，新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   */
+  private void setEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+    java.util.Objects.requireNonNull(value);
+    effectiveAlertRules_ = value;
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * 同上，新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+    java.util.Objects.requireNonNull(value);
+    if (effectiveAlertRules_ != null &&
+        effectiveAlertRules_ != ink.sipc.nagi.proto.v1.EffectiveAlertRules.getDefaultInstance()) {
+      effectiveAlertRules_ =
+        ink.sipc.nagi.proto.v1.EffectiveAlertRules.newBuilder(effectiveAlertRules_).mergeFrom(value).buildPartial();
+    } else {
+      effectiveAlertRules_ = value;
+    }
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * 同上，新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   */
+  private void clearEffectiveAlertRules() {
+    effectiveAlertRules_ = null;
+    bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
   public static ink.sipc.nagi.proto.v1.LinkEntry parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1627,6 +1694,77 @@ public  final class LinkEntry extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 同上，新版本节点用它。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+     */
+    @java.lang.Override
+    public boolean hasEffectiveAlertRules() {
+      return instance.hasEffectiveAlertRules();
+    }
+    /**
+     * <pre>
+     * 同上，新版本节点用它。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules() {
+      return instance.getEffectiveAlertRules();
+    }
+    /**
+     * <pre>
+     * 同上，新版本节点用它。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder setEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+      copyOnWrite();
+      instance.setEffectiveAlertRules(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 同上，新版本节点用它。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder setEffectiveAlertRules(
+        ink.sipc.nagi.proto.v1.EffectiveAlertRules.Builder builderForValue) {
+      copyOnWrite();
+      instance.setEffectiveAlertRules(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 同上，新版本节点用它。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder mergeEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+      copyOnWrite();
+      instance.mergeEffectiveAlertRules(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 同上，新版本节点用它。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder clearEffectiveAlertRules() {  copyOnWrite();
+      instance.clearEffectiveAlertRules();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LinkEntry)
   }
   @java.lang.Override
@@ -1658,11 +1796,12 @@ public  final class LinkEntry extends
             ink.sipc.nagi.proto.v1.LinkNode.class,
             "alertRules_",
             "proxyProtocol_",
+            "effectiveAlertRules_",
           };
           java.lang.String info =
-              "\u0000\r\u0000\u0001\u0001\r\r\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u000b\u0007\u021a\b\u0007\t\u0208\n\u000b\u000b\u001b" +
-              "\f\u1009\u0000\r\u0007";
+              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u000b\u0007\u021a\b\u0007\t\u0208\n\u000b" +
+              "\u000b\u001b\f\u1009\u0000\r\u0007\u000e\u1009\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

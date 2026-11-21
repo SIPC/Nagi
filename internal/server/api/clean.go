@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"google.golang.org/protobuf/proto"
 	"net"
 	"regexp"
 	"slices"
@@ -13,6 +12,8 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -34,8 +35,9 @@ import (
 
 // cleanedFields 登记回复里带地址、节点引用、路径的字段和处理方式。键是 消息.字段。
 var cleanedFields = map[string]string{
-	"nagi.v1.AlertState.node_id": "AlertService 按项目过滤，列表和处理响应均清空不可见节点",
-	"nagi.v1.Alert.node":         "AlertService 不信任节点提交的名称，非管理员清空",
+	"nagi.v1.AlertOverride.node_id": "GetAlertRules 只返回 node.manage 且节点在范围内的节点覆盖（alert_rules.go）",
+	"nagi.v1.AlertState.node_id":    "AlertService 按项目过滤，列表和处理响应均清空不可见节点",
+	"nagi.v1.Alert.node":            "AlertService 不信任节点提交的名称，非管理员清空",
 	// ---- 项目 ----
 	"nagi.v1.Container.node_id":               "看不到的节点清空（其他节点）",
 	"nagi.v1.Container.dir":                   "要查看配置，节点看不到时清空",

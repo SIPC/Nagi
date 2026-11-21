@@ -6,7 +6,7 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { Alert } from "./common_pb";
+import type { Alert, AlertOverride, AlertOverrideSchema, AlertPolicy, AlertPolicySchema, AlertRule } from "./common_pb";
 import { file_nagi_v1_common } from "./common_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/alert_state.proto.
  */
 export const file_nagi_v1_alert_state: GenFile = /*@__PURE__*/
-  fileDesc("ChluYWdpL3YxL2FsZXJ0X3N0YXRlLnByb3RvEgduYWdpLnYxIiYKE0FsZXJ0UmVwbGljYVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSI0CgxBbGVydFJlcGxpY2ESDwoHbm9kZV9pZBgBIAEoCRITCgtsZWRnZXJfanNvbhgCIAEoDCJWChdSZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBIsCgdyZXF1ZXN0GAEgASgLMhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QSDQoFYWN0b3IYAiABKAkigQEKCUFsZXJ0U3luYxIOCgZzb3VyY2UYASABKAkSEAoIcmV2aXNpb24YAiABKAQSHwoHY3VycmVudBgDIAMoCzIOLm5hZ2kudjEuQWxlcnQSHwoHaGlzdG9yeRgEIAMoCzIOLm5hZ2kudjEuQWxlcnQSEAoIY29tcGxldGUYBSABKAgirgIKCkFsZXJ0U3RhdGUSDwoHbm9kZV9pZBgBIAEoCRIdCgVhbGVydBgCIAEoCzIOLm5hZ2kudjEuQWxlcnQSFAoMYWNrbm93bGVkZ2VkGAMgASgIEhIKCmNvbmNsdXNpb24YBCABKAkSMQoNc2lsZW5jZV91bnRpbBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoRbWFpbnRlbmFuY2VfdW50aWwYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhkKEWhhbmRsaW5nX3JldmlzaW9uGAcgASgEEi8KC3JlY2VpdmVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh2YWxpZGl0eRgJIAEoCSJCChZMaXN0QWxlcnRTdGF0ZXNSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSFwoPaW5jbHVkZV9oaXN0b3J5GAIgASgIIlMKF0xpc3RBbGVydFN0YXRlc1Jlc3BvbnNlEiMKBmFsZXJ0cxgBIAMoCzITLm5hZ2kudjEuQWxlcnRTdGF0ZRITCgtyZWNlbnRfY29weRgCIAEoCCKwAQoSSGFuZGxlQWxlcnRSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSCwoDa2V5GAIgASgJEhIKCm9jY3VycmVuY2UYAyABKAkSGQoRaGFuZGxpbmdfcmV2aXNpb24YBCABKAQSDgoGYWN0aW9uGAUgASgJEhIKCmNvbmNsdXNpb24YBiABKAkSKQoFdW50aWwYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIjkKE0hhbmRsZUFsZXJ0UmVzcG9uc2USIgoFYWxlcnQYASABKAsyEy5uYWdpLnYxLkFsZXJ0U3RhdGUyrgEKDEFsZXJ0U2VydmljZRJUCg9MaXN0QWxlcnRTdGF0ZXMSHy5uYWdpLnYxLkxpc3RBbGVydFN0YXRlc1JlcXVlc3QaIC5uYWdpLnYxLkxpc3RBbGVydFN0YXRlc1Jlc3BvbnNlEkgKC0hhbmRsZUFsZXJ0EhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QaHC5uYWdpLnYxLkhhbmRsZUFsZXJ0UmVzcG9uc2UyqQEKEVBhbmVsQWxlcnRTZXJ2aWNlEkcKEFJlYWRBbGVydFJlcGxpY2ESHC5uYWdpLnYxLkFsZXJ0UmVwbGljYVJlcXVlc3QaFS5uYWdpLnYxLkFsZXJ0UmVwbGljYRJLChBSZWxheUhhbmRsZUFsZXJ0EiAubmFnaS52MS5SZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBoVLm5hZ2kudjEuQWxlcnRSZXBsaWNhQk4KFmluay5zaXBjLm5hZ2kucHJvdG8udjFQAVoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChluYWdpL3YxL2FsZXJ0X3N0YXRlLnByb3RvEgduYWdpLnYxIiYKE0FsZXJ0UmVwbGljYVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSI0CgxBbGVydFJlcGxpY2ESDwoHbm9kZV9pZBgBIAEoCRITCgtsZWRnZXJfanNvbhgCIAEoDCJWChdSZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBIsCgdyZXF1ZXN0GAEgASgLMhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QSDQoFYWN0b3IYAiABKAkigQEKCUFsZXJ0U3luYxIOCgZzb3VyY2UYASABKAkSEAoIcmV2aXNpb24YAiABKAQSHwoHY3VycmVudBgDIAMoCzIOLm5hZ2kudjEuQWxlcnQSHwoHaGlzdG9yeRgEIAMoCzIOLm5hZ2kudjEuQWxlcnQSEAoIY29tcGxldGUYBSABKAgirgIKCkFsZXJ0U3RhdGUSDwoHbm9kZV9pZBgBIAEoCRIdCgVhbGVydBgCIAEoCzIOLm5hZ2kudjEuQWxlcnQSFAoMYWNrbm93bGVkZ2VkGAMgASgIEhIKCmNvbmNsdXNpb24YBCABKAkSMQoNc2lsZW5jZV91bnRpbBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoRbWFpbnRlbmFuY2VfdW50aWwYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhkKEWhhbmRsaW5nX3JldmlzaW9uGAcgASgEEi8KC3JlY2VpdmVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh2YWxpZGl0eRgJIAEoCSJCChZMaXN0QWxlcnRTdGF0ZXNSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSFwoPaW5jbHVkZV9oaXN0b3J5GAIgASgIIlMKF0xpc3RBbGVydFN0YXRlc1Jlc3BvbnNlEiMKBmFsZXJ0cxgBIAMoCzITLm5hZ2kudjEuQWxlcnRTdGF0ZRITCgtyZWNlbnRfY29weRgCIAEoCCKwAQoSSGFuZGxlQWxlcnRSZXF1ZXN0Eg8KB25vZGVfaWQYASABKAkSCwoDa2V5GAIgASgJEhIKCm9jY3VycmVuY2UYAyABKAkSGQoRaGFuZGxpbmdfcmV2aXNpb24YBCABKAQSDgoGYWN0aW9uGAUgASgJEhIKCmNvbmNsdXNpb24YBiABKAkSKQoFdW50aWwYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIjkKE0hhbmRsZUFsZXJ0UmVzcG9uc2USIgoFYWxlcnQYASABKAsyEy5uYWdpLnYxLkFsZXJ0U3RhdGUiFgoUR2V0QWxlcnRSdWxlc1JlcXVlc3QiqAEKFUdldEFsZXJ0UnVsZXNSZXNwb25zZRIlCgdidWlsdGluGAEgASgLMhQubmFnaS52MS5BbGVydFBvbGljeRIkCgZwb2xpY3kYAiABKAsyFC5uYWdpLnYxLkFsZXJ0UG9saWN5EikKCW92ZXJyaWRlcxgDIAMoCzIWLm5hZ2kudjEuQWxlcnRPdmVycmlkZRIXCg9jYW5fZWRpdF9wb2xpY3kYBCABKAgiVwoYVXBkYXRlQWxlcnRQb2xpY3lSZXF1ZXN0EiQKBnBvbGljeRgBIAEoCzIULm5hZ2kudjEuQWxlcnRQb2xpY3kSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAyL1AQoXU2V0QWxlcnRPdmVycmlkZVJlcXVlc3QSDQoFc2NvcGUYASABKAkSDwoHbm9kZV9pZBgCIAEoCRISCgpwcm9qZWN0X2lkGAMgASgJEhEKCWNvbnRhaW5lchgEIAEoCRI6CgVydWxlcxgFIAMoCzIrLm5hZ2kudjEuU2V0QWxlcnRPdmVycmlkZVJlcXVlc3QuUnVsZXNFbnRyeRIVCg1iYXNlX3JldmlzaW9uGAYgASgDGkAKClJ1bGVzRW50cnkSCwoDa2V5GAEgASgJEiEKBXZhbHVlGAIgASgLMhIubmFnaS52MS5BbGVydFJ1bGU6AjgBMpoDCgxBbGVydFNlcnZpY2USVAoPTGlzdEFsZXJ0U3RhdGVzEh8ubmFnaS52MS5MaXN0QWxlcnRTdGF0ZXNSZXF1ZXN0GiAubmFnaS52MS5MaXN0QWxlcnRTdGF0ZXNSZXNwb25zZRJICgtIYW5kbGVBbGVydBIbLm5hZ2kudjEuSGFuZGxlQWxlcnRSZXF1ZXN0GhwubmFnaS52MS5IYW5kbGVBbGVydFJlc3BvbnNlEk4KDUdldEFsZXJ0UnVsZXMSHS5uYWdpLnYxLkdldEFsZXJ0UnVsZXNSZXF1ZXN0Gh4ubmFnaS52MS5HZXRBbGVydFJ1bGVzUmVzcG9uc2USTAoRVXBkYXRlQWxlcnRQb2xpY3kSIS5uYWdpLnYxLlVwZGF0ZUFsZXJ0UG9saWN5UmVxdWVzdBoULm5hZ2kudjEuQWxlcnRQb2xpY3kSTAoQU2V0QWxlcnRPdmVycmlkZRIgLm5hZ2kudjEuU2V0QWxlcnRPdmVycmlkZVJlcXVlc3QaFi5uYWdpLnYxLkFsZXJ0T3ZlcnJpZGUyqQEKEVBhbmVsQWxlcnRTZXJ2aWNlEkcKEFJlYWRBbGVydFJlcGxpY2ESHC5uYWdpLnYxLkFsZXJ0UmVwbGljYVJlcXVlc3QaFS5uYWdpLnYxLkFsZXJ0UmVwbGljYRJLChBSZWxheUhhbmRsZUFsZXJ0EiAubmFnaS52MS5SZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBoVLm5hZ2kudjEuQWxlcnRSZXBsaWNhQk4KFmluay5zaXBjLm5hZ2kucHJvdG8udjFQAVoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.AlertReplicaRequest
@@ -287,6 +287,117 @@ export const HandleAlertResponseSchema: GenMessage<HandleAlertResponse> = /*@__P
   messageDesc(file_nagi_v1_alert_state, 8);
 
 /**
+ * @generated from message nagi.v1.GetAlertRulesRequest
+ */
+export type GetAlertRulesRequest = Message<"nagi.v1.GetAlertRulesRequest"> & {
+};
+
+/**
+ * Describes the message nagi.v1.GetAlertRulesRequest.
+ * Use `create(GetAlertRulesRequestSchema)` to create a new message.
+ */
+export const GetAlertRulesRequestSchema: GenMessage<GetAlertRulesRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 9);
+
+/**
+ * @generated from message nagi.v1.GetAlertRulesResponse
+ */
+export type GetAlertRulesResponse = Message<"nagi.v1.GetAlertRulesResponse"> & {
+  /**
+   * 内置默认值（每条规则每个字段都有值）。
+   *
+   * @generated from field: nagi.v1.AlertPolicy builtin = 1;
+   */
+  builtin?: AlertPolicy | undefined;
+
+  /**
+   * @generated from field: nagi.v1.AlertPolicy policy = 2;
+   */
+  policy?: AlertPolicy | undefined;
+
+  /**
+   * @generated from field: repeated nagi.v1.AlertOverride overrides = 3;
+   */
+  overrides: AlertOverride[];
+
+  /**
+   * @generated from field: bool can_edit_policy = 4;
+   */
+  canEditPolicy: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.GetAlertRulesResponse.
+ * Use `create(GetAlertRulesResponseSchema)` to create a new message.
+ */
+export const GetAlertRulesResponseSchema: GenMessage<GetAlertRulesResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 10);
+
+/**
+ * @generated from message nagi.v1.UpdateAlertPolicyRequest
+ */
+export type UpdateAlertPolicyRequest = Message<"nagi.v1.UpdateAlertPolicyRequest"> & {
+  /**
+   * @generated from field: nagi.v1.AlertPolicy policy = 1;
+   */
+  policy?: AlertPolicy | undefined;
+
+  /**
+   * @generated from field: int64 base_revision = 2;
+   */
+  baseRevision: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.UpdateAlertPolicyRequest.
+ * Use `create(UpdateAlertPolicyRequestSchema)` to create a new message.
+ */
+export const UpdateAlertPolicyRequestSchema: GenMessage<UpdateAlertPolicyRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 11);
+
+/**
+ * @generated from message nagi.v1.SetAlertOverrideRequest
+ */
+export type SetAlertOverrideRequest = Message<"nagi.v1.SetAlertOverrideRequest"> & {
+  /**
+   * @generated from field: string scope = 1;
+   */
+  scope: string;
+
+  /**
+   * @generated from field: string node_id = 2;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: string project_id = 3;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string container = 4;
+   */
+  container: string;
+
+  /**
+   * @generated from field: map<string, nagi.v1.AlertRule> rules = 5;
+   */
+  rules: { [key: string]: AlertRule };
+
+  /**
+   * @generated from field: int64 base_revision = 6;
+   */
+  baseRevision: bigint;
+};
+
+/**
+ * Describes the message nagi.v1.SetAlertOverrideRequest.
+ * Use `create(SetAlertOverrideRequestSchema)` to create a new message.
+ */
+export const SetAlertOverrideRequestSchema: GenMessage<SetAlertOverrideRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 12);
+
+/**
  * Browser API. Scope and elevation are enforced on the receiving panel.
  *
  * @generated from service nagi.v1.AlertService
@@ -307,6 +418,37 @@ export const AlertService: GenService<{
     methodKind: "unary";
     input: typeof HandleAlertRequestSchema;
     output: typeof HandleAlertResponseSchema;
+  },
+  /**
+   * 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+   *
+   * @generated from rpc nagi.v1.AlertService.GetAlertRules
+   */
+  getAlertRules: {
+    methodKind: "unary";
+    input: typeof GetAlertRulesRequestSchema;
+    output: typeof GetAlertRulesResponseSchema;
+  },
+  /**
+   * 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+   *
+   * @generated from rpc nagi.v1.AlertService.UpdateAlertPolicy
+   */
+  updateAlertPolicy: {
+    methodKind: "unary";
+    input: typeof UpdateAlertPolicyRequestSchema;
+    output: typeof AlertPolicySchema;
+  },
+  /**
+   * 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+   * 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+   *
+   * @generated from rpc nagi.v1.AlertService.SetAlertOverride
+   */
+  setAlertOverride: {
+    methodKind: "unary";
+    input: typeof SetAlertOverrideRequestSchema;
+    output: typeof AlertOverrideSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_alert_state, 0);

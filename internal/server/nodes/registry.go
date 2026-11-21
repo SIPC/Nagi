@@ -114,6 +114,8 @@ type Registry struct {
 	// Changes 通知订阅流有变化（见 changes.go）。
 	Changes Changes
 	alerts  activeAlerts
+	// policyMu 串行修改告警的全局设置（修订号检查和保存在一起）。
+	policyMu sync.Mutex
 
 	// OnReport 在节点上报后调用（不阻塞上报）：面板据此给缓存过时的容器补推配置。
 	OnReport func(c *Conn, req *nagiv1.ReportRequest)

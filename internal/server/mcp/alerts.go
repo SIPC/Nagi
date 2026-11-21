@@ -141,23 +141,18 @@ func alertView(r *nagiv1.AlertRules, rules []string) map[string]any {
 			off = append(off, k)
 		}
 	}
-	or := func(v, d uint32) uint32 {
-		if v == 0 {
-			return d
-		}
-		return v
-	}
+	// 规则已经是生效值（面板按 设置 → 告警 里的全局默认值和覆盖算好的）。
 	out := map[string]any{"rules_off": off}
 	if slices.Equal(rules, alert.NodeRules) {
-		out["disk_percent"] = or(r.GetDiskPercent(), alert.DefaultDiskPercent)
-		out["mem_percent"] = or(r.GetMemPercent(), alert.DefaultMemPercent)
-		out["mem_minutes"] = or(r.GetMemMinutes(), alert.DefaultMemMinutes)
-		out["cert_days"] = or(r.GetCertDays(), alert.DefaultCertDays)
-		out["offline_seconds"] = or(r.GetOfflineSeconds(), alert.DefaultOfflineSeconds)
+		out["disk_percent"] = r.GetDiskPercent()
+		out["mem_percent"] = r.GetMemPercent()
+		out["mem_minutes"] = r.GetMemMinutes()
+		out["cert_days"] = r.GetCertDays()
+		out["offline_seconds"] = r.GetOfflineSeconds()
 	} else {
-		out["restart_count"] = or(r.GetRestartCount(), alert.DefaultRestartCount)
-		out["restart_minutes"] = or(r.GetRestartMinutes(), alert.DefaultRestartMinutes)
-		out["error_percent"] = or(r.GetErrorPercent(), alert.DefaultErrorPercent)
+		out["restart_count"] = r.GetRestartCount()
+		out["restart_minutes"] = r.GetRestartMinutes()
+		out["error_percent"] = r.GetErrorPercent()
 	}
 	return out
 }

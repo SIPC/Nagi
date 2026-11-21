@@ -416,6 +416,8 @@ message ContainerSpec {
   SnapshotSchedule project_snapshot_schedule = 26;
   // 备份节点：每次定时快照后依次把快照仓库同步过去。为空表示没有设置。
   repeated BackupTarget backups = 27;
+  // 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+  EffectiveAlertRules effective_alert_rules = 28;
 }
 
 // BackupTarget 是接收副本的节点。
@@ -623,16 +625,69 @@ message AlertRules {
 
 message AlertConfig {
   repeated AlertChannel channels = 1;
+  // 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
   AlertRules rules = 2;
   // 节点在面板上的名称：只在下发给节点时由面板填写，节点发告警时用它；为空时（旧版本的面板）用主机名。
   string node_name = 3;
+  // 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+  EffectiveAlertRules effective = 4;
+}
+
+// AlertRule 是一条告警规则的设置（见 docs/monitoring.md#告警）。没写的字段沿用上一层（内置默认 → 全局默认 → 节点；
+// 内置默认 → 全局默认 → 项目 → 容器）；下发给节点的生效值每个字段都有值。
+message AlertRule {
+  optional bool enabled = 1;
+  // 触发阈值。单位按规则：百分比、秒（失联）、天（证书）、次（重启）、倍（请求突增）。
+  optional double threshold = 2;
+  // 超过阈值持续这么多秒才告警。
+  optional uint32 for_seconds = 3;
+  // 恢复阈值（回差）：回到它以下（证书是以上）并保持 recover_seconds 秒才算恢复。
+  optional double recover_threshold = 4;
+  optional uint32 recover_seconds = 5;
+  // 一直没恢复时每隔这么多分钟再提醒一次，0 表示不重复提醒；出站拦截是同一目标的去重时间。
+  optional uint32 repeat_minutes = 6;
+  // 统计窗口（重启、5xx、4xx、请求突增），分钟。
+  optional uint32 window_minutes = 7;
+  // 最少请求数（5xx、4xx）；请求突增是每秒最少请求数。
+  optional double min_requests = 8;
+}
+
+// AlertPolicy 是全局的告警设置：规则的全局默认值、通知语言和抖动保护。
+message AlertPolicy {
+  map<string, AlertRule> rules = 1;
+  // 通知语言："zh-CN"（默认）或 "en"。
+  string language = 2;
+  // 抖动保护：flap_window_minutes 分钟内触发 flap_count 轮及以上时暂停逐条通知，0 表示默认（60 分钟、3 轮）。
+  uint32 flap_window_minutes = 3;
+  uint32 flap_count = 4;
+  // 修订号：修改时带上读到的，被别人改过时拒绝。
+  int64 revision = 5;
+}
+
+// AlertOverride 是一个节点、项目或容器上改过的规则字段。
+message AlertOverride {
+  // node、project、container。
+  string scope = 1;
+  string node_id = 2;
+  string project_id = 3;
+  string container = 4;
+  map<string, AlertRule> rules = 5;
+  int64 revision = 6;
+}
+
+// EffectiveAlertRules 是面板算好、下发给节点的生效规则（每条规则的每个字段都有值）。
+message EffectiveAlertRules {
+  map<string, AlertRule> rules = 1;
+  string language = 2;
+  uint32 flap_window_minutes = 3;
+  uint32 flap_count = 4;
 }
 
 // Alert 是一条告警或恢复通知。
 message Alert {
   // 同一个问题的唯一标识，例如 disk、cert:example.com。
   string key = 1;
-  // firing：出现；resolved：已恢复。
+  // firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
   string status = 2;
   string title = 3;
   string message = 4;
@@ -645,11 +700,28 @@ message Alert {
   string source = 10;
   // valid / unknown；缺数据不改 detection status。
   string validity = 11;
-  // recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+  // recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
   string end_reason = 12;
   google.protobuf.Timestamp since = 13;
   // critical / warning / info；空值按现有单项规则保守处理。
   string severity = 14;
+  // 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+  string rule = 15;
+  // 对象：磁盘挂载点、容器名、映射名、域名等。
+  string subject = 16;
+  optional double value = 17;
+  optional double threshold = 18;
+  optional double recover_threshold = 19;
+  // 本轮出现以来的峰值（证书是最低值）。
+  optional double peak = 20;
+  // 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+  uint32 duration_seconds = 21;
+  // 恢复时：回到恢复阈值以内保持了多久。
+  uint32 recover_seconds = 22;
+  // 这是一条重复提醒（status 仍是 firing）。
+  bool reminder = 23;
+  // 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+  string language = 24;
 }
 // TrustedPanel 是节点信任列表里的一个面板。
 message TrustedPanel {
@@ -920,6 +992,8 @@ message LinkEntry {
   bool proxy_protocol = 13;
   // 目标容器生效的告警规则：入口节点按它判断这条映射的 5xx 比例（容器不一定在入口节点上）。
   AlertRules alert_rules = 12;
+  // 同上，新版本节点用它。
+  EffectiveAlertRules effective_alert_rules = 14;
 }
 
 // LinkEntryAllow：入口节点只能访问映射指向的这一个端口，不因此能访问项目里的其他容器和端口。

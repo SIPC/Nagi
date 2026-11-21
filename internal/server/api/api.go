@@ -399,7 +399,7 @@ func (s *nodeService) ListNodes(ctx context.Context, _ *connect.Request[nagiv1.L
 		}
 		n.UnknownContainers = s.Projects.UnknownContainers(ctx, row.ID)
 		n.StaleProjects = s.Projects.StaleProjects(ctx, row.ID)
-		n.AlertRules = nodes.NodeAlertRules(row)
+		n.AlertRules = s.Nodes.NodeAlertLegacy(ctx, row.ID)
 		if n.Tags, err = s.Q.NodeTags(ctx, row.ID); err != nil {
 			return nil, err
 		}
@@ -574,6 +574,9 @@ func (s *nodeService) forgetNode(ctx context.Context, id string) error {
 	s.Projects.ForgetEntryNode(ctx, id)
 	s.Nodes.Disconnect(id)
 	s.Nodes.Forget(id) // 还没恢复的告警不再出现在「需要处理」里
+	if err := s.Nodes.ForgetNodeAlertRules(ctx, id); err != nil {
+		s.Log.Warn("删除节点的告警规则失败", "node", id, "err", err)
+	}
 	s.Log.Info("节点已移除", "node", id)
 	return nil
 }

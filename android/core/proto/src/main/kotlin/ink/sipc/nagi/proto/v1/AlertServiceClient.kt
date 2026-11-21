@@ -39,4 +39,50 @@ public class AlertServiceClient(
     ),
   )
 
+
+  /**
+   *  告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+   */
+  override suspend fun getAlertRules(request: GetAlertRulesRequest, headers: Headers): ResponseMessage<GetAlertRulesResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/GetAlertRules",
+      ink.sipc.nagi.proto.v1.GetAlertRulesRequest::class,
+      ink.sipc.nagi.proto.v1.GetAlertRulesResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+   */
+  override suspend fun updateAlertPolicy(request: UpdateAlertPolicyRequest, headers: Headers): ResponseMessage<AlertPolicy> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/UpdateAlertPolicy",
+      ink.sipc.nagi.proto.v1.UpdateAlertPolicyRequest::class,
+      ink.sipc.nagi.proto.v1.AlertPolicy::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+   *  项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+   */
+  override suspend fun setAlertOverride(request: SetAlertOverrideRequest, headers: Headers): ResponseMessage<AlertOverride> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/SetAlertOverride",
+      ink.sipc.nagi.proto.v1.SetAlertOverrideRequest::class,
+      ink.sipc.nagi.proto.v1.AlertOverride::class,
+      StreamType.UNARY,
+    ),
+  )
+
 }

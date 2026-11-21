@@ -25,11 +25,19 @@ public interface AlertConfigOrBuilder extends
   int getChannelsCount();
 
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    * @return Whether the rules field is set.
    */
   boolean hasRules();
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    * @return The rules.
    */
@@ -54,4 +62,23 @@ public interface AlertConfigOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNodeNameBytes();
+
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   * @return Whether the effective field is set.
+   */
+  boolean hasEffective();
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   * @return The effective.
+   */
+  ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffective();
 }

@@ -14,4 +14,20 @@ public interface AlertServiceClientInterface {
   public suspend fun listAlertStates(request: ListAlertStatesRequest, headers: Headers = emptyMap()): ResponseMessage<ListAlertStatesResponse>
 
   public suspend fun handleAlert(request: HandleAlertRequest, headers: Headers = emptyMap()): ResponseMessage<HandleAlertResponse>
+
+  /**
+   *  告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+   */
+  public suspend fun getAlertRules(request: GetAlertRulesRequest, headers: Headers = emptyMap()): ResponseMessage<GetAlertRulesResponse>
+
+  /**
+   *  全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+   */
+  public suspend fun updateAlertPolicy(request: UpdateAlertPolicyRequest, headers: Headers = emptyMap()): ResponseMessage<AlertPolicy>
+
+  /**
+   *  一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+   *  项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+   */
+  public suspend fun setAlertOverride(request: SetAlertOverrideRequest, headers: Headers = emptyMap()): ResponseMessage<AlertOverride>
 }

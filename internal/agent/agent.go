@@ -1030,34 +1030,35 @@ func trustedFingerprints(panels []trustedPanel) []string {
 	return out
 }
 
-// containerAlertRules 返回容器生效的告警规则（面板随容器配置下发）。本节点上没有这个容器，或者面板是旧版本、没有下发时 ok 为 false。
-func (a *agent) containerAlertRules(projectID, container string) (*nagiv1.AlertRules, bool) {
+// containerAlertRules 返回容器生效的告警规则（面板随容器配置下发）：新版本面板给 eff，旧版本只给 legacy。
+// 本节点上没有这个容器，或者面板都没有下发时 ok 为 false。
+func (a *agent) containerAlertRules(projectID, container string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
 	c, err := a.projects.Get(context.Background(), projectID, container)
-	if err != nil || c.Spec.GetAlertRules() == nil {
-		return nil, false
+	if err != nil || c.Spec.GetEffectiveAlertRules() == nil && c.Spec.GetAlertRules() == nil {
+		return nil, nil, false
 	}
-	return c.Spec.GetAlertRules(), true
+	return c.Spec.GetEffectiveAlertRules(), c.Spec.GetAlertRules(), true
 }
 
 // routeAlertRules 返回 http 规则（映射）所属容器的告警规则：容器在本节点上时看它的配置，
 // 本节点只是入口节点时看入口计划里带的。
-func (a *agent) routeAlertRules(projectID, route string) (*nagiv1.AlertRules, bool) {
+func (a *agent) routeAlertRules(projectID, route string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
 	for _, c := range a.projects.List(context.Background()) {
 		if c.Spec.GetProjectId() != projectID {
 			continue
 		}
 		for _, r := range c.Spec.GetRoutes() {
-			if r.GetName() == route && c.Spec.GetAlertRules() != nil {
-				return c.Spec.GetAlertRules(), true
+			if r.GetName() == route && (c.Spec.GetEffectiveAlertRules() != nil || c.Spec.GetAlertRules() != nil) {
+				return c.Spec.GetEffectiveAlertRules(), c.Spec.GetAlertRules(), true
 			}
 		}
 	}
 	if a.intranet != nil {
 		for _, e := range a.intranet.current().GetEntries() {
-			if e.GetProjectId() == projectID && e.GetName() == route && e.GetAlertRules() != nil {
-				return e.GetAlertRules(), true
+			if e.GetProjectId() == projectID && e.GetName() == route && (e.GetEffectiveAlertRules() != nil || e.GetAlertRules() != nil) {
+				return e.GetEffectiveAlertRules(), e.GetAlertRules(), true
 			}
 		}
 	}
-	return nil, false
+	return nil, nil, false
 }

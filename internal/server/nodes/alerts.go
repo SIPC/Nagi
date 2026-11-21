@@ -111,10 +111,14 @@ func (r *Registry) pushAlertConfig(ctx context.Context, c *Conn, cfg *nagiv1.Ale
 	}
 	cfg = proto.CloneOf(cfg)
 	cfg.NodeName = c.Name()
-	// 规则按节点下发：节点自己的规则（内存、磁盘、证书）。容器的规则随容器配置下发（ContainerSpec.alert_rules）。
+	// 规则按节点下发：节点自己的规则（内存、磁盘、CPU、证书）。容器的规则随容器配置下发（ContainerSpec.effective_alert_rules）。
+	// 旧版本节点只认 rules，按生效值换算后一起下发。
 	cfg.Rules = nil
-	if row, err := r.q.GetNode(ctx, c.NodeID); err == nil {
-		cfg.Rules = NodeAlertRules(row)
+	if eff, err := r.NodeAlertEffective(ctx, c.NodeID); err == nil {
+		cfg.Effective, cfg.Rules = eff, alert.Legacy(eff)
+	} else {
+		r.log.Warn("读取告警规则失败", "node", c.NodeID, "err", err)
+		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -300,14 +304,16 @@ func (p *panelService) RelayAlert(ctx context.Context, req *nagiv1.RelayAlertReq
 func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 	start := time.Now()
 	type offline struct {
+		since    time.Time // 失联开始（最后在线）
 		notified time.Time
 		name     string
+		back     time.Time // 重新连上的时间，保持 recover_seconds 才算恢复
 	}
 	firing := map[string]*offline{}
 	if states, err := r.AlertStates(ctx, "", false); err == nil {
 		for _, a := range states {
 			if id, ok := strings.CutPrefix(a.Alert.Key, "offline:"); ok && a.Alert.Source == "panel" {
-				firing[id] = &offline{notified: a.Alert.Time.AsTime(), name: a.Alert.Node}
+				firing[id] = &offline{since: a.Alert.GetSince().AsTime(), notified: a.Alert.Time.AsTime(), name: a.Alert.Node}
 			}
 		}
 	}
@@ -323,6 +329,11 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 		if err != nil {
 			continue
 		}
+		policy, err := r.AlertPolicy(ctx)
+		if err != nil {
+			continue
+		}
+		lang := alert.Language(policy.GetLanguage())
 		now := time.Now()
 		seen := map[string]bool{}
 		for _, n := range list {
@@ -331,46 +342,77 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 			if name == "" {
 				name = n.ID
 			}
-			st := firing[n.ID]
-			if r.Online(n.ID) {
-				if st != nil {
-					delete(firing, n.ID)
-					r.sendLogged(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "resolved", Title: "节点已重新连上面板",
-						Node: name, Time: timestamppb.New(now)})
-				}
+			eff, err := r.NodeAlertEffective(ctx, n.ID)
+			if err != nil {
 				continue
 			}
-			nodeRules := NodeAlertRules(n)
-			if !alert.Enabled(nodeRules, alert.RuleOffline) {
+			rule := alert.Rule(eff.GetRules(), alert.RuleOffline)
+			st := firing[n.ID]
+			key := "offline:" + n.ID
+			base := func(status string) *nagiv1.Alert {
+				th := rule.GetThreshold()
+				return &nagiv1.Alert{Key: key, Status: status, Node: name, Time: timestamppb.New(now), Rule: alert.RuleOffline, Language: lang, Threshold: &th}
+			}
+			if r.Online(n.ID) {
+				if st == nil {
+					continue
+				}
+				// 重新连上并保持 recover_seconds 才算恢复：节点反复断连时不来回发失联、恢复。
+				if st.back.IsZero() {
+					st.back = now
+				}
+				hold := time.Duration(rule.GetRecoverSeconds()) * time.Second
+				if now.Sub(st.back) < hold {
+					continue
+				}
+				delete(firing, n.ID)
+				a := base("resolved")
+				a.DurationSeconds, a.RecoverSeconds = uint32(st.back.Sub(st.since)/time.Second), uint32(now.Sub(st.back)/time.Second)
+				a.Title = "节点已重新连上面板"
+				r.sendLogged(ctx, a)
+				continue
+			}
+			if st != nil {
+				st.back = time.Time{}
+			}
+			if !alert.On(rule) {
 				if st != nil {
-					if _, err := r.trackPanelAlert(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "ended", EndReason: "rule_disabled", Node: name}); err != nil {
+					if _, err := r.trackPanelAlert(ctx, &nagiv1.Alert{Key: key, Status: "ended", EndReason: "rule_disabled", Node: name}); err != nil {
 						r.log.Warn("保存告警快照失败", "err", err)
 					}
 				}
 				delete(firing, n.ID)
 				continue
 			}
-			rules := alert.EffectiveRules(nodeRules)
 			// 面板刚启动时节点需要时间重连，离线时间从面板启动开始算。
 			since := time.Unix(n.LastSeen, 0)
 			if since.Before(start) {
 				since = start
 			}
 			down := now.Sub(since)
-			if down < time.Duration(rules.OfflineSeconds)*time.Second {
+			if down < time.Duration(rule.GetThreshold())*time.Second {
 				continue
 			}
-			if st != nil && now.Sub(st.notified) < alert.RepeatInterval {
-				if _, err := r.trackPanelAlert(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "firing", Title: fmt.Sprintf("节点失联超过 %d 秒", int(down.Seconds())), Node: name, Time: timestamppb.New(st.notified)}); err != nil {
+			a := base("firing")
+			a.DurationSeconds = uint32(down / time.Second)
+			a.Message = lastSeen(lang, time.Unix(n.LastSeen, 0))
+			a.Title = fmt.Sprintf("节点失联已 %s（阈值 %d 秒）", alert.Duration(down, false), int(rule.GetThreshold()))
+			every := time.Duration(rule.GetRepeatMinutes()) * time.Minute
+			if st != nil && (every <= 0 || now.Sub(st.notified) < every) {
+				a.Time = timestamppb.New(st.notified)
+				if _, err := r.trackPanelAlert(ctx, a); err != nil {
 					r.log.Warn("保存告警快照失败", "err", err)
 				}
 				continue
 			}
-			firing[n.ID] = &offline{notified: now, name: name}
-			r.sendLogged(ctx, &nagiv1.Alert{Key: "offline:" + n.ID, Status: "firing",
-				Title:   fmt.Sprintf("节点失联超过 %d 秒", int(down.Seconds())),
-				Message: "最后在线：" + time.Unix(n.LastSeen, 0).Local().Format("2006-01-02 15:04:05"),
-				Node:    name, Time: timestamppb.New(now)})
+			if st != nil {
+				a.Reminder = true
+			} else {
+				st = &offline{since: since, name: name}
+				firing[n.ID] = st
+			}
+			st.notified = now
+			r.sendLogged(ctx, a)
 		}
 		// 已被移除的节点不再跟踪。
 		for id := range firing {
@@ -382,6 +424,13 @@ func (r *Registry) RunOfflineAlerts(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func lastSeen(lang string, t time.Time) string {
+	if lang == "en" {
+		return "Last seen: " + t.Local().Format("2006-01-02 15:04:05")
+	}
+	return "最后在线：" + t.Local().Format("2006-01-02 15:04:05")
 }
 
 func (r *Registry) sendLogged(ctx context.Context, a *nagiv1.Alert) {
@@ -434,7 +483,8 @@ func NodeAlertRules(n store.Node) *nagiv1.AlertRules {
 	return rules
 }
 
-// SetNodeAlertRules 保存节点的告警规则（只留节点的那几条），节点在线时立即下发。
+// SetNodeAlertRules 是旧版本界面和 MCP 的接口：把旧格式的节点规则换成节点的覆盖（只留和全局生效值不一样的字段），
+// 节点在线时立即下发。
 func (r *Registry) SetNodeAlertRules(ctx context.Context, nodeID string, rules *nagiv1.AlertRules) error {
 	if err := alert.CheckRules(rules); err != nil {
 		return err
@@ -442,20 +492,21 @@ func (r *Registry) SetNodeAlertRules(ctx context.Context, nodeID string, rules *
 	if _, err := r.q.GetNode(ctx, nodeID); err != nil {
 		return i18n.New("节点不存在")
 	}
-	var b []byte
-	if rules = alert.NodePart(rules); !alert.IsEmpty(rules) {
-		var err error
-		if b, err = proto.Marshal(rules); err != nil {
-			return err
-		}
-	}
-	if err := r.q.SetNodeAlertRules(ctx, store.SetNodeAlertRulesParams{AlertRules: b, ID: nodeID}); err != nil {
+	policy, err := r.AlertPolicy(ctx)
+	if err != nil {
 		return err
 	}
-	if c, err := r.Get(nodeID); err == nil {
-		go r.pushAlertConfig(context.Background(), c, nil)
+	layer := DiffRules(alert.Merge(policy.GetRules()), alert.FromLegacy(rules, alert.NodeRules), alert.NodeRules)
+	return r.ReplaceAlertOverride(ctx, &nagiv1.AlertOverride{Scope: "node", NodeId: nodeID, Rules: layer})
+}
+
+// NodeAlertLegacy 返回节点生效的规则，换成旧格式（节点列表、MCP 显示用）。
+func (r *Registry) NodeAlertLegacy(ctx context.Context, nodeID string) *nagiv1.AlertRules {
+	eff, err := r.NodeAlertEffective(ctx, nodeID)
+	if err != nil {
+		return nil
 	}
-	return nil
+	return alert.Legacy(eff)
 }
 
 // MigrateAlertRules 把旧版本的全局告警规则搬到各个节点上（节点的规则），返回其中容器的规则，

@@ -666,6 +666,12 @@ func (s *Server) Run(ctx context.Context) error {
 		if err := s.nodes.MigrateAlertRules(ctx, func(r *nagiv1.AlertRules) error { return s.projects.MigrateAlertRules(ctx, r) }); err != nil {
 			s.log.Warn("搬迁告警规则失败", "err", err)
 		}
+		// v0.38 起规则集中在 设置 → 告警：旧的节点、项目、容器规则换成覆盖，再把容器的生效规则推给节点。
+		if err := s.nodes.MigrateAlertPolicy(ctx, s.projects.LegacyAlertRules); err != nil {
+			s.log.Warn("迁移告警规则失败", "err", err)
+		} else {
+			go s.projects.PushAlertRules(ctx, "")
+		}
 		go s.nodes.RunOfflineAlerts(ctx)
 	}
 	domainDone := make(chan struct{})

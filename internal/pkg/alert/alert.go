@@ -18,54 +18,17 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
-// 规则的默认阈值。
-const (
-	DefaultDiskPercent    = 90
-	DefaultMemPercent     = 90
-	DefaultMemMinutes     = 5
-	DefaultRestartCount   = 3
-	DefaultRestartMinutes = 10
-	DefaultCertDays       = 7
-	DefaultOfflineSeconds = 60
-	DefaultErrorPercent   = 5
-	// 5xx 比例按最近 5 分钟计算，请求数太少时不判断。
-	ErrorWindow      = 5 * time.Minute
-	ErrorMinRequests = 20
-	// RepeatInterval：问题一直没恢复时，每隔这么久再提醒一次。
-	RepeatInterval = 4 * time.Hour
-)
+// RepeatInterval：补发队列里的告警超过这么久就不再补发（已经过时）。规则的重复提醒间隔在规则里设置（见 policy.go）。
+const RepeatInterval = 4 * time.Hour
+
+// ErrorWindowDefault：http 映射的默认统计窗口；请求量突增的基线不含最近这么久。
+const ErrorWindowDefault = 5 * time.Minute
 
 func or(v, def uint32) uint32 {
 	if v == 0 {
 		return def
 	}
 	return v
-}
-
-// Rules 是填好默认值的规则。
-type Rules struct {
-	DiskPercent    float64
-	MemPercent     float64
-	MemFor         time.Duration
-	RestartCount   int
-	RestartWindow  time.Duration
-	CertDays       int
-	OfflineSeconds int
-	ErrorPercent   float64
-}
-
-// EffectiveRules 把 0 替换成默认值。
-func EffectiveRules(r *nagiv1.AlertRules) Rules {
-	return Rules{
-		DiskPercent:    float64(or(r.GetDiskPercent(), DefaultDiskPercent)),
-		MemPercent:     float64(or(r.GetMemPercent(), DefaultMemPercent)),
-		MemFor:         time.Duration(or(r.GetMemMinutes(), DefaultMemMinutes)) * time.Minute,
-		RestartCount:   int(or(r.GetRestartCount(), DefaultRestartCount)),
-		RestartWindow:  time.Duration(or(r.GetRestartMinutes(), DefaultRestartMinutes)) * time.Minute,
-		CertDays:       int(or(r.GetCertDays(), DefaultCertDays)),
-		OfflineSeconds: int(or(r.GetOfflineSeconds(), DefaultOfflineSeconds)),
-		ErrorPercent:   float64(or(r.GetErrorPercent(), DefaultErrorPercent)),
-	}
 }
 
 // ChannelKey 用来判断两个渠道是不是同一个目的地（多个面板配置了同一个渠道时只发一次）。
@@ -145,28 +108,45 @@ func blockedError(host string, b *safehttp.BlockedError) error {
 	return i18n.Errorf("webhook 地址 %s 指向本机、链路本地或云服务器的元数据地址，不能使用", host)
 }
 
-// Text 返回告警的纯文本内容。
+// Text 返回告警的纯文本内容（见 docs/monitoring.md#消息格式）。
 func Text(a *nagiv1.Alert) string {
+	en := isEn(a)
+	pick := func(zh, e string) string {
+		if en {
+			return e
+		}
+		return zh
+	}
+	title, detail := Render(a)
 	prefix := "🔴 "
-	switch a.GetStatus() {
-	case "resolved":
-		prefix = "✅ 已恢复："
-	case "info":
+	switch {
+	case a.GetStatus() == "resolved":
+		prefix = pick("✅ 已恢复：", "✅ Resolved: ")
+		if a.GetRule() == RuleOffline || a.GetRule() == RuleHealth { // 文字本身已说明恢复
+			prefix = "✅ "
+		}
+	case a.GetStatus() == "ended":
+		prefix = pick("⚪ 已结束：", "⚪ Ended: ")
+	case a.GetStatus() == "flapping":
+		prefix = "🟡 "
+	case a.GetStatus() == "info":
 		prefix = "ℹ️ "
+	case a.GetReminder():
+		prefix = pick("🔁 仍未恢复：", "🔁 Still firing: ")
 	}
 	var b strings.Builder
-	b.WriteString(prefix + a.GetTitle())
-	if a.GetMessage() != "" {
-		b.WriteString("\n" + a.GetMessage())
+	b.WriteString(prefix + title)
+	if detail != "" {
+		b.WriteString("\n" + detail)
 	}
 	if a.GetNode() != "" {
-		b.WriteString("\n节点：" + a.GetNode())
+		b.WriteString(pick("\n节点：", "\nNode: ") + a.GetNode())
 	}
 	if a.GetProject() != "" {
-		b.WriteString("\n项目：" + a.GetProject())
+		b.WriteString(pick("\n项目：", "\nProject: ") + a.GetProject())
 	}
 	if a.GetTime() != nil {
-		b.WriteString("\n时间：" + a.GetTime().AsTime().Local().Format("2006-01-02 15:04:05"))
+		b.WriteString(pick("\n时间：", "\nTime: ") + a.GetTime().AsTime().Local().Format("2006-01-02 15:04:05"))
 	}
 	return b.String()
 }
@@ -175,16 +155,33 @@ func Text(a *nagiv1.Alert) string {
 func Send(ctx context.Context, c *nagiv1.AlertChannel, a *nagiv1.Alert) error {
 	switch c.GetType() {
 	case "webhook":
-		body, _ := json.Marshal(map[string]any{
+		title, message := Render(a)
+		m := map[string]any{
 			"status":  a.GetStatus(),
 			"key":     a.GetKey(),
-			"title":   a.GetTitle(),
-			"message": a.GetMessage(),
+			"title":   title,
+			"message": message,
 			"node":    a.GetNode(),
 			"project": a.GetProject(),
 			"time":    a.GetTime().AsTime().Format(time.RFC3339),
 			"text":    Text(a),
-		})
+		}
+		// 规则告警的结构化内容（旧版本节点、事件类告警没有）。
+		if a.GetRule() != "" {
+			m["rule"], m["duration_seconds"], m["reminder"] = a.GetRule(), a.GetDurationSeconds(), a.GetReminder()
+			for k, v := range map[string]*float64{"value": a.Value, "threshold": a.Threshold, "recover_threshold": a.RecoverThreshold, "peak": a.Peak} {
+				if v != nil {
+					m[k] = *v
+				}
+			}
+			if a.GetSubject() != "" {
+				m["subject"] = a.GetSubject()
+			}
+		}
+		if a.GetEndReason() != "" {
+			m["end_reason"] = a.GetEndReason()
+		}
+		body, _ := json.Marshal(m)
 		host := "?"
 		if u, err := url.Parse(c.GetUrl()); err == nil {
 			host = u.Host

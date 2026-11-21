@@ -1809,6 +1809,73 @@ java.lang.String defaultValue) {
     backups_.remove(index);
   }
 
+  public static final int EFFECTIVE_ALERT_RULES_FIELD_NUMBER = 28;
+  private ink.sipc.nagi.proto.v1.EffectiveAlertRules effectiveAlertRules_;
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   */
+  @java.lang.Override
+  public boolean hasEffectiveAlertRules() {
+    return ((bitField0_ & 0x00000020) != 0);
+  }
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules() {
+    return effectiveAlertRules_ == null ? ink.sipc.nagi.proto.v1.EffectiveAlertRules.getDefaultInstance() : effectiveAlertRules_;
+  }
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   */
+  private void setEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+    java.util.Objects.requireNonNull(value);
+    effectiveAlertRules_ = value;
+    bitField0_ |= 0x00000020;
+  }
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+    java.util.Objects.requireNonNull(value);
+    if (effectiveAlertRules_ != null &&
+        effectiveAlertRules_ != ink.sipc.nagi.proto.v1.EffectiveAlertRules.getDefaultInstance()) {
+      effectiveAlertRules_ =
+        ink.sipc.nagi.proto.v1.EffectiveAlertRules.newBuilder(effectiveAlertRules_).mergeFrom(value).buildPartial();
+    } else {
+      effectiveAlertRules_ = value;
+    }
+    bitField0_ |= 0x00000020;
+  }
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   */
+  private void clearEffectiveAlertRules() {
+    effectiveAlertRules_ = null;
+    bitField0_ = (bitField0_ & ~0x00000020);
+  }
+
   public static ink.sipc.nagi.proto.v1.ContainerSpec parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3777,6 +3844,77 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+     */
+    @java.lang.Override
+    public boolean hasEffectiveAlertRules() {
+      return instance.hasEffectiveAlertRules();
+    }
+    /**
+     * <pre>
+     * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules() {
+      return instance.getEffectiveAlertRules();
+    }
+    /**
+     * <pre>
+     * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder setEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+      copyOnWrite();
+      instance.setEffectiveAlertRules(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder setEffectiveAlertRules(
+        ink.sipc.nagi.proto.v1.EffectiveAlertRules.Builder builderForValue) {
+      copyOnWrite();
+      instance.setEffectiveAlertRules(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder mergeEffectiveAlertRules(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+      copyOnWrite();
+      instance.mergeEffectiveAlertRules(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+     */
+    public Builder clearEffectiveAlertRules() {  copyOnWrite();
+      instance.clearEffectiveAlertRules();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.ContainerSpec)
   }
   @java.lang.Override
@@ -3825,13 +3963,14 @@ java.lang.String defaultValue) {
             "projectSnapshotSchedule_",
             "backups_",
             ink.sipc.nagi.proto.v1.BackupTarget.class,
+            "effectiveAlertRules_",
           };
           java.lang.String info =
-              "\u0000\u001b\u0000\u0001\u0001\u001b\u001b\u0001\u0004\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001c\u0000\u0001\u0001\u001c\u001c\u0001\u0004\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0002\u0007\u0002\b\u0002\t\u1009\u0000" +
               "\n\u001b\u000b2\f\u001b\r\n\u000e\u0208\u000f\n\u0010\u0208\u0011\u000b\u0012\u0007" +
               "\u0013\u1009\u0001\u0014\u0208\u0015\u021a\u0016\u0208\u0017\u000b\u0018\u1009\u0002" +
-              "\u0019\u1009\u0003\u001a\u1009\u0004\u001b\u001b";
+              "\u0019\u1009\u0003\u001a\u1009\u0004\u001b\u001b\u001c\u1009\u0005";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

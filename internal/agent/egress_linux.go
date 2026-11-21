@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -240,12 +239,9 @@ func (e *egress) hit(ctx context.Context, h egressHit) {
 		"instance": c.name, "target": target, "mode_at_observation": mode,
 		"observation_seconds": 5, "dedup_seconds": 600, "complete_connections": false,
 	}})
-	// 告警可以在项目或容器的告警规则里关掉（规则 egress），关掉后照常拦截，只记日志。
-	if !e.a.alerts.ContainerEnabled(c.project, name, alert.RuleEgress) {
-		return
-	}
+	// 告警可以在告警规则里关掉（规则 egress），关掉后照常拦截，只记日志；同一目标的去重时间是规则的提醒间隔。
 	// 键是 egress:<项目>/<容器>/<目标>：面板按它把告警记到项目和容器上（见 nodes.alertContainer）。
-	e.a.alerts.NotifyKey(ctx, "egress:"+c.project+"/"+name+"/"+target, title, "", c.project)
+	e.a.alerts.NotifyEgress(ctx, c.project, name, target, title)
 }
 
 // writeFileAtomic 先写临时文件再改名，写到一半断电也不会留下半份规则。

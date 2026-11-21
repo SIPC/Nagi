@@ -32,7 +32,7 @@ public interface AlertOrBuilder extends
 
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -41,7 +41,7 @@ public interface AlertOrBuilder extends
   java.lang.String getStatus();
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -169,7 +169,7 @@ public interface AlertOrBuilder extends
 
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -178,7 +178,7 @@ public interface AlertOrBuilder extends
   java.lang.String getEndReason();
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -217,4 +217,146 @@ public interface AlertOrBuilder extends
    */
   com.google.protobuf.ByteString
       getSeverityBytes();
+
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   * @return The rule.
+   */
+  java.lang.String getRule();
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   * @return The bytes for rule.
+   */
+  com.google.protobuf.ByteString
+      getRuleBytes();
+
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   * @return The subject.
+   */
+  java.lang.String getSubject();
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   * @return The bytes for subject.
+   */
+  com.google.protobuf.ByteString
+      getSubjectBytes();
+
+  /**
+   * <code>optional double value = 17 [json_name = "value"];</code>
+   * @return Whether the value field is set.
+   */
+  boolean hasValue();
+  /**
+   * <code>optional double value = 17 [json_name = "value"];</code>
+   * @return The value.
+   */
+  double getValue();
+
+  /**
+   * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+   * @return Whether the threshold field is set.
+   */
+  boolean hasThreshold();
+  /**
+   * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+   * @return The threshold.
+   */
+  double getThreshold();
+
+  /**
+   * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+   * @return Whether the recoverThreshold field is set.
+   */
+  boolean hasRecoverThreshold();
+  /**
+   * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+   * @return The recoverThreshold.
+   */
+  double getRecoverThreshold();
+
+  /**
+   * <pre>
+   * 本轮出现以来的峰值（证书是最低值）。
+   * </pre>
+   *
+   * <code>optional double peak = 20 [json_name = "peak"];</code>
+   * @return Whether the peak field is set.
+   */
+  boolean hasPeak();
+  /**
+   * <pre>
+   * 本轮出现以来的峰值（证书是最低值）。
+   * </pre>
+   *
+   * <code>optional double peak = 20 [json_name = "peak"];</code>
+   * @return The peak.
+   */
+  double getPeak();
+
+  /**
+   * <pre>
+   * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+   * </pre>
+   *
+   * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+   * @return The durationSeconds.
+   */
+  int getDurationSeconds();
+
+  /**
+   * <pre>
+   * 恢复时：回到恢复阈值以内保持了多久。
+   * </pre>
+   *
+   * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+   * @return The recoverSeconds.
+   */
+  int getRecoverSeconds();
+
+  /**
+   * <pre>
+   * 这是一条重复提醒（status 仍是 firing）。
+   * </pre>
+   *
+   * <code>bool reminder = 23 [json_name = "reminder"];</code>
+   * @return The reminder.
+   */
+  boolean getReminder();
+
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   * @return The language.
+   */
+  java.lang.String getLanguage();
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   * @return The bytes for language.
+   */
+  com.google.protobuf.ByteString
+      getLanguageBytes();
 }

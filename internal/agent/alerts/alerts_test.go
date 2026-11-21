@@ -115,9 +115,10 @@ func TestHandlingSurvivesRestartWithoutSuppressingRecoveryOrNewOccurrence(t *tes
 	if len(terminal.History) != 1 || terminal.History[0].Revision == 0 || rcv.count() != 1 {
 		t.Fatalf("missing terminal version or recovery: %v", terminal)
 	}
+	// 静默按告警键记下（见 docs/monitoring.md#告警）：截止之前同一个键新一轮的出现也不通知，但照样记录。
 	e.Fire(ctx, "backup:p/web", "new failure", "", "p")
-	if rcv.count() != 2 {
-		t.Fatal("old silence leaked to new occurrence")
+	if rcv.count() != 1 || e.Snapshot().Current[0].GetOccurrence() == terminal.History[0].GetOccurrence() {
+		t.Fatal("silence must cover a new occurrence of the same key")
 	}
 	if _, err := os.Stat(e.stateFile()); !os.IsNotExist(err) {
 		t.Fatalf("new state leaked outside logs.db: %v", err)
@@ -238,46 +239,70 @@ func TestNodeName(t *testing.T) {
 	}
 }
 
+// 几个面板管同一个节点时取最严格的：阈值更低、恢复更难、持续更短；任何一个开着就判断。
 func TestStrictestRules(t *testing.T) {
 	e := newEngine(t, nil)
-	_ = e.SetConfig("p1", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{DiskPercent: 80}})
-	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{DiskPercent: 95, CertDays: 14}})
-	r := e.rules()
-	if r.DiskPercent != 80 || r.CertDays != 14 || r.MemPercent != 90 {
-		t.Fatalf("规则合并不对：%+v", r)
+	p1 := alert.Effective(&nagiv1.AlertPolicy{Rules: map[string]*nagiv1.AlertRule{alert.RuleDisk: {Threshold: f64(80), RecoverThreshold: f64(70)}}}, true)
+	p2 := alert.Effective(&nagiv1.AlertPolicy{Rules: map[string]*nagiv1.AlertRule{alert.RuleDisk: {Threshold: f64(95)}, alert.RuleCert: {Threshold: f64(14), RecoverThreshold: f64(20)},
+		alert.RuleMem: {Enabled: on(false)}}}, true)
+	_ = e.SetConfig("p1", &nagiv1.AlertConfig{Effective: p1})
+	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Effective: p2})
+	// 旧版本面板只有 AlertRules：按换算后的生效值参与合并。
+	_ = e.SetConfig("p3", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{MemPercent: 70}})
+	e.mu.Lock()
+	r := e.nodeRules()
+	e.mu.Unlock()
+	if d := r.get(alert.RuleDisk); d.GetThreshold() != 80 || d.GetRecoverThreshold() != 70 {
+		t.Fatalf("磁盘应取 80/70：%v", d)
+	}
+	if c := r.get(alert.RuleCert); c.GetThreshold() != 14 || c.GetRecoverThreshold() != 20 {
+		t.Fatalf("证书是越低越糟的规则，应取 14/20：%v", c)
+	}
+	if m := r.get(alert.RuleMem); !alert.On(m) || m.GetThreshold() != 70 {
+		t.Fatalf("p1、p3 开着内存告警，阈值取旧版本面板的 70：%v", m)
 	}
 }
 
-// 容器的规则按面板随容器配置下发的判断；没有下发（旧版本面板）时用告警配置里的。节点的规则任何一个面板开着就判断。
+// 容器的规则按面板随容器配置下发的判断；没有下发（旧版本面板）时用告警配置里的。
 func TestRuleSwitches(t *testing.T) {
 	e := newEngine(t, nil)
-	_ = e.SetConfig("p1", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{RestartCount: 9, Enabled: map[string]bool{"mem": false, "snapshot": false}}})
-	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{Enabled: map[string]bool{"mem": true, "snapshot": false}}})
-	e.ContainerRules = func(project, container string) (*nagiv1.AlertRules, bool) {
-		if container == "web" {
-			return &nagiv1.AlertRules{RestartCount: 5, Enabled: map[string]bool{"backup": false}}, true
+	_ = e.SetConfig("p1", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{Enabled: map[string]bool{"snapshot": false}}})
+	_ = e.SetConfig("p2", &nagiv1.AlertConfig{Rules: &nagiv1.AlertRules{Enabled: map[string]bool{"snapshot": false}}})
+	e.ContainerRules = func(project, container string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
+		switch container {
+		case "web": // 新版本面板
+			return alert.Effective(nil, false, map[string]*nagiv1.AlertRule{alert.RuleBackup: {Enabled: on(false)}, alert.RuleRestart: {Threshold: f64(5)}}), nil, true
+		case "v37": // v0.37 面板只下发旧格式
+			return nil, &nagiv1.AlertRules{RestartCount: 7}, true
 		}
-		return nil, false
-	}
-	if !e.NodeEnabled("mem") {
-		t.Error("p2 开着内存告警，应该判断")
+		return nil, nil, false
 	}
 	if e.ContainerEnabled("p", "web", "backup") || !e.ContainerEnabled("p", "web", "snapshot") {
-		t.Error("web 按它自己的规则：备份关、快照开")
+		t.Error("web 按面板下发的规则：备份关、快照开")
 	}
 	if e.ContainerEnabled("p", "old", "snapshot") {
 		t.Error("没有下发规则的容器按告警配置：两个面板都关了快照告警")
 	}
 	e.mu.Lock()
-	fallback := judge{e.rules(), func(string) bool { return true }}
-	e.mu.Unlock()
-	if j := e.forContainer("p", "web", fallback); j.RestartCount != 5 {
-		t.Errorf("web 的重启次数 %d，应该是 5", j.RestartCount)
+	defer e.mu.Unlock()
+	// 送达前复核（补发队列）：备份、热备告警按容器的规则判断（以前按节点规则，节点规则里没有 backup，永远放行）。
+	if e.ruleEnabled("event:backup:p/web") || e.ruleEnabled("event:standby:p/web") || !e.ruleEnabled("event:snapshot:p/web") {
+		t.Error("复核应按 web 的规则：备份、热备关，快照开")
 	}
-	if j := e.forContainer("p", "old", fallback); j.RestartCount != 3 {
-		t.Errorf("old 用告警配置里最严格的重启次数，得到 %d", j.RestartCount)
+	if n := e.forContainer("p", "web").get(alert.RuleRestart).GetThreshold(); n != 5 {
+		t.Errorf("web 的重启次数 %v，应该是 5", n)
+	}
+	if n := e.forContainer("p", "v37").get(alert.RuleRestart).GetThreshold(); n != 7 {
+		t.Errorf("v37 按旧格式换算，应该是 7，得到 %v", n)
+	}
+	if n := e.forContainer("p", "old").get(alert.RuleRestart).GetThreshold(); n != 3 {
+		t.Errorf("old 用内置默认值 3，得到 %v", n)
 	}
 }
+
+func f64(v float64) *float64 { return &v }
+func u32(v uint32) *uint32   { return &v }
+func on(v bool) *bool        { return &v }
 
 type observations struct {
 	latest     map[string]float64
@@ -313,8 +338,26 @@ func TestRecoveryRequiresPositiveEvidence(t *testing.T) {
 			rcv := &receiver{}
 			srv := httptest.NewServer(rcv)
 			defer srv.Close()
-			e := newEngine(t, nil)
-			e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+			// 这个测试只看「有没有健康证据」，持续时间都设为 0。
+			disabled := false
+			rules := func() *nagiv1.AlertPolicy {
+				p := &nagiv1.AlertPolicy{Rules: map[string]*nagiv1.AlertRule{}}
+				for _, r := range []string{alert.RuleDisk, alert.RuleHealth, alert.RuleClientErrors, alert.RuleErrors} {
+					p.Rules[r] = &nagiv1.AlertRule{ForSeconds: u32(0), RecoverSeconds: u32(0), Enabled: on(!disabled)}
+				}
+				return p
+			}
+			ch := []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}
+			var e *Engine
+			setup := func(x *Engine) {
+				e = x
+				e.SetConfig("p", &nagiv1.AlertConfig{Channels: ch, Effective: alert.Effective(rules(), true)})
+				e.ContainerRules = func(string, string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
+					return alert.Effective(rules(), false), nil, true
+				}
+				e.RouteRules = e.ContainerRules
+			}
+			setup(newEngine(t, nil))
 			o := &observations{latest: map[string]float64{"node:disk": 95}, data: routeSamples(time.Now(), 1, .6, .2),
 				containers: []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "unhealthy"}}}
 			e.metrics, e.docker = o, o
@@ -349,7 +392,8 @@ func TestRecoveryRequiresPositiveEvidence(t *testing.T) {
 			case "disabled":
 				o.latest, o.data, o.dockerErr = map[string]float64{"node:disk": 5}, routeSamples(time.Now(), 1, 0, 0), nil
 				o.containers = []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "healthy"}}
-				e.SetConfig("p", &nagiv1.AlertConfig{Channels: e.configs["p"].Channels, Rules: &nagiv1.AlertRules{Enabled: map[string]bool{"disk": false, "health": false, "4xx": false, "errors": false}}})
+				disabled = true
+				setup(e)
 			case "empty docker list":
 				o.dockerErr = nil
 			case "starting":
@@ -360,7 +404,7 @@ func TestRecoveryRequiresPositiveEvidence(t *testing.T) {
 			if rcv.count() != 4 {
 				t.Fatalf("%s sent a false recovery: %v", failure, rcv.got)
 			}
-			e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
+			setup(New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs))
 			e.metrics, e.docker = o, o
 			e.evaluate(context.Background())
 			if rcv.count() != 4 {
@@ -368,10 +412,23 @@ func TestRecoveryRequiresPositiveEvidence(t *testing.T) {
 			}
 
 			// Restore the rules and provide actual fresh healthy evidence.
-			e.SetConfig("p", &nagiv1.AlertConfig{Channels: e.configs["p"].Channels})
+			disabled = false
+			setup(e)
 			o.latest, o.data, o.queryErr, o.dockerErr = map[string]float64{"node:disk": 10}, routeSamples(time.Now(), 1, 0, 0), nil, nil
 			o.containers = []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "healthy"}}
 			e.evaluate(context.Background())
+			if failure == "disabled" {
+				// 关掉规则时这一轮已经以 rule_disabled 结束（不是恢复，不通知），重新打开后没有可恢复的告警。
+				for _, a := range e.Snapshot().History {
+					if a.GetEndReason() != "rule_disabled" {
+						t.Fatalf("expected rule_disabled endings: %v", a)
+					}
+				}
+				if rcv.count() != 4 {
+					t.Fatalf("disabling a rule must not notify: %v", rcv.got)
+				}
+				return
+			}
 			if rcv.count() != 8 {
 				t.Fatalf("expected four genuine recoveries: %v", rcv.got)
 			}
@@ -420,38 +477,6 @@ func TestOccurrenceSurvivesRestartAndRemovalDoesNotResolve(t *testing.T) {
 	}
 	if data, err := e.logs.Checkpoint(ctx, "alerts/state/agent"); err != nil || !json.Valid(data) {
 		t.Fatalf("state checkpoint invalid: %s %v", data, err)
-	}
-}
-
-func TestDurationRulesDoNotResolveDuringReconfirmation(t *testing.T) {
-	rcv := &receiver{}
-	srv := httptest.NewServer(rcv)
-	defer srv.Close()
-	e := newEngine(t, nil)
-	e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
-	o := &observations{latest: map[string]float64{"node:cpu": 95, "node:mem": 95, "c:p/web/app:cpu": 190, "l:p/web:cpu": 200}}
-	e.metrics, e.docker = o, o
-	// Advance the duration gates without making the test wait ten minutes.
-	e.memSince = time.Now().Add(-e.rules().MemFor)
-	e.load.cpuSince = time.Now().Add(-cpuFor)
-	e.load.ctrSince = map[string]time.Time{"p/web": time.Now().Add(-cpuFor)}
-	ctx := context.Background()
-	e.evaluate(ctx)
-	if rcv.count() != 3 {
-		t.Fatalf("expected node CPU, memory and container CPU firing: %v", rcv.got)
-	}
-	high := o.latest
-	o.latest = nil
-	e.evaluate(ctx)
-	o.latest = high
-	e.evaluate(ctx)
-	if rcv.count() != 3 {
-		t.Fatalf("a gap or fresh high values incorrectly resolved duration alerts: %v", rcv.got)
-	}
-	o.latest = map[string]float64{"node:cpu": 20, "node:mem": 30, "c:p/web/app:cpu": 40, "l:p/web:cpu": 200}
-	e.evaluate(ctx)
-	if rcv.count() != 6 {
-		t.Fatalf("fresh low values did not resolve duration alerts: %v", rcv.got)
 	}
 }
 

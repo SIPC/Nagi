@@ -286,8 +286,9 @@ func (s *Service) planEntries(ctx context.Context, nodeID string, all []store.Co
 				e := &nagiv1.LinkEntry{
 					ProjectId: row.ProjectID, Name: r.GetName(), Container: r.GetContainer(), Service: r.GetService(), Protocol: r.GetProtocol(),
 					Published: r.GetPublished(), Domains: r.GetDomains(), HttpOnly: r.GetHttpOnly(), TargetName: name, TargetPort: r.GetTarget(),
-					ProxyProtocol: r.GetProxyProtocol(), AlertRules: effectiveAlertRules(settingsOf(row.ProjectID), c),
+					ProxyProtocol: r.GetProxyProtocol(),
 				}
+				e.EffectiveAlertRules, e.AlertRules = s.containerRules(ctx, settingsOf(row.ProjectID), c)
 				for _, n := range failoverNodes(c) {
 					if len(keys[n]) > 0 {
 						e.Nodes = append(e.Nodes, &nagiv1.LinkNode{Key: keys[n], Name: names[n]})
