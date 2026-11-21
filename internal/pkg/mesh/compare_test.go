@@ -124,6 +124,8 @@ func TestComparePaths(t *testing.T) {
 		{"too few samples", build(path{small: ms(80), rounds: 20, roundEvery: 3 * time.Second}, path{via: pooled, small: ms(20), rounds: 20, roundEvery: 3 * time.Second}), false, Key{}, ""},
 		// 直连的第一跳变过：直连没有可信基线，不给建议，也不能当成「该回直连」。
 		{"direct hop changed", build(path{small: ms(80), epoch: 2}, path{via: pooled, small: ms(20)}), false, Key{}, ""},
+		// 直连在窗口里断过（丢包重时直连会被判断为断开）：同样不给结论。
+		{"direct dropped out", build(path{small: ms(80), err: ErrProbePath}, path{via: pooled, small: ms(20)}), false, Key{}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := m.ComparePaths(peer, tc.samples)
@@ -132,6 +134,9 @@ func TestComparePaths(t *testing.T) {
 			}
 			if len(got.Paths) != 2 || got.Paths[0].Via != (Key{}) {
 				t.Fatalf("paths = %+v", got.Paths)
+			}
+			if tc.name == "direct dropped out" && got.Reason != "直连：直连在窗口里断过，要重新观察" {
+				t.Fatalf("reason = %q", got.Reason)
 			}
 			if tc.sufficient && got.Paths[1].Reject != tc.reject {
 				t.Fatalf("relay reject = %q, want %q", got.Paths[1].Reject, tc.reject)

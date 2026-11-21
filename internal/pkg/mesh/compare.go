@@ -108,6 +108,10 @@ func (m *Mesh) ComparePaths(peer Key, samples []PathSample) PathAdvice {
 			continue
 		}
 		switch {
+		case errors.Is(s.Err, ErrProbePath) && s.Via == (Key{}):
+			// 直连没有授权一说：这时直连已经判断为断开（丢包重时会短暂出现），恢复后代次也变了。
+			r.Reject = "直连在窗口里断过，要重新观察"
+			continue
 		case errors.Is(s.Err, ErrProbePath):
 			r.Reject = "路线不可用或没有授权"
 			continue
