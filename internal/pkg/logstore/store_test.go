@@ -83,7 +83,9 @@ func TestCapacityPrunesOrdinaryBeforeAuditAndKeepsBoundedGaps(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "logs.db")
 	const budget = 2 << 20
 	s := openStore(t, path, budget)
-	record(t, s, logstore.Event{Time: time.Now().Add(-24 * time.Hour), Category: logstore.Audit, Kind: "first.audit", Data: "must survive ordinary flood"})
+	if err := s.RecordCheckpoint(t.Context(), logstore.Event{Time: time.Now().Add(-24 * time.Hour), Category: logstore.Audit, Kind: "first.audit", Data: "must survive ordinary flood"}, "input", 7); err != nil {
+		t.Fatal(err)
+	}
 	first := query(t, s, logstore.Filter{})[0]
 	fill := func(category string, count int) {
 		for i := range count {
@@ -123,6 +125,9 @@ func TestCapacityPrunesOrdinaryBeforeAuditAndKeepsBoundedGaps(t *testing.T) {
 	rows = query(t, s, logstore.Filter{After: state.Last})
 	if len(rows) != 1 || rows[0].Seq != state.Last+1 || rows[0].Source != state.Source {
 		t.Fatalf("清理重启后复用了编号: %+v", rows)
+	}
+	if b, err := s.Checkpoint(t.Context(), "input"); err != nil || string(b) != "7" {
+		t.Fatalf("历史清理顺便丢掉了来源读取位置: %s %v", b, err)
 	}
 }
 
@@ -171,7 +176,7 @@ func TestLocalConfigDefaultsAndCapacityRange(t *testing.T) {
 	for _, tc := range []struct {
 		json string
 		ok   bool
-	}{{`{"capacity_gib":10}`, true}, {`{"capacity_gib":4}`, false}, {`{"capacity_gib":11}`, false}, {`{"metrics_every_seconds":15}`, false}, {`{"metrics_every_seconds":0}`, false}, {`{"runtime_level":"trace"}`, false}} {
+	}{{`{"capacity_gib":10}`, true}, {`{"capacity_gib":4}`, false}, {`{"capacity_gib":11}`, false}, {`{"metrics_every_seconds":15}`, false}, {`{"metrics_every_seconds":0}`, false}, {`{"container_rescan_seconds":0}`, false}, {`{"container_retry_seconds":3601}`, false}, {`{"runtime_level":"trace"}`, false}} {
 		if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(tc.json), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -179,6 +184,26 @@ func TestLocalConfigDefaultsAndCapacityRange(t *testing.T) {
 		if (err == nil) != tc.ok {
 			t.Errorf("%s: err=%v", tc.json, err)
 		}
+	}
+}
+
+func TestHistoryAndCheckpointCommitTogetherAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "logs.db")
+	s := openStore(t, path, 2<<20)
+	e := logstore.Event{Category: logstore.Container, Kind: "output", Data: "first"}
+	if err := s.RecordCheckpoint(t.Context(), e, "container-a", 7); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := s.RecordCheckpoint(ctx, e, "container-a", 8); err == nil {
+		t.Fatal("失败记录却确认了位置")
+	}
+	s.Close()
+	s = openStore(t, path, 2<<20)
+	b, err := s.Checkpoint(t.Context(), "container-a")
+	if err != nil || string(b) != "7" || len(query(t, s, logstore.Filter{})) != 1 {
+		t.Fatalf("失败/重启后读取位置与正文脱节: %s %v", b, err)
 	}
 }
 

@@ -13,13 +13,16 @@ const GiB int64 = 1 << 30
 // Config 是本机 logs/config.json 的配置。面板和它的内嵌节点共用一份额度。
 // 修改后重启生效；不包含业务库、旧日志库和 Docker 自己的轮换文件。
 type Config struct {
-	CapacityGiB         int    `json:"capacity_gib"`
-	MetricsEverySeconds int    `json:"metrics_every_seconds"`
-	RuntimeLevel        string `json:"runtime_level"`
+	CapacityGiB            int    `json:"capacity_gib"`
+	MetricsEverySeconds    int    `json:"metrics_every_seconds"`
+	ContainerRescanSeconds int    `json:"container_rescan_seconds"`
+	ContainerRetrySeconds  int    `json:"container_retry_seconds"`
+	ContainerLineBytes     int    `json:"container_line_bytes"`
+	RuntimeLevel           string `json:"runtime_level"`
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, RuntimeLevel: "INFO"}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, RuntimeLevel: "INFO"}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。
@@ -40,6 +43,12 @@ func LoadConfig(dir string) (Config, error) {
 	// 现有指标采集每 10 秒一次。这里只调日志入库频率，不改变告警采样和旧图表的统计契约。
 	if c.MetricsEverySeconds < 10 || c.MetricsEverySeconds > 86400 || c.MetricsEverySeconds%10 != 0 {
 		return c, fmt.Errorf("metrics_every_seconds 必须是 10～86400 范围内的 10 秒倍数")
+	}
+	if c.ContainerRescanSeconds < 1 || c.ContainerRescanSeconds > 3600 || c.ContainerRetrySeconds < 1 || c.ContainerRetrySeconds > 3600 {
+		return c, fmt.Errorf("容器日志重扫/重试秒数必须在 1～3600 之间")
+	}
+	if c.ContainerLineBytes < 1024 || c.ContainerLineBytes > 8192 {
+		return c, fmt.Errorf("container_line_bytes 必须在 1024～8192 之间，给 JSON 转义和记录元信息留出空间")
 	}
 	c.RuntimeLevel = strings.ToUpper(c.RuntimeLevel)
 	switch c.RuntimeLevel {

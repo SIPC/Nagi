@@ -157,6 +157,8 @@ func Open(ctx context.Context, path string, budget int64) (*Store, error) {
 		CREATE INDEX IF NOT EXISTS log_time ON log_events(time_ns, seq);
 		CREATE TABLE IF NOT EXISTS log_pruned (
 			category TEXT PRIMARY KEY, first_seq INTEGER NOT NULL, last_seq INTEGER NOT NULL, count INTEGER NOT NULL);
+		CREATE TABLE IF NOT EXISTS log_checkpoints (
+			key TEXT PRIMARY KEY, data BLOB NOT NULL);
 	`); err != nil {
 		return fail(err)
 	}
@@ -206,7 +208,38 @@ func (s *Store) Close() error {
 }
 
 // Record 同步落盘，调用方得到成功后记录已提交。失败不会外送，也不会自动改用控制连接。
-func (s *Store) Record(ctx context.Context, e Event) (err error) {
+func (s *Store) Record(ctx context.Context, e Event) error {
+	return s.record(ctx, e, "", nil)
+}
+
+// RecordCheckpoint 把已采到的记录和来源读取位置放在同一事务内。
+// 位置不是可轮换的历史，清理历史不能删除或倒退它；位置本身也受数据库页数硬上限约束。
+func (s *Store) RecordCheckpoint(ctx context.Context, e Event, key string, position any) error {
+	b, err := json.Marshal(position)
+	if err != nil {
+		return err
+	}
+	if key == "" || len(key) > 200 || len(b) > 4096 {
+		return fmt.Errorf("无效或过大的日志采集断点")
+	}
+	return s.record(ctx, e, key, b)
+}
+
+// Checkpoint 返回最近一次已随记录提交的位置；没有位置不等于过去没有日志。
+func (s *Store) Checkpoint(ctx context.Context, key string) (json.RawMessage, error) {
+	if err := s.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer func() { <-s.gate }()
+	var b []byte
+	err := s.db.QueryRowContext(ctx, `SELECT data FROM log_checkpoints WHERE key=?`, key).Scan(&b)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return json.RawMessage(b), err
+}
+
+func (s *Store) record(ctx context.Context, e Event, key string, position []byte) (err error) {
 	if s == nil {
 		return nil
 	}
@@ -256,9 +289,23 @@ func (s *Store) Record(ctx context.Context, e Event) (err error) {
 			return err
 		}
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO log_events(time_ns, received_ns, category, priority, kind, project, object, data)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `INSERT INTO log_events(time_ns, received_ns, category, priority, kind, project, object, data)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, e.Time.UnixNano(), e.Received.UnixNano(), e.Category, p, e.Kind, e.Project, e.Object, b)
 	if err != nil {
+		return err
+	}
+	if key != "" {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO log_checkpoints(key,data) VALUES (?,?)
+			ON CONFLICT(key) DO UPDATE SET data=excluded.data`, key, position); err != nil {
+			return err
+		}
+	}
+	if err = tx.Commit(); err != nil {
 		return err
 	}
 	// 每次提交都回收 WAL，限制大写入/清理后的物理增长，而非等定时器才发现越额。

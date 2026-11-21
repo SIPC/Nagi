@@ -22,6 +22,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/nodefiles"
 	"github.com/SIPC/nagi/internal/agent/project"
@@ -179,6 +180,15 @@ func Run(ctx context.Context, cfg Config) error {
 	a.egress = newEgress(a)
 	a.violations = newViolations(a)
 	a.openAudit(ctx)
+	if cfg.Logs != nil {
+		logCtx, stopLogs := context.WithCancel(ctx)
+		logsDone := make(chan struct{})
+		go func() {
+			defer close(logsDone)
+			logging.RunContainers(logCtx, dc, cfg.Logs, cfg.LogConfig)
+		}()
+		defer func() { stopLogs(); <-logsDone }()
+	}
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
 		if a.proxy == nil {

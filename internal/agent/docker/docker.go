@@ -204,6 +204,8 @@ type LogLine struct {
 	Stream    string
 	Text      string
 	Time      time.Time
+	Truncated bool
+	Bytes     int64 // 原始行字节数（含 Docker 时间前缀，不含换行），不是脱敏后的长度。
 }
 
 // Logs 读取一个容器的日志，每一行调用一次 onLine，直到结束或 ctx 取消。
