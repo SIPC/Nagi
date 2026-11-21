@@ -175,20 +175,30 @@ export function projectMetricNodes(project: Project | undefined) {
 // useProjectMetrics 取项目在时间范围内的容器、容器资源上限和端口映射（http）监控。监控数据存在节点上，逐个节点查询。
 // 同一时间范围的项目栏、项目概览和容器页用同一份缓存：nodeIds 传 projectMetricNodes。
 export function useProjectMetrics(projectId: string, nodeIds: string[], range: MetricRange = "1h") {
-  const ids = [...new Set(nodeIds)].sort();
+  // 已知离线的节点不查（合计旁另有提示）；其余失败（例如节点版本过旧、节点网络不通）不吞掉，整块显示错误，不把少算的合计当成完整的。
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const offline = new Set(nodes.data?.nodes.filter((n) => !n.online).map((n) => n.id));
+  const ids = [...new Set(nodeIds)].filter((id) => !offline.has(id)).sort();
   const r = rangeOf(range);
   return useQuery({
     queryKey: ["project-metrics", projectId, ids.join(","), range],
     queryFn: async () => {
       const step = BigInt(r.step);
+      const failures: unknown[] = [];
+      const one = (p: Promise<{ series: MetricSeries[] }>) =>
+        p.catch((err) => {
+          failures.push(err);
+          return null;
+        });
       const parts = await Promise.all(
         ids.flatMap((nodeId) => [
-          nodeClient.queryNodeMetrics({ nodeId, prefix: `c:${projectId}/`, from: ago(r.seconds), step }).catch(() => null),
-          nodeClient.queryNodeMetrics({ nodeId, prefix: `r:${projectId}/`, from: ago(r.seconds), step }).catch(() => null),
+          one(nodeClient.queryNodeMetrics({ nodeId, prefix: `c:${projectId}/`, from: ago(r.seconds), step })),
+          one(nodeClient.queryNodeMetrics({ nodeId, prefix: `r:${projectId}/`, from: ago(r.seconds), step })),
           // 上限只用最新的值，取最近 1 分钟就够了。
-          nodeClient.queryNodeMetrics({ nodeId, prefix: `l:${projectId}/`, from: ago(60) }).catch(() => null),
+          one(nodeClient.queryNodeMetrics({ nodeId, prefix: `l:${projectId}/`, from: ago(60) })),
         ]),
       );
+      if (failures.length) throw failures[0];
       return parts.flatMap((p) => p?.series ?? []);
     },
     enabled: ids.length > 0,

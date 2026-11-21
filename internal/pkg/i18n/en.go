@@ -88,6 +88,8 @@ var en = map[string]string{
 	"节点上还有 1 个容器，请先迁移到其他节点或删除":               "The node still has 1 container. Migrate it to another node or delete it first",
 	"节点上还有 %d 个容器，请先迁移到其他节点或删除":              "The node still has %d containers. Migrate them to other nodes or delete them first",
 	"节点 %s 还没有加入节点网络":                        "Node %s hasn't joined the node network yet",
+	"节点 %s 版本过旧，不支持此项，请升级节点":                 "Node %s is too old to support this. Upgrade the node",
+	"项目有容器在版本过旧的节点上，这部分监控无法读取，请升级节点":         "Some of the project's containers are on nodes that are too old, so their metrics can't be read. Upgrade the nodes",
 	"节点 %s 版本过低，升级后才能查看磁盘明细":                 "Node %s is out of date. Upgrade it to see disk usage details",
 	"节点 %s 版本过低，升级后才能导入现有目录":                 "Node %s is out of date. Upgrade it to import an existing directory",
 	"节点 %s 版本过低，升级后才能清理快照仓库":                 "Node %s is out of date. Upgrade it to clean up snapshot repositories",

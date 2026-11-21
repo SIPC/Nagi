@@ -3,9 +3,8 @@ package audit
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/recording"
@@ -83,38 +82,37 @@ func (l *Log) ReadBatch(ctx context.Context, after int64, limit int, rec *Record
 		trows.Close()
 	}
 	if rec != nil {
+		// Read through the recording store: since v0.37 the chunks are in its
+		// database, and legacy files may already be verified and removed.
 		for _, e := range b.Events {
 			if !recording.ValidID(e.RecordingID) {
 				continue
 			}
-			dir := filepath.Join(rec.Dir, e.RecordingID[:6], e.RecordingID)
-			entries, _ := os.ReadDir(dir)
-			for _, f := range entries {
-				seq, err := strconv.Atoi(f.Name())
-				if err != nil {
-					continue
-				}
-				data, err := os.ReadFile(filepath.Join(dir, f.Name()))
-				if err == nil {
-					b.Chunks = append(b.Chunks, Chunk{Recording: e.RecordingID, Seq: seq, Data: data})
-				}
-			}
+			_ = rec.SealedChunks(e.RecordingID, func(seq int, data []byte) error {
+				b.Chunks = append(b.Chunks, Chunk{Recording: e.RecordingID, Seq: seq, Data: data})
+				return nil
+			})
 		}
 	}
 	return b, marshalReplica(out, b), nil
 }
 
-// WriteBatch 把同步来的一批写进备用面板的审计库：按原来的 id、prev_hash、hash 写入，录制的块写进录制目录。
+// WriteBatch 把同步来的一批写进备用面板的审计库：按原来的 id、prev_hash、hash 写入。录制的块先原样写进录制库，
+// 再提交引用它们的记录：中途断开时记录没有提交，续传从同一处重发，块重复写入是空操作。
 func (l *Log) WriteBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone, chunks []Chunk, rec *Recordings) error {
+	if rec != nil {
+		for _, c := range chunks {
+			if err := rec.PutReplicated(ctx, c.Recording, c.Seq, c.Data); err != nil {
+				return err
+			}
+		}
+	}
 	reserve := int64(64<<10) + int64(len(tombs))*256
 	for _, e := range events {
 		reserve += int64(len(Canonical(e.Event)))*2 + 4096
 	}
-	for _, c := range chunks {
-		reserve += int64(len(c.Data)) + 4096
-	}
 	return l.budget.WriteArchive(ctx, 4, reserve, func() error {
-		if err := l.writeBatch(ctx, events, tombs, chunks, rec); err != nil {
+		if err := l.writeBatch(ctx, events, tombs); err != nil {
 			return err
 		}
 		if l.budget != nil {
@@ -125,7 +123,7 @@ func (l *Log) WriteBatch(ctx context.Context, events []replicaEvent, tombs []Tom
 	})
 }
 
-func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone, chunks []Chunk, rec *Recordings) error {
+func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	tx, err := l.db.BeginTx(ctx, nil)
@@ -162,28 +160,43 @@ func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tom
 		return err
 	}
 	l.lastHash = last
-	if rec != nil {
-		for _, c := range chunks {
-			if !recording.ValidID(c.Recording) {
-				continue
-			}
-			dir := filepath.Join(rec.Dir, c.Recording[:6], c.Recording)
-			if err := os.MkdirAll(dir, 0o700); err != nil {
-				return err
-			}
-			if err := os.WriteFile(filepath.Join(dir, recording.ChunkName(c.Seq)), c.Data, 0o600); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 
-// wireBatch 是同步连接上的一帧。
+// wireBatch 是同步连接上的一帧。Cursors 是主面板各外送目标的游标（v0.37.1 起；旧版本没有这一项、也不读它）：
+// 提升以后接着这些位置外送，提升前主面板没送到的记录照常送出，送到的不重发。
 type wireBatch struct {
-	Events     []replicaEvent `json:"events,omitempty"`
-	Tombstones []Tombstone    `json:"tombstones,omitempty"`
-	Chunks     []Chunk        `json:"chunks,omitempty"`
+	Events     []replicaEvent   `json:"events,omitempty"`
+	Tombstones []Tombstone      `json:"tombstones,omitempty"`
+	Chunks     []Chunk          `json:"chunks,omitempty"`
+	Cursors    map[string]int64 `json:"cursors,omitempty"`
+}
+
+// SinkCursors returns the primary's external delivery cursors (meta sink:*),
+// sent to standbys with each frame.
+func (l *Log) SinkCursors(ctx context.Context) map[string]int64 {
+	rows, err := l.db.QueryContext(ctx, `SELECT key, value FROM meta WHERE key LIKE 'sink:%:cursor'`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	out := map[string]int64{}
+	for rows.Next() {
+		var k, v string
+		if rows.Scan(&k, &v) != nil {
+			continue
+		}
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			out[k] = n
+		}
+	}
+	return out
+}
+
+// CursorFrame is a frame carrying only delivery cursors.
+func CursorFrame(cursors map[string]int64) []byte {
+	b, _ := json.Marshal(wireBatch{Cursors: cursors})
+	return b
 }
 
 func marshalReplica(events []replicaEvent, b Batch) []byte {
@@ -202,6 +215,23 @@ func (l *Log) ApplyFrame(ctx context.Context, frame []byte, rec *Recordings) (in
 	}
 	if err := l.WriteBatch(ctx, w.Events, w.Tombstones, w.Chunks, rec); err != nil {
 		return 0, err
+	}
+	// The cursors may only move forward and never past what this replica
+	// holds: a promoted panel must not believe records it lacks were sent.
+	if len(w.Cursors) > 0 {
+		have := l.MaxID(ctx)
+		for k, v := range w.Cursors {
+			if !strings.HasPrefix(k, "sink:") || !strings.HasSuffix(k, ":cursor") || strings.Contains(k, ":node:") {
+				continue
+			}
+			v = min(v, have)
+			if old, err := strconv.ParseInt(l.Meta(ctx, k), 10, 64); err == nil && old >= v {
+				continue
+			}
+			if err := l.SetMeta(ctx, k, strconv.FormatInt(v, 10)); err != nil {
+				return 0, err
+			}
+		}
 	}
 	return l.MaxID(ctx), nil
 }

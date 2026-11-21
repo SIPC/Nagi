@@ -11,21 +11,33 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
 // Pending delivery is an intent, not a saved message or a saved credential.
-// Legacy queues without occurrence/source identity are deliberately not replayed.
+// The one exception is Legacy: a v0.36 queue entry has no occurrence to bind
+// to, so its own alert text is kept and sent once to the channel the panel
+// currently configures with the same ID and destination. Its saved channel
+// (URL or token) is never kept.
 type queued struct {
-	ID          string    `json:"id"`
-	Source      string    `json:"source"`
-	Occurrence  string    `json:"occurrence"`
-	Key         string    `json:"key"`
-	Status      string    `json:"status"`
-	Panel       string    `json:"panel"`
-	Channel     string    `json:"channel_id"`
-	Destination string    `json:"destination"`
-	Created     time.Time `json:"created"`
+	ID          string          `json:"id"`
+	Source      string          `json:"source"`
+	Occurrence  string          `json:"occurrence"`
+	Key         string          `json:"key"`
+	Status      string          `json:"status"`
+	Panel       string          `json:"panel"`
+	Channel     string          `json:"channel_id"`
+	Destination string          `json:"destination"`
+	Created     time.Time       `json:"created"`
+	Legacy      json.RawMessage `json:"legacy_alert,omitempty"`
+}
+
+// legacyQueued is a v0.36 alerts-queue.json entry: the full alert and channel.
+type legacyQueued struct {
+	Alert   json.RawMessage `json:"alert"`
+	Channel json.RawMessage `json:"channel"`
+	Panel   string          `json:"panel"`
 }
 
 type savedQueue struct {
@@ -72,6 +84,9 @@ func (e *Engine) queuedNotification(q queued) (*nagiv1.Alert, *nagiv1.AlertChann
 	if q.ID == "" || q.Created.IsZero() || time.Since(q.Created) > alert.RepeatInterval || q.Created.After(time.Now().Add(time.Minute)) {
 		return nil, nil
 	}
+	if q.Legacy != nil {
+		return e.legacyNotification(q)
+	}
 	for _, ch := range e.configs[q.Panel].GetChannels() {
 		if ch.GetId() == q.Channel && destination(ch) == q.Destination {
 			a := e.notificationAlert(q)
@@ -81,6 +96,47 @@ func (e *Engine) queuedNotification(q queued) (*nagiv1.Alert, *nagiv1.AlertChann
 		}
 	}
 	return nil, nil
+}
+
+// legacyNotification has no current-state evidence to check: it is the old
+// node's own record of a notification it failed to send, replayed as is.
+func (e *Engine) legacyNotification(q queued) (*nagiv1.Alert, *nagiv1.AlertChannel) {
+	a := &nagiv1.Alert{}
+	if protojson.Unmarshal(q.Legacy, a) != nil {
+		return nil, nil
+	}
+	for _, ch := range e.configs[q.Panel].GetChannels() {
+		if ch.GetId() == q.Channel && destination(ch) == q.Destination {
+			return a, proto.CloneOf(ch)
+		}
+	}
+	return nil, nil
+}
+
+// migrateLegacyQueue converts a v0.36 queue. An entry whose channel is no
+// longer configured, or now points elsewhere, can't be sent without the stored
+// credential, so it is dropped and counted in the log.
+func (e *Engine) migrateLegacyQueue(data []byte) bool {
+	var old []legacyQueued
+	if json.Unmarshal(data, &old) != nil {
+		return false
+	}
+	now, dropped := time.Now().UTC(), 0
+	for _, l := range old {
+		a, ch := &nagiv1.Alert{}, &nagiv1.AlertChannel{}
+		if protojson.Unmarshal(l.Alert, a) != nil || protojson.Unmarshal(l.Channel, ch) != nil {
+			dropped++
+			continue
+		}
+		q := queued{ID: rand.Text(), Key: a.GetKey(), Status: a.GetStatus(), Panel: l.Panel, Channel: ch.GetId(), Destination: destination(ch), Created: now, Legacy: l.Alert}
+		if current, _ := e.legacyNotification(q); current == nil {
+			dropped++
+			continue
+		}
+		e.queue = append(e.queue, q)
+	}
+	e.log.Info("已把旧版告警待发队列迁移到新格式", "migrated", len(e.queue), "dropped", dropped)
+	return true
 }
 
 func (e *Engine) enqueue(a *nagiv1.Alert, c channel) {
@@ -122,19 +178,25 @@ func (e *Engine) loadQueue() {
 	if os.IsNotExist(err) {
 		return
 	}
+	// saveQueue replaces the legacy file in one rename; a crash before it
+	// leaves the legacy file for the next start to migrate again.
+	if err == nil && e.migrateLegacyQueue(data) {
+		e.saveQueue()
+		return
+	}
 	var saved savedQueue
 	if err == nil {
 		err = json.Unmarshal(data, &saved)
 	}
 	if err != nil || saved.Version != 2 {
-		e.log.Warn("旧版或损坏的告警待发队列不重放；当前告警状态保留")
+		e.log.Warn("损坏的告警待发队列不重放；当前告警状态保留")
 		e.saveQueue()
 		return
 	}
 	for _, q := range saved.Pending {
 		// Rules are unconfirmed until fresh evaluation after restart; retain the
 		// reference so evaluation can validate it, never trust its old payload.
-		if q.Source == e.source && q.Occurrence != "" {
+		if q.Source == e.source && q.Occurrence != "" || q.Legacy != nil {
 			e.queue = append(e.queue, q)
 		}
 	}
@@ -163,7 +225,7 @@ func (e *Engine) flushQueue(ctx context.Context) {
 		}
 		a, ch := e.queuedNotification(q)
 		e.mu.Unlock()
-		if a != nil && !e.deliver(ctx, a, ch, q.Panel) {
+		if a != nil && !e.deliver(ctx, a, ch, q.Panel, q.Legacy != nil) {
 			continue
 		}
 		e.mu.Lock()

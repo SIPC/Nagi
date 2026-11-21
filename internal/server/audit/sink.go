@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -470,20 +468,12 @@ func (s *Shipper) uploadRecording(ctx context.Context, sk SinkConfig, id string)
 	if !recording.ValidID(id) {
 		return nil
 	}
-	dir := filepath.Join(s.Recordings.Dir, id[:6], id)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil // 已经被清理
-	}
-	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		key := auditsink.ScopedKey(sk.Prefix, auditsink.PanelScope, "recordings/"+id+"/"+e.Name())
-		if err := auditsink.S3Put(ctx, s.client, sk, key, b, "application/octet-stream"); err != nil {
-			return err
-		}
-	}
-	return nil
+	// 读新录制库（旧文件导入、清理后只在库里）；已被清理的录制不再上传。
+	var putErr error
+	_ = s.Recordings.SealedChunks(id, func(seq int, b []byte) error {
+		key := auditsink.ScopedKey(sk.Prefix, auditsink.PanelScope, "recordings/"+id+"/"+recording.ChunkName(seq))
+		putErr = auditsink.S3Put(ctx, s.client, sk, key, b, "application/octet-stream")
+		return putErr
+	})
+	return putErr
 }

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"slices"
 	"time"
-
-	"github.com/SIPC/nagi/internal/pkg/db"
 )
 
 // 哈希链校验（见 docs/audit.md#防篡改）：每条记录的 hash = SHA-256(prev_hash ‖ 规范化 JSON)，prev_hash 是上一条
@@ -54,7 +52,7 @@ func (l *Log) LastVerify(ctx context.Context) (VerifyResult, bool) {
 
 // VerifyFile 只读地校验一个审计库文件（nagi audit verify，面板运行中也能用）。
 func VerifyFile(ctx context.Context, path string) (VerifyResult, error) {
-	d, err := db.Open(path)
+	d, err := openRead(path)
 	if err != nil {
 		return VerifyResult{}, err
 	}

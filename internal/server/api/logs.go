@@ -11,9 +11,12 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/release"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -48,7 +51,7 @@ func (s *nodeLogService) QueryNodeLogs(ctx context.Context, req *connect.Request
 	}
 	out, err := nagiv1.NewLogServiceClient(cc).QueryLogs(ctx, q)
 	if err != nil {
-		return nil, toConnect(err)
+		return nil, s.logError(req.Msg.GetNodeId(), err)
 	}
 	return connect.NewResponse(out), nil
 }
@@ -126,9 +129,30 @@ func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 	return connect.NewResponse(out), nil
 }
 
+// logServiceMinVersion 是在 mesh 上提供 LogService（统一日志、图表历史、节点录制）的最低节点版本。
+const logServiceMinVersion = "v0.37.0"
+
+// outdatedNode 是旧节点没有 LogService 时的说明：面板不改走旧接口，如实提示升级。
+func (a *API) outdatedNode(nodeID string) error {
+	return connect.NewError(connect.CodeFailedPrecondition, i18n.Errorf("节点 %s 版本过旧，不支持此项，请升级节点", a.nodeRef(context.Background(), nodeID)))
+}
+
+// logError 把 LogService 调用的错误转给浏览器。只有节点明确不认识这个服务（Unimplemented）才说是版本过旧，
+// 其他 mesh 错误原样返回，不当成旧节点。
+func (a *API) logError(nodeID string, err error) error {
+	if status.Code(err) == codes.Unimplemented {
+		return a.outdatedNode(nodeID)
+	}
+	return toConnect(err)
+}
+
 // Log and metric history use each panel's authenticated mesh identity and never
 // fall back to the control connection. Nodes allow trusted standbys these reads.
+// Nodes that report a version without LogService fail with an explicit upgrade hint.
 func (a *API) logConnection(nodeID string) (*grpc.ClientConn, error) {
+	if release.Before(a.nodeVersion(nodeID), logServiceMinVersion) {
+		return nil, a.outdatedNode(nodeID)
+	}
 	m := a.Nodes.Mesh()
 	if m == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板 mesh 没有启动，无法查询节点日志"))
@@ -154,7 +178,7 @@ func (a *API) queryNodeMetrics(ctx context.Context, nodeID string, q *nagiv1.Que
 	defer cancel()
 	out, err := nagiv1.NewLogServiceClient(cc).QueryMetrics(ctx, q)
 	if err != nil {
-		return nil, toConnect(err)
+		return nil, a.logError(nodeID, err)
 	}
 	return out, nil
 }

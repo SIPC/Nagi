@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/SIPC/nagi/internal/agent"
+	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/pkg/invite"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/server"
@@ -443,20 +444,41 @@ func auditCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&dataDir, "data-dir", "/var/lib/nagi", "数据目录（和 nagi server 的相同）")
 	verify := &cobra.Command{
 		Use:   "verify",
-		Short: "校验审计日志的哈希链：中间的记录被修改或删除时报错",
+		Short: "校验审计日志的哈希链（面板审计和节点本地审计）：中间的记录被修改或删除时报错",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := filepath.Join(dataDir, "panel", "audit.db")
+			found := false
+			// 面板审计：v0.37.1 起在本机日志目录；还没迁移（或迁移未通过核验）的在面板目录。
+			path := filepath.Join(dataDir, "logs", "audit", "audit.db")
 			if _, err := os.Stat(path); err != nil {
-				return fmt.Errorf("找不到审计库 %s", path)
+				path = filepath.Join(dataDir, "panel", "audit.db")
 			}
-			r, err := audit.VerifyFile(cmd.Context(), path)
-			if err != nil {
-				return err
+			if _, err := os.Stat(path); err == nil {
+				found = true
+				r, err := audit.VerifyFile(cmd.Context(), path)
+				if err != nil {
+					return err
+				}
+				if !r.OK() {
+					return fmt.Errorf("面板审计哈希链校验失败：%s（共 %d 条记录）", r.Reason, r.Records)
+				}
+				fmt.Printf("面板审计哈希链完好：共 %d 条记录，最新一条 %d，哈希 %s\n", r.Records, r.LastID, r.LastHash)
 			}
-			if !r.OK() {
-				return fmt.Errorf("哈希链校验失败：%s（共 %d 条记录）", r.Reason, r.Records)
+			// 节点本地审计（v0.37.1 起）。
+			nodePath := auditlog.Path(filepath.Join(dataDir, "logs"))
+			if _, err := os.Stat(nodePath); err == nil {
+				found = true
+				r, err := auditlog.VerifyFile(cmd.Context(), nodePath)
+				if err != nil {
+					return err
+				}
+				if !r.OK() {
+					return fmt.Errorf("节点审计哈希链校验失败：%s（共 %d 条记录）", r.Reason, r.Records)
+				}
+				fmt.Printf("节点审计哈希链完好：共 %d 条记录、%d 个已清理的序号，最新一条 %d，哈希 %s\n", r.Records, r.Tombstones, r.LastSeq, r.LastHash)
 			}
-			fmt.Printf("哈希链完好：共 %d 条记录，最新一条 %d，哈希 %s\n", r.Records, r.LastID, r.LastHash)
+			if !found {
+				return fmt.Errorf("在 %s 下找不到审计库", dataDir)
+			}
 			return nil
 		},
 	}

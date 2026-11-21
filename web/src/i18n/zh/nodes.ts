@@ -16,6 +16,9 @@ export default {
     undone: "已解除隔离",
   },
   egressUnavailable: "无法限制容器出站",
+  tooOld: "节点版本过旧，部分功能需升级节点",
+  tooOldMetrics: "节点版本过旧，不支持监控图表，请升级节点",
+  tooOldHint: (version: string) => `Nagi ${version} 不支持监控图表、统一日志、节点本地录制和告警的确认与静默；升级节点后才能使用。终端、文件、部署等照常可用。`,
   tabs: {
     containers: "容器",
     metrics: "监控",

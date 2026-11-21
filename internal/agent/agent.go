@@ -184,6 +184,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		ctx:      ctx,
 
 		confirmUpgrade: confirmUpgrade,
+		panelReached:   make(chan struct{}),
 	}
 	a.startedAt = time.Now()
 	a.files = a.newNodeFiles()
@@ -398,6 +399,11 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 			log.Error("监控历史后台迁移失败，历史只读；基础服务继续运行，重启后重试", "err", err)
 		} else if err == nil {
 			log.Info("监控历史后台迁移完成", "duration", time.Since(started))
+			// The migration verified every value before emptying the old tables;
+			// only now may they leave node.db. A failure keeps them for the next start.
+			if err := metrics.CleanupLegacy(historyCtx, nodeDB, filepath.Join(cfg.DataDir, "node.db"), cfg.Logs, log); err != nil && historyCtx.Err() == nil {
+				log.Error("清理 node.db 中的旧监控表失败，已保留，重启后重试", "err", err)
+			}
 		}
 		if closeHistory != nil {
 			<-historyCtx.Done()
@@ -451,6 +457,9 @@ type agent struct {
 	startedAt  time.Time
 	// confirmUpgrade 在连上面板后调用：刚升级时表示新版本能用（见 upgrade_guard.go）。
 	confirmUpgrade func()
+	// panelReached 在第一次连上面板时关闭：之后升级不会再被自动换回旧版本，可以删除旧版本还要用的文件。
+	panelReached     chan struct{}
+	panelReachedOnce sync.Once
 
 	mu       sync.Mutex
 	subs     []chan struct{}
@@ -761,6 +770,11 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	a.log.Info("已连接面板", "panel", p.Address)
 	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "panel.connection.established", Object: p.Fingerprint, Data: map[string]any{"panel": p.Address}})
 	a.confirmUpgrade()
+	a.panelReachedOnce.Do(func() {
+		if a.panelReached != nil {
+			close(a.panelReached)
+		}
+	})
 	a.setConnectError(p.Fingerprint, nil)
 	a.mu.Lock()
 	if a.panels == nil {

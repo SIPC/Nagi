@@ -77,10 +77,18 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 	progress := logstore.Migration{ID: "metrics", Phase: "copying"}
 	var legacyPath string
 	var hasLegacy bool
-	if err := legacy.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM metrics_raw UNION ALL SELECT 1 FROM metrics_m5)`).Scan(&hasLegacy); err != nil {
+	// CleanupLegacy drops both tables once a migration has been verified.
+	var legacyTables int
+	if err := legacy.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name IN ('metrics_raw','metrics_m5')`).Scan(&legacyTables); err != nil {
 		return nil, nil, err
 	}
-	if report != nil {
+	dropped := legacyTables == 0
+	if !dropped {
+		if err := legacy.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM metrics_raw UNION ALL SELECT 1 FROM metrics_m5)`).Scan(&hasLegacy); err != nil {
+			return nil, nil, err
+		}
+	}
+	if report != nil && !dropped {
 		if err := legacy.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM metrics_raw)+(SELECT count(*) FROM metrics_m5)`).Scan(&progress.Total); err != nil {
 			return nil, nil, err
 		}
@@ -135,6 +143,9 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 		return fail(err)
 	}
 	for _, table := range []string{"metrics_raw", "metrics_m5"} {
+		if dropped {
+			break
+		}
 		var series string
 		var ts int64
 		first := true
@@ -263,6 +274,9 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 			report(progress)
 		}
 		if err := budget.WriteArchive(ctx, 2, reserve+(64<<10), func() error {
+			if dropped {
+				return nil
+			}
 			tx, err := legacy.BeginTx(ctx, nil)
 			if err != nil {
 				return err

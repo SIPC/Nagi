@@ -10,7 +10,7 @@ import {
   RouterProvider,
   useMatch,
 } from "@tanstack/react-router";
-import { authClient, isNotFound, isUnauthenticated, reverifyReason, setupClient } from "@/lib/api";
+import { authClient, isFailedPrecondition, isNotFound, isUnauthenticated, reverifyReason, setupClient } from "@/lib/api";
 import type { MeResponse } from "@/gen/nagi/v1/api_pb";
 import { ReverifyHost, waitReverify } from "@/components/reverify";
 import { LoginPage, SetupPage } from "@/pages/auth";
@@ -43,7 +43,7 @@ const onError = (err: unknown) => {
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: (err, query) => query.queryKey[0] !== "me" && onError(err) }),
   mutationCache: new MutationCache({ onError }),
-  defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && !reverifyReason(err) && !isNotFound(err) && count < 2 } },
+  defaultOptions: { queries: { retry: (count, err) => !isUnauthenticated(err) && !reverifyReason(err) && !isNotFound(err) && !isFailedPrecondition(err) && count < 2 } },
 });
 
 // 确认框、身份验证框和 Toast 挂在根路由里：其中的链接要用到路由。

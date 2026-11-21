@@ -77,22 +77,44 @@ func TestPendingNotificationsFollowCurrentStateAndConfiguration(t *testing.T) {
 	}
 }
 
-func TestLegacyNotificationQueueDoesNotReplaySavedPayloads(t *testing.T) {
-	r := &receiver{}
-	srv := httptest.NewServer(r)
+// v0.36 的 alerts-queue.json 是 [{alert, channel, panel}]：升级后迁到新格式并补发，
+// 不保留其中的渠道地址；渠道已删除或换了地址的条目发不出去，不发到别处。
+func TestLegacyNotificationQueueMigratesAndSends(t *testing.T) {
+	r, gone := &receiver{fail: true}, &receiver{}
+	srv, srvGone := httptest.NewServer(r), httptest.NewServer(gone)
 	defer srv.Close()
+	defer srvGone.Close()
 	e := newEngine(t, nil)
-	data := `[{"alert":{"key":"disk","status":"firing","title":"obsolete"},"channel":{"type":"webhook","url":"` + srv.URL + `"},"panel":"removed"}]`
+	if err := e.SetConfig("panel", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "kept", Type: "webhook", Url: srv.URL}, {Id: "moved", Type: "webhook", Url: srv.URL + "/new"}}}); err != nil {
+		t.Fatal(err)
+	}
+	data := `[{"alert":{"key":"disk","status":"firing","title":"disk full"},"channel":{"id":"kept","type":"webhook","url":"` + srv.URL + `"},"panel":"panel"},` +
+		`{"alert":{"key":"cpu","status":"resolved","title":"cpu high"},"channel":{"id":"kept","type":"webhook","url":"` + srv.URL + `"},"panel":"panel"},` +
+		`{"alert":{"key":"mem","status":"firing","title":"moved"},"channel":{"id":"moved","type":"webhook","url":"` + srvGone.URL + `"},"panel":"panel"},` +
+		`{"alert":{"key":"x","status":"firing","title":"removed panel"},"channel":{"id":"kept","type":"webhook","url":"` + srv.URL + `"},"panel":"gone"}]`
 	if err := os.WriteFile(e.queueFile(), []byte(data), 0600); err != nil {
 		t.Fatal(err)
 	}
 	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
-	e.flushQueue(context.Background())
-	if r.count() != 0 {
-		t.Fatal("legacy full message queue sent obsolete notification")
-	}
 	b, err := os.ReadFile(e.queueFile())
-	if err != nil || strings.Contains(string(b), srv.URL) {
-		t.Fatalf("legacy credential copy retained: %s %v", b, err)
+	if err != nil || strings.Contains(string(b), srv.URL) || !strings.Contains(string(b), `"version":2`) {
+		t.Fatalf("迁移后应是新格式且不含渠道地址：%s %v", b, err)
+	}
+	// 第一次发送失败：留在队列里，重启后仍在。
+	e.flushQueue(context.Background())
+	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil, e.logs)
+	r.mu.Lock()
+	r.fail = false
+	r.mu.Unlock()
+	e.flushQueue(context.Background())
+	e.flushQueue(context.Background())
+	if r.count() != 2 || gone.count() != 0 {
+		t.Fatalf("应只发出 2 条且各一次：%v %v", r.got, gone.got)
+	}
+	if r.got[0]["title"] != "disk full" || r.got[0]["status"] != "firing" || r.got[1]["title"] != "cpu high" || r.got[1]["status"] != "resolved" {
+		t.Fatalf("按原顺序发出原通知：%v", r.got)
+	}
+	if b, _ := os.ReadFile(e.queueFile()); strings.Contains(string(b), "legacy_alert") {
+		t.Fatalf("发出后应从队列删除：%s", b)
 	}
 }

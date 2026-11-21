@@ -20,6 +20,7 @@ export default {
   // 有离线节点时，流量和端口映射只统计在线节点。
   offlineExcluded: (names: string) => `未包含离线节点 ${names}`,
   allOffline: "节点均离线，无法获取流量",
+  tooOld: (_n: number, names: string) => `节点 ${names} 版本过旧，不支持流量统计，未计入；请升级节点`,
   viewNodes: "查看节点",
   flow: {
     title: "实时流量",
@@ -34,7 +35,11 @@ export default {
     other: "其他",
     noSend: "无发出",
     noReceive: "无接收",
-    outdated: (names: string) => `节点 ${names} 版本过低，升级后才能统计节点之间的流量。在此之前，它们的对外流量包含节点之间的流量`,
+    meshMigrating: (names: string) => `节点 ${names} 正在迁移旧监控历史，期间暂不记录节点之间的流量，完成后自动恢复。在此之前，它们的对外流量包含节点之间的流量`,
+    meshFailed: (names: string) => `节点 ${names} 的监控历史迁移失败，暂不记录节点之间的流量，节点重启后会重试；原因见该节点的日志。在此之前，它们的对外流量包含节点之间的流量`,
+    meshWaiting: (names: string) => `节点 ${names} 近期暂无节点之间的统计，可能刚启动或刚加入组网，等下一轮采样。在此之前，它们的对外流量包含节点之间的流量`,
+    meshNone: (names: string) => `节点 ${names} 近期暂无节点之间的统计。在此之前，它们的对外流量包含节点之间的流量`,
+    viewLogs: "查看日志",
     empty: "暂无流量",
     aria: (from: string, to: string, rate: string) => `流量桑基图：左边是发出方，右边是接收方。最大的是 ${from} 发往 ${to} ${rate}。`,
     caption: "当前各路径的流量",

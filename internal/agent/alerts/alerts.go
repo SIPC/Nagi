@@ -711,7 +711,7 @@ func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
 	}
 	accepted := len(chans) > 0
 	for _, c := range chans {
-		if !e.deliver(ctx, a, c.ch, c.panel) {
+		if !e.deliver(ctx, a, c.ch, c.panel, false) {
 			accepted = false
 			e.mu.Lock()
 			e.enqueue(a, c)
@@ -730,14 +730,15 @@ func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
 
 // Revalidate between network attempts; config changes cannot redirect a delayed
 // relay to a replacement destination with the same channel ID.
-func (e *Engine) currentDelivery(a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string) (*nagiv1.Alert, *nagiv1.AlertChannel) {
+// A legacy (v0.36) queue entry has no occurrence to revalidate; only its channel.
+func (e *Engine) currentDelivery(a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string, legacy bool) (*nagiv1.Alert, *nagiv1.AlertChannel) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, current := range e.configs[panel].GetChannels() {
 		if current.GetId() != ch.GetId() || destination(current) != destination(ch) {
 			continue
 		}
-		if a.GetStatus() != "info" {
+		if a.GetStatus() != "info" && !legacy {
 			a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
 		}
 		if a != nil {
@@ -748,8 +749,8 @@ func (e *Engine) currentDelivery(a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel
 }
 
 // deliver 先直接发送，失败再请面板代发。
-func (e *Engine) deliver(ctx context.Context, a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string) bool {
-	a, ch = e.currentDelivery(a, ch, panel)
+func (e *Engine) deliver(ctx context.Context, a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string, legacy bool) bool {
+	a, ch = e.currentDelivery(a, ch, panel, legacy)
 	if a == nil || ch == nil {
 		return false
 	}
@@ -758,7 +759,7 @@ func (e *Engine) deliver(ctx context.Context, a *nagiv1.Alert, ch *nagiv1.AlertC
 		return true
 	}
 	e.log.Warn("直接发送告警失败，交给面板代发", "channel", ch.GetName(), "err", err)
-	a, ch = e.currentDelivery(a, ch, panel)
+	a, ch = e.currentDelivery(a, ch, panel, legacy)
 	if a == nil || ch == nil {
 		return false
 	}

@@ -9,6 +9,7 @@ import { RecordingDialog } from "@/components/recording";
 import { errorMessage, logClient, nodeClient, projectClient, toDate } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import type { LogEntry, LogPage, LogQuery, NodeLogQuery } from "@/gen/nagi/v1/logs_pb";
+import { lacksLogService } from "@/pages/update";
 import { t } from "@/i18n";
 
 type Request = Pick<NodeLogQuery, "nodeId" | "panelLocal" | "recentCopy"> & { query: Pick<LogQuery, "category" | "kindPrefix" | "project" | "search" | "limit" | "from" | "to"> };
@@ -51,13 +52,16 @@ export function LogEntries() {
   }), [search.node, search.copy, search.category, search.project, search.q, search.from, search.to, revision]);
   useEffect(() => { setSelected(undefined); setReplaying(false); }, [request]);
   const invalid = !!(search.from && !Number.isFinite(Date.parse(search.from)) || search.to && !Number.isFinite(Date.parse(search.to)) || search.from && search.to && Date.parse(search.from) >= Date.parse(search.to));
+  // 版本过旧的节点没有统一日志：不查，只显示一条升级提示（旧审计在「审计与录制」）。
+  const tooOld = !request.recentCopy && lacksLogService(nodes.data?.nodes.find((node) => node.id === search.node)?.info?.version);
   const logs = useInfiniteQuery({
     // Protobuf timestamps contain bigint seconds; keep cache keys JSON-safe.
     queryKey: ["logs", search.node, search.copy, search.category, search.project, search.q, search.from, search.to, revision],
     initialPageParam: { source: "", after: 0n },
     queryFn: ({ pageParam, signal }) => logClient.queryNodeLogs({ ...request, query: { ...request.query, ...pageParam } }, { signal }),
     getNextPageParam: (last) => last.more ? { source: last.source, after: last.nextAfter } : undefined,
-    enabled: !invalid, retry: false, refetchOnWindowFocus: false,
+    // 选了节点时先等节点列表，才知道它是不是版本过旧。
+    enabled: !invalid && !tooOld && (!search.node || !nodes.isPending), retry: false, refetchOnWindowFocus: false,
   });
   const pages = logs.data?.pages ?? [];
   const events = pages.flatMap((page) => page.entries);
@@ -84,7 +88,7 @@ export function LogEntries() {
     { key: "to" as const, label: search.to && `${t.logs.to}: ${search.to.replace("T", " ")}` },
   ].filter((chip) => chip.label);
   return <div className="flex min-w-0 flex-col gap-4">
-    <MetricsMigration request={request} online={nodes.data?.nodes.find((node) => node.id === request.nodeId)?.online === true} />
+    {!tooOld && <MetricsMigration request={request} online={nodes.data?.nodes.find((node) => node.id === request.nodeId)?.online === true} />}
     <form className="flex items-center gap-2" onSubmit={(event) => {
       event.preventDefault(); apply();
     }}>
@@ -139,10 +143,11 @@ export function LogEntries() {
     </Dialog>
     {(nodes.error || projects.error) && <QueryError error={nodes.error || projects.error} />}
     {invalid && <Notice tone="danger">{t.logs.invalidTime}</Notice>}
+    {tooOld && <Notice tone="warning">{t.logs.tooOld(sourceName)}</Notice>}
     {offline && !request.recentCopy && <Notice tone="warning" actions={<Button readOnlyOk variant="outline" onClick={() => navigate({ search: { ...search, copy: true, category: search.category || "audit" }, replace: true })}>{t.logs.useCopy}</Button>}>{t.logs.offlineHelp}</Notice>}
-    {!invalid && <LogCoverage key={revision} request={request} state={state} onOpen={(e, source) => { setSelected(e); setSelectedSource(source); setReplaying(false); }} />}
+    {!invalid && !tooOld && <LogCoverage key={revision} request={request} state={state} onOpen={(e, source) => { setSelected(e); setSelectedSource(source); setReplaying(false); }} />}
     {logs.error && <QueryError error={logs.error} onRetry={reset} />}
-    {!invalid && logs.isPending ? <RowsSkeleton count={5} /> : state && <>
+    {tooOld ? null : !invalid && logs.isPending ? <RowsSkeleton count={5} /> : state && <>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-muted-foreground"><span>{sourceName}</span><span>{t.logs.order}</span></div>
       {!events.length ? <EmptyRow action={<Button readOnlyOk variant="outline" onClick={() => navigate({ search: {}, replace: true })}>{t.audit.clearFilters}</Button>}>{t.logs.empty}</EmptyRow> : <Table compact className="table-fixed">
         <thead><tr><Th className="md:w-1/2">{t.logs.event}</Th><Th className="hidden w-28 lg:table-cell">{t.audit.detail.category}</Th><Th className="hidden w-32 xl:table-cell">{t.audit.detail.project}</Th><Th className="hidden md:table-cell">{t.audit.detail.time}</Th></tr></thead>
@@ -190,20 +195,30 @@ function MetricsMigration({ request, online }: { request: Request; online: boole
   if (request.recentCopy) return <Notice>{t.logs.migration.copyHelp}</Notice>;
   if (!enabled) return null;
   if (status.isError) return <Notice tone="warning" title={t.logs.migration.title}>{t.logs.migration.unavailable}<span className="block wrap-anywhere">{errorMessage(status.error)}</span></Notice>;
+  const cleanups = (status.data?.migrations ?? []).filter((item) => item.id in t.logs.cleanup.targets && item.phase !== "complete");
+  const cleanupNotices = cleanups.map(({ id, phase, error }) => <Notice key={id} tone={phase === "failed" ? "warning" : "info"} title={t.logs.cleanup.title}>
+    <span className="inline-flex max-w-full items-center gap-2">{phase !== "failed" && <Spinner className="shrink-0" />}{phase === "failed" ? t.logs.cleanup.failed(t.logs.cleanup.targets[id as keyof typeof t.logs.cleanup.targets]) : t.logs.cleanup.running(t.logs.cleanup.targets[id as keyof typeof t.logs.cleanup.targets])}</span>
+    {phase === "failed" && <span className="block whitespace-pre-wrap wrap-anywhere">{error || t.logs.migration.unknownError}</span>}
+  </Notice>);
+  const verify = status.data?.migrations?.find((item) => item.id === "verify.audit" && item.phase !== "complete");
+  if (verify) cleanupNotices.push(<Notice key={verify.id} tone={verify.phase === "failed" ? "danger" : "info"} title={t.logs.cleanup.title}>
+    <span className="inline-flex max-w-full items-center gap-2">{verify.phase !== "failed" && <Spinner className="shrink-0" />}{verify.phase === "failed" ? t.logs.cleanup.verifyFailed : t.logs.cleanup.verifying}</span>
+    {verify.phase === "failed" && <span className="block whitespace-pre-wrap wrap-anywhere">{verify.error || t.logs.migration.unknownError}</span>}
+  </Notice>);
   const migration = status.data?.migrations?.find((item) => item.id === "metrics");
-  if (!migration) return null;
+  if (!migration) return cleanupNotices.length ? <>{cleanupNotices}</> : null;
   const { phase, completed, total, error } = migration;
   if (phase !== "pending" && phase !== "copying" && phase !== "cleanup" && phase !== "complete" && phase !== "failed") return null;
   const failed = phase === "failed";
   const complete = phase === "complete";
   const running = !failed && !complete;
-  return <Notice tone={failed ? "danger" : complete ? "success" : "info"} title={<span className="inline-flex items-center gap-1">{t.logs.migration.title}<HelpTip>{t.logs.migration.scope}</HelpTip></span>}>
+  return <><Notice tone={failed ? "danger" : complete ? "success" : "info"} title={<span className="inline-flex items-center gap-1">{t.logs.migration.title}<HelpTip>{t.logs.migration.scope}</HelpTip></span>}>
     <span className="inline-flex max-w-full items-center gap-2">{running && <Spinner className="shrink-0" />}{t.logs.migration.phases[phase]}</span>
     {phase === "copying" && <span className="block tabular-nums wrap-anywhere">{total > 0n ? t.logs.migration.progress(String(completed), String(total), String(completed * 100n / total)) : t.logs.migration.copied(String(completed))}</span>}
     {running && <span className="block">{t.logs.migration.background}</span>}
     {failed && <span className="block">{t.logs.migration.failedHelp}</span>}
     {failed && <span className="block whitespace-pre-wrap wrap-anywhere">{error || t.logs.migration.unknownError}</span>}
-  </Notice>;
+  </Notice>{cleanupNotices}</>;
 }
 
 // Node-wide evidence intentionally ignores the user's text/project/category filters.

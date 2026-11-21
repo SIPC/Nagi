@@ -6,13 +6,17 @@ import { Button, Dialog, DialogActions, Field, FormBody, List, Notice, QueryErro
 import { withElevation } from "@/components/elevate";
 import { useRole } from "@/components/role";
 import type { AlertState } from "@/gen/nagi/v1/alert_state_pb";
-import { alertClient, errorMessage, toDate } from "@/lib/api";
+import { alertClient, errorMessage, nodeClient, toDate } from "@/lib/api";
+import { lacksLogService } from "@/pages/update";
 import { formatDateTime } from "@/lib/utils";
 import { t } from "@/i18n";
 
 export function CurrentAlerts() {
   const { can } = useRole();
   const qc = useQueryClient();
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}), enabled: can("node.view") });
+  // v0.36 及更早的节点不向面板上报告警状态：列出这些节点，不显示成没有告警。
+  const tooOld = nodes.data?.nodes.filter((n) => n.online && lacksLogService(n.info?.version)).map((n) => n.name) ?? [];
   const query = useQuery({ queryKey: ["alert-states"], queryFn: () => alertClient.listAlertStates({ includeHistory: true }), refetchInterval: 15_000 });
   const [selected, setSelected] = useState<AlertState>();
   const [note, setNote] = useState("");
@@ -45,7 +49,8 @@ export function CurrentAlerts() {
   const status = (a: AlertState) => !live(a) ? a.alert?.status === "resolved" ? m.recovered : m.ended
     : a.validity === "stale" ? m.stale : a.validity !== "valid" ? m.unknown : a.acknowledged ? m.acknowledged : m.unacknowledged;
   // An empty current snapshot consumes no page space, including old history.
-  if (!current.length && !selected) return query.error ? <QueryError error={query.error} onRetry={() => query.refetch()} /> : null;
+  const oldNotice = tooOld.length > 0 && <Notice tone="warning">{m.tooOld(tooOld.length, t.common.list(tooOld))}</Notice>;
+  if (!current.length && !selected) return query.error ? <QueryError error={query.error} onRetry={() => query.refetch()} /> : oldNotice ? <div className="mb-6">{oldNotice}</div> : null;
   return <section className="mb-6 flex flex-col gap-4" aria-label={m.title}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h2 className="text-base font-semibold">{m.title} <span className="ml-2 text-sm font-normal text-muted-foreground">{m.count(current.length)}</span></h2>
@@ -54,6 +59,7 @@ export function CurrentAlerts() {
         <Button variant="ghost" readOnlyOk disabled={query.isFetching} onClick={() => query.refetch()}>{m.refresh}</Button>
       </div>
     </div>
+    {oldNotice}
     {query.data?.recentCopy && <Notice tone="warning">{m.recent}</Notice>}
     {query.error && <QueryError error={query.error} onRetry={() => query.refetch()} />}
     <List>{current.map((a) => <Row key={`${a.nodeId}/${a.alert?.occurrence}`} title={a.alert?.title} sub={[a.alert?.project, a.conclusion].filter(Boolean).join(" · ")}
