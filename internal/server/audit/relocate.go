@@ -35,6 +35,9 @@ import (
 // RelocateID is the live migration entry for the log page.
 const RelocateID = "cleanup.audit"
 
+// VerifyMovedID reports the background chain check of renamed databases.
+const VerifyMovedID = "verify.audit"
+
 // The checkpoint is keyed by the destination name: each destination is filled
 // from exactly one original, and is never filled again once done.
 func relocateCheckpoint(dst string) string { return "legacy.cleanup.audit." + filepath.Base(dst) }

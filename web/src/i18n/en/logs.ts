@@ -26,9 +26,11 @@ export default {
   pruned: (origin, category, first, last, count) => `${origin} · ${category}: ${count} entries removed within sequences ${first}–${last}; exact time range unknown.`,
   cleanup: {
     title: "Old data cleanup",
-    targets: { "cleanup.metrics": "the emptied old metric tables in the node's node.db", "cleanup.recordings": "the panel's old recording files", "cleanup.audit": "the old audit databases in the panel directory (whole chains copied to the local log directory)", "cleanup.nodeAudit": "the node's old audit files (imported into the new hash-chained audit store)" },
+    targets: { "cleanup.metrics": "the emptied old metric tables in the node's node.db", "cleanup.recordings": "the panel's old recording files", "cleanup.audit": "the old audit databases in the panel directory (whole chains moved to the local log directory)", "cleanup.nodeAudit": "the node's old audit files (imported into the new hash-chained audit store)" },
     running: (what) => `Migrated and verified. Deleting ${what} and reclaiming space.`,
     failed: (what) => `Couldn't delete ${what}. The originals are kept and it retries on the next start.`,
+    verifying: "The panel audit database was moved to the local log directory. Verifying the whole hash chain in the background; the panel stays available.",
+    verifyFailed: "The moved panel audit database failed hash-chain verification: it may have been modified before the upgrade. The file is kept as it was and no records were deleted. See Settings → Security → Hash chain for the first mismatching record.",
   },
   migration: {
     title: "Metrics history migration",

@@ -65,7 +65,7 @@ func TestPanelAuditLeavesPanelDirectory(t *testing.T) {
 	}
 	s.verifyMovedAudit(ctx) // runs in the background once the panel serves
 	for _, m := range logs.Migrations() {
-		if m.ID == audit.RelocateID && m.Phase != "complete" {
+		if (m.ID == audit.RelocateID || m.ID == audit.VerifyMovedID) && m.Phase != "complete" {
 			t.Fatalf("migration status: %+v", m)
 		}
 	}

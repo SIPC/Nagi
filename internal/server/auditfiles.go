@@ -77,6 +77,7 @@ func (s *Server) verifyMovedAudit(ctx context.Context) {
 		return
 	}
 	logs := s.cfg.Logs
+	logs.SetMigration(logstore.Migration{ID: audit.VerifyMovedID, Phase: "cleanup"})
 	var failures []error
 	for _, path := range s.movedAudit {
 		if err := audit.VerifyMoved(ctx, path); err != nil {
@@ -90,11 +91,11 @@ func (s *Server) verifyMovedAudit(ctx context.Context) {
 	}
 	if err := errors.Join(failures...); err != nil {
 		s.log.Error("迁移后的审计库校验不通过，文件原样保留，请检查是否被篡改", "err", err)
-		logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "failed", Error: err.Error()})
+		logs.SetMigration(logstore.Migration{ID: audit.VerifyMovedID, Phase: "failed", Error: err.Error()})
 		return
 	}
 	s.log.Info("迁移后的审计库整链校验通过", "count", len(s.movedAudit))
-	logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "complete"})
+	logs.SetMigration(logstore.Migration{ID: audit.VerifyMovedID, Phase: "complete"})
 }
 
 func (s *Server) relocateLegacyAudit(ctx context.Context, dir string, logs *logstore.Store) error {
@@ -136,8 +137,6 @@ func (s *Server) relocateLegacyAudit(ctx context.Context, dir string, logs *logs
 		logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "failed", Error: err.Error()})
 		return nil
 	}
-	if len(s.movedAudit) == 0 {
-		logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "complete"})
-	}
+	logs.SetMigration(logstore.Migration{ID: audit.RelocateID, Phase: "complete"})
 	return nil
 }

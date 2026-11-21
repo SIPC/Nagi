@@ -200,6 +200,11 @@ function MetricsMigration({ request, online }: { request: Request; online: boole
     <span className="inline-flex max-w-full items-center gap-2">{phase !== "failed" && <Spinner className="shrink-0" />}{phase === "failed" ? t.logs.cleanup.failed(t.logs.cleanup.targets[id as keyof typeof t.logs.cleanup.targets]) : t.logs.cleanup.running(t.logs.cleanup.targets[id as keyof typeof t.logs.cleanup.targets])}</span>
     {phase === "failed" && <span className="block whitespace-pre-wrap wrap-anywhere">{error || t.logs.migration.unknownError}</span>}
   </Notice>);
+  const verify = status.data?.migrations?.find((item) => item.id === "verify.audit" && item.phase !== "complete");
+  if (verify) cleanupNotices.push(<Notice key={verify.id} tone={verify.phase === "failed" ? "danger" : "info"} title={t.logs.cleanup.title}>
+    <span className="inline-flex max-w-full items-center gap-2">{verify.phase !== "failed" && <Spinner className="shrink-0" />}{verify.phase === "failed" ? t.logs.cleanup.verifyFailed : t.logs.cleanup.verifying}</span>
+    {verify.phase === "failed" && <span className="block whitespace-pre-wrap wrap-anywhere">{verify.error || t.logs.migration.unknownError}</span>}
+  </Notice>);
   const migration = status.data?.migrations?.find((item) => item.id === "metrics");
   if (!migration) return cleanupNotices.length ? <>{cleanupNotices}</> : null;
   const { phase, completed, total, error } = migration;
