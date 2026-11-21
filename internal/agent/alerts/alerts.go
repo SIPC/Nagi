@@ -61,18 +61,22 @@ type Engine struct {
 	ContainerRules func(projectID, container string) (*nagiv1.AlertRules, bool)
 	RouteRules     func(projectID, route string) (*nagiv1.AlertRules, bool)
 
-	mu         sync.Mutex
-	configs    map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
-	states     map[string]*state
-	restarts   map[string][]restartSample
-	memSince   time.Time
-	load       loadState
-	queue      []queued
-	source     string
-	revision   uint64
-	history    []*nagiv1.Alert
-	stateErr   error                // fail closed: never publish an uncommitted source version
-	suppressed map[string]time.Time // occurrence -> bounded primary-authorized mute
+	mu           sync.Mutex
+	configs      map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
+	states       map[string]*state
+	restarts     map[string][]restartSample
+	memSince     time.Time
+	load         loadState
+	queue        []queued
+	source       string
+	revision     uint64
+	history      []*nagiv1.Alert
+	stateErr     error             // fail closed: never publish an uncommitted source version
+	committed    *nagiv1.AlertSync // newest committed version; the only one Snapshot publishes
+	pending      *pendingSave      // newest version waiting for a congested store
+	saving       bool              // retrySaves is running and is the only writer
+	congestedLog time.Time
+	suppressed   map[string]time.Time // occurrence -> bounded primary-authorized mute
 }
 
 type state struct {

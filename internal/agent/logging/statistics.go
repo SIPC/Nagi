@@ -25,8 +25,10 @@ type metricSample struct {
 	Chunks   int           `json:"chunks"`
 }
 
-// CaptureMetrics records bounded chunks followed by a completion marker. Readers
-// cannot mistake a partly persisted sample for a complete healthy observation.
+// CaptureMetrics queues bounded chunks followed by a completion marker as one
+// batch: readers never see a partly persisted sample as a complete healthy
+// observation, and the sampler never waits for the disk. A batch that cannot
+// be queued or written is counted as lost in the store's write failures.
 func CaptureMetrics(logs *logstore.Store, cfg logstore.Config) func(time.Time, map[string]float64) {
 	var last time.Time
 	return func(at time.Time, values map[string]float64) {
@@ -34,20 +36,21 @@ func CaptureMetrics(logs *logstore.Store, cfg logstore.Config) func(time.Time, m
 			return
 		}
 		last = at
+		var batch, invalid []logstore.Event
 		chunk := make([]metricPoint, 0, 32)
 		points, chunks := 0, 0
 		flush := func() {
 			if len(chunk) == 0 {
 				return
 			}
-			logs.Report(logstore.Event{Time: at, Category: logstore.Metrics, Kind: "sample", Data: metricSample{Interval: cfg.MetricsEverySeconds, Values: chunk}})
+			batch = append(batch, logstore.Event{Time: at, Category: logstore.Metrics, Kind: "sample", Data: metricSample{Interval: cfg.MetricsEverySeconds, Values: chunk}})
 			points += len(chunk)
 			chunks++
 			chunk = make([]metricPoint, 0, 32)
 		}
 		for series, value := range values {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
-				logs.Report(logstore.Event{Time: at, Category: logstore.System, Kind: "sample.invalid", Data: map[string]any{"series": series}})
+				invalid = append(invalid, logstore.Event{Time: at, Category: logstore.System, Kind: "sample.invalid", Data: map[string]any{"series": series}})
 				continue
 			}
 			chunk = append(chunk, metricPoint{series, value})
@@ -56,7 +59,9 @@ func CaptureMetrics(logs *logstore.Store, cfg logstore.Config) func(time.Time, m
 			}
 		}
 		flush()
-		logs.Report(logstore.Event{Time: at, Category: logstore.Metrics, Kind: "sample.end", Data: metricSample{Interval: cfg.MetricsEverySeconds, Points: points, Chunks: chunks}})
+		batch = append(batch, logstore.Event{Time: at, Category: logstore.Metrics, Kind: "sample.end", Data: metricSample{Interval: cfg.MetricsEverySeconds, Points: points, Chunks: chunks}})
+		logs.ReportBatch(batch)
+		logs.ReportBatch(invalid)
 	}
 }
 

@@ -107,6 +107,9 @@ func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	out := &nagiv1.LogPage{Source: p.State.Source, LatestSeq: p.State.Last, NextAfter: p.Next, More: p.More, RecentCopy: req.GetRecentCopy(), WriteErrors: p.State.WriteErrors, DiskBytes: p.State.DiskBytes, BudgetBytes: p.State.BudgetBytes, Migrations: migrations}
+	for _, w := range p.State.Failures {
+		out.WriteFailures = append(out.WriteFailures, &nagiv1.LogWriteFailure{Category: w.Category, Failed: w.Failed, Lost: w.Lost, LastError: w.LastError, LastTime: timestamppb.New(w.LastTime)})
+	}
 	for _, e := range p.Events {
 		data, err := json.Marshal(e.Data)
 		if err != nil {

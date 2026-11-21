@@ -10,9 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -96,6 +96,7 @@ type State struct {
 	DiskBytes   int64          `json:"disk_bytes"`
 	BudgetBytes int64          `json:"budget_bytes"`
 	WriteErrors uint64         `json:"write_errors"`
+	Failures    []WriteFailure `json:"failures"`
 	Pruned      []Pruned       `json:"pruned"`
 	Archives    []ArchiveUsage `json:"archives"`
 }
@@ -117,7 +118,10 @@ type Store struct {
 	budget  int64
 	dbLimit int64
 	closed  bool
+	w       writer
 	errors  atomic.Uint64
+	// lastDisk is the physical size last measured under the gate (see Reserve).
+	lastDisk atomic.Int64
 	// Report 的失败仅写原始 stderr logger，不能递归写回自身。
 	lastError  atomic.Int64
 	archives   []Archive
@@ -177,9 +181,14 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 		}
 	}
 	// 单连接且所有查询在锁内读完，任何 checkpoint 都不会被本模块自己的长游标阻塞。
+	// 默认 WAL + NORMAL：进程崩溃不丢已提交记录，断电可能丢最后几次提交，但库不会损坏。
+	// 审计、安全、告警和日志库自身记录的事务在 write 里临时切到 FULL，断电也不丢。
+	// WAL 交给自动 checkpoint（不再每次提交后 TRUNCATE），阈值按额度缩放，
+	// WAL 物理大小始终留在额度预留的 20% 以内。
+	walPages := min(1000, max(16, budget/32/4096))
 	for _, pragma := range []string{
-		"PRAGMA auto_vacuum = INCREMENTAL", "PRAGMA synchronous = FULL",
-		"PRAGMA wal_autocheckpoint = 64", "PRAGMA journal_size_limit = 0", "PRAGMA temp_store = MEMORY",
+		"PRAGMA auto_vacuum = INCREMENTAL", "PRAGMA synchronous = NORMAL",
+		fmt.Sprintf("PRAGMA wal_autocheckpoint = %d", walPages), "PRAGMA journal_size_limit = 0", "PRAGMA temp_store = MEMORY",
 	} {
 		if _, err := d.ExecContext(ctx, pragma); err != nil {
 			return fail(err)
@@ -237,6 +246,7 @@ func (s *Store) Close() error {
 	if s == nil {
 		return nil
 	}
+	s.stopWriter()
 	s.gate <- struct{}{}
 	defer func() { <-s.gate }()
 	if s.closed {
@@ -281,6 +291,35 @@ func (s *Store) ImportCheckpoint(ctx context.Context, e Event, key string, posit
 	return s.record(ctx, e, key, b, true)
 }
 
+// ImportBatch is ImportCheckpoint for several facts in one transaction, so a
+// startup import does not pay one synchronous commit per historical record.
+func (s *Store) ImportBatch(ctx context.Context, events []Event, key string, position any) error {
+	if s == nil || len(events) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(position)
+	if err != nil {
+		return err
+	}
+	if key == "" || len(key) > 200 || len(b) > 4096 {
+		return fmt.Errorf("无效或过大的日志采集断点")
+	}
+	rows := make([]row, 0, len(events))
+	for _, e := range events {
+		r, err := prepareRow(e)
+		if err != nil {
+			s.fail(e.Category, 1, 0, err)
+			return err
+		}
+		rows = append(rows, r)
+	}
+	if err := s.write(ctx, rows, key, b, true); err != nil {
+		s.fail(events[0].Category, uint64(len(events)), 0, err)
+		return err
+	}
+	return nil
+}
+
 // Checkpoint 返回最近一次已随记录提交的位置；没有位置不等于过去没有日志。
 func (s *Store) Checkpoint(ctx context.Context, key string) (json.RawMessage, error) {
 	if err := s.lock(ctx); err != nil {
@@ -295,34 +334,53 @@ func (s *Store) Checkpoint(ctx context.Context, key string) (json.RawMessage, er
 	return json.RawMessage(b), err
 }
 
-func (s *Store) record(ctx context.Context, e Event, key string, position []byte, reconcile bool) (err error) {
-	if s == nil {
-		return nil
-	}
-	defer func() {
-		if err != nil {
-			s.errors.Add(1)
-		}
-	}()
+func prepareRow(e Event) (row, error) {
 	p, ok := priority(e.Category)
 	if !ok || e.Kind == "" {
-		return fmt.Errorf("未知日志类别或空事件名称")
+		return row{}, fmt.Errorf("未知日志类别或空事件名称")
 	}
 	b, err := json.Marshal(e.Data)
 	if err != nil {
-		return err
+		return row{}, err
 	}
 	b, err = sanitizeJSON(b)
 	if err != nil {
-		return err
+		return row{}, err
 	}
 	if len(b) > maxRecordBytes {
 		b, _ = json.Marshal(map[string]any{"truncated": true, "original_bytes": len(b), "head": string(b[:8<<10])})
 	}
 	e.Kind, e.Project, e.Object = clipText(e.Kind, 200), clipText(e.Project, 200), clipText(e.Object, 1000)
-	e.Received = time.Now().UTC()
 	if e.Time.IsZero() {
-		e.Time = e.Received
+		e.Time = time.Now().UTC()
+	}
+	return row{e: e, p: p, data: b}, nil
+}
+
+func (s *Store) record(ctx context.Context, e Event, key string, position []byte, reconcile bool) error {
+	if s == nil {
+		return nil
+	}
+	r, err := prepareRow(e)
+	if err == nil {
+		err = s.write(ctx, []row{r}, key, position, reconcile)
+	}
+	if err != nil {
+		s.fail(e.Category, 1, 0, err)
+	}
+	return err
+}
+
+// writeRows commits one queued batch in a single transaction (FULL sync when it holds important records).
+func (s *Store) writeRows(ctx context.Context, rows []row) error {
+	return s.write(ctx, rows, "", nil, false)
+}
+
+func (s *Store) write(ctx context.Context, rows []row, key string, position []byte, reconcile bool) error {
+	reserve, maxP := int64(32<<10), 0
+	for _, r := range rows {
+		reserve += int64(len(r.data)) * 2
+		maxP = max(maxP, r.p)
 	}
 	if err := s.lock(ctx); err != nil {
 		return err
@@ -331,53 +389,56 @@ func (s *Store) record(ctx context.Context, e Event, key string, position []byte
 	if s.closed {
 		return sql.ErrConnDone
 	}
-	if err := s.prepare(ctx, p, int64(len(b))*2+(32<<10)); err != nil {
+	if err := s.prepare(ctx, maxP, reserve); err != nil {
 		return err
+	}
+	if slices.ContainsFunc(rows, func(r row) bool { return important(r.e.Category) }) {
+		if _, err := s.db.ExecContext(ctx, `PRAGMA synchronous = FULL`); err != nil {
+			return err
+		}
+		defer s.db.Exec(`PRAGMA synchronous = NORMAL`)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	query := `INSERT INTO log_events(time_ns, received_ns, category, priority, kind, project, object, data)
+	received := time.Now().UTC().UnixNano()
+	for _, r := range rows {
+		e := r.e
+		query := `INSERT INTO log_events(time_ns, received_ns, category, priority, kind, project, object, data)
 		SELECT ?, ?, ?, ?, ?, ?, ?, ?`
-	args := []any{e.Time.UnixNano(), e.Received.UnixNano(), e.Category, p, e.Kind, e.Project, e.Object, b}
-	if reconcile {
-		at := e.Time.Truncate(time.Millisecond)
-		query += ` WHERE NOT EXISTS (SELECT 1 FROM log_events WHERE time_ns>=? AND time_ns<? AND category=? AND kind=? AND project=? AND object=? AND data=?)`
-		args = append(args, at.UnixNano(), at.Add(time.Millisecond).UnixNano(), e.Category, e.Kind, e.Project, e.Object, b)
-	}
-	_, err = tx.ExecContext(ctx, query, args...)
-	if err != nil {
-		return err
+		args := []any{e.Time.UnixNano(), received, e.Category, r.p, e.Kind, e.Project, e.Object, r.data}
+		if reconcile {
+			at := e.Time.Truncate(time.Millisecond)
+			query += ` WHERE NOT EXISTS (SELECT 1 FROM log_events WHERE time_ns>=? AND time_ns<? AND category=? AND kind=? AND project=? AND object=? AND data=?)`
+			args = append(args, at.UnixNano(), at.Add(time.Millisecond).UnixNano(), e.Category, e.Kind, e.Project, e.Object, r.data)
+		}
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return err
+		}
 	}
 	if key != "" {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO log_checkpoints(key,data) VALUES (?,?)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO log_checkpoints(key,data) VALUES (?,?)
 			ON CONFLICT(key) DO UPDATE SET data=excluded.data`, key, position); err != nil {
 			return err
 		}
 	}
-	if err = tx.Commit(); err != nil {
+	// 提交后不再每次 TRUNCATE checkpoint：实测它占接收副本耗时六成以上，把整机写锁拖到数百毫秒。
+	// WAL 交给自动 checkpoint；只有大事务把 WAL 撑过额度的 1/16 时才截断，保证物理额度。
+	if err := tx.Commit(); err != nil {
 		return err
 	}
-	// 每次提交都回收 WAL，限制大写入/清理后的物理增长，而非等定时器才发现越额。
-	_, err = s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-	return err
+	s.trimWAL(ctx)
+	return nil
 }
 
-// Report 是不阻断业务的采集入口；本地写入最多等 500ms。失败计数可查询，并至多每分钟向 stderr 报一次。
-// 它不是远端确认，也不承诺机器断电或写盘失败时仍不丢记录。
-func (s *Store) Report(e Event) {
-	if s == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	if err := s.Record(ctx, e); err != nil {
-		now, prev := time.Now().Unix(), s.lastError.Load()
-		if now-prev >= 60 && s.lastError.CompareAndSwap(prev, now) {
-			slog.New(slog.NewTextHandler(os.Stderr, nil)).Error("本地日志入库失败", "category", e.Category, "err", err)
-		}
+// trimWAL truncates an oversized WAL after a commit. The commit already
+// succeeded, so a failed truncation is not a write failure; the next large
+// commit or cleanup tries again, and prepare still counts the WAL's bytes.
+func (s *Store) trimWAL(ctx context.Context) {
+	if st, err := os.Stat(s.path + "-wal"); err == nil && st.Size() > s.budget/16 {
+		_, _ = s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
 	}
 }
 
@@ -516,7 +577,12 @@ func (s *Store) diskBytes() (int64, error) {
 	return size, nil
 }
 
+// Query first waits (bounded by ctx) for records already queued by Report, so
+// a caller sees its own earlier reports. Paged readers do not wait.
 func (s *Store) Query(ctx context.Context, f Filter) ([]Event, error) {
+	wait, cancel := context.WithTimeout(ctx, 5*time.Second)
+	_ = s.Flush(wait)
+	cancel()
 	if err := s.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -580,7 +646,7 @@ func (s *Store) State(ctx context.Context) (State, error) {
 }
 
 func (s *Store) state(ctx context.Context) (State, error) {
-	st := State{Source: s.source, BudgetBytes: s.budget, WriteErrors: s.errors.Load(), Pruned: []Pruned{}}
+	st := State{Source: s.source, BudgetBytes: s.budget, WriteErrors: s.errors.Load(), Failures: s.WriteFailures(), Pruned: []Pruned{}}
 	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name='log_events'),0)`).Scan(&st.Last); err != nil {
 		return st, err
 	}

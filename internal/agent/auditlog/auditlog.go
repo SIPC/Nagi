@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -111,10 +112,16 @@ func (l *Log) Record(e Event) int64 {
 		e.Result = "ok"
 	}
 	e.Actor, e.Target, e.Detail, e.Error = clip(e.Actor), clip(e.Target), clip(e.Detail), clip(e.Error)
-	var seq int64
+	// 只有容量确实不足才丢弃；等不到共享日志锁（拥堵）时照样写入独立的审计文件。
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-	_ = l.budget.WriteArchive(ctx, 4, 64<<10, func() error { seq = l.record(&e); return nil })
+	err := l.budget.Reserve(ctx, 4, 64<<10)
+	cancel()
+	var seq int64
+	if errors.Is(err, logstore.ErrCapacity) {
+		l.budget.NoteWriteFailure(logstore.Audit, 0, 1, fmt.Errorf("节点审计文件：%w", err))
+	} else if seq = l.record(&e); seq == 0 {
+		l.budget.NoteWriteFailure(logstore.Audit, 1, 1, errors.New("节点审计文件写入失败"))
+	}
 	if l.Capture != nil {
 		l.Capture(e)
 	}

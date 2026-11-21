@@ -117,6 +117,15 @@ type Log struct {
 	path           string
 	budget         *logstore.Store
 	historyPending atomic.Bool
+
+	// 写入超时的记录按原顺序在内存里排队重试（见 retry.go）。
+	retryMu     sync.Mutex
+	retryQ      []Event
+	retryOnce   sync.Once
+	retryWake   chan struct{}
+	retryCtx    context.Context
+	retryCancel context.CancelFunc
+	retryDone   chan struct{}
 	// Capture 独立采集规范化后的本机审计事实，旧库写失败仍会调用。
 	// 启动时设置，运行时不修改，不能递归写本 Log；旧库失败时 ID/哈希为空。
 	// 检测规则和旧外送继续使用仅在旧库提交成功后运行的 OnRecord。
@@ -148,8 +157,11 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Log, error) {
 	return l, nil
 }
 
-// Close 关闭审计库。
-func (l *Log) Close() error { return l.db.Close() }
+// Close 关闭审计库。还没写进去的重试记录计入确认丢失。
+func (l *Log) Close() error {
+	l.stopRetry()
+	return l.db.Close()
+}
 
 // DB 返回底层的数据库，给迁移和测试用。
 func (l *Log) DB() *sql.DB { return l.db }
@@ -161,7 +173,8 @@ func (l *Log) OnRecord(f func(Event)) {
 	l.hooksMu.Unlock()
 }
 
-// Record 写入一条记录，返回它的 ID。写入失败只记日志：审计不能挡住正常的操作。
+// Record 写入一条记录，返回它的 ID。审计不能挡住正常的操作：写入超时的记录转入重试队列，
+// 返回 0；队列里还有记录时新记录直接排在后面，保持哈希链里的先后顺序。
 func (l *Log) Record(ctx context.Context, e Event) int64 {
 	if l == nil {
 		return 0
@@ -180,32 +193,48 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 	}
 	persistCtx := context.WithoutCancel(ctx)
 	if l.budget != nil {
-		var cancel context.CancelFunc
-		persistCtx, cancel = context.WithTimeout(persistCtx, 500*time.Millisecond)
-		defer cancel()
-	}
-	var id int64
-	err := l.budget.WriteArchive(persistCtx, 4, 64<<10, func() error {
-		var err error
-		id, err = l.insert(persistCtx, &e)
-		if err == nil && l.budget != nil {
-			_, err = l.db.ExecContext(persistCtx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+		// The quota check may wait briefly for the shared journal gate. A slow
+		// check must not drop the audit record: only a full quota rejects it,
+		// and the insert itself runs on audit.db outside the shared gate.
+		reserveCtx, cancel := context.WithTimeout(persistCtx, 500*time.Millisecond)
+		err := l.budget.Reserve(reserveCtx, 4, 64<<10)
+		cancel()
+		if errors.Is(err, logstore.ErrCapacity) {
+			l.log.Warn("写入审计记录失败", "err", err, "action", e.Action)
+			l.note(0, 1, err)
+			return 0
 		}
-		return err
-	})
+	}
+	if l.queueIfBacklog(e) {
+		return 0
+	}
+	insertCtx, cancel := context.WithTimeout(persistCtx, insertWait)
+	defer cancel()
+	id, err := l.insert(insertCtx, &e)
 	if err != nil {
 		// insertTx 可能已经分配了 ID/计算了哈希，但事务没有提交，不能当成旧库证据。
 		e.ID, e.Hash, e.PrevHash = 0, "", ""
-		l.log.Warn("写入审计记录失败", "err", err, "action", e.Action)
+		if !retryable(err) {
+			l.log.Warn("写入审计记录失败", "err", err, "action", e.Action)
+			l.note(1, 1, err)
+			return 0
+		}
+		l.log.Warn("写入审计记录超时，转入重试", "err", err, "action", e.Action)
+		l.note(1, 0, err)
+		l.enqueue(e)
 		return 0
 	}
+	l.runHooks(e)
+	return id
+}
+
+func (l *Log) runHooks(e Event) {
 	l.hooksMu.RLock()
 	hooks := l.hooks
 	l.hooksMu.RUnlock()
 	for _, f := range hooks {
 		f(e)
 	}
-	return id
 }
 
 func normalize(e *Event) {

@@ -19,6 +19,8 @@ public  final class LogPage extends
     entries_ = emptyProtobufList();
     pruned_ = emptyProtobufList();
     sourcePruned_ = emptyProtobufList();
+    migrations_ = emptyProtobufList();
+    writeFailures_ = emptyProtobufList();
   }
   public static final int SOURCE_FIELD_NUMBER = 1;
   private java.lang.String source_;
@@ -573,6 +575,282 @@ public  final class LogPage extends
   private void removeSourcePruned(int index) {
     ensureSourcePrunedIsMutable();
     sourcePruned_.remove(index);
+  }
+
+  public static final int MIGRATIONS_FIELD_NUMBER = 12;
+  private com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.LogMigration> migrations_;
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<ink.sipc.nagi.proto.v1.LogMigration> getMigrationsList() {
+    return migrations_;
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogMigrationOrBuilder> 
+      getMigrationsOrBuilderList() {
+    return migrations_;
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  @java.lang.Override
+  public int getMigrationsCount() {
+    return migrations_.size();
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.LogMigration getMigrations(int index) {
+    return migrations_.get(index);
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  public ink.sipc.nagi.proto.v1.LogMigrationOrBuilder getMigrationsOrBuilder(
+      int index) {
+    return migrations_.get(index);
+  }
+  private void ensureMigrationsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.LogMigration> tmp = migrations_;
+    if (!tmp.isModifiable()) {
+      migrations_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  private void setMigrations(
+      int index, ink.sipc.nagi.proto.v1.LogMigration value) {
+    java.util.Objects.requireNonNull(value);
+    ensureMigrationsIsMutable();
+    migrations_.set(index, value);
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  private void addMigrations(ink.sipc.nagi.proto.v1.LogMigration value) {
+    java.util.Objects.requireNonNull(value);
+    ensureMigrationsIsMutable();
+    migrations_.add(value);
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  private void addMigrations(
+      int index, ink.sipc.nagi.proto.v1.LogMigration value) {
+    java.util.Objects.requireNonNull(value);
+    ensureMigrationsIsMutable();
+    migrations_.add(index, value);
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  private void addAllMigrations(
+      java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.LogMigration> values) {
+    ensureMigrationsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, migrations_);
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  private void clearMigrations() {
+    migrations_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  private void removeMigrations(int index) {
+    ensureMigrationsIsMutable();
+    migrations_.remove(index);
+  }
+
+  public static final int WRITE_FAILURES_FIELD_NUMBER = 13;
+  private com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.LogWriteFailure> writeFailures_;
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<ink.sipc.nagi.proto.v1.LogWriteFailure> getWriteFailuresList() {
+    return writeFailures_;
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogWriteFailureOrBuilder> 
+      getWriteFailuresOrBuilderList() {
+    return writeFailures_;
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  @java.lang.Override
+  public int getWriteFailuresCount() {
+    return writeFailures_.size();
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.LogWriteFailure getWriteFailures(int index) {
+    return writeFailures_.get(index);
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  public ink.sipc.nagi.proto.v1.LogWriteFailureOrBuilder getWriteFailuresOrBuilder(
+      int index) {
+    return writeFailures_.get(index);
+  }
+  private void ensureWriteFailuresIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<ink.sipc.nagi.proto.v1.LogWriteFailure> tmp = writeFailures_;
+    if (!tmp.isModifiable()) {
+      writeFailures_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  private void setWriteFailures(
+      int index, ink.sipc.nagi.proto.v1.LogWriteFailure value) {
+    java.util.Objects.requireNonNull(value);
+    ensureWriteFailuresIsMutable();
+    writeFailures_.set(index, value);
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  private void addWriteFailures(ink.sipc.nagi.proto.v1.LogWriteFailure value) {
+    java.util.Objects.requireNonNull(value);
+    ensureWriteFailuresIsMutable();
+    writeFailures_.add(value);
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  private void addWriteFailures(
+      int index, ink.sipc.nagi.proto.v1.LogWriteFailure value) {
+    java.util.Objects.requireNonNull(value);
+    ensureWriteFailuresIsMutable();
+    writeFailures_.add(index, value);
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  private void addAllWriteFailures(
+      java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.LogWriteFailure> values) {
+    ensureWriteFailuresIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, writeFailures_);
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  private void clearWriteFailures() {
+    writeFailures_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  private void removeWriteFailures(int index) {
+    ensureWriteFailuresIsMutable();
+    writeFailures_.remove(index);
   }
 
   public static ink.sipc.nagi.proto.v1.LogPage parseFrom(
@@ -1271,6 +1549,306 @@ public  final class LogPage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<ink.sipc.nagi.proto.v1.LogMigration> getMigrationsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getMigrationsList());
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    @java.lang.Override
+    public int getMigrationsCount() {
+      return instance.getMigrationsCount();
+    }/**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.LogMigration getMigrations(int index) {
+      return instance.getMigrations(index);
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder setMigrations(
+        int index, ink.sipc.nagi.proto.v1.LogMigration value) {
+      copyOnWrite();
+      instance.setMigrations(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder setMigrations(
+        int index, ink.sipc.nagi.proto.v1.LogMigration.Builder builderForValue) {
+      copyOnWrite();
+      instance.setMigrations(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder addMigrations(ink.sipc.nagi.proto.v1.LogMigration value) {
+      copyOnWrite();
+      instance.addMigrations(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder addMigrations(
+        int index, ink.sipc.nagi.proto.v1.LogMigration value) {
+      copyOnWrite();
+      instance.addMigrations(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder addMigrations(
+        ink.sipc.nagi.proto.v1.LogMigration.Builder builderForValue) {
+      copyOnWrite();
+      instance.addMigrations(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder addMigrations(
+        int index, ink.sipc.nagi.proto.v1.LogMigration.Builder builderForValue) {
+      copyOnWrite();
+      instance.addMigrations(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder addAllMigrations(
+        java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.LogMigration> values) {
+      copyOnWrite();
+      instance.addAllMigrations(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder clearMigrations() {
+      copyOnWrite();
+      instance.clearMigrations();
+      return this;
+    }
+    /**
+     * <pre>
+     * Live process state only; never replicated with recent copies.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+     */
+    public Builder removeMigrations(int index) {
+      copyOnWrite();
+      instance.removeMigrations(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<ink.sipc.nagi.proto.v1.LogWriteFailure> getWriteFailuresList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getWriteFailuresList());
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    @java.lang.Override
+    public int getWriteFailuresCount() {
+      return instance.getWriteFailuresCount();
+    }/**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.LogWriteFailure getWriteFailures(int index) {
+      return instance.getWriteFailures(index);
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder setWriteFailures(
+        int index, ink.sipc.nagi.proto.v1.LogWriteFailure value) {
+      copyOnWrite();
+      instance.setWriteFailures(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder setWriteFailures(
+        int index, ink.sipc.nagi.proto.v1.LogWriteFailure.Builder builderForValue) {
+      copyOnWrite();
+      instance.setWriteFailures(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder addWriteFailures(ink.sipc.nagi.proto.v1.LogWriteFailure value) {
+      copyOnWrite();
+      instance.addWriteFailures(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder addWriteFailures(
+        int index, ink.sipc.nagi.proto.v1.LogWriteFailure value) {
+      copyOnWrite();
+      instance.addWriteFailures(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder addWriteFailures(
+        ink.sipc.nagi.proto.v1.LogWriteFailure.Builder builderForValue) {
+      copyOnWrite();
+      instance.addWriteFailures(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder addWriteFailures(
+        int index, ink.sipc.nagi.proto.v1.LogWriteFailure.Builder builderForValue) {
+      copyOnWrite();
+      instance.addWriteFailures(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder addAllWriteFailures(
+        java.lang.Iterable<? extends ink.sipc.nagi.proto.v1.LogWriteFailure> values) {
+      copyOnWrite();
+      instance.addAllWriteFailures(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder clearWriteFailures() {
+      copyOnWrite();
+      instance.clearWriteFailures();
+      return this;
+    }
+    /**
+     * <pre>
+     * This source process's per-category write outcome since it started.
+     * </pre>
+     *
+     * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+     */
+    public Builder removeWriteFailures(int index) {
+      copyOnWrite();
+      instance.removeWriteFailures(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LogPage)
   }
   @java.lang.Override
@@ -1301,11 +1879,15 @@ public  final class LogPage extends
             "recentCopy_",
             "sourcePruned_",
             ink.sipc.nagi.proto.v1.LogPruned.class,
+            "migrations_",
+            ink.sipc.nagi.proto.v1.LogMigration.class,
+            "writeFailures_",
+            ink.sipc.nagi.proto.v1.LogWriteFailure.class,
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0000\u0001\u000b\u000b\u0000\u0003\u0000\u0001\u0208\u0002\u0002" +
-              "\u0003\u0002\u0004\u0007\u0005\u001b\u0006\u001b\u0007\u0003\b\u0002\t\u0002\n\u0007" +
-              "\u000b\u001b";
+              "\u0000\r\u0000\u0000\u0001\r\r\u0000\u0005\u0000\u0001\u0208\u0002\u0002\u0003\u0002" +
+              "\u0004\u0007\u0005\u001b\u0006\u001b\u0007\u0003\b\u0002\t\u0002\n\u0007\u000b\u001b" +
+              "\f\u001b\r\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

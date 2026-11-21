@@ -21,6 +21,9 @@ export default {
   refresh: "Refresh", order: "Collection sequence, oldest first", empty: "No saved records match. Check collection and pruning information as well.",
   watermark: (source, seq) => `Source ${source} · confirmed sequence ${seq}`,
   writeErrors: (count) => `The source reports ${count} failed log writes. Records may be missing.`,
+  writeRetried: (category, failed) => `${category}: ${failed} write attempts failed. The records are queued for retry and not confirmed lost.`,
+  writeLost: (category, failed, lost) => `${category}: ${failed} write attempts failed and ${lost} records are confirmed lost (queue overflow or a category that is not retried). They will not be written.`,
+  writeLast: (time, error) => `Last: ${time}${error ? `, reason: ${error}` : ""}. Counts cover this source since it started.`,
   sourcePruned: "Source pruning", copyPruned: "Copy expiry or pruning",
   pruned: (origin, category, first, last, count) => `${origin} · ${category}: ${count} entries removed within sequences ${first}–${last}; exact time range unknown.`,
   migration: {

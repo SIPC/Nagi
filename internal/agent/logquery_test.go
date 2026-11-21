@@ -181,6 +181,10 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 			if b, err := os.ReadFile(path); err != nil || string(b) != "payload" {
 				t.Fatalf("file: %q %v", b, err)
 			}
+			// Reports are queued; wait for the writer before reading them back.
+			if err := store.Flush(ctx); err != nil {
+				t.Fatal(err)
+			}
 			history, err := client.QueryLogs(ctx, &nagiv1.LogQuery{Category: logstore.Task})
 			if err != nil {
 				t.Fatal(err)

@@ -34,6 +34,9 @@ func TestIndependentHistorySurvivesLegacyWriteFailure(t *testing.T) {
 	if id := l.RecordWithChildren(ctx, Event{Action: "parent"}, children); id != 0 {
 		t.Fatalf("旧库写失败不能返回成功编号: %d", id)
 	}
+	if err := history.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	rows, err := history.Query(t.Context(), logstore.Filter{Category: logstore.Audit})
 	if err != nil || len(rows) != 3 || rows[0].Kind != "before" || rows[1].Kind != "parent" || rows[2].Kind != "child" {
 		t.Fatalf("独立历史丢失或重复: %+v err=%v", rows, err)

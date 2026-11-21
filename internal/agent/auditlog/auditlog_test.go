@@ -36,6 +36,9 @@ func TestIndependentHistorySurvivesLegacyWriteFailure(t *testing.T) {
 	if id := legacy.Record(Event{Time: at, Action: "after", Actor: strings.Repeat("人", 3000)}); id != 0 {
 		t.Fatalf("旧文件写失败不能返回已保存的编号: %d", id)
 	}
+	if err := history.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	rows, err := history.Query(t.Context(), logstore.Filter{Category: logstore.Audit})
 	if err != nil || len(rows) != 2 || rows[0].Kind != "before" || rows[1].Kind != "after" || !rows[1].Time.Equal(at) {
 		t.Fatalf("独立历史丢失或重复: %+v err=%v", rows, err)

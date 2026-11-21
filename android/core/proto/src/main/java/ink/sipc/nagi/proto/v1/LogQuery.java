@@ -491,6 +491,44 @@ public  final class LogQuery extends
 
   }
 
+  public static final int MIGRATIONS_ONLY_FIELD_NUMBER = 11;
+  private boolean migrationsOnly_;
+  /**
+   * <pre>
+   * Live migration state only, without waiting for the log disk writer.
+   * </pre>
+   *
+   * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+   * @return The migrationsOnly.
+   */
+  @java.lang.Override
+  public boolean getMigrationsOnly() {
+    return migrationsOnly_;
+  }
+  /**
+   * <pre>
+   * Live migration state only, without waiting for the log disk writer.
+   * </pre>
+   *
+   * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+   * @param value The migrationsOnly to set.
+   */
+  private void setMigrationsOnly(boolean value) {
+    
+    migrationsOnly_ = value;
+  }
+  /**
+   * <pre>
+   * Live migration state only, without waiting for the log disk writer.
+   * </pre>
+   *
+   * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+   */
+  private void clearMigrationsOnly() {
+
+    migrationsOnly_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.LogQuery parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1072,6 +1110,46 @@ public  final class LogQuery extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Live migration state only, without waiting for the log disk writer.
+     * </pre>
+     *
+     * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+     * @return The migrationsOnly.
+     */
+    @java.lang.Override
+    public boolean getMigrationsOnly() {
+      return instance.getMigrationsOnly();
+    }
+    /**
+     * <pre>
+     * Live migration state only, without waiting for the log disk writer.
+     * </pre>
+     *
+     * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+     * @param value The migrationsOnly to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMigrationsOnly(boolean value) {
+      copyOnWrite();
+      instance.setMigrationsOnly(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Live migration state only, without waiting for the log disk writer.
+     * </pre>
+     *
+     * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMigrationsOnly() {
+      copyOnWrite();
+      instance.clearMigrationsOnly();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LogQuery)
   }
   @java.lang.Override
@@ -1099,11 +1177,12 @@ public  final class LogQuery extends
             "limit_",
             "search_",
             "kindPrefix_",
+            "migrationsOnly_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u0002\u0003\u1009" +
-              "\u0000\u0004\u1009\u0001\u0005\u0208\u0006\u0208\u0007\u0208\b\u0004\t\u0208\n\u0208" +
-              "";
+              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0000\u0000\u0001\u0208\u0002\u0002" +
+              "\u0003\u1009\u0000\u0004\u1009\u0001\u0005\u0208\u0006\u0208\u0007\u0208\b\u0004" +
+              "\t\u0208\n\u0208\u000b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

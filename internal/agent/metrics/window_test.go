@@ -44,7 +44,7 @@ func TestDownsampleAndWindow(t *testing.T) {
 	}
 	c.lastDownsampledTo = start
 	c.maintain(ctx, start.Add(bucket))
-	rows, err := c.q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: "", FromTs: start.Unix(), ToTs: start.Unix()})
+	rows, err := c.q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: "", PrefixEnd: prefixEnd(""), FromTs: start.Unix(), ToTs: start.Unix()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,6 +73,37 @@ func TestDownsampleAndWindow(t *testing.T) {
 	}
 	if w.Res != bucket || w.To.After(reqNow.Add(-2*Interval).Truncate(bucket)) || w.From.Before(reqNow.Add(-7*24*time.Hour)) {
 		t.Fatalf("7 天的查询：%+v", w)
+	}
+}
+
+// 按前缀查询走主键范围，结果必须和逐条比较前缀完全一致：边界上的序列、空前缀、多字节字符都不能多也不能少。
+func TestQueryPrefixRange(t *testing.T) {
+	ctx := context.Background()
+	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	c := New(d, nil, "", nil)
+	at := time.Now().Add(-time.Minute)
+	all := []string{"r", "r:", "r:a", "r:\u9879\u76ee/web:req", "r;", "r;x", "r9", "c:p/web:cpu", "node:cpu", "\u9879"}
+	v := map[string]float64{}
+	for _, name := range all {
+		v[name] = 1
+	}
+	if err := c.store(ctx, at, v); err != nil {
+		t.Fatal(err)
+	}
+	for _, prefix := range []string{"r:", "r", "", "r:\u9879", "\u9879", "node:cpu", "zz"} {
+		got, err := c.Query(ctx, prefix, at.Add(-time.Second), at.Add(time.Second))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range all {
+			if _, ok := got[name]; ok != strings.HasPrefix(name, prefix) {
+				t.Fatalf("prefix %q: series %q returned=%v", prefix, name, ok)
+			}
+		}
 	}
 }
 

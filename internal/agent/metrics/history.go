@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -188,7 +189,13 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 				values.WriteString("(?,?,?)")
 				args = append(args, p.series, p.ts, p.value)
 			}
-			if err := budget.WriteArchive(ctx, 2, reserve, func() error {
+			// Only the capacity check uses the shared journal lock; the batch
+			// transaction runs on metrics.db alone, so a large upgrade does not
+			// starve audit, alert-state and local log writes for its duration.
+			if err := budget.Reserve(ctx, 2, reserve); err != nil {
+				return fail(err)
+			}
+			if err := func() error {
 				tx, err := d.BeginTx(ctx, nil)
 				if err != nil {
 					return err
@@ -214,11 +221,15 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 				if err := tx.Commit(); err != nil {
 					return err
 				}
-				if _, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-					return err
+				// Truncate only an oversized WAL (it counts against the shared
+				// budget); a TRUNCATE after every 2048 rows made the copy fsync-bound.
+				if st, err := os.Stat(path + "-wal"); err == nil && st.Size() > 64<<20 {
+					if _, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+						return err
+					}
 				}
 				return nil
-			}); err != nil {
+			}(); err != nil {
 				return fail(err)
 			}
 			last := batch[len(batch)-1]

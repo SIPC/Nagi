@@ -254,7 +254,13 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 		}
 	}
 	p, _ := priority(b.Category)
-	err := c.budget.WriteArchive(ctx, p, totalBytes*2+(64<<10), func() error {
+	// The machine-wide gate is held only for the capacity check, never for the
+	// copy transaction: one panel receives every node's copies and must not
+	// starve its own audit and alert writes (v0.37.0 field failure).
+	if err := c.budget.Reserve(ctx, p, totalBytes*2+(64<<10)); err != nil {
+		return receipt, err
+	}
+	err := func() error {
 		if err := c.s.lock(ctx); err != nil {
 			return err
 		}
@@ -293,9 +299,6 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 		}
 		if !fromPanel && b.After != receipt.After {
 			return ErrCopyCursor
-		}
-		if err := c.expire(ctx); err != nil {
-			return err
 		}
 		for {
 			n, err := c.s.diskBytes()
@@ -391,26 +394,39 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 		if err := tx.Commit(); err != nil {
 			return err
 		}
-		_, err = c.s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-		return err
-	})
+		c.s.trimWAL(ctx)
+		return nil
+	}()
 	return receipt, err
 }
 
 // Expire uses panel receipt time, never a node-controlled clock. Confirmation
 // positions survive expiry and capacity pruning, so reconnects don't resurrect
 // deleted evidence or copy the same old records forever.
+// Each batch takes recent.db's gate briefly, so receipts interleave with a
+// large expiry instead of waiting for the whole sweep.
 func (c *Copies) Expire(ctx context.Context) error {
-	return c.budget.WriteArchive(ctx, 4, 0, func() error {
-		if err := c.s.lock(ctx); err != nil {
-			return err
+	for p := range 5 {
+		for {
+			changed, err := func() (bool, error) {
+				if err := c.s.lock(ctx); err != nil {
+					return false, err
+				}
+				defer func() { <-c.s.gate }()
+				if c.s.closed {
+					return false, sql.ErrConnDone
+				}
+				return c.trim(ctx, p, time.Now().Add(-c.retention))
+			}()
+			if err != nil || !changed {
+				if err != nil {
+					return err
+				}
+				break
+			}
 		}
-		defer func() { <-c.s.gate }()
-		if c.s.closed {
-			return sql.ErrConnDone
-		}
-		return c.expire(ctx)
-	})
+	}
+	return nil
 }
 func (c *Copies) expire(ctx context.Context) error {
 	for p := range 5 {
@@ -503,9 +519,6 @@ func (c *Copies) Read(ctx context.Context, node, source string, f Filter) (Page,
 	}
 	if f.After < 0 || f.After > 0 && source == "" || f.Limit < 0 || f.Limit > 1000 || !f.From.IsZero() && !f.To.IsZero() && !f.From.Before(f.To) {
 		return page, nil, fmt.Errorf("无效的近期副本查询")
-	}
-	if err := c.Expire(ctx); err != nil {
-		return page, nil, err
 	}
 	if err := c.s.lock(ctx); err != nil {
 		return page, nil, err

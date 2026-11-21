@@ -152,16 +152,30 @@ func (l *Log) migrateHistory(ctx context.Context, dest *logstore.Store, through 
 			}
 			break
 		}
+		// One transaction per run of consecutive IDs; a gap record commits first.
+		var run []logstore.Event
+		flush := func() error {
+			if len(run) == 0 {
+				return nil
+			}
+			err := dest.ImportBatch(ctx, run, key, after)
+			run = run[:0]
+			return err
+		}
 		for _, e := range batch {
 			if e.ID > after+1 {
+				if err := flush(); err != nil {
+					return err
+				}
 				if err := gap(e.ID - 1); err != nil {
 					return err
 				}
 			}
-			if err := dest.ImportCheckpoint(ctx, JournalEvent(e), key, e.ID); err != nil {
-				return err
-			}
+			run = append(run, JournalEvent(e))
 			after = e.ID
+		}
+		if err := flush(); err != nil {
+			return err
 		}
 	}
 	return nil

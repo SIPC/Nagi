@@ -227,7 +227,7 @@ function LogCoverage({ request, state, onOpen }: { request: Request; state?: Log
   const [open, setOpen] = useState(false);
   const evidence = [{ category: "runtime", result: runtime }, { category: "logstore", result: logstore }];
   const pruned = [...(state?.pruned ?? []).map((p) => ({ ...p, origin: request.recentCopy ? t.logs.copyPruned : t.logs.sourcePruned })), ...(state?.sourcePruned ?? []).map((p) => ({ ...p, origin: t.logs.sourcePruned }))];
-  const issues = evidence.reduce((count, { result }) => count + (result.data?.pages.reduce((n, page) => n + page.entries.length, 0) ?? 0), 0) + pruned.length + (state && state.writeErrors > 0n ? 1 : 0);
+  const issues = evidence.reduce((count, { result }) => count + (result.data?.pages.reduce((n, page) => n + page.entries.length, 0) ?? 0), 0) + pruned.length + (state?.writeFailures.length || (state && state.writeErrors > 0n) ? 1 : 0);
   return <div className="grid gap-2">
     <Notice tone={issues || request.recentCopy ? "warning" : "neutral"} title={<span className="inline-flex items-center gap-1">{request.recentCopy ? t.logs.copy : issues ? t.logs.gap : t.logs.gaps}<HelpTip>{t.logs.coverage}</HelpTip></span>} actions={<Button readOnlyOk variant="ghost" className="-mr-3" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? t.logs.hideCoverage : t.logs.showCoverage}</Button>}>
       {request.recentCopy ? <>{t.logs.copySummary}{issues > 0 && <> {t.logs.coverageIssues(issues)}</>}</> : issues ? t.logs.coverageIssues(issues) : t.logs.coverageSummary}
@@ -236,7 +236,10 @@ function LogCoverage({ request, state, onOpen }: { request: Request; state?: Log
     <Collapse open={open}>
       <div className="grid gap-4 pt-2">
         <p className="text-muted-foreground">{request.recentCopy ? t.logs.copyHelp : t.logs.coverage}</p>
-        {state && state.writeErrors > 0n && <Notice tone="warning">{t.logs.writeErrors(String(state.writeErrors))}</Notice>}
+        {state?.writeFailures.length ? state.writeFailures.map((f) => <Notice key={f.category} tone={f.lost > 0n ? "danger" : "warning"}>
+          {f.lost > 0n ? t.logs.writeLost(categoryName(f.category), String(f.failed), String(f.lost)) : t.logs.writeRetried(categoryName(f.category), String(f.failed))}
+          {f.lastTime && <> {t.logs.writeLast(formatDateTime(toDate(f.lastTime)) ?? "", f.lastError)}</>}
+        </Notice>) : state && state.writeErrors > 0n && <Notice tone="warning">{t.logs.writeErrors(String(state.writeErrors))}</Notice>}
         {pruned.map((p) => <Notice key={`${p.origin}-${p.category}`} tone="warning">{t.logs.pruned(p.origin, categoryName(p.category), String(p.first), String(p.last), String(p.count))}</Notice>)}
         {evidence.map(({ category, result }) => <div key={category} className="grid gap-2">
           <h3 className="flex items-center gap-1 text-sm font-medium">{categoryName(category)}<HelpTip>{t.logs.collectionEvidence}</HelpTip></h3>

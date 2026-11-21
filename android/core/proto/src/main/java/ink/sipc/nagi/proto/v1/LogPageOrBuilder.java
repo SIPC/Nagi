@@ -117,4 +117,56 @@ public interface LogPageOrBuilder extends
    * <code>repeated .nagi.v1.LogPruned source_pruned = 11 [json_name = "sourcePruned"];</code>
    */
   int getSourcePrunedCount();
+
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.LogMigration> 
+      getMigrationsList();
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  ink.sipc.nagi.proto.v1.LogMigration getMigrations(int index);
+  /**
+   * <pre>
+   * Live process state only; never replicated with recent copies.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
+   */
+  int getMigrationsCount();
+
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  java.util.List<ink.sipc.nagi.proto.v1.LogWriteFailure> 
+      getWriteFailuresList();
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  ink.sipc.nagi.proto.v1.LogWriteFailure getWriteFailures(int index);
+  /**
+   * <pre>
+   * This source process's per-category write outcome since it started.
+   * </pre>
+   *
+   * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
+   */
+  int getWriteFailuresCount();
 }
