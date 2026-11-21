@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/docker"
@@ -69,13 +70,14 @@ type Collector struct {
 	prevContainer     map[string]docker.Stats
 	lastDownsampledTo time.Time
 	sources           []Source
+	dropped           atomic.Int64
 
 	// ExtraRestarts 返回节点代为重启某个容器的次数（顶替项目由节点代管重启，Docker 不计数）。
 	ExtraRestarts func(containerID string) int
 	// ProjectDirs 返回所有项目目录。项目目录可能在另一块磁盘上（例如 /srv 挂的数据盘），那块盘也要监控。
 	ProjectDirs func() []string
 	// OnSample 保存原始采样到统一日志库，不依赖旧指标库成功，也不受旧图表降采样/过期清理影响。
-	// 回调在采样协程执行，不能修改 values。
+	// 回调在采样协程执行，必须立即返回（只入队），不能修改 values。
 	OnSample func(time.Time, map[string]float64)
 }
 
@@ -180,17 +182,53 @@ func (c *Collector) LatestFresh(now time.Time) map[string]float64 {
 	return out
 }
 
-// Run 每 10 秒采集一次，直到 ctx 取消。
+// Run 按固定的 10 秒节拍采集，直到 ctx 取消。写入在单独的协程里做：
+// 磁盘或日志库拥堵时采样照常进行，积压的采样（最多 5 分钟）下一次一起写入；
+// 超过上限才丢最旧的并计数，不会把下一次采样往后推
+// （v0.37.0 曾因此让图表相邻点间隔超过 50 秒）。
 func (c *Collector) Run(ctx context.Context) {
+	pending := make(chan sample, pendingSamples)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case v := <-pending:
+				batch := []sample{v}
+			drain:
+				for len(batch) < pendingSamples {
+					select {
+					case v := <-pending:
+						batch = append(batch, v)
+					default:
+						break drain
+					}
+				}
+				c.persist(ctx, batch)
+			}
+		}
+	}()
+	defer func() { <-done }()
 	t := time.NewTicker(Interval)
 	defer t.Stop()
 	for {
 		now := time.Now()
-		values := c.collect(ctx, now)
-		if err := c.store(ctx, now, values); err != nil && ctx.Err() == nil {
-			c.log.Warn("保存监控数据失败", "err", err)
+		v := sample{now, c.collect(ctx, now)}
+		if c.OnSample != nil {
+			c.OnSample(v.at, v.values) // 只入队，不等磁盘
 		}
-		c.maintain(ctx, now)
+		select {
+		case pending <- v:
+		default:
+			select {
+			case <-pending:
+				c.dropped.Add(1)
+			default:
+			}
+			pending <- v
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -198,6 +236,28 @@ func (c *Collector) Run(ctx context.Context) {
 		}
 	}
 }
+
+type sample struct {
+	at     time.Time
+	values map[string]float64
+}
+
+// Dropped 返回因写入跟不上采样而没有写进图表历史的采样数（本进程启动以来）。
+func (c *Collector) Dropped() int64 { return c.dropped.Load() }
+
+func (c *Collector) persist(ctx context.Context, batch []sample) {
+	if err := c.storeBatch(ctx, batch); err != nil && ctx.Err() == nil {
+		c.log.Warn("保存监控数据失败", "err", err, "samples", len(batch))
+	}
+	c.maintain(ctx, batch[len(batch)-1].at)
+}
+
+const (
+	// historyWait 是图表历史写入等共享日志额度检查的上限；超过就丢掉这批采样并计数。
+	historyWait = 2 * time.Second
+	// pendingSamples 是等待写入图表历史的采样上限（5 分钟）。
+	pendingSamples = 30
+)
 
 func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float64 {
 	v := map[string]float64{}
@@ -387,40 +447,49 @@ func (l *limitSum) result(memTotal uint64) (cpu, mem float64) {
 }
 
 func (c *Collector) store(ctx context.Context, now time.Time, values map[string]float64) error {
-	if c.OnSample != nil {
-		c.OnSample(now, values)
-	}
+	return c.storeBatch(ctx, []sample{{now, values}})
+}
+
+func (c *Collector) storeBatch(ctx context.Context, batch []sample) error {
 	c.historyMu.RLock()
 	defer c.historyMu.RUnlock()
 	if c.historyReadOnly {
 		return errors.New("监控历史迁移未完成，旧业务库只读")
 	}
-	return c.budget.WriteArchive(ctx, 2, int64(len(values))*16384+(64<<10), func() error {
-		return c.storeHistory(ctx, now, values)
-	})
+	// 只在额度检查时占用共享日志锁；metrics.db 自己的事务不再持有它。
+	if c.budget != nil {
+		wait, cancel := context.WithTimeout(ctx, historyWait)
+		reserve := int64(64 << 10)
+		for _, v := range batch {
+			reserve += int64(len(v.values)) * 16384
+		}
+		err := c.budget.Reserve(wait, 2, min(reserve, 64<<20))
+		cancel()
+		if err != nil {
+			c.dropped.Add(int64(len(batch)))
+			return err
+		}
+	}
+	return c.storeHistory(ctx, batch)
 }
 
-func (c *Collector) storeHistory(ctx context.Context, now time.Time, values map[string]float64) error {
+// storeHistory 把一批采样放在一个事务里提交。
+func (c *Collector) storeHistory(ctx context.Context, batch []sample) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	q := c.q.WithTx(tx)
-	ts := now.Unix()
-	for series, value := range values {
-		if err := q.InsertMetric(ctx, nodestore.InsertMetricParams{Series: series, Ts: ts, Value: value}); err != nil {
-			return err
+	for _, v := range batch {
+		ts := v.at.Unix()
+		for series, value := range v.values {
+			if err := q.InsertMetric(ctx, nodestore.InsertMetricParams{Series: series, Ts: ts, Value: value}); err != nil {
+				return err
+			}
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	if c.budget != nil {
-		_, err := c.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 // maintain 把完整的 5 分钟窗口降采样，并清理过期数据。
@@ -442,24 +511,17 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 		if err != nil {
 			return
 		}
-		for _, r := range rows {
-			v := r.Value
-			// 速率序列：窗口里没有采样的时间算 0（见 rateSeries）。
-			if want := float64(bucket / Interval); rateSeries(r.Series) && float64(r.Samples) < want {
-				v *= float64(r.Samples) / want
-			}
-			if err := c.budget.WriteArchive(ctx, 2, 64<<10, func() error {
-				if err := c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v}); err != nil {
-					return err
-				}
-				if c.budget != nil {
-					_, err := c.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-					return err
-				}
-				return nil
-			}); err != nil {
+		// 一个 5 分钟窗口一次额度检查、一个事务；等额度超过上限时下次再补这个窗口。
+		if c.budget != nil {
+			wait, cancel := context.WithTimeout(ctx, historyWait)
+			err := c.budget.Reserve(wait, 2, int64(len(rows))*256+(64<<10))
+			cancel()
+			if err != nil {
 				return
 			}
+		}
+		if err := c.insertWindow(ctx, from, rows); err != nil {
+			return
 		}
 		c.lastDownsampledTo = to
 	}
@@ -468,6 +530,26 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 		_ = c.q.DeleteRawBefore(ctx, now.Add(-keepRaw).Unix())
 		_ = c.q.DeleteM5Before(ctx, now.Add(-keepM5).Unix())
 	}
+}
+
+func (c *Collector) insertWindow(ctx context.Context, from time.Time, rows []nodestore.AverageRawRow) error {
+	tx, err := c.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	q := c.q.WithTx(tx)
+	for _, r := range rows {
+		v := r.Value
+		// 速率序列：窗口里没有采样的时间算 0（见 rateSeries）。
+		if want := float64(bucket / Interval); rateSeries(r.Series) && float64(r.Samples) < want {
+			v *= float64(r.Samples) / want
+		}
+		if err := q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // rateSeries 报告序列是不是端口映射按每秒速率记的计数：请求、各类状态码、连接、失败、流量。
