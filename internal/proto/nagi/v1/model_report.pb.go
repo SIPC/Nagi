@@ -546,7 +546,8 @@ const file_nagi_v1_model_report_proto_rawDesc = "" +
 	"\x12UpdateReportConfig\x12\".nagi.v1.UpdateReportConfigRequest\x1a\x15.nagi.v1.ReportConfig\x12F\n" +
 	"\x0eGenerateReport\x12\x1e.nagi.v1.GenerateReportRequest\x1a\x14.nagi.v1.ModelReport\x12H\n" +
 	"\vListReports\x12\x1b.nagi.v1.ListReportsRequest\x1a\x1c.nagi.v1.ListReportsResponse\x12<\n" +
-	"\tGetReport\x12\x19.nagi.v1.GetReportRequest\x1a\x14.nagi.v1.ModelReportB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
+	"\tGetReport\x12\x19.nagi.v1.GetReportRequest\x1a\x14.nagi.v1.ModelReportBN\n" +
+	"\x16ink.sipc.nagi.proto.v1P\x01Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
 var (
 	file_nagi_v1_model_report_proto_rawDescOnce sync.Once
