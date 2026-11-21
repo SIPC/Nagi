@@ -56,10 +56,12 @@ func (m *Manager) Unfence(ctx context.Context, projectID, container string, onLi
 }
 
 // PrePull 热备：按副本的配置提前拉好镜像，顶替时只需要启动容器。tmp 是临时目录。失败不影响顶替（启动时会再拉）。
-func PrePull(ctx context.Context, s *nagiv1.ContainerSpec, tmp string, onLine func(string)) error {
+func (m *Manager) PrePull(ctx context.Context, s *nagiv1.ContainerSpec, tmp string, onLine func(string)) (retErr error) {
 	if s.GetVersion() == 0 {
 		return nil
 	}
+	onLine, finish := m.taskLog("pre_pull", s.GetProjectId(), s.GetName(), onLine)
+	defer func() { finish(retErr) }()
 	os.RemoveAll(tmp)
 	defer os.RemoveAll(tmp)
 	mp := containerPaths{root: tmp}

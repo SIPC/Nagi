@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -185,5 +186,66 @@ func TestTaskHistoryWithoutViewer(t *testing.T) {
 	var output string
 	if err := m.MigrateResume(ctx, pid, "web", func(s string) { output += s }); err != nil || !strings.Contains(output, "重新启动容器 web") {
 		t.Fatalf("日志失败影响业务: %q %v", output, err)
+	}
+}
+
+func TestPrePullHistoryIncludesPreparationFailure(t *testing.T) {
+	ctx := t.Context()
+	m, err := project.NewManager(nil, nil, project.DefaultSubnetPool, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "logs.db")
+	m.Journal, err = logstore.Open(ctx, path, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { m.Journal.Close() }()
+	// Cannot prepare a temporary directory under a regular file. This must
+	// fail before invoking any actual compose process or registry.
+	blocked := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocked, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sp := &nagiv1.ContainerSpec{ProjectId: "0123456789abcdef", Name: "warm", Version: 1}
+	if err := m.PrePull(ctx, sp, filepath.Join(blocked, "prepull"), nil); err == nil {
+		t.Fatal("preparation failure became success")
+	}
+	sp.Version = 0
+	if err := m.PrePull(ctx, sp, filepath.Join(blocked, "prepull"), nil); err != nil {
+		t.Fatalf("undeployed version should still be skipped: %v", err)
+	}
+	if b, err := os.ReadFile(blocked); err != nil || string(b) != "keep" {
+		t.Fatalf("prepull changed unrelated file: %s %v", b, err)
+	}
+	if err := m.Journal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	m.Journal, err = logstore.Open(ctx, path, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := m.Journal.Query(ctx, logstore.Filter{Project: sp.ProjectId})
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("preparation lost its lifecycle or skipped version created one: %+v %v", rows, err)
+	}
+	var taskID string
+	for i, row := range rows {
+		var data struct {
+			TaskID                       string `json:"task_id"`
+			Action, Phase, Result, Error string
+		}
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			taskID = data.TaskID
+		}
+		if taskID == "" || data.TaskID != taskID || row.Object != "warm" || row.Kind != "project.task" || data.Action != "pre_pull" || data.Phase != []string{"started", "finished"}[i] {
+			t.Fatalf("task association: %+v %s", row, row.Data)
+		}
+		if i == 1 && (data.Result != "failed" || data.Error == "") {
+			t.Fatalf("preparation failure recorded as success: %s", row.Data)
+		}
 	}
 }

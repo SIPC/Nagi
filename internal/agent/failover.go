@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/lease"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
@@ -962,7 +961,7 @@ func (a *agent) prePull(ctx context.Context, pid, name string) {
 	if err != nil {
 		return
 	}
-	if err := project.PrePull(ctx, sp, filepath.Join(a.cfg.DataDir, "replicas", ".prepull-"+id), func(string) {}); err != nil {
+	if err := a.projects.PrePull(ctx, sp, filepath.Join(a.cfg.DataDir, "replicas", ".prepull-"+id), func(string) {}); err != nil {
 		a.log.Warn("热备提前拉取镜像失败（顶替时会再拉）", "project", pid, "container", name, "err", err)
 	}
 }
