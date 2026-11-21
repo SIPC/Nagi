@@ -20,6 +20,7 @@ func (r *Recordings) UseDatabase(ctx context.Context, path string, budget *logst
 	if r.db != nil {
 		return errors.New("录制数据库已打开")
 	}
+	r.legacyDatabase = r.Dir != ""
 	d, err := db.Open(path)
 	if err != nil {
 		return err
@@ -37,14 +38,18 @@ CREATE TABLE IF NOT EXISTS recording_chunks (
  recording TEXT NOT NULL REFERENCES recording_sessions(id) ON DELETE CASCADE,
  seq INTEGER NOT NULL, body BLOB NOT NULL, PRIMARY KEY(recording,seq)
 );
-CREATE INDEX IF NOT EXISTS recording_age ON recording_sessions(started_ns,id);`); err != nil {
+CREATE INDEX IF NOT EXISTS recording_age ON recording_sessions(started_ns,id);
+CREATE TABLE IF NOT EXISTS recording_imports (
+ id TEXT PRIMARY KEY, last_seq INTEGER NOT NULL DEFAULT -1, complete INTEGER NOT NULL DEFAULT 0
+);`); err != nil {
 		return err
 	}
-	err = budget.RegisterArchive(ctx, logstore.Archive{
+	err = budget.ReplaceArchive(ctx, logstore.Archive{
 		Name: path, Priority: 3,
 		Size: func() (int64, error) { return logstore.FileBytes(path) },
 		Trim: func(ctx context.Context) (bool, error) {
-			rows, err := d.QueryContext(ctx, `SELECT id FROM recording_sessions ORDER BY started_ns,id`)
+			rows, err := d.QueryContext(ctx, `SELECT id FROM recording_sessions s WHERE NOT EXISTS
+(SELECT 1 FROM recording_imports i WHERE i.id=s.id AND i.complete=0) ORDER BY started_ns,id`)
 			if err != nil {
 				return false, err
 			}
@@ -133,8 +138,16 @@ func (r *Recordings) deleteChunk(id string, seq int) error {
 
 func (r *Recordings) chunkSequences(id string) ([]int, bool, error) {
 	if r.db != nil {
+		var complete int
+		err := r.db.QueryRow(`SELECT complete FROM recording_imports WHERE id=?`, id).Scan(&complete)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, true, err
+		}
+		if err == nil && complete == 0 {
+			return r.legacySequences(id)
+		}
 		var exists int
-		err := r.db.QueryRow(`SELECT 1 FROM recording_sessions WHERE id=?`, id).Scan(&exists)
+		err = r.db.QueryRow(`SELECT 1 FROM recording_sessions WHERE id=?`, id).Scan(&exists)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, true, err
 		}
@@ -154,7 +167,16 @@ func (r *Recordings) chunkSequences(id string) ([]int, bool, error) {
 			}
 			return seqs, true, rows.Err()
 		}
+		// Import receipts survive body cleanup. Never resurrect expired history
+		// by falling back to old files that have not yet been reclaimed.
+		if complete == 1 {
+			return nil, true, nil
+		}
 	}
+	return r.legacySequences(id)
+}
+
+func (r *Recordings) legacySequences(id string) ([]int, bool, error) {
 	if r.Dir == "" {
 		return nil, false, os.ErrNotExist
 	}

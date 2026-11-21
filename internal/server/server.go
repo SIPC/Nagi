@@ -311,6 +311,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		}
 	}
 	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
+	if cfg.Logs != nil {
+		s.recordings.FlushInterval = time.Duration(cfg.LogConfig.RecordingFlushSeconds) * time.Second
+		if err := s.recordings.UseDatabase(ctx, filepath.Join(cfg.Logs.Directory(), "panel-recordings.db"), cfg.Logs); err != nil {
+			log.Error("无法打开本机旧录制迁移库，保留旧文件", "err", err)
+		}
+	}
 	if err := s.recordings.UseBudget(ctx, cfg.Logs); err != nil {
 		log.Error("无法把终端录制接入统一本机容量", "err", err)
 	}
@@ -467,6 +473,7 @@ func mountPublicRoutes(mux *http.ServeMux, pair, status http.Handler) {
 
 func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
+	defer s.recordings.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	if s.cfg.Logs != nil {
@@ -501,6 +508,11 @@ func (s *Server) Run(ctx context.Context) error {
 		historyDone := make(chan struct{})
 		go func() {
 			defer close(historyDone)
+			if s.standby == nil {
+				if err := s.recordings.ImportLegacy(historyCtx); err != nil && historyCtx.Err() == nil {
+					s.log.Error("旧录制正文迁移未完成，保留原件和已提交位置", "err", err)
+				}
+			}
 			if err := s.audit.MigrateHistory(historyCtx, s.cfg.Logs, s.auditHistoryHead); err != nil && historyCtx.Err() == nil {
 				s.log.Error("面板旧审计迁移未完成，保留原库和已提交位置", "err", err)
 			}

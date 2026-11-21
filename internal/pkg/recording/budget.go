@@ -15,7 +15,7 @@ func (r *Recordings) UseBudget(ctx context.Context, budget *logstore.Store) erro
 	if budget == nil {
 		return nil
 	}
-	err := budget.RegisterArchive(ctx, logstore.Archive{Name: r.Dir, Priority: 3,
+	err := budget.ReplaceArchive(ctx, logstore.Archive{Name: r.Dir, Priority: 3,
 		Size: func() (int64, error) {
 			var total int64
 			err := filepath.WalkDir(r.Dir, func(_ string, d fs.DirEntry, err error) error {
@@ -54,6 +54,15 @@ func (r *Recordings) UseBudget(ctx context.Context, budget *logstore.Store) erro
 				}
 				if _, active := r.active.Load(d.Name()); active {
 					return filepath.SkipDir
+				}
+				if r.legacyDatabase {
+					if r.db == nil {
+						return filepath.SkipDir
+					}
+					var complete int
+					if err := r.db.QueryRowContext(ctx, `SELECT complete FROM recording_imports WHERE id=?`, d.Name()).Scan(&complete); err != nil || complete != 1 {
+						return filepath.SkipDir
+					}
 				}
 				s, err := d.Info()
 				if err != nil {

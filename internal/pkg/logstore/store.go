@@ -587,6 +587,9 @@ func (s *Store) lock(ctx context.Context) error {
 	}
 }
 
+// Directory is the machine-local history directory, outside role snapshots.
+func (s *Store) Directory() string { return filepath.Dir(s.path) }
+
 // OpenLocal 只打开本机的配置和日志库；面板的角色变化不应重建它。
 func OpenLocal(ctx context.Context, dir string) (*Store, Config, error) {
 	c, err := LoadConfig(dir)

@@ -48,10 +48,11 @@ type Recordings struct {
 	// FlushInterval applies to new sessions; zero keeps the legacy five seconds.
 	FlushInterval time.Duration
 	// Enabled 判断现在要不要录制（「设置 → 安全 → 终端录制」）。
-	Enabled func(context.Context) bool
-	budget  *logstore.Store
-	active  sync.Map
-	db      *sql.DB // encrypted local bodies; nil keeps the legacy file reader/writer
+	Enabled        func(context.Context) bool
+	budget         *logstore.Store
+	active         sync.Map
+	db             *sql.DB // encrypted local bodies; nil keeps the legacy file reader/writer
+	legacyDatabase bool    // protect legacy sources until their verified import commits
 }
 
 var recordingIDRe = regexp.MustCompile(`^[0-9]{6}-[0-9a-f]{24}$`)
