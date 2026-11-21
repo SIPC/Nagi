@@ -244,6 +244,44 @@ public  final class MeshConfig extends
     isolated_ = emptyProtobufList();
   }
 
+  public static final int AUTO_ROUTE_FIELD_NUMBER = 4;
+  private boolean autoRoute_;
+  /**
+   * <pre>
+   * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+   * </pre>
+   *
+   * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+   * @return The autoRoute.
+   */
+  @java.lang.Override
+  public boolean getAutoRoute() {
+    return autoRoute_;
+  }
+  /**
+   * <pre>
+   * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+   * </pre>
+   *
+   * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+   * @param value The autoRoute to set.
+   */
+  private void setAutoRoute(boolean value) {
+    
+    autoRoute_ = value;
+  }
+  /**
+   * <pre>
+   * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+   * </pre>
+   *
+   * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+   */
+  private void clearAutoRoute() {
+
+    autoRoute_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.MeshConfig parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -572,6 +610,46 @@ public  final class MeshConfig extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+     * </pre>
+     *
+     * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+     * @return The autoRoute.
+     */
+    @java.lang.Override
+    public boolean getAutoRoute() {
+      return instance.getAutoRoute();
+    }
+    /**
+     * <pre>
+     * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+     * </pre>
+     *
+     * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+     * @param value The autoRoute to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAutoRoute(boolean value) {
+      copyOnWrite();
+      instance.setAutoRoute(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+     * </pre>
+     *
+     * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAutoRoute() {
+      copyOnWrite();
+      instance.clearAutoRoute();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.MeshConfig)
   }
   @java.lang.Override
@@ -592,10 +670,11 @@ public  final class MeshConfig extends
             "peers_",
             ink.sipc.nagi.proto.v1.MeshPeer.class,
             "isolated_",
+            "autoRoute_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0002\u0000\u0001\n\u0002\u001b" +
-              "\u0003\u001c";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0002\u0000\u0001\n\u0002\u001b" +
+              "\u0003\u001c\u0004\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

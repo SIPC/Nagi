@@ -1090,6 +1090,44 @@ public  final class Node extends
 
   }
 
+  public static final int RELAY_POOL_FIELD_NUMBER = 17;
+  private boolean relayPool_;
+  /**
+   * <pre>
+   * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+   * </pre>
+   *
+   * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+   * @return The relayPool.
+   */
+  @java.lang.Override
+  public boolean getRelayPool() {
+    return relayPool_;
+  }
+  /**
+   * <pre>
+   * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+   * </pre>
+   *
+   * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+   * @param value The relayPool to set.
+   */
+  private void setRelayPool(boolean value) {
+    
+    relayPool_ = value;
+  }
+  /**
+   * <pre>
+   * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+   * </pre>
+   *
+   * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+   */
+  private void clearRelayPool() {
+
+    relayPool_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.Node parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -2304,6 +2342,46 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+     * </pre>
+     *
+     * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+     * @return The relayPool.
+     */
+    @java.lang.Override
+    public boolean getRelayPool() {
+      return instance.getRelayPool();
+    }
+    /**
+     * <pre>
+     * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+     * </pre>
+     *
+     * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+     * @param value The relayPool to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRelayPool(boolean value) {
+      copyOnWrite();
+      instance.setRelayPool(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+     * </pre>
+     *
+     * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRelayPool() {
+      copyOnWrite();
+      instance.clearRelayPool();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.Node)
   }
   @java.lang.Override
@@ -2339,12 +2417,13 @@ public  final class Node extends
             "tags_",
             "isolated_",
             "group_",
+            "relayPool_",
           };
           java.lang.String info =
-              "\u0000\u0010\u0000\u0001\u0001\u0010\u0010\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0011\u0000\u0001\u0001\u0011\u0011\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0007\u0004\u1009\u0000\u0005\u1009\u0001\u0006\u0208\u0007\u0007\b\u1009" +
               "\u0002\t\u0004\n\u001b\u000b\u0007\f\u001b\r\u1009\u0003\u000e\u021a\u000f\u0007" +
-              "\u0010\u0208";
+              "\u0010\u0208\u0011\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -669,6 +669,21 @@ public class NodeServiceClient(
 
 
   /**
+   *  加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+   */
+  override suspend fun setNodeRelayPool(request: SetNodeRelayPoolRequest, headers: Headers): ResponseMessage<SetNodeRelayPoolResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.NodeService/SetNodeRelayPool",
+      ink.sipc.nagi.proto.v1.SetNodeRelayPoolRequest::class,
+      ink.sipc.nagi.proto.v1.SetNodeRelayPoolResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
    *  隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
    *  只有管理员能用，要先做高权限确认并输入节点名。
    */

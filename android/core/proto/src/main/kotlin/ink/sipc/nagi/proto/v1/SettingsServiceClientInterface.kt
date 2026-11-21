@@ -23,6 +23,11 @@ public interface SettingsServiceClientInterface {
    */
   public suspend fun setPanelName(request: SetPanelNameRequest, headers: Headers = emptyMap()): ResponseMessage<UpdateSettingsResponse>
 
+  /**
+   *  打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+   */
+  public suspend fun setMeshAutoRoute(request: SetMeshAutoRouteRequest, headers: Headers = emptyMap()): ResponseMessage<UpdateSettingsResponse>
+
   public suspend fun getAlertConfig(request: GetAlertConfigRequest, headers: Headers = emptyMap()): ResponseMessage<GetAlertConfigResponse>
 
   public suspend fun updateAlertConfig(request: UpdateAlertConfigRequest, headers: Headers = emptyMap()): ResponseMessage<UpdateAlertConfigResponse>

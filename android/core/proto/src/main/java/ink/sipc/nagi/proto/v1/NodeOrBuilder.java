@@ -280,4 +280,14 @@ public interface NodeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getGroupBytes();
+
+  /**
+   * <pre>
+   * 加入了中转池（见 docs/mesh.md#中转池），默认关闭。
+   * </pre>
+   *
+   * <code>bool relay_pool = 17 [json_name = "relayPool"];</code>
+   * @return The relayPool.
+   */
+  boolean getRelayPool();
 }

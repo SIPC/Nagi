@@ -490,6 +490,44 @@ public  final class PanelSettings extends
 
   }
 
+  public static final int MESH_AUTO_ROUTE_FIELD_NUMBER = 9;
+  private boolean meshAutoRoute_;
+  /**
+   * <pre>
+   * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+   * </pre>
+   *
+   * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+   * @return The meshAutoRoute.
+   */
+  @java.lang.Override
+  public boolean getMeshAutoRoute() {
+    return meshAutoRoute_;
+  }
+  /**
+   * <pre>
+   * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+   * </pre>
+   *
+   * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+   * @param value The meshAutoRoute to set.
+   */
+  private void setMeshAutoRoute(boolean value) {
+    
+    meshAutoRoute_ = value;
+  }
+  /**
+   * <pre>
+   * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+   * </pre>
+   *
+   * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+   */
+  private void clearMeshAutoRoute() {
+
+    meshAutoRoute_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.PanelSettings parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1070,6 +1108,46 @@ public  final class PanelSettings extends
       return this;
     }
 
+    /**
+     * <pre>
+     * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+     * </pre>
+     *
+     * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+     * @return The meshAutoRoute.
+     */
+    @java.lang.Override
+    public boolean getMeshAutoRoute() {
+      return instance.getMeshAutoRoute();
+    }
+    /**
+     * <pre>
+     * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+     * </pre>
+     *
+     * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+     * @param value The meshAutoRoute to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMeshAutoRoute(boolean value) {
+      copyOnWrite();
+      instance.setMeshAutoRoute(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+     * </pre>
+     *
+     * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMeshAutoRoute() {
+      copyOnWrite();
+      instance.clearMeshAutoRoute();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.PanelSettings)
   }
   @java.lang.Override
@@ -1094,10 +1172,11 @@ public  final class PanelSettings extends
             "masterKeyPath_",
             "name_",
             "defaultName_",
+            "meshAutoRoute_",
           };
           java.lang.String info =
-              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u000b\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208";
+              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0000\u0000\u0001\u0208\u0002\u000b\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

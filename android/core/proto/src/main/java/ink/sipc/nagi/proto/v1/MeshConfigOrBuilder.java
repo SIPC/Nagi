@@ -58,4 +58,14 @@ public interface MeshConfigOrBuilder extends
    * @return The isolated at the given index.
    */
   com.google.protobuf.ByteString getIsolated(int index);
+
+  /**
+   * <pre>
+   * 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+   * </pre>
+   *
+   * <code>bool auto_route = 4 [json_name = "autoRoute"];</code>
+   * @return The autoRoute.
+   */
+  boolean getAutoRoute();
 }

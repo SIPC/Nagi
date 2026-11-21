@@ -68,6 +68,21 @@ public class SettingsServiceClient(
   )
 
 
+  /**
+   *  打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+   */
+  override suspend fun setMeshAutoRoute(request: SetMeshAutoRouteRequest, headers: Headers): ResponseMessage<UpdateSettingsResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.SettingsService/SetMeshAutoRoute",
+      ink.sipc.nagi.proto.v1.SetMeshAutoRouteRequest::class,
+      ink.sipc.nagi.proto.v1.UpdateSettingsResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
   override suspend fun getAlertConfig(request: GetAlertConfigRequest, headers: Headers): ResponseMessage<GetAlertConfigResponse> = client.unary(
     request,
     headers,

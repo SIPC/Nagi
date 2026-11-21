@@ -143,4 +143,14 @@ public interface PanelSettingsOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDefaultNameBytes();
+
+  /**
+   * <pre>
+   * mesh 自动切路总开关（默认关闭，见 docs/mesh.md#自动切路），用 SetMeshAutoRoute 修改。
+   * </pre>
+   *
+   * <code>bool mesh_auto_route = 9 [json_name = "meshAutoRoute"];</code>
+   * @return The meshAutoRoute.
+   */
+  boolean getMeshAutoRoute();
 }

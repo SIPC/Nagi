@@ -476,6 +476,47 @@ public  final class MeshPeer extends
     nodeRelayEnabled_ = false;
   }
 
+  public static final int RELAY_POOL_FIELD_NUMBER = 8;
+  private boolean relayPool_;
+  /**
+   * <pre>
+   * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+   * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+   * </pre>
+   *
+   * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+   * @return The relayPool.
+   */
+  @java.lang.Override
+  public boolean getRelayPool() {
+    return relayPool_;
+  }
+  /**
+   * <pre>
+   * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+   * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+   * </pre>
+   *
+   * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+   * @param value The relayPool to set.
+   */
+  private void setRelayPool(boolean value) {
+    
+    relayPool_ = value;
+  }
+  /**
+   * <pre>
+   * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+   * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+   * </pre>
+   *
+   * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+   */
+  private void clearRelayPool() {
+
+    relayPool_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.MeshPeer parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1032,6 +1073,49 @@ public  final class MeshPeer extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+     * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+     * </pre>
+     *
+     * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+     * @return The relayPool.
+     */
+    @java.lang.Override
+    public boolean getRelayPool() {
+      return instance.getRelayPool();
+    }
+    /**
+     * <pre>
+     * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+     * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+     * </pre>
+     *
+     * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+     * @param value The relayPool to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRelayPool(boolean value) {
+      copyOnWrite();
+      instance.setRelayPool(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+     * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+     * </pre>
+     *
+     * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRelayPool() {
+      copyOnWrite();
+      instance.clearRelayPool();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.MeshPeer)
   }
   @java.lang.Override
@@ -1056,10 +1140,11 @@ public  final class MeshPeer extends
             "isPanel_",
             "relays_",
             "nodeRelayEnabled_",
+            "relayPool_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0002\u0000\u0001\n\u0002\u021a" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u001c\u0007\u1007\u0000";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0002\u0000\u0001\n\u0002\u021a\u0003\u0208" +
+              "\u0004\u0208\u0005\u0007\u0006\u001c\u0007\u1007\u0000\b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

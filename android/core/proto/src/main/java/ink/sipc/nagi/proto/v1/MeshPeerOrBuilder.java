@@ -144,4 +144,15 @@ public interface MeshPeerOrBuilder extends
    * @return The nodeRelayEnabled.
    */
   boolean getNodeRelayEnabled();
+
+  /**
+   * <pre>
+   * 这个成员加入了中转池（节点页「加入中转池」，默认关闭）：管理员同意它为直连可用的节点对承担性能中转。
+   * 只在 node_relay_enabled 也为 true 时有效；缺失或 false 都不是池成员。关闭后已在用它的性能路线按撤权处理。
+   * </pre>
+   *
+   * <code>bool relay_pool = 8 [json_name = "relayPool"];</code>
+   * @return The relayPool.
+   */
+  boolean getRelayPool();
 }
