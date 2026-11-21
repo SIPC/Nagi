@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -55,6 +57,8 @@ type Config struct {
 	StandbyCode string
 	// DevAppKeys：安卓 App 的开发模式（--dev-app-keys），接受软件密钥和模拟器的证明（见 docs/android.md#工程）。
 	DevAppKeys bool
+	// Logs 是本机库，不是从其他节点接收的近期副本；由启动入口管理，主备切换时不替换。
+	Logs *logstore.Store
 }
 
 const (
@@ -274,6 +278,16 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
+	s.audit.OnRecord(func(e audit.Event) {
+		category := logstore.Audit
+		if e.Category == audit.Security {
+			category = logstore.Security
+		} else if e.Category == audit.Alert {
+			category = logstore.Alert
+		}
+		s.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: category, Kind: "panel." + e.Action,
+			Project: e.ProjectID, Object: e.TargetID, Data: json.RawMessage(audit.Canonical(e))})
+	})
 	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
 	s.auth = auth.New(s.q, s.sealer)
 	s.auth.SetAudit(s.audit)
@@ -521,7 +535,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	httpLn := newChanListener(s.listener.Addr())
 	srv := &http.Server{
-		Handler: securityHeaders(s.auth.EntranceMiddleware(a.OriginCheck(mux)), false),
+		Handler: s.accessLog(securityHeaders(s.auth.EntranceMiddleware(a.OriginCheck(mux)), false)),
 		// TLS 指纹（见 docs/panel.md#会话）：握手时按底层连接记下，这里放进请求的 ctx。
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			if tc, ok := c.(*tls.Conn); ok {
@@ -546,7 +560,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	domainDone := make(chan struct{})
 	go func() {
-		s.serveDomain(ctx, s.auth.EntranceMiddleware(mux))
+		s.serveDomain(ctx, s.accessLog(s.auth.EntranceMiddleware(mux)))
 		close(domainDone)
 	}()
 	if m := s.nodes.Mesh(); m != nil {

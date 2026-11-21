@@ -3,13 +3,16 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyevents"
@@ -65,10 +68,11 @@ func (s *RouteStats) Percentile(q float64) float64 {
 }
 
 type observerT struct {
-	mu     sync.Mutex
-	stats  map[string]*RouteStats
-	l4     map[string]*l4Counter
-	onCert func(domain string, err error)
+	mu       sync.Mutex
+	stats    map[string]*RouteStats
+	l4       map[string]*l4Counter
+	onCert   func(domain string, err error)
+	onAccess func(AccessRecord)
 }
 
 var observer = &observerT{stats: map[string]*RouteStats{}, l4: map[string]*l4Counter{}}
@@ -93,15 +97,64 @@ func OnCertEvent(fn func(domain string, err error)) {
 	observer.mu.Unlock()
 }
 
+// AccessRecord 只取访问日志的白名单字段，不把 Caddy 的请求头/凭据原文交给日志库。
+// PathHash 用于关联同一路径；路径本身暂不记录，避免任意业务路径内的秘密泄露。
+type AccessRecord struct {
+	Time      time.Time `json:"time"`
+	Route     string    `json:"route"`
+	Status    int       `json:"status"`
+	Duration  float64   `json:"duration_seconds"`
+	BytesRead int64     `json:"bytes_in"`
+	Size      int64     `json:"bytes_out"`
+	Method    string    `json:"method"`
+	Host      string    `json:"host"`
+	Remote    string    `json:"remote"`
+	Protocol  string    `json:"protocol"`
+	PathHash  string    `json:"path_hash"`
+}
+
+// OnAccess 包括没有匹配业务规则的请求；不会改变已有告警聚合只统计业务规则的行为。
+func OnAccess(fn func(AccessRecord)) {
+	observer.mu.Lock()
+	observer.onAccess = fn
+	observer.mu.Unlock()
+}
+
 func (o *observerT) record(line []byte) {
 	var entry struct {
+		Time      float64 `json:"ts"`
 		Route     string  `json:"nagi_route"`
 		Status    int     `json:"status"`
 		Duration  float64 `json:"duration"`
 		BytesRead int64   `json:"bytes_read"`
 		Size      int64   `json:"size"`
+		Request   struct {
+			Method   string `json:"method"`
+			Host     string `json:"host"`
+			Remote   string `json:"remote_ip"`
+			Protocol string `json:"proto"`
+			URI      string `json:"uri"`
+		} `json:"request"`
 	}
-	if json.Unmarshal(line, &entry) != nil || entry.Route == "" {
+	if json.Unmarshal(line, &entry) != nil {
+		return
+	}
+	o.mu.Lock()
+	fn := o.onAccess
+	o.mu.Unlock()
+	if fn != nil {
+		e := AccessRecord{Time: time.Unix(0, int64(entry.Time*1e9)), Route: entry.Route, Status: entry.Status,
+			Duration: entry.Duration, BytesRead: entry.BytesRead, Size: entry.Size,
+			Method: entry.Request.Method, Host: entry.Request.Host, Remote: entry.Request.Remote, Protocol: entry.Request.Protocol}
+		if entry.Time == 0 {
+			e.Time = time.Now()
+		}
+		if uri, err := url.ParseRequestURI(entry.Request.URI); err == nil {
+			e.PathHash = fmt.Sprintf("%x", sha256.Sum256([]byte(uri.Path)))
+		}
+		fn(e)
+	}
+	if entry.Route == "" {
 		return
 	}
 	o.mu.Lock()

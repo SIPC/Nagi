@@ -14,6 +14,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent"
 	"github.com/SIPC/nagi/internal/pkg/invite"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/server"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/standby"
@@ -58,6 +59,13 @@ func serverCmd() *cobra.Command {
 			ctx, cancel := signalContext()
 			defer cancel()
 			log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+			logs, logConfig, err := logstore.OpenLocal(ctx, filepath.Join(dataDir, "logs"))
+			if err != nil {
+				log.Error("无法打开本机日志，继续运行；新日志未入库，请检查磁盘和日志配置", "err", err)
+			} else {
+				defer logs.Close()
+				log = logs.Logger(log, logConfig)
+			}
 			standbyCode = standbyCodeFrom(standbyCode, log)
 
 			panelDir := filepath.Join(dataDir, "panel")
@@ -80,13 +88,14 @@ func serverCmd() *cobra.Command {
 					NewMasterKey: newKey,
 					StandbyCode:  standbyCode,
 					DevAppKeys:   devAppKeys,
+					Logs:         logs,
 				})
 				if err != nil {
 					return err
 				}
 				if runAgent && !agentStarted {
 					agentStarted = true
-					go func() { errc <- runEmbeddedAgent(ctx, srv, dataDir, noProxy, log) }()
+					go func() { errc <- runEmbeddedAgent(ctx, srv, dataDir, noProxy, log, logs, logConfig) }()
 				}
 				runc := make(chan error, 1)
 				go func() { runc <- srv.Run(ctx) }()
@@ -118,7 +127,7 @@ func serverCmd() *cobra.Command {
 }
 
 // runEmbeddedAgent 启动面板自带的节点。它和远程节点走完全相同的加入流程和控制连接。
-func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, noProxy bool, log *slog.Logger) error {
+func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, noProxy bool, log *slog.Logger, logs *logstore.Store, logConfig logstore.Config) error {
 	agentDir := filepath.Join(dataDir, "agent")
 	cfg := agent.Config{
 		DataDir:      agentDir,
@@ -127,6 +136,8 @@ func runEmbeddedAgent(ctx context.Context, srv *server.Server, dataDir string, n
 		Embedded:     true,
 		PanelRelay:   srv.RelayBytes,
 		Logger:       log.With("component", "agent"),
+		Logs:         logs,
+		LogConfig:    logConfig,
 	}
 	// 只在第一次启动时自动加入本面板。之后即使本机节点被移交给了别的面板，也不会再自动加回来。
 	if !agent.HasPanels(agentDir) {

@@ -29,6 +29,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -59,6 +60,10 @@ type Config struct {
 	PanelRelay func() (rx, tx uint64)
 	Version    string
 	Logger     *slog.Logger
+	// Logs 只给内嵌节点复用面板本机库（和已经接入该库的 Logger），避免同一台机器分配两份容量。
+	// 独立节点从 DataDir/logs/config.json 读取配置并自行打开。
+	Logs      *logstore.Store
+	LogConfig logstore.Config
 }
 
 // Enrolled 判断节点是否已经信任某个面板，用于决定是否需要生成加入令牌。
@@ -106,6 +111,16 @@ func Run(ctx context.Context, cfg Config) error {
 	confirmUpgrade := func() {}
 	if !cfg.Embedded {
 		confirmUpgrade = guardUpgrade(filepath.Join(cfg.DataDir, "identity"), cfg.Version, log)
+	}
+	if cfg.Logs == nil && !cfg.Embedded {
+		var err error
+		cfg.Logs, cfg.LogConfig, err = logstore.OpenLocal(ctx, filepath.Join(cfg.DataDir, "logs"))
+		if err != nil {
+			log.Error("无法打开本机日志，继续运行；新日志未入库，请检查磁盘和日志配置", "err", err)
+		} else {
+			defer cfg.Logs.Close()
+			log = cfg.Logs.Logger(log, cfg.LogConfig)
+		}
 	}
 
 	id, err := loadIdentity(filepath.Join(cfg.DataDir, "identity"))
@@ -217,10 +232,15 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}()
 	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	if cfg.Logs != nil {
+		a.metrics.OnSample = a.logMetrics()
+	}
 	a.metrics.ExtraRestarts = projects.ManagedRestartCount
 	a.metrics.ProjectDirs = func() []string { return projects.Dirs(context.Background()) }
 	hintDirs = func() []string { return append([]string{cfg.DataDir}, projects.Dirs(context.Background())...) }
 	if !cfg.DisableProxy {
+		proxy.OnAccess(a.logProxyAccess)
+		defer proxy.OnAccess(nil)
 		a.metrics.AddSource(routeMetrics())
 	}
 	a.metrics.AddSource(a.meshMetrics())

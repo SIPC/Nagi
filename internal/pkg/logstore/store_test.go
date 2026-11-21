@@ -1,0 +1,196 @@
+package logstore_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/logstore"
+)
+
+func openStore(t *testing.T, path string, budget int64) *logstore.Store {
+	t.Helper()
+	s, err := logstore.Open(t.Context(), path, budget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	return s
+}
+
+func query(t *testing.T, s *logstore.Store, f logstore.Filter) []logstore.Event {
+	t.Helper()
+	r, err := s.Query(t.Context(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func record(t *testing.T, s *logstore.Store, e logstore.Event) {
+	t.Helper()
+	if err := s.Record(t.Context(), e); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLocalHistorySurvivesRestartAndUsesExclusiveCursor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "logs.db")
+	s := openStore(t, path, 2<<20)
+	start := time.Date(2026, 11, 20, 1, 2, 3, 123456789, time.UTC)
+	for i := range 3 {
+		record(t, s, logstore.Event{Time: start.Add(time.Duration(i) * time.Second), Category: logstore.Access, Kind: "http", Project: "p", Data: map[string]any{"status": 401 + i, "bytes": int64(9007199254740993)}})
+	}
+	first := query(t, s, logstore.Filter{Project: "p", Limit: 1})[0]
+	if first.Source == "" || !first.Time.Equal(start) || first.Received.IsZero() {
+		t.Fatalf("缺失来源/精确事件时间/采集时间: %+v", first)
+	}
+	if !strings.Contains(string(first.Data.(json.RawMessage)), "9007199254740993") {
+		t.Fatal("64 位计数被浮点数舍入")
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = openStore(t, path, 2<<20)
+	record(t, s, logstore.Event{Category: logstore.Audit, Kind: "restart", Data: "ok"})
+	rows := query(t, s, logstore.Filter{After: first.Seq, Limit: 10})
+	if len(rows) != 3 || rows[0].Seq != first.Seq+1 || rows[2].Seq != first.Seq+3 || rows[2].Source != first.Source {
+		t.Fatalf("重启/翻页丢失、重复或来源变化: %+v", rows)
+	}
+	rows = query(t, s, logstore.Filter{From: start.Add(time.Second), To: start.Add(2 * time.Second), Category: logstore.Access, Project: "p"})
+	if len(rows) != 1 || rows[0].Seq != first.Seq+1 {
+		t.Fatalf("闭开时间边界错误: %+v", rows)
+	}
+	if _, err := s.Query(t.Context(), logstore.Filter{Limit: 1001}); err == nil {
+		t.Fatal("查询无界")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := s.Record(ctx, logstore.Event{Category: logstore.Audit, Kind: "canceled"}); err == nil {
+		t.Fatal("取消的写入被当成成功")
+	}
+}
+
+func TestCapacityPrunesOrdinaryBeforeAuditAndKeepsBoundedGaps(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "logs.db")
+	const budget = 2 << 20
+	s := openStore(t, path, budget)
+	record(t, s, logstore.Event{Time: time.Now().Add(-24 * time.Hour), Category: logstore.Audit, Kind: "first.audit", Data: "must survive ordinary flood"})
+	first := query(t, s, logstore.Filter{})[0]
+	fill := func(category string, count int) {
+		for i := range count {
+			record(t, s, logstore.Event{Time: time.Now().Add(24 * time.Hour), Category: category, Kind: fmt.Sprint(i), Data: strings.Repeat("x", 32<<10)})
+			state, err := s.State(t.Context())
+			if err != nil || state.DiskBytes > budget {
+				t.Fatalf("真实 DB/WAL/SHM 越额: %+v err=%v", state, err)
+			}
+		}
+	}
+	fill(logstore.Access, 70)
+	rows := query(t, s, logstore.Filter{Category: logstore.Audit})
+	if len(rows) != 1 || rows[0].Seq != first.Seq {
+		t.Fatal("普通流量淘汰了旧审计")
+	}
+	fill(logstore.Audit, 75)
+	state, err := s.State(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Pruned) != 2 || len(query(t, s, logstore.Filter{Category: logstore.Access})) != 0 {
+		t.Fatalf("没有按类别清理/缺口账本不对: %+v", state)
+	}
+	var removed int64
+	for _, p := range state.Pruned {
+		if p.Count <= 0 || p.Last < p.First {
+			t.Fatalf("清理摘要错误: %+v", p)
+		}
+		removed += p.Count
+	}
+	if got := len(query(t, s, logstore.Filter{Limit: 1000})); int64(got)+removed != state.Last {
+		t.Fatalf("清理有未记账丢失: retained=%d removed=%d last=%d", got, removed, state.Last)
+	}
+	s.Close()
+	s = openStore(t, path, budget)
+	record(t, s, logstore.Event{Category: logstore.Audit, Kind: "after.prune.restart"})
+	rows = query(t, s, logstore.Filter{After: state.Last})
+	if len(rows) != 1 || rows[0].Seq != state.Last+1 || rows[0].Source != state.Source {
+		t.Fatalf("清理重启后复用了编号: %+v", rows)
+	}
+}
+
+func TestJournalRedactsAndPreservesLoggerGroups(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	var terminal bytes.Buffer
+	logger := s.Logger(slog.New(slog.NewTextHandler(&terminal, nil)), logstore.DefaultConfig())
+	logger.With("component", "agent").WithGroup("job").With("id", "task-7").With("phase", "pull").WithGroup("result").Info("failed token=topsecret", "status", 502, "authorization", "Bearer abcdef", "url", "https://bob:pass@example.com/private?code=unsafe")
+	rows := query(t, s, logstore.Filter{Category: logstore.Runtime})
+	if len(rows) != 1 || terminal.Len() == 0 {
+		t.Fatal("结构化日志或原来的终端输出丢失")
+	}
+	b := rows[0].Data.(json.RawMessage)
+	for _, secret := range []string{"topsecret", "abcdef", "bob:pass", "unsafe"} {
+		if bytes.Contains(b, []byte(secret)) {
+			t.Fatalf("敏感数据入库: %s", b)
+		}
+	}
+	var data struct {
+		Component string
+		Job       struct {
+			ID, Phase string
+			Result    struct{ Status int }
+		}
+	}
+	if err := json.Unmarshal(b, &data); err != nil || data.Component != "agent" || data.Job.ID != "task-7" || data.Job.Phase != "pull" || data.Job.Result.Status != 502 {
+		t.Fatalf("With/WithGroup 改变字段层级或丢掉字段: %s err=%v", b, err)
+	}
+	record(t, s, logstore.Event{Category: logstore.Container, Kind: "stdout", Data: strings.Repeat("长输出", 32<<10)})
+	rows = query(t, s, logstore.Filter{Category: logstore.Container})
+	b = rows[0].Data.(json.RawMessage)
+	if !json.Valid(b) || len(b) > 64<<10 || !bytes.Contains(b, []byte(`"truncated":true`)) {
+		t.Fatalf("大记录没有有界且显式地截断: len=%d", len(b))
+	}
+	s.Close()
+	s.Report(logstore.Event{Category: logstore.Runtime, Kind: "closed"})
+	// 已关闭库的错误不能递归写日志；Report 自己返回即可。
+}
+
+func TestLocalConfigDefaultsAndCapacityRange(t *testing.T) {
+	dir := t.TempDir()
+	c, err := logstore.LoadConfig(dir)
+	if err != nil || c.CapacityGiB != 5 || c.MetricsEverySeconds != 10 {
+		t.Fatalf("默认配置: %+v err=%v", c, err)
+	}
+	for _, tc := range []struct {
+		json string
+		ok   bool
+	}{{`{"capacity_gib":10}`, true}, {`{"capacity_gib":4}`, false}, {`{"capacity_gib":11}`, false}, {`{"metrics_every_seconds":15}`, false}, {`{"metrics_every_seconds":0}`, false}, {`{"runtime_level":"trace"}`, false}} {
+		if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(tc.json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := logstore.LoadConfig(dir)
+		if (err == nil) != tc.ok {
+			t.Errorf("%s: err=%v", tc.json, err)
+		}
+	}
+}
+
+func BenchmarkLocalJournal(b *testing.B) {
+	s, err := logstore.Open(context.Background(), filepath.Join(b.TempDir(), "logs.db"), 8<<20)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer s.Close()
+	logger := s.Logger(slog.New(slog.NewTextHandler(io.Discard, nil)), logstore.DefaultConfig())
+	b.ResetTimer()
+	for b.Loop() {
+		logger.Info("request", "status", 401)
+	}
+}

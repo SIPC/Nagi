@@ -69,6 +69,9 @@ type Collector struct {
 	ExtraRestarts func(containerID string) int
 	// ProjectDirs 返回所有项目目录。项目目录可能在另一块磁盘上（例如 /srv 挂的数据盘），那块盘也要监控。
 	ProjectDirs func() []string
+	// OnSample 保存原始采样到统一日志库，不依赖旧指标库成功，也不受旧图表降采样/过期清理影响。
+	// 回调在采样协程执行，不能修改 values。
+	OnSample func(time.Time, map[string]float64)
 }
 
 // Source 是额外的指标来源，每次采样时调用，elapsed 是距上次采样的秒数。
@@ -363,6 +366,9 @@ func (l *limitSum) result(memTotal uint64) (cpu, mem float64) {
 }
 
 func (c *Collector) store(ctx context.Context, now time.Time, values map[string]float64) error {
+	if c.OnSample != nil {
+		c.OnSample(now, values)
+	}
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
