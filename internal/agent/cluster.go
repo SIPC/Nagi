@@ -253,6 +253,8 @@ var readOnlyRPCs = map[string]bool{
 	nagiv1.AgentService_MeshPing_FullMethodName:             true,
 	nagiv1.AgentService_GetMirrors_FullMethodName:           true,
 	nagiv1.AgentService_ListImages_FullMethodName:           true,
+	nagiv1.LogService_QueryLogs_FullMethodName:              true,
+	nagiv1.LogService_QueryMetrics_FullMethodName:           true,
 }
 
 // checkPrimary 判断面板 fp 能不能调用 method：先要在信任列表里（移除的面板在连接断开前也不能再调用），查询接口都可以，修改只接受主面板的。

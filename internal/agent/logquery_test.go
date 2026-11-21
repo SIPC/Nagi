@@ -214,6 +214,23 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 			}
 		})
 	}
+	// The same authenticated panel may become a standby without losing log
+	// reads. This must not turn standby membership into write permission.
+	if err := id.addPanel(trustedPanel{Address: "primary:1", Fingerprint: "other-primary", NodeID: "n1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := id.observe("", 1, "other-primary"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.QueryLogs(ctx, &nagiv1.LogQuery{Category: logstore.Access}); err != nil {
+		t.Fatalf("standby log query rejected: %v", err)
+	}
+	if _, err := client.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{}); err != nil {
+		t.Fatalf("standby metric query rejected: %v", err)
+	}
+	if _, err := nagiv1.NewMeshServiceClient(cc).NodeFileUploadBegin(ctx, &nagiv1.UploadBeginRequest{}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("standby obtained write permission: %v", err)
+	}
 	if _, err := id.removePanel("panel-fp", true, nil); err != nil {
 		t.Fatal(err)
 	}
