@@ -131,4 +131,14 @@ public interface LogQueryOrBuilder extends
    */
   com.google.protobuf.ByteString
       getKindPrefixBytes();
+
+  /**
+   * <pre>
+   * Live migration state only, without waiting for the log disk writer.
+   * </pre>
+   *
+   * <code>bool migrations_only = 11 [json_name = "migrationsOnly"];</code>
+   * @return The migrationsOnly.
+   */
+  boolean getMigrationsOnly();
 }

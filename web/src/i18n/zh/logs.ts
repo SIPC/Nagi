@@ -20,6 +20,9 @@ export default {
   refresh: "刷新", order: "按采集序号从早到晚", empty: "没有符合条件的已保存记录；请同时检查采集与清理信息。",
   watermark: (source: string, seq: string) => `来源 ${source} · 已确认序号 ${seq}`,
   writeErrors: (count: string) => `来源报告 ${count} 次日志写入失败，可能存在未保存的记录。`,
+  writeRetried: (category: string, failed: string) => `${category}：写入尝试失败 ${failed} 次，已排队重试，尚未确认丢失。`,
+  writeLost: (category: string, failed: string, lost: string) => `${category}：写入尝试失败 ${failed} 次，确认丢失 ${lost} 条（队列溢出或不重试的类别），这些记录不会再写入。`,
+  writeLast: (time: string, error: string) => `最近一次：${time}${error ? `，原因：${error}` : ""}。计数为来源本次启动以来。`,
   sourcePruned: "源端清理", copyPruned: "副本过期或清理",
   pruned: (origin: string, category: string, first: string, last: string, count: string) => `${origin} · ${category}：序号 ${first}–${last} 范围内累计移除 ${count} 条，确切时间范围未知。`,
   migration: {

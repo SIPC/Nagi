@@ -67,6 +67,9 @@ func (s *meshService) QueryLogs(ctx context.Context, q *nagiv1.LogQuery) (*nagiv
 	}
 	out := &nagiv1.LogPage{Source: page.State.Source, LatestSeq: page.State.Last, NextAfter: page.Next, More: page.More,
 		WriteErrors: page.State.WriteErrors, DiskBytes: page.State.DiskBytes, BudgetBytes: page.State.BudgetBytes, Migrations: migrations}
+	for _, w := range page.State.Failures {
+		out.WriteFailures = append(out.WriteFailures, &nagiv1.LogWriteFailure{Category: w.Category, Failed: w.Failed, Lost: w.Lost, LastError: w.LastError, LastTime: timestamppb.New(w.LastTime)})
+	}
 	for _, e := range page.Events {
 		data, err := json.Marshal(e.Data)
 		if err != nil {

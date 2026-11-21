@@ -695,7 +695,9 @@ type LogPage struct {
 	// Kept separate from pruned (panel-side expiry/capacity) to avoid double counts.
 	SourcePruned []*LogPruned `protobuf:"bytes,11,rep,name=source_pruned,json=sourcePruned,proto3" json:"source_pruned,omitempty"`
 	// Live process state only; never replicated with recent copies.
-	Migrations    []*LogMigration `protobuf:"bytes,12,rep,name=migrations,proto3" json:"migrations,omitempty"`
+	Migrations []*LogMigration `protobuf:"bytes,12,rep,name=migrations,proto3" json:"migrations,omitempty"`
+	// This source process's per-category write outcome since it started.
+	WriteFailures []*LogWriteFailure `protobuf:"bytes,13,rep,name=write_failures,json=writeFailures,proto3" json:"write_failures,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -814,6 +816,92 @@ func (x *LogPage) GetMigrations() []*LogMigration {
 	return nil
 }
 
+func (x *LogPage) GetWriteFailures() []*LogWriteFailure {
+	if x != nil {
+		return x.WriteFailures
+	}
+	return nil
+}
+
+// failed counts write attempts that did not commit (important records are
+// retried, so one record may fail several times); lost counts records that
+// will never be written.
+type LogWriteFailure struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Category      string                 `protobuf:"bytes,1,opt,name=category,proto3" json:"category,omitempty"`
+	Failed        uint64                 `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
+	Lost          uint64                 `protobuf:"varint,3,opt,name=lost,proto3" json:"lost,omitempty"`
+	LastError     string                 `protobuf:"bytes,4,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	LastTime      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=last_time,json=lastTime,proto3" json:"last_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogWriteFailure) Reset() {
+	*x = LogWriteFailure{}
+	mi := &file_nagi_v1_logs_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogWriteFailure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogWriteFailure) ProtoMessage() {}
+
+func (x *LogWriteFailure) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_logs_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogWriteFailure.ProtoReflect.Descriptor instead.
+func (*LogWriteFailure) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *LogWriteFailure) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *LogWriteFailure) GetFailed() uint64 {
+	if x != nil {
+		return x.Failed
+	}
+	return 0
+}
+
+func (x *LogWriteFailure) GetLost() uint64 {
+	if x != nil {
+		return x.Lost
+	}
+	return 0
+}
+
+func (x *LogWriteFailure) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *LogWriteFailure) GetLastTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastTime
+	}
+	return nil
+}
+
 type LogMigration struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -828,7 +916,7 @@ type LogMigration struct {
 
 func (x *LogMigration) Reset() {
 	*x = LogMigration{}
-	mi := &file_nagi_v1_logs_proto_msgTypes[10]
+	mi := &file_nagi_v1_logs_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -840,7 +928,7 @@ func (x *LogMigration) String() string {
 func (*LogMigration) ProtoMessage() {}
 
 func (x *LogMigration) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_logs_proto_msgTypes[10]
+	mi := &file_nagi_v1_logs_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -853,7 +941,7 @@ func (x *LogMigration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogMigration.ProtoReflect.Descriptor instead.
 func (*LogMigration) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{10}
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *LogMigration) GetId() string {
@@ -950,7 +1038,7 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\bcategory\x18\x01 \x01(\tR\bcategory\x12\x14\n" +
 	"\x05first\x18\x02 \x01(\x03R\x05first\x12\x12\n" +
 	"\x04last\x18\x03 \x01(\x03R\x04last\x12\x14\n" +
-	"\x05count\x18\x04 \x01(\x03R\x05count\"\xc2\x03\n" +
+	"\x05count\x18\x04 \x01(\x03R\x05count\"\x83\x04\n" +
 	"\aLogPage\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1d\n" +
 	"\n" +
@@ -970,7 +1058,15 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\rsource_pruned\x18\v \x03(\v2\x12.nagi.v1.LogPrunedR\fsourcePruned\x125\n" +
 	"\n" +
 	"migrations\x18\f \x03(\v2\x15.nagi.v1.LogMigrationR\n" +
-	"migrations\"~\n" +
+	"migrations\x12?\n" +
+	"\x0ewrite_failures\x18\r \x03(\v2\x18.nagi.v1.LogWriteFailureR\rwriteFailures\"\xb1\x01\n" +
+	"\x0fLogWriteFailure\x12\x1a\n" +
+	"\bcategory\x18\x01 \x01(\tR\bcategory\x12\x16\n" +
+	"\x06failed\x18\x02 \x01(\x04R\x06failed\x12\x12\n" +
+	"\x04lost\x18\x03 \x01(\x04R\x04lost\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\x04 \x01(\tR\tlastError\x127\n" +
+	"\tlast_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\blastTime\"~\n" +
 	"\fLogMigration\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05phase\x18\x02 \x01(\tR\x05phase\x12\x1c\n" +
@@ -1001,7 +1097,7 @@ func file_nagi_v1_logs_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_logs_proto_rawDescData
 }
 
-var file_nagi_v1_logs_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_nagi_v1_logs_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_nagi_v1_logs_proto_goTypes = []any{
 	(*LocalRecordingQuery)(nil),   // 0: nagi.v1.LocalRecordingQuery
 	(*LocalRecordingChunk)(nil),   // 1: nagi.v1.LocalRecordingChunk
@@ -1013,40 +1109,43 @@ var file_nagi_v1_logs_proto_goTypes = []any{
 	(*LogEntry)(nil),              // 7: nagi.v1.LogEntry
 	(*LogPruned)(nil),             // 8: nagi.v1.LogPruned
 	(*LogPage)(nil),               // 9: nagi.v1.LogPage
-	(*LogMigration)(nil),          // 10: nagi.v1.LogMigration
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
-	(*QueryMetricsRequest)(nil),   // 12: nagi.v1.QueryMetricsRequest
-	(*QueryMetricsResponse)(nil),  // 13: nagi.v1.QueryMetricsResponse
+	(*LogWriteFailure)(nil),       // 10: nagi.v1.LogWriteFailure
+	(*LogMigration)(nil),          // 11: nagi.v1.LogMigration
+	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(*QueryMetricsRequest)(nil),   // 13: nagi.v1.QueryMetricsRequest
+	(*QueryMetricsResponse)(nil),  // 14: nagi.v1.QueryMetricsResponse
 }
 var file_nagi_v1_logs_proto_depIdxs = []int32{
 	7,  // 0: nagi.v1.LogCopyBatch.entries:type_name -> nagi.v1.LogEntry
 	8,  // 1: nagi.v1.LogCopyBatch.pruned:type_name -> nagi.v1.LogPruned
-	11, // 2: nagi.v1.LogQuery.from:type_name -> google.protobuf.Timestamp
-	11, // 3: nagi.v1.LogQuery.to:type_name -> google.protobuf.Timestamp
+	12, // 2: nagi.v1.LogQuery.from:type_name -> google.protobuf.Timestamp
+	12, // 3: nagi.v1.LogQuery.to:type_name -> google.protobuf.Timestamp
 	5,  // 4: nagi.v1.NodeLogQuery.query:type_name -> nagi.v1.LogQuery
-	11, // 5: nagi.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
-	11, // 6: nagi.v1.LogEntry.received:type_name -> google.protobuf.Timestamp
+	12, // 5: nagi.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
+	12, // 6: nagi.v1.LogEntry.received:type_name -> google.protobuf.Timestamp
 	7,  // 7: nagi.v1.LogPage.entries:type_name -> nagi.v1.LogEntry
 	8,  // 8: nagi.v1.LogPage.pruned:type_name -> nagi.v1.LogPruned
 	8,  // 9: nagi.v1.LogPage.source_pruned:type_name -> nagi.v1.LogPruned
-	10, // 10: nagi.v1.LogPage.migrations:type_name -> nagi.v1.LogMigration
-	5,  // 11: nagi.v1.LogService.QueryLogs:input_type -> nagi.v1.LogQuery
-	12, // 12: nagi.v1.LogService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
-	0,  // 13: nagi.v1.LogService.ReadRecording:input_type -> nagi.v1.LocalRecordingQuery
-	2,  // 14: nagi.v1.LogCopyService.GetLogReceipt:input_type -> nagi.v1.LogReceiptQuery
-	4,  // 15: nagi.v1.LogCopyService.PushLogs:input_type -> nagi.v1.LogCopyBatch
-	6,  // 16: nagi.v1.NodeLogService.QueryNodeLogs:input_type -> nagi.v1.NodeLogQuery
-	9,  // 17: nagi.v1.LogService.QueryLogs:output_type -> nagi.v1.LogPage
-	13, // 18: nagi.v1.LogService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	1,  // 19: nagi.v1.LogService.ReadRecording:output_type -> nagi.v1.LocalRecordingChunk
-	3,  // 20: nagi.v1.LogCopyService.GetLogReceipt:output_type -> nagi.v1.LogReceipt
-	3,  // 21: nagi.v1.LogCopyService.PushLogs:output_type -> nagi.v1.LogReceipt
-	9,  // 22: nagi.v1.NodeLogService.QueryNodeLogs:output_type -> nagi.v1.LogPage
-	17, // [17:23] is the sub-list for method output_type
-	11, // [11:17] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	11, // 10: nagi.v1.LogPage.migrations:type_name -> nagi.v1.LogMigration
+	10, // 11: nagi.v1.LogPage.write_failures:type_name -> nagi.v1.LogWriteFailure
+	12, // 12: nagi.v1.LogWriteFailure.last_time:type_name -> google.protobuf.Timestamp
+	5,  // 13: nagi.v1.LogService.QueryLogs:input_type -> nagi.v1.LogQuery
+	13, // 14: nagi.v1.LogService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
+	0,  // 15: nagi.v1.LogService.ReadRecording:input_type -> nagi.v1.LocalRecordingQuery
+	2,  // 16: nagi.v1.LogCopyService.GetLogReceipt:input_type -> nagi.v1.LogReceiptQuery
+	4,  // 17: nagi.v1.LogCopyService.PushLogs:input_type -> nagi.v1.LogCopyBatch
+	6,  // 18: nagi.v1.NodeLogService.QueryNodeLogs:input_type -> nagi.v1.NodeLogQuery
+	9,  // 19: nagi.v1.LogService.QueryLogs:output_type -> nagi.v1.LogPage
+	14, // 20: nagi.v1.LogService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	1,  // 21: nagi.v1.LogService.ReadRecording:output_type -> nagi.v1.LocalRecordingChunk
+	3,  // 22: nagi.v1.LogCopyService.GetLogReceipt:output_type -> nagi.v1.LogReceipt
+	3,  // 23: nagi.v1.LogCopyService.PushLogs:output_type -> nagi.v1.LogReceipt
+	9,  // 24: nagi.v1.NodeLogService.QueryNodeLogs:output_type -> nagi.v1.LogPage
+	19, // [19:25] is the sub-list for method output_type
+	13, // [13:19] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_logs_proto_init() }
@@ -1061,7 +1160,7 @@ func file_nagi_v1_logs_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_logs_proto_rawDesc), len(file_nagi_v1_logs_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
