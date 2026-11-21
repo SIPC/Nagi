@@ -1,0 +1,46 @@
+syntax = "proto3";
+package nagi.v1;
+import "google/protobuf/timestamp.proto";
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+// Panel-only, administrator-only. Never sent to agents.
+service ModelReportService {
+  rpc GetReportConfig(GetReportConfigRequest) returns (ReportConfig);
+  rpc UpdateReportConfig(UpdateReportConfigRequest) returns (ReportConfig);
+  rpc GenerateReport(GenerateReportRequest) returns (ModelReport);
+  rpc ListReports(ListReportsRequest) returns (ListReportsResponse);
+  rpc GetReport(GetReportRequest) returns (ModelReport);
+}
+message GetReportConfigRequest {}
+message ReportConfig {
+  bool enabled = 1;
+  string endpoint = 2;
+  string model = 3;
+  bool has_api_key = 4;
+}
+message UpdateReportConfigRequest {
+  bool enabled = 1;
+  string endpoint = 2 [debug_redact = true];
+  string model = 3;
+  // Empty preserves the stored key; clear_api_key explicitly removes it.
+  string api_key = 4 [debug_redact = true];
+  bool clear_api_key = 5;
+}
+message GenerateReportRequest { string language = 1; }
+message ListReportsRequest {}
+message GetReportRequest { string id = 1; }
+message ListReportsResponse { repeated ModelReport reports = 1; }
+message ModelReport {
+  string id = 1;
+  string status = 2;
+  google.protobuf.Timestamp started = 3;
+  google.protobuf.Timestamp finished = 4;
+  string model = 5;
+  string template_version = 6;
+  string material_json = 7;
+  string digest = 8;
+  string content = 9;
+  string failure = 10;
+  int64 actor = 11;
+  string trigger = 12;
+}

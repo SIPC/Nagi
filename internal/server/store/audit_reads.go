@@ -3,6 +3,8 @@ package store
 // SensitiveReads 是要记进审计的查询（见 docs/audit.md#记录范围）：返回密钥、变量值或文件内容的接口。
 // api 包的测试列出所有返回这类内容的接口，没登记在这里、也没登记为不用记的，测试失败。
 var SensitiveReads = map[string]bool{
+	"ListReports": true,
+	"GetReport":   true,
 	// 项目配置里有环境变量和共享变量的值。界面会定时刷新，每个会话、每个项目每小时只记一条。
 	"GetProject":   true,
 	"ListProjects": true,

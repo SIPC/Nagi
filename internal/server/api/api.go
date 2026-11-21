@@ -25,6 +25,7 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
+	"github.com/SIPC/nagi/internal/server/modelreport"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/oauth"
 	"github.com/SIPC/nagi/internal/server/projects"
@@ -54,16 +55,18 @@ type API struct {
 	// 不能插进别的修改，否则能造出指向已删角色的成员、把管理员删光（2026-11-19-87c02b5#7、#8）。
 	membersMu sync.Mutex
 
-	Q         *store.Queries
-	Auth      *auth.Service
-	Nodes     *nodes.Registry
-	Projects  *projects.Service
-	CA        *tlsutil.CA
-	Sealer    *sealer.Sealer
-	Panel     *PanelInfo
-	Log       *slog.Logger
-	Logs      *logstore.Store
-	LogConfig logstore.Config
+	Q              *store.Queries
+	Auth           *auth.Service
+	Nodes          *nodes.Registry
+	Projects       *projects.Service
+	CA             *tlsutil.CA
+	Sealer         *sealer.Sealer
+	Panel          *PanelInfo
+	Log            *slog.Logger
+	Logs           *logstore.Store
+	LogConfig      logstore.Config
+	ModelReports   *modelreport.Engine
+	reportConfigMu sync.Mutex
 	// OAuth 是给 MCP 客户端用的授权服务器（见 docs/mcp.md#oauth），授权页的接口要用它。
 	OAuth *oauth.Server
 	// Audit 是审计日志（见 docs/audit.md）。
@@ -87,6 +90,9 @@ type API struct {
 
 // Mount 把所有接口挂到 mux 上。
 func (a *API) Mount(mux *http.ServeMux) {
+	if a.ModelReports == nil {
+		a.ModelReports = &modelreport.Engine{Logs: a.Logs}
+	}
 	chain := []connect.Interceptor{langInterceptor{}, a.Auth.Interceptor(
 		nagiv1connect.SetupServiceGetSetupStateProcedure,
 		nagiv1connect.SetupServiceSetupProcedure,
@@ -123,6 +129,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(&projectService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewEnrollServiceHandler(&enrollService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
+	mux.Handle(nagiv1connect.NewModelReportServiceHandler(&modelReportService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewAppServiceHandler(&appService{a}, interceptors))
 	mux.Handle("/hooks/", a.standbyBlock(a.WebhookHandler()))
 	mux.Handle("/ws/exec", a.standbyBlock(a.TerminalHandler()))

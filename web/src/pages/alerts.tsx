@@ -11,6 +11,7 @@ import { confirmAction } from "@/components/confirm";
 import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
 import { HelpParts } from "@/components/help-parts";
+import { ModelReports } from "@/pages/model-reports";
 
 // ---- 告警设置：通知渠道（规则在各节点和项目的设置里） ----
 
@@ -196,7 +197,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
 }
 
 export function AlertSettings() {
-  const { can } = useRole();
+  const { can, isAdmin } = useRole();
   const cfg = useQuery({
     queryKey: ["alert-config"],
     queryFn: () => settingsClient.getAlertConfig({}),
@@ -217,6 +218,7 @@ export function AlertSettings() {
   return (
     <>
       <AlertForm config={cfg.data.config} lost={cfg.data.lost} />
+      {isAdmin && <ModelReports />}
       {/* 登录安全告警存在审计设置里，归「安全设置」。 */}
       {can("panel.security") && <SecurityAlertRules />}
     </>

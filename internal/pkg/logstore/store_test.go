@@ -313,6 +313,35 @@ func TestImportReconcilesHistoryWithoutCollapsingIdenticalLiveFacts(t *testing.T
 	}
 }
 
+func TestExpireObjectPreservesOtherHistoryAndCheckpoint(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	ctx := t.Context()
+	// Retention uses local receive time, not an untrusted event timestamp.
+	if err := s.RecordCheckpoint(ctx, logstore.Event{Time: time.Now().Add(24 * time.Hour), Category: logstore.Task, Object: "reports", Kind: "old", Data: "old"}, "reports", 7); err != nil {
+		t.Fatal(err)
+	}
+	old := query(t, s, logstore.Filter{})[0]
+	record(t, s, logstore.Event{Time: time.Now().Add(-24 * time.Hour), Category: logstore.Task, Object: "reports", Kind: "recent", Data: "recent"})
+	record(t, s, logstore.Event{Category: logstore.Task, Object: "other", Kind: "other", Data: "other"})
+	record(t, s, logstore.Event{Category: logstore.Audit, Object: "reports", Kind: "audit", Data: "audit"})
+	for range 2 {
+		if err := s.ExpireObject(ctx, logstore.Task, "reports", old.Received.Add(time.Nanosecond)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	remaining := query(t, s, logstore.Filter{})
+	if len(remaining) != 3 || remaining[0].Kind != "recent" || remaining[1].Kind != "other" || remaining[2].Kind != "audit" {
+		t.Fatalf("expired unrelated or recent history: %+v", remaining)
+	}
+	if b, err := s.Checkpoint(ctx, "reports"); err != nil || string(b) != "7" {
+		t.Fatalf("expiration reset checkpoint: %s %v", b, err)
+	}
+	state, err := s.State(ctx)
+	if err != nil || len(state.Pruned) != 1 || state.Pruned[0].Category != logstore.Task || state.Pruned[0].Count != 1 || state.Pruned[0].First != old.Seq || state.Pruned[0].Last != old.Seq {
+		t.Fatalf("expiration envelope or repeated cleanup count incorrect: %+v %v", state.Pruned, err)
+	}
+}
+
 func BenchmarkLocalJournal(b *testing.B) {
 	s, err := logstore.Open(context.Background(), filepath.Join(b.TempDir(), "logs.db"), 8<<20)
 	if err != nil {

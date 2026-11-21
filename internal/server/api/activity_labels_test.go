@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // 审计记录里的每种操作在界面上都要有中英文名称（web/src/i18n/*/activity.ts 的 actions，
@@ -23,13 +24,15 @@ func TestActivityLabels(t *testing.T) {
 				labels[m[1]] = true
 			}
 		}
-		services := nagiv1.File_nagi_v1_api_proto.Services()
-		for i := range services.Len() {
-			svc := services.Get(i)
-			for j := range svc.Methods().Len() {
-				method := string(svc.Methods().Get(j).Name())
-				if activityRecorded("/nagi.v1."+string(svc.Name())+"/"+method) && !labels[method] {
-					t.Errorf("%s/activity.ts 和 audit.ts 都缺少 %s 的名称", lang, method)
+		for _, file := range []protoreflect.FileDescriptor{nagiv1.File_nagi_v1_api_proto, nagiv1.File_nagi_v1_model_report_proto} {
+			services := file.Services()
+			for i := range services.Len() {
+				svc := services.Get(i)
+				for j := range svc.Methods().Len() {
+					method := string(svc.Methods().Get(j).Name())
+					if activityRecorded("/nagi.v1."+string(svc.Name())+"/"+method) && !labels[method] {
+						t.Errorf("%s/activity.ts 和 audit.ts 都缺少 %s 的名称", lang, method)
+					}
 				}
 			}
 		}

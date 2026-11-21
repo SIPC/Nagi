@@ -101,6 +101,10 @@ export default {
     hidden: (n: number) => `${n} characters not echoed`,
   },
   events: {
+    UpdateReportConfig: "Edit model report settings",
+    GenerateReport: "Generate alert report",
+    ListReports: "View model report list",
+    GetReport: "View model report",
     login_failed: "Sign-in failed",
     login_failed_summary: "Sign-in failures",
     totp_failed: "Wrong 2FA code",
