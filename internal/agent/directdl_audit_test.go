@@ -29,7 +29,7 @@ func directAuditAgent(t *testing.T) (*agent, []byte) {
 	if err := id.addPanel(trustedPanel{Address: "a:1", Fingerprint: "fp-a", NodeID: "n1", CertPEM: "cert", CAPEM: "ca"}); err != nil {
 		t.Fatal(err)
 	}
-	l, err := auditlog.Open(filepath.Join(dataDir, "audit"))
+	l, err := auditlog.Open(auditlog.Path(filepath.Join(dataDir, "logs")), "")
 	if err != nil {
 		t.Fatal(err)
 	}

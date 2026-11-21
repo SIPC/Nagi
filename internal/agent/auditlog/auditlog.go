@@ -1,36 +1,34 @@
 // Package auditlog 是节点本地审计（见 docs/audit.md#节点本地审计）：面板被攻破时，面板上的记录不可信，
 // 所以节点自己也记一份——节点终端、node_exec、面板下发的修改类指令、被拒绝的越权请求。
 //
-// 写在 <数据目录>/audit/ 下，JSON Lines，按 10 MB 轮换，保留 10 个文件。面板读走后代为外送（见 ship.go）：
-// 节点被攻破后可以删掉本地文件，但已经外送的记录还在。
+// v0.37.1 起记在本机日志目录的 audit/node-audit.db（SQLite），和节点业务库分开。每条记录保存原样的一行 JSON
+// （ReadAuditLog 返回、面板外送的就是这一行）和哈希链：hash = SHA-256(prev_hash ‖ 这一行)。v0.37.0 及以前的
+// JSON Lines 文件（<数据目录>/audit/）启动时按原序号、原样导入，核对后删除，见 legacy.go。
+// 面板读走后代为外送（见 ship.go）：节点被攻破后可以删改本地记录，但已经外送的记录还在。
 package auditlog
 
 import (
-	"bufio"
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
-// maxSize 是每个文件的大小上限（测试里改小）。
-var maxSize int64 = 10 << 20
-
-const (
-	current  = "audit.jsonl"
-	maxFiles = 10
-	// maxField 是每个字段的长度上限：来源于请求的内容都可能很长。
-	maxField = 2000
-)
+// maxField 是每个字段的长度上限：来源于请求的内容都可能很长。
+const maxField = 2000
 
 // Event 是一条节点本地审计记录。
 type Event struct {
@@ -46,48 +44,89 @@ type Event struct {
 	Error  string    `json:"error,omitempty"`
 }
 
-// Log 是节点本地审计。零值不可用，用 Open 打开；nil 时 Record 什么也不做。
+// Log 是节点本地审计。用 Open 打开；nil 时 Record 什么也不做。
 type Log struct {
-	dir string
+	db     *sql.DB
+	path   string
+	legacy string // v0.37.0 及以前的 JSON Lines 目录
 
-	mu     sync.Mutex
-	f      *os.File
-	size   int64
-	seq    int64
-	budget *logstore.Store
-	// Unimported source history stays protected if migration is interrupted.
+	mu       sync.Mutex
+	seq      int64
+	lastHash string
+	budget   *logstore.Store
+	// pending：旧文件还没有导入完。这期间新记录照旧追加到旧文件（序号接着旧文件），导入时一起按序号进链，
+	// 不会出现序号交错；导入完以后不再写旧文件。
+	pending atomic.Bool
+	// historyPending：统一日志页的旧副本还没导入完，容量清理先不删本库里的记录。
 	historyPending atomic.Bool
-	// Capture 独立采集规范化后的审计事实，不以旧文件写成功为前提。
-	// 启动时设置，运行时不修改，不能递归写本 Log；序号不代表旧文件已保存。
+	// Capture 独立采集规范化后的审计事实，不以本库写成功为前提。
+	// 启动时设置，运行时不修改，不能递归写本 Log；序号不代表本库已保存。
 	Capture func(Event)
 }
 
-// Open 打开（必要时创建）审计目录，接着上次的序号写。
-func Open(dir string) (*Log, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+// Path is the audit store below a machine's local log directory.
+func Path(logsDir string) string { return filepath.Join(logsDir, "audit", "node-audit.db") }
+
+// Open 打开（必要时创建）审计库 path。legacyDir 是旧版本的 JSON Lines 目录（没有时为空）。打开后调用
+// ImportLegacy 导入旧文件。
+func Open(path, legacyDir string) (*Log, error) {
+	d, err := db.Open(path)
+	if err != nil {
 		return nil, err
 	}
-	l := &Log{dir: dir}
-	l.seq = lastSeq(dir)
-	l.historyPending.Store(l.seq > 0)
-	if err := l.openCurrent(); err != nil {
+	// Incremental auto-vacuum lets capacity cleanup give space back without a
+	// full-size VACUUM. db.Open already wrote a WAL header, so switching needs a
+	// VACUUM, which is free while the database is still empty.
+	var tables int
+	if err := d.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type='table'`).Scan(&tables); err != nil {
+		d.Close()
 		return nil, err
+	}
+	if tables == 0 {
+		if _, err := d.Exec(`PRAGMA auto_vacuum=INCREMENTAL; VACUUM`); err != nil {
+			d.Close()
+			return nil, err
+		}
+	}
+	if _, err := d.Exec(`PRAGMA synchronous=FULL;
+CREATE TABLE IF NOT EXISTS audit_events (
+ seq INTEGER PRIMARY KEY, line BLOB NOT NULL, prev_hash TEXT NOT NULL, hash TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audit_tombstones (seq INTEGER PRIMARY KEY, hash TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audit_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`); err != nil {
+		d.Close()
+		return nil, err
+	}
+	l := &Log{db: d, path: path, legacy: legacyDir}
+	if err := l.loadHead(); err != nil {
+		d.Close()
+		return nil, err
+	}
+	if legacyDir != "" && l.meta("legacy_imported") == "" && len(files(legacyDir)) > 0 {
+		l.pending.Store(true)
+		l.historyPending.Store(true)
+		l.seq = max(l.seq, legacySeq(legacyDir))
 	}
 	return l, nil
 }
 
-func (l *Log) openCurrent() error {
-	f, err := os.OpenFile(filepath.Join(l.dir, current), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
+func (l *Log) loadHead() error {
+	l.seq, l.lastHash = 0, ""
+	err := l.db.QueryRow(`SELECT seq, hash FROM (SELECT seq, hash FROM audit_events UNION ALL SELECT seq, hash FROM audit_tombstones) ORDER BY seq DESC LIMIT 1`).Scan(&l.seq, &l.lastHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
 	}
-	st, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return err
-	}
-	l.f, l.size = f, st.Size()
-	return nil
+	return err
+}
+
+func (l *Log) meta(key string) string {
+	var v string
+	_ = l.db.QueryRow(`SELECT value FROM audit_meta WHERE key=?`, key).Scan(&v)
+	return v
+}
+
+func (l *Log) setMeta(key, value string) error {
+	_, err := l.db.Exec(`INSERT INTO audit_meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, value)
+	return err
 }
 
 func clip(s string) string {
@@ -96,6 +135,14 @@ func clip(s string) string {
 	}
 	// 按字节截，再去掉被截断的半个字符。
 	return strings.ToValidUTF8(s[:maxField], "") + "…"
+}
+
+// ChainHash 是一条记录的哈希：SHA-256(prev_hash ‖ 原样的一行)。
+func ChainHash(prev string, line []byte) string {
+	h := sha256.New()
+	h.Write([]byte(prev))
+	h.Write(line)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // Record 写一条记录，返回它的序号。写失败只返回 0：审计不能影响节点的正常工作。
@@ -112,66 +159,65 @@ func (l *Log) Record(e Event) int64 {
 	}
 	e.Actor, e.Target, e.Detail, e.Error = clip(e.Actor), clip(e.Target), clip(e.Detail), clip(e.Error)
 	var seq int64
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	// The deadline bounds only the wait for the shared capacity gate; the insert
+	// itself must not be cancelled half-way by a slow disk, or the record is lost.
+	gate, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	_ = l.budget.WriteArchive(ctx, 4, 64<<10, func() error { seq = l.record(&e); return nil })
+	ctx := context.WithoutCancel(gate)
+	_ = l.budget.WriteArchive(gate, 4, 64<<10, func() error {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		if l.db == nil {
+			return sql.ErrConnDone
+		}
+		var err error
+		if l.pending.Load() {
+			err = l.appendLegacyLocked(&e)
+		} else {
+			err = l.appendLocked(ctx, &e)
+		}
+		if err == nil {
+			seq = e.Seq
+		}
+		return err
+	})
+	if seq == 0 {
+		e.Seq = 0
+	}
 	if l.Capture != nil {
 		l.Capture(e)
 	}
 	return seq
 }
 
-func (l *Log) record(e *Event) int64 {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.seq++
-	e.Seq = l.seq
-	b, err := json.Marshal(e)
+// appendLocked appends e to the chain; the caller holds l.mu.
+func (l *Log) appendLocked(ctx context.Context, e *Event) error {
+	e.Seq = l.seq + 1
+	line, err := json.Marshal(e)
 	if err != nil {
-		return 0
+		return err
 	}
-	b = append(b, '\n')
-	if l.size+int64(len(b)) > maxSize && l.size > 0 {
-		l.rotate()
+	hash := ChainHash(l.lastHash, line)
+	if _, err := l.db.ExecContext(ctx, `INSERT INTO audit_events(seq,line,prev_hash,hash) VALUES(?,?,?,?)`, e.Seq, line, l.lastHash, hash); err != nil {
+		return err
 	}
-	if l.f == nil {
-		return 0
-	}
-	n, err := l.f.Write(b)
-	l.size += int64(n)
-	if err != nil {
-		return 0
-	}
-	return e.Seq
+	l.seq, l.lastHash = e.Seq, hash
+	return nil
 }
 
-// rotate 把 audit.jsonl 改名为 audit.<最后的序号>.jsonl，只留最新的 maxFiles 个文件（包括当前的）。调用方持有锁。
-func (l *Log) rotate() {
-	if l.f != nil {
-		l.f.Close()
-		l.f = nil
-	}
-	_ = os.Rename(filepath.Join(l.dir, current), filepath.Join(l.dir, fmt.Sprintf("audit.%020d.jsonl", l.seq-1)))
-	old := rotated(l.dir)
-	for l.budget == nil && len(old) > maxFiles-1 {
-		_ = os.Remove(filepath.Join(l.dir, old[0]))
-		old = old[1:]
-	}
-	_ = l.openCurrent()
-}
-
-// Close 关闭文件。
+// Close 关闭审计库。
 func (l *Log) Close() error {
 	if l == nil {
 		return nil
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.f == nil {
+	if l.db == nil {
 		return nil
 	}
-	err := l.f.Close()
-	l.f = nil
+	_, _ = l.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	err := l.db.Close()
+	l.db = nil
 	return err
 }
 
@@ -182,94 +228,204 @@ func (l *Log) Seq() int64 {
 	return l.seq
 }
 
-// rotated 返回轮换出去的文件名，旧的在前（文件名里的序号补齐了位数，按名字排序就是按时间）。
-func rotated(dir string) []string {
-	entries, _ := os.ReadDir(dir)
-	var out []string
-	for _, e := range entries {
-		n := e.Name()
-		if n != current && strings.HasPrefix(n, "audit.") && strings.HasSuffix(n, ".jsonl") {
-			out = append(out, n)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// files 返回所有文件，旧的在前。
-func files(dir string) []string {
-	return append(rotated(dir), current)
-}
-
-func lastSeq(dir string) int64 {
-	all := files(dir)
-	for i := len(all) - 1; i >= 0; i-- {
-		var last int64
-		_ = scan(filepath.Join(dir, all[i]), func(e Event) bool {
-			last = e.Seq
-			return true
-		})
-		if last > 0 {
-			return last
-		}
-		// 当前文件是空的（刚轮换）：从轮换出去的文件名里取。
-		if n := strings.TrimSuffix(strings.TrimPrefix(all[i], "audit."), ".jsonl"); n != all[i] {
-			if v, err := strconv.ParseInt(n, 10, 64); err == nil && v > 0 {
-				return v
-			}
-		}
-	}
-	return 0
-}
-
-func scan(path string, fn func(Event) bool) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for sc.Scan() {
-		var e Event
-		if json.Unmarshal(sc.Bytes(), &e) != nil {
-			continue
-		}
-		if !fn(e) {
-			return nil
-		}
-	}
-	return sc.Err()
-}
-
-// After 返回序号大于 seq 的记录（原样的行），最多 limit 条。
+// After 返回序号大于 seq 的记录（原样的行），最多 limit 条。旧文件没导入完时没有记录可读，
+// 面板的游标不动，导入完以后从同一个位置接着读。
 func (l *Log) After(seq int64, limit int) (lines [][]byte, first, last int64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, name := range files(l.dir) {
-		f, err := os.Open(filepath.Join(l.dir, name))
-		if err != nil {
-			continue
+	if l.db == nil || l.pending.Load() {
+		return nil, 0, 0
+	}
+	rows, err := l.db.Query(`SELECT seq, line FROM audit_events WHERE seq>? ORDER BY seq LIMIT ?`, seq, limit)
+	if err != nil {
+		return nil, 0, 0
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s int64
+		var line []byte
+		if rows.Scan(&s, &line) != nil {
+			break
 		}
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 64<<10), 1<<20)
-		for sc.Scan() && len(lines) < limit {
-			var e struct {
-				Seq int64 `json:"seq"`
-			}
-			if json.Unmarshal(sc.Bytes(), &e) != nil || e.Seq <= seq {
-				continue
-			}
-			if first == 0 {
-				first = e.Seq
-			}
-			last = e.Seq
-			lines = append(lines, append([]byte(nil), sc.Bytes()...))
+		if first == 0 {
+			first = s
 		}
-		f.Close()
-		if len(lines) >= limit {
+		last = s
+		lines = append(lines, line)
+	}
+	return lines, first, last
+}
+
+// VerifyResult 是一次链校验的结果。
+type VerifyResult struct {
+	Records    int64  `json:"records"`
+	Tombstones int64  `json:"tombstones"`
+	LastSeq    int64  `json:"last_seq"`
+	LastHash   string `json:"last_hash"`
+	BadSeq     int64  `json:"bad_seq,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+// OK 判断整条链完好。
+func (r VerifyResult) OK() bool { return r.BadSeq == 0 }
+
+// Verify 校验整条哈希链：每条的哈希对得上内容，相邻的记录（或墓碑）接得上，每个墓碑都被链上某条清理记录
+// （audit_pruned）或旧文件导入记录（audit_legacy_import 的 gaps）列出。中间删一条、改一条、补一个假墓碑都能
+// 发现；从某处起重写后面所有的记录、或在末尾追加，要靠外送出去的副本对比。
+func (l *Log) Verify(ctx context.Context) (VerifyResult, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.db == nil {
+		return VerifyResult{}, sql.ErrConnDone
+	}
+	return verifyDB(ctx, l.db)
+}
+
+func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
+	var res VerifyResult
+	tomb := map[int64]string{}
+	trows, err := d.QueryContext(ctx, `SELECT seq, hash FROM audit_tombstones`)
+	if err != nil {
+		return res, err
+	}
+	for trows.Next() {
+		var s int64
+		var h string
+		if err := trows.Scan(&s, &h); err != nil {
+			trows.Close()
+			return res, err
+		}
+		tomb[s] = h
+	}
+	if err := errors.Join(trows.Err(), trows.Close()); err != nil {
+		return res, err
+	}
+	res.Tombstones = int64(len(tomb))
+	bad := func(seq int64, format string, args ...any) {
+		if res.BadSeq == 0 {
+			res.BadSeq, res.Reason = seq, fmt.Sprintf(format, args...)
+		}
+	}
+	rows, err := d.QueryContext(ctx, `SELECT seq, line, prev_hash, hash FROM audit_events ORDER BY seq`)
+	if err != nil {
+		return res, err
+	}
+	defer rows.Close()
+	prevSeq, prevHash := int64(-1), ""
+	covered := map[int64]bool{}
+	for rows.Next() {
+		var seq int64
+		var line []byte
+		var prev, hash string
+		if err := rows.Scan(&seq, &line, &prev, &hash); err != nil {
+			return res, err
+		}
+		res.Records++
+		var e Event
+		if json.Unmarshal(line, &e) != nil || e.Seq != seq {
+			bad(seq, "记录 %d 的内容和序号对不上，可能被修改过", seq)
+		}
+		if ChainHash(prev, line) != hash {
+			bad(seq, "记录 %d 的内容和哈希对不上，可能被修改过", seq)
+		}
+		if prevSeq >= 0 {
+			link := prevHash
+			for s := prevSeq + 1; s < seq; s++ {
+				h, ok := tomb[s]
+				if !ok {
+					bad(seq, "记录 %d 之前缺少记录 %d，可能被删除过", seq, s)
+					break
+				}
+				link = h
+			}
+			if prev != link {
+				bad(seq, "记录 %d 和上一条记录接不上，中间的记录可能被删除或修改过", seq)
+			}
+		}
+		for _, s := range coveredBy(e) {
+			covered[s] = true
+		}
+		prevSeq, prevHash = seq, hash
+		res.LastSeq, res.LastHash = seq, hash
+	}
+	if err := rows.Err(); err != nil {
+		return res, err
+	}
+	for s := range tomb {
+		if !covered[s] {
+			bad(s, "记录 %d 被删除了，但没有对应的清理记录，墓碑可能是伪造的", s)
 			break
 		}
 	}
-	return lines, first, last
+	if res.Records == 0 && len(tomb) > 0 {
+		return res, errors.New("节点审计库里只剩墓碑，记录被清空了")
+	}
+	return res, nil
+}
+
+// coveredBy lists the tombstones a record accounts for.
+func coveredBy(e Event) []int64 {
+	switch e.Action {
+	case actionPruned:
+		v, _ := strings.CutPrefix(e.Detail, "ids=")
+		return parseRanges(strings.Split(v, ","))
+	case legacyImport:
+		var s importSummary
+		if json.Unmarshal([]byte(e.Detail), &s) == nil {
+			return parseRanges(s.Gaps)
+		}
+	}
+	return nil
+}
+
+func parseRanges(parts []string) []int64 {
+	var out []int64
+	for _, part := range parts {
+		a, b, found := strings.Cut(part, "-")
+		lo, err := strconv.ParseInt(a, 10, 64)
+		if err != nil {
+			continue
+		}
+		hi := lo
+		if found {
+			if hi, err = strconv.ParseInt(b, 10, 64); err != nil || hi < lo || hi-lo > 1<<24 {
+				continue
+			}
+		}
+		for s := lo; s <= hi; s++ {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func formatRanges(seqs []int64) []string {
+	var out []string
+	for i := 0; i < len(seqs); {
+		j := i
+		for j+1 < len(seqs) && seqs[j+1] == seqs[j]+1 {
+			j++
+		}
+		if i == j {
+			out = append(out, strconv.FormatInt(seqs[i], 10))
+		} else {
+			out = append(out, fmt.Sprintf("%d-%d", seqs[i], seqs[j]))
+		}
+		i = j + 1
+	}
+	return out
+}
+
+// VerifyFile 只读地校验一个节点审计库（nagi audit verify）。
+func VerifyFile(ctx context.Context, path string) (VerifyResult, error) {
+	if _, err := os.Stat(path); err != nil {
+		return VerifyResult{}, err
+	}
+	d, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	defer d.Close()
+	d.SetMaxOpenConns(1)
+	return verifyDB(ctx, d)
 }
