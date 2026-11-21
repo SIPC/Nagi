@@ -28,6 +28,13 @@ type Config struct {
 	RecentHours              int    `json:"recent_hours"`
 	CopyImportantSeconds     int    `json:"copy_important_seconds"`
 	CopyOrdinarySeconds      int    `json:"copy_ordinary_seconds"`
+	CopyCatchupEntries       int    `json:"copy_catchup_entries"`
+	CopyCatchupKiB           int    `json:"copy_catchup_kib"`
+	CopyBudgetKiBPerSecond   int    `json:"copy_budget_kib_per_second"`
+	CopyBudgetEntriesPerSec  int    `json:"copy_budget_entries_per_second"`
+	CopyBackoffMaxSeconds    int    `json:"copy_backoff_max_seconds"`
+	CopyYieldPressurePercent int    `json:"copy_yield_pressure_percent"`
+	CopyReceiveSharePercent  int    `json:"copy_receive_share_percent"`
 	RuntimeLevel             string `json:"runtime_level"`
 	HostJournal              bool   `json:"host_journal"`
 	HostRetrySeconds         int    `json:"host_retry_seconds"`
@@ -39,7 +46,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, DecisionQueueEntries: 256, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO", HostJournal: true, HostRetrySeconds: 30, HostLookbackHours: 24, HostSSHFailuresPerMinute: 100, HostSSHSummarySeconds: 10}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, DecisionQueueEntries: 256, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, CopyCatchupEntries: 256, CopyCatchupKiB: 512, CopyBudgetKiBPerSecond: 1024, CopyBudgetEntriesPerSec: 2048, CopyBackoffMaxSeconds: 60, CopyYieldPressurePercent: 40, CopyReceiveSharePercent: 50, RuntimeLevel: "INFO", HostJournal: true, HostRetrySeconds: 30, HostLookbackHours: 24, HostSSHFailuresPerMinute: 100, HostSSHSummarySeconds: 10}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。
@@ -87,6 +94,16 @@ func LoadConfig(dir string) (Config, error) {
 	}
 	if c.CopyImportantSeconds < 1 || c.CopyImportantSeconds > 300 || c.CopyOrdinarySeconds < 1 || c.CopyOrdinarySeconds > 300 {
 		return c, fmt.Errorf("近期副本发送间隔必须在 1～300 秒")
+	}
+	// 追赶批量不得超过面板接收上限（256 条、约 1 MiB 含每条元数据余量）。
+	if c.CopyCatchupEntries < 128 || c.CopyCatchupEntries > 256 || c.CopyCatchupKiB < 256 || c.CopyCatchupKiB > 768 {
+		return c, fmt.Errorf("copy_catchup_entries 须在 128～256，copy_catchup_kib 须在 256～768")
+	}
+	if c.CopyBudgetKiBPerSecond < 256 || c.CopyBudgetKiBPerSecond > 65536 || c.CopyBudgetEntriesPerSec < 256 || c.CopyBudgetEntriesPerSec > 65536 {
+		return c, fmt.Errorf("copy_budget_kib_per_second 与 copy_budget_entries_per_second 须在 256～65536")
+	}
+	if c.CopyBackoffMaxSeconds < 5 || c.CopyBackoffMaxSeconds > 600 || c.CopyYieldPressurePercent < 1 || c.CopyYieldPressurePercent > 100 || c.CopyReceiveSharePercent < 10 || c.CopyReceiveSharePercent > 90 {
+		return c, fmt.Errorf("copy_backoff_max_seconds 须在 5～600，copy_yield_pressure_percent 须在 1～100，copy_receive_share_percent 须在 10～90")
 	}
 	if c.HostRetrySeconds < 1 || c.HostRetrySeconds > 3600 || c.HostLookbackHours < 1 || c.HostLookbackHours > 168 {
 		return c, fmt.Errorf("宿主机日志重试须在 1～3600 秒，首次/缺口回看须在 1～168 小时")

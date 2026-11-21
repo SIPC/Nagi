@@ -84,6 +84,8 @@ type Registry struct {
 	AlertPrimary func(context.Context) (*grpc.ClientConn, error)
 	// LogCopies is local history, not part of standby configuration snapshots.
 	LogCopies *logstore.Copies
+	// CopyIntake refuses extra catch-up batches while receipts saturate this panel.
+	CopyIntake *CopyIntake
 	// AuthorizeLogPanel checks the current certificate-bound panel membership on
 	// every mesh reconciliation RPC, independently of node upload permissions.
 	AuthorizeLogPanel func(context.Context, mesh.Key) error

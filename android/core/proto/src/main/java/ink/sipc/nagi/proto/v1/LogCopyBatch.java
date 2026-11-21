@@ -380,6 +380,47 @@ public  final class LogCopyBatch extends
     writeErrors_ = 0L;
   }
 
+  public static final int CATCHUP_FIELD_NUMBER = 8;
+  private boolean catchup_;
+  /**
+   * <pre>
+   * Set on extra catch-up batches. A loaded panel may refuse them with
+   * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+   * </pre>
+   *
+   * <code>bool catchup = 8 [json_name = "catchup"];</code>
+   * @return The catchup.
+   */
+  @java.lang.Override
+  public boolean getCatchup() {
+    return catchup_;
+  }
+  /**
+   * <pre>
+   * Set on extra catch-up batches. A loaded panel may refuse them with
+   * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+   * </pre>
+   *
+   * <code>bool catchup = 8 [json_name = "catchup"];</code>
+   * @param value The catchup to set.
+   */
+  private void setCatchup(boolean value) {
+    
+    catchup_ = value;
+  }
+  /**
+   * <pre>
+   * Set on extra catch-up batches. A loaded panel may refuse them with
+   * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+   * </pre>
+   *
+   * <code>bool catchup = 8 [json_name = "catchup"];</code>
+   */
+  private void clearCatchup() {
+
+    catchup_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.LogCopyBatch parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -863,6 +904,49 @@ public  final class LogCopyBatch extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Set on extra catch-up batches. A loaded panel may refuse them with
+     * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+     * </pre>
+     *
+     * <code>bool catchup = 8 [json_name = "catchup"];</code>
+     * @return The catchup.
+     */
+    @java.lang.Override
+    public boolean getCatchup() {
+      return instance.getCatchup();
+    }
+    /**
+     * <pre>
+     * Set on extra catch-up batches. A loaded panel may refuse them with
+     * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+     * </pre>
+     *
+     * <code>bool catchup = 8 [json_name = "catchup"];</code>
+     * @param value The catchup to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCatchup(boolean value) {
+      copyOnWrite();
+      instance.setCatchup(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Set on extra catch-up batches. A loaded panel may refuse them with
+     * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+     * </pre>
+     *
+     * <code>bool catchup = 8 [json_name = "catchup"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCatchup() {
+      copyOnWrite();
+      instance.clearCatchup();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LogCopyBatch)
   }
   @java.lang.Override
@@ -888,10 +972,11 @@ public  final class LogCopyBatch extends
             "pruned_",
             ink.sipc.nagi.proto.v1.LogPruned.class,
             "writeErrors_",
+            "catchup_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0002\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0002\u0004\u0002\u0005\u001b\u0006\u001b\u0007\u0003";
+              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0002" +
+              "\u0004\u0002\u0005\u001b\u0006\u001b\u0007\u0003\b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

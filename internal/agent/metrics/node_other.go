@@ -18,3 +18,5 @@ func readDisk(string) (total, free uint64, ok bool) { return 0, 0, false }
 func readNet() (rx, tx uint64, ok bool)             { return 0, 0, false }
 func mountOf(string) string                         { return "" }
 func readMounts() []mountEntry                      { return nil }
+
+func pressure() float64 { return 0 }

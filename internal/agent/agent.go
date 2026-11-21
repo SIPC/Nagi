@@ -424,6 +424,8 @@ type agent struct {
 	info     *nagiv1.NodeInfo
 	upgrade  upgradeState
 
+	copies copyState // recent-copy catch-up, shared by all panel senders
+
 	proxy     *proxy.Proxy
 	proxyKick chan struct{}
 	// proxyMu：applyProxy 同时只有一个在做。
