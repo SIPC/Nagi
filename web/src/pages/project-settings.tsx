@@ -205,7 +205,7 @@ function GeneralSettings({ project }: { project: Project }) {
             {edit("group")}
           </SettingRow>
         )}
-        <SettingRow label={t.labels.tags} help={t.labels.projectTagsHint} description={project.tags.length > 0 ? project.tags.join("、") : t.labels.noGroup}>
+        <SettingRow label={t.labels.tags} help={t.labels.projectTagsHint} description={project.tags.length > 0 ? t.common.list(project.tags) : t.labels.noGroup}>
           {edit("tags")}
         </SettingRow>
       </SettingRows>
