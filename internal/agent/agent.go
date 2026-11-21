@@ -99,7 +99,7 @@ func Enroll(ctx context.Context, cfg Config) error {
 }
 
 // Run 运行节点，直到 ctx 取消。
-func Run(ctx context.Context, cfg Config) error {
+func Run(ctx context.Context, cfg Config) (runErr error) {
 	log := cfg.Logger
 	if log == nil {
 		log = slog.Default()
@@ -127,6 +127,15 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}
 
+	started := time.Now()
+	cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.starting", Data: map[string]any{"version": cfg.Version, "embedded": cfg.Embedded}})
+	defer func() {
+		data := map[string]any{"duration_ms": time.Since(started).Milliseconds(), "result": "stopped", "context_canceled": ctx.Err() != nil}
+		if runErr != nil {
+			data["result"], data["error"] = "failed", runErr.Error()
+		}
+		cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.stopped", Data: data})
+	}()
 	id, err := loadIdentity(filepath.Join(cfg.DataDir, "identity"))
 	if err != nil {
 		return fmt.Errorf("读取节点身份: %w", err)
@@ -352,6 +361,11 @@ func Run(ctx context.Context, cfg Config) error {
 		a.startFailover(ctx, id)
 	}
 	proxy.OnCertEvent(func(domain string, err error) {
+		data := map[string]any{"domain": domain, "result": "obtained"}
+		if err != nil {
+			data["result"], data["error"] = "failed", err.Error()
+		}
+		cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "proxy.certificate", Object: domain, Data: data})
 		if a.direct.certEvent(domain, err) {
 			go a.changed() // 直连下载的 IP 证书：只更新状态，不告警
 			return
@@ -383,6 +397,7 @@ func Run(ctx context.Context, cfg Config) error {
 		go a.proxyLoop(ctx)
 	}
 
+	cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.ready", Data: map[string]any{"version": cfg.Version, "hostname": hostname, "embedded": cfg.Embedded}})
 	a.superviseLoop(ctx)
 	return nil
 }
@@ -560,6 +575,11 @@ func (a *agent) applyProxy(ctx context.Context) {
 	if err == nil {
 		err = a.proxy.Apply(routes)
 	}
+	data := map[string]any{"result": "ok", "rules": len(routes)}
+	if err != nil {
+		data["result"], data["error"] = "failed", err.Error()
+	}
+	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "proxy.apply", Data: data})
 	if err == nil {
 		// 域名移除不是证书恢复的证据，保留未确认恢复的记录。
 		domains := map[string]bool{}
@@ -666,6 +686,11 @@ func (a *agent) connectLoop(ctx context.Context, fingerprint string) {
 		}
 		start := time.Now()
 		err := a.session(ctx, p)
+		data := map[string]any{"duration_ms": time.Since(start).Milliseconds(), "context_canceled": ctx.Err() != nil}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "panel.connection.ended", Object: fingerprint, Data: data})
 		if ctx.Err() != nil {
 			return
 		}
@@ -721,6 +746,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	panel := nagiv1.NewPanelServiceClient(cc)
 
 	a.log.Info("已连接面板", "panel", p.Address)
+	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "panel.connection.established", Object: p.Fingerprint, Data: map[string]any{"panel": p.Address}})
 	a.confirmUpgrade()
 	a.setConnectError(p.Fingerprint, nil)
 	a.mu.Lock()

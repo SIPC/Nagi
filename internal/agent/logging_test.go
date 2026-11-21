@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -138,5 +139,32 @@ func TestRawMetricHistoryKeepsFullChunksAndDoesNotInventMissingValues(t *testing
 	invalid, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.System})
 	if err != nil || len(invalid) != 1 || invalid[0].Kind != "sample.invalid" {
 		t.Fatalf("无效数值没有留痕: %+v err=%v", invalid, err)
+	}
+}
+
+func TestNodeStartupFailureIsNotRecordedAsReadyOrHealthyShutdown(t *testing.T) {
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "identity"), []byte("not a directory"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err = Run(t.Context(), Config{Embedded: true, DataDir: dir, Logs: logs, Version: "test-version", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err == nil {
+		t.Fatal("invalid identity directory must fail startup before contacting Docker")
+	}
+	rows, readErr := logs.Query(t.Context(), logstore.Filter{Category: logstore.Task})
+	if readErr != nil || len(rows) != 2 || rows[0].Kind != "node.starting" || rows[1].Kind != "node.stopped" {
+		t.Fatalf("startup boundary: %+v %v", rows, readErr)
+	}
+	var end struct{ Result, Error string }
+	if readErr := json.Unmarshal(rows[1].Data.(json.RawMessage), &end); readErr != nil {
+		t.Fatal(readErr)
+	}
+	if end.Result != "failed" || end.Error == "" {
+		t.Fatalf("startup failure hidden: %s", rows[1].Data)
 	}
 }
