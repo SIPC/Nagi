@@ -31,6 +31,7 @@ jobs:
             done
             return 1
           }
+          # 预发布版也在列表里（gh 默认包含），它们的说明同样从 CHANGELOG.md 同步。
           retry gh release list --limit 1000 --json tagName -q '.[].tagName' > released.txt
           failed=0
           for tag in $(sed -n 's/^## \(v[0-9][^ ]*\).*/\1/p' CHANGELOG.md); do
