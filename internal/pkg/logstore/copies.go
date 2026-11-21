@@ -535,6 +535,14 @@ func (c *Copies) Read(ctx context.Context, node, source string, f Filter) (Page,
 		where = append(where, "e.time_ns<?")
 		args = append(args, f.To.UnixNano())
 	}
+	if f.Search != "" {
+		where = append(where, "instr(lower(e.kind || ' ' || e.project || ' ' || e.object || ' ' || CAST(e.data AS TEXT)),lower(?))>0")
+		args = append(args, f.Search)
+	}
+	if f.KindPrefix != "" {
+		where = append(where, "substr(e.kind,1,length(?))=?")
+		args = append(args, f.KindPrefix, f.KindPrefix)
+	}
 	if f.Limit == 0 {
 		f.Limit = 100
 	}

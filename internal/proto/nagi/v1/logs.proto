@@ -69,6 +69,10 @@ message LogQuery {
   string project = 6;
   string object = 7;
   int32 limit = 8;
+  // Literal, case-insensitive substring across kind, project, object and redacted JSON.
+  string search = 9;
+  // Literal prefix, e.g. host. for the selected host journal sources.
+  string kind_prefix = 10;
 }
 
 message NodeLogQuery {
@@ -76,6 +80,8 @@ message NodeLogQuery {
   LogQuery query = 2;
   // Explicitly query the panel's bounded copy, including while the node is offline.
   bool recent_copy = 3;
+  // Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+  bool panel_local = 4;
 }
 
 message LogEntry {

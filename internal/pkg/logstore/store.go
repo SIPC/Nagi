@@ -69,12 +69,14 @@ type Event struct {
 
 // Filter 只查本库；After 为独占游标，From/To 为事件时间的闭开区间。
 type Filter struct {
-	After    int64
-	From, To time.Time
-	Category string
-	Project  string
-	Object   string
-	Limit    int
+	After      int64
+	From, To   time.Time
+	Category   string
+	Project    string
+	Object     string
+	Search     string
+	KindPrefix string
+	Limit      int
 }
 
 // Pruned 是某类别累计主动清理的范围包络，范围内不表示每条都已删除。
@@ -510,6 +512,14 @@ func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 	}
 	if !f.To.IsZero() {
 		where, args = append(where, "time_ns<?"), append(args, f.To.UnixNano())
+	}
+	if f.Search != "" {
+		where = append(where, "instr(lower(kind || ' ' || project || ' ' || object || ' ' || CAST(data AS TEXT)),lower(?))>0")
+		args = append(args, f.Search)
+	}
+	if f.KindPrefix != "" {
+		where = append(where, "substr(kind,1,length(?))=?")
+		args = append(args, f.KindPrefix, f.KindPrefix)
 	}
 	args = append(args, f.Limit)
 	rows, err := s.db.QueryContext(ctx, `SELECT seq,time_ns,received_ns,category,kind,project,object,data FROM log_events WHERE `+strings.Join(where, " AND ")+` ORDER BY seq LIMIT ?`, args...)

@@ -22,6 +22,10 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer logs.Close()
+	h.a.Logs = logs
+	if err := logs.Record(t.Context(), logstore.Event{Category: logstore.Runtime, Kind: "host.journal", Data: "local marker 20%"}); err != nil {
+		t.Fatal(err)
+	}
 	copies, err := logs.OpenCopies(t.Context(), logstore.Config{RecentCapacityMiB: 16, RecentHours: 24})
 	if err != nil {
 		t.Fatal(err)
@@ -31,11 +35,18 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 	if _, err := copies.Receive(t.Context(), "offline-node", logstore.CopyBatch{Source: "s", Category: logstore.Audit, Through: 5, Events: []logstore.Event{{Seq: 5, Time: time.Now(), Category: logstore.Audit, Kind: "operation", Data: "copy survives"}}}); err != nil {
 		t.Fatal(err)
 	}
+	auditor, err := h.a.Q.CreateRole(t.Context(), "audit-only", time.Now().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.a.Q.SetRolePermissions(t.Context(), auditor, []string{"panel.audit"}); err != nil {
+		t.Fatal(err)
+	}
 	for _, u := range []struct {
 		name string
 		role int64
 		want connect.Code
-	}{{"viewer", auth.ViewerRoleID, connect.CodePermissionDenied}, {"admin", auth.AdminRoleID, connect.CodeUnavailable}} {
+	}{{"viewer", auth.ViewerRoleID, connect.CodePermissionDenied}, {"auditor", auditor, connect.CodePermissionDenied}, {"admin", auth.AdminRoleID, connect.CodeUnavailable}} {
 		if _, err := h.a.Auth.CreateUser(t.Context(), u.name, "password-for-logs", u.role); err != nil {
 			t.Fatal(err)
 		}
@@ -47,11 +58,25 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 		lc := nagiv1connect.NewNodeLogServiceClient(&hc, h.srv.URL)
+		local, localErr := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{PanelLocal: true, Query: &nagiv1.LogQuery{Search: "MARKER 20%", KindPrefix: "host."}}))
+		if u.role != auth.AdminRoleID {
+			if connect.CodeOf(localErr) != connect.CodePermissionDenied {
+				t.Fatalf("local permissions: %v", localErr)
+			}
+		} else {
+			if localErr != nil || local.Msg.GetRecentCopy() || len(local.Msg.GetEntries()) != 1 {
+				t.Fatalf("local search: %v %v", local, localErr)
+			}
+			_, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{PanelLocal: true, Query: &nagiv1.LogQuery{Source: "replaced-source"}}))
+			if connect.CodeOf(err) != connect.CodeFailedPrecondition {
+				t.Fatalf("source replacement not detected: %v", err)
+			}
+		}
 		if _, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{NodeId: "offline-node"})); connect.CodeOf(err) != u.want {
 			t.Fatalf("%s: %v", u.name, err)
 		}
 		page, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{NodeId: "offline-node", RecentCopy: true, Query: &nagiv1.LogQuery{Category: logstore.Audit}}))
-		if u.name == "viewer" {
+		if u.role != auth.AdminRoleID {
 			if connect.CodeOf(err) != connect.CodePermissionDenied {
 				t.Fatalf("copy permissions: %v", err)
 			}

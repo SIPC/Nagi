@@ -91,4 +91,44 @@ public interface LogQueryOrBuilder extends
    * @return The limit.
    */
   int getLimit();
+
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   * @return The search.
+   */
+  java.lang.String getSearch();
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   * @return The bytes for search.
+   */
+  com.google.protobuf.ByteString
+      getSearchBytes();
+
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   * @return The kindPrefix.
+   */
+  java.lang.String getKindPrefix();
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   * @return The bytes for kindPrefix.
+   */
+  com.google.protobuf.ByteString
+      getKindPrefixBytes();
 }

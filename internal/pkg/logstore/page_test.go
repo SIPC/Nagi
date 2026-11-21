@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
@@ -33,5 +34,43 @@ func TestByteBoundedPagesDoNotSkipRecords(t *testing.T) {
 	}
 	if _, err := s.ReadPage(t.Context(), logstore.Filter{After: 29}); err == nil {
 		t.Fatal("超过来源末尾的游标被当成没有日志")
+	}
+}
+
+func TestLogSearchFiltersBeforePaginationIncludingCopies(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 32<<20)
+	c, err := s.OpenCopies(t.Context(), logstore.Config{RecentCapacityMiB: 16, RecentHours: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for i, e := range []logstore.Event{
+		{Category: logstore.Runtime, Kind: "program", Project: "p1", Data: "disk 20%"},
+		{Category: logstore.Runtime, Kind: "host.journal", Project: "p2", Data: "disk 20%"},
+		{Category: logstore.Runtime, Kind: "host.journal", Project: "p1", Data: "disk 200"},
+		{Category: logstore.Runtime, Kind: "host.journal", Project: "p1", Data: "DISK 20%"},
+		{Category: logstore.Runtime, Kind: "host.journal", Project: "p1", Data: "disk 20% second"},
+	} {
+		e.Time = time.Now()
+		record(t, s, e)
+		e.Seq = int64(i + 1)
+		if _, err := c.Receive(t.Context(), "n", logstore.CopyBatch{Source: "remote", Category: logstore.Runtime, After: int64(i), Through: int64(i + 1), Events: []logstore.Event{e}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, copy := range []bool{false, true} {
+		f := logstore.Filter{Category: logstore.Runtime, Project: "p1", Search: "disk 20%", KindPrefix: "host.", Limit: 1}
+		for _, want := range []int64{4, 5} {
+			var p logstore.Page
+			if copy {
+				p, _, err = c.Read(t.Context(), "n", "remote", f)
+			} else {
+				p, err = s.ReadPage(t.Context(), f)
+			}
+			if err != nil || len(p.Events) != 1 || p.Events[0].Seq != want {
+				t.Fatalf("copy=%v want=%d got=%+v err=%v", copy, want, p, err)
+			}
+			f.After = p.Next
+		}
 	}
 }

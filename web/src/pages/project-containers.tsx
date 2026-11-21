@@ -69,7 +69,7 @@ import { EnvEditor, type EnvMode } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
 import { WriteGate } from "@/components/perm";
 import { canProjectSettings, useRole } from "@/components/role";
-import { actionLabel } from "@/pages/audit";
+import { actionLabel } from "@/pages/logs";
 
 // 项目「概览」：容器列表、批量部署、添加容器、项目的监控；以及容器页（概览、配置、版本、日志、终端、数据）。
 // 宽屏时容器列在项目栏里（含状态、CPU、内存），概览里不再重复这张表，只保留添加和部署的按钮。
@@ -1108,7 +1108,7 @@ function ContainerEvents({ project, container }: { project: Project; container: 
       title={ev.title}
       actions={
         canAudit && (
-          <ButtonLink to="/audit" search={{ project: project.id, q: container.name }} variant="ghost" readOnlyOk className="-mr-3">
+          <ButtonLink to="/logs" search={{ tab: "audit", project: project.id, q: container.name }} variant="ghost" readOnlyOk className="-mr-3">
             {ev.viewAll}
           </ButtonLink>
         )

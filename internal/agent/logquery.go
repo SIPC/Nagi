@@ -29,7 +29,7 @@ func (s *meshService) QueryLogs(ctx context.Context, q *nagiv1.LogQuery) (*nagiv
 	if q.GetAfter() < 0 || q.GetLimit() < 0 || q.GetLimit() > 1000 || q.GetAfter() > 0 && q.GetSource() == "" {
 		return nil, status.Error(codes.InvalidArgument, "无效的日志游标或分页大小")
 	}
-	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject()}
+	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
 	for _, v := range []struct {
 		in  *timestamppb.Timestamp
 		out *time.Time

@@ -315,15 +315,19 @@ func (x *LogCopyBatch) GetWriteErrors() uint64 {
 }
 
 type LogQuery struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	After         int64                  `protobuf:"varint,2,opt,name=after,proto3" json:"after,omitempty"`
-	From          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
-	To            *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
-	Category      string                 `protobuf:"bytes,5,opt,name=category,proto3" json:"category,omitempty"`
-	Project       string                 `protobuf:"bytes,6,opt,name=project,proto3" json:"project,omitempty"`
-	Object        string                 `protobuf:"bytes,7,opt,name=object,proto3" json:"object,omitempty"`
-	Limit         int32                  `protobuf:"varint,8,opt,name=limit,proto3" json:"limit,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Source   string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	After    int64                  `protobuf:"varint,2,opt,name=after,proto3" json:"after,omitempty"`
+	From     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=from,proto3" json:"from,omitempty"`
+	To       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`
+	Category string                 `protobuf:"bytes,5,opt,name=category,proto3" json:"category,omitempty"`
+	Project  string                 `protobuf:"bytes,6,opt,name=project,proto3" json:"project,omitempty"`
+	Object   string                 `protobuf:"bytes,7,opt,name=object,proto3" json:"object,omitempty"`
+	Limit    int32                  `protobuf:"varint,8,opt,name=limit,proto3" json:"limit,omitempty"`
+	// Literal, case-insensitive substring across kind, project, object and redacted JSON.
+	Search string `protobuf:"bytes,9,opt,name=search,proto3" json:"search,omitempty"`
+	// Literal prefix, e.g. host. for the selected host journal sources.
+	KindPrefix    string `protobuf:"bytes,10,opt,name=kind_prefix,json=kindPrefix,proto3" json:"kind_prefix,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -414,12 +418,28 @@ func (x *LogQuery) GetLimit() int32 {
 	return 0
 }
 
+func (x *LogQuery) GetSearch() string {
+	if x != nil {
+		return x.Search
+	}
+	return ""
+}
+
+func (x *LogQuery) GetKindPrefix() string {
+	if x != nil {
+		return x.KindPrefix
+	}
+	return ""
+}
+
 type NodeLogQuery struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	Query  *LogQuery              `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	// Explicitly query the panel's bounded copy, including while the node is offline.
-	RecentCopy    bool `protobuf:"varint,3,opt,name=recent_copy,json=recentCopy,proto3" json:"recent_copy,omitempty"`
+	RecentCopy bool `protobuf:"varint,3,opt,name=recent_copy,json=recentCopy,proto3" json:"recent_copy,omitempty"`
+	// Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+	PanelLocal    bool `protobuf:"varint,4,opt,name=panel_local,json=panelLocal,proto3" json:"panel_local,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -471,6 +491,13 @@ func (x *NodeLogQuery) GetQuery() *LogQuery {
 func (x *NodeLogQuery) GetRecentCopy() bool {
 	if x != nil {
 		return x.RecentCopy
+	}
+	return false
+}
+
+func (x *NodeLogQuery) GetPanelLocal() bool {
+	if x != nil {
+		return x.PanelLocal
 	}
 	return false
 }
@@ -793,7 +820,7 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\athrough\x18\x04 \x01(\x03R\athrough\x12+\n" +
 	"\aentries\x18\x05 \x03(\v2\x11.nagi.v1.LogEntryR\aentries\x12*\n" +
 	"\x06pruned\x18\x06 \x03(\v2\x12.nagi.v1.LogPrunedR\x06pruned\x12!\n" +
-	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\"\xf8\x01\n" +
+	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\"\xb1\x02\n" +
 	"\bLogQuery\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
 	"\x05after\x18\x02 \x01(\x03R\x05after\x12.\n" +
@@ -802,12 +829,18 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\bcategory\x18\x05 \x01(\tR\bcategory\x12\x18\n" +
 	"\aproject\x18\x06 \x01(\tR\aproject\x12\x16\n" +
 	"\x06object\x18\a \x01(\tR\x06object\x12\x14\n" +
-	"\x05limit\x18\b \x01(\x05R\x05limit\"q\n" +
+	"\x05limit\x18\b \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06search\x18\t \x01(\tR\x06search\x12\x1f\n" +
+	"\vkind_prefix\x18\n" +
+	" \x01(\tR\n" +
+	"kindPrefix\"\x92\x01\n" +
 	"\fNodeLogQuery\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12'\n" +
 	"\x05query\x18\x02 \x01(\v2\x11.nagi.v1.LogQueryR\x05query\x12\x1f\n" +
 	"\vrecent_copy\x18\x03 \x01(\bR\n" +
-	"recentCopy\"\x83\x02\n" +
+	"recentCopy\x12\x1f\n" +
+	"\vpanel_local\x18\x04 \x01(\bR\n" +
+	"panelLocal\"\x83\x02\n" +
 	"\bLogEntry\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x03R\x03seq\x12.\n" +
 	"\x04time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x126\n" +

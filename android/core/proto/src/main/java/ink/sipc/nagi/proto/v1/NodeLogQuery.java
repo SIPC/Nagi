@@ -150,6 +150,44 @@ public  final class NodeLogQuery extends
     recentCopy_ = false;
   }
 
+  public static final int PANEL_LOCAL_FIELD_NUMBER = 4;
+  private boolean panelLocal_;
+  /**
+   * <pre>
+   * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+   * </pre>
+   *
+   * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+   * @return The panelLocal.
+   */
+  @java.lang.Override
+  public boolean getPanelLocal() {
+    return panelLocal_;
+  }
+  /**
+   * <pre>
+   * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+   * </pre>
+   *
+   * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+   * @param value The panelLocal to set.
+   */
+  private void setPanelLocal(boolean value) {
+
+    panelLocal_ = value;
+  }
+  /**
+   * <pre>
+   * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+   * </pre>
+   *
+   * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+   */
+  private void clearPanelLocal() {
+
+    panelLocal_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.NodeLogQuery parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -383,6 +421,46 @@ public  final class NodeLogQuery extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+     * </pre>
+     *
+     * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+     * @return The panelLocal.
+     */
+    @java.lang.Override
+    public boolean getPanelLocal() {
+      return instance.getPanelLocal();
+    }
+    /**
+     * <pre>
+     * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+     * </pre>
+     *
+     * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+     * @param value The panelLocal to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPanelLocal(boolean value) {
+      copyOnWrite();
+      instance.setPanelLocal(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+     * </pre>
+     *
+     * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPanelLocal() {
+      copyOnWrite();
+      instance.clearPanelLocal();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.NodeLogQuery)
   }
   @java.lang.Override
@@ -403,10 +481,11 @@ public  final class NodeLogQuery extends
             "nodeId_",
             "query_",
             "recentCopy_",
+            "panelLocal_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0001\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u1009" +
-              "\u0000\u0003\u0007";
+              "\u0000\u0004\u0000\u0001\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u1009" +
+              "\u0000\u0003\u0007\u0004\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
@@ -460,4 +539,3 @@ public  final class NodeLogQuery extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

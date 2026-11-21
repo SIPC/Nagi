@@ -70,7 +70,7 @@ function usePageTitle(nodes: Node[] | undefined, isAdmin: boolean, can: Can) {
   // bar：手机标题栏上的字。项目里是项目名（灰字），其他是当前页。
   let bar: string | undefined;
   if (parts[0] === "overview") title = t.app.nav.overview;
-  else if (parts[0] === "audit") title = t.app.nav.audit;
+  else if (parts[0] === "logs") title = t.app.nav.logs;
   else if (parts[0] === "projects" && parts[1] === "new") title = t.app.search.newProject;
   else if (projectId) {
     const name = project.data?.project?.name ?? t.app.nav.projects;
@@ -150,11 +150,11 @@ function MobileNav({ open, onClose, title, children }: { open: boolean; onClose:
 
 // 左侧导航（参照 OpenAI 平台后台）：上面是产品名和四个入口，下面是用户卡片。手机上收进 ☰ 打开的全屏导航。
 // perm：要的权限，没有时不显示（见 internal/server/auth/perms.go）。
-const navItems: { to: "/overview" | "/projects" | "/nodes" | "/audit" | "/settings"; label: string; icon: (typeof navIcons)["overview"]; perm?: Permission }[] = [
+const navItems: { to: "/overview" | "/projects" | "/nodes" | "/logs" | "/settings"; label: string; icon: (typeof navIcons)["overview"]; perm?: Permission }[] = [
   { to: "/overview", label: t.app.nav.overview, icon: navIcons.overview },
   { to: "/projects", label: t.app.nav.projects, icon: navIcons.projects, perm: "project.view" },
   { to: "/nodes", label: t.app.nav.nodes, icon: navIcons.nodes, perm: "node.view" },
-  { to: "/audit", label: t.app.nav.audit, icon: navIcons.audit, perm: "panel.audit" },
+  { to: "/logs", label: t.app.nav.logs, icon: navIcons.audit, perm: "panel.audit" },
   { to: "/settings", label: t.app.nav.settings, icon: navIcons.settings },
 ];
 
@@ -188,7 +188,7 @@ export function AppLayout() {
   const nodeWrites = nodeWritePerms.some((p) => can(p));
   const readOnly =
     (standby?.isStandby ?? false) ||
-    (!pathname.startsWith("/settings") && !pathname.startsWith("/audit") && (pathname.startsWith("/nodes") ? !nodeWrites : !projectWrites));
+    (!pathname.startsWith("/settings") && !pathname.startsWith("/logs") && (pathname.startsWith("/nodes") ? !nodeWrites : !projectWrites));
   // 项目页（含容器页）宽屏取消内容区的宽度限制，由 ProjectSplit 分成项目栏和右边的内容。
   const split = !!useMatch({ from: "/app/projects/$projectId", shouldThrow: false });
   const navBox = useActiveBox();
