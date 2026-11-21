@@ -21,7 +21,7 @@ func TestMetricHistorySharesPhysicalBudgetAndRetainsAudit(t *testing.T) {
 	}
 	defer legacy.Close()
 	path := filepath.Join(dir, "metrics.db")
-	history, err := OpenHistory(ctx, path, legacy)
+	history, err := OpenHistory(ctx, path, legacy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestMetricHistorySharesPhysicalBudgetAndRetainsAudit(t *testing.T) {
 	}
 	defer journal.Close()
 	c := New(history, nil, "", nil)
-	if err := c.UseBudget(ctx, journal, path); err != nil {
+	if err := c.UseBudget(ctx, journal, path, true); err != nil {
 		t.Fatal(err)
 	}
 	c.lastDownsampledTo = now.Truncate(bucket)

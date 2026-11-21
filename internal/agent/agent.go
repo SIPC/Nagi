@@ -154,7 +154,7 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("无法检查旧监控历史", "err", err)
 	}
 	metricDB := nodeDB
-	if history, err := metrics.OpenHistory(ctx, filepath.Join(cfg.DataDir, "logs", "metrics.db"), nodeDB); err != nil {
+	if history, err := metrics.OpenHistory(ctx, filepath.Join(cfg.DataDir, "logs", "metrics.db"), nodeDB, cfg.Logs); err != nil {
 		log.Error("无法分离监控历史，保留并继续使用旧库", "err", err)
 	} else {
 		metricDB = history
@@ -265,10 +265,8 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}()
 	a.metrics = metrics.New(metricDB, dc, cfg.DataDir, log.With("component", "metrics"))
-	if metricDB != nodeDB {
-		if err := a.metrics.UseBudget(ctx, cfg.Logs, filepath.Join(cfg.DataDir, "logs", "metrics.db")); err != nil {
-			log.Error("无法把监控历史接入统一本机容量", "err", err)
-		}
+	if err := a.metrics.UseBudget(ctx, cfg.Logs, filepath.Join(cfg.DataDir, "logs", "metrics.db"), metricDB != nodeDB); err != nil {
+		log.Error("无法把监控历史接入统一本机容量", "err", err)
 	}
 	if cfg.Logs != nil {
 		a.metrics.OnSample = a.logMetrics()

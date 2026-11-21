@@ -8,12 +8,17 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
-// UseBudget is only for the separated metrics database, never node.db.
-func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path string) error {
+// UseBudget enables quota-gated writes even when a protected migration failed.
+// Only the separated history database may be reclaimed; never vacuum node.db.
+func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path string, separated bool) error {
+	c.budget = budget
 	if budget == nil {
 		return nil
 	}
-	if err := budget.RegisterArchive(ctx, logstore.Archive{
+	if !separated {
+		return nil // OpenHistory still accounts for both protected migration files.
+	}
+	if err := budget.ReplaceArchive(ctx, logstore.Archive{
 		Name: path, Priority: 2, Size: func() (int64, error) { return logstore.FileBytes(path) },
 		Trim: func(ctx context.Context) (bool, error) {
 			var table string
@@ -35,6 +40,5 @@ func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path 
 	}); err != nil {
 		return err
 	}
-	c.budget = budget
 	return nil
 }

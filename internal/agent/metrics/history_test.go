@@ -2,13 +2,16 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
 func TestSeparateHistoryPreservesQueriesAndNodeState(t *testing.T) {
@@ -32,7 +35,7 @@ func TestSeparateHistoryPreservesQueriesAndNodeState(t *testing.T) {
 		}
 	}
 	path := filepath.Join(dir, "logs", "metrics.db")
-	history, err := OpenHistory(ctx, path, legacy)
+	history, err := OpenHistory(ctx, path, legacy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +60,7 @@ func TestSeparateHistoryPreservesQueriesAndNodeState(t *testing.T) {
 		t.Fatal(err)
 	}
 	history.Close()
-	history, err = OpenHistory(ctx, path, legacy)
+	history, err = OpenHistory(ctx, path, legacy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,13 +100,13 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d, err := OpenHistory(ctx, path, legacy); err == nil {
+	if d, err := OpenHistory(ctx, path, legacy, nil); err == nil {
 		d.Close()
 		t.Fatal("冲突被静默覆盖")
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	if d, err := OpenHistory(cancelled, path, legacy); err == nil {
+	if d, err := OpenHistory(cancelled, path, legacy, nil); err == nil {
 		d.Close()
 		t.Fatal("取消后继续迁移")
 	}
@@ -129,7 +132,7 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 	if _, err := legacy.Exec(`CREATE TRIGGER reject_delete BEFORE DELETE ON metrics_m5 BEGIN SELECT RAISE(ABORT,'test delete failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	if d, err := OpenHistory(ctx, path, legacy); err == nil {
+	if d, err := OpenHistory(ctx, path, legacy, nil); err == nil {
 		d.Close()
 		t.Fatal("源删除失败没有报错")
 	}
@@ -140,12 +143,128 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 	if _, err := legacy.Exec(`DROP TRIGGER reject_delete`); err != nil {
 		t.Fatal(err)
 	}
-	target, err = OpenHistory(ctx, path, legacy)
+	target, err = OpenHistory(ctx, path, legacy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer target.Close()
 	if err := target.QueryRow(`SELECT (SELECT count(*) FROM metrics_raw)+(SELECT count(*) FROM metrics_m5)`).Scan(&left); err != nil || left != 2 {
 		t.Fatalf("中断后的重试丢失或重复: %d %v", left, err)
+	}
+}
+
+func TestMigrationCopiesAndFallbackWritesShareCapacity(t *testing.T) {
+	for _, capacity := range []int64{4 << 20, 32 << 20} {
+		t.Run(fmt.Sprint(capacity), func(t *testing.T) {
+			ctx, dir := t.Context(), t.TempDir()
+			legacyPath := filepath.Join(dir, "node.db")
+			legacy, err := db.OpenMigrated(ctx, legacyPath, nodestore.Migrations)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer legacy.Close()
+			if _, err := legacy.Exec(`INSERT INTO subnets VALUES ('10.5.0.0/24','keep')`); err != nil {
+				t.Fatal(err)
+			}
+			tx, err := legacy.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range 2100 {
+				if _, err := tx.Exec(`INSERT INTO metrics_raw VALUES (?,?,?)`, "c:p/"+strings.Repeat("s", 512)+fmt.Sprint(i), 10, float64(i)); err != nil {
+					tx.Rollback()
+					t.Fatal(err)
+				}
+			}
+			if _, err := tx.Exec(`INSERT INTO metrics_m5 VALUES ('node:cpu',0,34)`); err != nil {
+				tx.Rollback()
+				t.Fatal(err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := legacy.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+				t.Fatal(err)
+			}
+			journal, err := logstore.Open(ctx, filepath.Join(dir, "logs.db"), capacity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer journal.Close()
+			path := filepath.Join(dir, "metrics.db")
+			history, migrateErr := OpenHistory(ctx, path, legacy, journal)
+			if capacity == 4<<20 {
+				if !errors.Is(migrateErr, logstore.ErrCapacity) {
+					if history != nil {
+						history.Close()
+					}
+					t.Fatalf("expected bounded migration failure: %v", migrateErr)
+				}
+				for table, want := range map[string]int{"metrics_raw": 2100, "metrics_m5": 1} {
+					var n int
+					if err := legacy.QueryRow(`SELECT count(*) FROM ` + table).Scan(&n); err != nil || n != want {
+						t.Fatalf("protected source changed: %s %d %v", table, n, err)
+					}
+				}
+				c := New(legacy, nil, "", nil)
+				if err := c.UseBudget(ctx, journal, path, false); err != nil {
+					t.Fatal(err)
+				}
+				values := map[string]float64{}
+				for i := range 64 {
+					values[fmt.Sprint(i)] = float64(i)
+				}
+				if err := c.store(ctx, time.Now(), values); !errors.Is(err, logstore.ErrCapacity) {
+					t.Fatalf("fallback bypassed quota: %v", err)
+				}
+			} else {
+				if migrateErr != nil {
+					t.Fatal(migrateErr)
+				}
+				defer history.Close()
+				c := New(history, nil, "", nil)
+				if err := c.UseBudget(ctx, journal, path, true); err != nil {
+					t.Fatal(err)
+				}
+				var n int
+				if err := history.QueryRow(`SELECT count(*) FROM metrics_raw`).Scan(&n); err != nil || n != 2100 {
+					t.Fatalf("migration changed history: %d %v", n, err)
+				}
+			}
+			var subnet string
+			if err := legacy.QueryRow(`SELECT subnet FROM subnets WHERE owner='keep'`).Scan(&subnet); err != nil || subnet != "10.5.0.0/24" {
+				t.Fatalf("subnet changed: %q %v", subnet, err)
+			}
+			state, err := journal.State(ctx)
+			oldBytes, _ := logstore.FileBytes(legacyPath)
+			newBytes, _ := logstore.FileBytes(path)
+			want := newBytes
+			if migrateErr != nil {
+				want += oldBytes
+			}
+			if err != nil || state.DiskBytes > capacity || len(state.Archives) != 1 || state.Archives[0].DiskBytes != want {
+				t.Fatalf("migration files not accounted: %+v want %d err %v", state, want, err)
+			}
+			if migrateErr != nil {
+				if err := journal.Close(); err != nil {
+					t.Fatal(err)
+				}
+				reopened, err := logstore.Open(ctx, filepath.Join(dir, "logs.db"), 32<<20)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer reopened.Close()
+				resumed, err := OpenHistory(ctx, path, legacy, reopened)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer resumed.Close()
+				var n int
+				var sum float64
+				if err := resumed.QueryRow(`SELECT count(*),sum(value) FROM metrics_raw`).Scan(&n, &sum); err != nil || n != 2100 || sum != 2203950 {
+					t.Fatalf("resumed migration changed samples: %d %v %v", n, sum, err)
+				}
+			}
+		})
 	}
 }

@@ -26,6 +26,16 @@ type ArchiveUsage struct {
 }
 
 func (s *Store) RegisterArchive(ctx context.Context, a Archive) error {
+	return s.registerArchive(ctx, a, false)
+}
+
+// ReplaceArchive transfers an existing history owner's accounting at startup,
+// for example from protected migration files to a reclaimable history database.
+func (s *Store) ReplaceArchive(ctx context.Context, a Archive) error {
+	return s.registerArchive(ctx, a, true)
+}
+
+func (s *Store) registerArchive(ctx context.Context, a Archive, replace bool) error {
 	if s == nil {
 		return nil
 	}
@@ -36,8 +46,12 @@ func (s *Store) RegisterArchive(ctx context.Context, a Archive) error {
 		return err
 	}
 	defer func() { <-s.gate }()
-	for _, old := range s.archives {
+	for i, old := range s.archives {
 		if old.Name == a.Name {
+			if replace {
+				s.archives[i] = a
+				return nil
+			}
 			return fmt.Errorf("重复历史存储: %s", a.Name)
 		}
 	}
