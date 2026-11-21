@@ -111,11 +111,11 @@ func TestSegmented(t *testing.T) {
 		t.Error("不小于阈值的文件应分段")
 	}
 	c.Size--
-	if c.Segmented() || strings.Contains(c.String(), "N=") || strings.Contains(c.Windows(), "$N") {
-		t.Error("小文件用一个连接")
+	if c.Segmented() || !strings.Contains(c.String(), "N=1\n") || !strings.Contains(c.Windows(), "$N = 1\n") {
+		t.Error("小文件用一个连接（1 段）")
 	}
 	c = Command{Resume: false, Size: 0}
-	if c.Segmented() || strings.Contains(c.Windows(), "'-C'") {
+	if c.Segmented() || strings.Contains(c.Windows(), "'-r'") {
 		t.Error("目录打包用一个连接、不续传")
 	}
 }
@@ -268,78 +268,181 @@ func TestSegmentedPOSIX(t *testing.T) {
 	checkE2E(t, srv2, dir, SafeName(c.Name), plain, out, Threads)
 }
 
-// 端到端：用 PowerShell（pwsh）跑 Windows 版的脚本，curl.exe 指向 curl。分段下载（中途断开一段）和一个连接的续传，
-// 解密用 C# 的 CTR 实现，结果要和 Go 的密钥流一致，并核对 SHA-256。没有 pwsh 时跳过（在 PowerShell 的容器里跑）。
-func TestWindowsScript(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("不在宿主机上运行下载脚本，在容器里跑")
+// psHosts 是机器上能用的 PowerShell：Windows 上是自带的 Windows PowerShell 5.1 和装了的 PowerShell 7；
+// 别的系统上是 pwsh（curl.exe 指向 curl）。
+func psHosts(t *testing.T) (hosts []string, env []string) {
+	t.Helper()
+	if _, err := exec.LookPath("curl"); err != nil && runtime.GOOS != "windows" {
+		t.Skip("没有 curl")
 	}
-	for _, tool := range []string{"pwsh", "curl"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("没有 %s", tool)
+	for _, h := range []string{"powershell", "pwsh"} {
+		if runtime.GOOS != "windows" && h == "powershell" {
+			continue
+		}
+		if _, err := exec.LookPath(h); err == nil {
+			hosts = append(hosts, h)
 		}
 	}
-	curl, _ := exec.LookPath("curl")
-	bin := t.TempDir()
-	if err := os.Symlink(curl, filepath.Join(bin, "curl.exe")); err != nil {
-		t.Fatal(err)
+	if len(hosts) == 0 {
+		t.Skip("没有 PowerShell")
 	}
-	// asFile 为 false 时整段作为 -Command 的参数运行，接近粘贴进窗口。
-	run := func(dir, script string, asFile bool) string {
-		t.Helper()
-		file := filepath.Join(t.TempDir(), "dl.ps1")
-		if err := os.WriteFile(file, []byte(script), 0o644); err != nil {
+	env = os.Environ()
+	if runtime.GOOS != "windows" {
+		curl, _ := exec.LookPath("curl")
+		bin := t.TempDir()
+		if err := os.Symlink(curl, filepath.Join(bin, "curl.exe")); err != nil {
 			t.Fatal(err)
 		}
-		cmd := exec.Command("pwsh", "-NoProfile", "-NonInteractive", "-File", file)
-		if !asFile {
-			cmd = exec.Command("pwsh", "-NoProfile", "-NonInteractive", "-Command", script)
-		}
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-		out, _ := cmd.CombinedOutput()
-		return string(out)
+		env = append(env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
+	return hosts, env
+}
 
-	srv, c, plain := e2eFixture(t)
-	hs := httptest.NewServer(srv)
-	defer hs.Close()
-	c.URL = hs.URL + HTTPPathPrefix + "tok"
-	dir := t.TempDir()
-	out := run(dir, c.Windows(), true)
-	if !strings.Contains(out, "SHA-256 OK") {
-		t.Fatalf("分段下载失败：\n%s", out)
-	}
-	checkE2E(t, srv, dir, WinSafeName(SafeName(c.Name)), plain, []byte(out), Threads+1)
-
-	// 一个连接（小文件）：先放一部分密文，续传后解密。文件名带引号和 PowerShell 的特殊字符。
-	small := plain[:5<<20+3]
-	sum := sha256.Sum256(small)
-	srv3 := &rangeServer{plain: small, key: c.Key}
-	hs3 := httptest.NewServer(srv3)
-	defer hs3.Close()
-	c3 := Command{URL: hs3.URL + HTTPPathPrefix + "tok", Name: "it's ‘a’ $(x) `y`.bin", Key: c.Key, SHA256: hex.EncodeToString(sum[:]), Resume: true, Size: int64(len(small))}
-	dir = t.TempDir()
-	enc := make([]byte, 1<<20+7)
-	c.Key.Stream(0).XORKeyStream(enc, small[:len(enc)])
-	name := WinSafeName(SafeName(c3.Name))
-	if err := os.WriteFile(filepath.Join(dir, c3.partBase(name)+".part"), enc, 0o644); err != nil {
+// runPS 运行 Windows 版的脚本。asFile 为 false 时整段作为 -Command 的参数运行，接近粘贴进窗口。cwd 是当前目录，
+// saveDir 不为空时经 NAGI_DOWNLOAD_DIR 指定保存的位置。
+func runPS(t *testing.T, host string, env []string, cwd, saveDir, script string, asFile bool) string {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "dl.ps1")
+	if err := os.WriteFile(file, []byte(script), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out = run(dir, c3.Windows(), false)
-	if !strings.Contains(out, "SHA-256 OK") {
-		t.Fatalf("一个连接的下载失败：\n%s", out)
+	cmd := exec.Command(host, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file)
+	if !asFile {
+		cmd = exec.Command(host, "-NoProfile", "-NonInteractive", "-Command", script)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, name))
-	if err != nil || !bytes.Equal(got, small) {
-		t.Fatalf("解密的内容不对：%v\n%s", err, out)
+	cmd.Dir = cwd
+	cmd.Env = append(append([]string(nil), env...), "NAGI_DOWNLOAD_DIR="+saveDir)
+	out, _ := cmd.CombinedOutput()
+	return string(out)
+}
+
+// 端到端：用 PowerShell 跑 Windows 版的脚本（Windows 上是真的 curl.exe，Windows PowerShell 5.1 和 PowerShell 7 都跑）。
+// 分段下载（中途断开一段，自动接着下载）、保存目录的路径带空格和中文、一个连接时的续传，解密用 C# 的 CTR 实现，
+// 结果要和 Go 的密钥流一致，并核对 SHA-256；目录不可写、链接被拒绝时说明原因。
+func TestWindowsScript(t *testing.T) {
+	hosts, env := psHosts(t)
+	for _, host := range hosts {
+		t.Run(host, func(t *testing.T) {
+			srv, c, plain := e2eFixture(t)
+			hs := httptest.NewServer(srv)
+			defer hs.Close()
+			c.URL = hs.URL + HTTPPathPrefix + "tok"
+			c.Name = "big 'v1' 中文.bin"
+			save := filepath.Join(t.TempDir(), "my files 下载")
+			out := runPS(t, host, env, t.TempDir(), save, c.Windows(), true)
+			if !strings.Contains(out, "SHA-256 OK") {
+				t.Fatalf("分段下载失败：\n%s", out)
+			}
+			name := WinSafeName(SafeName(c.Name))
+			if !strings.Contains(out, "Saved to "+filepath.Join(save, name)) {
+				t.Errorf("应该写明保存的位置：\n%s", out)
+			}
+			checkE2E(t, srv, save, name, plain, []byte(out), Threads+1)
+
+			// 一个连接（小文件）：先放一部分密文，续传后解密。文件名带引号和 PowerShell 的特殊字符。
+			small := plain[:5<<20+3]
+			sum := sha256.Sum256(small)
+			srv3 := &rangeServer{plain: small, key: c.Key}
+			hs3 := httptest.NewServer(srv3)
+			defer hs3.Close()
+			c3 := Command{URL: hs3.URL + HTTPPathPrefix + "tok", Name: "it's ‘a’ $(x) `y`.bin", Key: c.Key, SHA256: hex.EncodeToString(sum[:]), Resume: true, Size: int64(len(small))}
+			dir := t.TempDir()
+			enc := make([]byte, 1<<20+7)
+			c.Key.Stream(0).XORKeyStream(enc, small[:len(enc)])
+			name = WinSafeName(SafeName(c3.Name))
+			if err := os.WriteFile(filepath.Join(dir, c3.partBase(name)+".1.part0"), enc, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out = runPS(t, host, env, t.TempDir(), dir, c3.Windows(), false)
+			if !strings.Contains(out, "SHA-256 OK") {
+				t.Fatalf("一个连接的下载失败：\n%s", out)
+			}
+			got, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil || !bytes.Equal(got, small) {
+				t.Fatalf("解密的内容不对：%v\n%s", err, out)
+			}
+			if want := fmt.Sprintf("bytes=%d-%d", len(enc), len(small)-1); len(srv3.requests) != 1 || srv3.requests[0] != want {
+				t.Errorf("应该续传（%s）：%q", want, srv3.requests)
+			}
+			// 内容不对时提示失败。
+			c3.SHA256 = strings.Repeat("0", 64)
+			if out := runPS(t, host, env, t.TempDir(), t.TempDir(), c3.Windows(), true); !strings.Contains(out, "FAILED: SHA-256 mismatch") {
+				t.Errorf("SHA-256 对不上时应该提示：\n%s", out)
+			}
+			// 节点拒绝链接（404）：每段只说一次原因，不重试，提示重新生成；之前下载的部分留着。
+			srv404 := httptest.NewServer(http.NotFoundHandler())
+			defer srv404.Close()
+			c.URL = srv404.URL + HTTPPathPrefix + "tok"
+			out = runPS(t, host, env, t.TempDir(), t.TempDir(), c.Windows(), true)
+			if strings.Count(out, "rejected the link") != 1 || !strings.Contains(out, "download incomplete") {
+				t.Errorf("404 时应该说明一次原因：\n%s", out)
+			}
+		})
 	}
-	if srv3.requests[0] != fmt.Sprintf("bytes=%d-", len(enc)) {
-		t.Errorf("应该续传：%q", srv3.requests)
+}
+
+// Windows 上实测保存的位置：在 C:\Windows\System32（普通用户不可写，就是用户报告的情况）运行时存到下载文件夹，
+// 不再 curl: (23)；NAGI_DOWNLOAD_DIR 指向不可写的目录时说明「folder not writable」，不开始下载。
+// 以管理员身份运行时 System32 可写，这里只检查默认不写当前目录。
+func TestWindowsScriptSaveDir(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("要在 Windows 上运行")
 	}
-	// 内容不对时提示失败。
-	c3.SHA256 = strings.Repeat("0", 64)
-	if out := run(t.TempDir(), c3.Windows(), true); !strings.Contains(out, "FAILED") {
-		t.Errorf("SHA-256 对不上时应该提示：\n%s", out)
+	hosts, env := psHosts(t)
+	plain := []byte("hello from nagi")
+	sum := sha256.Sum256(plain)
+	k := FileKey(bytes.Repeat([]byte{3}, 32), Claims{Node: "n", Path: "s"}, `"1-2"`)
+	srv := &rangeServer{plain: plain, key: k}
+	hs := httptest.NewServer(srv)
+	defer hs.Close()
+	name := "nagi-test-" + NewID() + ".txt"
+	c := Command{URL: hs.URL + HTTPPathPrefix + "tok", Name: name, Key: k, SHA256: hex.EncodeToString(sum[:]), Resume: true, Size: int64(len(plain))}
+	sys32 := filepath.Join(os.Getenv("SystemRoot"), "System32")
+	profile := t.TempDir()
+	for _, host := range hosts {
+		// 下载文件夹放到临时的用户目录（USERPROFILE），不动真正的下载文件夹。
+		env := append(append([]string(nil), env...), "USERPROFILE="+profile)
+		cmd := exec.Command(host, "-NoProfile", "-NonInteractive", "-Command",
+			"$k = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders'; (Get-ItemProperty -LiteralPath $k).'{374DE290-123F-4565-9164-39C4925E467B}'")
+		cmd.Env = env
+		reg, _ := cmd.Output()
+		want := filepath.Join(profile, "Downloads")
+		if s := strings.TrimSpace(string(reg)); s != "" {
+			want = s
+		}
+		file := filepath.Join(t.TempDir(), "dl.ps1")
+		if err := os.WriteFile(file, []byte(c.Windows()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run := exec.Command(host, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file)
+		run.Dir = sys32
+		run.Env = env
+		out, _ := run.CombinedOutput()
+		if !strings.Contains(string(out), "SHA-256 OK") || !strings.Contains(string(out), "Saved to "+filepath.Join(want, name)) {
+			t.Errorf("%s：在 System32 里运行应该存到下载文件夹 %s：\n%s", host, want, out)
+		}
+		_ = os.Remove(filepath.Join(want, name))
+		if _, err := os.Stat(filepath.Join(sys32, name)); err == nil {
+			_ = os.Remove(filepath.Join(sys32, name))
+			t.Errorf("%s：不该写进当前目录", host)
+		}
+		out2 := runPS(t, host, env, t.TempDir(), filepath.Join(sys32, "nagi-no-write"), c.Windows(), true)
+		if isAdmin() {
+			continue
+		}
+		if !strings.Contains(out2, "folder not writable") || strings.Contains(out2, "Saving to") {
+			t.Errorf("%s：不可写的目录应该说明：\n%s", host, out2)
+		}
 	}
+}
+
+// isAdmin：Windows 上当前进程是不是以管理员身份运行（能写 System32）。
+func isAdmin() bool {
+	f, err := os.CreateTemp(filepath.Join(os.Getenv("SystemRoot"), "System32"), "nagi-admin-*")
+	if err != nil {
+		return false
+	}
+	f.Close()
+	os.Remove(f.Name())
+	return true
 }

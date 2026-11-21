@@ -23,6 +23,7 @@ func (a *API) revokeDirectLinks() {
 	if a.Nodes == nil {
 		return
 	}
+	expireScripts()
 	r := &a.directRot
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -71,15 +72,17 @@ func writeDirect(w http.ResponseWriter, url string) {
 }
 
 // writeCommand 回答加密 HTTP 下载的命令（mode=command，见 docs/agent.md#加密-http-下载）。
-// 节点不能用时回 409。命令里有内容密钥：不缓存，也不写进活动记录。
-func writeCommand(w http.ResponseWriter, r *http.Request, cmd *nodes.DirectHTTPCommand) {
+// 节点不能用时回 409。命令里有内容密钥：不缓存，也不写进活动记录。short、short_windows 是从面板取脚本的短命令（dlscript.go）。
+func (a *API) writeCommand(w http.ResponseWriter, r *http.Request, cmd *nodes.DirectHTTPCommand) {
 	if cmd == nil {
 		jsonFail(w, r, http.StatusConflict, i18n.New("该节点现在不能生成下载命令"))
 		return
 	}
+	short, shortWin := a.shortCommands(r, saveScript(cmd))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{
+		"short": short, "short_windows": shortWin,
 		"command": cmd.Command, "command_windows": cmd.CommandWindows, "segmented": cmd.Segmented, "name": cmd.Name, "size": cmd.Size, "archive": cmd.Archive,
 		"sha256": cmd.SHA256, "hash_skipped": cmd.HashSkipped, "expires": cmd.Expires.Unix(),
 	})
@@ -186,13 +189,13 @@ func (a *API) nodeDirect(ctx context.Context, u auth.User, nodeID, path string, 
 }
 
 // writeResult 按请求的方式回答浏览器：链接不能用时回 204（浏览器经面板下载），命令不能用时回 409。
-func writeResult(w http.ResponseWriter, r *http.Request, res DirectResult, err error) {
+func (a *API) writeResult(w http.ResponseWriter, r *http.Request, res DirectResult, err error) {
 	if err != nil {
 		jsonFail(w, r, http.StatusBadGateway, err)
 		return
 	}
 	if commandMode(r) {
-		writeCommand(w, r, res.Command)
+		a.writeCommand(w, r, res.Command)
 		return
 	}
 	writeDirect(w, res.URL)
@@ -223,7 +226,7 @@ func (a *API) VolumeDirectHandler() http.Handler {
 			return
 		}
 		res, err := a.volumeDirect(ctx, u, ref, modeOf(r))
-		writeResult(w, r, res, err)
+		a.writeResult(w, r, res, err)
 	})
 }
 
@@ -250,7 +253,7 @@ func (a *API) NodeDirectHandler() http.Handler {
 			return
 		}
 		res, err := a.nodeDirect(ctx, u, nodeID, path, modeOf(r))
-		writeResult(w, r, res, err)
+		a.writeResult(w, r, res, err)
 	})
 }
 

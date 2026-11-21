@@ -85,8 +85,11 @@ export async function fetchDirectLink(endpoint: string, fail = failure): Promise
 }
 
 // DirectCommand 是加密 HTTP 下载的命令：command 是 Linux、macOS 的（sh），command_windows 是 PowerShell 的；
-// segmented：大文件分段同时下载。命令里有内容密钥，只显示，不存。
+// short、short_windows 是从面板取同一份脚本运行的一行短命令（旧版本的面板没有）；segmented：大文件分段同时下载。
+// 命令里有内容密钥，只显示，不存。
 export type DirectCommand = {
+  short?: string;
+  short_windows?: string;
   command: string;
   command_windows?: string;
   segmented?: boolean;

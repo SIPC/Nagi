@@ -7,7 +7,7 @@
 // 「复制下载链接」只在 HTTPS 能用时出现，给下载工具或别的设备用。
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, CodeBlock, Dialog, DialogActions, Segmented, Spinner } from "@/components/ui";
+import { Alert, Button, CodeBlock, Dialog, DialogActions, Segmented, Spinner, textLink } from "@/components/ui";
 import type { DirectDownload } from "@/gen/nagi/v1/common_pb";
 import { t } from "@/i18n";
 import { errorMessage } from "@/lib/api";
@@ -145,20 +145,26 @@ export function useDownloads({ direct, url, check, fail, onError }: Options) {
   return { download, items, dialogs, available: can.link };
 }
 
-// CommandBody：Linux / macOS、Windows 两种命令和几条说明（加密、密钥留在历史里、需要的工具、分段、续传和校验）。
+// CommandBody：Linux / macOS、Windows 两种命令和几条说明（加密、密钥留在历史里、需要的工具、保存位置、分段、续传和校验）。
+// 默认显示一行短命令（从面板取脚本运行），「显示完整命令」换成完整的脚本：不能用 iex、curl | sh 时直接粘贴。
 function CommandBody({ data }: { data: DirectCommand }) {
   const m = t.fileManager.link;
   const [os, setOS] = useState<OS>(() => (data.command_windows ? visitorOS() : "posix"));
-  const notes = [m.encrypted, os === "windows" ? m.windowsTools : m.posixTools];
+  const [full, setFull] = useState(false);
+  const win = os === "windows" && !!data.command_windows;
+  const short = win ? data.short_windows : data.short;
+  const showShort = !!short && !full;
+  const notes = [m.encrypted, win ? m.windowsTools : m.posixTools, win ? m.windowsSaved : m.posixSaved];
+  if (showShort) notes.push(m.shortTrust);
   if (data.archive) notes.push(m.archive);
   else {
-    if (data.segmented) notes.push(m.segmented);
-    notes.push(m.resume, m.changing);
+    if (data.segmented) notes.push(showShort ? m.segmentedShort : m.segmented);
+    notes.push(showShort ? m.resumeShort : m.resume, m.changing);
     if (data.sha256) notes.push(m.verified);
     else if (data.hash_skipped === "too_large") notes.push(m.tooLarge);
     else if (data.hash_skipped === "timeout") notes.push(m.timeout);
   }
-  const text = os === "windows" && data.command_windows ? data.command_windows : data.command;
+  const text = showShort ? short : win ? data.command_windows! : data.command;
   return (
     <>
       {data.command_windows && (
@@ -172,6 +178,7 @@ function CommandBody({ data }: { data: DirectCommand }) {
           ]}
         />
       )}
+      {/* 短命令放不下时折行，不截断：要复制前看清楚取脚本的地址是不是自己的面板。 */}
       <CodeBlock copy className="[&>code]:max-h-72 [&>code]:overflow-auto">
         {text}
       </CodeBlock>
@@ -180,6 +187,14 @@ function CommandBody({ data }: { data: DirectCommand }) {
           <li key={n}>{n}</li>
         ))}
       </ul>
+      {short && (
+        <p className="leading-5 text-muted-foreground">
+          <button type="button" className={textLink} onClick={() => setFull(!full)}>
+            {full ? m.showShort : m.showFull}
+          </button>
+          {!full && ` ${m.fullHelp}`}
+        </p>
+      )}
     </>
   );
 }

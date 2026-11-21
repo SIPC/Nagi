@@ -66,8 +66,8 @@ func TestEntranceHidesPanel(t *testing.T) {
 	}
 	h := s.EntranceMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "panel") }))
 	for path, open := range map[string]bool{
-		"/hooks/abc": true, "/install.sh": true, "/api/standby/status": true,
-		"/": false, "/login": false, "/download/nagi-linux-amd64": false, "/nagi.v1.AuthService/Me": false,
+		"/hooks/abc": true, "/install.sh": true, "/api/standby/status": true, "/dl/tok.ps1": true,
+		"/dl": false, "/": false, "/login": false, "/download/nagi-linux-amd64": false, "/nagi.v1.AuthService/Me": false,
 	} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "https://panel.example.com"+path, nil))
