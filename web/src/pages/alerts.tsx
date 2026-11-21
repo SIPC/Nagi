@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AuditSettings } from "@/gen/nagi/v1/api_pb";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { create } from "@bufbuild/protobuf";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -8,12 +7,12 @@ import { errorMessage, settingsClient } from "@/lib/api";
 import { useRole } from "@/components/role";
 import { AlertChannelSchema, AlertConfigSchema, type AlertChannel, type AlertConfig } from "@/gen/nagi/v1/common_pb";
 import { confirmAction } from "@/components/confirm";
-import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, SettingRows, SettingSwitch, Spinner } from "@/components/ui";
+import { Alert, Button, Check, Dialog, DialogActions, EmptyRow, Field, FormRow, HelpTip, Input, List, Notice, QueryError, Row, RowMenu, RowsSkeleton, Section, Select, Spinner } from "@/components/ui";
 import { t } from "@/i18n";
-import { HelpParts } from "@/components/help-parts";
 import { ModelReports } from "@/pages/model-reports";
+import { AlertRulesSettings } from "@/pages/alert-rules";
 
-// ---- 告警设置：通知渠道（规则在各节点和项目的设置里） ----
+// ---- 告警设置：通知渠道、规则（alert-rules.tsx）、事件通知 ----
 
 const channelName = (c: AlertChannel) => c.name || c.type;
 
@@ -105,7 +104,7 @@ function ChannelDialog({ initial, adding, onClose, onSave }: { initial: AlertCha
 }
 
 // 查询成功才挂载，所以这里拿到的一定是面板上的配置，不会用空配置覆盖。
-// 告警规则在各节点和项目的设置里（见 components/alert-rules.tsx），这里只有渠道。
+// 规则在下面的「告警规则」里（pages/alert-rules.tsx）。
 function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: boolean }) {
   const queryClient = useQueryClient();
   const channels = config?.channels ?? [];
@@ -156,7 +155,7 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
   );
   return (
     <>
-      <Section title={t.settings.tabs.alerts.label} help={`${t.alerts.channelsHelp}${t.alerts.rulesWhere}`} actions={channels.length > 0 ? addButton : undefined}>
+      <Section title={t.settings.tabs.alerts.label} help={t.alerts.channelsHelp} actions={channels.length > 0 ? addButton : undefined}>
         {lost && (
           <Notice tone="warning" title={t.alerts.lostTitle}>
             {t.alerts.lostBody} <HelpTip>{t.alerts.lostHelp}</HelpTip>
@@ -196,8 +195,19 @@ function AlertForm({ config, lost }: { config: AlertConfig | undefined; lost: bo
   );
 }
 
+// 设置 → 告警：渠道和通用设置要「面板设置」；规则按层级各自的权限（见 alert-rules.tsx）。
 export function AlertSettings() {
   const { can, isAdmin } = useRole();
+  return (
+    <>
+      {can("panel.settings") && <Channels />}
+      <AlertRulesSettings />
+      {isAdmin && <ModelReports />}
+    </>
+  );
+}
+
+function Channels() {
   const cfg = useQuery({
     queryKey: ["alert-config"],
     queryFn: () => settingsClient.getAlertConfig({}),
@@ -215,51 +225,5 @@ export function AlertSettings() {
         <QueryError error={errorMessage(cfg.error)} onRetry={() => cfg.refetch()} />
       </Section>
     );
-  return (
-    <>
-      <AlertForm config={cfg.data.config} lost={cfg.data.lost} />
-      {isAdmin && <ModelReports />}
-      {/* 登录安全告警存在审计设置里，归「安全设置」。 */}
-      {can("panel.security") && <SecurityAlertRules />}
-    </>
-  );
-}
-
-// 登录安全告警（见 docs/audit.md#安全告警）：三条可以关；账号、凭据和集群变更的通知不能关，这里只说明。
-function SecurityAlertRules() {
-  const queryClient = useQueryClient();
-  const settings = useQuery({ queryKey: ["audit-settings"], queryFn: () => settingsClient.getAuditSettings({}) });
-  const save = useMutation({
-    mutationFn: (patch: Partial<AuditSettings>) => settingsClient.setAuditSettings({ ...settings.data!, ...patch }),
-    onSuccess: (s) => queryClient.setQueryData(["audit-settings"], s),
-  });
-  const m = t.alerts.security;
-  if (settings.isPending)
-    return (
-      <Section title={m.title}>
-        <RowsSkeleton count={3} />
-      </Section>
-    );
-  if (!settings.data)
-    return (
-      <Section title={m.title}>
-        <QueryError error={errorMessage(settings.error)} onRetry={() => settings.refetch()} />
-      </Section>
-    );
-  const s = settings.data;
-  const rows: [keyof typeof m.rules, boolean, Partial<AuditSettings>][] = [
-    ["totp", s.alertTotpFailures, { alertTotpFailures: !s.alertTotpFailures }],
-    ["ratelimit", s.alertLoginRatelimit, { alertLoginRatelimit: !s.alertLoginRatelimit }],
-    ["network", s.alertAdminNetwork, { alertAdminNetwork: !s.alertAdminNetwork }],
-  ];
-  return (
-    <Section title={m.title} help={<HelpParts parts={[m.description, m.help]} />}>
-      {save.error && <Alert>{errorMessage(save.error)}</Alert>}
-      <SettingRows>
-        {rows.map(([key, on, patch]) => (
-          <SettingSwitch key={key} label={m.rules[key].label} description={m.rules[key].description} on={on} busy={save.isPending && save.variables === patch} onChange={() => save.mutate(patch)} />
-        ))}
-      </SettingRows>
-    </Section>
-  );
+  return <AlertForm config={cfg.data.config} lost={cfg.data.lost} />;
 }

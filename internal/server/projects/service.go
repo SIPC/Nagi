@@ -303,6 +303,8 @@ func (s *Service) assemble(ctx context.Context, p store.Project) (*nagiv1.Projec
 	if err != nil {
 		return nil, err
 	}
+	// 旧版本界面、MCP 看的规则：项目生效的规则换成旧格式（设置里以前存的不再使用）。
+	settings.AlertRules = s.legacyProjectRules(ctx, p.ID)
 	proj := &nagiv1.Project{
 		Id: p.ID, Name: p.Name, NetworkName: p.NetworkName, Revision: p.Revision,
 		CreatedAt: timestamppb.New(time.Unix(p.CreatedAt, 0)), Settings: settings,
@@ -365,7 +367,7 @@ func (s *Service) containerInfo(ctx context.Context, c store.Container, settings
 		Name: c.Name, Revision: c.Revision, LatestVersion: v.Version, DeployedVersion: c.DeployedVersion,
 		CreatedAt: timestamppb.New(time.Unix(c.CreatedAt, 0)), Config: cfg, HasDraft: draft != nil, Draft: draft,
 		DeployKey: c.DeployKeyPub, WebhookToken: sec.WebhookToken, LastCommit: c.LastCommit, Kind: spec.Kind(cfg),
-		NodeId: c.NodeID, Dir: c.Dir, BackupNodeIds: store.BackupNodes(c), DisplayName: c.DisplayName, AlertRules: containerAlertRules(c),
+		NodeId: c.NodeID, Dir: c.Dir, BackupNodeIds: store.BackupNodes(c), DisplayName: c.DisplayName, AlertRules: s.legacyContainerRules(ctx, c),
 		SnapshotSchedule: containerSnapshotSchedule(c), PendingHa: pendingHAOf(c),
 	}
 	if cfg := failoverOf(c); cfg != nil {
@@ -609,9 +611,17 @@ func (s *Service) UpdateSettings(ctx context.Context, id string, base int64, nam
 		return nil, err
 	}
 	next.SharedEnv = old.GetSharedEnv()
-	// 没带告警规则（只改别的设置）时保留原来的；要清空就带一组空规则。
-	if in.GetAlertRules() == nil {
-		next.AlertRules = old.GetAlertRules()
+	// 告警规则改在 设置 → 告警 里（覆盖）。旧版本的界面、MCP 带来的项目规则换成项目的覆盖；设置里的旧字段不再改。
+	next.AlertRules = old.GetAlertRules()
+	if r := in.GetAlertRules(); r != nil && s.Nodes != nil {
+		policy, err := s.Nodes.AlertPolicy(ctx)
+		if err != nil {
+			return nil, err
+		}
+		layer := nodes.DiffRules(alert.Merge(policy.GetRules()), alert.FromLegacy(r, alert.ContainerRules), alert.ContainerRules)
+		if err := s.Nodes.ReplaceAlertOverride(ctx, &nagiv1.AlertOverride{Scope: "project", ProjectId: id, Rules: layer}); err != nil {
+			return nil, err
+		}
 	}
 	mergeSnapshotSchedule(next, old)
 	// 没带出站限制（只改别的设置）时保留原来的。

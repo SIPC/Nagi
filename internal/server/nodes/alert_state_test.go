@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -79,6 +80,23 @@ func TestReportedAlertsPersistHandlingAndRecoveryOutsideBusinessDB(t *testing.T)
 	if err != nil || len(states) != 1 || states[0].Alert.Status != "resolved" || !states[0].Acknowledged {
 		t.Fatalf("recovery/ordering: %v %v", states, err)
 	}
+	// 基线进度：旧节点（不带 baselines_supported）算没上报过；新节点的完整快照整组替换，存在日志库里。
+	if _, _, reported, err := p.r.AlertBaselines(ctx, p.nodeID); err != nil || reported {
+		t.Fatalf("v0.37 node must be unsupported: %v %v", reported, err)
+	}
+	baseline := func(rev uint64, list ...*nagiv1.AlertBaseline) {
+		t.Helper()
+		if _, err := s.panel.Report(ctx, &nagiv1.ReportRequest{Alerts: &nagiv1.AlertSync{Source: source.Source, Revision: rev, Complete: true,
+			BaselinesSupported: true, Baselines: list}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	baseline(3, &nagiv1.AlertBaseline{Rule: alert.RuleL4Surge, ProjectId: "p1", Subject: "tcp", RequiredSeconds: 21600, CollectedSeconds: 9000, Status: "building"},
+		&nagiv1.AlertBaseline{Rule: alert.RuleTraffic, ProjectId: "p1", Subject: "web", Status: "ready"})
+	baseline(4, &nagiv1.AlertBaseline{Rule: alert.RuleL4Surge, ProjectId: "p1", Subject: "tcp", RequiredSeconds: 21600, CollectedSeconds: 21600, Status: "ready"})
+	if list, _, reported, err := p.r.AlertBaselines(ctx, p.nodeID); err != nil || !reported || len(list) != 1 || list[0].GetStatus() != "ready" {
+		t.Fatalf("baselines must be replaced by the latest snapshot: %v %v %v", list, reported, err)
+	}
 	events, err := logs.Query(ctx, logstore.Filter{Category: logstore.Alert, KindPrefix: "alert.handled", Limit: 100})
 	if err != nil || len(events) != 2 {
 		t.Fatalf("handling history: %v %v", events, err)
@@ -101,7 +119,7 @@ func TestReportedAlertsPersistHandlingAndRecoveryOutsideBusinessDB(t *testing.T)
 		t.Fatal(err)
 	}
 	var count int
-	if err := business.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND (name LIKE '%alert%' OR name GLOB 'log_*' OR name GLOB 'logs*' OR name LIKE '%audit%')`).Scan(&count); err != nil || count != 0 {
+	if err := business.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT IN ('alert_node_overrides', 'alert_project_overrides', 'alert_container_overrides', 'alert_route_overrides') AND (name LIKE '%alert%' OR name GLOB 'log_*' OR name GLOB 'logs*' OR name LIKE '%audit%')`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("log tables in business DB: %d %v", count, err)
 	}
 }

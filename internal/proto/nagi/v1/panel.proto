@@ -100,6 +100,8 @@ message ReportRequest {
   // 本节点开放的域名（只开 HTTP 的除外）的证书状态。
   repeated DomainCert certs = 10;
   AlertSync alerts = 11;
+  // 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+  google.protobuf.Timestamp node_time = 12;
 }
 
 message ReportResponse {

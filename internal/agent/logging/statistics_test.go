@@ -28,15 +28,18 @@ func TestRecordedStatisticsRequireCompleteFreshSamples(t *testing.T) {
 	defer logs.Close()
 	now := time.Now().UTC()
 	collect := CaptureMetrics(logs, logstore.DefaultConfig())
-	values := map[string]float64{"node:disk": 96, "node:cpu": 17}
-	for i := range 67 {
+	values := map[string]float64{"node:disk": 96, "node:cpu": 17,
+		// 按挂载点、网卡、映射的序列名带 @ 和 /，不能被日志的脱敏当成 user:pass@ 或路径改写，否则磁盘、inode 告警看不到。
+		"node:disk@/srv/nagi": 92, "node:filesystem@/srv/nagi:inodes_free": 7, "node:interface@eth0:rx_errors_per_second": 3}
+	for i := range 64 {
 		values[fmt.Sprintf("c:p/service%d:mem", i)] = float64(i + 9)
 	}
 	collect(now.Add(-20*time.Second), values)
 	flush(t, logs)
 	s := Statistics{Store: logs}
 	got := s.LatestFresh(now)
-	if len(got) != 69 || got["node:disk"] != 96 || got["c:p/service66:mem"] != 75 {
+	if len(got) != 69 || got["node:disk"] != 96 || got["c:p/service63:mem"] != 72 || got["node:disk@/srv/nagi"] != 92 ||
+		got["node:filesystem@/srv/nagi:inodes_free"] != 7 || got["node:interface@eth0:rx_errors_per_second"] != 3 {
 		t.Fatalf("chunked sample incomplete: %+v", got)
 	}
 	collect(now.Add(-10*time.Second), map[string]float64{"node:cpu": 19})

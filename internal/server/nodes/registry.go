@@ -116,6 +116,10 @@ type Registry struct {
 	// Changes 通知订阅流有变化（见 changes.go）。
 	Changes Changes
 	alerts  activeAlerts
+	// policyMu 串行修改告警的全局设置（修订号检查和保存在一起）。
+	policyMu sync.Mutex
+	// panelRules 是面板判断的规则的状态（见 panel_rules.go）。
+	panelRules panelRules
 
 	// OnReport 在节点上报后调用（不阻塞上报）：面板据此给缓存过时的容器补推配置。
 	OnReport func(c *Conn, req *nagiv1.ReportRequest)
@@ -803,6 +807,9 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 
 	p.r.touch(ctx, p.conn, req, false)
 	p.r.Changes.Bump()
+	if t := req.GetNodeTime(); t != nil && !pending {
+		go p.r.checkClock(context.WithoutCancel(ctx), p.conn, t.AsTime(), time.Now())
+	}
 	// 节点认的主面板不是本面板时，Behind 去核实（本面板可能已经落后）；这次不补推配置，
 	// 但回复照常带上主备信息：节点可能只是还没收到本面板的新任期。
 	if !pending && p.r.Behind != nil && p.r.Behind(ctx, req) {

@@ -223,4 +223,23 @@ public interface ReportRequestOrBuilder extends
    * @return The alerts.
    */
   ink.sipc.nagi.proto.v1.AlertSync getAlerts();
+
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   * @return Whether the nodeTime field is set.
+   */
+  boolean hasNodeTime();
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   * @return The nodeTime.
+   */
+  com.google.protobuf.Timestamp getNodeTime();
 }

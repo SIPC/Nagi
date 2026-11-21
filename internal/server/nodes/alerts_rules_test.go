@@ -10,6 +10,7 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/sealer"
 	"github.com/SIPC/nagi/internal/server/store"
+	"google.golang.org/protobuf/proto"
 )
 
 // 旧版本的全局规则搬到各个节点（节点的部分）和项目（容器的部分）上，搬完以后告警配置里不再有规则；
@@ -32,7 +33,9 @@ func TestMigrateAlertRules(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := r.SetNodeAlertRules(ctx, "n2", &nagiv1.AlertRules{DiskPercent: 70}); err != nil {
+	// 旧版本已经设置过节点规则（升级前的列）。
+	b, _ := proto.Marshal(&nagiv1.AlertRules{DiskPercent: 70})
+	if err := q.SetNodeAlertRules(ctx, store.SetNodeAlertRulesParams{ID: "n2", AlertRules: b}); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &nagiv1.AlertConfig{

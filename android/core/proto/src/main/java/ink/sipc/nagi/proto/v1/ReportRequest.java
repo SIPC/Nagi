@@ -929,6 +929,73 @@ public  final class ReportRequest extends
     bitField0_ = (bitField0_ & ~0x00000008);
   }
 
+  public static final int NODE_TIME_FIELD_NUMBER = 12;
+  private com.google.protobuf.Timestamp nodeTime_;
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   */
+  @java.lang.Override
+  public boolean hasNodeTime() {
+    return ((bitField0_ & 0x00000010) != 0);
+  }
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   */
+  @java.lang.Override
+  public com.google.protobuf.Timestamp getNodeTime() {
+    return nodeTime_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : nodeTime_;
+  }
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   */
+  private void setNodeTime(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    nodeTime_ = value;
+    bitField0_ |= 0x00000010;
+  }
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeNodeTime(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    if (nodeTime_ != null &&
+        nodeTime_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+      nodeTime_ =
+        com.google.protobuf.Timestamp.newBuilder(nodeTime_).mergeFrom(value).buildPartial();
+    } else {
+      nodeTime_ = value;
+    }
+    bitField0_ |= 0x00000010;
+  }
+  /**
+   * <pre>
+   * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+   */
+  private void clearNodeTime() {
+    nodeTime_ = null;
+    bitField0_ = (bitField0_ & ~0x00000010);
+  }
+
   public static ink.sipc.nagi.proto.v1.ReportRequest parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1977,6 +2044,77 @@ public  final class ReportRequest extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+     */
+    @java.lang.Override
+    public boolean hasNodeTime() {
+      return instance.hasNodeTime();
+    }
+    /**
+     * <pre>
+     * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getNodeTime() {
+      return instance.getNodeTime();
+    }
+    /**
+     * <pre>
+     * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+     */
+    public Builder setNodeTime(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.setNodeTime(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+     */
+    public Builder setNodeTime(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setNodeTime(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+     */
+    public Builder mergeNodeTime(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.mergeNodeTime(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp node_time = 12 [json_name = "nodeTime"];</code>
+     */
+    public Builder clearNodeTime() {  copyOnWrite();
+      instance.clearNodeTime();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.ReportRequest)
   }
   @java.lang.Override
@@ -2008,11 +2146,12 @@ public  final class ReportRequest extends
             "certs_",
             ink.sipc.nagi.proto.v1.DomainCert.class,
             "alerts_",
+            "nodeTime_",
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0004\u0000\u0001\u1009\u0000\u0002" +
-              "\u1009\u0001\u0003\u001b\u0004\u001b\u0005\u1009\u0002\u0006\u0003\u0007\u0208\b" +
-              "\u0208\t\u021a\n\u001b\u000b\u1009\u0003";
+              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0004\u0000\u0001\u1009\u0000\u0002\u1009\u0001" +
+              "\u0003\u001b\u0004\u001b\u0005\u1009\u0002\u0006\u0003\u0007\u0208\b\u0208\t\u021a" +
+              "\n\u001b\u000b\u1009\u0003\f\u1009\u0004";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

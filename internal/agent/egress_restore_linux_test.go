@@ -56,8 +56,8 @@ func TestEgressHistoryWithoutNotifications(t *testing.T) {
 	}
 	defer func() { s.Close() }()
 	a := &agent{cfg: Config{Logs: s}, log: slog.New(slog.DiscardHandler), alerts: &alerts.Engine{
-		ContainerRules: func(string, string) (*nagiv1.AlertRules, bool) {
-			return &nagiv1.AlertRules{Enabled: map[string]bool{"egress": false}}, true
+		ContainerRules: func(string, string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
+			return nil, &nagiv1.AlertRules{Enabled: map[string]bool{"egress": false}}, true
 		},
 	}}
 	e := &egress{a: a, byIP: map[string]egressContainer{"172.20.0.2": {project: testProject, name: "instance", nagi: "web"}}, modes: map[string]string{testProject: "log"}}

@@ -72,6 +72,8 @@ type Service struct {
 
 	// Alert 发一条安全告警（会话被盗用等），由面板接到告警渠道上。key 用来合并重复的告警。
 	Alert func(ctx context.Context, key, title, message string)
+	// NoticeEnabled 判断一项事件通知（见 alert.Notices）开着没有；为 nil 时都算开着。
+	NoticeEnabled func(ctx context.Context, notice string) bool
 }
 
 // Sealer 加密两步验证的密钥（面板主密钥）。

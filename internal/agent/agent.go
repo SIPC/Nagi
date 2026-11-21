@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -41,6 +42,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Config 是节点的配置。
@@ -295,6 +297,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	a.alerts.Report = a.reportAlert
 	a.alerts.ContainerRules = a.containerAlertRules
 	a.alerts.RouteRules = a.routeAlertRules
+	a.alerts.Probes = a.alertProbes
 	a.alerts.Domains = func() map[string]bool {
 		routes, err := a.allRoutes(context.Background())
 		if err != nil {
@@ -461,11 +464,13 @@ type agent struct {
 	panelReached     chan struct{}
 	panelReachedOnce sync.Once
 
-	mu       sync.Mutex
-	subs     []chan struct{}
-	panels   map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
-	sessions map[string]context.CancelFunc        // 面板指纹 → 停止连接
-	connErrs map[string]string                    // 面板指纹 → 最近一次连接失败的原因
+	mu     sync.Mutex
+	subs   []chan struct{}
+	panels map[string]nagiv1.PanelServiceClient // 面板指纹 → 当前连接，用于请面板代发告警
+	// facts 是状态类告警的事实（见 alert_probes.go）。
+	facts    alertFacts
+	sessions map[string]context.CancelFunc // 面板指纹 → 停止连接
+	connErrs map[string]string             // 面板指纹 → 最近一次连接失败的原因
 	reload   chan struct{}
 }
 
@@ -602,6 +607,13 @@ func (a *agent) applyProxy(ctx context.Context) {
 		data["result"], data["error"] = "failed", err.Error()
 	}
 	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "proxy.apply", Data: data})
+	if routes != nil {
+		like := make([]routeLike, 0, len(routes))
+		for _, r := range routes {
+			like = append(like, routeLike{project: r.Project, name: r.Name, protocol: r.Protocol, published: r.Published})
+		}
+		a.proxyApplied(like, err)
+	}
 	if err == nil {
 		// 域名移除不是证书恢复的证据，保留未确认恢复的记录。
 		domains := map[string]bool{}
@@ -861,7 +873,8 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 		primaryAddr = pp.Address
 	}
 	return panel.Report(ctx, &nagiv1.ReportRequest{Node: info, Containers: containers, Mesh: a.mesh.info(), Failovers: a.failoverStatuses(ctx), Usage: usage,
-		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels()), Certs: a.certStatuses(ctx), Alerts: a.alerts.Snapshot()})
+		Term: st.Term, Primary: st.Primary, PrimaryAddress: primaryAddr, Panels: trustedFingerprints(a.id.Panels()), Certs: a.certStatuses(ctx), Alerts: a.alerts.Snapshot(),
+		NodeTime: timestamppb.Now()})
 }
 
 // renewIfNeeded：证书 30 天内到期时请面板续期。新证书在下次连接时生效。
@@ -877,6 +890,7 @@ func (a *agent) renewIfNeeded(ctx context.Context, panel nagiv1.PanelServiceClie
 	resp, err := panel.RenewCertificate(ctx, &nagiv1.RenewCertificateRequest{Csr: csr})
 	if err != nil {
 		a.log.Warn("证书续期失败", "panel", p.Address, "err", err)
+		a.certRenewed(cert.NotAfter, err)
 		return
 	}
 	p.CertPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: resp.GetCertificate()}))
@@ -885,6 +899,9 @@ func (a *agent) renewIfNeeded(ctx context.Context, panel nagiv1.PanelServiceClie
 		return
 	}
 	a.log.Info("证书已续期", "panel", p.Address)
+	if c, err := x509.ParseCertificate(resp.GetCertificate()); err == nil {
+		a.certRenewed(c.NotAfter, nil)
+	}
 }
 
 // domainProject 返回绑定了这个域名的项目 ID，找不到时返回空。
@@ -1046,34 +1063,38 @@ func trustedFingerprints(panels []trustedPanel) []string {
 	return out
 }
 
-// containerAlertRules 返回容器生效的告警规则（面板随容器配置下发）。本节点上没有这个容器，或者面板是旧版本、没有下发时 ok 为 false。
-func (a *agent) containerAlertRules(projectID, container string) (*nagiv1.AlertRules, bool) {
+// containerAlertRules 返回容器生效的告警规则（面板随容器配置下发）：新版本面板给 eff，旧版本只给 legacy。
+// 本节点上没有这个容器，或者面板都没有下发时 ok 为 false。
+func (a *agent) containerAlertRules(projectID, container string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
 	c, err := a.projects.Get(context.Background(), projectID, container)
-	if err != nil || c.Spec.GetAlertRules() == nil {
-		return nil, false
+	if err != nil || c.Spec.GetEffectiveAlertRules() == nil && c.Spec.GetAlertRules() == nil {
+		return nil, nil, false
 	}
-	return c.Spec.GetAlertRules(), true
+	return c.Spec.GetEffectiveAlertRules(), c.Spec.GetAlertRules(), true
 }
 
 // routeAlertRules 返回 http 规则（映射）所属容器的告警规则：容器在本节点上时看它的配置，
 // 本节点只是入口节点时看入口计划里带的。
-func (a *agent) routeAlertRules(projectID, route string) (*nagiv1.AlertRules, bool) {
+func (a *agent) routeAlertRules(projectID, route string) (*nagiv1.EffectiveAlertRules, *nagiv1.AlertRules, bool) {
 	for _, c := range a.projects.List(context.Background()) {
 		if c.Spec.GetProjectId() != projectID {
 			continue
 		}
 		for _, r := range c.Spec.GetRoutes() {
-			if r.GetName() == route && c.Spec.GetAlertRules() != nil {
-				return c.Spec.GetAlertRules(), true
+			if r.GetName() == route && (c.Spec.GetEffectiveAlertRules() != nil || c.Spec.GetAlertRules() != nil) {
+				if own := c.Spec.GetRouteAlertRules()[route]; own != nil {
+					return own, c.Spec.GetAlertRules(), true
+				}
+				return c.Spec.GetEffectiveAlertRules(), c.Spec.GetAlertRules(), true
 			}
 		}
 	}
 	if a.intranet != nil {
 		for _, e := range a.intranet.current().GetEntries() {
-			if e.GetProjectId() == projectID && e.GetName() == route && e.GetAlertRules() != nil {
-				return e.GetAlertRules(), true
+			if e.GetProjectId() == projectID && e.GetName() == route && (e.GetEffectiveAlertRules() != nil || e.GetAlertRules() != nil) {
+				return e.GetEffectiveAlertRules(), e.GetAlertRules(), true
 			}
 		}
 	}
-	return nil, false
+	return nil, nil, false
 }

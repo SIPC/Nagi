@@ -41,6 +41,21 @@ const (
 	// AlertServiceHandleAlertProcedure is the fully-qualified name of the AlertService's HandleAlert
 	// RPC.
 	AlertServiceHandleAlertProcedure = "/nagi.v1.AlertService/HandleAlert"
+	// AlertServiceGetAlertRulesProcedure is the fully-qualified name of the AlertService's
+	// GetAlertRules RPC.
+	AlertServiceGetAlertRulesProcedure = "/nagi.v1.AlertService/GetAlertRules"
+	// AlertServiceUpdateAlertPolicyProcedure is the fully-qualified name of the AlertService's
+	// UpdateAlertPolicy RPC.
+	AlertServiceUpdateAlertPolicyProcedure = "/nagi.v1.AlertService/UpdateAlertPolicy"
+	// AlertServiceSetAlertOverrideProcedure is the fully-qualified name of the AlertService's
+	// SetAlertOverride RPC.
+	AlertServiceSetAlertOverrideProcedure = "/nagi.v1.AlertService/SetAlertOverride"
+	// AlertServiceSetAlertNotificationProcedure is the fully-qualified name of the AlertService's
+	// SetAlertNotification RPC.
+	AlertServiceSetAlertNotificationProcedure = "/nagi.v1.AlertService/SetAlertNotification"
+	// AlertServiceListAlertBaselinesProcedure is the fully-qualified name of the AlertService's
+	// ListAlertBaselines RPC.
+	AlertServiceListAlertBaselinesProcedure = "/nagi.v1.AlertService/ListAlertBaselines"
 	// PanelAlertServiceReadAlertReplicaProcedure is the fully-qualified name of the PanelAlertService's
 	// ReadAlertReplica RPC.
 	PanelAlertServiceReadAlertReplicaProcedure = "/nagi.v1.PanelAlertService/ReadAlertReplica"
@@ -53,6 +68,18 @@ const (
 type AlertServiceClient interface {
 	ListAlertStates(context.Context, *connect.Request[v1.ListAlertStatesRequest]) (*connect.Response[v1.ListAlertStatesResponse], error)
 	HandleAlert(context.Context, *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error)
+	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+	GetAlertRules(context.Context, *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error)
+	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+	UpdateAlertPolicy(context.Context, *connect.Request[v1.UpdateAlertPolicyRequest]) (*connect.Response[v1.AlertPolicy], error)
+	// 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+	// 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+	SetAlertOverride(context.Context, *connect.Request[v1.SetAlertOverrideRequest]) (*connect.Response[v1.AlertOverride], error)
+	// 关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+	// 关掉之前先发一条通知到当前渠道，并记入审计。
+	SetAlertNotification(context.Context, *connect.Request[v1.SetAlertNotificationRequest]) (*connect.Response[v1.AlertPolicy], error)
+	// 基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+	ListAlertBaselines(context.Context, *connect.Request[v1.ListAlertBaselinesRequest]) (*connect.Response[v1.ListAlertBaselinesResponse], error)
 }
 
 // NewAlertServiceClient constructs a client for the nagi.v1.AlertService service. By default, it
@@ -78,13 +105,48 @@ func NewAlertServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(alertServiceMethods.ByName("HandleAlert")),
 			connect.WithClientOptions(opts...),
 		),
+		getAlertRules: connect.NewClient[v1.GetAlertRulesRequest, v1.GetAlertRulesResponse](
+			httpClient,
+			baseURL+AlertServiceGetAlertRulesProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("GetAlertRules")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAlertPolicy: connect.NewClient[v1.UpdateAlertPolicyRequest, v1.AlertPolicy](
+			httpClient,
+			baseURL+AlertServiceUpdateAlertPolicyProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("UpdateAlertPolicy")),
+			connect.WithClientOptions(opts...),
+		),
+		setAlertOverride: connect.NewClient[v1.SetAlertOverrideRequest, v1.AlertOverride](
+			httpClient,
+			baseURL+AlertServiceSetAlertOverrideProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("SetAlertOverride")),
+			connect.WithClientOptions(opts...),
+		),
+		setAlertNotification: connect.NewClient[v1.SetAlertNotificationRequest, v1.AlertPolicy](
+			httpClient,
+			baseURL+AlertServiceSetAlertNotificationProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("SetAlertNotification")),
+			connect.WithClientOptions(opts...),
+		),
+		listAlertBaselines: connect.NewClient[v1.ListAlertBaselinesRequest, v1.ListAlertBaselinesResponse](
+			httpClient,
+			baseURL+AlertServiceListAlertBaselinesProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("ListAlertBaselines")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // alertServiceClient implements AlertServiceClient.
 type alertServiceClient struct {
-	listAlertStates *connect.Client[v1.ListAlertStatesRequest, v1.ListAlertStatesResponse]
-	handleAlert     *connect.Client[v1.HandleAlertRequest, v1.HandleAlertResponse]
+	listAlertStates      *connect.Client[v1.ListAlertStatesRequest, v1.ListAlertStatesResponse]
+	handleAlert          *connect.Client[v1.HandleAlertRequest, v1.HandleAlertResponse]
+	getAlertRules        *connect.Client[v1.GetAlertRulesRequest, v1.GetAlertRulesResponse]
+	updateAlertPolicy    *connect.Client[v1.UpdateAlertPolicyRequest, v1.AlertPolicy]
+	setAlertOverride     *connect.Client[v1.SetAlertOverrideRequest, v1.AlertOverride]
+	setAlertNotification *connect.Client[v1.SetAlertNotificationRequest, v1.AlertPolicy]
+	listAlertBaselines   *connect.Client[v1.ListAlertBaselinesRequest, v1.ListAlertBaselinesResponse]
 }
 
 // ListAlertStates calls nagi.v1.AlertService.ListAlertStates.
@@ -97,10 +159,47 @@ func (c *alertServiceClient) HandleAlert(ctx context.Context, req *connect.Reque
 	return c.handleAlert.CallUnary(ctx, req)
 }
 
+// GetAlertRules calls nagi.v1.AlertService.GetAlertRules.
+func (c *alertServiceClient) GetAlertRules(ctx context.Context, req *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error) {
+	return c.getAlertRules.CallUnary(ctx, req)
+}
+
+// UpdateAlertPolicy calls nagi.v1.AlertService.UpdateAlertPolicy.
+func (c *alertServiceClient) UpdateAlertPolicy(ctx context.Context, req *connect.Request[v1.UpdateAlertPolicyRequest]) (*connect.Response[v1.AlertPolicy], error) {
+	return c.updateAlertPolicy.CallUnary(ctx, req)
+}
+
+// SetAlertOverride calls nagi.v1.AlertService.SetAlertOverride.
+func (c *alertServiceClient) SetAlertOverride(ctx context.Context, req *connect.Request[v1.SetAlertOverrideRequest]) (*connect.Response[v1.AlertOverride], error) {
+	return c.setAlertOverride.CallUnary(ctx, req)
+}
+
+// SetAlertNotification calls nagi.v1.AlertService.SetAlertNotification.
+func (c *alertServiceClient) SetAlertNotification(ctx context.Context, req *connect.Request[v1.SetAlertNotificationRequest]) (*connect.Response[v1.AlertPolicy], error) {
+	return c.setAlertNotification.CallUnary(ctx, req)
+}
+
+// ListAlertBaselines calls nagi.v1.AlertService.ListAlertBaselines.
+func (c *alertServiceClient) ListAlertBaselines(ctx context.Context, req *connect.Request[v1.ListAlertBaselinesRequest]) (*connect.Response[v1.ListAlertBaselinesResponse], error) {
+	return c.listAlertBaselines.CallUnary(ctx, req)
+}
+
 // AlertServiceHandler is an implementation of the nagi.v1.AlertService service.
 type AlertServiceHandler interface {
 	ListAlertStates(context.Context, *connect.Request[v1.ListAlertStatesRequest]) (*connect.Response[v1.ListAlertStatesResponse], error)
 	HandleAlert(context.Context, *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error)
+	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+	GetAlertRules(context.Context, *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error)
+	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+	UpdateAlertPolicy(context.Context, *connect.Request[v1.UpdateAlertPolicyRequest]) (*connect.Response[v1.AlertPolicy], error)
+	// 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+	// 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+	SetAlertOverride(context.Context, *connect.Request[v1.SetAlertOverrideRequest]) (*connect.Response[v1.AlertOverride], error)
+	// 关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+	// 关掉之前先发一条通知到当前渠道，并记入审计。
+	SetAlertNotification(context.Context, *connect.Request[v1.SetAlertNotificationRequest]) (*connect.Response[v1.AlertPolicy], error)
+	// 基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+	ListAlertBaselines(context.Context, *connect.Request[v1.ListAlertBaselinesRequest]) (*connect.Response[v1.ListAlertBaselinesResponse], error)
 }
 
 // NewAlertServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -122,12 +221,52 @@ func NewAlertServiceHandler(svc AlertServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(alertServiceMethods.ByName("HandleAlert")),
 		connect.WithHandlerOptions(opts...),
 	)
+	alertServiceGetAlertRulesHandler := connect.NewUnaryHandler(
+		AlertServiceGetAlertRulesProcedure,
+		svc.GetAlertRules,
+		connect.WithSchema(alertServiceMethods.ByName("GetAlertRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	alertServiceUpdateAlertPolicyHandler := connect.NewUnaryHandler(
+		AlertServiceUpdateAlertPolicyProcedure,
+		svc.UpdateAlertPolicy,
+		connect.WithSchema(alertServiceMethods.ByName("UpdateAlertPolicy")),
+		connect.WithHandlerOptions(opts...),
+	)
+	alertServiceSetAlertOverrideHandler := connect.NewUnaryHandler(
+		AlertServiceSetAlertOverrideProcedure,
+		svc.SetAlertOverride,
+		connect.WithSchema(alertServiceMethods.ByName("SetAlertOverride")),
+		connect.WithHandlerOptions(opts...),
+	)
+	alertServiceSetAlertNotificationHandler := connect.NewUnaryHandler(
+		AlertServiceSetAlertNotificationProcedure,
+		svc.SetAlertNotification,
+		connect.WithSchema(alertServiceMethods.ByName("SetAlertNotification")),
+		connect.WithHandlerOptions(opts...),
+	)
+	alertServiceListAlertBaselinesHandler := connect.NewUnaryHandler(
+		AlertServiceListAlertBaselinesProcedure,
+		svc.ListAlertBaselines,
+		connect.WithSchema(alertServiceMethods.ByName("ListAlertBaselines")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AlertService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AlertServiceListAlertStatesProcedure:
 			alertServiceListAlertStatesHandler.ServeHTTP(w, r)
 		case AlertServiceHandleAlertProcedure:
 			alertServiceHandleAlertHandler.ServeHTTP(w, r)
+		case AlertServiceGetAlertRulesProcedure:
+			alertServiceGetAlertRulesHandler.ServeHTTP(w, r)
+		case AlertServiceUpdateAlertPolicyProcedure:
+			alertServiceUpdateAlertPolicyHandler.ServeHTTP(w, r)
+		case AlertServiceSetAlertOverrideProcedure:
+			alertServiceSetAlertOverrideHandler.ServeHTTP(w, r)
+		case AlertServiceSetAlertNotificationProcedure:
+			alertServiceSetAlertNotificationHandler.ServeHTTP(w, r)
+		case AlertServiceListAlertBaselinesProcedure:
+			alertServiceListAlertBaselinesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -143,6 +282,26 @@ func (UnimplementedAlertServiceHandler) ListAlertStates(context.Context, *connec
 
 func (UnimplementedAlertServiceHandler) HandleAlert(context.Context, *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.HandleAlert is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) GetAlertRules(context.Context, *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.GetAlertRules is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) UpdateAlertPolicy(context.Context, *connect.Request[v1.UpdateAlertPolicyRequest]) (*connect.Response[v1.AlertPolicy], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.UpdateAlertPolicy is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) SetAlertOverride(context.Context, *connect.Request[v1.SetAlertOverrideRequest]) (*connect.Response[v1.AlertOverride], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.SetAlertOverride is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) SetAlertNotification(context.Context, *connect.Request[v1.SetAlertNotificationRequest]) (*connect.Response[v1.AlertPolicy], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.SetAlertNotification is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) ListAlertBaselines(context.Context, *connect.Request[v1.ListAlertBaselinesRequest]) (*connect.Response[v1.ListAlertBaselinesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.ListAlertBaselines is not implemented"))
 }
 
 // PanelAlertServiceClient is a client for the nagi.v1.PanelAlertService service.

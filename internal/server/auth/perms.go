@@ -226,6 +226,12 @@ var selfProcedures = map[string]bool{
 	"/nagi.v1.SettingsService/RevokeAccessToken":        true,
 	"/nagi.v1.SettingsService/BeginPasskeyRegistration": true, "/nagi.v1.SettingsService/AddPasskey": true,
 	"/nagi.v1.SettingsService/DeletePasskey": true,
+	// 告警规则（设置 → 告警）：按规则所在的对象要不同的权限（面板设置、节点管理、项目的告警规则或项目管理），
+	// 处理函数里检查，读取时只返回能管的部分（api 的 alert_rules.go）。
+	"/nagi.v1.AlertService/GetAlertRules": true, "/nagi.v1.AlertService/UpdateAlertPolicy": true,
+	"/nagi.v1.AlertService/SetAlertOverride": true, "/nagi.v1.AlertService/SetAlertNotification": true,
+	// 基线进度：和当前告警一样按告警权限和访问范围过滤（api 的 alert_baselines.go）。
+	"/nagi.v1.AlertService/ListAlertBaselines": true,
 }
 
 var adminProcedures = map[string]bool{

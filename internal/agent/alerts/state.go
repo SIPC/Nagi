@@ -7,10 +7,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -31,6 +29,7 @@ type checkpoint struct {
 	States     map[string]savedState `json:"states"`
 	History    []json.RawMessage     `json:"history"`
 	Suppressed map[string]time.Time  `json:"suppressed,omitempty"`
+	MutedKeys  map[string]time.Time  `json:"muted_keys,omitempty"`
 }
 
 func (e *Engine) stateFile() string { return filepath.Join(e.dir, "alerts-state.json") }
@@ -42,7 +41,7 @@ func (e *Engine) saveStates() {
 		return
 	}
 	e.revision++
-	raw := checkpoint{Source: e.source, Revision: e.revision, States: map[string]savedState{}, Suppressed: e.suppressed}
+	raw := checkpoint{Source: e.source, Revision: e.revision, States: map[string]savedState{}, Suppressed: e.suppressed, MutedKeys: e.mutedKeys}
 	for key, st := range e.states {
 		a := proto.CloneOf(st.alert)
 		a.Source, a.Occurrence, a.Revision = e.source, st.occurrence, e.revision
@@ -223,7 +222,7 @@ func (e *Engine) loadStates() {
 		}
 		raw.Source = rand.Text()
 	}
-	e.suppressed = raw.Suppressed
+	e.suppressed, e.mutedKeys = raw.Suppressed, raw.MutedKeys
 	e.source, e.revision = raw.Source, raw.Revision
 	for key, s := range raw.States {
 		a := &nagiv1.Alert{}
@@ -255,7 +254,11 @@ func (e *Engine) Snapshot() *nagiv1.AlertSync {
 	if e.source == "" || e.stateErr != nil || e.committed == nil {
 		return nil
 	}
-	return proto.CloneOf(e.committed)
+	s := proto.CloneOf(e.committed)
+	// Baseline progress is a live observation, not an uncommitted alert revision.
+	s.BaselinesSupported = true
+	s.Baselines = e.baselines()
+	return s
 }
 
 // ApplyHandling does not change detection or manufacture recovery. Only the
@@ -264,6 +267,11 @@ func (e *Engine) ApplyHandling(states []*nagiv1.AlertState) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	suppressed := map[string]time.Time{}
+	now := time.Now()
+	if e.mutedKeys == nil {
+		e.mutedKeys = map[string]time.Time{}
+	}
+	changed := false
 	for _, s := range states {
 		if s.GetAlert().GetSource() != e.source {
 			continue
@@ -272,11 +280,25 @@ func (e *Engine) ApplyHandling(states []*nagiv1.AlertState) {
 		if t := s.GetMaintenanceUntil().AsTime(); t.After(until) {
 			until = t
 		}
-		if until.After(time.Now()) && time.Until(until) <= 24*time.Hour {
+		key := s.GetAlert().GetKey()
+		if until.After(now) && until.Sub(now) <= 24*time.Hour {
 			suppressed[s.Alert.Occurrence] = until
+			// 按键记下：告警反复出现时，新一轮也不通知（见 docs/monitoring.md#告警）。
+			if !until.Equal(e.mutedKeys[key]) {
+				e.mutedKeys[key], changed = until, true
+			}
+		} else if st := e.states[key]; st != nil && st.occurrence == s.Alert.Occurrence && !e.mutedKeys[key].IsZero() {
+			delete(e.mutedKeys, key) // 当前这一轮的静默被取消了
+			changed = true
 		}
 	}
-	changed := len(suppressed) != len(e.suppressed)
+	for k, t := range e.mutedKeys {
+		if !t.After(now) {
+			delete(e.mutedKeys, k)
+			changed = true
+		}
+	}
+	changed = changed || len(suppressed) != len(e.suppressed)
 	for k, v := range suppressed {
 		if !v.Equal(e.suppressed[k]) {
 			changed = true
@@ -286,44 +308,4 @@ func (e *Engine) ApplyHandling(states []*nagiv1.AlertState) {
 		e.suppressed = suppressed
 		e.saveStates()
 	}
-}
-
-func (e *Engine) ruleEnabled(key string, fallback judge) bool {
-	kind, rest, _ := strings.Cut(key, ":")
-	if kind == "event" {
-		kind, rest, _ = strings.Cut(rest, ":")
-		switch kind {
-		case "cert_failed":
-			return fallback.on(alert.RuleCert)
-		case "snapshot", "maintain":
-			p, c, ok := strings.Cut(rest, "/")
-			if ok {
-				return e.forContainer(p, c, fallback).on(alert.RuleSnapshot)
-			}
-			return fallback.on(alert.RuleSnapshot)
-		case "backup", "standby":
-			return fallback.on(alert.RuleBackup)
-		default:
-			return true
-		}
-	}
-	if kind == "cert" && e.Domains != nil && !e.Domains()[rest] {
-		return true
-	} // absence alone isn't health
-	if kind == "errors" || kind == "4xx" || kind == "traffic" {
-		p, r := splitContainer(rest)
-		if e.RouteRules != nil {
-			rules, ok := e.RouteRules(p, r)
-			return forRules(rules, ok, fallback).on(kind)
-		}
-	}
-	if kind == "health" || kind == "restart" || kind == "container_cpu" {
-		p, c := splitContainer(rest)
-		c, _, _ = strings.Cut(c, "/")
-		return e.forContainer(p, c, fallback).on(kind)
-	}
-	if kind == alert.RuleDisk || kind == alert.RuleMem || kind == alert.RuleCPU || kind == alert.RuleCert {
-		return fallback.on(kind)
-	}
-	return true
 }

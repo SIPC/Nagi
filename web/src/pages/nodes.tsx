@@ -55,7 +55,7 @@ import {
   CodeBlock,
 } from "@/components/ui";
 import type { Mirrors } from "@/gen/nagi/v1/agent_pb";
-import { AlertRulesForm, nodeRules, rulesSummary } from "@/components/alert-rules";
+import { AlertRulesLink } from "@/pages/alert-rules";
 import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/nagi/v1/api_pb";
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
@@ -1181,7 +1181,7 @@ function NodeSettings({ n }: { n: Node }) {
   const canRoot = can("node.root");
   const reclaim = useRun("");
   const moving = useRun("");
-  const [editing, setEditing] = useState<"root" | "replicaDir" | "mirrors" | "alerts" | null>(null);
+  const [editing, setEditing] = useState<"root" | "replicaDir" | "mirrors" | null>(null);
   const queryClient = useQueryClient();
   const root = n.info?.projectsRoot || "/srv/nagi";
   const mirrors = useQuery({ queryKey: ["node-mirrors", n.id], queryFn: () => nodeClient.getNodeMirrors({ nodeId: n.id }), enabled: isAdmin });
@@ -1245,13 +1245,7 @@ function NodeSettings({ n }: { n: Node }) {
             </Button>
           )}
         </SettingRow>
-        <SettingRow label={t.alerts.rules} help={t.alerts.nodeRulesHelp} description={rulesSummary(nodeRules, n.alertRules)}>
-          {isAdmin && (
-            <Button variant="outline" onClick={() => setEditing("alerts")}>
-              {t.common.actions.edit}
-            </Button>
-          )}
-        </SettingRow>
+        <AlertRulesLink scope="node" nodeId={n.id} />
         <NodeQUIC nodeId={n.id} online={n.online} />
         <NodeRelay nodeId={n.id} online={n.online} />
         <NodeRelayPool node={n} />
@@ -1288,19 +1282,6 @@ function NodeSettings({ n }: { n: Node }) {
             };
             refresh();
             setTimeout(refresh, 2000);
-          }}
-        />
-      </Dialog>
-      <Dialog open={editing === "alerts"} onClose={() => setEditing(null)} title={t.alerts.rules} description={t.alerts.nodeRulesHelp} className="max-w-[560px]">
-        <AlertRulesForm
-          id={`node-alerts-${n.id}`}
-          defs={nodeRules}
-          initial={n.alertRules}
-          onCancel={() => setEditing(null)}
-          onSave={async (rules) => {
-            await nodeClient.setNodeAlertRules({ nodeId: n.id, rules });
-            await queryClient.invalidateQueries({ queryKey: ["nodes"] });
-            setEditing(null);
           }}
         />
       </Dialog>

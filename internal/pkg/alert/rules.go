@@ -26,8 +26,36 @@ const (
 	RuleClientErrors = "4xx"
 	// RuleEgress 是容器出站被拦截（见 docs/agent.md#出站限制）。
 	RuleEgress = "egress"
+
+	// v0.37.1 新增（见 docs/monitoring.md#告警）。
+	RuleInode         = "inode"
+	RuleNodeCert      = "node_cert"
+	RuleUpgrade       = "upgrade"
+	RuleLogWrite      = "logstore_write"
+	RuleLogFull       = "logstore_full"
+	RuleMigration     = "migration"
+	RuleMeshPeer      = "mesh_peer"
+	RuleMeshLoss      = "mesh_loss"
+	RuleMeshRTT       = "mesh_rtt"
+	RuleWitness       = "witness"
+	RuleKernelStorage = "kernel_storage"
+	RuleKernelOOM     = "kernel_oom"
+	RuleNIC           = "nic_errors"
+	RuleConntrack     = "conntrack"
+	RuleClockSkew     = "clock_skew"
+	RuleContainerOOM  = "container_oom"
+	RuleSnapshotStale = "snapshot_stale"
+	RuleBackupLag     = "backup_lag"
+	RuleL4Surge       = "l4_conn_surge"
+	RuleL4Active      = "l4_active"
+	RuleL4Fail        = "l4_fail"
+	RuleL4Bandwidth   = "l4_bandwidth"
+	RuleL4Listen      = "l4_listen"
+	RuleAuditVerify   = "audit_verify"
+	RuleTokenExpiry   = "token_expiry"
 )
 
+// NodeRules、ContainerRules 是旧版本（AlertRules）认识的规则。
 var (
 	NodeRules      = []string{RuleMem, RuleDisk, RuleOffline, RuleCert, RuleCPU}
 	ContainerRules = []string{RuleRestart, RuleErrors, RuleHealth, RuleSnapshot, RuleBackup, RuleContainerCPU, RuleTraffic, RuleClientErrors, RuleEgress}

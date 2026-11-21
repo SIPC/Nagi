@@ -116,6 +116,10 @@ public  final class AlertConfig extends
   public static final int RULES_FIELD_NUMBER = 2;
   private ink.sipc.nagi.proto.v1.AlertRules rules_;
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    */
   @java.lang.Override
@@ -123,6 +127,10 @@ public  final class AlertConfig extends
     return ((bitField0_ & 0x00000001) != 0);
   }
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    */
   @java.lang.Override
@@ -130,6 +138,10 @@ public  final class AlertConfig extends
     return rules_ == null ? ink.sipc.nagi.proto.v1.AlertRules.getDefaultInstance() : rules_;
   }
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    */
   private void setRules(ink.sipc.nagi.proto.v1.AlertRules value) {
@@ -138,6 +150,10 @@ public  final class AlertConfig extends
     bitField0_ |= 0x00000001;
   }
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    */
   @java.lang.SuppressWarnings("ReferenceEquality")
@@ -153,6 +169,10 @@ public  final class AlertConfig extends
     bitField0_ |= 0x00000001;
   }
   /**
+   * <pre>
+   * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+   * </pre>
+   *
    * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
    */
   private void clearRules() {
@@ -225,6 +245,73 @@ public  final class AlertConfig extends
     checkByteStringIsUtf8(value);
     nodeName_ = value.toStringUtf8();
 
+  }
+
+  public static final int EFFECTIVE_FIELD_NUMBER = 4;
+  private ink.sipc.nagi.proto.v1.EffectiveAlertRules effective_;
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   */
+  @java.lang.Override
+  public boolean hasEffective() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffective() {
+    return effective_ == null ? ink.sipc.nagi.proto.v1.EffectiveAlertRules.getDefaultInstance() : effective_;
+  }
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   */
+  private void setEffective(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+    java.util.Objects.requireNonNull(value);
+    effective_ = value;
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeEffective(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+    java.util.Objects.requireNonNull(value);
+    if (effective_ != null &&
+        effective_ != ink.sipc.nagi.proto.v1.EffectiveAlertRules.getDefaultInstance()) {
+      effective_ =
+        ink.sipc.nagi.proto.v1.EffectiveAlertRules.newBuilder(effective_).mergeFrom(value).buildPartial();
+    } else {
+      effective_ = value;
+    }
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <pre>
+   * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+   */
+  private void clearEffective() {
+    effective_ = null;
+    bitField0_ = (bitField0_ & ~0x00000002);
   }
 
   public static ink.sipc.nagi.proto.v1.AlertConfig parseFrom(
@@ -427,6 +514,10 @@ public  final class AlertConfig extends
     }
 
     /**
+     * <pre>
+     * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+     * </pre>
+     *
      * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
      */
     @java.lang.Override
@@ -434,6 +525,10 @@ public  final class AlertConfig extends
       return instance.hasRules();
     }
     /**
+     * <pre>
+     * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+     * </pre>
+     *
      * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
      */
     @java.lang.Override
@@ -441,6 +536,10 @@ public  final class AlertConfig extends
       return instance.getRules();
     }
     /**
+     * <pre>
+     * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+     * </pre>
+     *
      * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
      */
     public Builder setRules(ink.sipc.nagi.proto.v1.AlertRules value) {
@@ -449,6 +548,10 @@ public  final class AlertConfig extends
       return this;
       }
     /**
+     * <pre>
+     * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+     * </pre>
+     *
      * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
      */
     public Builder setRules(
@@ -458,6 +561,10 @@ public  final class AlertConfig extends
       return this;
     }
     /**
+     * <pre>
+     * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+     * </pre>
+     *
      * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
      */
     public Builder mergeRules(ink.sipc.nagi.proto.v1.AlertRules value) {
@@ -466,6 +573,10 @@ public  final class AlertConfig extends
       return this;
     }
     /**
+     * <pre>
+     * 旧版本节点用的规则（v0.37 及以前），新节点用 effective。
+     * </pre>
+     *
      * <code>.nagi.v1.AlertRules rules = 2 [json_name = "rules"];</code>
      */
     public Builder clearRules() {  copyOnWrite();
@@ -542,6 +653,77 @@ public  final class AlertConfig extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+     */
+    @java.lang.Override
+    public boolean hasEffective() {
+      return instance.hasEffective();
+    }
+    /**
+     * <pre>
+     * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffective() {
+      return instance.getEffective();
+    }
+    /**
+     * <pre>
+     * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+     */
+    public Builder setEffective(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+      copyOnWrite();
+      instance.setEffective(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+     */
+    public Builder setEffective(
+        ink.sipc.nagi.proto.v1.EffectiveAlertRules.Builder builderForValue) {
+      copyOnWrite();
+      instance.setEffective(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+     */
+    public Builder mergeEffective(ink.sipc.nagi.proto.v1.EffectiveAlertRules value) {
+      copyOnWrite();
+      instance.mergeEffective(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 这个节点生效的节点规则、通知语言和抖动保护（只在下发给节点时由面板填写）。
+     * </pre>
+     *
+     * <code>.nagi.v1.EffectiveAlertRules effective = 4 [json_name = "effective"];</code>
+     */
+    public Builder clearEffective() {  copyOnWrite();
+      instance.clearEffective();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.AlertConfig)
   }
   @java.lang.Override
@@ -563,10 +745,11 @@ public  final class AlertConfig extends
             ink.sipc.nagi.proto.v1.AlertChannel.class,
             "rules_",
             "nodeName_",
+            "effective_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0001\u0001\u0003\u0003\u0000\u0001\u0000\u0001\u001b\u0002\u1009" +
-              "\u0000\u0003\u0208";
+              "\u0000\u0004\u0000\u0001\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u001b\u0002\u1009" +
+              "\u0000\u0003\u0208\u0004\u1009\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

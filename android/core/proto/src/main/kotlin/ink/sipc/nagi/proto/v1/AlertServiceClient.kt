@@ -39,4 +39,81 @@ public class AlertServiceClient(
     ),
   )
 
+
+  /**
+   *  告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+   */
+  override suspend fun getAlertRules(request: GetAlertRulesRequest, headers: Headers): ResponseMessage<GetAlertRulesResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/GetAlertRules",
+      ink.sipc.nagi.proto.v1.GetAlertRulesRequest::class,
+      ink.sipc.nagi.proto.v1.GetAlertRulesResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+   */
+  override suspend fun updateAlertPolicy(request: UpdateAlertPolicyRequest, headers: Headers): ResponseMessage<AlertPolicy> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/UpdateAlertPolicy",
+      ink.sipc.nagi.proto.v1.UpdateAlertPolicyRequest::class,
+      ink.sipc.nagi.proto.v1.AlertPolicy::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+   *  项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+   */
+  override suspend fun setAlertOverride(request: SetAlertOverrideRequest, headers: Headers): ResponseMessage<AlertOverride> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/SetAlertOverride",
+      ink.sipc.nagi.proto.v1.SetAlertOverrideRequest::class,
+      ink.sipc.nagi.proto.v1.AlertOverride::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+   *  关掉之前先发一条通知到当前渠道，并记入审计。
+   */
+  override suspend fun setAlertNotification(request: SetAlertNotificationRequest, headers: Headers): ResponseMessage<AlertPolicy> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/SetAlertNotification",
+      ink.sipc.nagi.proto.v1.SetAlertNotificationRequest::class,
+      ink.sipc.nagi.proto.v1.AlertPolicy::class,
+      StreamType.UNARY,
+    ),
+  )
+
+
+  /**
+   *  基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+   */
+  override suspend fun listAlertBaselines(request: ListAlertBaselinesRequest, headers: Headers): ResponseMessage<ListAlertBaselinesResponse> = client.unary(
+    request,
+    headers,
+    MethodSpec(
+    "nagi.v1.AlertService/ListAlertBaselines",
+      ink.sipc.nagi.proto.v1.ListAlertBaselinesRequest::class,
+      ink.sipc.nagi.proto.v1.ListAlertBaselinesResponse::class,
+      StreamType.UNARY,
+    ),
+  )
+
 }

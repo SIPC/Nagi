@@ -35,7 +35,6 @@ func TestAlertTOTPFailures(t *testing.T) {
 // 管理员从新的网段登录时告警；第一次登录、同一网段、操作员不告警；关掉开关以后不告警。
 func TestAlertAdminNewNetwork(t *testing.T) {
 	h := newSessionHarness(t)
-	ctx := context.Background()
 	h.login("admin", home)                                                 // 第一次登录：记下网段
 	h.login("admin", RequestInfo{IP: "203.0.113.77", UserAgent: chromeUA}) // 同一 /24
 	h.login("op", home)                                                    // 操作员
@@ -47,7 +46,7 @@ func TestAlertAdminNewNetwork(t *testing.T) {
 	if !h.alerted("从新的网段登录") {
 		t.Fatalf("没有告警：%v", h.alerts)
 	}
-	_ = h.q.SetSetting(ctx, store.SetSettingParams{Key: SettingAlertNewNetwork, Value: "0"})
+	h.s.NoticeEnabled = func(_ context.Context, n string) bool { return n != NoticeNewNetwork }
 	h.alerts = nil
 	h.login("admin", RequestInfo{IP: "192.0.2.5", UserAgent: chromeUA})
 	if len(h.alerts) != 0 {

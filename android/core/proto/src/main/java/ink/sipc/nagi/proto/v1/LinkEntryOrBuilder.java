@@ -199,4 +199,23 @@ public interface LinkEntryOrBuilder extends
    * @return The alertRules.
    */
   ink.sipc.nagi.proto.v1.AlertRules getAlertRules();
+
+  /**
+   * <pre>
+   * 这条映射生效的规则（含映射层的覆盖），新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   * @return Whether the effectiveAlertRules field is set.
+   */
+  boolean hasEffectiveAlertRules();
+  /**
+   * <pre>
+   * 这条映射生效的规则（含映射层的覆盖），新版本节点用它。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 14 [json_name = "effectiveAlertRules"];</code>
+   * @return The effectiveAlertRules.
+   */
+  ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules();
 }

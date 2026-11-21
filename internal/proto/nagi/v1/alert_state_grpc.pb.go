@@ -19,8 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AlertService_ListAlertStates_FullMethodName = "/nagi.v1.AlertService/ListAlertStates"
-	AlertService_HandleAlert_FullMethodName     = "/nagi.v1.AlertService/HandleAlert"
+	AlertService_ListAlertStates_FullMethodName      = "/nagi.v1.AlertService/ListAlertStates"
+	AlertService_HandleAlert_FullMethodName          = "/nagi.v1.AlertService/HandleAlert"
+	AlertService_GetAlertRules_FullMethodName        = "/nagi.v1.AlertService/GetAlertRules"
+	AlertService_UpdateAlertPolicy_FullMethodName    = "/nagi.v1.AlertService/UpdateAlertPolicy"
+	AlertService_SetAlertOverride_FullMethodName     = "/nagi.v1.AlertService/SetAlertOverride"
+	AlertService_SetAlertNotification_FullMethodName = "/nagi.v1.AlertService/SetAlertNotification"
+	AlertService_ListAlertBaselines_FullMethodName   = "/nagi.v1.AlertService/ListAlertBaselines"
 )
 
 // AlertServiceClient is the client API for AlertService service.
@@ -31,6 +36,18 @@ const (
 type AlertServiceClient interface {
 	ListAlertStates(ctx context.Context, in *ListAlertStatesRequest, opts ...grpc.CallOption) (*ListAlertStatesResponse, error)
 	HandleAlert(ctx context.Context, in *HandleAlertRequest, opts ...grpc.CallOption) (*HandleAlertResponse, error)
+	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+	GetAlertRules(ctx context.Context, in *GetAlertRulesRequest, opts ...grpc.CallOption) (*GetAlertRulesResponse, error)
+	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+	UpdateAlertPolicy(ctx context.Context, in *UpdateAlertPolicyRequest, opts ...grpc.CallOption) (*AlertPolicy, error)
+	// 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+	// 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+	SetAlertOverride(ctx context.Context, in *SetAlertOverrideRequest, opts ...grpc.CallOption) (*AlertOverride, error)
+	// 关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+	// 关掉之前先发一条通知到当前渠道，并记入审计。
+	SetAlertNotification(ctx context.Context, in *SetAlertNotificationRequest, opts ...grpc.CallOption) (*AlertPolicy, error)
+	// 基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+	ListAlertBaselines(ctx context.Context, in *ListAlertBaselinesRequest, opts ...grpc.CallOption) (*ListAlertBaselinesResponse, error)
 }
 
 type alertServiceClient struct {
@@ -61,6 +78,56 @@ func (c *alertServiceClient) HandleAlert(ctx context.Context, in *HandleAlertReq
 	return out, nil
 }
 
+func (c *alertServiceClient) GetAlertRules(ctx context.Context, in *GetAlertRulesRequest, opts ...grpc.CallOption) (*GetAlertRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAlertRulesResponse)
+	err := c.cc.Invoke(ctx, AlertService_GetAlertRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *alertServiceClient) UpdateAlertPolicy(ctx context.Context, in *UpdateAlertPolicyRequest, opts ...grpc.CallOption) (*AlertPolicy, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlertPolicy)
+	err := c.cc.Invoke(ctx, AlertService_UpdateAlertPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *alertServiceClient) SetAlertOverride(ctx context.Context, in *SetAlertOverrideRequest, opts ...grpc.CallOption) (*AlertOverride, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlertOverride)
+	err := c.cc.Invoke(ctx, AlertService_SetAlertOverride_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *alertServiceClient) SetAlertNotification(ctx context.Context, in *SetAlertNotificationRequest, opts ...grpc.CallOption) (*AlertPolicy, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlertPolicy)
+	err := c.cc.Invoke(ctx, AlertService_SetAlertNotification_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *alertServiceClient) ListAlertBaselines(ctx context.Context, in *ListAlertBaselinesRequest, opts ...grpc.CallOption) (*ListAlertBaselinesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAlertBaselinesResponse)
+	err := c.cc.Invoke(ctx, AlertService_ListAlertBaselines_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AlertServiceServer is the server API for AlertService service.
 // All implementations must embed UnimplementedAlertServiceServer
 // for forward compatibility.
@@ -69,6 +136,18 @@ func (c *alertServiceClient) HandleAlert(ctx context.Context, in *HandleAlertReq
 type AlertServiceServer interface {
 	ListAlertStates(context.Context, *ListAlertStatesRequest) (*ListAlertStatesResponse, error)
 	HandleAlert(context.Context, *HandleAlertRequest) (*HandleAlertResponse, error)
+	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
+	GetAlertRules(context.Context, *GetAlertRulesRequest) (*GetAlertRulesResponse, error)
+	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
+	UpdateAlertPolicy(context.Context, *UpdateAlertPolicyRequest) (*AlertPolicy, error)
+	// 一个节点、项目或容器上的覆盖（整组替换，rules 为空表示全部沿用）。节点要「节点管理」，
+	// 项目要「告警规则」或「项目管理」，容器要「告警规则」，并且对象在访问范围内。
+	SetAlertOverride(context.Context, *SetAlertOverrideRequest) (*AlertOverride, error)
+	// 关掉或打开一项事件通知（见 docs/monitoring.md#事件通知）。关掉要高权限确认，安全类只有管理员能改，
+	// 关掉之前先发一条通知到当前渠道，并记入审计。
+	SetAlertNotification(context.Context, *SetAlertNotificationRequest) (*AlertPolicy, error)
+	// 基线建立进度（见 docs/monitoring.md#基线），按调用者的告警权限和访问范围过滤。
+	ListAlertBaselines(context.Context, *ListAlertBaselinesRequest) (*ListAlertBaselinesResponse, error)
 	mustEmbedUnimplementedAlertServiceServer()
 }
 
@@ -84,6 +163,21 @@ func (UnimplementedAlertServiceServer) ListAlertStates(context.Context, *ListAle
 }
 func (UnimplementedAlertServiceServer) HandleAlert(context.Context, *HandleAlertRequest) (*HandleAlertResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HandleAlert not implemented")
+}
+func (UnimplementedAlertServiceServer) GetAlertRules(context.Context, *GetAlertRulesRequest) (*GetAlertRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAlertRules not implemented")
+}
+func (UnimplementedAlertServiceServer) UpdateAlertPolicy(context.Context, *UpdateAlertPolicyRequest) (*AlertPolicy, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAlertPolicy not implemented")
+}
+func (UnimplementedAlertServiceServer) SetAlertOverride(context.Context, *SetAlertOverrideRequest) (*AlertOverride, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAlertOverride not implemented")
+}
+func (UnimplementedAlertServiceServer) SetAlertNotification(context.Context, *SetAlertNotificationRequest) (*AlertPolicy, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAlertNotification not implemented")
+}
+func (UnimplementedAlertServiceServer) ListAlertBaselines(context.Context, *ListAlertBaselinesRequest) (*ListAlertBaselinesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAlertBaselines not implemented")
 }
 func (UnimplementedAlertServiceServer) mustEmbedUnimplementedAlertServiceServer() {}
 func (UnimplementedAlertServiceServer) testEmbeddedByValue()                      {}
@@ -142,6 +236,96 @@ func _AlertService_HandleAlert_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AlertService_GetAlertRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAlertRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlertServiceServer).GetAlertRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AlertService_GetAlertRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlertServiceServer).GetAlertRules(ctx, req.(*GetAlertRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AlertService_UpdateAlertPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAlertPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlertServiceServer).UpdateAlertPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AlertService_UpdateAlertPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlertServiceServer).UpdateAlertPolicy(ctx, req.(*UpdateAlertPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AlertService_SetAlertOverride_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAlertOverrideRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlertServiceServer).SetAlertOverride(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AlertService_SetAlertOverride_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlertServiceServer).SetAlertOverride(ctx, req.(*SetAlertOverrideRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AlertService_SetAlertNotification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAlertNotificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlertServiceServer).SetAlertNotification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AlertService_SetAlertNotification_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlertServiceServer).SetAlertNotification(ctx, req.(*SetAlertNotificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AlertService_ListAlertBaselines_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAlertBaselinesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlertServiceServer).ListAlertBaselines(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AlertService_ListAlertBaselines_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlertServiceServer).ListAlertBaselines(ctx, req.(*ListAlertBaselinesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AlertService_ServiceDesc is the grpc.ServiceDesc for AlertService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -156,6 +340,26 @@ var AlertService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HandleAlert",
 			Handler:    _AlertService_HandleAlert_Handler,
+		},
+		{
+			MethodName: "GetAlertRules",
+			Handler:    _AlertService_GetAlertRules_Handler,
+		},
+		{
+			MethodName: "UpdateAlertPolicy",
+			Handler:    _AlertService_UpdateAlertPolicy_Handler,
+		},
+		{
+			MethodName: "SetAlertOverride",
+			Handler:    _AlertService_SetAlertOverride_Handler,
+		},
+		{
+			MethodName: "SetAlertNotification",
+			Handler:    _AlertService_SetAlertNotification_Handler,
+		},
+		{
+			MethodName: "ListAlertBaselines",
+			Handler:    _AlertService_ListAlertBaselines_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

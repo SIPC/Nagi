@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/store"
@@ -28,9 +29,33 @@ type alertLedger struct {
 	History     []*nagiv1.AlertState `json:"-"`
 	CurrentJSON []json.RawMessage    `json:"current"`
 	HistoryJSON []json.RawMessage    `json:"history"`
+	// Baselines 是节点最近一次完整快照里的基线进度（protojson 的 AlertBaseline），BaselineAt 是收到的时间（Unix 秒）；
+	// 节点不上报（v0.37）时为空，界面上提示升级。
+	Baselines  []json.RawMessage `json:"baselines,omitempty"`
+	BaselineAt int64             `json:"baseline_at,omitempty"`
 }
 
 func alertStateKey(node string) string { return "alerts/state/" + node }
+
+// maxBaselines 是每个节点最多记几条基线进度（节点不可信，不能无限制地写）。
+const maxBaselines = 500
+
+// AlertBaselines 返回节点最近一次上报的基线进度和收到的时间；reported 为 false 表示节点从没上报过（旧版本）。
+func (r *Registry) AlertBaselines(ctx context.Context, node string) (list []*nagiv1.AlertBaseline, at time.Time, reported bool, err error) {
+	r.alerts.mu.Lock()
+	defer r.alerts.mu.Unlock()
+	l, err := r.loadAlertLedger(ctx, node)
+	if err != nil || l.BaselineAt == 0 {
+		return nil, time.Time{}, false, err
+	}
+	for _, raw := range l.Baselines {
+		b := &nagiv1.AlertBaseline{}
+		if protojson.Unmarshal(raw, b) == nil {
+			list = append(list, b)
+		}
+	}
+	return list, time.Unix(l.BaselineAt, 0), true, nil
+}
 
 func (r *Registry) loadAlertLedger(ctx context.Context, node string) (*alertLedger, error) {
 	l := &alertLedger{}
@@ -112,7 +137,7 @@ func validSourceAlert(a *nagiv1.Alert, source string, revision uint64, current b
 	if current {
 		return a.GetStatus() == "firing" && a.GetEndReason() == ""
 	}
-	return a.GetStatus() == "resolved" && a.GetEndReason() == "recovered" || a.GetStatus() == "ended" && (a.GetEndReason() == "rule_disabled" || a.GetEndReason() == "object_removed")
+	return a.GetStatus() == "resolved" && a.GetEndReason() == "recovered" || a.GetStatus() == "ended" && (a.GetEndReason() == "rule_disabled" || a.GetEndReason() == "object_removed" || a.GetEndReason() == "insufficient_data")
 }
 
 // syncAlerts is called only after authenticating/approving the source. A delta
@@ -175,11 +200,13 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 		v.Alert.Node, v.Alert.Project = "", "" // never trust source-supplied names as object references
 		if project, container := alertContainer(a.Key); container != "" {
 			kind, _, _ := strings.Cut(a.Key, ":")
-			if kind == "errors" || kind == "4xx" || kind == "traffic" {
+			if d, ok := alert.DefOf(kind); ok && d.Route {
 				container = ""
+				// 键是 <规则>:<项目>/<映射>，带宽还有 /in、/out。
+				name, _, _ := strings.Cut(strings.TrimPrefix(a.Key, kind+":"+project+"/"), "/")
 				if routes, err := r.q.ListRoutes(ctx, project); err == nil {
 					for _, route := range routes {
-						if route.Name == strings.TrimPrefix(a.Key, kind+":"+project+"/") {
+						if route.Name == name {
 							container = route.Container
 							break
 						}
@@ -227,6 +254,15 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 			}
 		}
 		l.Snapshot = s.Revision
+		l.Baselines, l.BaselineAt = nil, 0
+		if s.GetBaselinesSupported() {
+			l.BaselineAt = time.Now().Unix()
+		}
+		for _, b := range s.GetBaselines() {
+			if raw, err := protojson.Marshal(b); err == nil && len(l.Baselines) < maxBaselines {
+				l.Baselines = append(l.Baselines, raw)
+			}
+		}
 	}
 	l.Current = nil
 	for _, a := range current {

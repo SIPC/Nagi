@@ -159,7 +159,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | --- | --- | --- |
 | `create_project` | 新建项目（不带容器） | `CreateProject` |
 | `update_project` | 修改项目名称、网络名、定时快照（开关、间隔或每天定时）、份数上限、内部端口（`容器:端口` 或 `服务.容器组:端口`，UDP 加 `/udp`）、出站限制（模式和放行地址，要「网络和域名」，接口检查），立即生效。`expected_revision` 是 `get_project` 返回的项目修订号 | `UpdateProjectSettings` |
-| `set_alert_rules` | 修改项目里容器的告警规则（重启、5xx、4xx、健康检查、快照、备份同步、CPU、流量、出站拦截），或者给一个容器单独设置；`use_project` 让容器改回用项目的。只改传了的项 | `UpdateProjectSettings`、`SetContainerAlertRules` |
+| `set_alert_rules` | 修改项目里容器的告警规则（重启、5xx、4xx、健康检查、快照、备份同步、CPU、流量、出站拦截），或者给一个容器单独设置；`use_project` 让容器改回用项目的。只改传了的项。面板把它换成「设置 → 告警」里项目或容器的覆盖（只记和上一层不一样的字段），新增的规则在设置页里改 | `UpdateProjectSettings`、`SetContainerAlertRules` |
 | `update_shared_env` | 设置、删除共享变量，或标为密钥，存为草稿，返回引用了改动变量的容器。用 `deploy` 的 `apply_shared_env` 生效 | `SaveSharedEnv` |
 | `discard_shared_env` | 丢弃共享变量的草稿 | `DiscardSharedEnv` |
 | `connect_project`、`disconnect_project` | 连接、断开两个项目，立即生效。连接后用 `容器.网络名` 访问对方的容器，容器组里的服务是 `服务.组.网络名` | `ConnectProject`、`DisconnectProject` |
@@ -181,7 +181,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `delete_route` | 删除端口映射，立即生效。不带 `confirm` 只返回预览，`confirm` 原样填映射名才删除 | `DeleteRoute` |
 | `retry_cert` | 让入口节点立即重新申请域名的证书。不指定节点时，对证书还没拿到的入口节点都重试 | `CheckDomains`、`RetryDomainCert` |
 | `sync_backup` | 开始依次同步到所有备份节点（或只同步 `backup_node`）。同步在源节点上进行、不限时，工具最多等 `wait_seconds`（默认 30，最多 600）后返回各自的状态和进度（`bytes_done`、`bytes_total`、`bytes_per_second`、`eta_seconds`、重试次数），没传完时说明仍在进行，之后用 `get_container` 查；`stop` 停止正在进行的同步，已传的文件留着，下次接着传（见 [snapshot.md](snapshot.md#同步的进度)） | `SyncBackup`、`StopBackupSync`、`GetProject` |
-| `set_node_alert_rules` | 只给管理员：修改节点的告警规则（内存、磁盘、离线、证书、CPU） | `SetNodeAlertRules` |
+| `set_node_alert_rules` | 只给管理员：修改节点的告警规则（内存、磁盘、离线、证书、CPU），面板换成节点的覆盖 | `SetNodeAlertRules` |
 | `pull_node_image` | 只给管理员：在节点上拉取镜像，用节点全局的 Docker 登录信息和镜像加速，等拉完才返回，最长 30 分钟 | `PullNodeImage` |
 | `exec` | 在容器里执行一条命令，不分配终端、没有输入，默认 30 秒、最长 120 秒超时，输出最多 64 KB（超出时保留开头和结尾）。权限和终端一样，只读成员不能用，操作员不能进入特权容器；令牌要勾「执行命令」 | 节点的 `Exec`（和 `/ws/exec` 同一段代码） |
 

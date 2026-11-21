@@ -314,8 +314,16 @@ const nodeRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/settings",
-  validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab; activity?: "" | "operation" | "alert" } => ({
+  // scope、node、project、container、route：从节点、项目、容器页跳到 设置 → 告警 时预先选好要覆盖的对象。
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab?: SettingsTab; activity?: "" | "operation" | "alert"; scope?: string; node?: string; project?: string; container?: string; route?: string } => ({
     tab: settingsTabs.some((t) => t.value === search.tab) ? (search.tab as SettingsTab) : undefined,
+    scope: typeof search.scope === "string" ? search.scope : undefined,
+    node: typeof search.node === "string" ? search.node : undefined,
+    project: typeof search.project === "string" ? search.project : undefined,
+    container: typeof search.container === "string" ? search.container : undefined,
+    route: typeof search.route === "string" ? search.route : undefined,
     // 日志以前是设置里的一项（?tab=activity），旧地址由 beforeLoad 跳到日志页。路由会拿结果再校验一次，所以 activity 本身也要认。
     activity: search.tab === "activity" ? (search.kind === "operation" || search.kind === "alert" ? search.kind : "") : search.activity === "" || search.activity === "operation" || search.activity === "alert" ? search.activity : undefined,
   }),

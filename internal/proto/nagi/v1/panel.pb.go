@@ -560,8 +560,10 @@ type ReportRequest struct {
 	// 节点信任的所有面板的公钥指纹。面板据此判断写节点缓存的另一个面板是不是还在管这个节点（见 docs/panel.md#项目数据）。
 	Panels []string `protobuf:"bytes,9,rep,name=panels,proto3" json:"panels,omitempty"`
 	// 本节点开放的域名（只开 HTTP 的除外）的证书状态。
-	Certs         []*DomainCert `protobuf:"bytes,10,rep,name=certs,proto3" json:"certs,omitempty"`
-	Alerts        *AlertSync    `protobuf:"bytes,11,opt,name=alerts,proto3" json:"alerts,omitempty"`
+	Certs  []*DomainCert `protobuf:"bytes,10,rep,name=certs,proto3" json:"certs,omitempty"`
+	Alerts *AlertSync    `protobuf:"bytes,11,opt,name=alerts,proto3" json:"alerts,omitempty"`
+	// 节点发出这次上报时的本机时间，面板据此算时钟偏差（见 docs/monitoring.md#告警）。
+	NodeTime      *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=node_time,json=nodeTime,proto3" json:"node_time,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -669,6 +671,13 @@ func (x *ReportRequest) GetCerts() []*DomainCert {
 func (x *ReportRequest) GetAlerts() *AlertSync {
 	if x != nil {
 		return x.Alerts
+	}
+	return nil
+}
+
+func (x *ReportRequest) GetNodeTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.NodeTime
 	}
 	return nil
 }
@@ -1082,7 +1091,7 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\x17RenewCertificateRequest\x12\x10\n" +
 	"\x03csr\x18\x01 \x01(\fR\x03csr\"<\n" +
 	"\x18RenewCertificateResponse\x12 \n" +
-	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\xbe\x03\n" +
+	"\vcertificate\x18\x01 \x01(\fR\vcertificate\"\xf7\x03\n" +
 	"\rReportRequest\x12%\n" +
 	"\x04node\x18\x01 \x01(\v2\x11.nagi.v1.NodeInfoR\x04node\x12%\n" +
 	"\x04mesh\x18\x02 \x01(\v2\x11.nagi.v1.MeshInfoR\x04mesh\x128\n" +
@@ -1097,7 +1106,8 @@ const file_nagi_v1_panel_proto_rawDesc = "" +
 	"\x06panels\x18\t \x03(\tR\x06panels\x12)\n" +
 	"\x05certs\x18\n" +
 	" \x03(\v2\x13.nagi.v1.DomainCertR\x05certs\x12*\n" +
-	"\x06alerts\x18\v \x01(\v2\x12.nagi.v1.AlertSyncR\x06alerts\"\xa6\x01\n" +
+	"\x06alerts\x18\v \x01(\v2\x12.nagi.v1.AlertSyncR\x06alerts\x127\n" +
+	"\tnode_time\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnodeTime\"\xa6\x01\n" +
 	"\x0eReportResponse\x12'\n" +
 	"\x04mesh\x18\x01 \x01(\v2\x13.nagi.v1.MeshConfigR\x04mesh\x12/\n" +
 	"\acluster\x18\x02 \x01(\v2\x15.nagi.v1.PanelClusterR\acluster\x12:\n" +
@@ -1174,8 +1184,8 @@ var file_nagi_v1_panel_proto_goTypes = []any{
 	(*NodeUsage)(nil),                // 22: nagi.v1.NodeUsage
 	(*DomainCert)(nil),               // 23: nagi.v1.DomainCert
 	(*AlertSync)(nil),                // 24: nagi.v1.AlertSync
-	(*AlertState)(nil),               // 25: nagi.v1.AlertState
-	(*timestamppb.Timestamp)(nil),    // 26: google.protobuf.Timestamp
+	(*timestamppb.Timestamp)(nil),    // 25: google.protobuf.Timestamp
+	(*AlertState)(nil),               // 26: nagi.v1.AlertState
 }
 var file_nagi_v1_panel_proto_depIdxs = []int32{
 	2,  // 0: nagi.v1.MeshInfo.directs:type_name -> nagi.v1.MeshDirect
@@ -1189,29 +1199,30 @@ var file_nagi_v1_panel_proto_depIdxs = []int32{
 	22, // 8: nagi.v1.ReportRequest.usage:type_name -> nagi.v1.NodeUsage
 	23, // 9: nagi.v1.ReportRequest.certs:type_name -> nagi.v1.DomainCert
 	24, // 10: nagi.v1.ReportRequest.alerts:type_name -> nagi.v1.AlertSync
-	3,  // 11: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
-	12, // 12: nagi.v1.ReportResponse.cluster:type_name -> nagi.v1.PanelCluster
-	25, // 13: nagi.v1.ReportResponse.alert_handling:type_name -> nagi.v1.AlertState
-	13, // 14: nagi.v1.PanelCluster.panels:type_name -> nagi.v1.ClusterPanel
-	26, // 15: nagi.v1.Violation.time:type_name -> google.protobuf.Timestamp
-	14, // 16: nagi.v1.ReportViolationsRequest.violations:type_name -> nagi.v1.Violation
-	10, // 17: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
-	8,  // 18: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
-	4,  // 19: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
-	6,  // 20: nagi.v1.PanelService.ReportAlert:input_type -> nagi.v1.ReportAlertRequest
-	0,  // 21: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
-	15, // 22: nagi.v1.PanelService.ReportViolations:input_type -> nagi.v1.ReportViolationsRequest
-	11, // 23: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
-	9,  // 24: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
-	5,  // 25: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
-	7,  // 26: nagi.v1.PanelService.ReportAlert:output_type -> nagi.v1.ReportAlertResponse
-	0,  // 27: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
-	16, // 28: nagi.v1.PanelService.ReportViolations:output_type -> nagi.v1.ReportViolationsResponse
-	23, // [23:29] is the sub-list for method output_type
-	17, // [17:23] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	25, // 11: nagi.v1.ReportRequest.node_time:type_name -> google.protobuf.Timestamp
+	3,  // 12: nagi.v1.ReportResponse.mesh:type_name -> nagi.v1.MeshConfig
+	12, // 13: nagi.v1.ReportResponse.cluster:type_name -> nagi.v1.PanelCluster
+	26, // 14: nagi.v1.ReportResponse.alert_handling:type_name -> nagi.v1.AlertState
+	13, // 15: nagi.v1.PanelCluster.panels:type_name -> nagi.v1.ClusterPanel
+	25, // 16: nagi.v1.Violation.time:type_name -> google.protobuf.Timestamp
+	14, // 17: nagi.v1.ReportViolationsRequest.violations:type_name -> nagi.v1.Violation
+	10, // 18: nagi.v1.PanelService.Report:input_type -> nagi.v1.ReportRequest
+	8,  // 19: nagi.v1.PanelService.RenewCertificate:input_type -> nagi.v1.RenewCertificateRequest
+	4,  // 20: nagi.v1.PanelService.RelayAlert:input_type -> nagi.v1.RelayAlertRequest
+	6,  // 21: nagi.v1.PanelService.ReportAlert:input_type -> nagi.v1.ReportAlertRequest
+	0,  // 22: nagi.v1.PanelService.MeshRelay:input_type -> nagi.v1.MeshPacket
+	15, // 23: nagi.v1.PanelService.ReportViolations:input_type -> nagi.v1.ReportViolationsRequest
+	11, // 24: nagi.v1.PanelService.Report:output_type -> nagi.v1.ReportResponse
+	9,  // 25: nagi.v1.PanelService.RenewCertificate:output_type -> nagi.v1.RenewCertificateResponse
+	5,  // 26: nagi.v1.PanelService.RelayAlert:output_type -> nagi.v1.RelayAlertResponse
+	7,  // 27: nagi.v1.PanelService.ReportAlert:output_type -> nagi.v1.ReportAlertResponse
+	0,  // 28: nagi.v1.PanelService.MeshRelay:output_type -> nagi.v1.MeshPacket
+	16, // 29: nagi.v1.PanelService.ReportViolations:output_type -> nagi.v1.ReportViolationsResponse
+	24, // [24:30] is the sub-list for method output_type
+	18, // [18:24] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_panel_proto_init() }

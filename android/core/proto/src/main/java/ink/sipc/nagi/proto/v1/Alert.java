@@ -30,6 +30,9 @@ public  final class Alert extends
     validity_ = "";
     endReason_ = "";
     severity_ = "";
+    rule_ = "";
+    subject_ = "";
+    language_ = "";
   }
   private int bitField0_;
   public static final int KEY_FIELD_NUMBER = 1;
@@ -103,7 +106,7 @@ public  final class Alert extends
   private java.lang.String status_;
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -115,7 +118,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -128,7 +131,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -142,7 +145,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -153,7 +156,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * firing：出现；resolved：已恢复。
+   * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
    * </pre>
    *
    * <code>string status = 2 [json_name = "status"];</code>
@@ -612,7 +615,7 @@ public  final class Alert extends
   private java.lang.String endReason_;
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -624,7 +627,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -637,7 +640,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -651,7 +654,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -662,7 +665,7 @@ public  final class Alert extends
   }
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -786,6 +789,473 @@ public  final class Alert extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     severity_ = value.toStringUtf8();
+
+  }
+
+  public static final int RULE_FIELD_NUMBER = 15;
+  private java.lang.String rule_;
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   * @return The rule.
+   */
+  @java.lang.Override
+  public java.lang.String getRule() {
+    return rule_;
+  }
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   * @return The bytes for rule.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRuleBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(rule_);
+  }
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   * @param value The rule to set.
+   */
+  private void setRule(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    rule_ = value;
+  }
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   */
+  private void clearRule() {
+
+    rule_ = getDefaultInstance().getRule();
+  }
+  /**
+   * <pre>
+   * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+   * </pre>
+   *
+   * <code>string rule = 15 [json_name = "rule"];</code>
+   * @param value The bytes for rule to set.
+   */
+  private void setRuleBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    rule_ = value.toStringUtf8();
+
+  }
+
+  public static final int SUBJECT_FIELD_NUMBER = 16;
+  private java.lang.String subject_;
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   * @return The subject.
+   */
+  @java.lang.Override
+  public java.lang.String getSubject() {
+    return subject_;
+  }
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   * @return The bytes for subject.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSubjectBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(subject_);
+  }
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   * @param value The subject to set.
+   */
+  private void setSubject(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    subject_ = value;
+  }
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   */
+  private void clearSubject() {
+
+    subject_ = getDefaultInstance().getSubject();
+  }
+  /**
+   * <pre>
+   * 对象：磁盘挂载点、容器名、映射名、域名等。
+   * </pre>
+   *
+   * <code>string subject = 16 [json_name = "subject"];</code>
+   * @param value The bytes for subject to set.
+   */
+  private void setSubjectBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    subject_ = value.toStringUtf8();
+
+  }
+
+  public static final int VALUE_FIELD_NUMBER = 17;
+  private double value_;
+  /**
+   * <code>optional double value = 17 [json_name = "value"];</code>
+   * @return Whether the value field is set.
+   */
+  @java.lang.Override
+  public boolean hasValue() {
+    return ((bitField0_ & 0x00000004) != 0);
+  }
+  /**
+   * <code>optional double value = 17 [json_name = "value"];</code>
+   * @return The value.
+   */
+  @java.lang.Override
+  public double getValue() {
+    return value_;
+  }
+  /**
+   * <code>optional double value = 17 [json_name = "value"];</code>
+   * @param value The value to set.
+   */
+  private void setValue(double value) {
+    bitField0_ |= 0x00000004;
+    value_ = value;
+  }
+  /**
+   * <code>optional double value = 17 [json_name = "value"];</code>
+   */
+  private void clearValue() {
+    bitField0_ = (bitField0_ & ~0x00000004);
+    value_ = 0D;
+  }
+
+  public static final int THRESHOLD_FIELD_NUMBER = 18;
+  private double threshold_;
+  /**
+   * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+   * @return Whether the threshold field is set.
+   */
+  @java.lang.Override
+  public boolean hasThreshold() {
+    return ((bitField0_ & 0x00000008) != 0);
+  }
+  /**
+   * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+   * @return The threshold.
+   */
+  @java.lang.Override
+  public double getThreshold() {
+    return threshold_;
+  }
+  /**
+   * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+   * @param value The threshold to set.
+   */
+  private void setThreshold(double value) {
+    bitField0_ |= 0x00000008;
+    threshold_ = value;
+  }
+  /**
+   * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+   */
+  private void clearThreshold() {
+    bitField0_ = (bitField0_ & ~0x00000008);
+    threshold_ = 0D;
+  }
+
+  public static final int RECOVER_THRESHOLD_FIELD_NUMBER = 19;
+  private double recoverThreshold_;
+  /**
+   * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+   * @return Whether the recoverThreshold field is set.
+   */
+  @java.lang.Override
+  public boolean hasRecoverThreshold() {
+    return ((bitField0_ & 0x00000010) != 0);
+  }
+  /**
+   * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+   * @return The recoverThreshold.
+   */
+  @java.lang.Override
+  public double getRecoverThreshold() {
+    return recoverThreshold_;
+  }
+  /**
+   * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+   * @param value The recoverThreshold to set.
+   */
+  private void setRecoverThreshold(double value) {
+    bitField0_ |= 0x00000010;
+    recoverThreshold_ = value;
+  }
+  /**
+   * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+   */
+  private void clearRecoverThreshold() {
+    bitField0_ = (bitField0_ & ~0x00000010);
+    recoverThreshold_ = 0D;
+  }
+
+  public static final int PEAK_FIELD_NUMBER = 20;
+  private double peak_;
+  /**
+   * <pre>
+   * 本轮出现以来的峰值（证书是最低值）。
+   * </pre>
+   *
+   * <code>optional double peak = 20 [json_name = "peak"];</code>
+   * @return Whether the peak field is set.
+   */
+  @java.lang.Override
+  public boolean hasPeak() {
+    return ((bitField0_ & 0x00000020) != 0);
+  }
+  /**
+   * <pre>
+   * 本轮出现以来的峰值（证书是最低值）。
+   * </pre>
+   *
+   * <code>optional double peak = 20 [json_name = "peak"];</code>
+   * @return The peak.
+   */
+  @java.lang.Override
+  public double getPeak() {
+    return peak_;
+  }
+  /**
+   * <pre>
+   * 本轮出现以来的峰值（证书是最低值）。
+   * </pre>
+   *
+   * <code>optional double peak = 20 [json_name = "peak"];</code>
+   * @param value The peak to set.
+   */
+  private void setPeak(double value) {
+    bitField0_ |= 0x00000020;
+    peak_ = value;
+  }
+  /**
+   * <pre>
+   * 本轮出现以来的峰值（证书是最低值）。
+   * </pre>
+   *
+   * <code>optional double peak = 20 [json_name = "peak"];</code>
+   */
+  private void clearPeak() {
+    bitField0_ = (bitField0_ & ~0x00000020);
+    peak_ = 0D;
+  }
+
+  public static final int DURATION_SECONDS_FIELD_NUMBER = 21;
+  private int durationSeconds_;
+  /**
+   * <pre>
+   * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+   * </pre>
+   *
+   * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+   * @return The durationSeconds.
+   */
+  @java.lang.Override
+  public int getDurationSeconds() {
+    return durationSeconds_;
+  }
+  /**
+   * <pre>
+   * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+   * </pre>
+   *
+   * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+   * @param value The durationSeconds to set.
+   */
+  private void setDurationSeconds(int value) {
+    
+    durationSeconds_ = value;
+  }
+  /**
+   * <pre>
+   * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+   * </pre>
+   *
+   * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+   */
+  private void clearDurationSeconds() {
+
+    durationSeconds_ = 0;
+  }
+
+  public static final int RECOVER_SECONDS_FIELD_NUMBER = 22;
+  private int recoverSeconds_;
+  /**
+   * <pre>
+   * 恢复时：回到恢复阈值以内保持了多久。
+   * </pre>
+   *
+   * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+   * @return The recoverSeconds.
+   */
+  @java.lang.Override
+  public int getRecoverSeconds() {
+    return recoverSeconds_;
+  }
+  /**
+   * <pre>
+   * 恢复时：回到恢复阈值以内保持了多久。
+   * </pre>
+   *
+   * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+   * @param value The recoverSeconds to set.
+   */
+  private void setRecoverSeconds(int value) {
+    
+    recoverSeconds_ = value;
+  }
+  /**
+   * <pre>
+   * 恢复时：回到恢复阈值以内保持了多久。
+   * </pre>
+   *
+   * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+   */
+  private void clearRecoverSeconds() {
+
+    recoverSeconds_ = 0;
+  }
+
+  public static final int REMINDER_FIELD_NUMBER = 23;
+  private boolean reminder_;
+  /**
+   * <pre>
+   * 这是一条重复提醒（status 仍是 firing）。
+   * </pre>
+   *
+   * <code>bool reminder = 23 [json_name = "reminder"];</code>
+   * @return The reminder.
+   */
+  @java.lang.Override
+  public boolean getReminder() {
+    return reminder_;
+  }
+  /**
+   * <pre>
+   * 这是一条重复提醒（status 仍是 firing）。
+   * </pre>
+   *
+   * <code>bool reminder = 23 [json_name = "reminder"];</code>
+   * @param value The reminder to set.
+   */
+  private void setReminder(boolean value) {
+    
+    reminder_ = value;
+  }
+  /**
+   * <pre>
+   * 这是一条重复提醒（status 仍是 firing）。
+   * </pre>
+   *
+   * <code>bool reminder = 23 [json_name = "reminder"];</code>
+   */
+  private void clearReminder() {
+
+    reminder_ = false;
+  }
+
+  public static final int LANGUAGE_FIELD_NUMBER = 24;
+  private java.lang.String language_;
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   * @return The language.
+   */
+  @java.lang.Override
+  public java.lang.String getLanguage() {
+    return language_;
+  }
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   * @return The bytes for language.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLanguageBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(language_);
+  }
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   * @param value The language to set.
+   */
+  private void setLanguage(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    language_ = value;
+  }
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   */
+  private void clearLanguage() {
+
+    language_ = getDefaultInstance().getLanguage();
+  }
+  /**
+   * <pre>
+   * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+   * </pre>
+   *
+   * <code>string language = 24 [json_name = "language"];</code>
+   * @param value The bytes for language to set.
+   */
+  private void setLanguageBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    language_ = value.toStringUtf8();
 
   }
 
@@ -961,7 +1431,7 @@ public  final class Alert extends
 
     /**
      * <pre>
-     * firing：出现；resolved：已恢复。
+     * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
      * </pre>
      *
      * <code>string status = 2 [json_name = "status"];</code>
@@ -973,7 +1443,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * firing：出现；resolved：已恢复。
+     * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
      * </pre>
      *
      * <code>string status = 2 [json_name = "status"];</code>
@@ -986,7 +1456,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * firing：出现；resolved：已恢复。
+     * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
      * </pre>
      *
      * <code>string status = 2 [json_name = "status"];</code>
@@ -1001,7 +1471,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * firing：出现；resolved：已恢复。
+     * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
      * </pre>
      *
      * <code>string status = 2 [json_name = "status"];</code>
@@ -1014,7 +1484,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * firing：出现；resolved：已恢复。
+     * firing：出现；resolved：已恢复；ended：没有恢复就结束了（见 end_reason）；info：一次性通知；flapping：反复出现，暂停逐条通知。
      * </pre>
      *
      * <code>string status = 2 [json_name = "status"];</code>
@@ -1488,7 +1958,7 @@ public  final class Alert extends
 
     /**
      * <pre>
-     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
      * </pre>
      *
      * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -1500,7 +1970,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
      * </pre>
      *
      * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -1513,7 +1983,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
      * </pre>
      *
      * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -1528,7 +1998,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
      * </pre>
      *
      * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -1541,7 +2011,7 @@ public  final class Alert extends
     }
     /**
      * <pre>
-     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
      * </pre>
      *
      * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -1671,6 +2141,493 @@ public  final class Alert extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+     * </pre>
+     *
+     * <code>string rule = 15 [json_name = "rule"];</code>
+     * @return The rule.
+     */
+    @java.lang.Override
+    public java.lang.String getRule() {
+      return instance.getRule();
+    }
+    /**
+     * <pre>
+     * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+     * </pre>
+     *
+     * <code>string rule = 15 [json_name = "rule"];</code>
+     * @return The bytes for rule.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getRuleBytes() {
+      return instance.getRuleBytes();
+    }
+    /**
+     * <pre>
+     * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+     * </pre>
+     *
+     * <code>string rule = 15 [json_name = "rule"];</code>
+     * @param value The rule to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRule(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setRule(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+     * </pre>
+     *
+     * <code>string rule = 15 [json_name = "rule"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRule() {
+      copyOnWrite();
+      instance.clearRule();
+      return this;
+    }
+    /**
+     * <pre>
+     * 规则告警的结构化内容（事件类告警和旧版本节点不填）。
+     * </pre>
+     *
+     * <code>string rule = 15 [json_name = "rule"];</code>
+     * @param value The bytes for rule to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRuleBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setRuleBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 对象：磁盘挂载点、容器名、映射名、域名等。
+     * </pre>
+     *
+     * <code>string subject = 16 [json_name = "subject"];</code>
+     * @return The subject.
+     */
+    @java.lang.Override
+    public java.lang.String getSubject() {
+      return instance.getSubject();
+    }
+    /**
+     * <pre>
+     * 对象：磁盘挂载点、容器名、映射名、域名等。
+     * </pre>
+     *
+     * <code>string subject = 16 [json_name = "subject"];</code>
+     * @return The bytes for subject.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSubjectBytes() {
+      return instance.getSubjectBytes();
+    }
+    /**
+     * <pre>
+     * 对象：磁盘挂载点、容器名、映射名、域名等。
+     * </pre>
+     *
+     * <code>string subject = 16 [json_name = "subject"];</code>
+     * @param value The subject to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSubject(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSubject(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 对象：磁盘挂载点、容器名、映射名、域名等。
+     * </pre>
+     *
+     * <code>string subject = 16 [json_name = "subject"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSubject() {
+      copyOnWrite();
+      instance.clearSubject();
+      return this;
+    }
+    /**
+     * <pre>
+     * 对象：磁盘挂载点、容器名、映射名、域名等。
+     * </pre>
+     *
+     * <code>string subject = 16 [json_name = "subject"];</code>
+     * @param value The bytes for subject to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSubjectBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSubjectBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>optional double value = 17 [json_name = "value"];</code>
+     * @return Whether the value field is set.
+     */
+    @java.lang.Override
+    public boolean hasValue() {
+      return instance.hasValue();
+    }
+    /**
+     * <code>optional double value = 17 [json_name = "value"];</code>
+     * @return The value.
+     */
+    @java.lang.Override
+    public double getValue() {
+      return instance.getValue();
+    }
+    /**
+     * <code>optional double value = 17 [json_name = "value"];</code>
+     * @param value The value to set.
+     * @return This builder for chaining.
+     */
+    public Builder setValue(double value) {
+      copyOnWrite();
+      instance.setValue(value);
+      return this;
+    }
+    /**
+     * <code>optional double value = 17 [json_name = "value"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearValue() {
+      copyOnWrite();
+      instance.clearValue();
+      return this;
+    }
+
+    /**
+     * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+     * @return Whether the threshold field is set.
+     */
+    @java.lang.Override
+    public boolean hasThreshold() {
+      return instance.hasThreshold();
+    }
+    /**
+     * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+     * @return The threshold.
+     */
+    @java.lang.Override
+    public double getThreshold() {
+      return instance.getThreshold();
+    }
+    /**
+     * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+     * @param value The threshold to set.
+     * @return This builder for chaining.
+     */
+    public Builder setThreshold(double value) {
+      copyOnWrite();
+      instance.setThreshold(value);
+      return this;
+    }
+    /**
+     * <code>optional double threshold = 18 [json_name = "threshold"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearThreshold() {
+      copyOnWrite();
+      instance.clearThreshold();
+      return this;
+    }
+
+    /**
+     * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+     * @return Whether the recoverThreshold field is set.
+     */
+    @java.lang.Override
+    public boolean hasRecoverThreshold() {
+      return instance.hasRecoverThreshold();
+    }
+    /**
+     * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+     * @return The recoverThreshold.
+     */
+    @java.lang.Override
+    public double getRecoverThreshold() {
+      return instance.getRecoverThreshold();
+    }
+    /**
+     * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+     * @param value The recoverThreshold to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRecoverThreshold(double value) {
+      copyOnWrite();
+      instance.setRecoverThreshold(value);
+      return this;
+    }
+    /**
+     * <code>optional double recover_threshold = 19 [json_name = "recoverThreshold"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRecoverThreshold() {
+      copyOnWrite();
+      instance.clearRecoverThreshold();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 本轮出现以来的峰值（证书是最低值）。
+     * </pre>
+     *
+     * <code>optional double peak = 20 [json_name = "peak"];</code>
+     * @return Whether the peak field is set.
+     */
+    @java.lang.Override
+    public boolean hasPeak() {
+      return instance.hasPeak();
+    }
+    /**
+     * <pre>
+     * 本轮出现以来的峰值（证书是最低值）。
+     * </pre>
+     *
+     * <code>optional double peak = 20 [json_name = "peak"];</code>
+     * @return The peak.
+     */
+    @java.lang.Override
+    public double getPeak() {
+      return instance.getPeak();
+    }
+    /**
+     * <pre>
+     * 本轮出现以来的峰值（证书是最低值）。
+     * </pre>
+     *
+     * <code>optional double peak = 20 [json_name = "peak"];</code>
+     * @param value The peak to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPeak(double value) {
+      copyOnWrite();
+      instance.setPeak(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 本轮出现以来的峰值（证书是最低值）。
+     * </pre>
+     *
+     * <code>optional double peak = 20 [json_name = "peak"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPeak() {
+      copyOnWrite();
+      instance.clearPeak();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+     * </pre>
+     *
+     * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+     * @return The durationSeconds.
+     */
+    @java.lang.Override
+    public int getDurationSeconds() {
+      return instance.getDurationSeconds();
+    }
+    /**
+     * <pre>
+     * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+     * </pre>
+     *
+     * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+     * @param value The durationSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDurationSeconds(int value) {
+      copyOnWrite();
+      instance.setDurationSeconds(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 出现时：超标持续了多久；恢复时：本轮一共持续了多久。
+     * </pre>
+     *
+     * <code>uint32 duration_seconds = 21 [json_name = "durationSeconds"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDurationSeconds() {
+      copyOnWrite();
+      instance.clearDurationSeconds();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 恢复时：回到恢复阈值以内保持了多久。
+     * </pre>
+     *
+     * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+     * @return The recoverSeconds.
+     */
+    @java.lang.Override
+    public int getRecoverSeconds() {
+      return instance.getRecoverSeconds();
+    }
+    /**
+     * <pre>
+     * 恢复时：回到恢复阈值以内保持了多久。
+     * </pre>
+     *
+     * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+     * @param value The recoverSeconds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRecoverSeconds(int value) {
+      copyOnWrite();
+      instance.setRecoverSeconds(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 恢复时：回到恢复阈值以内保持了多久。
+     * </pre>
+     *
+     * <code>uint32 recover_seconds = 22 [json_name = "recoverSeconds"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRecoverSeconds() {
+      copyOnWrite();
+      instance.clearRecoverSeconds();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 这是一条重复提醒（status 仍是 firing）。
+     * </pre>
+     *
+     * <code>bool reminder = 23 [json_name = "reminder"];</code>
+     * @return The reminder.
+     */
+    @java.lang.Override
+    public boolean getReminder() {
+      return instance.getReminder();
+    }
+    /**
+     * <pre>
+     * 这是一条重复提醒（status 仍是 firing）。
+     * </pre>
+     *
+     * <code>bool reminder = 23 [json_name = "reminder"];</code>
+     * @param value The reminder to set.
+     * @return This builder for chaining.
+     */
+    public Builder setReminder(boolean value) {
+      copyOnWrite();
+      instance.setReminder(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 这是一条重复提醒（status 仍是 firing）。
+     * </pre>
+     *
+     * <code>bool reminder = 23 [json_name = "reminder"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearReminder() {
+      copyOnWrite();
+      instance.clearReminder();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+     * </pre>
+     *
+     * <code>string language = 24 [json_name = "language"];</code>
+     * @return The language.
+     */
+    @java.lang.Override
+    public java.lang.String getLanguage() {
+      return instance.getLanguage();
+    }
+    /**
+     * <pre>
+     * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+     * </pre>
+     *
+     * <code>string language = 24 [json_name = "language"];</code>
+     * @return The bytes for language.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLanguageBytes() {
+      return instance.getLanguageBytes();
+    }
+    /**
+     * <pre>
+     * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+     * </pre>
+     *
+     * <code>string language = 24 [json_name = "language"];</code>
+     * @param value The language to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLanguage(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setLanguage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+     * </pre>
+     *
+     * <code>string language = 24 [json_name = "language"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLanguage() {
+      copyOnWrite();
+      instance.clearLanguage();
+      return this;
+    }
+    /**
+     * <pre>
+     * 通知文字的语言（"zh-CN"、"en"），面板代发时按它拼文字。
+     * </pre>
+     *
+     * <code>string language = 24 [json_name = "language"];</code>
+     * @param value The bytes for language to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLanguageBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setLanguageBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.Alert)
   }
   @java.lang.Override
@@ -1702,11 +2659,23 @@ public  final class Alert extends
             "endReason_",
             "since_",
             "severity_",
+            "rule_",
+            "subject_",
+            "value_",
+            "threshold_",
+            "recoverThreshold_",
+            "peak_",
+            "durationSeconds_",
+            "recoverSeconds_",
+            "reminder_",
+            "language_",
           };
           java.lang.String info =
-              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0018\u0000\u0001\u0001\u0018\u0018\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u1009\u0000\b\u0208\t\u0003" +
-              "\n\u0208\u000b\u0208\f\u0208\r\u1009\u0001\u000e\u0208";
+              "\n\u0208\u000b\u0208\f\u0208\r\u1009\u0001\u000e\u0208\u000f\u0208\u0010\u0208\u0011" +
+              "\u1000\u0002\u0012\u1000\u0003\u0013\u1000\u0004\u0014\u1000\u0005\u0015\u000b\u0016" +
+              "\u000b\u0017\u0007\u0018\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

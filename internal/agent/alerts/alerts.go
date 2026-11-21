@@ -4,13 +4,10 @@ package alerts
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"log/slog"
-	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -56,16 +53,19 @@ type Engine struct {
 	Report func(context.Context, *nagiv1.Alert)
 	// Domains 返回现在还在用的域名（项目映射和面板域名），只检查这些域名的证书。为 nil 时检查全部。
 	Domains func() map[string]bool
-	// ContainerRules 返回容器生效的告警规则（面板随容器配置下发）。旧版本的面板不下发，ok 为 false，
-	// 这时按告警配置里的规则判断。RouteRules 同样返回 http 规则所属容器的规则，用于判断 5xx 比例。
-	ContainerRules func(projectID, container string) (*nagiv1.AlertRules, bool)
-	RouteRules     func(projectID, route string) (*nagiv1.AlertRules, bool)
+	// ContainerRules 返回容器生效的告警规则（面板随容器配置下发）：新版本面板给 eff，旧版本只给 legacy；
+	// 都没有下发时 ok 为 false，按告警配置里的规则判断。RouteRules 同样返回 http 映射所属容器的规则。
+	ContainerRules func(projectID, container string) (eff *nagiv1.EffectiveAlertRules, legacy *nagiv1.AlertRules, ok bool)
+	RouteRules     func(projectID, route string) (eff *nagiv1.EffectiveAlertRules, legacy *nagiv1.AlertRules, ok bool)
+	// Probes 返回 agent 报告的状态类事实（mesh 成员、见证人、日志库、节点证书、快照、副本，见 sources.go）。
+	Probes Probes
 
 	mu           sync.Mutex
 	configs      map[string]*nagiv1.AlertConfig // 面板指纹 → 配置
 	states       map[string]*state
-	restarts     map[string][]restartSample
-	memSince     time.Time
+	tracks       map[string]*track
+	flaps        map[string]*flapState
+	notices      []*nagiv1.Alert
 	load         loadState
 	queue        []queued
 	source       string
@@ -77,6 +77,21 @@ type Engine struct {
 	saving       bool              // retrySaves is running and is the only writer
 	congestedLog time.Time
 	suppressed   map[string]time.Time // occurrence -> bounded primary-authorized mute
+	// mutedKeys：静默、维护按告警键记下，截止之前同一个键新一轮的出现也不通知（见 ApplyHandling）。
+	mutedKeys map[string]time.Time
+	// egressSent：出站拦截通知最近一次发送的时间（按 egress 键），用来按规则的提醒间隔去重。
+	egressSent map[string]time.Time
+	// counts：次数类规则的发生时间（见 Count）。
+	counts map[string]*counted
+	// clock 只给测试用：推进状态机的时间（为 nil 时用 time.Now）。
+	clock func() time.Time
+}
+
+func (e *Engine) now() time.Time {
+	if e.clock != nil {
+		return e.clock()
+	}
+	return time.Now()
 }
 
 type state struct {
@@ -89,17 +104,12 @@ type state struct {
 	confirmed     bool
 }
 
-type restartSample struct {
-	at    time.Time
-	count float64
-}
-
 // New 创建告警引擎，读取本地保存的配置和待补发队列。
 func New(log *slog.Logger, node, dir, certDir string, m metricSource, dc *docker.Client, projectName func(string) string, relay Relay, logs *logstore.Store) *Engine {
 	e := &Engine{
 		log: log, logs: logs, node: node, dir: dir, certDir: certDir, metrics: m, docker: dc,
 		projectName: projectName, relay: relay,
-		configs: map[string]*nagiv1.AlertConfig{}, states: map[string]*state{}, restarts: map[string][]restartSample{},
+		configs: map[string]*nagiv1.AlertConfig{}, states: map[string]*state{}, tracks: map[string]*track{}, flaps: map[string]*flapState{},
 	}
 	e.loadConfigs()
 	e.loadStates()
@@ -200,6 +210,23 @@ func (e *Engine) channels() []channel {
 	return out
 }
 
+// panelOrder 返回面板指纹，按指纹排序（结果固定）。调用方持有 e.mu。
+func (e *Engine) panelOrder() []string {
+	panels := make([]string, 0, len(e.configs))
+	for p := range e.configs {
+		panels = append(panels, p)
+	}
+	sort.Strings(panels)
+	return panels
+}
+
+// language 是通知语言。
+func (e *Engine) language() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nodeRules().lang
+}
+
 // nodeName 是告警里的节点名称：面板上的名称（用户可能改过），和界面上一致；面板没下发时用主机名。
 // 移交过程中两个面板的名称可能不同，按面板指纹排序取第一个，结果固定。调用方持有 e.mu。
 func (e *Engine) nodeName() string {
@@ -214,77 +241,6 @@ func (e *Engine) nodeName() string {
 		}
 	}
 	return e.node
-}
-
-// rules 取所有面板配置里最严格的阈值。
-func (e *Engine) rules() alert.Rules {
-	r := alert.EffectiveRules(nil)
-	first := true
-	for _, cfg := range e.configs {
-		x := alert.EffectiveRules(cfg.GetRules())
-		if first {
-			r, first = x, false
-			continue
-		}
-		r.DiskPercent = min(r.DiskPercent, x.DiskPercent)
-		r.MemPercent = min(r.MemPercent, x.MemPercent)
-		r.MemFor = min(r.MemFor, x.MemFor)
-		r.RestartCount = min(r.RestartCount, x.RestartCount)
-		r.RestartWindow = max(r.RestartWindow, x.RestartWindow)
-		r.CertDays = max(r.CertDays, x.CertDays)
-		r.ErrorPercent = min(r.ErrorPercent, x.ErrorPercent)
-	}
-	return r
-}
-
-// nodeEnabled 判断节点的规则开着没有：任何一个面板的配置里开着就判断（和阈值一样取最严格的）。调用方持有 e.mu。
-func (e *Engine) nodeEnabled(rule string) bool {
-	if len(e.configs) == 0 {
-		return true
-	}
-	for _, cfg := range e.configs {
-		if alert.Enabled(cfg.GetRules(), rule) {
-			return true
-		}
-	}
-	return false
-}
-
-// NodeEnabled 判断节点的规则开着没有，给事件类告警（证书申请失败）用。
-func (e *Engine) NodeEnabled(rule string) bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.nodeEnabled(rule)
-}
-
-// judge 是判断一个容器用的规则：阈值和开关。
-type judge struct {
-	alert.Rules
-	on func(rule string) bool
-}
-
-// forRules 按面板下发的容器规则判断；没有下发（旧版本的面板）时用告警配置里的。
-func forRules(r *nagiv1.AlertRules, ok bool, fallback judge) judge {
-	if !ok {
-		return fallback
-	}
-	return judge{alert.EffectiveRules(r), func(rule string) bool { return alert.Enabled(r, rule) }}
-}
-
-func (e *Engine) forContainer(projectID, container string, fallback judge) judge {
-	if e.ContainerRules == nil {
-		return fallback
-	}
-	r, ok := e.ContainerRules(projectID, container)
-	return forRules(r, ok, fallback)
-}
-
-// ContainerEnabled 判断容器的规则开着没有，给事件类告警（快照失败、备份同步失败）用。
-func (e *Engine) ContainerEnabled(projectID, container, rule string) bool {
-	e.mu.Lock()
-	fallback := e.nodeEnabled(rule)
-	e.mu.Unlock()
-	return e.forContainer(projectID, container, judge{on: func(string) bool { return fallback }}).on(rule)
 }
 
 // ---- 规则判断 ----
@@ -302,209 +258,6 @@ func (e *Engine) Run(ctx context.Context) {
 		e.evaluate(ctx)
 		e.flushQueue(ctx)
 	}
-}
-
-func (e *Engine) evaluate(ctx context.Context) {
-	e.mu.Lock()
-	rules := e.rules()
-	enabled := map[string]bool{}
-	for _, k := range append(append([]string{}, alert.NodeRules...), alert.ContainerRules...) {
-		enabled[k] = e.nodeEnabled(k)
-	}
-	e.mu.Unlock()
-	node := judge{rules, func(rule string) bool { return enabled[rule] }}
-	now := time.Now()
-	latest := e.metrics.LatestFresh(now)
-	active := map[string]*nagiv1.Alert{}
-	// Only an explicitly evaluated, healthy item may resolve an existing alert.
-	// An absent series, disabled rule or failed query is not a healthy result.
-	healthy := map[string]bool{}
-
-	if v, ok := latest["node:disk"]; ok && enabled[alert.RuleDisk] {
-		if v > rules.DiskPercent {
-			active["disk"] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘使用 %.0f%%，超过 %.0f%%", v, rules.DiskPercent)}
-		} else {
-			healthy["disk"] = true
-		}
-	}
-	for series, v := range latest {
-		if mount, ok := strings.CutPrefix(series, "node:disk@"); ok && enabled[alert.RuleDisk] {
-			if v > rules.DiskPercent {
-				active["disk:"+mount] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘 %s（项目目录所在）使用 %.0f%%，超过 %.0f%%", mount, v, rules.DiskPercent)}
-			} else {
-				healthy["disk:"+mount] = true
-			}
-		}
-	}
-	if v, ok := latest["node:mem"]; ok && v > rules.MemPercent && enabled[alert.RuleMem] {
-		if e.memSince.IsZero() {
-			e.memSince = now
-		}
-		if now.Sub(e.memSince) >= rules.MemFor {
-			active["mem"] = &nagiv1.Alert{Title: fmt.Sprintf("内存使用 %.0f%%，已持续超过 %d 分钟", v, int(rules.MemFor.Minutes()))}
-		}
-	} else {
-		e.memSince = time.Time{}
-		if v, ok := latest["node:mem"]; ok && v <= rules.MemPercent && enabled[alert.RuleMem] {
-			healthy["mem"] = true
-		}
-	}
-
-	// 容器重启：比较时间窗口内累计重启次数的增量。
-	for series := range e.restarts {
-		if _, ok := latest[series]; !ok {
-			delete(e.restarts, series)
-		}
-	}
-	for series, count := range latest {
-		name, ok := strings.CutSuffix(series, ":restarts")
-		if !ok {
-			continue
-		}
-		project, service := splitContainer(name)
-		container, _, _ := strings.Cut(service, "/")
-		j := e.forContainer(project, container, node)
-		hist := e.restarts[series]
-		if len(hist) > 0 && (count < hist[len(hist)-1].count || now.Sub(hist[len(hist)-1].at) > time.Minute) {
-			hist = nil
-		}
-		hist = append(hist, restartSample{at: now, count: count})
-		for len(hist) > 1 && now.Sub(hist[1].at) >= j.RestartWindow {
-			hist = hist[1:]
-		}
-		e.restarts[series] = hist
-		baseline := hist[0]
-		if now.Sub(baseline.at) > j.RestartWindow && len(hist) > 1 {
-			baseline = hist[1]
-		}
-		if n := int(count - baseline.count); n >= j.RestartCount && j.on(alert.RuleRestart) {
-			active["restart:"+name] = &nagiv1.Alert{
-				Title:   fmt.Sprintf("%s 在 %d 分钟内重启了 %d 次", describeService(service), int(j.RestartWindow.Minutes()), n),
-				Project: e.projectName(project),
-			}
-		} else if j.on(alert.RuleRestart) && now.Sub(hist[0].at) >= j.RestartWindow && count >= hist[0].count {
-			// After a restart or a sampling gap, rebuild a full window before recovery.
-			healthy["restart:"+name] = true
-		}
-	}
-
-	// http 规则的 5xx 比例。
-	for route, x := range e.errorRates(ctx, now) {
-		project, name := splitContainer(route)
-		j := node
-		if e.RouteRules != nil {
-			r, ok := e.RouteRules(project, name)
-			j = forRules(r, ok, node)
-		}
-		if x.requests >= alert.ErrorMinRequests && 100*x.errors/x.requests > j.ErrorPercent && j.on(alert.RuleErrors) {
-			active["errors:"+route] = &nagiv1.Alert{
-				Title: fmt.Sprintf("规则 %s 最近 %d 分钟 5xx 占 %.0f%%（共 %.0f 个请求）",
-					name, int(alert.ErrorWindow.Minutes()), 100*x.errors/x.requests, x.requests),
-				Project: e.projectName(project),
-			}
-		} else if x.requests >= alert.ErrorMinRequests && j.on(alert.RuleErrors) {
-			healthy["errors:"+route] = true
-		}
-	}
-
-	// CPU 和流量。
-	e.evaluateLoad(ctx, now, latest, node, enabled, active, healthy)
-
-	// 健康检查失败。
-	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
-		for _, c := range containers {
-			key := "health:" + c.Project + "/" + c.Container + "/" + c.Service
-			if !e.forContainer(c.Project, c.Container, node).on(alert.RuleHealth) {
-				continue
-			}
-			if c.Health == "unhealthy" {
-				what := describeService(c.Container + "/" + c.Service)
-				active["health:"+c.Project+"/"+c.Container+"/"+c.Service] = &nagiv1.Alert{
-					Title: what + " 健康检查失败", Project: e.projectName(c.Project),
-				}
-			} else if c.State == "running" && c.Health == "healthy" {
-				healthy[key] = true
-			}
-		}
-	}
-
-	// 证书快过期。
-	for domain, notAfter := range e.CertExpiries() {
-		if left := time.Until(notAfter); left < time.Duration(rules.CertDays)*24*time.Hour && enabled[alert.RuleCert] {
-			active["cert:"+domain] = &nagiv1.Alert{
-				Title: fmt.Sprintf("域名 %s 的证书将在 %d 天内过期", domain, int(left.Hours()/24)),
-			}
-		} else if enabled[alert.RuleCert] {
-			healthy["cert:"+domain] = true
-		}
-	}
-
-	e.mu.Lock()
-	var send []*nagiv1.Alert
-	for key, a := range active {
-		a.Key = key
-		if x := e.setFiring(key, a); x != nil {
-			send = append(send, x)
-		}
-	}
-	for key, st := range e.states {
-		// 事件类告警（例如快照失败）由 Fire/Resolve 控制，这里只处理规则类告警。
-		if st.firing && !isEventKey(key) && active[key] == nil && healthy[key] {
-			send = append(send, e.setResolved(key))
-		} else if !isEventKey(key) {
-			st.confirmed = active[key] != nil
-		}
-	}
-	e.saveStates()
-	e.mu.Unlock()
-	for _, a := range send {
-		e.dispatch(ctx, a)
-	}
-}
-
-type errorRate struct{ requests, errors float64 }
-
-// errorRates 统计每条 http 规则最近一段时间的请求数和 5xx 数（序列存的是每秒速率，每 10 秒一个点）。
-func (e *Engine) errorRates(ctx context.Context, now time.Time) map[string]errorRate {
-	return e.windowRates(ctx, now, "5xx")
-}
-
-// windowRates requires matching, fresh request and status samples throughout
-// the window. A missing error counter is not a zero error counter.
-func (e *Engine) windowRates(ctx context.Context, now time.Time, kind string) map[string]errorRate {
-	data, err := e.metrics.Query(ctx, "r:", now.Add(-alert.ErrorWindow), now)
-	if err != nil {
-		return nil
-	}
-	out := map[string]errorRate{}
-	for series, points := range data {
-		route, ok := strings.CutSuffix(strings.TrimPrefix(series, "r:"), ":req")
-		if !ok || len(points) == 0 {
-			continue
-		}
-		errors := data["r:"+route+":"+kind]
-		if len(errors) != len(points) {
-			continue
-		}
-		previous := now.Add(-alert.ErrorWindow)
-		x := errorRate{}
-		valid := true
-		for i, p := range points {
-			e := errors[i]
-			if !e.Time.Equal(p.Time) || p.Time.Before(previous) || p.Time.After(now) || p.Time.Sub(previous) > 3*metrics.Interval ||
-				math.IsNaN(p.Value) || math.IsInf(p.Value, 0) || math.IsNaN(e.Value) || math.IsInf(e.Value, 0) || p.Value < 0 || e.Value < 0 || e.Value > p.Value {
-				valid = false
-				break
-			}
-			x.requests += p.Value * metrics.Interval.Seconds()
-			x.errors += e.Value * metrics.Interval.Seconds()
-			previous = p.Time
-		}
-		if valid && now.Sub(previous) <= 3*metrics.Interval {
-			out[route] = x
-		}
-	}
-	return out
 }
 
 func cutLast(s, sep string) (before, after string, ok bool) {
@@ -579,7 +332,12 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 		a.Project = e.projectName(projectID)
 	}
 	e.mu.Lock()
-	send := e.setFiring(a.Key, a)
+	_, set := e.rulesFor(a.Key)
+	if !alert.NoticeOn(e.nodeRules().off, a.Key) {
+		e.mu.Unlock()
+		return // 这项事件通知被关掉了（见 alert.Notices）
+	}
+	send := e.setFiring(a.Key, a, set, time.Now())
 	e.saveStates()
 	e.mu.Unlock()
 	if send != nil {
@@ -590,9 +348,12 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 // Notify 发一条一次性的通知（例如"已顶替项目"），不跟踪状态，也没有"已恢复"。
 func (e *Engine) Notify(ctx context.Context, title, message, projectID string) {
 	e.mu.Lock()
-	node := e.nodeName()
+	node, on := e.nodeName(), alert.NoticeOn(e.nodeRules().off, "notice")
 	e.mu.Unlock()
-	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now()}
+	if !on {
+		return
+	}
+	a := &nagiv1.Alert{Key: "notice", Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now(), Language: e.language()}
 	if projectID != "" {
 		a.Project = e.projectName(projectID)
 	}
@@ -604,7 +365,7 @@ func (e *Engine) NotifyKey(ctx context.Context, key, title, message, projectID s
 	e.mu.Lock()
 	node := e.nodeName()
 	e.mu.Unlock()
-	a := &nagiv1.Alert{Key: key, Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now()}
+	a := &nagiv1.Alert{Key: key, Status: "info", Title: title, Message: message, Node: node, Time: timestamppb.Now(), Language: e.language()}
 	if projectID != "" {
 		a.Project = e.projectName(projectID)
 	}
@@ -616,7 +377,7 @@ func (e *Engine) Resolve(ctx context.Context, key string) {
 	e.mu.Lock()
 	var send *nagiv1.Alert
 	if st := e.states["event:"+key]; st != nil && st.firing {
-		send = e.setResolved("event:" + key)
+		send = e.end("event:"+key, "recovered")
 	}
 	e.saveStates()
 	e.mu.Unlock()
@@ -637,66 +398,23 @@ func (e *Engine) MarkUnavailableUnless(prefix string, keep func(rest string) boo
 	e.saveStates()
 }
 
-// ---- 状态与发送 ----
-
-// setFiring 更新告警状态，需要通知时返回要发送的告警。调用方持有 e.mu。
-func (e *Engine) setFiring(key string, a *nagiv1.Alert) *nagiv1.Alert {
-	st := e.states[key]
-	now := time.Now()
-	if st == nil {
-		if len(e.states) >= 200 {
-			return nil
-		}
-		st = &state{occurrence: rand.Text(), since: now}
-		e.states[key] = st
-	}
-	st.confirmed = true
-	a.Status, a.Node, a.Time = "firing", e.nodeName(), timestamppb.New(now)
-	a.Occurrence, a.Source, a.Since, a.Validity = st.occurrence, e.source, timestamppb.New(st.since), "valid"
-	pending := false
-	for _, q := range e.queue {
-		pending = pending || q.Source == e.source && q.Occurrence == st.occurrence
-	}
-	if st.firing && now.Sub(st.lastNotified) < alert.RepeatInterval && (!st.lastDelivered.IsZero() || pending || len(e.channels()) == 0) {
-		st.alert = a
-		return nil
-	}
-	st.firing, st.lastNotified, st.alert = true, now, a
-	return a
-}
-
-// setResolved 清除告警状态，返回恢复通知。调用方持有 e.mu。
-func (e *Engine) setResolved(key string) *nagiv1.Alert {
-	return e.end(key, "recovered")
-}
-
-func (e *Engine) end(key, reason string) *nagiv1.Alert {
-	st := e.states[key]
-	st.firing = false
-	status := "ended"
-	if reason == "recovered" {
-		status = "resolved"
-	}
-	a := &nagiv1.Alert{Key: key, Status: status, Title: st.alert.GetTitle(), Project: st.alert.GetProject(),
-		Node: e.nodeName(), Time: timestamppb.Now(), Occurrence: st.occurrence, Source: e.source,
-		Since: timestamppb.New(st.since), EndReason: reason, Validity: "unknown"}
-	if reason == "recovered" {
-		a.Validity = "valid"
-	}
-	e.history = append(e.history, a)
-	if len(e.history) > 200 {
-		e.history = e.history[len(e.history)-200:]
-	}
-	delete(e.states, key)
-	return a
-}
-
 // dispatch 发到所有渠道。直接发送失败的，请配置它的面板代发；面板也不可达时放进队列。
 // 发送时不持有 e.mu，避免网络慢的时候卡住配置下发。
 func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
 	e.mu.Lock()
-	if a.GetStatus() != "info" {
-		a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
+	switch a.GetStatus() {
+	case "info", "ended":
+	case "flapping":
+		if time.Now().Before(e.mutedKeys[a.GetKey()]) {
+			a = nil
+		}
+	default:
+		// 发送的是状态里的最新内容；重复提醒按调用方给的标记。
+		reminder := a.GetReminder()
+		if a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()}); a != nil {
+			a = proto.CloneOf(a)
+			a.Reminder = reminder && a.GetStatus() == "firing"
+		}
 	}
 	if a == nil {
 		e.mu.Unlock()
@@ -738,8 +456,12 @@ func (e *Engine) currentDelivery(a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel
 		if current.GetId() != ch.GetId() || destination(current) != destination(ch) {
 			continue
 		}
-		if a.GetStatus() != "info" && !legacy {
-			a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
+		if s := a.GetStatus(); !legacy && (s == "firing" || s == "resolved") {
+			reminder := a.GetReminder()
+			if a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()}); a != nil {
+				a = proto.CloneOf(a)
+				a.Reminder = reminder && s == "firing"
+			}
 		}
 		if a != nil {
 			return proto.CloneOf(a), proto.CloneOf(current)

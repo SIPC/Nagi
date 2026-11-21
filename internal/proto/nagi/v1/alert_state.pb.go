@@ -172,14 +172,18 @@ func (x *RelayHandleAlertRequest) GetActor() string {
 
 // 当前快照先于有界历史。完整也不允许把缺席解释成健康，只能标记 unknown。
 type AlertSync struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Revision      uint64                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
-	Current       []*Alert               `protobuf:"bytes,3,rep,name=current,proto3" json:"current,omitempty"`
-	History       []*Alert               `protobuf:"bytes,4,rep,name=history,proto3" json:"history,omitempty"`
-	Complete      bool                   `protobuf:"varint,5,opt,name=complete,proto3" json:"complete,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Source   string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Revision uint64                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
+	Current  []*Alert               `protobuf:"bytes,3,rep,name=current,proto3" json:"current,omitempty"`
+	History  []*Alert               `protobuf:"bytes,4,rep,name=history,proto3" json:"history,omitempty"`
+	Complete bool                   `protobuf:"varint,5,opt,name=complete,proto3" json:"complete,omitempty"`
+	// 需要先积累历史才能判断的规则的进度（见 AlertBaseline）。
+	Baselines []*AlertBaseline `protobuf:"bytes,6,rep,name=baselines,proto3" json:"baselines,omitempty"`
+	// 节点会上报基线进度（v0.37.1 起）；为 false 时是旧版本节点，界面提示升级。
+	BaselinesSupported bool `protobuf:"varint,7,opt,name=baselines_supported,json=baselinesSupported,proto3" json:"baselines_supported,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *AlertSync) Reset() {
@@ -247,6 +251,119 @@ func (x *AlertSync) GetComplete() bool {
 	return false
 }
 
+func (x *AlertSync) GetBaselines() []*AlertBaseline {
+	if x != nil {
+		return x.Baselines
+	}
+	return nil
+}
+
+func (x *AlertSync) GetBaselinesSupported() bool {
+	if x != nil {
+		return x.BaselinesSupported
+	}
+	return false
+}
+
+// AlertBaseline 是一条规则在一个对象上的基线进度，节点按自己的指标算好上报。
+type AlertBaseline struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 规则（traffic、l4_conn_surge、restart、snapshot_stale、backup_lag）。
+	Rule string `protobuf:"bytes,1,opt,name=rule,proto3" json:"rule,omitempty"`
+	// 项目 ID（容器、映射的规则），节点的规则为空。
+	ProjectId string `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	// 对象：映射名、容器名。
+	Subject string `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
+	// 需要的数据时长和已经积累的（秒）。
+	RequiredSeconds  uint32 `protobuf:"varint,4,opt,name=required_seconds,json=requiredSeconds,proto3" json:"required_seconds,omitempty"`
+	CollectedSeconds uint32 `protobuf:"varint,5,opt,name=collected_seconds,json=collectedSeconds,proto3" json:"collected_seconds,omitempty"`
+	// building：建立中；ready：可用；stalled：最近 10 分钟没有新数据。
+	Status string `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	// 最近一个样本的时间。
+	LastSample    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_sample,json=lastSample,proto3" json:"last_sample,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertBaseline) Reset() {
+	*x = AlertBaseline{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertBaseline) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertBaseline) ProtoMessage() {}
+
+func (x *AlertBaseline) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertBaseline.ProtoReflect.Descriptor instead.
+func (*AlertBaseline) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AlertBaseline) GetRule() string {
+	if x != nil {
+		return x.Rule
+	}
+	return ""
+}
+
+func (x *AlertBaseline) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *AlertBaseline) GetSubject() string {
+	if x != nil {
+		return x.Subject
+	}
+	return ""
+}
+
+func (x *AlertBaseline) GetRequiredSeconds() uint32 {
+	if x != nil {
+		return x.RequiredSeconds
+	}
+	return 0
+}
+
+func (x *AlertBaseline) GetCollectedSeconds() uint32 {
+	if x != nil {
+		return x.CollectedSeconds
+	}
+	return 0
+}
+
+func (x *AlertBaseline) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *AlertBaseline) GetLastSample() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSample
+	}
+	return nil
+}
+
 type AlertState struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	NodeId           string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -265,7 +382,7 @@ type AlertState struct {
 
 func (x *AlertState) Reset() {
 	*x = AlertState{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[4]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +394,7 @@ func (x *AlertState) String() string {
 func (*AlertState) ProtoMessage() {}
 
 func (x *AlertState) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[4]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +407,7 @@ func (x *AlertState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertState.ProtoReflect.Descriptor instead.
 func (*AlertState) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{4}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AlertState) GetNodeId() string {
@@ -366,7 +483,7 @@ type ListAlertStatesRequest struct {
 
 func (x *ListAlertStatesRequest) Reset() {
 	*x = ListAlertStatesRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[5]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -378,7 +495,7 @@ func (x *ListAlertStatesRequest) String() string {
 func (*ListAlertStatesRequest) ProtoMessage() {}
 
 func (x *ListAlertStatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[5]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -391,7 +508,7 @@ func (x *ListAlertStatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAlertStatesRequest.ProtoReflect.Descriptor instead.
 func (*ListAlertStatesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{5}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListAlertStatesRequest) GetNodeId() string {
@@ -418,7 +535,7 @@ type ListAlertStatesResponse struct {
 
 func (x *ListAlertStatesResponse) Reset() {
 	*x = ListAlertStatesResponse{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[6]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -430,7 +547,7 @@ func (x *ListAlertStatesResponse) String() string {
 func (*ListAlertStatesResponse) ProtoMessage() {}
 
 func (x *ListAlertStatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[6]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -443,7 +560,7 @@ func (x *ListAlertStatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAlertStatesResponse.ProtoReflect.Descriptor instead.
 func (*ListAlertStatesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{6}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListAlertStatesResponse) GetAlerts() []*AlertState {
@@ -477,7 +594,7 @@ type HandleAlertRequest struct {
 
 func (x *HandleAlertRequest) Reset() {
 	*x = HandleAlertRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[7]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -489,7 +606,7 @@ func (x *HandleAlertRequest) String() string {
 func (*HandleAlertRequest) ProtoMessage() {}
 
 func (x *HandleAlertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[7]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,7 +619,7 @@ func (x *HandleAlertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandleAlertRequest.ProtoReflect.Descriptor instead.
 func (*HandleAlertRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{7}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *HandleAlertRequest) GetNodeId() string {
@@ -563,7 +680,7 @@ type HandleAlertResponse struct {
 
 func (x *HandleAlertResponse) Reset() {
 	*x = HandleAlertResponse{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[8]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -575,7 +692,7 @@ func (x *HandleAlertResponse) String() string {
 func (*HandleAlertResponse) ProtoMessage() {}
 
 func (x *HandleAlertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[8]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -588,7 +705,7 @@ func (x *HandleAlertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HandleAlertResponse.ProtoReflect.Descriptor instead.
 func (*HandleAlertResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{8}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *HandleAlertResponse) GetAlert() *AlertState {
@@ -596,6 +713,699 @@ func (x *HandleAlertResponse) GetAlert() *AlertState {
 		return x.Alert
 	}
 	return nil
+}
+
+type GetAlertRulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAlertRulesRequest) Reset() {
+	*x = GetAlertRulesRequest{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAlertRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAlertRulesRequest) ProtoMessage() {}
+
+func (x *GetAlertRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAlertRulesRequest.ProtoReflect.Descriptor instead.
+func (*GetAlertRulesRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{10}
+}
+
+type GetAlertRulesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 内置默认值（每条规则每个字段都有值）。
+	Builtin       *AlertPolicy     `protobuf:"bytes,1,opt,name=builtin,proto3" json:"builtin,omitempty"`
+	Policy        *AlertPolicy     `protobuf:"bytes,2,opt,name=policy,proto3" json:"policy,omitempty"`
+	Overrides     []*AlertOverride `protobuf:"bytes,3,rep,name=overrides,proto3" json:"overrides,omitempty"`
+	CanEditPolicy bool             `protobuf:"varint,4,opt,name=can_edit_policy,json=canEditPolicy,proto3" json:"can_edit_policy,omitempty"`
+	// 全部规则的说明（alert.Defs），顺序就是界面上的顺序。
+	Defs []*AlertRuleDef `protobuf:"bytes,5,rep,name=defs,proto3" json:"defs,omitempty"`
+	// 全部事件通知（alert.Notices），顺序就是界面上的顺序。
+	Notices []*AlertNoticeDef `protobuf:"bytes,6,rep,name=notices,proto3" json:"notices,omitempty"`
+	// 能改安全类通知的开关（管理员）、能改其余通知的开关（panel.settings）。
+	CanEditSecurityNotices bool `protobuf:"varint,7,opt,name=can_edit_security_notices,json=canEditSecurityNotices,proto3" json:"can_edit_security_notices,omitempty"`
+	CanEditNotices         bool `protobuf:"varint,8,opt,name=can_edit_notices,json=canEditNotices,proto3" json:"can_edit_notices,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *GetAlertRulesResponse) Reset() {
+	*x = GetAlertRulesResponse{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAlertRulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAlertRulesResponse) ProtoMessage() {}
+
+func (x *GetAlertRulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAlertRulesResponse.ProtoReflect.Descriptor instead.
+func (*GetAlertRulesResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetAlertRulesResponse) GetBuiltin() *AlertPolicy {
+	if x != nil {
+		return x.Builtin
+	}
+	return nil
+}
+
+func (x *GetAlertRulesResponse) GetPolicy() *AlertPolicy {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
+}
+
+func (x *GetAlertRulesResponse) GetOverrides() []*AlertOverride {
+	if x != nil {
+		return x.Overrides
+	}
+	return nil
+}
+
+func (x *GetAlertRulesResponse) GetCanEditPolicy() bool {
+	if x != nil {
+		return x.CanEditPolicy
+	}
+	return false
+}
+
+func (x *GetAlertRulesResponse) GetDefs() []*AlertRuleDef {
+	if x != nil {
+		return x.Defs
+	}
+	return nil
+}
+
+func (x *GetAlertRulesResponse) GetNotices() []*AlertNoticeDef {
+	if x != nil {
+		return x.Notices
+	}
+	return nil
+}
+
+func (x *GetAlertRulesResponse) GetCanEditSecurityNotices() bool {
+	if x != nil {
+		return x.CanEditSecurityNotices
+	}
+	return false
+}
+
+func (x *GetAlertRulesResponse) GetCanEditNotices() bool {
+	if x != nil {
+		return x.CanEditNotices
+	}
+	return false
+}
+
+type AlertRuleDef struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// node：节点规则；route：按端口映射判断（可以在映射上覆盖）；panel：只有全局一层。
+	Node  bool   `protobuf:"varint,2,opt,name=node,proto3" json:"node,omitempty"`
+	Route bool   `protobuf:"varint,3,opt,name=route,proto3" json:"route,omitempty"`
+	Panel bool   `protobuf:"varint,4,opt,name=panel,proto3" json:"panel,omitempty"`
+	Unit  string `protobuf:"bytes,5,opt,name=unit,proto3" json:"unit,omitempty"`
+	// lower：值越低越糟（证书剩余天数）。
+	Lower bool `protobuf:"varint,6,opt,name=lower,proto3" json:"lower,omitempty"`
+	// 有意义的字段（threshold、for_seconds、recover_threshold、recover_seconds、repeat_minutes、window_minutes、min_requests）。
+	Fields        []string `protobuf:"bytes,7,rep,name=fields,proto3" json:"fields,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertRuleDef) Reset() {
+	*x = AlertRuleDef{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertRuleDef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertRuleDef) ProtoMessage() {}
+
+func (x *AlertRuleDef) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertRuleDef.ProtoReflect.Descriptor instead.
+func (*AlertRuleDef) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AlertRuleDef) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AlertRuleDef) GetNode() bool {
+	if x != nil {
+		return x.Node
+	}
+	return false
+}
+
+func (x *AlertRuleDef) GetRoute() bool {
+	if x != nil {
+		return x.Route
+	}
+	return false
+}
+
+func (x *AlertRuleDef) GetPanel() bool {
+	if x != nil {
+		return x.Panel
+	}
+	return false
+}
+
+func (x *AlertRuleDef) GetUnit() string {
+	if x != nil {
+		return x.Unit
+	}
+	return ""
+}
+
+func (x *AlertRuleDef) GetLower() bool {
+	if x != nil {
+		return x.Lower
+	}
+	return false
+}
+
+func (x *AlertRuleDef) GetFields() []string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+type AlertNoticeDef struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	// account、session、cluster、settings、failover。
+	Category string `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	Recovers bool   `protobuf:"varint,3,opt,name=recovers,proto3" json:"recovers,omitempty"`
+	// 关掉以后，攻击者的这类操作不会通知你。
+	Risky bool `protobuf:"varint,4,opt,name=risky,proto3" json:"risky,omitempty"`
+	// 安全类：只有管理员能改开关。
+	Security      bool   `protobuf:"varint,5,opt,name=security,proto3" json:"security,omitempty"`
+	Zh            string `protobuf:"bytes,6,opt,name=zh,proto3" json:"zh,omitempty"`
+	En            string `protobuf:"bytes,7,opt,name=en,proto3" json:"en,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertNoticeDef) Reset() {
+	*x = AlertNoticeDef{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertNoticeDef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertNoticeDef) ProtoMessage() {}
+
+func (x *AlertNoticeDef) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertNoticeDef.ProtoReflect.Descriptor instead.
+func (*AlertNoticeDef) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *AlertNoticeDef) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *AlertNoticeDef) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *AlertNoticeDef) GetRecovers() bool {
+	if x != nil {
+		return x.Recovers
+	}
+	return false
+}
+
+func (x *AlertNoticeDef) GetRisky() bool {
+	if x != nil {
+		return x.Risky
+	}
+	return false
+}
+
+func (x *AlertNoticeDef) GetSecurity() bool {
+	if x != nil {
+		return x.Security
+	}
+	return false
+}
+
+func (x *AlertNoticeDef) GetZh() string {
+	if x != nil {
+		return x.Zh
+	}
+	return ""
+}
+
+func (x *AlertNoticeDef) GetEn() string {
+	if x != nil {
+		return x.En
+	}
+	return ""
+}
+
+type UpdateAlertPolicyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Policy        *AlertPolicy           `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
+	BaseRevision  int64                  `protobuf:"varint,2,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAlertPolicyRequest) Reset() {
+	*x = UpdateAlertPolicyRequest{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAlertPolicyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAlertPolicyRequest) ProtoMessage() {}
+
+func (x *UpdateAlertPolicyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAlertPolicyRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAlertPolicyRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UpdateAlertPolicyRequest) GetPolicy() *AlertPolicy {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
+}
+
+func (x *UpdateAlertPolicyRequest) GetBaseRevision() int64 {
+	if x != nil {
+		return x.BaseRevision
+	}
+	return 0
+}
+
+type SetAlertNotificationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	BaseRevision  int64                  `protobuf:"varint,3,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAlertNotificationRequest) Reset() {
+	*x = SetAlertNotificationRequest{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAlertNotificationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAlertNotificationRequest) ProtoMessage() {}
+
+func (x *SetAlertNotificationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAlertNotificationRequest.ProtoReflect.Descriptor instead.
+func (*SetAlertNotificationRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SetAlertNotificationRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *SetAlertNotificationRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *SetAlertNotificationRequest) GetBaseRevision() int64 {
+	if x != nil {
+		return x.BaseRevision
+	}
+	return 0
+}
+
+type ListAlertBaselinesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAlertBaselinesRequest) Reset() {
+	*x = ListAlertBaselinesRequest{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAlertBaselinesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAlertBaselinesRequest) ProtoMessage() {}
+
+func (x *ListAlertBaselinesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAlertBaselinesRequest.ProtoReflect.Descriptor instead.
+func (*ListAlertBaselinesRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{16}
+}
+
+type ListAlertBaselinesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Baselines     []*AlertBaselineState  `protobuf:"bytes,1,rep,name=baselines,proto3" json:"baselines,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAlertBaselinesResponse) Reset() {
+	*x = ListAlertBaselinesResponse{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAlertBaselinesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAlertBaselinesResponse) ProtoMessage() {}
+
+func (x *ListAlertBaselinesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAlertBaselinesResponse.ProtoReflect.Descriptor instead.
+func (*ListAlertBaselinesResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ListAlertBaselinesResponse) GetBaselines() []*AlertBaselineState {
+	if x != nil {
+		return x.Baselines
+	}
+	return nil
+}
+
+type AlertBaselineState struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	// 节点名称；看不到的节点为空。
+	Node string `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	// 项目名称（项目 ID 在 baseline 里）。
+	Project  string         `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
+	Baseline *AlertBaseline `protobuf:"bytes,4,opt,name=baseline,proto3" json:"baseline,omitempty"`
+	// 节点版本不支持上报基线（v0.37）。
+	Unsupported   bool `protobuf:"varint,5,opt,name=unsupported,proto3" json:"unsupported,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AlertBaselineState) Reset() {
+	*x = AlertBaselineState{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AlertBaselineState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AlertBaselineState) ProtoMessage() {}
+
+func (x *AlertBaselineState) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AlertBaselineState.ProtoReflect.Descriptor instead.
+func (*AlertBaselineState) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *AlertBaselineState) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *AlertBaselineState) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *AlertBaselineState) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *AlertBaselineState) GetBaseline() *AlertBaseline {
+	if x != nil {
+		return x.Baseline
+	}
+	return nil
+}
+
+func (x *AlertBaselineState) GetUnsupported() bool {
+	if x != nil {
+		return x.Unsupported
+	}
+	return false
+}
+
+type SetAlertOverrideRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Container     string                 `protobuf:"bytes,4,opt,name=container,proto3" json:"container,omitempty"`
+	Rules         map[string]*AlertRule  `protobuf:"bytes,5,rep,name=rules,proto3" json:"rules,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	BaseRevision  int64                  `protobuf:"varint,6,opt,name=base_revision,json=baseRevision,proto3" json:"base_revision,omitempty"`
+	Route         string                 `protobuf:"bytes,7,opt,name=route,proto3" json:"route,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAlertOverrideRequest) Reset() {
+	*x = SetAlertOverrideRequest{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAlertOverrideRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAlertOverrideRequest) ProtoMessage() {}
+
+func (x *SetAlertOverrideRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAlertOverrideRequest.ProtoReflect.Descriptor instead.
+func (*SetAlertOverrideRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SetAlertOverrideRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *SetAlertOverrideRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *SetAlertOverrideRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *SetAlertOverrideRequest) GetContainer() string {
+	if x != nil {
+		return x.Container
+	}
+	return ""
+}
+
+func (x *SetAlertOverrideRequest) GetRules() map[string]*AlertRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *SetAlertOverrideRequest) GetBaseRevision() int64 {
+	if x != nil {
+		return x.BaseRevision
+	}
+	return 0
+}
+
+func (x *SetAlertOverrideRequest) GetRoute() string {
+	if x != nil {
+		return x.Route
+	}
+	return ""
 }
 
 var File_nagi_v1_alert_state_proto protoreflect.FileDescriptor
@@ -611,13 +1421,25 @@ const file_nagi_v1_alert_state_proto_rawDesc = "" +
 	"ledgerJson\"f\n" +
 	"\x17RelayHandleAlertRequest\x125\n" +
 	"\arequest\x18\x01 \x01(\v2\x1b.nagi.v1.HandleAlertRequestR\arequest\x12\x14\n" +
-	"\x05actor\x18\x02 \x01(\tR\x05actor\"\xaf\x01\n" +
+	"\x05actor\x18\x02 \x01(\tR\x05actor\"\x96\x02\n" +
 	"\tAlertSync\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x04R\brevision\x12(\n" +
 	"\acurrent\x18\x03 \x03(\v2\x0e.nagi.v1.AlertR\acurrent\x12(\n" +
 	"\ahistory\x18\x04 \x03(\v2\x0e.nagi.v1.AlertR\ahistory\x12\x1a\n" +
-	"\bcomplete\x18\x05 \x01(\bR\bcomplete\"\x9f\x03\n" +
+	"\bcomplete\x18\x05 \x01(\bR\bcomplete\x124\n" +
+	"\tbaselines\x18\x06 \x03(\v2\x16.nagi.v1.AlertBaselineR\tbaselines\x12/\n" +
+	"\x13baselines_supported\x18\a \x01(\bR\x12baselinesSupported\"\x89\x02\n" +
+	"\rAlertBaseline\x12\x12\n" +
+	"\x04rule\x18\x01 \x01(\tR\x04rule\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x18\n" +
+	"\asubject\x18\x03 \x01(\tR\asubject\x12)\n" +
+	"\x10required_seconds\x18\x04 \x01(\rR\x0frequiredSeconds\x12+\n" +
+	"\x11collected_seconds\x18\x05 \x01(\rR\x10collectedSeconds\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12;\n" +
+	"\vlast_sample\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"lastSample\"\x9f\x03\n" +
 	"\n" +
 	"AlertState\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12$\n" +
@@ -652,10 +1474,70 @@ const file_nagi_v1_alert_state_proto_rawDesc = "" +
 	"conclusion\x120\n" +
 	"\x05until\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"@\n" +
 	"\x13HandleAlertResponse\x12)\n" +
-	"\x05alert\x18\x01 \x01(\v2\x13.nagi.v1.AlertStateR\x05alert2\xae\x01\n" +
+	"\x05alert\x18\x01 \x01(\v2\x13.nagi.v1.AlertStateR\x05alert\"\x16\n" +
+	"\x14GetAlertRulesRequest\"\x96\x03\n" +
+	"\x15GetAlertRulesResponse\x12.\n" +
+	"\abuiltin\x18\x01 \x01(\v2\x14.nagi.v1.AlertPolicyR\abuiltin\x12,\n" +
+	"\x06policy\x18\x02 \x01(\v2\x14.nagi.v1.AlertPolicyR\x06policy\x124\n" +
+	"\toverrides\x18\x03 \x03(\v2\x16.nagi.v1.AlertOverrideR\toverrides\x12&\n" +
+	"\x0fcan_edit_policy\x18\x04 \x01(\bR\rcanEditPolicy\x12)\n" +
+	"\x04defs\x18\x05 \x03(\v2\x15.nagi.v1.AlertRuleDefR\x04defs\x121\n" +
+	"\anotices\x18\x06 \x03(\v2\x17.nagi.v1.AlertNoticeDefR\anotices\x129\n" +
+	"\x19can_edit_security_notices\x18\a \x01(\bR\x16canEditSecurityNotices\x12(\n" +
+	"\x10can_edit_notices\x18\b \x01(\bR\x0ecanEditNotices\"\xa4\x01\n" +
+	"\fAlertRuleDef\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04node\x18\x02 \x01(\bR\x04node\x12\x14\n" +
+	"\x05route\x18\x03 \x01(\bR\x05route\x12\x14\n" +
+	"\x05panel\x18\x04 \x01(\bR\x05panel\x12\x12\n" +
+	"\x04unit\x18\x05 \x01(\tR\x04unit\x12\x14\n" +
+	"\x05lower\x18\x06 \x01(\bR\x05lower\x12\x16\n" +
+	"\x06fields\x18\a \x03(\tR\x06fields\"\xac\x01\n" +
+	"\x0eAlertNoticeDef\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1a\n" +
+	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x1a\n" +
+	"\brecovers\x18\x03 \x01(\bR\brecovers\x12\x14\n" +
+	"\x05risky\x18\x04 \x01(\bR\x05risky\x12\x1a\n" +
+	"\bsecurity\x18\x05 \x01(\bR\bsecurity\x12\x0e\n" +
+	"\x02zh\x18\x06 \x01(\tR\x02zh\x12\x0e\n" +
+	"\x02en\x18\a \x01(\tR\x02en\"m\n" +
+	"\x18UpdateAlertPolicyRequest\x12,\n" +
+	"\x06policy\x18\x01 \x01(\v2\x14.nagi.v1.AlertPolicyR\x06policy\x12#\n" +
+	"\rbase_revision\x18\x02 \x01(\x03R\fbaseRevision\"n\n" +
+	"\x1bSetAlertNotificationRequest\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12#\n" +
+	"\rbase_revision\x18\x03 \x01(\x03R\fbaseRevision\"\x1b\n" +
+	"\x19ListAlertBaselinesRequest\"W\n" +
+	"\x1aListAlertBaselinesResponse\x129\n" +
+	"\tbaselines\x18\x01 \x03(\v2\x1b.nagi.v1.AlertBaselineStateR\tbaselines\"\xb1\x01\n" +
+	"\x12AlertBaselineState\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\x12\x18\n" +
+	"\aproject\x18\x03 \x01(\tR\aproject\x122\n" +
+	"\bbaseline\x18\x04 \x01(\v2\x16.nagi.v1.AlertBaselineR\bbaseline\x12 \n" +
+	"\vunsupported\x18\x05 \x01(\bR\vunsupported\"\xd1\x02\n" +
+	"\x17SetAlertOverrideRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x17\n" +
+	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x1c\n" +
+	"\tcontainer\x18\x04 \x01(\tR\tcontainer\x12A\n" +
+	"\x05rules\x18\x05 \x03(\v2+.nagi.v1.SetAlertOverrideRequest.RulesEntryR\x05rules\x12#\n" +
+	"\rbase_revision\x18\x06 \x01(\x03R\fbaseRevision\x12\x14\n" +
+	"\x05route\x18\a \x01(\tR\x05route\x1aL\n" +
+	"\n" +
+	"RulesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x012\xcd\x04\n" +
 	"\fAlertService\x12T\n" +
 	"\x0fListAlertStates\x12\x1f.nagi.v1.ListAlertStatesRequest\x1a .nagi.v1.ListAlertStatesResponse\x12H\n" +
-	"\vHandleAlert\x12\x1b.nagi.v1.HandleAlertRequest\x1a\x1c.nagi.v1.HandleAlertResponse2\xa9\x01\n" +
+	"\vHandleAlert\x12\x1b.nagi.v1.HandleAlertRequest\x1a\x1c.nagi.v1.HandleAlertResponse\x12N\n" +
+	"\rGetAlertRules\x12\x1d.nagi.v1.GetAlertRulesRequest\x1a\x1e.nagi.v1.GetAlertRulesResponse\x12L\n" +
+	"\x11UpdateAlertPolicy\x12!.nagi.v1.UpdateAlertPolicyRequest\x1a\x14.nagi.v1.AlertPolicy\x12L\n" +
+	"\x10SetAlertOverride\x12 .nagi.v1.SetAlertOverrideRequest\x1a\x16.nagi.v1.AlertOverride\x12R\n" +
+	"\x14SetAlertNotification\x12$.nagi.v1.SetAlertNotificationRequest\x1a\x14.nagi.v1.AlertPolicy\x12]\n" +
+	"\x12ListAlertBaselines\x12\".nagi.v1.ListAlertBaselinesRequest\x1a#.nagi.v1.ListAlertBaselinesResponse2\xa9\x01\n" +
 	"\x11PanelAlertService\x12G\n" +
 	"\x10ReadAlertReplica\x12\x1c.nagi.v1.AlertReplicaRequest\x1a\x15.nagi.v1.AlertReplica\x12K\n" +
 	"\x10RelayHandleAlert\x12 .nagi.v1.RelayHandleAlertRequest\x1a\x15.nagi.v1.AlertReplicaBN\n" +
@@ -673,44 +1555,81 @@ func file_nagi_v1_alert_state_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_alert_state_proto_rawDescData
 }
 
-var file_nagi_v1_alert_state_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_nagi_v1_alert_state_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_nagi_v1_alert_state_proto_goTypes = []any{
-	(*AlertReplicaRequest)(nil),     // 0: nagi.v1.AlertReplicaRequest
-	(*AlertReplica)(nil),            // 1: nagi.v1.AlertReplica
-	(*RelayHandleAlertRequest)(nil), // 2: nagi.v1.RelayHandleAlertRequest
-	(*AlertSync)(nil),               // 3: nagi.v1.AlertSync
-	(*AlertState)(nil),              // 4: nagi.v1.AlertState
-	(*ListAlertStatesRequest)(nil),  // 5: nagi.v1.ListAlertStatesRequest
-	(*ListAlertStatesResponse)(nil), // 6: nagi.v1.ListAlertStatesResponse
-	(*HandleAlertRequest)(nil),      // 7: nagi.v1.HandleAlertRequest
-	(*HandleAlertResponse)(nil),     // 8: nagi.v1.HandleAlertResponse
-	(*Alert)(nil),                   // 9: nagi.v1.Alert
-	(*timestamppb.Timestamp)(nil),   // 10: google.protobuf.Timestamp
+	(*AlertReplicaRequest)(nil),         // 0: nagi.v1.AlertReplicaRequest
+	(*AlertReplica)(nil),                // 1: nagi.v1.AlertReplica
+	(*RelayHandleAlertRequest)(nil),     // 2: nagi.v1.RelayHandleAlertRequest
+	(*AlertSync)(nil),                   // 3: nagi.v1.AlertSync
+	(*AlertBaseline)(nil),               // 4: nagi.v1.AlertBaseline
+	(*AlertState)(nil),                  // 5: nagi.v1.AlertState
+	(*ListAlertStatesRequest)(nil),      // 6: nagi.v1.ListAlertStatesRequest
+	(*ListAlertStatesResponse)(nil),     // 7: nagi.v1.ListAlertStatesResponse
+	(*HandleAlertRequest)(nil),          // 8: nagi.v1.HandleAlertRequest
+	(*HandleAlertResponse)(nil),         // 9: nagi.v1.HandleAlertResponse
+	(*GetAlertRulesRequest)(nil),        // 10: nagi.v1.GetAlertRulesRequest
+	(*GetAlertRulesResponse)(nil),       // 11: nagi.v1.GetAlertRulesResponse
+	(*AlertRuleDef)(nil),                // 12: nagi.v1.AlertRuleDef
+	(*AlertNoticeDef)(nil),              // 13: nagi.v1.AlertNoticeDef
+	(*UpdateAlertPolicyRequest)(nil),    // 14: nagi.v1.UpdateAlertPolicyRequest
+	(*SetAlertNotificationRequest)(nil), // 15: nagi.v1.SetAlertNotificationRequest
+	(*ListAlertBaselinesRequest)(nil),   // 16: nagi.v1.ListAlertBaselinesRequest
+	(*ListAlertBaselinesResponse)(nil),  // 17: nagi.v1.ListAlertBaselinesResponse
+	(*AlertBaselineState)(nil),          // 18: nagi.v1.AlertBaselineState
+	(*SetAlertOverrideRequest)(nil),     // 19: nagi.v1.SetAlertOverrideRequest
+	nil,                                 // 20: nagi.v1.SetAlertOverrideRequest.RulesEntry
+	(*Alert)(nil),                       // 21: nagi.v1.Alert
+	(*timestamppb.Timestamp)(nil),       // 22: google.protobuf.Timestamp
+	(*AlertPolicy)(nil),                 // 23: nagi.v1.AlertPolicy
+	(*AlertOverride)(nil),               // 24: nagi.v1.AlertOverride
+	(*AlertRule)(nil),                   // 25: nagi.v1.AlertRule
 }
 var file_nagi_v1_alert_state_proto_depIdxs = []int32{
-	7,  // 0: nagi.v1.RelayHandleAlertRequest.request:type_name -> nagi.v1.HandleAlertRequest
-	9,  // 1: nagi.v1.AlertSync.current:type_name -> nagi.v1.Alert
-	9,  // 2: nagi.v1.AlertSync.history:type_name -> nagi.v1.Alert
-	9,  // 3: nagi.v1.AlertState.alert:type_name -> nagi.v1.Alert
-	10, // 4: nagi.v1.AlertState.silence_until:type_name -> google.protobuf.Timestamp
-	10, // 5: nagi.v1.AlertState.maintenance_until:type_name -> google.protobuf.Timestamp
-	10, // 6: nagi.v1.AlertState.received_at:type_name -> google.protobuf.Timestamp
-	4,  // 7: nagi.v1.ListAlertStatesResponse.alerts:type_name -> nagi.v1.AlertState
-	10, // 8: nagi.v1.HandleAlertRequest.until:type_name -> google.protobuf.Timestamp
-	4,  // 9: nagi.v1.HandleAlertResponse.alert:type_name -> nagi.v1.AlertState
-	5,  // 10: nagi.v1.AlertService.ListAlertStates:input_type -> nagi.v1.ListAlertStatesRequest
-	7,  // 11: nagi.v1.AlertService.HandleAlert:input_type -> nagi.v1.HandleAlertRequest
-	0,  // 12: nagi.v1.PanelAlertService.ReadAlertReplica:input_type -> nagi.v1.AlertReplicaRequest
-	2,  // 13: nagi.v1.PanelAlertService.RelayHandleAlert:input_type -> nagi.v1.RelayHandleAlertRequest
-	6,  // 14: nagi.v1.AlertService.ListAlertStates:output_type -> nagi.v1.ListAlertStatesResponse
-	8,  // 15: nagi.v1.AlertService.HandleAlert:output_type -> nagi.v1.HandleAlertResponse
-	1,  // 16: nagi.v1.PanelAlertService.ReadAlertReplica:output_type -> nagi.v1.AlertReplica
-	1,  // 17: nagi.v1.PanelAlertService.RelayHandleAlert:output_type -> nagi.v1.AlertReplica
-	14, // [14:18] is the sub-list for method output_type
-	10, // [10:14] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	8,  // 0: nagi.v1.RelayHandleAlertRequest.request:type_name -> nagi.v1.HandleAlertRequest
+	21, // 1: nagi.v1.AlertSync.current:type_name -> nagi.v1.Alert
+	21, // 2: nagi.v1.AlertSync.history:type_name -> nagi.v1.Alert
+	4,  // 3: nagi.v1.AlertSync.baselines:type_name -> nagi.v1.AlertBaseline
+	22, // 4: nagi.v1.AlertBaseline.last_sample:type_name -> google.protobuf.Timestamp
+	21, // 5: nagi.v1.AlertState.alert:type_name -> nagi.v1.Alert
+	22, // 6: nagi.v1.AlertState.silence_until:type_name -> google.protobuf.Timestamp
+	22, // 7: nagi.v1.AlertState.maintenance_until:type_name -> google.protobuf.Timestamp
+	22, // 8: nagi.v1.AlertState.received_at:type_name -> google.protobuf.Timestamp
+	5,  // 9: nagi.v1.ListAlertStatesResponse.alerts:type_name -> nagi.v1.AlertState
+	22, // 10: nagi.v1.HandleAlertRequest.until:type_name -> google.protobuf.Timestamp
+	5,  // 11: nagi.v1.HandleAlertResponse.alert:type_name -> nagi.v1.AlertState
+	23, // 12: nagi.v1.GetAlertRulesResponse.builtin:type_name -> nagi.v1.AlertPolicy
+	23, // 13: nagi.v1.GetAlertRulesResponse.policy:type_name -> nagi.v1.AlertPolicy
+	24, // 14: nagi.v1.GetAlertRulesResponse.overrides:type_name -> nagi.v1.AlertOverride
+	12, // 15: nagi.v1.GetAlertRulesResponse.defs:type_name -> nagi.v1.AlertRuleDef
+	13, // 16: nagi.v1.GetAlertRulesResponse.notices:type_name -> nagi.v1.AlertNoticeDef
+	23, // 17: nagi.v1.UpdateAlertPolicyRequest.policy:type_name -> nagi.v1.AlertPolicy
+	18, // 18: nagi.v1.ListAlertBaselinesResponse.baselines:type_name -> nagi.v1.AlertBaselineState
+	4,  // 19: nagi.v1.AlertBaselineState.baseline:type_name -> nagi.v1.AlertBaseline
+	20, // 20: nagi.v1.SetAlertOverrideRequest.rules:type_name -> nagi.v1.SetAlertOverrideRequest.RulesEntry
+	25, // 21: nagi.v1.SetAlertOverrideRequest.RulesEntry.value:type_name -> nagi.v1.AlertRule
+	6,  // 22: nagi.v1.AlertService.ListAlertStates:input_type -> nagi.v1.ListAlertStatesRequest
+	8,  // 23: nagi.v1.AlertService.HandleAlert:input_type -> nagi.v1.HandleAlertRequest
+	10, // 24: nagi.v1.AlertService.GetAlertRules:input_type -> nagi.v1.GetAlertRulesRequest
+	14, // 25: nagi.v1.AlertService.UpdateAlertPolicy:input_type -> nagi.v1.UpdateAlertPolicyRequest
+	19, // 26: nagi.v1.AlertService.SetAlertOverride:input_type -> nagi.v1.SetAlertOverrideRequest
+	15, // 27: nagi.v1.AlertService.SetAlertNotification:input_type -> nagi.v1.SetAlertNotificationRequest
+	16, // 28: nagi.v1.AlertService.ListAlertBaselines:input_type -> nagi.v1.ListAlertBaselinesRequest
+	0,  // 29: nagi.v1.PanelAlertService.ReadAlertReplica:input_type -> nagi.v1.AlertReplicaRequest
+	2,  // 30: nagi.v1.PanelAlertService.RelayHandleAlert:input_type -> nagi.v1.RelayHandleAlertRequest
+	7,  // 31: nagi.v1.AlertService.ListAlertStates:output_type -> nagi.v1.ListAlertStatesResponse
+	9,  // 32: nagi.v1.AlertService.HandleAlert:output_type -> nagi.v1.HandleAlertResponse
+	11, // 33: nagi.v1.AlertService.GetAlertRules:output_type -> nagi.v1.GetAlertRulesResponse
+	23, // 34: nagi.v1.AlertService.UpdateAlertPolicy:output_type -> nagi.v1.AlertPolicy
+	24, // 35: nagi.v1.AlertService.SetAlertOverride:output_type -> nagi.v1.AlertOverride
+	23, // 36: nagi.v1.AlertService.SetAlertNotification:output_type -> nagi.v1.AlertPolicy
+	17, // 37: nagi.v1.AlertService.ListAlertBaselines:output_type -> nagi.v1.ListAlertBaselinesResponse
+	1,  // 38: nagi.v1.PanelAlertService.ReadAlertReplica:output_type -> nagi.v1.AlertReplica
+	1,  // 39: nagi.v1.PanelAlertService.RelayHandleAlert:output_type -> nagi.v1.AlertReplica
+	31, // [31:40] is the sub-list for method output_type
+	22, // [22:31] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_alert_state_proto_init() }
@@ -725,7 +1644,7 @@ func file_nagi_v1_alert_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_alert_state_proto_rawDesc), len(file_nagi_v1_alert_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

@@ -49,6 +49,7 @@ import {
   Row,
   RowsSkeleton,
   Section,
+  SettingRows,
   Roll,
   Segmented,
   Slide,
@@ -61,9 +62,8 @@ import {
   oneLineTextarea,
   textLink,
 } from "@/components/ui";
-import { create } from "@bufbuild/protobuf";
-import { AlertRulesSchema, type AlertRules, type Container, type Project, type ServiceStatus } from "@/gen/nagi/v1/common_pb";
-import { AlertRulesFields, AlertRulesForm, containerRules } from "@/components/alert-rules";
+import { type Container, type Project, type ServiceStatus } from "@/gen/nagi/v1/common_pb";
+import { AlertRulesLink } from "@/pages/alert-rules";
 import { useUnsaved } from "@/components/unsaved";
 import { EnvEditor, type EnvMode } from "@/components/env-editor";
 import { ConfigDiff } from "@/components/config-diff";
@@ -835,42 +835,13 @@ function ContainerDetail({
   );
 }
 
-// ContainerAlerts：容器的告警规则。默认用项目的；单独设置时整组替换项目的，起点是项目现在的规则。
+// ContainerAlerts：规则集中在 设置 → 告警，这里只显示这个容器覆盖了几项和跳转。
 function ContainerAlerts({ project, container }: { project: Project; container: Container }) {
-  const queryClient = useQueryClient();
-  const isViewer = !useRole().can("project.alerts");
-  const projectRules = project.settings?.alertRules;
-  const [own, setOwn] = useState(!!container.alertRules);
-  const save = async (rules: AlertRules | undefined) => {
-    await projectClient.setContainerAlertRules({ projectId: project.id, container: container.name, rules });
-    toast.success(t.alerts.savedAndPushed);
-    await queryClient.invalidateQueries({ queryKey: ["project", project.id] });
-  };
-  const toggle = async (v: boolean) => {
-    // 改回用项目的规则时立即保存（没有别的要填），单独设置的规则会被清掉，先确认。
-    if (!v && container.alertRules && !(await confirmAction(t.alerts.useProjectConfirm(containerLabel(container)), { action: t.alerts.useProject, danger: true }))) return;
-    setOwn(v);
-    if (!v && container.alertRules) {
-      try {
-        await save(undefined);
-      } catch (err) {
-        setOwn(true);
-        toast.error(errorMessage(err));
-      }
-    }
-  };
   return (
-    <Section title={t.alerts.rules} help={t.alerts.containerRulesHelp}>
-      <div className="grid gap-6">
-        <Check checked={own} disabled={isViewer} onChange={toggle} help={t.alerts.containerOwnHelp}>
-          {t.alerts.containerOwn}
-        </Check>
-        {own ? (
-          <AlertRulesForm id={`container-alerts-${container.name}`} defs={containerRules} initial={container.alertRules ?? projectRules} disabled={isViewer} onSave={save} />
-        ) : (
-          <AlertRulesFields id={`container-alerts-${container.name}`} defs={containerRules} value={projectRules ?? create(AlertRulesSchema)} onChange={() => {}} disabled />
-        )}
-      </div>
+    <Section title={t.alerts.rules}>
+      <SettingRows>
+        <AlertRulesLink scope="container" projectId={project.id} container={container.name} />
+      </SettingRows>
     </Section>
   );
 }

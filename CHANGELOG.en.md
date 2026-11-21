@@ -32,6 +32,30 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - After upgrading a node with a large amount of legacy monitoring history (tens of millions of records), counting the records at the start of the migration holds the node database for about a minute. During that time the node may disconnect from and reconnect to the panel once or twice, then works normally.
 - How fast recent copies are received is limited by the panel's disk performance. With heavy logging, recent copies may still fall behind; the node originals are not affected.
 - The audit retry queue is kept in memory. If the panel process is killed or loses power, audit records still in the queue are lost.
+> [!TIP]
+> Alert rules are migrated to the new settings automatically on the panel's first start; thresholds you changed and rules you turned off are kept. Upgrade the panel and nodes together: older nodes keep using the previous rules and don't know the new ones.
+
+### New features
+
+- All alert rules are now managed in Settings → Alerts: global defaults plus overrides per node, project, container and port mapping. Each level stores only the fields it changes and follows the level above for the rest, so a container no longer stops following its project after getting its own rules. Node, project and container pages show how many fields are overridden and link to the settings page.
+- Every rule has a configurable trigger threshold, how long it must last, recovery threshold (hysteresis), how long recovery must hold and reminder interval.
+- New alerts: log store write failures, log store nearly full, node upgrade failed or rolled back, mesh peer disconnected, witness unreachable, node certificate renewal failed, container OOM, inodes nearly full, kernel disk errors, kernel OOM, no recent successful snapshot, replica sync lag, background migration failed, scheduled audit chain verification failed, NIC errors and drops, conntrack nearly full, clock skew, mesh loss and latency, and access tokens about to expire.
+- New TCP/UDP mapping alerts: new connection surge, too many active connections, high connection failure rate, bandwidth above a limit and port cannot listen, with project and mapping overrides.
+- The Logs page shows baseline progress for surge rules: how long they need, how much has been collected and when they will be ready. It collapses once everything is ready.
+- All event notifications (accounts, sessions, cluster, panel settings, failover) are listed in Settings → Alerts and can be turned off one by one; all are on by default. Turning one off requires re-authentication, notifies the current channels first, and is audited; security items can only be changed by administrators.
+- New notifications: member deleted, administrator role removed, role created, changed or deleted, session policy changed, node removed, panel removed, join command or invite created, failover and backup settings changed.
+- Notifications can be sent in Chinese or English.
+
+### Improvements
+
+- An alert recovers only after dropping below its recovery threshold and staying there for a while, so values hovering around a threshold no longer cause repeated alert and recovery messages. Alerts that keep firing pause individual notifications.
+- Notifications state the current value and threshold. Recovery messages state the value at recovery, how long the alert lasted and its peak, instead of repeating the alert text.
+- Silences and maintenance also cover new occurrences of the same alert. Turning a rule off or deleting its object ends the alert instead of leaving it in Current alerts.
+
+### Fixes
+
+- Fixed recovery messages showing a higher memory value than the alert and "for more than 5 minutes" when memory hovered around the threshold.
+- Fixed backup and standby alerts being rechecked against node rules before resending, so they were sent even when turned off.
 
 ## v0.37.0
 

@@ -6,13 +6,16 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	"github.com/SIPC/nagi/internal/pkg/release"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/nodes"
 	"github.com/SIPC/nagi/internal/server/standby"
 	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
@@ -131,6 +134,7 @@ func (a *API) withUpdates(ctx context.Context, fn func(*updateRecords)) {
 		u.cancels = map[*updateState]context.CancelFunc{}
 	}
 	fn(&u.state)
+	a.upgradeAlerts(ctx, &u.state)
 	raw, err := json.Marshal(u.state)
 	if err != nil || string(raw) == u.saved {
 		return
@@ -519,4 +523,29 @@ func (a *API) cancelNodeInstall(ctx context.Context, id string) error {
 func newUpdateState(target, from, phase string) *updateState {
 	now := time.Now().Unix()
 	return &updateState{Target: target, From: from, Phase: phase, Started: now, Changed: now}
+}
+
+// upgradeAlerts 按更新记录发出「节点升级失败或回退」告警（见 docs/monitoring.md#告警）：节点的记录变成失败时告警
+// （包括节点自动换回旧版本），记录被删掉（升级成功、节点移除）时恢复或结束。只在主面板上。调用方持有 stateMu。
+func (a *API) upgradeAlerts(ctx context.Context, r *updateRecords) {
+	if a.Nodes == nil || a.Panel == nil || a.Panel.Standby != nil {
+		return
+	}
+	now := time.Now()
+	seen := map[string]bool{}
+	for id, n := range r.Nodes {
+		key := "upgrade:" + id
+		seen[key] = true
+		if n.Phase != updateFailed {
+			continue
+		}
+		go a.Nodes.EvaluatePanelRule(context.WithoutCancel(ctx), nodes.PanelObservation{Key: key, Rule: alert.RuleUpgrade, NodeID: id, Node: a.nodeName(ctx, id),
+			Subject: n.Target, Bad: true, Message: n.Error}, now)
+	}
+	for _, key := range a.Nodes.PanelRuleKeys("upgrade:") {
+		if !seen[key] {
+			id := strings.TrimPrefix(key, "upgrade:")
+			go a.Nodes.EvaluatePanelRule(context.WithoutCancel(ctx), nodes.PanelObservation{Key: key, Rule: alert.RuleUpgrade, NodeID: id, Node: a.nodeName(ctx, id), Good: true}, now)
+		}
+	}
 }

@@ -55,7 +55,8 @@ const tabAllowed: Record<SettingsTab, (can: Can, isAdmin: boolean) => boolean> =
   access: (can) => can("panel.settings"),
   "panel-security": (can) => can("panel.security"),
   members: (can) => can("panel.members"),
-  alerts: (can) => can("panel.settings"),
+  // 告警：渠道要面板设置；规则按层级（节点管理、项目告警或管理）也能进来改自己范围里的覆盖。
+  alerts: (can) => can("panel.settings") || can("node.manage") || can("project.alerts") || can("project.manage"),
   standby: (_, isAdmin) => isAdmin,
   invite: (_, isAdmin) => isAdmin,
   mesh: (_, isAdmin) => isAdmin,

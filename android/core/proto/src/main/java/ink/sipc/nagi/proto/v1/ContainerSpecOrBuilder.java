@@ -487,4 +487,79 @@ java.lang.String defaultValue);
    * <code>repeated .nagi.v1.BackupTarget backups = 27 [json_name = "backups"];</code>
    */
   int getBackupsCount();
+
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   * @return Whether the effectiveAlertRules field is set.
+   */
+  boolean hasEffectiveAlertRules();
+  /**
+   * <pre>
+   * 这个容器生效的告警规则（新版本节点用它，旧版本用 alert_rules）。
+   * </pre>
+   *
+   * <code>.nagi.v1.EffectiveAlertRules effective_alert_rules = 28 [json_name = "effectiveAlertRules"];</code>
+   * @return The effectiveAlertRules.
+   */
+  ink.sipc.nagi.proto.v1.EffectiveAlertRules getEffectiveAlertRules();
+
+  /**
+   * <pre>
+   * 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+   * </pre>
+   *
+   * <code>map&lt;string, .nagi.v1.EffectiveAlertRules&gt; route_alert_rules = 29 [json_name = "routeAlertRules"];</code>
+   */
+  int getRouteAlertRulesCount();
+  /**
+   * <pre>
+   * 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+   * </pre>
+   *
+   * <code>map&lt;string, .nagi.v1.EffectiveAlertRules&gt; route_alert_rules = 29 [json_name = "routeAlertRules"];</code>
+   */
+  boolean containsRouteAlertRules(
+      java.lang.String key);
+  /**
+   * Use {@link #getRouteAlertRulesMap()} instead.
+   */
+  @java.lang.Deprecated
+  java.util.Map<java.lang.String, ink.sipc.nagi.proto.v1.EffectiveAlertRules>
+  getRouteAlertRules();
+  /**
+   * <pre>
+   * 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+   * </pre>
+   *
+   * <code>map&lt;string, .nagi.v1.EffectiveAlertRules&gt; route_alert_rules = 29 [json_name = "routeAlertRules"];</code>
+   */
+  java.util.Map<java.lang.String, ink.sipc.nagi.proto.v1.EffectiveAlertRules>
+  getRouteAlertRulesMap();
+  /**
+   * <pre>
+   * 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+   * </pre>
+   *
+   * <code>map&lt;string, .nagi.v1.EffectiveAlertRules&gt; route_alert_rules = 29 [json_name = "routeAlertRules"];</code>
+   */
+
+  /* nullable */
+ink.sipc.nagi.proto.v1.EffectiveAlertRules getRouteAlertRulesOrDefault(
+      java.lang.String key,
+      /* nullable */
+ink.sipc.nagi.proto.v1.EffectiveAlertRules defaultValue);
+  /**
+   * <pre>
+   * 有映射层覆盖的映射（键是映射名）生效的告警规则；没有的映射用 effective_alert_rules。
+   * </pre>
+   *
+   * <code>map&lt;string, .nagi.v1.EffectiveAlertRules&gt; route_alert_rules = 29 [json_name = "routeAlertRules"];</code>
+   */
+
+  ink.sipc.nagi.proto.v1.EffectiveAlertRules getRouteAlertRulesOrThrow(
+      java.lang.String key);
 }

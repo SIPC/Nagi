@@ -137,6 +137,7 @@ func (s *settingsService) CreateRole(ctx context.Context, req *connect.Request[n
 	if err != nil {
 		return nil, err
 	}
+	s.notify(ctx, "role", i18n.Errorf("新建了角色 %s", r.Name).Error(), "")
 	return connect.NewResponse(roleProto(r)), nil
 }
 
@@ -219,6 +220,7 @@ func (s *settingsService) UpdateRole(ctx context.Context, req *connect.Request[n
 	if err != nil {
 		return nil, err
 	}
+	s.notify(ctx, "role", i18n.Errorf("角色 %s 已修改", r.Name).Error(), "")
 	return connect.NewResponse(roleProto(r)), nil
 }
 
@@ -242,6 +244,7 @@ func (s *settingsService) DeleteRole(ctx context.Context, req *connect.Request[n
 	if n == 0 {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("角色正在使用，不能删除"))
 	}
+	s.notify(ctx, "role", i18n.Errorf("角色 %s 已删除", r.Name).Error(), "")
 	return connect.NewResponse(&nagiv1.DeleteRoleResponse{}), nil
 }
 
@@ -658,6 +661,9 @@ func (s *settingsService) UpdateUser(ctx context.Context, req *connect.Request[n
 				oldPerms = auth.AllPerms
 			}
 			revoked = oldPerms&^rolePerms(role) != 0
+			if u.Role == auth.RoleAdmin && role.Builtin != auth.RoleAdmin {
+				s.notify(ctx, "admin-removed", i18n.Errorf("成员 %s 不再是管理员", u.Username).Error(), "")
+			}
 		}
 	}
 	if m.GetPassword() != "" {
@@ -730,5 +736,6 @@ func (s *settingsService) DeleteUser(ctx context.Context, req *connect.Request[n
 		return nil, err
 	}
 	s.revokeDirectLinks()
+	s.notify(ctx, "user-deleted", i18n.Errorf("成员 %s 已删除", u.Username).Error(), "")
 	return connect.NewResponse(&nagiv1.DeleteUserResponse{}), nil
 }

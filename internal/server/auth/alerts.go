@@ -16,11 +16,19 @@ import (
 //   - 按 IP 的登录限速开始等待，每小时汇总一条；
 //   - 管理员从新的网段登录（最近 90 天没有登录过的 IPv4 /24、IPv6 /48）。
 
-// 开关的设置项，"0" 表示关闭。
+// 以前开关的设置项（"0" 表示关闭）。v0.37.1 起开关是 设置 → 告警 的事件通知（见 alert.Notices），
+// 升级时迁移过去（nodes.migrateLoginNotices），旧设置项保留不用。
 const (
 	SettingAlertTOTP       = "alert_totp_failures"
 	SettingAlertRateLimit  = "alert_login_ratelimit"
 	SettingAlertNewNetwork = "alert_admin_network"
+)
+
+// 对应的事件通知。
+const (
+	NoticeTOTP       = "login_totp"
+	NoticeRateLimit  = "login_ratelimit"
+	NoticeNewNetwork = "login_new_network"
 )
 
 const (
@@ -28,10 +36,9 @@ const (
 	networkMemory  = 90 * 24 * time.Hour
 )
 
-// AlertEnabled 判断一条登录告警有没有开。
-func (s *Service) AlertEnabled(ctx context.Context, key string) bool {
-	v, err := s.q.GetSetting(ctx, key)
-	return err != nil || v != "0"
+// AlertEnabled 判断一项登录相关的事件通知有没有开（NoticeEnabled 没有设置时都算开着）。
+func (s *Service) AlertEnabled(ctx context.Context, notice string) bool {
+	return s.NoticeEnabled == nil || s.NoticeEnabled(ctx, notice)
 }
 
 type totpStreaks struct {
@@ -50,7 +57,7 @@ func (s *Service) totpFailed(ctx context.Context, userID int64, username, ip str
 	s.streaks.n[userID]++
 	n := s.streaks.n[userID]
 	s.streaks.mu.Unlock()
-	if n == totpAlertAfter && s.Alert != nil && s.AlertEnabled(ctx, SettingAlertTOTP) {
+	if n == totpAlertAfter && s.Alert != nil && s.AlertEnabled(ctx, NoticeTOTP) {
 		at, aid, an := userActor(userID, username)
 		s.loginEvent(ctx, audit.Event{Category: audit.Security, Action: "totp_failures", ActorType: at, ActorID: aid, ActorName: an, IP: ip, Result: audit.ResultDenied})
 		s.Alert(context.WithoutCancel(ctx), "totp:"+strconv.FormatInt(userID, 10), i18n.New("登录安全").Error(),
@@ -68,7 +75,7 @@ func (s *Service) loginApprovalFailed(ctx context.Context, userID int64, usernam
 	s.streaks.phone[userID]++
 	n := s.streaks.phone[userID]
 	s.streaks.mu.Unlock()
-	if n == totpAlertAfter && s.Alert != nil && s.AlertEnabled(ctx, SettingAlertTOTP) {
+	if n == totpAlertAfter && s.Alert != nil && s.AlertEnabled(ctx, NoticeTOTP) {
 		at, aid, an := userActor(userID, username)
 		s.loginEvent(ctx, audit.Event{Category: audit.Security, Action: "login_approval_failures", ActorType: at, ActorID: aid, ActorName: an, IP: ip, Result: audit.ResultDenied})
 		s.Alert(context.WithoutCancel(ctx), "login-approval:"+strconv.FormatInt(userID, 10), i18n.New("登录安全").Error(),
@@ -96,7 +103,7 @@ func (s *Service) rateLimited(ip string) {
 
 // alertRateLimited 在写出上一个小时的汇总时调用：碰到限速的 IP 数、失败次数、被尝试最多的用户名。
 func (s *Service) alertRateLimited(ctx context.Context, limited map[string]bool, pending map[string]*ipFailures) {
-	if len(limited) == 0 || s.Alert == nil || !s.AlertEnabled(ctx, SettingAlertRateLimit) {
+	if len(limited) == 0 || s.Alert == nil || !s.AlertEnabled(ctx, NoticeRateLimit) {
 		return
 	}
 	failures := 0
@@ -143,7 +150,7 @@ func (s *Service) checkNewNetwork(ctx context.Context, userID int64, username, r
 	}
 	now := time.Now()
 	seen, any, err := s.q.SeenNetwork(ctx, userID, network, now.Unix(), now.Add(-networkMemory).Unix())
-	if err != nil || seen || !any || role != RoleAdmin || s.Alert == nil || !s.AlertEnabled(ctx, SettingAlertNewNetwork) {
+	if err != nil || seen || !any || role != RoleAdmin || s.Alert == nil || !s.AlertEnabled(ctx, NoticeNewNetwork) {
 		return
 	}
 	at, aid, an := userActor(userID, username)
