@@ -4,6 +4,7 @@
 #   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh
 #   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh -s -- --port 28443
 #   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | NAGI_STANDBY=<配对码> sh   # 备用面板
+#   curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sh -s -- --channel pre   # 最新的预发布版
 #
 # 没有 Docker 时自动安装（面板带内嵌节点时需要）；下载 nagi、校验 SHA-256、安装到 /usr/local/bin/nagi
 # 并注册为 nagi 命令，以 systemd 服务 nagi-server 运行面板。首次安装后打印初始化链接。
@@ -17,6 +18,9 @@ SERVICE=nagi-server
 UNIT=/etc/systemd/system/$SERVICE.service
 
 VERSION=latest
+# CHANNEL：不指定版本时装哪个渠道的最新版本，stable（默认，只装正式版）或 pre（也装预发布版，见 docs/development.md#预发布版本）。
+CHANNEL="${NAGI_CHANNEL:-stable}"
+VERSION_SET=""
 DATA_DIR=""
 PORT=""
 NO_AGENT=""
@@ -34,7 +38,9 @@ usage() {
   cat <<'EOF'
 用法：install.sh [选项]
 
-  --version <版本>        安装指定版本，例如 v0.1.0（默认最新版本）
+  --version <版本>        安装指定版本，例如 v0.1.0 或 v0.38.0-pre.1（默认最新的正式版）
+  --channel <渠道>        不指定版本时安装哪个渠道的最新版本：stable（默认，正式版）或 pre（含预发布版），
+                          也可用环境变量 NAGI_CHANNEL 指定。只决定这次安装的版本，面板之后一键更新的渠道在「设置 → 关于」中选择
   --port <端口>           面板端口（默认首次启动时随机选择）
   --no-agent              只运行面板，不带内嵌节点（面板单独放在一台不运行项目的机器上）
   --standby <配对码>      作为备用面板安装（配对码在主面板「设置 → 备用面板」中生成）。
@@ -60,7 +66,8 @@ need_value() { [ $# -ge 2 ] && [ -n "$2" ] || fail "$1 需要一个值"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version) need_value "$@"; VERSION="$2"; shift 2 ;;
+    --version) need_value "$@"; VERSION="$2"; VERSION_SET=1; shift 2 ;;
+    --channel) need_value "$@"; CHANNEL="$2"; shift 2 ;;
     --port) need_value "$@"; PORT="$2"; shift 2 ;;
     --no-agent) NO_AGENT=1; shift ;;
     --standby) need_value "$@"; STANDBY="$2"; STANDBY_ARG=1; shift 2 ;;
@@ -83,6 +90,10 @@ if [ -n "$PORT" ]; then
   { [ "$PORT" -ne 80 ] && [ "$PORT" -ne 443 ]; } || fail "80 和 443 端口保留给项目域名，请使用其他面板端口"
 fi
 case "$DATA_DIR" in "" | /*) ;; *) fail "数据目录须为绝对路径" ;; esac
+case "$CHANNEL" in stable | pre) ;; *) fail "更新渠道须为 stable 或 pre" ;; esac
+if [ -n "$VERSION_SET" ]; then
+  case "$VERSION" in v[0-9]*.[0-9]*.[0-9]*) ;; *) fail "版本号须为 v<主>.<次>.<修订>，例如 v0.38.0 或 v0.38.0-pre.1" ;; esac
+fi
 
 # >>> 共用代码开始：scripts/install.sh 与 internal/server/api/install.go 中的这一段须保持一致（有测试检查）。
 # 用到调用方定义的 say、fail、BIN、ARCH、TMP（临时目录）、DOCKER_MIRROR、BASE（下载地址）。
@@ -326,6 +337,31 @@ on_exit() {
   fi
 }
 
+# newest_version 从标准输入读版本号（每行一个），打印按语义化版本号最大的一个：先比主、次、修订号，相同时正式版大于预发布版，
+# 预发布号逐段比较（数字段按数值，pre.2 < pre.10；数字段小于字母段；前面相同时段多的大）。和 internal/pkg/release.compare 一致。
+newest_version() {
+  awk '
+    function cmp(a, b,    x, y, pa, pb, n, m, i, na, nb) {
+      sub(/^v/, "", a); sub(/^v/, "", b); sub(/\+.*/, "", a); sub(/\+.*/, "", b)
+      pa = index(a, "-") ? substr(a, index(a, "-") + 1) : ""; if (index(a, "-")) a = substr(a, 1, index(a, "-") - 1)
+      pb = index(b, "-") ? substr(b, index(b, "-") + 1) : ""; if (index(b, "-")) b = substr(b, 1, index(b, "-") - 1)
+      split(a, x, "."); split(b, y, ".")
+      for (i = 1; i <= 3; i++) if (x[i] + 0 != y[i] + 0) return x[i] + 0 < y[i] + 0 ? -1 : 1
+      if (pa == "" || pb == "") return pa == pb ? 0 : (pa == "" ? 1 : -1)
+      n = split(pa, x, "."); m = split(pb, y, ".")
+      for (i = 1; i <= n && i <= m; i++) {
+        na = x[i] ~ /^[0-9]+$/; nb = y[i] ~ /^[0-9]+$/
+        if (na && nb) { if (x[i] + 0 != y[i] + 0) return x[i] + 0 < y[i] + 0 ? -1 : 1 }
+        else if (na != nb) return na ? -1 : 1
+        else if (x[i] != y[i]) return x[i] < y[i] ? -1 : 1
+      }
+      return n == m ? 0 : (n < m ? -1 : 1)
+    }
+    /^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$/ { if (best == "" || cmp(best, $0) < 0) best = $0 }
+    END { if (best != "") print best }
+  '
+}
+
 # standby_version_check 在要装的 nagi（$1，版本号）太旧时停下：v0.35.0 之前的 nagi 不读环境变量 NAGI_STANDBY 里的配对码，
 # 照常安装会在空的数据目录里初始化成一个新的主面板。版本的匹配和节点安装脚本的 enrollVersionCheck 一样。
 standby_version_check() {
@@ -354,6 +390,14 @@ OLD_VERSION=""
 TARGET=""
 if [ -n "$DOWNLOAD_URL" ]; then
   BASE=${DOWNLOAD_URL%/}
+elif [ -z "$VERSION_SET" ] && [ "$CHANNEL" = pre ]; then
+  # 预发布渠道：从发布列表（Atom，含预发布版）里取版本号最大的一个，正式版发布后也是它。查不到就停下，不退回正式版。
+  for U in $(gh_urls "https://github.com/$REPO/releases.atom"); do
+    TARGET=$(curl -fsSL --retry 2 --max-time 15 "$U" 2>/dev/null | grep -o "href=\"https://github.com/$REPO/releases/tag/[^\"]*\"" | sed 's|.*/tag/||; s|"$||' | newest_version || true)
+    [ -z "$TARGET" ] || break
+  done
+  [ -n "$TARGET" ] || fail "无法从 GitHub 获取发布列表，请稍后重试，或用 --version 指定版本"
+  BASE="https://github.com/$REPO/releases/download/$TARGET"
 elif [ "$VERSION" = latest ]; then
   BASE="https://github.com/$REPO/releases/latest/download"
   for U in $(gh_urls "https://github.com/$REPO/releases/latest"); do
