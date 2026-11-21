@@ -25,7 +25,7 @@ import (
 // openAudit 打开本地审计（见 docs/audit.md#节点本地审计）。打不开时只记日志，节点照常工作。外送由面板代为进行（ReadAuditLog）。
 //
 // 审计库在本机日志目录的 audit/node-audit.db（带哈希链），和节点业务库分开；没有本机日志库时退回数据目录。
-// 旧版本的 JSON Lines（<数据目录>/audit/）先按原序号原样导入，升级确认（第一次连上面板）以后核对删除。
+// 旧版本的 JSON Lines（<数据目录>/audit/）在后台按原序号原样导入，升级确认（第一次连上面板）以后核对删除。
 func (a *agent) openAudit(ctx context.Context) func() {
 	legacy := filepath.Join(a.cfg.DataDir, "audit")
 	path := filepath.Join(a.cfg.DataDir, "logs", "audit", "node-audit.db")
@@ -37,12 +37,6 @@ func (a *agent) openAudit(ctx context.Context) func() {
 		a.log.Warn("无法打开节点本地审计", "err", err)
 		return func() {}
 	}
-	// 在接受任何请求之前导入：之后的新记录直接接着旧序号写进链里。没导入成的，新记录先照旧追加到旧文件，下次启动再导入。
-	if err := l.ImportLegacy(ctx); err != nil {
-		a.log.Error("节点旧审计文件导入未完成，旧文件保留并继续写入，下次启动重试", "err", err)
-		a.cfg.Logs.SetMigration(logstore.Migration{ID: auditlog.CleanupID, Phase: "failed", Error: err.Error()})
-	}
-	through := l.Seq()
 	a.audit = l
 	l.Capture = func(e auditlog.Event) {
 		a.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: logstore.Audit, Kind: "node." + e.Action, Object: e.Target, Data: e})
@@ -57,26 +51,42 @@ func (a *agent) openAudit(ctx context.Context) func() {
 	ctx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() { defer wg.Done(); l.PruneLoop(ctx) }()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := l.MigrateHistory(ctx, a.cfg.Logs, through); err != nil && ctx.Err() == nil {
-			a.log.Error("节点审计的统一日志副本未导入完，保留已提交位置，下次启动继续", "err", err)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ctx.Done():
+		// 旧文件在后台导入（几十万行要一两分钟），节点不等。导入完成前新记录照旧追加到旧文件、序号接着旧文件，
+		// ReadAuditLog 暂不返回记录（面板游标不动），导入时一起按序号进链。没导入成的下次启动再导入。
+		if err := l.ImportLegacy(ctx); err != nil {
+			if ctx.Err() == nil {
+				a.log.Error("节点旧审计文件导入未完成，旧文件保留并继续写入，下次启动重试", "err", err)
+				a.cfg.Logs.SetMigration(logstore.Migration{ID: auditlog.CleanupID, Phase: "failed", Error: err.Error()})
+			}
 			return
-		case <-a.panelReached:
 		}
-		if err := l.CleanupLegacy(ctx, a.cfg.Logs); err != nil && ctx.Err() == nil {
-			a.log.Error("节点旧审计文件未删除：核对没有通过，已保留，下次启动重试", "err", err)
-		} else if err == nil && ctx.Err() == nil {
-			a.log.Info("节点旧审计文件已核对并删除")
-		}
+		through := l.Seq()
+		var tasks sync.WaitGroup
+		defer tasks.Wait()
+		tasks.Add(3)
+		go func() { defer tasks.Done(); l.PruneLoop(ctx) }()
+		go func() {
+			defer tasks.Done()
+			if err := l.MigrateHistory(ctx, a.cfg.Logs, through); err != nil && ctx.Err() == nil {
+				a.log.Error("节点审计的统一日志副本未导入完，保留已提交位置，下次启动继续", "err", err)
+			}
+		}()
+		go func() {
+			defer tasks.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case <-a.panelReached:
+			}
+			if err := l.CleanupLegacy(ctx, a.cfg.Logs); err != nil && ctx.Err() == nil {
+				a.log.Error("节点旧审计文件未删除：核对没有通过，已保留，下次启动重试", "err", err)
+			} else if err == nil && ctx.Err() == nil {
+				a.log.Info("节点旧审计文件已核对并删除")
+			}
+		}()
 	}()
 	go func() { defer close(done); wg.Wait(); l.Close() }()
 	return func() { cancel(); <-done }

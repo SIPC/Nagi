@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -273,5 +274,63 @@ func TestHistoryCopyResumesWithoutDuplicates(t *testing.T) {
 	var e Event
 	if err := json.Unmarshal(rows[0].Data.(json.RawMessage), &e); err != nil || e.Detail != "[已隐藏]" {
 		t.Fatalf("copy bypassed redaction: %+v %v", e, err)
+	}
+}
+
+// The import runs in the background while the node already records. Records
+// written meanwhile go to the legacy file with the next legacy sequence and end
+// up in the chain in order, none lost, and nothing is readable before the
+// switch-over, so the panel's shipping cursor cannot skip ahead.
+func TestRecordDuringBackgroundImport(t *testing.T) {
+	dir := t.TempDir()
+	legacyDir := filepath.Join(dir, "audit")
+	writeLegacy(t, legacyDir, 1, 3000)
+	l, err := Open(filepath.Join(dir, "logs", "audit", "node-audit.db"), legacyDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	done := make(chan error, 1)
+	go func() { done <- l.ImportLegacy(t.Context()) }()
+	var seqs []int64
+	for i := 0; i < 50; i++ {
+		if lines, _, _ := l.After(0, 10); l.LegacyPending() && len(lines) != 0 {
+			t.Fatal("records readable before the import finished")
+		}
+		seqs = append(seqs, l.Record(Event{Action: "during-import", Detail: strconv.Itoa(i)}))
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	for i, s := range seqs {
+		if s != int64(3001+i) {
+			t.Fatalf("record %d got sequence %d", i, s)
+		}
+	}
+	// The import record itself takes the next sequence; live records follow it.
+	if s := l.Record(Event{Action: "after-import"}); s != 3052 {
+		t.Fatalf("first record after the import: %d", s)
+	}
+	seqs = append(seqs, 3052)
+	var got []int64
+	for after := int64(3000); ; {
+		lines, _, last := l.After(after, 500)
+		if len(lines) == 0 {
+			break
+		}
+		for _, line := range lines {
+			var e Event
+			_ = json.Unmarshal(line, &e)
+			if e.Action != legacyImport {
+				got = append(got, e.Seq)
+			}
+		}
+		after = last
+	}
+	if len(got) != len(seqs) || got[0] != 3001 || got[len(got)-1] != seqs[len(seqs)-1] {
+		t.Fatalf("records lost or reordered: %v", got)
+	}
+	if r, err := l.Verify(t.Context()); err != nil || !r.OK() {
+		t.Fatalf("%+v %v", r, err)
 	}
 }

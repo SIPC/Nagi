@@ -162,12 +162,32 @@ func (l *Log) ImportLegacy(ctx context.Context) error {
 	if l.meta("legacy_imported") != "" {
 		return l.importRollback(ctx, names)
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if err := l.loadHead(); err != nil {
+	// Bulk pass without the lock: Record keeps appending to the legacy file
+	// meanwhile (pending), so the node serves requests during a long import.
+	// The final pass below holds the lock, takes the few lines written since,
+	// and switches new records over to the chain.
+	if err := l.importLegacy(ctx, names, false); err != nil {
 		return err
 	}
-	after := l.seq
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.importLegacy(ctx, files(l.legacy), true)
+}
+
+// importLegacy imports legacy lines after the chain head. Without final it
+// reads only up to each file's current end and leaves pending set; with final
+// the caller holds l.mu and the import is completed.
+func (l *Log) importLegacy(ctx context.Context, names []string, final bool) error {
+	var head struct {
+		seq  int64
+		hash string
+	}
+	err := l.db.QueryRowContext(ctx, `SELECT seq, hash FROM (SELECT seq, hash FROM audit_events UNION ALL SELECT seq, hash FROM audit_tombstones) ORDER BY seq DESC LIMIT 1`).Scan(&head.seq, &head.hash)
+	if err != nil && !errors.Is(err, sqlNoRows) {
+		return err
+	}
+	lastHash, lastSeq := head.hash, head.seq
+	after := lastSeq
 	expect := after + 1
 	var batch [][]byte
 	var seqs []int64
@@ -180,7 +200,7 @@ func (l *Log) ImportLegacy(ctx context.Context) error {
 			return err
 		}
 		defer tx.Rollback()
-		prev, last := l.lastHash, l.seq
+		prev, last := lastHash, lastSeq
 		for i, line := range batch {
 			// Lines lost before the first surviving one need no bridge: the chain starts there.
 			for s := last + 1; last > 0 && s < seqs[i]; s++ {
@@ -197,11 +217,16 @@ func (l *Log) ImportLegacy(ctx context.Context) error {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
-		l.lastHash, l.seq = prev, last
+		lastHash, lastSeq = prev, last
 		batch, seqs = batch[:0], seqs[:0]
 		return nil
 	}
 	for _, name := range names {
+		if !final && name == current {
+			// Record may be appending to it right now; a half-written last
+			// line must not be mistaken for a corrupt one. Read it under the lock.
+			continue
+		}
 		err := scanLines(filepath.Join(l.legacy, name), func(raw []byte) error {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -226,17 +251,16 @@ func (l *Log) ImportLegacy(ctx context.Context) error {
 		})
 		if err != nil {
 			// Keep what was read before the bad line; the rest waits for a retry.
-			err = errors.Join(err, flush())
-			_ = l.loadHead()
-			l.seq = max(l.seq, legacySeq(l.legacy))
-			return err
+			return errors.Join(err, flush())
 		}
 	}
 	if err := flush(); err != nil {
-		_ = l.loadHead()
-		l.seq = max(l.seq, legacySeq(l.legacy))
 		return err
 	}
+	if !final {
+		return nil
+	}
+	l.lastHash, l.seq = lastHash, lastSeq
 	// Every tombstone so far comes from gaps between legacy files, including
 	// gaps found by earlier, interrupted runs.
 	rows, err := l.db.QueryContext(ctx, `SELECT seq FROM audit_tombstones ORDER BY seq`)
