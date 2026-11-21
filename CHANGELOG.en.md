@@ -10,6 +10,9 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ## v0.37.0
 
+> [!TIP]
+> We recommend upgrading the panel, standby panels, all nodes, and witnesses together to the same version, as this is a major upgrade and older nodes contain data that is incompatible with the new version. We recommend using a version that includes this startup fix; on its first start, the panel migrates legacy metric history in the background while the website remains accessible.
+
 ### New features
 
 - Added node groups, shown as collapsible sections on the Nodes page, with filtering and group management in the ⋯ menu. Groups only organize the list and do not change member access.
