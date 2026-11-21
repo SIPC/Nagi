@@ -32,6 +32,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/recording"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
@@ -290,7 +291,6 @@ func Run(ctx context.Context, cfg Config) error {
 		a.metrics.AddSource(routeMetrics())
 	}
 	a.metrics.AddSource(a.meshMetrics())
-	go a.metrics.Run(ctx)
 	statistics := logging.Statistics{Store: cfg.Logs}
 	if metricDB != nodeDB {
 		statistics.History = a.metrics
@@ -323,6 +323,18 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
+	if cfg.Logs != nil {
+		captureMesh := logging.CaptureMesh(cfg.Logs, cfg.LogConfig)
+		a.metrics.AddSource(func(float64) map[string]float64 {
+			if a.mesh == nil {
+				captureMesh(time.Now(), nil)
+			} else {
+				captureMesh(time.Now(), mesh.StatusProto(a.mesh.m, a.mesh.name))
+			}
+			return nil
+		})
+	}
+	go a.metrics.Run(ctx)
 	copyCtx, stopCopies := context.WithCancel(ctx)
 	copiesDone := make(chan struct{})
 	go func() { defer close(copiesDone); a.logCopiesLoop(copyCtx) }()
