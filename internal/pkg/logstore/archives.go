@@ -46,6 +46,7 @@ func (s *Store) registerArchive(ctx context.Context, a Archive, replace bool) er
 		return err
 	}
 	defer func() { <-s.gate }()
+	s.lastDisk.Store(0) // a new owner's bytes are not in the cached size yet
 	for i, old := range s.archives {
 		if old.Name == a.Name {
 			if replace {
@@ -81,6 +82,32 @@ func (s *Store) WriteArchive(ctx context.Context, priority int, reserve int64, f
 	return fn()
 }
 
+// Reserve makes room for a write to a separate store that has its own writer
+// lock (recent copies). It holds the journal gate only while checking or
+// reclaiming capacity; the caller's transaction then runs without it. The
+// usual case (enough space) costs a few PRAGMA reads.
+//
+// Far below the quota it does not take the gate at all: each admission adds
+// its reserve (an upper bound of what that write adds) to the size last
+// measured under the gate, so admissions accumulate until the estimate
+// reaches 70% of the limit and the next caller measures again. The 30% margin
+// covers journal writes made since that measurement. A busy journal therefore
+// cannot stall callers that only need to know there is room.
+func (s *Store) Reserve(ctx context.Context, priority int, reserve int64) error {
+	if s != nil && priority >= 0 && priority <= 4 && reserve >= 0 && reserve <= s.budget/5 {
+		for {
+			n := s.lastDisk.Load()
+			if n <= 0 || n+reserve > s.dbLimit*7/10 {
+				break
+			}
+			if s.lastDisk.CompareAndSwap(n, n+reserve) {
+				return nil
+			}
+		}
+	}
+	return s.WriteArchive(ctx, priority, reserve, func() error { return nil })
+}
+
 func (s *Store) prepare(ctx context.Context, p int, reserve int64) error {
 	live, err := s.liveBytes(ctx)
 	if err != nil {
@@ -90,6 +117,7 @@ func (s *Store) prepare(ctx context.Context, p int, reserve int64) error {
 	if err != nil {
 		return err
 	}
+	s.lastDisk.Store(physical)
 	maxPriority := min(p, 3)
 	if p == 4 {
 		maxPriority = 4

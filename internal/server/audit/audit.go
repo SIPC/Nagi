@@ -180,19 +180,20 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 	}
 	persistCtx := context.WithoutCancel(ctx)
 	if l.budget != nil {
-		var cancel context.CancelFunc
-		persistCtx, cancel = context.WithTimeout(persistCtx, 500*time.Millisecond)
-		defer cancel()
-	}
-	var id int64
-	err := l.budget.WriteArchive(persistCtx, 4, 64<<10, func() error {
-		var err error
-		id, err = l.insert(persistCtx, &e)
-		if err == nil && l.budget != nil {
-			_, err = l.db.ExecContext(persistCtx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+		// The quota check may wait briefly for the shared journal gate. A slow
+		// check must not drop the audit record: only a full quota rejects it,
+		// and the insert itself runs on audit.db outside the shared gate.
+		reserveCtx, cancel := context.WithTimeout(persistCtx, 500*time.Millisecond)
+		err := l.budget.Reserve(reserveCtx, 4, 64<<10)
+		cancel()
+		if errors.Is(err, logstore.ErrCapacity) {
+			l.log.Warn("写入审计记录失败", "err", err, "action", e.Action)
+			return 0
 		}
-		return err
-	})
+	}
+	insertCtx, cancel := context.WithTimeout(persistCtx, 10*time.Second)
+	defer cancel()
+	id, err := l.insert(insertCtx, &e)
 	if err != nil {
 		// insertTx 可能已经分配了 ID/计算了哈希，但事务没有提交，不能当成旧库证据。
 		e.ID, e.Hash, e.PrevHash = 0, "", ""

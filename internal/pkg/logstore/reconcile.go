@@ -44,9 +44,6 @@ func copyHash(e Event) []byte {
 // Inventory scans a bounded page of retained originals. Its database source
 // prevents an old reconciliation cursor from skipping a rebuilt database.
 func (c *Copies) Inventory(ctx context.Context, pos CopyPosition) (CopyPosition, []CopyIndex, error) {
-	if err := c.Expire(ctx); err != nil {
-		return CopyPosition{}, nil, err
-	}
 	st, err := c.s.State(ctx)
 	if err != nil {
 		return CopyPosition{}, nil, err
@@ -181,15 +178,16 @@ func (c *Copies) SaveSyncPosition(ctx context.Context, peer string, pos CopyPosi
 	if err != nil {
 		return err
 	}
-	return c.budget.WriteArchive(ctx, 4, 64<<10, func() error {
-		if err := c.s.lock(ctx); err != nil {
-			return err
-		}
-		defer func() { <-c.s.gate }()
-		if c.s.closed {
-			return sql.ErrConnDone
-		}
-		_, err := c.s.db.ExecContext(ctx, `INSERT INTO log_checkpoints(key,data) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data`, "sync."+peer, b)
+	if err := c.budget.Reserve(ctx, 4, 64<<10); err != nil {
 		return err
-	})
+	}
+	if err := c.s.lock(ctx); err != nil {
+		return err
+	}
+	defer func() { <-c.s.gate }()
+	if c.s.closed {
+		return sql.ErrConnDone
+	}
+	_, err = c.s.db.ExecContext(ctx, `INSERT INTO log_checkpoints(key,data) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET data=excluded.data`, "sync."+peer, b)
+	return err
 }

@@ -12,6 +12,14 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
+// flush waits for queued Report batches; Report itself never waits for disk.
+func flush(t *testing.T, logs *logstore.Store) {
+	t.Helper()
+	if err := logs.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRecordedStatisticsRequireCompleteFreshSamples(t *testing.T) {
 	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
 	if err != nil {
@@ -25,17 +33,20 @@ func TestRecordedStatisticsRequireCompleteFreshSamples(t *testing.T) {
 		values[fmt.Sprintf("c:p/service%d:mem", i)] = float64(i + 9)
 	}
 	collect(now.Add(-20*time.Second), values)
+	flush(t, logs)
 	s := Statistics{Store: logs}
 	got := s.LatestFresh(now)
 	if len(got) != 69 || got["node:disk"] != 96 || got["c:p/service66:mem"] != 75 {
 		t.Fatalf("chunked sample incomplete: %+v", got)
 	}
 	collect(now.Add(-10*time.Second), map[string]float64{"node:cpu": 19})
+	flush(t, logs)
 	got = s.LatestFresh(now)
 	if len(got) != 1 || got["node:cpu"] != 19 {
 		t.Fatalf("missing disk carried forward from old sample: %+v", got)
 	}
 	collect(now, map[string]float64{})
+	flush(t, logs)
 	if got := s.LatestFresh(now); len(got) != 0 {
 		t.Fatalf("empty latest sample revived old healthy data: %+v", got)
 	}

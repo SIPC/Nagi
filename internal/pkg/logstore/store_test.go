@@ -204,6 +204,9 @@ func TestJournalRedactsAndPreservesLoggerGroups(t *testing.T) {
 	var terminal bytes.Buffer
 	logger := s.Logger(slog.New(slog.NewTextHandler(&terminal, nil)), logstore.DefaultConfig())
 	logger.With("component", "agent").WithGroup("job").With("id", "task-7").With("phase", "pull").WithGroup("result").Info("failed token=topsecret", "status", 502, "authorization", "Bearer abcdef", "url", "https://bob:pass@example.com/private?code=unsafe")
+	if err := s.Flush(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 	rows := query(t, s, logstore.Filter{Category: logstore.Runtime})
 	if len(rows) != 1 || terminal.Len() == 0 {
 		t.Fatal("结构化日志或原来的终端输出丢失")
