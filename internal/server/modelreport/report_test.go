@@ -87,6 +87,55 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+func TestCancellationIsPersistedAndConcurrentRequestIsRejected(t *testing.T) {
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	started := make(chan struct{})
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		io.Copy(io.Discard, req.Body)
+		close(started)
+		<-req.Context().Done()
+	}))
+	defer fake.Close()
+	e := &Engine{Logs: logs, client: fake.Client()}
+	cfg := Config{Enabled: true, Endpoint: fake.URL, Model: "local-fixture", APIKey: "local-key"}
+	in := Input{Alerts: []Alert{{Ref: "A1", Rule: "cpu"}}}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan *Report, 1)
+	go func() {
+		r, err := e.Generate(ctx, cfg, 1, in)
+		if err != nil {
+			t.Errorf("generate: %v", err)
+		}
+		done <- r
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("local request did not start")
+	}
+	if _, err := e.Generate(t.Context(), cfg, 1, in); err == nil || err.Error() != "busy" {
+		t.Fatalf("concurrent generation was not rejected: %v", err)
+	}
+	cancel()
+	select {
+	case r := <-done:
+		if r == nil || r.Status != "canceled" || r.Failure != "canceled" {
+			t.Fatalf("canceled result: %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("canceled request did not finish")
+	}
+	reports, err := e.List(t.Context())
+	if err != nil || len(reports) != 1 || reports[0].Status != "canceled" {
+		t.Fatalf("terminal result was not persisted after cancellation: %+v %v", reports, err)
+	}
+}
+
 func TestQuotaAndInputLimits(t *testing.T) {
 	ctx := context.Background()
 	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 8<<20)

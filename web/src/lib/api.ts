@@ -12,6 +12,7 @@ import {
   SetupService,
 } from "@/gen/nagi/v1/api_pb";
 import { locale, t } from "@/i18n";
+import { ModelReportService } from "@/gen/nagi/v1/model_report_pb";
 
 // 浏览器与面板同源，cookie 会随请求自动带上。
 // Accept-Language 换成界面当前的语言（可能和浏览器的不同），面板按它返回错误信息。
@@ -70,6 +71,7 @@ export const nodeClient: typeof rawNodeClient = {
 };
 export const projectClient = createClient(ProjectService, transport);
 export const settingsClient = createClient(SettingsService, transport);
+export const modelReportClient = createClient(ModelReportService, transport);
 
 // knownNodes：查节点名称和在线状态用的节点列表；列出、选择节点只用 nodes。看不到的节点（访问范围外，或者没有「查看节点」权限）
 // 面板不给 ID 和名称，回复里是空的 ID，显示为「其他节点」，也不显示是否在线（见 docs/panel.md#访问范围）。

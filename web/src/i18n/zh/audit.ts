@@ -101,10 +101,10 @@ export default {
   },
   // 不在 activity.actions 里的事件名。
   events: {
-	UpdateReportConfig: "编辑模型报告设置",
-	GenerateReport: "生成告警综合报告",
-	ListReports: "查看模型报告列表",
-	GetReport: "查看模型报告",
+    UpdateReportConfig: "编辑模型报告设置",
+    GenerateReport: "生成告警综合报告",
+    ListReports: "查看模型报告列表",
+    GetReport: "查看模型报告",
     login_failed: "登录失败",
     login_failed_summary: "登录失败汇总",
     totp_failed: "两步验证码错误",
