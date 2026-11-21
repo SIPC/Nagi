@@ -97,6 +97,7 @@ type Mesh struct {
 
 	mu         sync.Mutex
 	configured map[Key]bool
+	observing  bool // 显式观察每节点同时只运行一个窗口，不随调用者数量放大开销。
 	done       chan struct{}
 	closeOnce  sync.Once
 }

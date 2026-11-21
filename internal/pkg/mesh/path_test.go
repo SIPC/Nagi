@@ -141,7 +141,7 @@ func TestPathProbeFixedRoute(t *testing.T) {
 	rx, tx := r.m.bind.relayRx.Load(), r.m.bind.relayTx.Load()
 	for _, pair := range []struct{ from, to testNode }{{a, b}, {b, a}} {
 		for _, via := range []Key{{}, rk} {
-			for _, size := range []int{256, 1180} {
+			for _, size := range []int{256, 1180, 1253} {
 				s := pair.from.m.ProbePath(context.Background(), pair.to.m.PublicKey(), via, size)
 				// 本机 UDP 往返可能小于系统时钟分辨率；成功由认证后的 Err == nil 区分。
 				if s.Err != nil || s.RTT < 0 || s.Size != size || s.Epoch == 0 || s.LocalPort != pair.from.port {
@@ -158,8 +158,24 @@ func TestPathProbeFixedRoute(t *testing.T) {
 		}
 	}
 	// 每方向每尺寸经 R 转发两次。独立转发计数证明不是偷偷测直连。
-	if gotRx, gotTx := r.m.bind.relayRx.Load()-rx, r.m.bind.relayTx.Load()-tx; gotRx != 5744 || gotTx != 5744 {
-		t.Fatalf("R forwarded rx=%d tx=%d, want 5744 each", gotRx, gotTx)
+	// R 在发出最后一个应答之后才加 tx，A 可能先收到应答，所以稍等计数追上（不会多出来）。
+	var gotRx, gotTx uint64
+	for deadline := time.Now().Add(time.Second); ; time.Sleep(5 * time.Millisecond) {
+		gotRx, gotTx = r.m.bind.relayRx.Load()-rx, r.m.bind.relayTx.Load()-tx
+		if (gotRx == 10756 && gotTx == 10756) || gotRx > 10756 || gotTx > 10756 || time.Now().After(deadline) {
+			break
+		}
+	}
+	if gotRx != 10756 || gotTx != 10756 {
+		t.Fatalf("R forwarded rx=%d tx=%d, want 10756 each", gotRx, gotTx)
+	}
+	for _, size := range []int{1252, 1254} {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		s := a.m.ProbePath(ctx, bk, Key{}, size)
+		cancel()
+		if s.Err == nil || errors.Is(s.Err, context.DeadlineExceeded) {
+			t.Fatalf("unlisted size %d must be rejected, not sent: %+v", size, s)
+		}
 	}
 	a.m.bind.mu.Lock()
 	p := a.m.bind.peers[bk]
@@ -298,6 +314,9 @@ func TestObservePathsRetainsFailures(t *testing.T) {
 	}
 	var successes, failures int
 	for _, s := range samples {
+		if s.Size != 256 && s.Size != 1253 {
+			t.Fatalf("observation does not cover experimental QUIC packet size: %+v", s)
+		}
 		if s.Via == (Key{}) && s.Err == nil && s.RTT >= 0 {
 			successes++
 		}
@@ -310,6 +329,63 @@ func TestObservePathsRetainsFailures(t *testing.T) {
 	}
 	if _, err := a.m.ObservePaths(ctx, b.m.PublicKey(), []Key{{}, {}}); !errors.Is(err, ErrProbePath) {
 		t.Fatal("duplicate/direct relay accepted")
+	}
+}
+
+func TestObservePathsExclusiveAndClose(t *testing.T) {
+	t.Parallel()
+	a := newNodeConfig(t, Config{NoQUIC: true})
+	peer := PublicKey(Key{56})
+	start := func() (context.CancelFunc, <-chan error) {
+		t.Helper()
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		done := make(chan error, 1)
+		go func() {
+			_, err := a.m.ObservePaths(ctx, peer, nil)
+			done <- err
+		}()
+		// 仅同步进入窗口，下面通过公开入口验证排他、取消和关闭契约。
+		for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+			a.m.mu.Lock()
+			active := a.m.observing
+			a.m.mu.Unlock()
+			if active {
+				return cancel, done
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatal("observation did not start")
+		return nil, nil
+	}
+	cancel, done := start()
+	ctx, stop := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	samples, err := a.m.ObservePaths(ctx, PublicKey(Key{64}), nil)
+	stop()
+	if !errors.Is(err, ErrProbeLimited) || len(samples) != 0 {
+		t.Fatalf("overlapping window was not rejected: samples=%d err=%v", len(samples), err)
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled window: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("canceled observation kept running")
+	}
+	_, done = start() // 取消后释放名额，不必等满一分钟。
+	a.m.Close()
+	select {
+	case err := <-done:
+		if !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("closed window: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("observation outlived mesh closure")
+	}
+	if _, err := a.m.ObservePaths(context.Background(), peer, nil); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("closed mesh accepted observation: %v", err)
 	}
 }
 

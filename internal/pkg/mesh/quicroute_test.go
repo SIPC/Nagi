@@ -31,11 +31,13 @@ func TestQUICRoutedStream(t *testing.T) {
 	if err := r.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}}); err != nil {
 		t.Fatal(err)
 	}
-	set(a, b, []Key{rk}, &on)
-	set(b, a, []Key{rk}, &on)
+	set(a, b, nil, &on)
+	set(b, a, nil, &on)
 	for _, pair := range []struct{ from, to testNode }{{a, b}, {b, a}, {a, r}, {b, r}, {r, a}, {r, b}} {
 		waitPath(t, pair.from.m, pair.to.m.PublicKey(), "direct")
 	}
+	set(a, b, []Key{rk}, &on)
+	set(b, a, []Key{rk}, &on)
 	c := quicEchoConnection(t, a, b)
 	data := make([]byte, 256<<10)
 	_, _ = rand.Read(data)
@@ -73,6 +75,9 @@ func TestQUICRoutedStream(t *testing.T) {
 	}
 	set(a, b, nil, &on)
 	set(b, a, nil, &on)
+	if s := a.m.ProbePath(context.Background(), bk, rk, 1253); s.Err != nil {
+		t.Fatalf("selected QUIC route must remain observable after ranking removal: %+v", s)
+	}
 	exchange() // 排名移除不撤销手动选择且仍有独立许可的实验路径。
 	blockDirect.Store(false)
 	if err := a.m.SetQUICRoute(bk, Key{}); err != nil {

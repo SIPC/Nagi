@@ -1010,7 +1010,7 @@ func (b *Bind) setPeers(peers []Peer) {
 	for id, pending := range b.pathProbes {
 		p := pending.peer
 		allowed := pending.via == (Key{}) || (b.relayKeys[pending.via] &&
-			(p.activeRelay == pending.via || slices.Contains(p.nodeRelays, pending.via) || slices.Contains(p.relays, pending.via)))
+			(p.activeRelay == pending.via || p.quicVia == pending.via || slices.Contains(p.nodeRelays, pending.via) || slices.Contains(p.relays, pending.via)))
 		if b.peers[p.key] != p || b.peers[pending.hop.key] != pending.hop || !allowed {
 			delete(b.pathProbes, id)
 			pending.result <- PathSample{Err: ErrProbePath}

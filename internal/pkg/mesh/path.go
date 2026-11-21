@@ -13,7 +13,7 @@ import (
 
 const (
 	pathProbeSmall = 256
-	pathProbeLarge = 1180 // 加 37 字节中转头及 IPv6/UDP 头是 1265，不依赖 IP 分片。
+	pathProbeLarge = routedQUICMTU + headerLen + macLen // 1253：与实验 QUIC 等长，经 R 的 IPv6 外层共 1338 字节。
 	pathProbeTTL   = 3 * time.Second
 	maxPathProbes  = 32
 	probeRate      = 32 << 10 // 每个节点总预算（收发合计），不随成员数量增长。
@@ -53,8 +53,12 @@ type PathSample struct {
 	Err       error
 }
 
+func validProbeSize(size int) bool {
+	return size == pathProbeSmall || size == 1180 || size == pathProbeLarge
+}
+
 // ProbePath 显式测量直连或经指定中转的完整往返，不改变业务路径，不自动兜底。
-// size 只接受 256 或 1180。每次最多等 3 秒，调用者可用 ctx 进一步缩短。
+// size 只接受 256、1180（兼容早期观察协议）或 1253。每次最多等 3 秒，调用者可用 ctx 进一步缩短。
 // 双端都须支持新探测；旧端点不响应，返回超时，不会被视为低延迟。
 func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample PathSample) {
 	sample = PathSample{Via: via, Size: size, Started: time.Now()}
@@ -62,8 +66,8 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 		sample.Err = err
 		return
 	}
-	if size != pathProbeSmall && size != pathProbeLarge {
-		sample.Err = errors.New("mesh 探测大小只能为 256 或 1180")
+	if !validProbeSize(size) {
+		sample.Err = errors.New("mesh 探测大小只能为 256、1180 或 1253")
 		return
 	}
 	b := m.bind
@@ -77,7 +81,7 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 		return
 	}
 	if via != (Key{}) {
-		if p.activeRelay != via && !slices.Contains(p.nodeRelays, via) && !slices.Contains(p.relays, via) {
+		if p.activeRelay != via && p.quicVia != via && !slices.Contains(p.nodeRelays, via) && !slices.Contains(p.relays, via) {
 			b.mu.Unlock()
 			sample.Err = ErrProbePath
 			return
@@ -137,6 +141,7 @@ func (m *Mesh) ProbePath(ctx context.Context, peer, via Key, size int) (sample P
 
 // ObservePaths 显式进行一个完整 60 秒观察窗口，每秒交错测直连及最多两个中转的两种包长。
 // 无后台调度、无生产流量复制、无晋升或切路；中途取消时仍返回已有的全部尝试。
+// 每节点同一时间仅允许一个窗口，重叠调用返回 ErrProbeLimited；关闭 mesh 时及时停止。
 // 地址、socket 或候选授权改变时失败而非混入别的路径；后续策略须据失败/新鲜度重新观察。
 func (m *Mesh) ObservePaths(ctx context.Context, peer Key, relays []Key) ([]PathSample, error) {
 	if len(relays) > 2 || slices.Contains(relays, Key{}) || (len(relays) == 2 && relays[0] == relays[1]) {
@@ -145,6 +150,24 @@ func (m *Mesh) ObservePaths(ctx context.Context, peer Key, relays []Key) ([]Path
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	m.mu.Lock()
+	select {
+	case <-m.done:
+		m.mu.Unlock()
+		return nil, net.ErrClosed
+	default:
+	}
+	if m.observing {
+		m.mu.Unlock()
+		return nil, ErrProbeLimited
+	}
+	m.observing = true
+	m.mu.Unlock()
+	defer func() {
+		m.mu.Lock()
+		m.observing = false
+		m.mu.Unlock()
+	}()
 	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -166,6 +189,8 @@ func (m *Mesh) ObservePaths(ctx context.Context, peer Key, relays []Key) ([]Path
 					select {
 					case <-ctx.Done():
 						return
+					case <-m.done:
+						return
 					case <-delay.C:
 					}
 					attempt, stop := context.WithTimeout(ctx, 800*time.Millisecond)
@@ -181,6 +206,8 @@ func (m *Mesh) ObservePaths(ctx context.Context, peer Key, relays []Key) ([]Path
 		select {
 		case <-ctx.Done():
 			return samples, parent.Err()
+		case <-m.done:
+			return samples, net.ErrClosed
 		case <-tick.C:
 		}
 	}

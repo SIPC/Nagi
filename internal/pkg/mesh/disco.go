@@ -152,8 +152,8 @@ func parse(pkt []byte) (parsed, bool) {
 		}
 		p.payload = rest[:len(rest)-macLen]
 	case typePathRequest, typePathResponse:
-		// 固定两种尺寸，MAC 覆盖填充；请求和应答等长，不能用小请求放大流量。
-		if len(pkt) != pathProbeSmall && len(pkt) != pathProbeLarge {
+		// 固定尺寸白名单，MAC 覆盖填充；请求和应答等长，不能用小请求放大流量。
+		if !validProbeSize(len(pkt)) {
 			return p, false
 		}
 		p.payload = rest
