@@ -27,6 +27,12 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 - To improve write performance, logs other than audit, security, and alert records may lose the last few seconds of saved records after a power loss or system crash; process crashes are not affected. When the log write queue is full, new records are dropped and counted as confirmed lost.
 
+### Known limitations
+
+- After upgrading a node with a large amount of legacy monitoring history (tens of millions of records), counting the records at the start of the migration holds the node database for about a minute. During that time the node may disconnect from and reconnect to the panel once or twice, then works normally.
+- How fast recent copies are received is limited by the panel's disk performance. With heavy logging, recent copies may still fall behind; the node originals are not affected.
+- The audit retry queue is kept in memory. If the panel process is killed or loses power, audit records still in the queue are lost.
+
 ## v0.37.0
 
 > [!TIP]
