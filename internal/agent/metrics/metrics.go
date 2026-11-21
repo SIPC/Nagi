@@ -221,6 +221,16 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		v["node:disk@"+mount] = pct
 	}
 	disks := c.readDisks()
+	for _, disk := range disks {
+		prefix := "node:filesystem@" + disk.Mount + ":"
+		v[prefix+"total_bytes"] = float64(disk.Total)
+		v[prefix+"used_bytes"] = float64(disk.Used)
+		v[prefix+"available_bytes"] = float64(disk.Total - disk.Used)
+		if total, free := DiskInodes(disk.Mount); total > 0 && free >= 0 && free <= total {
+			v[prefix+"inodes_total"] = float64(total)
+			v[prefix+"inodes_free"] = float64(free)
+		}
+	}
 	c.mu.Lock()
 	c.disks = disks
 	c.mu.Unlock()

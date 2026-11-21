@@ -15,6 +15,7 @@ const GiB int64 = 1 << 30
 type Config struct {
 	CapacityGiB             int    `json:"capacity_gib"`
 	MetricsEverySeconds     int    `json:"metrics_every_seconds"`
+	NodeDetails             bool   `json:"node_details"`
 	ContainerRescanSeconds  int    `json:"container_rescan_seconds"`
 	ContainerRetrySeconds   int    `json:"container_retry_seconds"`
 	ContainerLineBytes      int    `json:"container_line_bytes"`
@@ -28,7 +29,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO"}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO"}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。

@@ -275,6 +275,9 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.Logs != nil {
 		a.metrics.OnSample = logging.CaptureMetrics(cfg.Logs, cfg.LogConfig)
 	}
+	if cfg.LogConfig.NodeDetails {
+		a.metrics.AddSource(metrics.NodeDetails())
+	}
 	a.metrics.ExtraRestarts = projects.ManagedRestartCount
 	a.metrics.ProjectDirs = func() []string { return projects.Dirs(context.Background()) }
 	hintDirs = func() []string { return append([]string{cfg.DataDir}, projects.Dirs(context.Background())...) }
