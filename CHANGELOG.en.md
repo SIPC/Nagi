@@ -8,6 +8,24 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.1
+
+### Fixes
+
+- Fixed an issue where, with many nodes or a slow disk, the panel kept timing out when writing logs and failed to save audit records, alert events, and runtime logs.
+- Fixed an issue where alert state could not be saved while log writes were congested, which paused alert notifications and sync.
+- Fixed an issue where container monitoring charts on nodes and the panel had gaps under heavy load.
+- Fixed an issue where, when upgrading from an earlier version, migrating a large amount of legacy monitoring history blocked local log, audit, and alert state writes.
+
+### Improvements
+
+- Audit, security, and alert records are retried automatically when a write fails temporarily, instead of being dropped after a timeout. Other logs are written in batches.
+- The collection details on the Logs page now show, per category, failed write attempts, records confirmed lost, and the latest reason and time.
+
+### Behavior changes
+
+- To improve write performance, logs other than audit, security, and alert records may lose the last few seconds of saved records after a power loss or system crash; process crashes are not affected. When the log write queue is full, new records are dropped and counted as confirmed lost.
+
 ## v0.37.0
 
 > [!TIP]
