@@ -13,16 +13,17 @@ const GiB int64 = 1 << 30
 // Config 是本机 logs/config.json 的配置。面板和它的内嵌节点共用一份额度。
 // 修改后重启生效；包含接入的旧历史库，不包含业务库和 Docker 自己的轮换文件。
 type Config struct {
-	CapacityGiB            int    `json:"capacity_gib"`
-	MetricsEverySeconds    int    `json:"metrics_every_seconds"`
-	ContainerRescanSeconds int    `json:"container_rescan_seconds"`
-	ContainerRetrySeconds  int    `json:"container_retry_seconds"`
-	ContainerLineBytes     int    `json:"container_line_bytes"`
-	RuntimeLevel           string `json:"runtime_level"`
+	CapacityGiB             int    `json:"capacity_gib"`
+	MetricsEverySeconds     int    `json:"metrics_every_seconds"`
+	ContainerRescanSeconds  int    `json:"container_rescan_seconds"`
+	ContainerRetrySeconds   int    `json:"container_retry_seconds"`
+	ContainerLineBytes      int    `json:"container_line_bytes"`
+	TransferProgressSeconds int    `json:"transfer_progress_seconds"`
+	RuntimeLevel            string `json:"runtime_level"`
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, RuntimeLevel: "INFO"}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RuntimeLevel: "INFO"}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。
@@ -49,6 +50,9 @@ func LoadConfig(dir string) (Config, error) {
 	}
 	if c.ContainerLineBytes < 1024 || c.ContainerLineBytes > 8192 {
 		return c, fmt.Errorf("container_line_bytes 必须在 1024～8192 之间，给 JSON 转义和记录元信息留出空间")
+	}
+	if c.TransferProgressSeconds < 1 || c.TransferProgressSeconds > 3600 {
+		return c, fmt.Errorf("transfer_progress_seconds 必须在 1～3600 之间")
 	}
 	c.RuntimeLevel = strings.ToUpper(c.RuntimeLevel)
 	switch c.RuntimeLevel {

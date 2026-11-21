@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -104,6 +106,66 @@ func (p *syncProgress) fill(st *nagiv1.BackupStatus) {
 	st.BytesTotal, st.BytesDone = p.total.Load(), min(p.done.Load(), p.total.Load())
 	st.BytesPerSecond = p.speed
 	st.Retries, st.RetryError = p.retries, p.retryErr
+}
+
+// transferLog 不拿副本/状态锁写库；完成时先停止并等待进度采集，结束之后不会再出现进度。
+// 取消时仍独立保存结果；不采集文件清单/正文、仓库配置或目标公钥。
+func (a *agent) transferLog(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget, p *syncProgress) (func(int, int64, error), func(int64, error)) {
+	if a.cfg.Logs == nil {
+		return func(int, int64, error) {}, func(int64, error) {}
+	}
+	id, started := rand.Text(), time.Now()
+	record := func(phase string, attempt int, sent int64, err error) {
+		var st nagiv1.BackupStatus
+		p.fill(&st)
+		data := map[string]any{"task_id": id, "phase": phase, "target_node": target.GetNodeId(), "target_name": target.GetName(),
+			"bytes_total": st.BytesTotal, "bytes_done": st.BytesDone, "retries": st.Retries}
+		if phase == "finished" {
+			data["result"], data["duration_ms"], data["transferred_bytes"] = "ok", time.Since(started).Milliseconds(), sent
+			if err != nil {
+				data["result"] = "failed"
+			}
+			if err != nil && ctx.Err() != nil {
+				data["result"], data["cancel_cause"] = "interrupted", context.Cause(ctx).Error()
+				if errors.Is(context.Cause(ctx), errSyncStopped) {
+					data["result"] = "stopped"
+				}
+			}
+		}
+		if phase == "retry" {
+			data["attempt"], data["attempt_bytes"] = attempt, sent
+		}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "replica.transfer", Project: projectID, Object: container, Data: data})
+	}
+	record("started", 0, 0, nil)
+	seconds := a.cfg.LogConfig.TransferProgressSeconds
+	if seconds == 0 {
+		seconds = logstore.DefaultConfig().TransferProgressSeconds
+	}
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(time.Duration(seconds) * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-stop:
+				return
+			case <-ticker.C:
+				record("progress", 0, 0, nil)
+			}
+		}
+	}()
+	return func(attempt int, sent int64, err error) { record("retry", attempt, sent, err) }, func(sent int64, err error) {
+		close(stop)
+		<-done
+		record("finished", 0, sent, err)
+	}
 }
 
 // syncRun 是一个容器到一个备份节点正在进行（或排着队）的同步。ctx 是节点自己的上下文派生的，

@@ -3,14 +3,92 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"math"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/agent/alerts"
 	"github.com/SIPC/nagi/internal/agent/logging"
+	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
+	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/protobuf/proto"
 )
+
+func TestBackupRequestPersistsTransferFailureWithoutViewer(t *testing.T) {
+	ctx := t.Context()
+	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	projects, err := project.NewManager(d, nil, project.DefaultSubnetPool, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := &nagiv1.ContainerSpec{ProjectId: "0123456789abcdef", Name: "web", Dir: t.TempDir(),
+		Backups: []*nagiv1.BackupTarget{{NodeId: "target-a", Name: "backup-a"}}}
+	b, err := proto.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nodestore.New(d).UpsertContainer(ctx, nodestore.UpsertContainerParams{ProjectID: spec.ProjectId, Name: spec.Name, Dir: spec.Dir, Spec: b}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "logs.db")
+	logs, err := logstore.Open(ctx, path, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := &agent{ctx: ctx, cfg: Config{Logs: logs, LogConfig: logstore.DefaultConfig()}, projects: projects,
+		backups: newBackupStates(filepath.Join(t.TempDir(), "backup-status.json")), log: logger,
+		alerts: alerts.New(logger, "test", t.TempDir(), "", nil, nil, nil, nil)}
+	a.alerts.ContainerRules = func(string, string) (*nagiv1.AlertRules, bool) {
+		return &nagiv1.AlertRules{Enabled: map[string]bool{"backup": false}}, true
+	}
+	st, err := (&agentService{node: a, projects: projects}).SyncBackup(ctx, &nagiv1.SyncBackupRequest{ProjectId: spec.ProjectId, Container: spec.Name})
+	if err != nil || st.GetLastError() != "节点网络没有启动" {
+		t.Fatalf("existing result changed: %+v %v", st, err)
+	}
+	if err := logs.Close(); err != nil {
+		t.Fatal(err)
+	}
+	logs, err = logstore.Open(ctx, path, 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	rows, err := logs.Query(ctx, logstore.Filter{Category: logstore.Task, Project: spec.ProjectId})
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("transfer history: %+v %v", rows, err)
+	}
+	var taskID string
+	for i, row := range rows {
+		var data struct {
+			TaskID               string `json:"task_id"`
+			Target               string `json:"target_node"`
+			Phase, Result, Error string
+		}
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			taskID = data.TaskID
+		}
+		if taskID == "" || taskID != data.TaskID || data.Target != "target-a" || row.Object != "web" || row.Kind != "replica.transfer" || data.Phase != []string{"started", "finished"}[i] {
+			t.Fatalf("association: %+v %s", row, row.Data)
+		}
+		if i == 1 && (data.Result != "failed" || data.Error != st.LastError) {
+			t.Fatalf("failure lost: %s", row.Data)
+		}
+	}
+}
 
 func TestRawMetricHistoryKeepsFullChunksAndDoesNotInventMissingValues(t *testing.T) {
 	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 2<<20)
