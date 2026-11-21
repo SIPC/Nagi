@@ -542,10 +542,10 @@ function NoticesSection({ data }: { data: GetAlertRulesResponse }) {
                     key={x.key}
                     label={noticeText(x)}
                     description={
-                      <span className="flex flex-wrap items-center gap-x-2">
-                        <span>{tags.join(" · ")}</span>
-                        {x.risky && <span className="text-warning-text">{n.risky}</span>}
-                      </span>
+                      <>
+                        {tags.join(" · ")}
+                        {x.risky && <span className="text-warning-text"> · {n.risky}</span>}
+                      </>
                     }
                     on={isOn(x.key)}
                     busy={busy === x.key}

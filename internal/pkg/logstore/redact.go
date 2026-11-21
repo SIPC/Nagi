@@ -109,6 +109,11 @@ func redactValue(key string, value any) any {
 		}
 		return x
 	case string:
+		// 指标序列名（node:disk@/srv/nagi、node:interface@eth0:…）由代码按挂载点、网卡、项目和映射 ID 拼出，
+		// 不是自由文本；按文本脱敏会把「名字:路径@」当成 user:pass@ 改写，告警就读不到按挂载点、网卡的序列。
+		if k == "series" {
+			return x
+		}
 		// 审计 params、手工拼接的 error 等可以是套在 JSON 字符串里的 JSON。
 		// 保持调用方的字符串类型，但先按字段递归隐藏，再回退文本模式。
 		trimmed := strings.TrimSpace(x)
