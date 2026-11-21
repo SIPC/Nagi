@@ -8,6 +8,7 @@ export default {
   showCoverage: "View collection info", hideCoverage: "Hide collection info", copySummary: "Only recently received logs; history may be incomplete.",
   chainHelp: "Verifies only the original audit database hash chain, not unified logs, recent copies or exported redacted payloads.",
   source: "Source", panel: "This panel's local logs", offline: "Offline", keyword: "Keyword", searchHelp: "Event, object or redacted payload",
+  panelCopy: "Panel's recent copy", panelFingerprint: "Source panel certificate fingerprint", panelCopyHelp: "Enter the original panel's full certificate fingerprint. Reads retained panel:<fingerprint> copies on this panel, not the source panel's live database.",
   from: "From (local time)", to: "Until (exclusive, local time)", invalidTime: "Enter valid dates. The start must be earlier than the end.",
   readFrom: "Read from", live: "Original node logs (mesh)", copy: "Panel recent copy", useCopy: "Query recent copy",
   copyHelp: "Not the node's full history: copies have retention and capacity limits and may not have arrived, may have expired or been pruned. Query one category at a time. Host selects runtime only; select Security for SSH/sudo.",

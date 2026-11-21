@@ -7,6 +7,7 @@ export default {
   showCoverage: "查看采集信息", hideCoverage: "收起采集信息", copySummary: "仅含近期收到的日志，可能不完整。",
   chainHelp: "只校验原审计库的哈希链，不为统一日志、近期副本或导出的脱敏正文背书。",
   source: "来源", panel: "当前面板本机", offline: "离线", keyword: "关键字", searchHelp: "事件、对象或脱敏正文",
+  panelCopy: "面板日志的近期副本", panelFingerprint: "来源面板证书指纹", panelCopyHelp: "填写原面板完整证书指纹，读取当前面板保存的 panel:<fingerprint> 副本，不访问来源面板的实时数据库。",
   from: "开始时间（本地）", to: "结束时间（不含，本地）", invalidTime: "请输入有效时间，开始时间必须早于结束时间。",
   readFrom: "读取位置", live: "节点原始日志（mesh）", copy: "面板近期副本", useCopy: "查询近期副本",
   copyHelp: "这不是节点完整历史：副本有容量和保留期限，可能尚未收到、已经过期或被清理。每次只查询一个类别；宿主机选项只查运行类别，SSH/sudo 请选安全类别。",

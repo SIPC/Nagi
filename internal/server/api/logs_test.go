@@ -3,6 +3,7 @@ package api
 import (
 	"net/http/cookiejar"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
+	"github.com/SIPC/nagi/internal/server/standby"
 )
 
 func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
@@ -33,6 +35,9 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 	defer copies.Close()
 	h.a.Nodes.LogCopies = copies
 	if _, err := copies.Receive(t.Context(), "offline-node", logstore.CopyBatch{Source: "s", Category: logstore.Audit, Through: 5, Events: []logstore.Event{{Seq: 5, Time: time.Now(), Category: logstore.Audit, Kind: "operation", Data: "copy survives"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := copies.Receive(t.Context(), "panel:fingerprint", logstore.CopyBatch{Source: "panel-source", Category: logstore.Audit, Through: 9, Events: []logstore.Event{{Seq: 9, Time: time.Now(), Category: logstore.Audit, Kind: "panel.operation", Data: "panel marker 20%"}}}); err != nil {
 		t.Fatal(err)
 	}
 	auditor, err := h.a.Q.CreateRole(t.Context(), "audit-only", time.Now().Unix())
@@ -82,6 +87,22 @@ func TestNodeLogQueryRequiresAdminAndNeverHidesMeshFailure(t *testing.T) {
 			}
 		} else if err != nil || !page.Msg.GetRecentCopy() || len(page.Msg.GetEntries()) != 1 || page.Msg.GetNextAfter() != 5 {
 			t.Fatalf("explicit offline copy: %v %v", page, err)
+		}
+		panel, err := lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{NodeId: "panel:fingerprint", RecentCopy: true, Query: &nagiv1.LogQuery{Category: logstore.Audit, Search: "MARKER 20%", KindPrefix: "panel."}}))
+		if u.role != auth.AdminRoleID {
+			if connect.CodeOf(err) != connect.CodePermissionDenied {
+				t.Fatalf("panel copy permissions: %v", err)
+			}
+		} else {
+			if err != nil || panel.Msg.Source != "panel-source" || len(panel.Msg.Entries) != 1 || panel.Msg.Entries[0].Seq != 9 {
+				t.Fatalf("panel identity or filters lost: %v %v", panel, err)
+			}
+			h.a.Panel = &PanelInfo{Standby: &standby.Client{}}
+			_, err = lc.QueryNodeLogs(t.Context(), connect.NewRequest(&nagiv1.NodeLogQuery{NodeId: "offline-node"}))
+			if connect.CodeOf(err) != connect.CodeUnavailable || !strings.Contains(err.Error(), "面板 mesh 没有启动") {
+				t.Fatalf("standby query did not reach the mesh path: %v", err)
+			}
+			h.a.Panel = nil
 		}
 	}
 	lc := nagiv1connect.NewNodeLogServiceClient(h.srv.Client(), h.srv.URL)

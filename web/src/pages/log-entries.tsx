@@ -40,9 +40,9 @@ export function LogEntries() {
   const request = useMemo<Request>(() => ({
     panelLocal: !search.node,
     nodeId: search.node ?? "",
-    recentCopy: !!search.node && !!search.copy,
+    recentCopy: !!search.node && (!!search.copy || search.node.startsWith("panel:")),
     query: {
-      category: search.category === "host" ? (search.copy ? "runtime" : "") : search.category || (search.copy ? "audit" : ""),
+      category: search.category === "host" ? (search.copy || search.node?.startsWith("panel:") ? "runtime" : "") : search.category || (search.copy || search.node?.startsWith("panel:") ? "audit" : ""),
       kindPrefix: search.category === "host" ? "host." : "",
       project: search.project ?? "", search: search.q ?? "", limit: 50,
       from: search.from && Number.isFinite(Date.parse(search.from)) ? timestampFromDate(new Date(search.from)) : undefined,
@@ -64,8 +64,8 @@ export function LogEntries() {
   const state = pages.at(-1);
   const data = selected && body(selected);
   const nodeRecording = data?.recording && typeof data.recording === "object" && "id" in data.recording ? data.recording.id : undefined;
-  const recordingNode = request.nodeId || nodes.data?.nodes.find((node) => node.ownEmbedded)?.id;
-  const recording = data?.recording_id || (typeof nodeRecording === "string" && recordingNode ? `node:${recordingNode}:${nodeRecording}` : undefined);
+  const recordingNode = request.nodeId.startsWith("panel:") ? undefined : request.nodeId || nodes.data?.nodes.find((node) => node.ownEmbedded)?.id;
+  const recording = request.nodeId.startsWith("panel:") ? undefined : data?.recording_id || (typeof nodeRecording === "string" && recordingNode ? `node:${recordingNode}:${nodeRecording}` : undefined);
   const offline = nodes.data?.nodes.find((node) => node.id === search.node)?.online === false;
   const reset = () => { setSelected(undefined); setRevision((v) => v + 1); };
   const sourceName = nodes.data?.nodes.find((node) => node.id === search.node)?.name || search.node || t.logs.panel;
@@ -106,16 +106,18 @@ export function LogEntries() {
     <Dialog open={filtering} onClose={closeFilters} title={t.audit.filters.title} className="md:max-w-[672px]">
       <form className="grid gap-6" onSubmit={(event) => { event.preventDefault(); apply(); setFiltering(false); }}>
         <FormBody>
-          <Field label={t.logs.source} htmlFor="log-node"><Select id="log-node" value={draft.node ?? ""} onChange={(e) => setDraft({ ...draft, node: e.target.value || undefined, copy: undefined })}>
+          <Field label={t.logs.source} htmlFor="log-node"><Select id="log-node" value={draft.node?.startsWith("panel:") ? "panel:" : draft.node ?? ""} onChange={(e) => setDraft({ ...draft, node: e.target.value || undefined, copy: e.target.value === "panel:" || undefined })}>
             <option value="">{t.logs.panel}</option>
+            <option value="panel:">{t.logs.panelCopy}</option>
             {nodes.data?.nodes.map((node) => <option key={node.id} value={node.id}>{node.name}{!node.online ? ` · ${t.logs.offline}` : ""}</option>)}
           </Select></Field>
-          {draft.node && <Field label={t.logs.readFrom} help={t.logs.copyHelp} htmlFor="log-copy"><Select id="log-copy" value={draft.copy ? "copy" : "live"} onChange={(e) => setDraft({ ...draft, copy: e.target.value === "copy" || undefined, category: e.target.value === "copy" ? draft.category || "audit" : draft.category })}>
+          {draft.node?.startsWith("panel:") && <Field label={t.logs.panelFingerprint} help={t.logs.panelCopyHelp} htmlFor="log-panel"><Input id="log-panel" required value={draft.node.slice(6)} onChange={(e) => setDraft({ ...draft, node: `panel:${e.target.value.trim()}`, copy: true })} /></Field>}
+          {draft.node && !draft.node.startsWith("panel:") && <Field label={t.logs.readFrom} help={t.logs.copyHelp} htmlFor="log-copy"><Select id="log-copy" value={draft.copy ? "copy" : "live"} onChange={(e) => setDraft({ ...draft, copy: e.target.value === "copy" || undefined, category: e.target.value === "copy" ? draft.category || "audit" : draft.category })}>
             <option value="live">{t.logs.live}</option><option value="copy">{t.logs.copy}</option>
           </Select></Field>}
           <FormRow>
-            <Field label={t.audit.filters.category} htmlFor="log-category"><Select id="log-category" value={draft.category ?? (draft.copy ? "audit" : "")} onChange={(e) => setDraft({ ...draft, category: e.target.value || undefined })}>
-              {!draft.copy && <option value="">{t.audit.filters.allCategories}</option>}
+            <Field label={t.audit.filters.category} htmlFor="log-category"><Select id="log-category" value={draft.category ?? (draft.copy || draft.node?.startsWith("panel:") ? "audit" : "")} onChange={(e) => setDraft({ ...draft, category: e.target.value || undefined })}>
+              {!draft.copy && !draft.node?.startsWith("panel:") && <option value="">{t.audit.filters.allCategories}</option>}
               {categories.map((category) => <option key={category} value={category}>{categoryName(category)}</option>)}
             </Select></Field>
             <Field label={t.audit.filters.project} htmlFor="log-project"><Select id="log-project" value={draft.project ?? ""} onChange={(e) => setDraft({ ...draft, project: e.target.value || undefined })}>

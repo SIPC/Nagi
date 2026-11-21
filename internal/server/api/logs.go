@@ -114,12 +114,9 @@ func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 	return connect.NewResponse(out), nil
 }
 
-// Log and metric history never fall back to the control connection, including
-// on standby panels whose mesh membership is not implemented yet.
+// Log and metric history use each panel's authenticated mesh identity and never
+// fall back to the control connection. Nodes allow trusted standbys these reads.
 func (a *API) logConnection(nodeID string) (*grpc.ClientConn, error) {
-	if a.Panel != nil && a.Panel.Standby != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("备用面板尚未接入日志 mesh，不能从控制连接读取代替"))
-	}
 	m := a.Nodes.Mesh()
 	if m == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板 mesh 没有启动，无法查询节点日志"))
