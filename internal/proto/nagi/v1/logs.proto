@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Registered on mesh only. Existing trusted-panel authorization still applies;
+// standby membership/authorization is deliberately not added here.
+service LogService {
+  rpc QueryLogs(LogQuery) returns (LogPage);
+}
+
+// Browser-to-panel queries; the panel forwards through mesh, never the control RPC.
+service NodeLogService {
+  rpc QueryNodeLogs(NodeLogQuery) returns (LogPage);
+}
+
+message LogQuery {
+  string source = 1;
+  int64 after = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  string category = 5;
+  string project = 6;
+  string object = 7;
+  int32 limit = 8;
+}
+
+message NodeLogQuery {
+  string node_id = 1;
+  LogQuery query = 2;
+}
+
+message LogEntry {
+  int64 seq = 1;
+  google.protobuf.Timestamp time = 2;
+  google.protobuf.Timestamp received = 3;
+  string category = 4;
+  string kind = 5;
+  string project = 6;
+  string object = 7;
+  bytes data_json = 8;
+}
+
+// Envelope of deleted sequences, not a claim that every sequence in it was removed.
+message LogPruned {
+  string category = 1;
+  int64 first = 2;
+  int64 last = 3;
+  int64 count = 4;
+}
+
+message LogPage {
+  string source = 1;
+  int64 latest_seq = 2;
+  int64 next_after = 3;
+  bool more = 4;
+  repeated LogEntry entries = 5;
+  repeated LogPruned pruned = 6;
+  uint64 write_errors = 7;
+  int64 disk_bytes = 8;
+  int64 budget_bytes = 9;
+}

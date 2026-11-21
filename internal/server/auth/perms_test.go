@@ -13,10 +13,13 @@ import (
 // （或者 public、self、admin），没登记的一律拒绝。新增接口忘了登记时这里失败。
 func TestEveryProcedureRegistered(t *testing.T) {
 	seen := map[string]bool{}
-	for _, file := range []protoreflect.FileDescriptor{nagiv1.File_nagi_v1_api_proto, nagiv1.File_nagi_v1_enroll_proto} {
+	for _, file := range []protoreflect.FileDescriptor{nagiv1.File_nagi_v1_api_proto, nagiv1.File_nagi_v1_enroll_proto, nagiv1.File_nagi_v1_logs_proto} {
 		services := file.Services()
 		for i := range services.Len() {
 			svc := services.Get(i)
+			if svc.FullName() == "nagi.v1.LogService" {
+				continue
+			} // mesh only, not mounted on the panel HTTP API
 			for j := range svc.Methods().Len() {
 				p := "/nagi.v1." + string(svc.Name()) + "/" + string(svc.Methods().Get(j).Name())
 				seen[p] = true

@@ -456,6 +456,14 @@ func (s *Store) diskBytes() (int64, error) {
 }
 
 func (s *Store) Query(ctx context.Context, f Filter) ([]Event, error) {
+	if err := s.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer func() { <-s.gate }()
+	return s.query(ctx, f)
+}
+
+func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 	if f.After < 0 || f.Limit < 0 || f.Limit > 1000 || (!f.From.IsZero() && !f.To.IsZero() && !f.From.Before(f.To)) {
 		return nil, fmt.Errorf("无效日志查询范围")
 	}
@@ -475,10 +483,6 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]Event, error) {
 		where, args = append(where, "time_ns<?"), append(args, f.To.UnixNano())
 	}
 	args = append(args, f.Limit)
-	if err := s.lock(ctx); err != nil {
-		return nil, err
-	}
-	defer func() { <-s.gate }()
 	rows, err := s.db.QueryContext(ctx, `SELECT seq,time_ns,received_ns,category,kind,project,object,data FROM log_events WHERE `+strings.Join(where, " AND ")+` ORDER BY seq LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
@@ -499,11 +503,15 @@ func (s *Store) Query(ctx context.Context, f Filter) ([]Event, error) {
 }
 
 func (s *Store) State(ctx context.Context) (State, error) {
-	st := State{Source: s.source, BudgetBytes: s.budget, WriteErrors: s.errors.Load(), Pruned: []Pruned{}}
 	if err := s.lock(ctx); err != nil {
-		return st, err
+		return State{}, err
 	}
 	defer func() { <-s.gate }()
+	return s.state(ctx)
+}
+
+func (s *Store) state(ctx context.Context) (State, error) {
+	st := State{Source: s.source, BudgetBytes: s.budget, WriteErrors: s.errors.Load(), Pruned: []Pruned{}}
 	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name='log_events'),0)`).Scan(&st.Last); err != nil {
 		return st, err
 	}

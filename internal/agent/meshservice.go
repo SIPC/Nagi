@@ -36,6 +36,7 @@ func acquireUpload() (func(), error) {
 // meshService 是节点在 mesh 上提供的服务。mesh 只说明网络能通，每个方法都要单独校验调用方。
 type meshService struct {
 	mesh.Service
+	nagiv1.UnimplementedLogServiceServer
 	a *agent
 }
 
