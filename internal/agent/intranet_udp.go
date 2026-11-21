@@ -3,6 +3,7 @@ package agent
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -292,6 +294,14 @@ func (n *intranet) forwardUDP(c net.Conn, lookup func() (*nagiv1.LinkProxy, uint
 				continue
 			}
 			start := time.Now()
+			id := rand.Text()
+			record := func(phase string) {
+				n.a.cfg.Logs.Report(logstore.Event{Category: logstore.Access, Kind: "intranet.udp." + phase, Project: p.GetProjectId(), Object: p.GetAlias(), Data: map[string]any{
+					"session_id": id, "target_project": p.GetTargetProject(), "target_name": p.GetTargetName(), "port": port,
+					"duration_ms": time.Since(start).Milliseconds(), "multiplexed": true,
+				}})
+			}
+			record("opened")
 			mu.Lock()
 			cur = t
 			mu.Unlock()
@@ -304,6 +314,7 @@ func (n *intranet) forwardUDP(c net.Conn, lookup func() (*nagiv1.LinkProxy, uint
 			cur = nil
 			mu.Unlock()
 			t.close()
+			record("observer_finished")
 			// 第一次断了马上重连（例如对方节点刚重启）；连续刚建好就断（例如对方的容器一直在重建）就等一会儿，
 			// 不要一直握手。
 			if time.Since(start) < udpHeartbeat {
@@ -440,6 +451,13 @@ func (n *intranet) dialRemoteUDP(k mesh.Key, name string, p *nagiv1.LinkProxy, p
 	if n.a.mesh == nil {
 		return nil
 	}
+	started, outcome := time.Now(), "dial_failed"
+	defer func() {
+		n.a.cfg.Logs.Report(logstore.Event{Category: logstore.Access, Kind: "intranet.udp.attempt", Project: p.GetProjectId(), Object: p.GetAlias(), Data: map[string]any{
+			"target_project": p.GetTargetProject(), "target_name": p.GetTargetName(), "port": port, "peer": fmt.Sprintf("%x", k[:]),
+			"outcome": outcome, "duration_ms": time.Since(started).Milliseconds(),
+		}})
+	}()
 	pc, err := n.a.mesh.m.ListenUDP(0)
 	if err != nil {
 		n.a.log.Debug("在 mesh 上开 UDP 端口失败", "err", err)
@@ -464,6 +482,7 @@ func (n *intranet) dialRemoteUDP(k mesh.Key, name string, p *nagiv1.LinkProxy, p
 		pc.Close()
 		return nil
 	}
+	outcome = "handshake_failed"
 	if _, err := fmt.Fprintf(mc, "udp %s %s %d %d\n", p.GetTargetProject(), p.GetTargetName(), port, local.Port); err != nil {
 		return fail("发送 UDP 通道请求失败", "err", err)
 	}
@@ -476,8 +495,10 @@ func (n *intranet) dialRemoteUDP(k mesh.Key, name string, p *nagiv1.LinkProxy, p
 	rest, ok := strings.CutPrefix(line, "OK ")
 	rport, perr := strconv.ParseUint(rest, 10, 16)
 	if !ok || perr != nil || rport == 0 {
+		outcome = "target_rejected"
 		return fail("目标节点没有接受 UDP 通道", "reply", line)
 	}
+	outcome = "accepted"
 	_ = mc.SetReadDeadline(time.Time{})
 	r := &remoteUDP{ctl: mc, pc: pc, peer: &net.UDPAddr{IP: mesh.Address(k).AsSlice(), Port: int(rport)}, stop: make(chan struct{})}
 	r.poke.Store(time.Now().UnixNano())

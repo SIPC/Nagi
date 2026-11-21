@@ -6,15 +6,18 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
@@ -99,6 +102,12 @@ func TestTCPEarlyDataAndRetry(t *testing.T) {
 	go fake(mC, true, seenC)
 
 	a := &agent{log: log, ctx: ctx, mesh: &meshNode{m: mA}}
+	store, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 8<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	a.cfg.Logs = store
 	n := &intranet{a: a}
 	a.intranet = n
 	kB, kC := mB.PublicKey(), mC.PublicKey()
@@ -111,7 +120,9 @@ func TestTCPEarlyDataAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer ln.Close()
+	forwarded := make(chan struct{})
 	go func() {
+		defer close(forwarded)
 		c, err := ln.Accept()
 		if err != nil {
 			return
@@ -135,6 +146,32 @@ func TestTCPEarlyDataAndRetry(t *testing.T) {
 	}
 	if string(got) != "C:hello\n" {
 		t.Fatalf("回应：%q", got)
+	}
+	select {
+	case <-forwarded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("forward did not finish")
+	}
+	events, err := store.Query(ctx, logstore.Filter{Category: logstore.Access})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outcomes []string
+	for _, ev := range events {
+		if ev.Kind != "intranet.tcp.attempt" {
+			continue
+		}
+		b, _ := json.Marshal(ev.Data)
+		var data struct {
+			Outcome string `json:"outcome"`
+		}
+		if err := json.Unmarshal(b, &data); err != nil {
+			t.Fatal(err)
+		}
+		outcomes = append(outcomes, data.Outcome)
+	}
+	if strings.Join(outcomes, ",") != "target_rejected,accepted" {
+		t.Fatalf("persisted attempts: %v", outcomes)
 	}
 	for name, ch := range map[string]chan seen{"B": seenB, "C": seenC} {
 		select {
