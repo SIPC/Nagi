@@ -22,6 +22,7 @@ type Config struct {
 	TransferProgressSeconds int    `json:"transfer_progress_seconds"`
 	RecordingFlushSeconds   int    `json:"recording_flush_seconds"`
 	UpgradeProgressSeconds  int    `json:"upgrade_progress_seconds"`
+	FileProgressSeconds     int    `json:"file_progress_seconds"`
 	RecentCapacityMiB       int    `json:"recent_capacity_mib"`
 	RecentHours             int    `json:"recent_hours"`
 	CopyImportantSeconds    int    `json:"copy_important_seconds"`
@@ -30,7 +31,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO"}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO"}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。
@@ -66,6 +67,9 @@ func LoadConfig(dir string) (Config, error) {
 	}
 	if c.UpgradeProgressSeconds < 1 || c.UpgradeProgressSeconds > 3600 {
 		return c, fmt.Errorf("upgrade_progress_seconds 必须在 1～3600 之间")
+	}
+	if c.FileProgressSeconds < 1 || c.FileProgressSeconds > 3600 {
+		return c, fmt.Errorf("file_progress_seconds 必须在 1～3600 之间")
 	}
 	if c.RecentCapacityMiB < 16 || c.RecentCapacityMiB > 1024 || c.RecentHours < 1 || c.RecentHours > 24 {
 		return c, fmt.Errorf("近期副本容量必须在 16～1024 MiB，保留时间在 1～24 小时")

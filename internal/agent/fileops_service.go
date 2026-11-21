@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"io"
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/fileops"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,12 +21,33 @@ import (
 const fileOpProgressEvery = 500 * time.Millisecond
 
 // fileOpStream 运行 run，进行中每隔一会儿发一条进度，最后一条带结果。对方断开时 ctx 被取消，run 停下并清理。
-func fileOpStream(ctx context.Context, send func(*nagiv1.FileOpEvent) error, run func(*fileops.Progress) (*nagiv1.FileOpResult, error)) error {
+func (s *agentService) fileOpStream(ctx context.Context, action, project, object string, send func(*nagiv1.FileOpEvent) error, run func(*fileops.Progress) (*nagiv1.FileOpResult, error)) error {
 	prog := &fileops.Progress{}
 	type result struct {
 		res *nagiv1.FileOpResult
 		err error
 	}
+	id, started := rand.Text(), time.Now()
+	record := func(phase string, r result) {
+		data := map[string]any{"task_id": id, "action": action, "phase": phase, "bytes": prog.Bytes.Load(), "files": prog.Files.Load()}
+		if phase == "finished" {
+			data["duration_ms"], data["result"] = time.Since(started).Milliseconds(), "ok"
+			if r.err != nil {
+				data["result"], data["error"] = "failed", r.err.Error()
+				if errors.Is(r.err, context.Canceled) || status.Code(r.err) == codes.Canceled {
+					data["result"] = "canceled"
+				}
+			}
+			if r.res != nil {
+				data["conflicts"], data["completed"], data["skipped"], data["skipped_links"] = len(r.res.Conflicts), len(r.res.Paths), r.res.Skipped, r.res.SkippedLinks
+				if len(r.res.Conflicts) > 0 && r.err == nil {
+					data["result"] = "conflict_no_change"
+				}
+			}
+		}
+		s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "files.task", Project: project, Object: object, Data: data})
+	}
+	record("started", result{})
 	done := make(chan result, 1)
 	go func() {
 		res, err := run(prog)
@@ -32,20 +55,32 @@ func fileOpStream(ctx context.Context, send func(*nagiv1.FileOpEvent) error, run
 	}()
 	tick := time.NewTicker(fileOpProgressEvery)
 	defer tick.Stop()
+	interval := time.Duration(s.node.cfg.LogConfig.FileProgressSeconds) * time.Second
+	if interval <= 0 {
+		interval = time.Second
+	}
+	last := started
 	for {
 		select {
 		case r := <-done:
+			record("finished", r)
 			if r.err != nil {
 				return toStatus(r.err)
 			}
 			return send(&nagiv1.FileOpEvent{Bytes: prog.Bytes.Load(), Files: prog.Files.Load(), Result: r.res})
 		case <-tick.C:
+			if time.Since(last) >= interval {
+				record("progress", result{})
+				last = time.Now()
+			}
 			if err := send(&nagiv1.FileOpEvent{Bytes: prog.Bytes.Load(), Files: prog.Files.Load()}); err != nil {
-				<-done // 对方走了：ctx 已经取消，等 run 清理完
+				r := <-done // 对方走了：ctx 已经取消，等 run 清理完
+				record("finished", r)
 				return err
 			}
 		case <-ctx.Done():
-			<-done
+			r := <-done
+			record("finished", r)
 			return status.Error(codes.Canceled, "操作已取消")
 		}
 	}
@@ -56,7 +91,7 @@ func (s *agentService) TransferVolumeFiles(req *nagiv1.VolumeTransferRequest, st
 	if err := check(); err != nil {
 		return toStatus(err)
 	}
-	return fileOpStream(stream.Context(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
+	return s.fileOpStream(stream.Context(), "volume.transfer", req.GetProjectId(), req.GetContainer(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
 		return s.projects.TransferVolumeFiles(stream.Context(), req, p, check)
 	})
 }
@@ -66,7 +101,7 @@ func (s *agentService) CompressVolumeFiles(req *nagiv1.VolumeCompressRequest, st
 	if err := check(); err != nil {
 		return toStatus(err)
 	}
-	return fileOpStream(stream.Context(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
+	return s.fileOpStream(stream.Context(), "volume.compress", req.GetProjectId(), req.GetContainer(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
 		return s.projects.CompressVolumeFiles(stream.Context(), req, p, check)
 	})
 }
@@ -76,7 +111,7 @@ func (s *agentService) ExtractVolumeFile(req *nagiv1.VolumeExtractRequest, strea
 	if err := check(); err != nil {
 		return toStatus(err)
 	}
-	return fileOpStream(stream.Context(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
+	return s.fileOpStream(stream.Context(), "volume.extract", req.GetProjectId(), req.GetContainer(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
 		return s.projects.ExtractVolumeFile(stream.Context(), req, p, check)
 	})
 }
@@ -93,7 +128,7 @@ func (s *agentService) TransferNodeFiles(req *nagiv1.NodeTransferRequest, stream
 	if err := s.node.checkNodeAccess(); err != nil {
 		return err
 	}
-	return fileOpStream(stream.Context(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
+	return s.fileOpStream(stream.Context(), "node.transfer", "", "", stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
 		return s.node.files.Transfer(stream.Context(), req, p)
 	})
 }
@@ -102,7 +137,7 @@ func (s *agentService) CompressNodeFiles(req *nagiv1.NodeCompressRequest, stream
 	if err := s.node.checkNodeAccess(); err != nil {
 		return err
 	}
-	return fileOpStream(stream.Context(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
+	return s.fileOpStream(stream.Context(), "node.compress", "", "", stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
 		return s.node.files.Compress(stream.Context(), req, p)
 	})
 }
@@ -111,7 +146,7 @@ func (s *agentService) ExtractNodeFile(req *nagiv1.NodeExtractRequest, stream na
 	if err := s.node.checkNodeAccess(); err != nil {
 		return err
 	}
-	return fileOpStream(stream.Context(), stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
+	return s.fileOpStream(stream.Context(), "node.extract", "", "", stream.Send, func(p *fileops.Progress) (*nagiv1.FileOpResult, error) {
 		return s.node.files.Extract(stream.Context(), req, p)
 	})
 }
