@@ -329,6 +329,33 @@ func (r *Recordings) WriteOnce(ctx context.Context, output string) Summary {
 // truncatedMarker 是回放时插在开头和结尾之间的提示。
 const truncatedMarker = "\r\n\x1b[33m[录制已截断：中间的输出超出上限，已丢弃]\x1b[0m\r\n"
 
+// SealedChunks 按序号给出每一块原样的密文（外送原样上传用），新数据库和旧文件都能读。
+func (r *Recordings) SealedChunks(id string, fn func(seq int, sealed []byte) error) error {
+	if !recordingIDRe.MatchString(id) {
+		return errors.New("录制不存在")
+	}
+	seqs, database, err := r.chunkSequences(id)
+	if err != nil {
+		return err
+	}
+	sort.Ints(seqs)
+	for _, seq := range seqs {
+		var sealed []byte
+		if database {
+			err = r.db.QueryRow(`SELECT body FROM recording_chunks WHERE recording=? AND seq=?`, id, seq).Scan(&sealed)
+		} else {
+			sealed, err = os.ReadFile(filepath.Join(r.Dir, id[:6], id, ChunkName(seq)))
+		}
+		if err != nil {
+			return err
+		}
+		if err := fn(seq, sealed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Read 按顺序读出录制的每一块（asciicast v2 的若干行），中间被丢掉的地方插入一条提示。
 func (r *Recordings) Read(id string, fn func([]byte) error) error {
 	if !recordingIDRe.MatchString(id) {

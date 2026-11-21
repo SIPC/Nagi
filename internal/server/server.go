@@ -524,6 +524,11 @@ func (s *Server) Run(ctx context.Context) error {
 			if s.standby == nil {
 				if err := s.recordings.ImportLegacy(historyCtx); err != nil && historyCtx.Err() == nil {
 					s.log.Error("旧录制正文迁移未完成，保留原件和已提交位置", "err", err)
+				} else if err == nil {
+					// Delete only originals whose import completed and still match the database.
+					if err := s.recordings.CleanupLegacy(historyCtx, s.cfg.Logs); err != nil && historyCtx.Err() == nil {
+						s.log.Error("旧录制原件清理未完成，未核验通过的已保留，重启后重试", "err", err)
+					}
 				}
 			}
 			if err := s.audit.MigrateHistory(historyCtx, s.cfg.Logs, s.auditHistoryHead); err != nil && historyCtx.Err() == nil {
