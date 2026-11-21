@@ -25,6 +25,11 @@ public  final class Alert extends
     message_ = "";
     node_ = "";
     project_ = "";
+    occurrence_ = "";
+    source_ = "";
+    validity_ = "";
+    endReason_ = "";
+    severity_ = "";
   }
   private int bitField0_;
   public static final int KEY_FIELD_NUMBER = 1;
@@ -394,6 +399,394 @@ public  final class Alert extends
   private void clearTime() {
     time_ = null;
     bitField0_ = (bitField0_ & ~0x00000001);
+  }
+
+  public static final int OCCURRENCE_FIELD_NUMBER = 8;
+  private java.lang.String occurrence_;
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   * @return The occurrence.
+   */
+  @java.lang.Override
+  public java.lang.String getOccurrence() {
+    return occurrence_;
+  }
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   * @return The bytes for occurrence.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getOccurrenceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(occurrence_);
+  }
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   * @param value The occurrence to set.
+   */
+  private void setOccurrence(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    occurrence_ = value;
+  }
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   */
+  private void clearOccurrence() {
+
+    occurrence_ = getDefaultInstance().getOccurrence();
+  }
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   * @param value The bytes for occurrence to set.
+   */
+  private void setOccurrenceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    occurrence_ = value.toStringUtf8();
+
+  }
+
+  public static final int REVISION_FIELD_NUMBER = 9;
+  private long revision_;
+  /**
+   * <code>uint64 revision = 9 [json_name = "revision"];</code>
+   * @return The revision.
+   */
+  @java.lang.Override
+  public long getRevision() {
+    return revision_;
+  }
+  /**
+   * <code>uint64 revision = 9 [json_name = "revision"];</code>
+   * @param value The revision to set.
+   */
+  private void setRevision(long value) {
+    
+    revision_ = value;
+  }
+  /**
+   * <code>uint64 revision = 9 [json_name = "revision"];</code>
+   */
+  private void clearRevision() {
+
+    revision_ = 0L;
+  }
+
+  public static final int SOURCE_FIELD_NUMBER = 10;
+  private java.lang.String source_;
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   * @return The source.
+   */
+  @java.lang.Override
+  public java.lang.String getSource() {
+    return source_;
+  }
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   * @return The bytes for source.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSourceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(source_);
+  }
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   * @param value The source to set.
+   */
+  private void setSource(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    source_ = value;
+  }
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   */
+  private void clearSource() {
+
+    source_ = getDefaultInstance().getSource();
+  }
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   * @param value The bytes for source to set.
+   */
+  private void setSourceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    source_ = value.toStringUtf8();
+
+  }
+
+  public static final int VALIDITY_FIELD_NUMBER = 11;
+  private java.lang.String validity_;
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   * @return The validity.
+   */
+  @java.lang.Override
+  public java.lang.String getValidity() {
+    return validity_;
+  }
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   * @return The bytes for validity.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getValidityBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(validity_);
+  }
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   * @param value The validity to set.
+   */
+  private void setValidity(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    validity_ = value;
+  }
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   */
+  private void clearValidity() {
+
+    validity_ = getDefaultInstance().getValidity();
+  }
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   * @param value The bytes for validity to set.
+   */
+  private void setValidityBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    validity_ = value.toStringUtf8();
+
+  }
+
+  public static final int END_REASON_FIELD_NUMBER = 12;
+  private java.lang.String endReason_;
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   * @return The endReason.
+   */
+  @java.lang.Override
+  public java.lang.String getEndReason() {
+    return endReason_;
+  }
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   * @return The bytes for endReason.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getEndReasonBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(endReason_);
+  }
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   * @param value The endReason to set.
+   */
+  private void setEndReason(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    endReason_ = value;
+  }
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   */
+  private void clearEndReason() {
+
+    endReason_ = getDefaultInstance().getEndReason();
+  }
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   * @param value The bytes for endReason to set.
+   */
+  private void setEndReasonBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    endReason_ = value.toStringUtf8();
+
+  }
+
+  public static final int SINCE_FIELD_NUMBER = 13;
+  private com.google.protobuf.Timestamp since_;
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSince() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   */
+  @java.lang.Override
+  public com.google.protobuf.Timestamp getSince() {
+    return since_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : since_;
+  }
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   */
+  private void setSince(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    since_ = value;
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeSince(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    if (since_ != null &&
+        since_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+      since_ =
+        com.google.protobuf.Timestamp.newBuilder(since_).mergeFrom(value).buildPartial();
+    } else {
+      since_ = value;
+    }
+    bitField0_ |= 0x00000002;
+  }
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   */
+  private void clearSince() {
+    since_ = null;
+    bitField0_ = (bitField0_ & ~0x00000002);
+  }
+
+  public static final int SEVERITY_FIELD_NUMBER = 14;
+  private java.lang.String severity_;
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   * @return The severity.
+   */
+  @java.lang.Override
+  public java.lang.String getSeverity() {
+    return severity_;
+  }
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   * @return The bytes for severity.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSeverityBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(severity_);
+  }
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   * @param value The severity to set.
+   */
+  private void setSeverity(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    severity_ = value;
+  }
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   */
+  private void clearSeverity() {
+
+    severity_ = getDefaultInstance().getSeverity();
+  }
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   * @param value The bytes for severity to set.
+   */
+  private void setSeverityBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    severity_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.Alert parseFrom(
@@ -878,6 +1271,406 @@ public  final class Alert extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+     * </pre>
+     *
+     * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+     * @return The occurrence.
+     */
+    @java.lang.Override
+    public java.lang.String getOccurrence() {
+      return instance.getOccurrence();
+    }
+    /**
+     * <pre>
+     * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+     * </pre>
+     *
+     * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+     * @return The bytes for occurrence.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getOccurrenceBytes() {
+      return instance.getOccurrenceBytes();
+    }
+    /**
+     * <pre>
+     * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+     * </pre>
+     *
+     * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+     * @param value The occurrence to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOccurrence(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setOccurrence(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+     * </pre>
+     *
+     * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOccurrence() {
+      copyOnWrite();
+      instance.clearOccurrence();
+      return this;
+    }
+    /**
+     * <pre>
+     * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+     * </pre>
+     *
+     * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+     * @param value The bytes for occurrence to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOccurrenceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setOccurrenceBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>uint64 revision = 9 [json_name = "revision"];</code>
+     * @return The revision.
+     */
+    @java.lang.Override
+    public long getRevision() {
+      return instance.getRevision();
+    }
+    /**
+     * <code>uint64 revision = 9 [json_name = "revision"];</code>
+     * @param value The revision to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRevision(long value) {
+      copyOnWrite();
+      instance.setRevision(value);
+      return this;
+    }
+    /**
+     * <code>uint64 revision = 9 [json_name = "revision"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRevision() {
+      copyOnWrite();
+      instance.clearRevision();
+      return this;
+    }
+
+    /**
+     * <code>string source = 10 [json_name = "source"];</code>
+     * @return The source.
+     */
+    @java.lang.Override
+    public java.lang.String getSource() {
+      return instance.getSource();
+    }
+    /**
+     * <code>string source = 10 [json_name = "source"];</code>
+     * @return The bytes for source.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSourceBytes() {
+      return instance.getSourceBytes();
+    }
+    /**
+     * <code>string source = 10 [json_name = "source"];</code>
+     * @param value The source to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSource(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSource(value);
+      return this;
+    }
+    /**
+     * <code>string source = 10 [json_name = "source"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSource() {
+      copyOnWrite();
+      instance.clearSource();
+      return this;
+    }
+    /**
+     * <code>string source = 10 [json_name = "source"];</code>
+     * @param value The bytes for source to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSourceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSourceBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * valid / unknown；缺数据不改 detection status。
+     * </pre>
+     *
+     * <code>string validity = 11 [json_name = "validity"];</code>
+     * @return The validity.
+     */
+    @java.lang.Override
+    public java.lang.String getValidity() {
+      return instance.getValidity();
+    }
+    /**
+     * <pre>
+     * valid / unknown；缺数据不改 detection status。
+     * </pre>
+     *
+     * <code>string validity = 11 [json_name = "validity"];</code>
+     * @return The bytes for validity.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getValidityBytes() {
+      return instance.getValidityBytes();
+    }
+    /**
+     * <pre>
+     * valid / unknown；缺数据不改 detection status。
+     * </pre>
+     *
+     * <code>string validity = 11 [json_name = "validity"];</code>
+     * @param value The validity to set.
+     * @return This builder for chaining.
+     */
+    public Builder setValidity(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setValidity(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * valid / unknown；缺数据不改 detection status。
+     * </pre>
+     *
+     * <code>string validity = 11 [json_name = "validity"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearValidity() {
+      copyOnWrite();
+      instance.clearValidity();
+      return this;
+    }
+    /**
+     * <pre>
+     * valid / unknown；缺数据不改 detection status。
+     * </pre>
+     *
+     * <code>string validity = 11 [json_name = "validity"];</code>
+     * @param value The bytes for validity to set.
+     * @return This builder for chaining.
+     */
+    public Builder setValidityBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setValidityBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * </pre>
+     *
+     * <code>string end_reason = 12 [json_name = "endReason"];</code>
+     * @return The endReason.
+     */
+    @java.lang.Override
+    public java.lang.String getEndReason() {
+      return instance.getEndReason();
+    }
+    /**
+     * <pre>
+     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * </pre>
+     *
+     * <code>string end_reason = 12 [json_name = "endReason"];</code>
+     * @return The bytes for endReason.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getEndReasonBytes() {
+      return instance.getEndReasonBytes();
+    }
+    /**
+     * <pre>
+     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * </pre>
+     *
+     * <code>string end_reason = 12 [json_name = "endReason"];</code>
+     * @param value The endReason to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEndReason(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setEndReason(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * </pre>
+     *
+     * <code>string end_reason = 12 [json_name = "endReason"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEndReason() {
+      copyOnWrite();
+      instance.clearEndReason();
+      return this;
+    }
+    /**
+     * <pre>
+     * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+     * </pre>
+     *
+     * <code>string end_reason = 12 [json_name = "endReason"];</code>
+     * @param value The bytes for endReason to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEndReasonBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setEndReasonBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSince() {
+      return instance.hasSince();
+    }
+    /**
+     * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getSince() {
+      return instance.getSince();
+    }
+    /**
+     * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+     */
+    public Builder setSince(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.setSince(value);
+      return this;
+      }
+    /**
+     * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+     */
+    public Builder setSince(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSince(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+     */
+    public Builder mergeSince(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.mergeSince(value);
+      return this;
+    }
+    /**
+     * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+     */
+    public Builder clearSince() {  copyOnWrite();
+      instance.clearSince();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * critical / warning / info；空值按现有单项规则保守处理。
+     * </pre>
+     *
+     * <code>string severity = 14 [json_name = "severity"];</code>
+     * @return The severity.
+     */
+    @java.lang.Override
+    public java.lang.String getSeverity() {
+      return instance.getSeverity();
+    }
+    /**
+     * <pre>
+     * critical / warning / info；空值按现有单项规则保守处理。
+     * </pre>
+     *
+     * <code>string severity = 14 [json_name = "severity"];</code>
+     * @return The bytes for severity.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSeverityBytes() {
+      return instance.getSeverityBytes();
+    }
+    /**
+     * <pre>
+     * critical / warning / info；空值按现有单项规则保守处理。
+     * </pre>
+     *
+     * <code>string severity = 14 [json_name = "severity"];</code>
+     * @param value The severity to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSeverity(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSeverity(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * critical / warning / info；空值按现有单项规则保守处理。
+     * </pre>
+     *
+     * <code>string severity = 14 [json_name = "severity"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSeverity() {
+      copyOnWrite();
+      instance.clearSeverity();
+      return this;
+    }
+    /**
+     * <pre>
+     * critical / warning / info；空值按现有单项规则保守处理。
+     * </pre>
+     *
+     * <code>string severity = 14 [json_name = "severity"];</code>
+     * @param value The bytes for severity to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSeverityBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSeverityBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.Alert)
   }
   @java.lang.Override
@@ -902,10 +1695,18 @@ public  final class Alert extends
             "node_",
             "project_",
             "time_",
+            "occurrence_",
+            "revision_",
+            "source_",
+            "validity_",
+            "endReason_",
+            "since_",
+            "severity_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u1009\u0000";
+              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u1009\u0000\b\u0208\t\u0003" +
+              "\n\u0208\u000b\u0208\f\u0208\r\u1009\u0001\u000e\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

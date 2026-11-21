@@ -108,4 +108,113 @@ public interface AlertOrBuilder extends
    * @return The time.
    */
   com.google.protobuf.Timestamp getTime();
+
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   * @return The occurrence.
+   */
+  java.lang.String getOccurrence();
+  /**
+   * <pre>
+   * 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+   * </pre>
+   *
+   * <code>string occurrence = 8 [json_name = "occurrence"];</code>
+   * @return The bytes for occurrence.
+   */
+  com.google.protobuf.ByteString
+      getOccurrenceBytes();
+
+  /**
+   * <code>uint64 revision = 9 [json_name = "revision"];</code>
+   * @return The revision.
+   */
+  long getRevision();
+
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   * @return The source.
+   */
+  java.lang.String getSource();
+  /**
+   * <code>string source = 10 [json_name = "source"];</code>
+   * @return The bytes for source.
+   */
+  com.google.protobuf.ByteString
+      getSourceBytes();
+
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   * @return The validity.
+   */
+  java.lang.String getValidity();
+  /**
+   * <pre>
+   * valid / unknown；缺数据不改 detection status。
+   * </pre>
+   *
+   * <code>string validity = 11 [json_name = "validity"];</code>
+   * @return The bytes for validity.
+   */
+  com.google.protobuf.ByteString
+      getValidityBytes();
+
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   * @return The endReason.
+   */
+  java.lang.String getEndReason();
+  /**
+   * <pre>
+   * recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+   * </pre>
+   *
+   * <code>string end_reason = 12 [json_name = "endReason"];</code>
+   * @return The bytes for endReason.
+   */
+  com.google.protobuf.ByteString
+      getEndReasonBytes();
+
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   * @return Whether the since field is set.
+   */
+  boolean hasSince();
+  /**
+   * <code>.google.protobuf.Timestamp since = 13 [json_name = "since"];</code>
+   * @return The since.
+   */
+  com.google.protobuf.Timestamp getSince();
+
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   * @return The severity.
+   */
+  java.lang.String getSeverity();
+  /**
+   * <pre>
+   * critical / warning / info；空值按现有单项规则保守处理。
+   * </pre>
+   *
+   * <code>string severity = 14 [json_name = "severity"];</code>
+   * @return The bytes for severity.
+   */
+  com.google.protobuf.ByteString
+      getSeverityBytes();
 }

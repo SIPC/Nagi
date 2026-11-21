@@ -882,6 +882,53 @@ public  final class ReportRequest extends
     certs_.remove(index);
   }
 
+  public static final int ALERTS_FIELD_NUMBER = 11;
+  private ink.sipc.nagi.proto.v1.AlertSync alerts_;
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAlerts() {
+    return ((bitField0_ & 0x00000008) != 0);
+  }
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   */
+  @java.lang.Override
+  public ink.sipc.nagi.proto.v1.AlertSync getAlerts() {
+    return alerts_ == null ? ink.sipc.nagi.proto.v1.AlertSync.getDefaultInstance() : alerts_;
+  }
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   */
+  private void setAlerts(ink.sipc.nagi.proto.v1.AlertSync value) {
+    java.util.Objects.requireNonNull(value);
+    alerts_ = value;
+    bitField0_ |= 0x00000008;
+  }
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeAlerts(ink.sipc.nagi.proto.v1.AlertSync value) {
+    java.util.Objects.requireNonNull(value);
+    if (alerts_ != null &&
+        alerts_ != ink.sipc.nagi.proto.v1.AlertSync.getDefaultInstance()) {
+      alerts_ =
+        ink.sipc.nagi.proto.v1.AlertSync.newBuilder(alerts_).mergeFrom(value).buildPartial();
+    } else {
+      alerts_ = value;
+    }
+    bitField0_ |= 0x00000008;
+  }
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   */
+  private void clearAlerts() {
+    alerts_ = null;
+    bitField0_ = (bitField0_ & ~0x00000008);
+  }
+
   public static ink.sipc.nagi.proto.v1.ReportRequest parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1883,6 +1930,53 @@ public  final class ReportRequest extends
       return this;
     }
 
+    /**
+     * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAlerts() {
+      return instance.hasAlerts();
+    }
+    /**
+     * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+     */
+    @java.lang.Override
+    public ink.sipc.nagi.proto.v1.AlertSync getAlerts() {
+      return instance.getAlerts();
+    }
+    /**
+     * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+     */
+    public Builder setAlerts(ink.sipc.nagi.proto.v1.AlertSync value) {
+      copyOnWrite();
+      instance.setAlerts(value);
+      return this;
+      }
+    /**
+     * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+     */
+    public Builder setAlerts(
+        ink.sipc.nagi.proto.v1.AlertSync.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAlerts(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+     */
+    public Builder mergeAlerts(ink.sipc.nagi.proto.v1.AlertSync value) {
+      copyOnWrite();
+      instance.mergeAlerts(value);
+      return this;
+    }
+    /**
+     * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+     */
+    public Builder clearAlerts() {  copyOnWrite();
+      instance.clearAlerts();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.ReportRequest)
   }
   @java.lang.Override
@@ -1913,11 +2007,12 @@ public  final class ReportRequest extends
             "panels_",
             "certs_",
             ink.sipc.nagi.proto.v1.DomainCert.class,
+            "alerts_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0004\u0000\u0001\u1009\u0000\u0002\u1009\u0001" +
-              "\u0003\u001b\u0004\u001b\u0005\u1009\u0002\u0006\u0003\u0007\u0208\b\u0208\t\u021a" +
-              "\n\u001b";
+              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0004\u0000\u0001\u1009\u0000\u0002" +
+              "\u1009\u0001\u0003\u001b\u0004\u001b\u0005\u1009\u0002\u0006\u0003\u0007\u0208\b" +
+              "\u0208\t\u021a\n\u001b\u000b\u1009\u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

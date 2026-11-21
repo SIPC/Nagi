@@ -212,4 +212,15 @@ public interface ReportRequestOrBuilder extends
    * <code>repeated .nagi.v1.DomainCert certs = 10 [json_name = "certs"];</code>
    */
   int getCertsCount();
+
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   * @return Whether the alerts field is set.
+   */
+  boolean hasAlerts();
+  /**
+   * <code>.nagi.v1.AlertSync alerts = 11 [json_name = "alerts"];</code>
+   * @return The alerts.
+   */
+  ink.sipc.nagi.proto.v1.AlertSync getAlerts();
 }
