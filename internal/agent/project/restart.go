@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/compose-spec/compose-go/v2/types"
 )
@@ -174,7 +175,17 @@ func (m *Manager) Supervise(ctx context.Context, projectID, container string) {
 		}
 		r.mu.Unlock()
 		if ok {
-			_ = m.docker.StartContainer(ctx, c.ID)
+			started := time.Now()
+			m.Decisions.Report(logstore.Event{Category: logstore.Task, Kind: "container.restart.attempt", Project: projectID, Object: container,
+				Data: map[string]any{"instance": c.ID, "service": c.Service, "policy": p.mode, "exit_code": code}})
+			err := m.docker.StartContainer(ctx, c.ID)
+			data := map[string]any{"instance": c.ID, "service": c.Service, "policy": p.mode, "exit_code": code,
+				"duration_ms": time.Since(started).Milliseconds(), "result": "start_accepted"}
+			if err != nil {
+				message := err.Error()
+				data["result"], data["error"] = "failed", strings.Clone(message[:min(len(message), 4096)])
+			}
+			m.Decisions.Report(logstore.Event{Category: logstore.Task, Kind: "container.restart.result", Project: projectID, Object: container, Data: data})
 		}
 	}
 }

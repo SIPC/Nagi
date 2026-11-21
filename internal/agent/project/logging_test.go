@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -21,6 +22,93 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestManagedRestartHistorySeparatesAcceptedFromFailed(t *testing.T) {
+	var starts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/containers/json"):
+			io.WriteString(w, `[{"Id":"accepted","State":"exited","Labels":{"com.docker.compose.service":"web"}},{"Id":"failed","State":"exited","Labels":{"com.docker.compose.service":"web"}},{"Id":"running","State":"running","Labels":{"com.docker.compose.service":"web"}}]`)
+		case strings.HasSuffix(r.URL.Path, "/json"):
+			io.WriteString(w, `{"State":{"ExitCode":7}}`)
+		case strings.HasSuffix(r.URL.Path, "/start"):
+			starts.Add(1)
+			if strings.Contains(r.URL.Path, "/failed/") {
+				w.WriteHeader(http.StatusInternalServerError)
+				io.WriteString(w, `{"message":"restart refused"}`)
+			} else {
+				w.WriteHeader(http.StatusNoContent)
+			}
+		default:
+			t.Errorf("unexpected endpoint %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_API_VERSION", "1.56")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	dc, err := docker.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dc.Close()
+	d, err := db.OpenMigrated(t.Context(), filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	m, err := project.NewManager(d, dc, project.DefaultSubnetPool, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Journal, err = logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Journal.Close()
+	m.Decisions = logging.NewDecisions(m.Journal, 32)
+	defer m.Decisions.Close()
+	const pid = "0123456789abcdef"
+	sp := &nagiv1.ContainerSpec{ProjectId: pid, Name: "web", Dir: t.TempDir(), Config: &nagiv1.ContainerConfig{Form: &nagiv1.ImageForm{Image: "nginx"}}}
+	b, err := proto.Marshal(sp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nodestore.New(d).UpsertContainer(t.Context(), nodestore.UpsertContainerParams{ProjectID: pid, Name: sp.Name, Dir: sp.Dir, Spec: b}); err != nil {
+		t.Fatal(err)
+	}
+	m.Supervise(t.Context(), pid, "web")
+	m.Supervise(t.Context(), pid, "web") // same stopped instances: backoff must prevent another attempt
+	m.Decisions.Close()
+	rows, err := m.Journal.Query(t.Context(), logstore.Filter{Category: logstore.Task, Project: pid})
+	if err != nil || len(rows) != 4 || starts.Load() != 2 {
+		t.Fatalf("rows=%+v starts=%d err=%v", rows, starts.Load(), err)
+	}
+	results := map[string]string{}
+	for _, row := range rows {
+		var data struct {
+			Instance, Result, Error string
+			ExitCode                int `json:"exit_code"`
+		}
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+			t.Fatal(err)
+		}
+		if row.Object != "web" || data.ExitCode != 7 {
+			t.Fatalf("wrong source: %+v %s", row, row.Data)
+		}
+		if row.Kind == "container.restart.result" {
+			results[data.Instance] = data.Result
+			if (data.Error != "") != (data.Instance == "failed") {
+				t.Fatalf("wrong error: %+v", data)
+			}
+		}
+	}
+	if results["accepted"] != "start_accepted" || results["failed"] != "failed" {
+		t.Fatalf("results=%v", results)
+	}
+}
 
 func TestImageCheckHistoryDistinguishesUnknownAndUpdate(t *testing.T) {
 	var phase atomic.Int32

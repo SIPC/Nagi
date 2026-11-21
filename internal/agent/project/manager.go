@@ -18,6 +18,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
@@ -61,6 +62,8 @@ type Manager struct {
 
 	// Journal 在启动时设置；任务事实写进本节点的统一本地日志。
 	Journal *logstore.Store
+	// Decisions shares the lease-safe bounded queue; never wait for disk in Supervise.
+	Decisions *logging.Decisions
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex

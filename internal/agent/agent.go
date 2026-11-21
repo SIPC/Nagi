@@ -253,6 +253,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	a.failovers = newFailovers(cfg.DataDir)
 	a.failovers.history = logging.NewDecisions(cfg.Logs, cfg.LogConfig.DecisionQueueEntries)
 	defer a.failovers.history.Close()
+	projects.Decisions = a.failovers.history
 	a.votes = &voteBatcher{a: a}
 	projects.ManagedRestart = a.managed
 	projects.FastSnapshot = a.managed
