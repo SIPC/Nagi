@@ -45,6 +45,8 @@ type Sealer interface {
 type Recordings struct {
 	Dir    string
 	Sealer Sealer
+	// FlushInterval applies to new sessions; zero keeps the legacy five seconds.
+	FlushInterval time.Duration
 	// Enabled 判断现在要不要录制（「设置 → 安全 → 终端录制」）。
 	Enabled func(context.Context) bool
 	budget  *logstore.Store
@@ -134,7 +136,11 @@ func (rec *Recorder) ID() string {
 
 func (rec *Recorder) loop() {
 	defer close(rec.done)
-	t := time.NewTicker(chunkInterval)
+	interval := rec.r.FlushInterval
+	if interval <= 0 {
+		interval = chunkInterval
+	}
+	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
 		select {

@@ -85,6 +85,9 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 	defer history.Close()
 	a := &agent{id: id, cfg: Config{Logs: store}, metrics: metrics.New(history, nil, "", logger),
 		mesh: &meshNode{m: node, panelKeys: map[string]mesh.Key{"panel-fp": panel.PublicKey()}}}
+	a.cfg.DataDir, a.log = dir, logger
+	closeRecordings := a.openRecordings(ctx)
+	defer closeRecordings()
 	svc := &meshService{Service: mesh.Service{M: node}, a: a}
 	done := make(chan error, 1)
 	go func() { done <- mesh.Serve(ctx, node, svc) }()
@@ -133,6 +136,7 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 			t.Fatalf("错误统计查询应拒绝: %+v %v", q, err)
 		}
 	}
+	recordingID := exerciseRecordingCapture(t, ctx, a, legacy, client)
 	if _, err := id.removePanel("panel-fp", true, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -141,5 +145,12 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 	}
 	if _, err := client.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{}); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("现存统计 mesh 连接上的撤权未生效: %v", err)
+	}
+	replay, err := client.ReadRecording(ctx, &nagiv1.LocalRecordingQuery{Id: recordingID})
+	if err == nil {
+		_, err = replay.Recv()
+	}
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("撤权后仍可读取录制正文: %v", err)
 	}
 }

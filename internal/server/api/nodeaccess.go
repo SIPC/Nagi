@@ -324,6 +324,7 @@ func (a *API) NodeShellHandler() http.Handler {
 			fail(i18n.Localize(lang, err))
 			return
 		}
+		ctx = a.recordingContext(ctx)
 		stream, err := conn.Agent.NodeShell(ctx)
 		if err == nil {
 			err = stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Start{Start: &nagiv1.NodeShellStart{
@@ -338,7 +339,7 @@ func (a *API) NodeShellHandler() http.Handler {
 
 		began := time.Now()
 		// 录制先开始，打开终端的记录带上它的 ID：终端还开着时也能回放已经录下的部分。
-		rec := a.Recordings.Start(ctx, cols, rows)
+		rec := a.startSessionRecording(ctx, stream, nodeID, cols, rows)
 		a.recordNodeShellOpen(ctx, nodeID, ip, rec.ID())
 		a.alertNodeShell(ctx, nodeID, u.Name, ip)
 		defer func() { a.recordSessionEnd(ctx, "CloseNodeShell", "node", nodeID, "", rec.Close()) }()
@@ -364,7 +365,7 @@ func (a *API) NodeShellHandler() http.Handler {
 		})
 
 		bridgeTerminal(ctx, cancel, ws, lang, lastActive, terminalStream{
-			rec: rec,
+			rec: rec.Recorder,
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Stdin{Stdin: b}})
 			},
@@ -372,7 +373,7 @@ func (a *API) NodeShellHandler() http.Handler {
 				return stream.Send(&nagiv1.NodeShellInput{Input: &nagiv1.NodeShellInput_Resize{Resize: &nagiv1.TerminalSize{Cols: cols, Rows: rows}}})
 			},
 			closeSend: stream.CloseSend,
-			recv:      stream.Recv,
+			recv:      func() (*nagiv1.ExecOutput, error) { return rec.receive(stream.Recv) },
 		})
 	})
 }

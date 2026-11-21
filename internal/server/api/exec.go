@@ -32,6 +32,7 @@ const execOutputMax = 64 << 10
 // 权限和终端一样：能操作容器的角色、访问范围内的项目，令牌还要允许执行命令。每次执行都记进活动记录，连同命令。
 func (a *API) RunCommand(ctx context.Context, projectID, container, service string, command []string, timeout time.Duration) (ExecResult, error) {
 	u := auth.CurrentUser(ctx)
+	var rec *sessionRecording
 	start := &nagiv1.ExecStart{
 		ProjectId: projectID, Container: container, Service: service, Command: command,
 		Size: &nagiv1.TerminalSize{Cols: 200, Rows: 50},
@@ -39,7 +40,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	// 命令本身记在详情里：活动记录要能看出 agent 在容器里做过什么。
 	detail := strings.Join(command, " ")
 	fail := func(err error) (ExecResult, error) {
-		a.recordExec(ctx, start, detail, auditFailure(err), audit.Summary{})
+		a.recordExec(ctx, start, detail, auditFailure(err), rec.Close())
 		// 这里不经过 scopeCheck：返回给成员前同样把他看不到的节点换掉（容器可能在范围外的节点上）。
 		return ExecResult{}, a.scrubFor(ctx, u, i18n.FromContext(ctx), err)
 	}
@@ -68,6 +69,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	ctx = a.recordingContext(ctx)
 	stream, err := conn.Agent.Exec(ctx)
 	if err != nil {
 		return fail(err)
@@ -78,7 +80,7 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 	var out headTail
 	res := ExecResult{ExitCode: -1}
 	// 录制的是完整的输出流（开头 8 MB、最后 56 MB），返回给 agent 的只有开头和结尾；开头先写上命令。
-	rec := a.Recordings.Start(ctx, 200, 50)
+	rec = a.startSessionRecording(ctx, stream, nodeID, 200, 50)
 	rec.Output([]byte(commandLine("", detail)))
 	for {
 		msg, err := stream.Recv()
@@ -86,7 +88,6 @@ func (a *API) RunCommand(ctx context.Context, projectID, container, service stri
 			if ctx.Err() != nil {
 				res.TimedOut = true
 			} else if !errors.Is(err, io.EOF) {
-				rec.Close()
 				return fail(err)
 			}
 			break

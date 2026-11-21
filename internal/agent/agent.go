@@ -31,6 +31,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
+	"github.com/SIPC/nagi/internal/pkg/recording"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -204,6 +205,8 @@ func Run(ctx context.Context, cfg Config) error {
 	a.violations = newViolations(a)
 	closeAudit := a.openAudit(ctx)
 	defer closeAudit()
+	closeRecordings := a.openRecordings(ctx)
+	defer closeRecordings()
 	if cfg.Logs != nil {
 		logCtx, stopLogs := context.WithCancel(ctx)
 		logsDone := make(chan struct{})
@@ -392,13 +395,14 @@ type agent struct {
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
 	violations *violations
 	// audit 是节点本地审计，面板用 ReadAuditLog 读走后代为外送（见 audit.go）。
-	audit     *auditlog.Log
-	replicas  *replicas
-	backups   *backupStates
-	failovers *failovers
-	votes     *voteBatcher
-	ctx       context.Context
-	startedAt time.Time
+	audit      *auditlog.Log
+	recordings *recording.Recordings
+	replicas   *replicas
+	backups    *backupStates
+	failovers  *failovers
+	votes      *voteBatcher
+	ctx        context.Context
+	startedAt  time.Time
 	// confirmUpgrade 在连上面板后调用：刚升级时表示新版本能用（见 upgrade_guard.go）。
 	confirmUpgrade func()
 

@@ -238,13 +238,13 @@ func TestJournalRedactsAndPreservesLoggerGroups(t *testing.T) {
 func TestLocalConfigDefaultsAndCapacityRange(t *testing.T) {
 	dir := t.TempDir()
 	c, err := logstore.LoadConfig(dir)
-	if err != nil || c.CapacityGiB != 5 || c.MetricsEverySeconds != 10 || c.TransferProgressSeconds != 5 {
+	if err != nil || c.CapacityGiB != 5 || c.MetricsEverySeconds != 10 || c.TransferProgressSeconds != 5 || c.RecordingFlushSeconds != 5 {
 		t.Fatalf("默认配置: %+v err=%v", c, err)
 	}
 	for _, tc := range []struct {
 		json string
 		ok   bool
-	}{{`{"capacity_gib":10}`, true}, {`{"capacity_gib":4}`, false}, {`{"capacity_gib":11}`, false}, {`{"metrics_every_seconds":15}`, false}, {`{"metrics_every_seconds":0}`, false}, {`{"container_rescan_seconds":0}`, false}, {`{"container_retry_seconds":3601}`, false}, {`{"transfer_progress_seconds":0}`, false}, {`{"transfer_progress_seconds":3601}`, false}, {`{"transfer_progress_seconds":1}`, true}, {`{"runtime_level":"trace"}`, false}} {
+	}{{`{"capacity_gib":10}`, true}, {`{"capacity_gib":4}`, false}, {`{"capacity_gib":11}`, false}, {`{"metrics_every_seconds":15}`, false}, {`{"metrics_every_seconds":0}`, false}, {`{"container_rescan_seconds":0}`, false}, {`{"container_retry_seconds":3601}`, false}, {`{"transfer_progress_seconds":0}`, false}, {`{"transfer_progress_seconds":3601}`, false}, {`{"transfer_progress_seconds":1}`, true}, {`{"recording_flush_seconds":0}`, false}, {`{"recording_flush_seconds":61}`, false}, {`{"recording_flush_seconds":1}`, true}, {`{"recording_flush_seconds":60}`, true}, {`{"runtime_level":"trace"}`, false}} {
 		if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(tc.json), 0o600); err != nil {
 			t.Fatal(err)
 		}

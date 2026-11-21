@@ -13,6 +13,16 @@ service LogService {
   rpc QueryLogs(LogQuery) returns (LogPage);
   // Includes indexed metric history migrated from the old node database.
   rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
+  // Decrypted recording bodies travel only inside the authenticated mesh.
+  rpc ReadRecording(LocalRecordingQuery) returns (stream LocalRecordingChunk);
+}
+
+message LocalRecordingQuery {
+  string id = 1;
+}
+
+message LocalRecordingChunk {
+  bytes data = 1;
 }
 
 // Node-initiated replication, registered on mesh only. Node identity is resolved

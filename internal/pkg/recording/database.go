@@ -155,6 +155,9 @@ func (r *Recordings) chunkSequences(id string) ([]int, bool, error) {
 			return seqs, true, rows.Err()
 		}
 	}
+	if r.Dir == "" {
+		return nil, false, os.ErrNotExist
+	}
 	entries, err := os.ReadDir(filepath.Join(r.Dir, id[:6], id))
 	if err != nil {
 		return nil, false, err

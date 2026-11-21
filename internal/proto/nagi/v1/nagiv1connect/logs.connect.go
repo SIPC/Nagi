@@ -41,6 +41,9 @@ const (
 	LogServiceQueryLogsProcedure = "/nagi.v1.LogService/QueryLogs"
 	// LogServiceQueryMetricsProcedure is the fully-qualified name of the LogService's QueryMetrics RPC.
 	LogServiceQueryMetricsProcedure = "/nagi.v1.LogService/QueryMetrics"
+	// LogServiceReadRecordingProcedure is the fully-qualified name of the LogService's ReadRecording
+	// RPC.
+	LogServiceReadRecordingProcedure = "/nagi.v1.LogService/ReadRecording"
 	// LogCopyServiceGetLogReceiptProcedure is the fully-qualified name of the LogCopyService's
 	// GetLogReceipt RPC.
 	LogCopyServiceGetLogReceiptProcedure = "/nagi.v1.LogCopyService/GetLogReceipt"
@@ -56,6 +59,8 @@ type LogServiceClient interface {
 	QueryLogs(context.Context, *connect.Request[v1.LogQuery]) (*connect.Response[v1.LogPage], error)
 	// Includes indexed metric history migrated from the old node database.
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// Decrypted recording bodies travel only inside the authenticated mesh.
+	ReadRecording(context.Context, *connect.Request[v1.LocalRecordingQuery]) (*connect.ServerStreamForClient[v1.LocalRecordingChunk], error)
 }
 
 // NewLogServiceClient constructs a client for the nagi.v1.LogService service. By default, it uses
@@ -81,13 +86,20 @@ func NewLogServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(logServiceMethods.ByName("QueryMetrics")),
 			connect.WithClientOptions(opts...),
 		),
+		readRecording: connect.NewClient[v1.LocalRecordingQuery, v1.LocalRecordingChunk](
+			httpClient,
+			baseURL+LogServiceReadRecordingProcedure,
+			connect.WithSchema(logServiceMethods.ByName("ReadRecording")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // logServiceClient implements LogServiceClient.
 type logServiceClient struct {
-	queryLogs    *connect.Client[v1.LogQuery, v1.LogPage]
-	queryMetrics *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	queryLogs     *connect.Client[v1.LogQuery, v1.LogPage]
+	queryMetrics  *connect.Client[v1.QueryMetricsRequest, v1.QueryMetricsResponse]
+	readRecording *connect.Client[v1.LocalRecordingQuery, v1.LocalRecordingChunk]
 }
 
 // QueryLogs calls nagi.v1.LogService.QueryLogs.
@@ -100,11 +112,18 @@ func (c *logServiceClient) QueryMetrics(ctx context.Context, req *connect.Reques
 	return c.queryMetrics.CallUnary(ctx, req)
 }
 
+// ReadRecording calls nagi.v1.LogService.ReadRecording.
+func (c *logServiceClient) ReadRecording(ctx context.Context, req *connect.Request[v1.LocalRecordingQuery]) (*connect.ServerStreamForClient[v1.LocalRecordingChunk], error) {
+	return c.readRecording.CallServerStream(ctx, req)
+}
+
 // LogServiceHandler is an implementation of the nagi.v1.LogService service.
 type LogServiceHandler interface {
 	QueryLogs(context.Context, *connect.Request[v1.LogQuery]) (*connect.Response[v1.LogPage], error)
 	// Includes indexed metric history migrated from the old node database.
 	QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error)
+	// Decrypted recording bodies travel only inside the authenticated mesh.
+	ReadRecording(context.Context, *connect.Request[v1.LocalRecordingQuery], *connect.ServerStream[v1.LocalRecordingChunk]) error
 }
 
 // NewLogServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -126,12 +145,20 @@ func NewLogServiceHandler(svc LogServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(logServiceMethods.ByName("QueryMetrics")),
 		connect.WithHandlerOptions(opts...),
 	)
+	logServiceReadRecordingHandler := connect.NewServerStreamHandler(
+		LogServiceReadRecordingProcedure,
+		svc.ReadRecording,
+		connect.WithSchema(logServiceMethods.ByName("ReadRecording")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.LogService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case LogServiceQueryLogsProcedure:
 			logServiceQueryLogsHandler.ServeHTTP(w, r)
 		case LogServiceQueryMetricsProcedure:
 			logServiceQueryMetricsHandler.ServeHTTP(w, r)
+		case LogServiceReadRecordingProcedure:
+			logServiceReadRecordingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -147,6 +174,10 @@ func (UnimplementedLogServiceHandler) QueryLogs(context.Context, *connect.Reques
 
 func (UnimplementedLogServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogService.QueryMetrics is not implemented"))
+}
+
+func (UnimplementedLogServiceHandler) ReadRecording(context.Context, *connect.Request[v1.LocalRecordingQuery], *connect.ServerStream[v1.LocalRecordingChunk]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogService.ReadRecording is not implemented"))
 }
 
 // LogCopyServiceClient is a client for the nagi.v1.LogCopyService service.

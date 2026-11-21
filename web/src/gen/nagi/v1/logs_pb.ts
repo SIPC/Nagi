@@ -14,7 +14,41 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/logs.proto.
  */
 export const file_nagi_v1_logs: GenFile = /*@__PURE__*/
-  fileDesc("ChJuYWdpL3YxL2xvZ3MucHJvdG8SB25hZ2kudjEiMwoPTG9nUmVjZWlwdFF1ZXJ5Eg4KBnNvdXJjZRgBIAEoCRIQCghjYXRlZ29yeRgCIAEoCSI9CgpMb2dSZWNlaXB0Eg4KBnNvdXJjZRgBIAEoCRIQCghjYXRlZ29yeRgCIAEoCRINCgVhZnRlchgDIAEoAyKuAQoMTG9nQ29weUJhdGNoEg4KBnNvdXJjZRgBIAEoCRIQCghjYXRlZ29yeRgCIAEoCRINCgVhZnRlchgDIAEoAxIPCgd0aHJvdWdoGAQgASgDEiIKB2VudHJpZXMYBSADKAsyES5uYWdpLnYxLkxvZ0VudHJ5EiIKBnBydW5lZBgGIAMoCzISLm5hZ2kudjEuTG9nUHJ1bmVkEhQKDHdyaXRlX2Vycm9ycxgHIAEoBCK9AQoITG9nUXVlcnkSDgoGc291cmNlGAEgASgJEg0KBWFmdGVyGAIgASgDEigKBGZyb20YAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjYXRlZ29yeRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEg4KBm9iamVjdBgHIAEoCRINCgVsaW1pdBgIIAEoBSJWCgxOb2RlTG9nUXVlcnkSDwoHbm9kZV9pZBgBIAEoCRIgCgVxdWVyeRgCIAEoCzIRLm5hZ2kudjEuTG9nUXVlcnkSEwoLcmVjZW50X2NvcHkYAyABKAgiwwEKCExvZ0VudHJ5EgsKA3NlcRgBIAEoAxIoCgR0aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIsCghyZWNlaXZlZBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIY2F0ZWdvcnkYBCABKAkSDAoEa2luZBgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEg4KBm9iamVjdBgHIAEoCRIRCglkYXRhX2pzb24YCCABKAwiSQoJTG9nUHJ1bmVkEhAKCGNhdGVnb3J5GAEgASgJEg0KBWZpcnN0GAIgASgDEgwKBGxhc3QYAyABKAMSDQoFY291bnQYBCABKAMilwIKB0xvZ1BhZ2USDgoGc291cmNlGAEgASgJEhIKCmxhdGVzdF9zZXEYAiABKAMSEgoKbmV4dF9hZnRlchgDIAEoAxIMCgRtb3JlGAQgASgIEiIKB2VudHJpZXMYBSADKAsyES5uYWdpLnYxLkxvZ0VudHJ5EiIKBnBydW5lZBgGIAMoCzISLm5hZ2kudjEuTG9nUHJ1bmVkEhQKDHdyaXRlX2Vycm9ycxgHIAEoBBISCgpkaXNrX2J5dGVzGAggASgDEhQKDGJ1ZGdldF9ieXRlcxgJIAEoAxITCgtyZWNlbnRfY29weRgKIAEoCBIpCg1zb3VyY2VfcHJ1bmVkGAsgAygLMhIubmFnaS52MS5Mb2dQcnVuZWQyiwEKCkxvZ1NlcnZpY2USMAoJUXVlcnlMb2dzEhEubmFnaS52MS5Mb2dRdWVyeRoQLm5hZ2kudjEuTG9nUGFnZRJLCgxRdWVyeU1ldHJpY3MSHC5uYWdpLnYxLlF1ZXJ5TWV0cmljc1JlcXVlc3QaHS5uYWdpLnYxLlF1ZXJ5TWV0cmljc1Jlc3BvbnNlMogBCg5Mb2dDb3B5U2VydmljZRI+Cg1HZXRMb2dSZWNlaXB0EhgubmFnaS52MS5Mb2dSZWNlaXB0UXVlcnkaEy5uYWdpLnYxLkxvZ1JlY2VpcHQSNgoIUHVzaExvZ3MSFS5uYWdpLnYxLkxvZ0NvcHlCYXRjaBoTLm5hZ2kudjEuTG9nUmVjZWlwdDJKCg5Ob2RlTG9nU2VydmljZRI4Cg1RdWVyeU5vZGVMb2dzEhUubmFnaS52MS5Ob2RlTG9nUXVlcnkaEC5uYWdpLnYxLkxvZ1BhZ2VCNFoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_agent]);
+  fileDesc("ChJuYWdpL3YxL2xvZ3MucHJvdG8SB25hZ2kudjEiIQoTTG9jYWxSZWNvcmRpbmdRdWVyeRIKCgJpZBgBIAEoCSIjChNMb2NhbFJlY29yZGluZ0NodW5rEgwKBGRhdGEYASABKAwiMwoPTG9nUmVjZWlwdFF1ZXJ5Eg4KBnNvdXJjZRgBIAEoCRIQCghjYXRlZ29yeRgCIAEoCSI9CgpMb2dSZWNlaXB0Eg4KBnNvdXJjZRgBIAEoCRIQCghjYXRlZ29yeRgCIAEoCRINCgVhZnRlchgDIAEoAyKuAQoMTG9nQ29weUJhdGNoEg4KBnNvdXJjZRgBIAEoCRIQCghjYXRlZ29yeRgCIAEoCRINCgVhZnRlchgDIAEoAxIPCgd0aHJvdWdoGAQgASgDEiIKB2VudHJpZXMYBSADKAsyES5uYWdpLnYxLkxvZ0VudHJ5EiIKBnBydW5lZBgGIAMoCzISLm5hZ2kudjEuTG9nUHJ1bmVkEhQKDHdyaXRlX2Vycm9ycxgHIAEoBCK9AQoITG9nUXVlcnkSDgoGc291cmNlGAEgASgJEg0KBWFmdGVyGAIgASgDEigKBGZyb20YAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiYKAnRvGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghjYXRlZ29yeRgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEg4KBm9iamVjdBgHIAEoCRINCgVsaW1pdBgIIAEoBSJWCgxOb2RlTG9nUXVlcnkSDwoHbm9kZV9pZBgBIAEoCRIgCgVxdWVyeRgCIAEoCzIRLm5hZ2kudjEuTG9nUXVlcnkSEwoLcmVjZW50X2NvcHkYAyABKAgiwwEKCExvZ0VudHJ5EgsKA3NlcRgBIAEoAxIoCgR0aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIsCghyZWNlaXZlZBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIY2F0ZWdvcnkYBCABKAkSDAoEa2luZBgFIAEoCRIPCgdwcm9qZWN0GAYgASgJEg4KBm9iamVjdBgHIAEoCRIRCglkYXRhX2pzb24YCCABKAwiSQoJTG9nUHJ1bmVkEhAKCGNhdGVnb3J5GAEgASgJEg0KBWZpcnN0GAIgASgDEgwKBGxhc3QYAyABKAMSDQoFY291bnQYBCABKAMilwIKB0xvZ1BhZ2USDgoGc291cmNlGAEgASgJEhIKCmxhdGVzdF9zZXEYAiABKAMSEgoKbmV4dF9hZnRlchgDIAEoAxIMCgRtb3JlGAQgASgIEiIKB2VudHJpZXMYBSADKAsyES5uYWdpLnYxLkxvZ0VudHJ5EiIKBnBydW5lZBgGIAMoCzISLm5hZ2kudjEuTG9nUHJ1bmVkEhQKDHdyaXRlX2Vycm9ycxgHIAEoBBISCgpkaXNrX2J5dGVzGAggASgDEhQKDGJ1ZGdldF9ieXRlcxgJIAEoAxITCgtyZWNlbnRfY29weRgKIAEoCBIpCg1zb3VyY2VfcHJ1bmVkGAsgAygLMhIubmFnaS52MS5Mb2dQcnVuZWQy2gEKCkxvZ1NlcnZpY2USMAoJUXVlcnlMb2dzEhEubmFnaS52MS5Mb2dRdWVyeRoQLm5hZ2kudjEuTG9nUGFnZRJLCgxRdWVyeU1ldHJpY3MSHC5uYWdpLnYxLlF1ZXJ5TWV0cmljc1JlcXVlc3QaHS5uYWdpLnYxLlF1ZXJ5TWV0cmljc1Jlc3BvbnNlEk0KDVJlYWRSZWNvcmRpbmcSHC5uYWdpLnYxLkxvY2FsUmVjb3JkaW5nUXVlcnkaHC5uYWdpLnYxLkxvY2FsUmVjb3JkaW5nQ2h1bmswATKIAQoOTG9nQ29weVNlcnZpY2USPgoNR2V0TG9nUmVjZWlwdBIYLm5hZ2kudjEuTG9nUmVjZWlwdFF1ZXJ5GhMubmFnaS52MS5Mb2dSZWNlaXB0EjYKCFB1c2hMb2dzEhUubmFnaS52MS5Mb2dDb3B5QmF0Y2gaEy5uYWdpLnYxLkxvZ1JlY2VpcHQySgoOTm9kZUxvZ1NlcnZpY2USOAoNUXVlcnlOb2RlTG9ncxIVLm5hZ2kudjEuTm9kZUxvZ1F1ZXJ5GhAubmFnaS52MS5Mb2dQYWdlQjRaMmdpdGh1Yi5jb20vU0lQQy9uYWdpL2ludGVybmFsL3Byb3RvL25hZ2kvdjE7bmFnaXYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_nagi_v1_agent]);
+
+/**
+ * @generated from message nagi.v1.LocalRecordingQuery
+ */
+export type LocalRecordingQuery = Message<"nagi.v1.LocalRecordingQuery"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message nagi.v1.LocalRecordingQuery.
+ * Use `create(LocalRecordingQuerySchema)` to create a new message.
+ */
+export const LocalRecordingQuerySchema: GenMessage<LocalRecordingQuery> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_logs, 0);
+
+/**
+ * @generated from message nagi.v1.LocalRecordingChunk
+ */
+export type LocalRecordingChunk = Message<"nagi.v1.LocalRecordingChunk"> & {
+  /**
+   * @generated from field: bytes data = 1;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message nagi.v1.LocalRecordingChunk.
+ * Use `create(LocalRecordingChunkSchema)` to create a new message.
+ */
+export const LocalRecordingChunkSchema: GenMessage<LocalRecordingChunk> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_logs, 1);
 
 /**
  * @generated from message nagi.v1.LogReceiptQuery
@@ -36,7 +70,7 @@ export type LogReceiptQuery = Message<"nagi.v1.LogReceiptQuery"> & {
  * Use `create(LogReceiptQuerySchema)` to create a new message.
  */
 export const LogReceiptQuerySchema: GenMessage<LogReceiptQuery> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 0);
+  messageDesc(file_nagi_v1_logs, 2);
 
 /**
  * @generated from message nagi.v1.LogReceipt
@@ -63,7 +97,7 @@ export type LogReceipt = Message<"nagi.v1.LogReceipt"> & {
  * Use `create(LogReceiptSchema)` to create a new message.
  */
 export const LogReceiptSchema: GenMessage<LogReceipt> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 1);
+  messageDesc(file_nagi_v1_logs, 3);
 
 /**
  * @generated from message nagi.v1.LogCopyBatch
@@ -110,7 +144,7 @@ export type LogCopyBatch = Message<"nagi.v1.LogCopyBatch"> & {
  * Use `create(LogCopyBatchSchema)` to create a new message.
  */
 export const LogCopyBatchSchema: GenMessage<LogCopyBatch> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 2);
+  messageDesc(file_nagi_v1_logs, 4);
 
 /**
  * @generated from message nagi.v1.LogQuery
@@ -162,7 +196,7 @@ export type LogQuery = Message<"nagi.v1.LogQuery"> & {
  * Use `create(LogQuerySchema)` to create a new message.
  */
 export const LogQuerySchema: GenMessage<LogQuery> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 3);
+  messageDesc(file_nagi_v1_logs, 5);
 
 /**
  * @generated from message nagi.v1.NodeLogQuery
@@ -191,7 +225,7 @@ export type NodeLogQuery = Message<"nagi.v1.NodeLogQuery"> & {
  * Use `create(NodeLogQuerySchema)` to create a new message.
  */
 export const NodeLogQuerySchema: GenMessage<NodeLogQuery> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 4);
+  messageDesc(file_nagi_v1_logs, 6);
 
 /**
  * @generated from message nagi.v1.LogEntry
@@ -243,7 +277,7 @@ export type LogEntry = Message<"nagi.v1.LogEntry"> & {
  * Use `create(LogEntrySchema)` to create a new message.
  */
 export const LogEntrySchema: GenMessage<LogEntry> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 5);
+  messageDesc(file_nagi_v1_logs, 7);
 
 /**
  * Envelope of deleted sequences, not a claim that every sequence in it was removed.
@@ -277,7 +311,7 @@ export type LogPruned = Message<"nagi.v1.LogPruned"> & {
  * Use `create(LogPrunedSchema)` to create a new message.
  */
 export const LogPrunedSchema: GenMessage<LogPruned> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 6);
+  messageDesc(file_nagi_v1_logs, 8);
 
 /**
  * @generated from message nagi.v1.LogPage
@@ -346,7 +380,7 @@ export type LogPage = Message<"nagi.v1.LogPage"> & {
  * Use `create(LogPageSchema)` to create a new message.
  */
 export const LogPageSchema: GenMessage<LogPage> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_logs, 7);
+  messageDesc(file_nagi_v1_logs, 9);
 
 /**
  * Registered on mesh only. Existing trusted-panel authorization still applies;
@@ -372,6 +406,16 @@ export const LogService: GenService<{
     methodKind: "unary";
     input: typeof QueryMetricsRequestSchema;
     output: typeof QueryMetricsResponseSchema;
+  },
+  /**
+   * Decrypted recording bodies travel only inside the authenticated mesh.
+   *
+   * @generated from rpc nagi.v1.LogService.ReadRecording
+   */
+  readRecording: {
+    methodKind: "server_streaming";
+    input: typeof LocalRecordingQuerySchema;
+    output: typeof LocalRecordingChunkSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_nagi_v1_logs, 0);

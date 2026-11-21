@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LogService_QueryLogs_FullMethodName    = "/nagi.v1.LogService/QueryLogs"
-	LogService_QueryMetrics_FullMethodName = "/nagi.v1.LogService/QueryMetrics"
+	LogService_QueryLogs_FullMethodName     = "/nagi.v1.LogService/QueryLogs"
+	LogService_QueryMetrics_FullMethodName  = "/nagi.v1.LogService/QueryMetrics"
+	LogService_ReadRecording_FullMethodName = "/nagi.v1.LogService/ReadRecording"
 )
 
 // LogServiceClient is the client API for LogService service.
@@ -33,6 +34,8 @@ type LogServiceClient interface {
 	QueryLogs(ctx context.Context, in *LogQuery, opts ...grpc.CallOption) (*LogPage, error)
 	// Includes indexed metric history migrated from the old node database.
 	QueryMetrics(ctx context.Context, in *QueryMetricsRequest, opts ...grpc.CallOption) (*QueryMetricsResponse, error)
+	// Decrypted recording bodies travel only inside the authenticated mesh.
+	ReadRecording(ctx context.Context, in *LocalRecordingQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LocalRecordingChunk], error)
 }
 
 type logServiceClient struct {
@@ -63,6 +66,25 @@ func (c *logServiceClient) QueryMetrics(ctx context.Context, in *QueryMetricsReq
 	return out, nil
 }
 
+func (c *logServiceClient) ReadRecording(ctx context.Context, in *LocalRecordingQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[LocalRecordingChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &LogService_ServiceDesc.Streams[0], LogService_ReadRecording_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[LocalRecordingQuery, LocalRecordingChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type LogService_ReadRecordingClient = grpc.ServerStreamingClient[LocalRecordingChunk]
+
 // LogServiceServer is the server API for LogService service.
 // All implementations must embed UnimplementedLogServiceServer
 // for forward compatibility.
@@ -73,6 +95,8 @@ type LogServiceServer interface {
 	QueryLogs(context.Context, *LogQuery) (*LogPage, error)
 	// Includes indexed metric history migrated from the old node database.
 	QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error)
+	// Decrypted recording bodies travel only inside the authenticated mesh.
+	ReadRecording(*LocalRecordingQuery, grpc.ServerStreamingServer[LocalRecordingChunk]) error
 	mustEmbedUnimplementedLogServiceServer()
 }
 
@@ -88,6 +112,9 @@ func (UnimplementedLogServiceServer) QueryLogs(context.Context, *LogQuery) (*Log
 }
 func (UnimplementedLogServiceServer) QueryMetrics(context.Context, *QueryMetricsRequest) (*QueryMetricsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryMetrics not implemented")
+}
+func (UnimplementedLogServiceServer) ReadRecording(*LocalRecordingQuery, grpc.ServerStreamingServer[LocalRecordingChunk]) error {
+	return status.Error(codes.Unimplemented, "method ReadRecording not implemented")
 }
 func (UnimplementedLogServiceServer) mustEmbedUnimplementedLogServiceServer() {}
 func (UnimplementedLogServiceServer) testEmbeddedByValue()                    {}
@@ -146,6 +173,17 @@ func _LogService_QueryMetrics_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LogService_ReadRecording_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(LocalRecordingQuery)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(LogServiceServer).ReadRecording(m, &grpc.GenericServerStream[LocalRecordingQuery, LocalRecordingChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type LogService_ReadRecordingServer = grpc.ServerStreamingServer[LocalRecordingChunk]
+
 // LogService_ServiceDesc is the grpc.ServiceDesc for LogService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -162,7 +200,13 @@ var LogService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _LogService_QueryMetrics_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ReadRecording",
+			Handler:       _LogService_ReadRecording_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "nagi/v1/logs.proto",
 }
 
