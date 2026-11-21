@@ -223,14 +223,17 @@ func (x *LogReceipt) GetAfter() int64 {
 }
 
 type LogCopyBatch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	Category      string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
-	After         int64                  `protobuf:"varint,3,opt,name=after,proto3" json:"after,omitempty"`
-	Through       int64                  `protobuf:"varint,4,opt,name=through,proto3" json:"through,omitempty"`
-	Entries       []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
-	Pruned        []*LogPruned           `protobuf:"bytes,6,rep,name=pruned,proto3" json:"pruned,omitempty"`
-	WriteErrors   uint64                 `protobuf:"varint,7,opt,name=write_errors,json=writeErrors,proto3" json:"write_errors,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Source      string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Category    string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	After       int64                  `protobuf:"varint,3,opt,name=after,proto3" json:"after,omitempty"`
+	Through     int64                  `protobuf:"varint,4,opt,name=through,proto3" json:"through,omitempty"`
+	Entries     []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
+	Pruned      []*LogPruned           `protobuf:"bytes,6,rep,name=pruned,proto3" json:"pruned,omitempty"`
+	WriteErrors uint64                 `protobuf:"varint,7,opt,name=write_errors,json=writeErrors,proto3" json:"write_errors,omitempty"`
+	// Set on extra catch-up batches. A loaded panel may refuse them with
+	// RESOURCE_EXHAUSTED; normal batches are never refused for load.
+	Catchup       bool `protobuf:"varint,8,opt,name=catchup,proto3" json:"catchup,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -312,6 +315,13 @@ func (x *LogCopyBatch) GetWriteErrors() uint64 {
 		return x.WriteErrors
 	}
 	return 0
+}
+
+func (x *LogCopyBatch) GetCatchup() bool {
+	if x != nil {
+		return x.Catchup
+	}
+	return false
 }
 
 type LogQuery struct {
@@ -907,7 +917,7 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"LogReceipt\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
 	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x14\n" +
-	"\x05after\x18\x03 \x01(\x03R\x05after\"\xee\x01\n" +
+	"\x05after\x18\x03 \x01(\x03R\x05after\"\x88\x02\n" +
 	"\fLogCopyBatch\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
 	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x14\n" +
@@ -915,7 +925,8 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\athrough\x18\x04 \x01(\x03R\athrough\x12+\n" +
 	"\aentries\x18\x05 \x03(\v2\x11.nagi.v1.LogEntryR\aentries\x12*\n" +
 	"\x06pruned\x18\x06 \x03(\v2\x12.nagi.v1.LogPrunedR\x06pruned\x12!\n" +
-	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\"\xda\x02\n" +
+	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\x12\x18\n" +
+	"\acatchup\x18\b \x01(\bR\acatchup\"\xda\x02\n" +
 	"\bLogQuery\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
 	"\x05after\x18\x02 \x01(\x03R\x05after\x12.\n" +

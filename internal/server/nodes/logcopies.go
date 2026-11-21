@@ -64,6 +64,11 @@ func (p *panelMesh) PushLogs(ctx context.Context, q *nagiv1.LogCopyBatch) (*nagi
 	if proto.Size(q) > 1<<20 || len(q.GetEntries()) > 256 {
 		return nil, status.Error(codes.ResourceExhausted, "日志批次过大")
 	}
+	done, ok := p.r.CopyIntake.Begin(q.GetCatchup())
+	if !ok {
+		return nil, status.Error(codes.ResourceExhausted, "面板正忙，稍后再追赶近期日志副本")
+	}
+	defer done()
 	b := logstore.CopyBatch{Source: q.GetSource(), Category: q.GetCategory(), After: q.GetAfter(), Through: q.GetThrough(), WriteErrors: q.GetWriteErrors()}
 	for _, e := range q.GetEntries() {
 		if e.GetTime() == nil || e.GetTime().CheckValid() != nil || !json.Valid(e.GetDataJson()) {

@@ -489,6 +489,12 @@ func (s *Server) Run(ctx context.Context) error {
 			s.log.Error("无法打开面板近期副本，不返回日志持久确认", "err", err)
 		} else {
 			s.nodes.LogCopies = copies
+			c := s.cfg.LogConfig
+			if c.CopyReceiveSharePercent == 0 {
+				d := logstore.DefaultConfig()
+				c.CopyReceiveSharePercent, c.CopyYieldPressurePercent = d.CopyReceiveSharePercent, d.CopyYieldPressurePercent
+			}
+			s.nodes.CopyIntake = nodes.NewCopyIntake(c.CopyReceiveSharePercent, c.CopyYieldPressurePercent, s.cfg.Logs.Directory())
 			defer copies.Close()
 			if s.mesh != nil {
 				logCtx, stopLogs := context.WithCancel(ctx)

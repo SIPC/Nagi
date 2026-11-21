@@ -79,4 +79,15 @@ public interface LogCopyBatchOrBuilder extends
    * @return The writeErrors.
    */
   long getWriteErrors();
+
+  /**
+   * <pre>
+   * Set on extra catch-up batches. A loaded panel may refuse them with
+   * RESOURCE_EXHAUSTED; normal batches are never refused for load.
+   * </pre>
+   *
+   * <code>bool catchup = 8 [json_name = "catchup"];</code>
+   * @return The catchup.
+   */
+  boolean getCatchup();
 }

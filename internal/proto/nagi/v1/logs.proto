@@ -53,6 +53,9 @@ message LogCopyBatch {
   repeated LogEntry entries = 5;
   repeated LogPruned pruned = 6;
   uint64 write_errors = 7;
+  // Set on extra catch-up batches. A loaded panel may refuse them with
+  // RESOURCE_EXHAUSTED; normal batches are never refused for load.
+  bool catchup = 8;
 }
 
 // Browser-to-panel queries; the panel forwards through mesh, never the control RPC.

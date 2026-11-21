@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/netip"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -139,16 +141,16 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 		}
 	}
 	lost := &lostLogAck{LogCopyServiceClient: client}
-	if err := copyLogCategory(ctx, local, lost, logstore.Container, 1000); status.Code(err) != codes.DeadlineExceeded {
+	if _, err := copyLogCategory(ctx, local, lost, logstore.Container, 128, 1000, false); status.Code(err) != codes.DeadlineExceeded {
 		t.Fatalf("lost response not exercised: %v", err)
 	}
 	for range 3 {
-		if err := copyLogCategory(ctx, local, client, logstore.Audit, 1000); err != nil {
+		if _, err := copyLogCategory(ctx, local, client, logstore.Audit, 128, 1000, false); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for range 3 {
-		if err := copyLogCategory(ctx, local, client, logstore.Container, 1000); err != nil {
+		if _, err := copyLogCategory(ctx, local, client, logstore.Container, 128, 1000, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -227,6 +229,8 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 		if err != nil || len(page.Events) != 1 || page.Events[0].Seq != 5 || page.Events[0].Kind != "primary.offline" {
 			t.Fatalf("standby sender lost identity or ignored revocation: %+v %v", page, err)
 		}
+	} else {
+		testCopyCatchup(ctx, t, local, copies, r, node, panel)
 	}
 	for _, change := range []string{`UPDATE nodes SET pending=1`, `UPDATE nodes SET pending=0,revoked=1`, `UPDATE nodes SET revoked=0,isolated=1`} {
 		if _, err := d.ExecContext(ctx, change); err != nil {
@@ -239,4 +243,65 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 			t.Fatalf("revoked/pending/isolated caller could push: %s %v", change, err)
 		}
 	}
+}
+
+// A backlog far beyond one default batch drains through the real sender at
+// the catch-up rate while the panel accepts it, and only at the normal
+// schedule while the panel refuses catch-up under pressure.
+func testCopyCatchup(ctx context.Context, t *testing.T, local *logstore.Store, copies *logstore.Copies, r *nodes.Registry, node, panel *mesh.Mesh) {
+	const backlog = 1500
+	for i := range backlog {
+		if err := local.Record(ctx, logstore.Event{Category: logstore.Access, Kind: "request", Data: fmt.Sprintf("GET /item/%d %s", i, strings.Repeat("p", 150))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := local.State(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pressure := atomic.Uint64{}
+	pressure.Store(100)
+	r.CopyIntake = nodes.NewCopyIntake(50, 40, t.TempDir())
+	r.CopyIntake.PSI = func() float64 { return float64(pressure.Load()) }
+	id, err := loadIdentity(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := id.addPanel(trustedPanel{Fingerprint: "primary", Address: "primary:1"}); err != nil {
+		t.Fatal(err)
+	}
+	// Default schedule: ordinary categories get one 128-entry batch per 10 s.
+	a := &agent{id: id, cfg: Config{Logs: local, LogConfig: logstore.DefaultConfig()}, log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		mesh: &meshNode{m: node, panelKeys: map[string]mesh.Key{"primary": panel.PublicKey()}}}
+	a.copies.psi = func() float64 { return 0 }
+	work, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); a.logCopiesLoop(work) }()
+	defer func() { stop(); <-done }()
+	acked := func() int64 {
+		receipt, err := copies.Receipt(ctx, "actual-node", st.Source, logstore.Access)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return receipt.After
+	}
+	// Panel under pressure: catch-up refused, the first normal batch still lands.
+	time.Sleep(3 * time.Second)
+	if got := acked(); got == 0 || got >= st.Last-backlog+256 {
+		t.Fatalf("refused catch-up: acknowledged through %d of %d, want only the first normal batch", got, st.Last)
+	}
+	pressure.Store(0)
+	start := time.Now()
+	for acked() < st.Last {
+		// Without catch-up the remaining ~1370 entries need about 110 s.
+		if time.Since(start) > 12*time.Second {
+			t.Fatalf("backlog not drained by catch-up: %d of %d after %v", acked(), st.Last, time.Since(start))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	page, _, err := copies.Read(ctx, "actual-node", st.Source, logstore.Filter{Category: logstore.Access, Limit: 1000})
+	if err != nil || len(page.Events) != 1000 || !page.More {
+		t.Fatalf("copied page: %d events more=%v %v", len(page.Events), page.More, err)
+	}
+	t.Logf("drained %d entries %v after pressure cleared", backlog, time.Since(start))
 }
