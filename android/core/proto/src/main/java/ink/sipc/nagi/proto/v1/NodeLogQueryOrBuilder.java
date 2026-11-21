@@ -42,4 +42,14 @@ public interface NodeLogQueryOrBuilder extends
    * @return The recentCopy.
    */
   boolean getRecentCopy();
+
+  /**
+   * <pre>
+   * Query this panel's local logs.db; mutually exclusive with node_id/recent_copy.
+   * </pre>
+   *
+   * <code>bool panel_local = 4 [json_name = "panelLocal"];</code>
+   * @return The panelLocal.
+   */
+  boolean getPanelLocal();
 }

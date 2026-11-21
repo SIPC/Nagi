@@ -19,6 +19,8 @@ public  final class LogQuery extends
     category_ = "";
     project_ = "";
     object_ = "";
+    search_ = "";
+    kindPrefix_ = "";
   }
   private int bitField0_;
   public static final int SOURCE_FIELD_NUMBER = 1;
@@ -353,6 +355,140 @@ public  final class LogQuery extends
   private void clearLimit() {
 
     limit_ = 0;
+  }
+
+  public static final int SEARCH_FIELD_NUMBER = 9;
+  private java.lang.String search_;
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   * @return The search.
+   */
+  @java.lang.Override
+  public java.lang.String getSearch() {
+    return search_;
+  }
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   * @return The bytes for search.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSearchBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(search_);
+  }
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   * @param value The search to set.
+   */
+  private void setSearch(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    search_ = value;
+  }
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   */
+  private void clearSearch() {
+
+    search_ = getDefaultInstance().getSearch();
+  }
+  /**
+   * <pre>
+   * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+   * </pre>
+   *
+   * <code>string search = 9 [json_name = "search"];</code>
+   * @param value The bytes for search to set.
+   */
+  private void setSearchBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    search_ = value.toStringUtf8();
+
+  }
+
+  public static final int KIND_PREFIX_FIELD_NUMBER = 10;
+  private java.lang.String kindPrefix_;
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   * @return The kindPrefix.
+   */
+  @java.lang.Override
+  public java.lang.String getKindPrefix() {
+    return kindPrefix_;
+  }
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   * @return The bytes for kindPrefix.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getKindPrefixBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(kindPrefix_);
+  }
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   * @param value The kindPrefix to set.
+   */
+  private void setKindPrefix(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    kindPrefix_ = value;
+  }
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   */
+  private void clearKindPrefix() {
+
+    kindPrefix_ = getDefaultInstance().getKindPrefix();
+  }
+  /**
+   * <pre>
+   * Literal prefix, e.g. host. for the selected host journal sources.
+   * </pre>
+   *
+   * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+   * @param value The bytes for kindPrefix to set.
+   */
+  private void setKindPrefixBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    kindPrefix_ = value.toStringUtf8();
+
   }
 
   public static ink.sipc.nagi.proto.v1.LogQuery parseFrom(
@@ -798,6 +934,144 @@ public  final class LogQuery extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+     * </pre>
+     *
+     * <code>string search = 9 [json_name = "search"];</code>
+     * @return The search.
+     */
+    @java.lang.Override
+    public java.lang.String getSearch() {
+      return instance.getSearch();
+    }
+    /**
+     * <pre>
+     * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+     * </pre>
+     *
+     * <code>string search = 9 [json_name = "search"];</code>
+     * @return The bytes for search.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSearchBytes() {
+      return instance.getSearchBytes();
+    }
+    /**
+     * <pre>
+     * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+     * </pre>
+     *
+     * <code>string search = 9 [json_name = "search"];</code>
+     * @param value The search to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSearch(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSearch(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+     * </pre>
+     *
+     * <code>string search = 9 [json_name = "search"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSearch() {
+      copyOnWrite();
+      instance.clearSearch();
+      return this;
+    }
+    /**
+     * <pre>
+     * Literal, case-insensitive substring across kind, project, object and redacted JSON.
+     * </pre>
+     *
+     * <code>string search = 9 [json_name = "search"];</code>
+     * @param value The bytes for search to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSearchBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSearchBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Literal prefix, e.g. host. for the selected host journal sources.
+     * </pre>
+     *
+     * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+     * @return The kindPrefix.
+     */
+    @java.lang.Override
+    public java.lang.String getKindPrefix() {
+      return instance.getKindPrefix();
+    }
+    /**
+     * <pre>
+     * Literal prefix, e.g. host. for the selected host journal sources.
+     * </pre>
+     *
+     * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+     * @return The bytes for kindPrefix.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getKindPrefixBytes() {
+      return instance.getKindPrefixBytes();
+    }
+    /**
+     * <pre>
+     * Literal prefix, e.g. host. for the selected host journal sources.
+     * </pre>
+     *
+     * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+     * @param value The kindPrefix to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKindPrefix(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setKindPrefix(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Literal prefix, e.g. host. for the selected host journal sources.
+     * </pre>
+     *
+     * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKindPrefix() {
+      copyOnWrite();
+      instance.clearKindPrefix();
+      return this;
+    }
+    /**
+     * <pre>
+     * Literal prefix, e.g. host. for the selected host journal sources.
+     * </pre>
+     *
+     * <code>string kind_prefix = 10 [json_name = "kindPrefix"];</code>
+     * @param value The bytes for kindPrefix to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKindPrefixBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setKindPrefixBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LogQuery)
   }
   @java.lang.Override
@@ -823,10 +1097,13 @@ public  final class LogQuery extends
             "project_",
             "object_",
             "limit_",
+            "search_",
+            "kindPrefix_",
           };
           java.lang.String info =
-              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0002\u0003\u1009" +
-              "\u0000\u0004\u1009\u0001\u0005\u0208\u0006\u0208\u0007\u0208\b\u0004";
+              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u0002\u0003\u1009" +
+              "\u0000\u0004\u1009\u0001\u0005\u0208\u0006\u0208\u0007\u0208\b\u0004\t\u0208\n\u0208" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

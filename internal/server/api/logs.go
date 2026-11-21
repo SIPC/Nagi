@@ -23,19 +23,25 @@ func (s *nodeLogService) QueryNodeLogs(ctx context.Context, req *connect.Request
 	if !auth.CurrentUser(ctx).IsAdmin() {
 		return nil, permissionDenied()
 	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if req.Msg.GetPanelLocal() {
+		if req.Msg.GetNodeId() != "" || req.Msg.GetRecentCopy() {
+			return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("请选择节点"))
+		}
+		return s.storedLogs(ctx, req.Msg)
+	}
 	if req.Msg.GetNodeId() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("请选择节点"))
 	}
 	if req.Msg.GetRecentCopy() {
-		return s.recentLogs(ctx, req.Msg)
+		return s.storedLogs(ctx, req.Msg)
 	}
 	cc, err := s.logConnection(req.Msg.GetNodeId())
 	if err != nil {
 		return nil, err
 	}
 	defer cc.Close()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 	q := req.Msg.GetQuery()
 	if q == nil {
 		q = &nagiv1.LogQuery{}
@@ -47,12 +53,18 @@ func (s *nodeLogService) QueryNodeLogs(ctx context.Context, req *connect.Request
 	return connect.NewResponse(out), nil
 }
 
-func (s *nodeLogService) recentLogs(ctx context.Context, req *nagiv1.NodeLogQuery) (*connect.Response[nagiv1.LogPage], error) {
-	if s.Nodes.LogCopies == nil {
+func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuery) (*connect.Response[nagiv1.LogPage], error) {
+	if req.GetPanelLocal() && s.Logs == nil {
+		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("本机日志库没有启动"))
+	}
+	if req.GetRecentCopy() && s.Nodes.LogCopies == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, i18n.New("面板近期副本没有启动"))
 	}
 	q := req.GetQuery()
-	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject()}
+	if q.GetAfter() > 0 && q.GetSource() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("无效的日志游标或分页大小"))
+	}
+	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
 	for _, v := range []struct {
 		in  *timestamppb.Timestamp
 		out *time.Time
@@ -68,14 +80,24 @@ func (s *nodeLogService) recentLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 			*v.out = t
 		}
 	}
-	p, sourcePruned, err := s.Nodes.LogCopies.Read(ctx, req.GetNodeId(), q.GetSource(), f)
+	var p logstore.Page
+	var sourcePruned []logstore.Pruned
+	var err error
+	if req.GetPanelLocal() {
+		p, err = s.Logs.ReadPage(ctx, f)
+		if q.GetSource() != "" && p.State.Source != "" && p.State.Source != q.GetSource() {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("日志来源已变化，请从头查询；不能沿用旧游标"))
+		}
+	} else {
+		p, sourcePruned, err = s.Nodes.LogCopies.Read(ctx, req.GetNodeId(), q.GetSource(), f)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, connect.NewError(connect.CodeNotFound, i18n.New("尚未收到该节点此类别的近期副本"))
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	out := &nagiv1.LogPage{Source: p.State.Source, LatestSeq: p.State.Last, NextAfter: p.Next, More: p.More, RecentCopy: true, WriteErrors: p.State.WriteErrors}
+	out := &nagiv1.LogPage{Source: p.State.Source, LatestSeq: p.State.Last, NextAfter: p.Next, More: p.More, RecentCopy: req.GetRecentCopy(), WriteErrors: p.State.WriteErrors, DiskBytes: p.State.DiskBytes, BudgetBytes: p.State.BudgetBytes}
 	for _, e := range p.Events {
 		data, err := json.Marshal(e.Data)
 		if err != nil {
