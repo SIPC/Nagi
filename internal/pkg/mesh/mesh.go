@@ -30,6 +30,12 @@ type Peer struct {
 	Relays []Key
 	// NodeRelays 是可以代为中转的节点，按延迟从低到高，先于面板使用（见 docs/mesh.md#经节点中转）。
 	NodeRelays []Key
+	// NodeRelayEnabled 独立声明这个成员的中转许可。nil 兼容旧面板，但不允许跨候选刷新钉住它。
+	// 仅用于现有故障兜底；不授权性能中转或自动切路。
+	NodeRelayEnabled *bool
+	// RelayPool：管理员把这个成员加入了中转池（默认关闭），同意它为直连可用的节点对承担性能中转。
+	// 只在 NodeRelayEnabled 也为 true 时有效；关闭时立即解除经它的实验 QUIC 路线，正在进行的观察以路径不可用结束。
+	RelayPool bool
 }
 
 // Config 是 mesh 的配置。
@@ -47,7 +53,10 @@ type Config struct {
 	// NoFEC、NoQUIC 关掉 FEC（见 fec.go）、QUIC（见 quic.go），只用于测试对比。
 	NoFEC  bool
 	NoQUIC bool
-	Logger *slog.Logger
+	// ExperimentalQUICRouting 启用固定逻辑地址/指定中转原型。端点和中转须分别显式开启，默认关闭。
+	// 仅提供 Go API 手动改路，不启动观察、自动切路或迁移旧 QUIC 连接。
+	ExperimentalQUICRouting bool
+	Logger                  *slog.Logger
 }
 
 // SetNodeRelay 开关替别的节点中转（节点的网络设置）。
@@ -64,10 +73,13 @@ type Direct struct {
 
 // Directs 返回现在直连着的成员和延迟（上报给面板，面板据此挑中转节点）。
 func (m *Mesh) Directs() []Direct {
+	m.bind.mu.Lock()
+	defer m.bind.mu.Unlock()
+	now := time.Now()
 	var out []Direct
-	for _, s := range m.bind.status() {
-		if s.Path == "direct" {
-			out = append(out, Direct{Key: s.Key, RTT: s.RTT})
+	for _, p := range m.bind.peers {
+		if p.directAlive(now) {
+			out = append(out, Direct{Key: p.key, RTT: p.rtt})
 		}
 	}
 	return out
@@ -88,6 +100,8 @@ type Mesh struct {
 
 	mu         sync.Mutex
 	configured map[Key]bool
+	observing  bool               // 显式观察每节点同时只运行一个窗口，不随调用者数量放大开销。
+	autoStop   context.CancelFunc // 自动切路在运行时停止它（见 autoroute.go），关闭时为 nil
 	done       chan struct{}
 	closeOnce  sync.Once
 }
@@ -110,6 +124,9 @@ func New(cfg Config) (*Mesh, error) {
 	}
 	if !cfg.NoQUIC {
 		caps |= capQUIC
+	}
+	if cfg.ExperimentalQUICRouting {
+		caps |= capQUICRoute
 	}
 	bind := newBind(cfg.PrivateKey, cfg.Relay, caps, cfg.ExtraPorts, log)
 	bind.nodeRelay.Store(cfg.NodeRelay)
@@ -136,6 +153,9 @@ func New(cfg Config) (*Mesh, error) {
 		m.quic = q
 		bind.mu.Lock()
 		bind.quic = q.pc
+		if q.routing {
+			bind.routedQUIC = q.routedConn
+		}
 		// 对方支持 QUIC 时提前建好连接，第一个 Dial 不用等。两边只由公钥小的一方去建，免得同时建两条。
 		// 对方刚打开 QUIC 时，之前连不上的记录作废。
 		bind.onCaps = func(k Key) {
@@ -244,7 +264,13 @@ func (m *Mesh) QUIC() bool {
 // Close 停止 mesh。可以重复调用。
 func (m *Mesh) Close() {
 	m.closeOnce.Do(func() {
+		m.mu.Lock()
 		close(m.done)
+		if m.autoStop != nil {
+			m.autoStop()
+			m.autoStop = nil
+		}
+		m.mu.Unlock()
 		if m.quic != nil {
 			m.quic.close()
 		}
@@ -373,8 +399,9 @@ func (m *Mesh) Listen(port uint16) (net.Listener, error) {
 }
 
 // Dial 经 mesh 连接某个成员的 TCP 端口：能走 QUIC 就走 QUIC，否则走 WireGuard 里的 TCP。
+// 自动切路正把到 k 的业务经中转发时，新连接走 WireGuard 跟着走中转；已有的 QUIC 连接留在直连，不迁移。
 func (m *Mesh) Dial(ctx context.Context, k Key, port uint16) (net.Conn, error) {
-	if m.quic != nil {
+	if m.quic != nil && !m.perfRouted(k) {
 		if c, err := m.quic.open(ctx, k, port); err == nil {
 			return c, nil
 		}

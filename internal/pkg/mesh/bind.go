@@ -39,6 +39,9 @@ const msgInitiation = 1
 // （例如 FEC 的定时器），所以用原子指针（见 setDropUDP）。
 var dropUDP atomic.Pointer[func(fromPort uint16, to netip.AddrPort) bool]
 
+// tapUDP 只用于测试：可以改写或代发一个包（模拟恶意中转），返回 true 时原包不再发出。
+var tapUDP atomic.Pointer[func(c *net.UDPConn, pkt []byte, to netip.AddrPort) bool]
+
 // setDropUDP 换掉 dropUDP，nil 表示不丢。
 func setDropUDP(f func(fromPort uint16, to netip.AddrPort) bool) {
 	if f == nil {
@@ -85,11 +88,20 @@ type peerState struct {
 	directConn int            // 直连用的本地端口（Bind.conns 的下标）
 	// confirmed 是最近经 ping/pong 确认过的对方地址（对方有备用端口时可能不止一个）。这些地址发来的包都收，
 	// 发只走 direct：两端各自选端口，对方用来发的端口不一定是我们选来发给它的那个。
-	confirmed  map[netip.AddrPort]time.Time
-	directAt   time.Time // 最近一次 pong 的时间
-	rtt        time.Duration
-	relays     []Key // 可以代为中转的面板
-	nodeRelays []Key // 可以代为中转的节点，先于面板用
+	confirmed   map[netip.AddrPort]time.Time
+	directAt    time.Time // 最近一次 pong 的时间
+	directEpoch uint64    // 物理地址/socket 变更或断路后重新确认时递增，隔离观测样本。
+	rtt         time.Duration
+	relays      []Key // 可以代为中转的面板
+	nodeRelays  []Key // 可以代为中转的节点，先于面板用
+	// activeRelay 只保留实际发送过、且有独立显式许可的一个中转，不因候选排名刷新而删掉。
+	activeRelay      Key
+	nodeRelayEnabled *bool
+	relayPool        bool // 这个成员在中转池里（还要 nodeRelayEnabled 为 true），见 poolRelay。
+	quicVia          Key  // 仅实验 API 明确指定；不影响 WireGuard 的选路或物理邻接。
+	// perfVia：自动切路选定的性能中转（见 autoroute.go）。只在直连可用、它仍在中转池里时用，否则发包时回到直连。
+	perfVia Key
+	perfRTT time.Duration // 选它的那个窗口里经它的往返中位数，Status 显示
 	// relayHealth：经每个中转节点发给这个对端以后，有没有经它收到对端的包（见 pickNodeRelay）。
 	relayHealth map[Key]*relayHealth
 	// pendingInit 是没有路径时发不出去的握手发起包，路径一可用就补发。例如对端刚重启、直连还没确认：
@@ -108,6 +120,11 @@ type peerState struct {
 	dec      *fecDecoder
 	// quicRx、quicTx：和对方之间收发的 QUIC 包的字节数。QUIC 不经过 WireGuard，要另外算进流量里。
 	quicRx, quicTx uint64
+}
+
+// poolRelay：这个成员可以承担性能中转：在中转池里，而且有显式的中转许可。
+func (p *peerState) poolRelay() bool {
+	return p != nil && p.relayPool && p.nodeRelayEnabled != nil && *p.nodeRelayEnabled
 }
 
 func (p *peerState) has(c byte, now time.Time) bool {
@@ -129,6 +146,7 @@ type Bind struct {
 	relay     bool // 是否替别人中转（面板）
 	// nodeRelay：节点替别的节点中转（网络设置里可以关）。只经直连的 UDP 转发，不经控制连接，按来源限速。
 	nodeRelay atomic.Bool
+	autoRoute bool // 自动切路打开（见 autoroute.go），持有 mu 时读写
 	// relayRx、relayTx：替别人中转收到、转出的字节数（面板），不属于任何一个对端，Status 里没有。
 	relayRx, relayTx atomic.Uint64
 	caps             byte // 自己启用的能力
@@ -140,21 +158,26 @@ type Bind struct {
 	// 备用端口只用来往外发，对方的回复是同一条流的回包，所以不用固定端口，也不用在防火墙上放行。
 	extra int
 
-	mu        sync.Mutex
-	conns     []*net.UDPConn // 第一个是主端口，其余是备用端口
-	port      uint16
-	peers     map[Key]*peerState
-	byAddr    map[netip.AddrPort]Key // 已确认的直连地址 → 对端
-	byMesh    map[netip.Addr]Key     // mesh 地址 → 对端
-	relayKeys map[Key]bool
-	links     map[Key]*Link
-	quic      *quicPacketConn       // 收到的 QUIC 包交给它（见 quic.go）
-	onCaps    func(Key)             // 对方刚表示支持 QUIC 时调用
-	observed  map[pingKey]time.Time // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
-	recv      chan delivery
-	done      chan struct{}
+	mu         sync.Mutex
+	conns      []*net.UDPConn // 第一个是主端口，其余是备用端口
+	port       uint16
+	peers      map[Key]*peerState
+	byAddr     map[netip.AddrPort]Key // 已确认的直连地址 → 对端
+	byMesh     map[netip.Addr]Key     // mesh 地址 → 对端
+	relayKeys  map[Key]bool
+	links      map[Key]*Link
+	quic       *quicPacketConn           // 收到的 QUIC 包交给它（见 quic.go）
+	routedQUIC func(Key) *quicPacketConn // 显式开启的实验协议，按发送方分到各自的 Transport，和旧 QUIC 隔离。
+	onCaps     func(Key)                 // 对方刚表示支持 QUIC 时调用
+	observed   map[pingKey]time.Time     // 别人看到的我们的地址，按本地端口分开（local 是本地端口的下标）
+	recv       chan delivery
+	done       chan struct{}
 	// relayBudget：节点替每个来源中转的字节数配额（令牌桶，见 relayAllowed）。
 	relayBudget map[Key]*relayBucket
+	// 路径观测与 NAT ping、业务中转健康完全分开；仅显式调用时发起。
+	pathProbes  map[[txidLen]byte]*pathProbe
+	probeBudget relayBucket
+	probeSeen   map[Key]map[[txidLen]byte]time.Time
 }
 
 // relayBucket 是一个来源的中转配额。
@@ -186,9 +209,20 @@ const (
 
 // pickNodeRelay 返回发给 p 用的中转节点，没有可用的时 ok 为 false。sending 为 true 时记下经它发了包。调用时持有 b.mu。
 func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, rp *peerState, ok bool) {
-	for _, r := range p.nodeRelays {
+	// 实际在用项先试，之后才是当前排名；不要把钉住的项写回候选，否则失败后会凭空复活。
+	for i := -1; i < len(p.nodeRelays); i++ {
+		r := p.activeRelay
+		if i >= 0 {
+			r = p.nodeRelays[i]
+		}
+		if r == (Key{}) || (i >= 0 && r == p.activeRelay) {
+			continue
+		}
 		rp := b.peers[r]
 		if rp == nil || !rp.directAlive(now) {
+			if p.activeRelay == r {
+				p.activeRelay = Key{}
+			}
 			continue
 		}
 		if p.relayHealth == nil {
@@ -200,15 +234,24 @@ func (b *Bind) pickNodeRelay(p *peerState, now time.Time, sending bool) (r Key, 
 			p.relayHealth[r] = h
 		}
 		if now.Before(h.badUntil) {
+			if p.activeRelay == r {
+				p.activeRelay = Key{}
+			}
 			continue
 		}
 		if !h.waitingSince.IsZero() && now.Sub(h.waitingSince) > relayProbe {
 			h.waitingSince, h.badUntil = time.Time{}, now.Add(relayBad)
+			if p.activeRelay == r {
+				p.activeRelay = Key{}
+			}
 			b.log.Debug("mesh 中转节点不通，暂时不用", "peer", p.key.Short(), "relay", r.Short())
 			continue
 		}
 		if sending && h.waitingSince.IsZero() {
 			h.waitingSince = now
+		}
+		if sending && rp.nodeRelayEnabled != nil && *rp.nodeRelayEnabled {
+			p.activeRelay = r
 		}
 		return r, rp, true
 	}
@@ -467,6 +510,9 @@ func (b *Bind) write(c *net.UDPConn, pkt []byte, to netip.AddrPort) {
 	if c == nil {
 		return
 	}
+	if tap := tapUDP.Load(); tap != nil && (*tap)(c, pkt, to) {
+		return
+	}
 	if drop := dropUDP.Load(); drop != nil && (*drop)(uint16(c.LocalAddr().(*net.UDPAddr).Port), to) {
 		return
 	}
@@ -483,12 +529,24 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		return
 	}
 	if p.directAlive(now) {
+		p.activeRelay = Key{}
+		// 自动切路选了性能中转：WireGuard 的包经它走，同时照常从直连再发一份（双发）。对端公钥不变，隧道里的连接不断。
+		// 接收方的 WireGuard 防重放窗口丢掉后到的那份，哪条路先到用哪条；任一条路断了另一份已经在路上，
+		// 不用等健康检查确认（见 docs/mesh.md#自动切路）。
+		var relayAddr netip.AddrPort
+		var relayConn *net.UDPConn
+		if rp := b.perfHop(p, now); rp != nil {
+			relayAddr, relayConn = rp.direct, b.sock(rp.directConn)
+		}
 		addr, c := p.direct, b.sock(p.directConn)
 		var enc *fecEncoder
 		if b.caps&capFEC != 0 && p.has(capFEC, now) {
 			enc = p.enc
 		}
 		b.mu.Unlock()
+		if relayConn != nil {
+			b.write(relayConn, encodeRelay(typeRelaySend, dst, pkt), relayAddr)
+		}
 		if enc == nil {
 			b.write(c, pkt, addr)
 			return
@@ -501,6 +559,7 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		return
 	}
 	if link := b.links[dst]; link != nil {
+		p.activeRelay = Key{}
 		b.mu.Unlock()
 		_ = (*link)(b.pub, dst, pkt)
 		return
@@ -512,6 +571,7 @@ func (b *Bind) sendTo(dst Key, pkt []byte) {
 		b.write(c, encodeRelay(typeRelaySend, dst, pkt), addr)
 		return
 	}
+	p.activeRelay = Key{}
 	for _, r := range p.relays {
 		if rp := b.peers[r]; rp != nil && rp.directAlive(now) {
 			addr, c := rp.direct, b.sock(rp.directConn)
@@ -713,6 +773,10 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 	}
 	now := time.Now()
 	switch m.typ {
+	case typeQUICRoute:
+		b.handleRoutedQUIC(from, Key{}, pkt)
+	case typePathRequest, typePathResponse:
+		b.handlePathProbe(c, local, from, Key{}, pkt)
 	case typePing:
 		b.mu.Lock()
 		p := b.peers[m.key]
@@ -782,6 +846,9 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			b.log.Debug("mesh 直连可用", "peer", p.key.Short(), "addr", from, "local_port", c.LocalAddr().(*net.UDPAddr).Port)
 			newPath = true
 		}
+		if newPath {
+			p.directEpoch++
+		}
 		p.direct, p.directConn, p.directAt, p.rtt = from, local, now, now.Sub(info.sent)
 		b.mu.Unlock()
 		// 到这个对端（以及经它中转的对端）有了路径：补发之前发不出去的握手，告诉对方自己的能力。
@@ -825,6 +892,19 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			b.mu.Unlock()
 			return nil, nil
 		}
+		if isControl(m.payload) && m.payload[4] == typeQUICRoute {
+			inner, valid := parse(m.payload)
+			if b.caps&capQUICRoute == 0 || !valid || inner.key != src || now.Sub(b.peers[src].confirmed[from]) >= directTimeout {
+				b.mu.Unlock()
+				return nil, nil
+			}
+			// 实验 QUIC 只能做一跳节点 UDP 中转，不能进面板 TLS 或递归转发。
+			b.mu.Unlock()
+			if b.nodeRelay.Load() {
+				b.forwardNode(src, m.key, m.payload, now)
+			}
+			return nil, nil
+		}
 		if m.key == b.pub {
 			ep := b.peers[src].ep
 			b.mu.Unlock()
@@ -838,13 +918,29 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 		}
 	case typeRelayDeliver:
 		b.mu.Lock()
-		defer b.mu.Unlock()
 		relay, ok := b.byAddr[from]
 		p := b.peers[m.key]
 		if !ok || !b.relayKeys[relay] || p == nil {
+			b.mu.Unlock()
+			return nil, nil
+		}
+		if isControl(m.payload) && m.payload[4] == typeQUICRoute {
+			b.mu.Unlock()
+			if inner, valid := parse(m.payload); valid && inner.key == m.key {
+				b.handleRoutedQUIC(from, relay, m.payload)
+			}
+			return nil, nil
+		}
+		if isControl(m.payload) && (m.payload[4] == typePathRequest || m.payload[4] == typePathResponse) {
+			b.mu.Unlock()
+			// 不把中转地址学成终点地址；认证和固定返回路径由独立处理器检查。
+			if inner, valid := parse(m.payload); valid && inner.key == m.key {
+				b.handlePathProbe(c, local, from, relay, m.payload)
+			}
 			return nil, nil
 		}
 		b.relayHeard(p, relay, now)
+		b.mu.Unlock()
 		return p.ep, m.payload
 	}
 	return nil, nil
@@ -884,15 +980,17 @@ func (b *Bind) setPeers(peers []Peer) {
 			p.candidates = p.candidates[:maxCandidates]
 		}
 		p.relays = pe.Relays
+		p.nodeRelayEnabled = nil
+		if pe.NodeRelayEnabled != nil {
+			enabled := *pe.NodeRelayEnabled
+			p.nodeRelayEnabled = &enabled
+		}
+		p.relayPool = pe.RelayPool
 		p.nodeRelays = nil
 		for _, r := range pe.NodeRelays {
 			if r != b.pub && r != pe.Key {
 				p.nodeRelays = append(p.nodeRelays, r)
 			}
-		}
-		// 中转方转来的包由 WireGuard 按原发送方验证，中转方伪造不了，所以只核对它是不是中转方。
-		for _, r := range append(append([]Key(nil), pe.Relays...), p.nodeRelays...) {
-			b.relayKeys[r] = true
 		}
 		b.byMesh[Address(pe.Key)] = pe.Key
 	}
@@ -904,6 +1002,48 @@ func (b *Bind) setPeers(peers []Peer) {
 				}
 			}
 			delete(b.peers, k)
+			delete(b.probeSeen, k)
+		}
+	}
+	for _, p := range b.peers {
+		// 排名出局不撤权；成员移除、显式 false、退回旧契约则立即解除钉住。
+		active := b.peers[p.activeRelay]
+		if active == nil || active.nodeRelayEnabled == nil || !*active.nodeRelayEnabled {
+			p.activeRelay = Key{}
+		}
+		if !b.peers[p.quicVia].poolRelay() {
+			p.quicVia = Key{} // 撤权或退出中转池优先于实验路径，恢复默认直连；不迁移旧协议连接。
+		}
+		if !b.peers[p.perfVia].poolRelay() {
+			p.perfVia = Key{} // 同上：退出中转池、撤权或移除时自动切路的路线立即回到直连。
+		}
+		p.nodeRelays = slices.DeleteFunc(p.nodeRelays, func(k Key) bool {
+			r := b.peers[k]
+			return r == nil || (r.nodeRelayEnabled != nil && !*r.nodeRelayEnabled)
+		})
+		for k := range p.relayHealth {
+			if k != p.activeRelay && !slices.Contains(p.nodeRelays, k) {
+				delete(p.relayHealth, k)
+			}
+		}
+		// 接收许可不依赖本方向的排名：两端的候选可以不同；载荷仍由终点的 WireGuard / QUIC 校验。
+		if p.nodeRelayEnabled != nil && *p.nodeRelayEnabled {
+			b.relayKeys[p.key] = true
+		}
+		for _, r := range p.relays {
+			b.relayKeys[r] = true
+		}
+		for _, r := range p.nodeRelays {
+			b.relayKeys[r] = true // 兼容旧面板：只有候选仍在时允许旧式中转。
+		}
+	}
+	// 撤权/删除不能在快速重新加回后让旧事务成功，也不把本地撤权误记为网络丢包。
+	for id, pending := range b.pathProbes {
+		p := pending.peer
+		allowed := pending.via == (Key{}) || b.probeVia(p, pending.via)
+		if b.peers[p.key] != p || b.peers[pending.hop.key] != pending.hop || !allowed {
+			delete(b.pathProbes, id)
+			pending.result <- PathSample{Err: ErrProbePath}
 		}
 	}
 }
@@ -952,6 +1092,7 @@ func (b *Bind) maintain(now time.Time) {
 		}
 		if p.direct.IsValid() {
 			b.log.Debug("mesh 直连断开", "peer", p.key.Short(), "addr", p.direct)
+			p.perfVia = Key{} // 直连不通时交给原来的故障兜底，不再算性能路线。
 			delete(p.confirmed, p.direct)
 			if b.byAddr[p.direct] == p.key {
 				delete(b.byAddr, p.direct)
@@ -1057,6 +1198,9 @@ type PeerStatus struct {
 	quicBytes [2]uint64
 	// fecBytes：FEC 在收、发两个方向上比 WireGuard 统计的多出的字节数，Status 同样加进去。
 	fecBytes [2]int64
+	// PhysicalDirect、DirectRTT 是独立于业务 Path 的物理邻接；RTT 仍表示所选业务路径的延迟。
+	PhysicalDirect netip.AddrPort
+	DirectRTT      time.Duration
 }
 
 func (b *Bind) status() []PeerStatus {
@@ -1069,6 +1213,7 @@ func (b *Bind) status() []PeerStatus {
 			fecBytes: [2]int64{p.dec.overheadBytes(), int64(p.enc.overheadBytes())},
 			TxLoss:   -1, RxLoss: -1}
 		if p.directAlive(now) {
+			s.PhysicalDirect, s.DirectRTT = p.direct, p.rtt
 			if now.Sub(p.lossAt) < lossFresh {
 				s.TxLoss, s.txLossAt = int64(p.lossPPM), p.lossAt
 			}
@@ -1086,6 +1231,9 @@ func (b *Bind) status() []PeerStatus {
 			}
 		}
 		switch {
+		case p.directAlive(now) && b.perfHop(p, now) != nil:
+			// 直连还在（PhysicalDirect 照填），业务走的是自动切路选的中转。
+			s.Path, s.Via, s.RTT = "node-relay", p.perfVia, p.perfRTT
 		case p.directAlive(now):
 			s.Path, s.Direct, s.RTT = "direct", p.direct, p.rtt
 			if c := b.sock(p.directConn); c != nil {

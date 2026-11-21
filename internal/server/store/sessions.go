@@ -253,6 +253,40 @@ func (q *Queries) IsolatedNodes(ctx context.Context) ([]string, [][]byte, error)
 	return ids, keys, rows.Err()
 }
 
+// RelayPoolNodes 返回加入了中转池的节点 ID（见 docs/mesh.md#中转池）。
+func (q *Queries) RelayPoolNodes(ctx context.Context) (map[string]bool, error) {
+	rows, err := q.db.QueryContext(ctx, `SELECT id FROM nodes WHERE relay_pool = 1 AND revoked = 0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// SetNodeRelayPool 让节点加入或退出中转池。
+func (q *Queries) SetNodeRelayPool(ctx context.Context, id string, on bool) error {
+	v := 0
+	if on {
+		v = 1
+	}
+	res, err := q.db.ExecContext(ctx, `UPDATE nodes SET relay_pool = ? WHERE id = ? AND revoked = 0`, v, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // SetNodeIsolated 设置节点的隔离状态。
 func (q *Queries) SetNodeIsolated(ctx context.Context, id string, on bool) error {
 	v := 0

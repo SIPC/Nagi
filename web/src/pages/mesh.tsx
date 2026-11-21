@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { confirmAction, notify } from "@/components/confirm";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { errorMessage, nodeClient, toDate } from "@/lib/api";
+import { errorMessage, nodeClient, settingsClient, toDate } from "@/lib/api";
 import type { MeshPeerStatus, MeshStatus } from "@/gen/nagi/v1/common_pb";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import { fmtBytes, fmtMs, fmtRate } from "@/components/metrics";
-import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
+import { Alert, Button, ButtonLink, Dialog, DialogActions, EmptyRow, Field, Input, List, Notice, QueryError, Roll, Row, RowMenu, RowsSkeleton, Section, SettingRow, SettingRows, Skeleton, Spinner, Table, Td, Th } from "@/components/ui";
 import { useRole } from "@/components/role";
 import { cn, timeAgo } from "@/lib/utils";
 import { locale, t } from "@/i18n";
@@ -341,9 +341,10 @@ function SpeedDialog({ nodeId, port, peer: p, run, onRetry, onClose }: { nodeId:
 }
 
 // MeshSection：一端（节点或面板）的 mesh 状态区块。
-function MeshSection({ q, nodeId, title }: { q: UseQueryResult<MeshStatus>; nodeId?: string; title: string }) {
+function MeshSection({ q, nodeId, title, top }: { q: UseQueryResult<MeshStatus>; nodeId?: string; title: string; top?: React.ReactNode }) {
   return (
     <Section title={title} actions={q.data && <span title={meshSummary(q.data, q.data.endpoints)}>{meshSummary(q.data, nodeId ? q.data.endpoints.slice(0, 1) : [])}</span>}>
+      {top}
       {q.isPending ? <RowsSkeleton /> : q.error ? <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} /> : <MeshPeers status={q.data} nodeId={nodeId} />}
     </Section>
   );
@@ -458,6 +459,39 @@ export function NodeRelay({ nodeId, online }: { nodeId: string; online: boolean 
   return <MeshOption nodeId={nodeId} online={online} field="relayOff" title={t.mesh.relayTitle} help={t.mesh.relayHelp} confirm={t.mesh.relayConfirm} />;
 }
 
+// NodeRelayPool：加入中转池（见 docs/mesh.md#中转池），默认关闭。存在面板上，节点离线也能改。
+// 还要节点自己开着「中转其他节点」才生效；节点关了时写明暂不生效，不替用户去开。
+export function NodeRelayPool({ node }: { node: Node }) {
+  const isAdmin = useRole().can("node.manage");
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const mesh = useQuery({ queryKey: ["node-mesh", node.id], queryFn: () => nodeClient.getNodeMesh({ nodeId: node.id }), enabled: node.online && node.relayPool });
+  const on = node.relayPool;
+  const toggle = async () => {
+    if (on && !(await confirmAction(t.mesh.poolConfirm, { action: t.mesh.poolLeave }))) return;
+    setBusy(true);
+    try {
+      await nodeClient.setNodeRelayPool({ nodeId: node.id, enabled: !on });
+      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+    } catch (err) {
+      await notify(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const status = !on ? t.mesh.poolOff : mesh.data?.relayOff ? <span className="text-warning-text">{t.mesh.poolNeedsRelay}</span> : t.mesh.poolOn;
+  return (
+    <SettingRow label={t.mesh.poolTitle} help={t.mesh.poolHelp} description={status}>
+      {isAdmin && (
+        <Button variant="outline" disabled={busy} onClick={toggle}>
+          {busy && <Spinner />}
+          {on ? t.mesh.poolLeave : t.mesh.poolJoin}
+        </Button>
+      )}
+    </SettingRow>
+  );
+}
+
 // NodeDirectDownload：直连下载（见 docs/agent.md#直连下载），唯一的开关。开着时写现在用 HTTPS 还是加密 HTTP、不能直连的原因；
 // 开着时多一个「HTTP 端口」，设置 HTTPS 不能用时加密 HTTP 下载用的端口（见 docs/agent.md#加密-http-下载）。
 export function NodeDirectDownload({ node }: { node: Node }) {
@@ -557,5 +591,37 @@ export function PanelMeshCard() {
     queryFn: () => nodeClient.getPanelMesh({}),
     refetchInterval: 5000,
   });
-  return <MeshSection q={q} title={t.settings.tabs.mesh.label} />;
+  return <MeshSection q={q} title={t.settings.tabs.mesh.label} top={<AutoRoute />} />;
+}
+
+// AutoRoute：自动切路总开关（见 docs/mesh.md#自动切路），默认关闭，存在面板上，立即下发给各节点。
+// 哪些节点能当中转在节点页的「加入中转池」里设置。
+function AutoRoute() {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const q = useQuery({ queryKey: ["settings"], queryFn: () => settingsClient.getSettings({}) });
+  const on = !!q.data?.settings?.meshAutoRoute;
+  const toggle = async () => {
+    if (on && !(await confirmAction(t.mesh.autoConfirm, { action: t.mesh.autoDisable }))) return;
+    setBusy(true);
+    try {
+      const r = await settingsClient.setMeshAutoRoute({ enabled: !on });
+      queryClient.setQueryData(["settings"], (s: typeof q.data) => s && { ...s, settings: r.settings });
+    } catch (err) {
+      await notify(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const status = q.data ? (on ? t.mesh.autoOn : t.mesh.autoOff) : q.error ? errorMessage(q.error) : <Skeleton className="h-4 w-12" />;
+  return (
+    <SettingRows>
+      <SettingRow label={t.mesh.autoTitle} help={t.mesh.autoHelp} description={status}>
+        <Button variant="outline" disabled={busy || !q.data} onClick={toggle}>
+          {busy && <Spinner />}
+          {on ? t.mesh.autoDisable : t.mesh.autoEnable}
+        </Button>
+      </SettingRow>
+    </SettingRows>
+  );
 }

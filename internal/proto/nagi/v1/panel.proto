@@ -54,6 +54,8 @@ message MeshConfig {
   repeated MeshPeer peers = 2;
   // 被隔离的节点的 mesh 公钥：立即从成员里去掉，不走保留期（见 docs/mesh.md#隔离）。
   repeated bytes isolated = 3;
+  // 面板设置里的自动切路总开关（默认关闭，见 docs/mesh.md#自动切路）。节点在所有可信面板都打开时才运行。
+  bool auto_route = 4;
 }
 
 message RelayAlertRequest {

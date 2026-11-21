@@ -191,4 +191,21 @@ func TestStandbyReloadsIsolation(t *testing.T) {
 	if r.Isolated(ctx, "x") {
 		t.Fatal("主面板解除隔离以后，备用面板也应该知道")
 	}
+	// 自动切路总开关：默认关闭；主面板打开以后同步过来，备用面板下发的成员列表也带上。
+	if r.AutoRoute(ctx) {
+		t.Fatal("自动切路默认应该关闭")
+	}
+	if err := q.SetSetting(ctx, store.SetSettingParams{Key: SettingMeshAutoRoute, Value: "1"}); err != nil {
+		t.Fatal(err)
+	}
+	r.ReloadIsolation(ctx)
+	if !r.AutoRoute(ctx) {
+		t.Fatal("同步以后应该知道自动切路打开了")
+	}
+	if err := r.SetAutoRoute(ctx, false); err != nil || r.AutoRoute(ctx) {
+		t.Fatalf("关闭自动切路：%v", err)
+	}
+	if v, _ := q.GetSetting(ctx, SettingMeshAutoRoute); v != "" {
+		t.Fatalf("关闭以后不应该留下设置：%q", v)
+	}
 }

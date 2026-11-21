@@ -15,6 +15,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/audit"
+	"github.com/SIPC/nagi/internal/server/store"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -27,6 +28,10 @@ type isolation struct {
 	mu     sync.RWMutex
 	loaded bool
 	nodes  map[string][]byte
+	// pool 是加入了中转池的节点（见 docs/mesh.md#中转池），和隔离一起从数据库加载、随备用面板同步。
+	pool map[string]bool
+	// autoRoute 是面板设置里的自动切路总开关（见 docs/mesh.md#自动切路），同样一起加载、同步。
+	autoRoute bool
 	// windows 是每个发起方 10 分钟的告警窗口。
 	windows map[string]time.Time
 	// audits 是面板发现的越权写审计的窗口（见 PanelViolation），窗口结束时删掉。
@@ -57,21 +62,79 @@ func (r *Registry) isolatedNodes(ctx context.Context) map[string][]byte {
 
 func (r *Registry) reloadIsolation(ctx context.Context) {
 	m := map[string][]byte{}
-	if r.q == nil {
-		r.iso.mu.Lock()
-		r.iso.nodes, r.iso.loaded = m, true
-		r.iso.mu.Unlock()
-		return
-	}
-	if ids, keys, err := r.q.IsolatedNodes(ctx); err == nil {
-		for i, id := range ids {
-			k, _ := mesh.ParseKey(keys[i])
-			m[id] = k[:]
+	pool := map[string]bool{}
+	auto := false
+	if r.q != nil {
+		// 同上：读不出来时按关闭。
+		if v, err := r.q.GetSetting(ctx, SettingMeshAutoRoute); err == nil {
+			auto = v == "1"
+		}
+		if ids, keys, err := r.q.IsolatedNodes(ctx); err == nil {
+			for i, id := range ids {
+				k, _ := mesh.ParseKey(keys[i])
+				m[id] = k[:]
+			}
+		}
+		// 读不出来时按都不在池里：默认关闭，不能因为一次查询失败把节点加进池。
+		if p, err := r.q.RelayPoolNodes(ctx); err == nil {
+			pool = p
 		}
 	}
 	r.iso.mu.Lock()
-	r.iso.nodes, r.iso.loaded = m, true
+	r.iso.nodes, r.iso.pool, r.iso.autoRoute, r.iso.loaded = m, pool, auto, true
 	r.iso.mu.Unlock()
+}
+
+// SettingMeshAutoRoute 是自动切路总开关在 settings 表里的键，值为 "1" 时打开；没有这一项就是关闭。
+const SettingMeshAutoRoute = "mesh_auto_route"
+
+// AutoRoute 返回自动切路总开关。
+func (r *Registry) AutoRoute(ctx context.Context) bool {
+	r.isolatedNodes(ctx) // 没加载过时一起加载
+	r.iso.mu.RLock()
+	defer r.iso.mu.RUnlock()
+	return r.iso.autoRoute
+}
+
+// SetAutoRoute 打开或关闭自动切路（见 docs/mesh.md#自动切路），立即推给各节点：关闭时各节点马上回到直连。
+func (r *Registry) SetAutoRoute(ctx context.Context, on bool) error {
+	var err error
+	if on {
+		err = r.q.SetSetting(ctx, store.SetSettingParams{Key: SettingMeshAutoRoute, Value: "1"})
+	} else {
+		err = r.q.DeleteSetting(ctx, SettingMeshAutoRoute)
+	}
+	if err != nil {
+		return err
+	}
+	r.reloadIsolation(ctx)
+	r.pushMesh(ctx)
+	return nil
+}
+
+// relayPool 返回加入了中转池的节点。
+func (r *Registry) relayPool(ctx context.Context) map[string]bool {
+	r.isolatedNodes(ctx) // 没加载过时一起加载
+	r.iso.mu.RLock()
+	defer r.iso.mu.RUnlock()
+	return r.iso.pool
+}
+
+// InRelayPool 判断节点有没有加入中转池。
+func (r *Registry) InRelayPool(ctx context.Context, nodeID string) bool {
+	return r.relayPool(ctx)[nodeID]
+}
+
+// SetRelayPool 让节点加入或退出中转池（见 docs/mesh.md#中转池），立即把新的成员列表推给各节点：
+// 退出时各节点马上解除经它的性能路线、结束经它的观察，不等下一次上报。
+func (r *Registry) SetRelayPool(ctx context.Context, nodeID string, on bool) error {
+	if err := r.q.SetNodeRelayPool(ctx, nodeID, on); err != nil {
+		return err
+	}
+	r.reloadIsolation(ctx)
+	r.updateMesh()
+	r.pushMesh(ctx)
+	return nil
 }
 
 // ReloadIsolation 从数据库重新加载隔离状态，并更新 mesh 成员。备用面板每次同步主面板的数据以后调用

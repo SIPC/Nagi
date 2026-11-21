@@ -153,6 +153,18 @@ func (s *nodeService) SetNodeGroup(ctx context.Context, req *connect.Request[nag
 	return connect.NewResponse(&nagiv1.SetNodeGroupResponse{}), nil
 }
 
+// SetNodeRelayPool 让节点加入或退出中转池（见 docs/mesh.md#中转池）。存在面板上，立即下发给各节点。
+func (s *nodeService) SetNodeRelayPool(ctx context.Context, req *connect.Request[nagiv1.SetNodeRelayPoolRequest]) (*connect.Response[nagiv1.SetNodeRelayPoolResponse], error) {
+	id := req.Msg.GetNodeId()
+	if n, err := s.Q.GetNode(ctx, id); err != nil || n.Revoked != 0 {
+		return nil, nodeNotFound()
+	}
+	if err := s.Nodes.SetRelayPool(ctx, id, req.Msg.GetEnabled()); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&nagiv1.SetNodeRelayPoolResponse{}), nil
+}
+
 func (s *nodeService) RenameNodeGroup(ctx context.Context, req *connect.Request[nagiv1.RenameLabelRequest]) (*connect.Response[nagiv1.RenameLabelResponse], error) {
 	from, to, err := renameLabel(ctx, req.Msg, s.Q.NodeGroupExists)
 	if err != nil {

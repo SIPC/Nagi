@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // meshNode 是节点的 mesh：成员列表来自每个信任的面板（面板自己和它管理的在线节点），合并后使用。
@@ -37,6 +38,9 @@ type meshNode struct {
 	isolated  map[string][][]byte
 	panelKeys map[string]mesh.Key // 面板指纹 → 面板的 WireGuard 公钥
 	panelAddr map[string]string   // 面板指纹 → 面板地址（host:port），面板的 UDP 用同一个端口
+	// autoRoute 是各面板的自动切路总开关（见 docs/mesh.md#自动切路）。不写盘：节点重启后
+	// 等信任的面板重新说打开才运行，不靠旧面板留下的记录打开。
+	autoRoute map[string]bool
 	names     map[mesh.Key]string
 	file      string // 成员列表写在这里，节点重启后面板不在也能联系其他成员（顶替投票要用）
 	// trusted 是现在信任的面板。移除的面板告诉我们的成员先留着，直到某个信任的面板给了成员列表：
@@ -213,6 +217,10 @@ func (n *meshNode) update(fingerprint, address string, cfg *nagiv1.MeshConfig) (
 		n.isolated = map[string][][]byte{}
 	}
 	n.isolated[fingerprint] = cfg.GetIsolated()
+	if n.autoRoute == nil {
+		n.autoRoute = map[string]bool{}
+	}
+	n.autoRoute[fingerprint] = cfg.GetAutoRoute()
 	n.panelPeers[fingerprint] = cfg.GetPeers()
 	n.panelKeys[fingerprint] = pk
 	n.panelAddr[fingerprint] = address
@@ -288,9 +296,7 @@ func (n *meshNode) retain(fingerprints []string) {
 		n.save()
 	}
 	n.mu.Unlock()
-	if changed {
-		n.apply()
-	}
+	n.apply() // 信任变更立即撤销旧面板的钉住许可，不等成员宽限结束。
 }
 
 // apply 合并所有面板的成员列表并应用到 mesh。
@@ -298,6 +304,8 @@ func (n *meshNode) apply() {
 	self := n.m.PublicKey()
 	n.mu.Lock()
 	merged := map[mesh.Key]*mesh.Peer{}
+	trustedMembers := map[mesh.Key]bool{}
+	poolVotes := map[mesh.Key]int{} // 1：可信面板都列进了中转池；-1：有可信面板没列；0：还没有可信面板说过
 	seen := map[mesh.Key]map[netip.AddrPort]bool{}
 	var order []mesh.Key
 	// addEp 加一个直连地址，去重，每个成员最多 mesh.MaxEndpoints 个（多的 mesh 也不用）。
@@ -322,6 +330,24 @@ func (n *meshNode) apply() {
 				merged[k] = p
 				seen[k] = map[netip.AddrPort]bool{}
 				order = append(order, k)
+				poolVotes[k] = 0
+			}
+			trusted := n.trusted == nil || slices.Contains(n.trusted, fp)
+			if trusted {
+				trustedMembers[k] = true
+			}
+			// 多面板冲突时显式撤权优先；旧面板不覆盖新面板的许可。
+			if trusted && mp.NodeRelayEnabled != nil &&
+				(p.NodeRelayEnabled == nil || !mp.GetNodeRelayEnabled()) {
+				p.NodeRelayEnabled = proto.Bool(mp.GetNodeRelayEnabled())
+			}
+			// 中转池：每个可信面板都把它列进池里才算（任一面板没开就不是），旧面板没有这一项，等于没开。
+			if trusted {
+				if mp.GetRelayPool() && poolVotes[k] >= 0 {
+					poolVotes[k] = 1
+				} else {
+					poolVotes[k] = -1
+				}
 			}
 			for _, e := range mp.GetEndpoints() {
 				if ap, err := netip.ParseAddrPort(e); err == nil {
@@ -363,7 +389,24 @@ func (n *meshNode) apply() {
 			}
 		}
 	}
+	// 自动切路：至少一个可信面板给过成员列表，而且给过的可信面板都打开了才运行（和中转池一样，任一面板没开就不开）。
+	auto := false
+	for fp := range n.panelPeers {
+		if n.trusted == nil || slices.Contains(n.trusted, fp) {
+			if !n.autoRoute[fp] {
+				auto = false
+				break
+			}
+			auto = true
+		}
+	}
 	for k, p := range merged {
+		p.RelayPool = poolVotes[k] == 1
+		if !trustedMembers[k] {
+			// 旧面板宽限可保连通，但不能降成 nil 后借旧候选继续提供中转许可。
+			p.NodeRelayEnabled = proto.Bool(false)
+			p.NodeRelays = nil
+		}
 		n.recent[k] = recentPeer{peer: *p, at: now}
 	}
 	later := false
@@ -376,6 +419,8 @@ func (n *meshNode) apply() {
 			continue
 		}
 		p := r.peer
+		// 成员宽限只保留连通性，不延长中转授权、中转池或在用路径的钉住。
+		p.NodeRelayEnabled, p.RelayPool = proto.Bool(false), false
 		merged[k] = &p
 		order = append(order, k)
 		later = true
@@ -397,6 +442,7 @@ func (n *meshNode) apply() {
 	if err := n.m.SetPeers(peers); err != nil {
 		n.log.Warn("更新 mesh 成员失败", "err", err)
 	}
+	n.m.SetAutoRoute(auto)
 }
 
 func resolve(hostport string) (netip.AddrPort, bool) {
@@ -605,15 +651,15 @@ func (a *agent) meshMetrics() metrics.Source {
 type meshCounter struct{ rx, tx uint64 }
 
 // meshRates 算出这一轮的速率并更新 prev。第一次见到的成员还没有差值，计数器变小（对端重启、重新握手）的这一轮不算。
-// 直连的成员同时记下延迟（毫秒，来自每 10 秒一次的保活 ping）；中转时没有延迟，不记。
+// 有物理直连的成员同时记下直连延迟（毫秒，来自保活 ping），不拿中转估算冒充实测。
 func meshRates(prev map[mesh.Key]meshCounter, peers []mesh.Status, elapsed float64) map[string]float64 {
 	out := map[string]float64{}
 	seen := make(map[mesh.Key]bool, len(peers))
 	for _, s := range peers {
 		seen[s.Key] = true
 		name := "m:" + hex.EncodeToString(s.Key[:]) + ":"
-		if s.Path == "direct" && s.RTT > 0 {
-			out[name+"rtt"] = float64(s.RTT.Microseconds()) / 1000
+		if s.PhysicalDirect.IsValid() && s.DirectRTT > 0 {
+			out[name+"rtt"] = float64(s.DirectRTT.Microseconds()) / 1000
 		}
 		p, ok := prev[s.Key]
 		prev[s.Key] = meshCounter{s.RxBytes, s.TxBytes}

@@ -68,9 +68,16 @@ func dropFor(t *testing.T, f func(fromPort uint16, to netip.AddrPort) bool) {
 
 func newNode(t *testing.T, relay bool) testNode {
 	t.Helper()
-	var priv Key
-	_, _ = rand.Read(priv[:])
-	m, err := New(Config{PrivateKey: priv, Relay: relay, NoQUIC: testNoQUIC, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	return newNodeConfig(t, Config{Relay: relay, NoQUIC: testNoQUIC})
+}
+
+func newNodeConfig(t *testing.T, cfg Config) testNode {
+	t.Helper()
+	_, _ = rand.Read(cfg.PrivateKey[:])
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	m, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,8 +453,9 @@ func TestNodeRelay(t *testing.T) {
 	pk, ak, bk, rk := p.m.PublicKey(), a.m.PublicKey(), b.m.PublicKey(), r.m.PublicKey()
 	_ = p.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}, {Key: bk, Endpoints: local(b.port)}, {Key: rk, Endpoints: local(r.port)}})
 	_ = r.m.SetPeers([]Peer{{Key: pk, Endpoints: local(p.port)}, {Key: ak, Endpoints: local(a.port), Relays: []Key{pk}}, {Key: bk, Endpoints: local(b.port), Relays: []Key{pk}}})
+	on := true
 	peers := func(other Key, relays []Key) []Peer {
-		return []Peer{{Key: pk, Endpoints: local(p.port)}, {Key: rk, Endpoints: local(r.port), Relays: []Key{pk}},
+		return []Peer{{Key: pk, Endpoints: local(p.port)}, {Key: rk, Endpoints: local(r.port), Relays: []Key{pk}, NodeRelayEnabled: &on},
 			{Key: other, Endpoints: local(map[Key]uint16{ak: a.port, bk: b.port}[other]), Relays: []Key{pk}, NodeRelays: relays}}
 	}
 	_ = a.m.SetPeers(peers(bk, nil))
@@ -472,6 +480,9 @@ func TestNodeRelay(t *testing.T) {
 		t.Logf("panel relay rx %d", p.m.bind.relayRx.Load())
 		t.Fatal("R 没有替 A、B 中转")
 	}
+	// 当前排名移除 R 后仍保留实际在用项，但失败以后不能再凭保留项自行重试。
+	_ = a.m.SetPeers(peers(bk, nil))
+	waitPath(t, a.m, bk, "node-relay")
 
 	// R 关掉中转：A 经 R 发的包没有回音，relayProbe 以后改走面板。
 	r.m.SetNodeRelay(false)
@@ -486,6 +497,9 @@ func TestNodeRelay(t *testing.T) {
 	}
 	if got := pathTo(a.m, bk); got != "udp-relay" {
 		t.Fatalf("R 不中转以后 A 到 B 应该改走面板，实际 %s", got)
+	}
+	if s := a.m.ProbePath(context.Background(), bk, rk, 256); !errors.Is(s.Err, ErrProbePath) {
+		t.Fatalf("failed pin survived candidate removal: %+v", s)
 	}
 	echo(t, b, a)
 }

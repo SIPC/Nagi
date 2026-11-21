@@ -25,6 +25,7 @@ public  final class MeshPeer extends
     nodeId_ = "";
     relays_ = emptyProtobufList();
   }
+  private int bitField0_;
   public static final int PUBLIC_KEY_FIELD_NUMBER = 1;
   private com.google.protobuf.ByteString publicKey_;
   /**
@@ -419,6 +420,60 @@ public  final class MeshPeer extends
    */
   private void clearRelays() {
     relays_ = emptyProtobufList();
+  }
+
+  public static final int NODE_RELAY_ENABLED_FIELD_NUMBER = 7;
+  private boolean nodeRelayEnabled_;
+  /**
+   * <pre>
+   * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+   * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+   * </pre>
+   *
+   * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+   * @return Whether the nodeRelayEnabled field is set.
+   */
+  @java.lang.Override
+  public boolean hasNodeRelayEnabled() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+   * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+   * </pre>
+   *
+   * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+   * @return The nodeRelayEnabled.
+   */
+  @java.lang.Override
+  public boolean getNodeRelayEnabled() {
+    return nodeRelayEnabled_;
+  }
+  /**
+   * <pre>
+   * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+   * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+   * </pre>
+   *
+   * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+   * @param value The nodeRelayEnabled to set.
+   */
+  private void setNodeRelayEnabled(boolean value) {
+    bitField0_ |= 0x00000001;
+    nodeRelayEnabled_ = value;
+  }
+  /**
+   * <pre>
+   * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+   * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+   * </pre>
+   *
+   * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+   */
+  private void clearNodeRelayEnabled() {
+    bitField0_ = (bitField0_ & ~0x00000001);
+    nodeRelayEnabled_ = false;
   }
 
   public static ink.sipc.nagi.proto.v1.MeshPeer parseFrom(
@@ -921,6 +976,62 @@ public  final class MeshPeer extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+     * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+     * </pre>
+     *
+     * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+     * @return Whether the nodeRelayEnabled field is set.
+     */
+    @java.lang.Override
+    public boolean hasNodeRelayEnabled() {
+      return instance.hasNodeRelayEnabled();
+    }
+    /**
+     * <pre>
+     * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+     * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+     * </pre>
+     *
+     * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+     * @return The nodeRelayEnabled.
+     */
+    @java.lang.Override
+    public boolean getNodeRelayEnabled() {
+      return instance.getNodeRelayEnabled();
+    }
+    /**
+     * <pre>
+     * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+     * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+     * </pre>
+     *
+     * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+     * @param value The nodeRelayEnabled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNodeRelayEnabled(boolean value) {
+      copyOnWrite();
+      instance.setNodeRelayEnabled(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+     * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+     * </pre>
+     *
+     * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNodeRelayEnabled() {
+      copyOnWrite();
+      instance.clearNodeRelayEnabled();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.MeshPeer)
   }
   @java.lang.Override
@@ -937,16 +1048,18 @@ public  final class MeshPeer extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "publicKey_",
             "endpoints_",
             "name_",
             "nodeId_",
             "isPanel_",
             "relays_",
+            "nodeRelayEnabled_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0002\u0000\u0001\n\u0002\u021a" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u001c";
+              "\u0000\u0007\u0000\u0001\u0001\u0007\u0007\u0000\u0002\u0000\u0001\n\u0002\u021a" +
+              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u001c\u0007\u1007\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

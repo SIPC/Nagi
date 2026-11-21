@@ -247,6 +247,9 @@ const (
 	// NodeServiceRenameNodeGroupProcedure is the fully-qualified name of the NodeService's
 	// RenameNodeGroup RPC.
 	NodeServiceRenameNodeGroupProcedure = "/nagi.v1.NodeService/RenameNodeGroup"
+	// NodeServiceSetNodeRelayPoolProcedure is the fully-qualified name of the NodeService's
+	// SetNodeRelayPool RPC.
+	NodeServiceSetNodeRelayPoolProcedure = "/nagi.v1.NodeService/SetNodeRelayPool"
 	// NodeServiceIsolateNodeProcedure is the fully-qualified name of the NodeService's IsolateNode RPC.
 	NodeServiceIsolateNodeProcedure = "/nagi.v1.NodeService/IsolateNode"
 	// NodeServiceUnisolateNodeProcedure is the fully-qualified name of the NodeService's UnisolateNode
@@ -276,6 +279,9 @@ const (
 	// SettingsServiceSetPanelNameProcedure is the fully-qualified name of the SettingsService's
 	// SetPanelName RPC.
 	SettingsServiceSetPanelNameProcedure = "/nagi.v1.SettingsService/SetPanelName"
+	// SettingsServiceSetMeshAutoRouteProcedure is the fully-qualified name of the SettingsService's
+	// SetMeshAutoRoute RPC.
+	SettingsServiceSetMeshAutoRouteProcedure = "/nagi.v1.SettingsService/SetMeshAutoRoute"
 	// SettingsServiceGetAlertConfigProcedure is the fully-qualified name of the SettingsService's
 	// GetAlertConfig RPC.
 	SettingsServiceGetAlertConfigProcedure = "/nagi.v1.SettingsService/GetAlertConfig"
@@ -1525,6 +1531,8 @@ type NodeServiceClient interface {
 	SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error)
 	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
 	RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+	SetNodeRelayPool(context.Context, *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
@@ -1830,6 +1838,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("RenameNodeGroup")),
 			connect.WithClientOptions(opts...),
 		),
+		setNodeRelayPool: connect.NewClient[v1.SetNodeRelayPoolRequest, v1.SetNodeRelayPoolResponse](
+			httpClient,
+			baseURL+NodeServiceSetNodeRelayPoolProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("SetNodeRelayPool")),
+			connect.WithClientOptions(opts...),
+		),
 		isolateNode: connect.NewClient[v1.IsolateNodeRequest, v1.IsolateNodeResponse](
 			httpClient,
 			baseURL+NodeServiceIsolateNodeProcedure,
@@ -1918,6 +1932,7 @@ type nodeServiceClient struct {
 	renameNodeTag         *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
 	setNodeGroup          *connect.Client[v1.SetNodeGroupRequest, v1.SetNodeGroupResponse]
 	renameNodeGroup       *connect.Client[v1.RenameLabelRequest, v1.RenameLabelResponse]
+	setNodeRelayPool      *connect.Client[v1.SetNodeRelayPoolRequest, v1.SetNodeRelayPoolResponse]
 	isolateNode           *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	unisolateNode         *connect.Client[v1.IsolateNodeRequest, v1.IsolateNodeResponse]
 	listNodeImages        *connect.Client[v1.NodeRef, v1.NodeImages]
@@ -2161,6 +2176,11 @@ func (c *nodeServiceClient) RenameNodeGroup(ctx context.Context, req *connect.Re
 	return c.renameNodeGroup.CallUnary(ctx, req)
 }
 
+// SetNodeRelayPool calls nagi.v1.NodeService.SetNodeRelayPool.
+func (c *nodeServiceClient) SetNodeRelayPool(ctx context.Context, req *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error) {
+	return c.setNodeRelayPool.CallUnary(ctx, req)
+}
+
 // IsolateNode calls nagi.v1.NodeService.IsolateNode.
 func (c *nodeServiceClient) IsolateNode(ctx context.Context, req *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
 	return c.isolateNode.CallUnary(ctx, req)
@@ -2274,6 +2294,8 @@ type NodeServiceHandler interface {
 	SetNodeGroup(context.Context, *connect.Request[v1.SetNodeGroupRequest]) (*connect.Response[v1.SetNodeGroupResponse], error)
 	// 重命名或删除节点分组（new_name 为空），所有节点一起改。
 	RenameNodeGroup(context.Context, *connect.Request[v1.RenameLabelRequest]) (*connect.Response[v1.RenameLabelResponse], error)
+	// 加入或退出中转池（见 docs/mesh.md#中转池）：开了就同意这个节点为别的节点承担性能中转，存在面板上，立即下发。
+	SetNodeRelayPool(context.Context, *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error)
 	// 隔离节点（见 docs/mesh.md#隔离）：立即从所有节点的 mesh 成员里去掉，撤销它的项目放行，停止为它中转。
 	// 只有管理员能用，要先做高权限确认并输入节点名。
 	IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error)
@@ -2575,6 +2597,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("RenameNodeGroup")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceSetNodeRelayPoolHandler := connect.NewUnaryHandler(
+		NodeServiceSetNodeRelayPoolProcedure,
+		svc.SetNodeRelayPool,
+		connect.WithSchema(nodeServiceMethods.ByName("SetNodeRelayPool")),
+		connect.WithHandlerOptions(opts...),
+	)
 	nodeServiceIsolateNodeHandler := connect.NewUnaryHandler(
 		NodeServiceIsolateNodeProcedure,
 		svc.IsolateNode,
@@ -2707,6 +2735,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServiceSetNodeGroupHandler.ServeHTTP(w, r)
 		case NodeServiceRenameNodeGroupProcedure:
 			nodeServiceRenameNodeGroupHandler.ServeHTTP(w, r)
+		case NodeServiceSetNodeRelayPoolProcedure:
+			nodeServiceSetNodeRelayPoolHandler.ServeHTTP(w, r)
 		case NodeServiceIsolateNodeProcedure:
 			nodeServiceIsolateNodeHandler.ServeHTTP(w, r)
 		case NodeServiceUnisolateNodeProcedure:
@@ -2916,6 +2946,10 @@ func (UnimplementedNodeServiceHandler) RenameNodeGroup(context.Context, *connect
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.RenameNodeGroup is not implemented"))
 }
 
+func (UnimplementedNodeServiceHandler) SetNodeRelayPool(context.Context, *connect.Request[v1.SetNodeRelayPoolRequest]) (*connect.Response[v1.SetNodeRelayPoolResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.SetNodeRelayPool is not implemented"))
+}
+
 func (UnimplementedNodeServiceHandler) IsolateNode(context.Context, *connect.Request[v1.IsolateNodeRequest]) (*connect.Response[v1.IsolateNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.IsolateNode is not implemented"))
 }
@@ -2948,6 +2982,8 @@ type SettingsServiceClient interface {
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainApiRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
 	SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+	SetMeshAutoRoute(context.Context, *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3064,6 +3100,12 @@ func NewSettingsServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			httpClient,
 			baseURL+SettingsServiceSetPanelNameProcedure,
 			connect.WithSchema(settingsServiceMethods.ByName("SetPanelName")),
+			connect.WithClientOptions(opts...),
+		),
+		setMeshAutoRoute: connect.NewClient[v1.SetMeshAutoRouteRequest, v1.UpdateSettingsResponse](
+			httpClient,
+			baseURL+SettingsServiceSetMeshAutoRouteProcedure,
+			connect.WithSchema(settingsServiceMethods.ByName("SetMeshAutoRoute")),
 			connect.WithClientOptions(opts...),
 		),
 		getAlertConfig: connect.NewClient[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse](
@@ -3363,6 +3405,7 @@ type settingsServiceClient struct {
 	updateSettings           *connect.Client[v1.UpdateSettingsRequest, v1.UpdateSettingsResponse]
 	setPanelDomain           *connect.Client[v1.SetPanelDomainApiRequest, v1.UpdateSettingsResponse]
 	setPanelName             *connect.Client[v1.SetPanelNameRequest, v1.UpdateSettingsResponse]
+	setMeshAutoRoute         *connect.Client[v1.SetMeshAutoRouteRequest, v1.UpdateSettingsResponse]
 	getAlertConfig           *connect.Client[v1.GetAlertConfigRequest, v1.GetAlertConfigResponse]
 	updateAlertConfig        *connect.Client[v1.UpdateAlertConfigRequest, v1.UpdateAlertConfigResponse]
 	testAlertChannel         *connect.Client[v1.TestAlertChannelRequest, v1.TestAlertChannelResponse]
@@ -3431,6 +3474,11 @@ func (c *settingsServiceClient) SetPanelDomain(ctx context.Context, req *connect
 // SetPanelName calls nagi.v1.SettingsService.SetPanelName.
 func (c *settingsServiceClient) SetPanelName(ctx context.Context, req *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return c.setPanelName.CallUnary(ctx, req)
+}
+
+// SetMeshAutoRoute calls nagi.v1.SettingsService.SetMeshAutoRoute.
+func (c *settingsServiceClient) SetMeshAutoRoute(ctx context.Context, req *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return c.setMeshAutoRoute.CallUnary(ctx, req)
 }
 
 // GetAlertConfig calls nagi.v1.SettingsService.GetAlertConfig.
@@ -3681,6 +3729,8 @@ type SettingsServiceHandler interface {
 	SetPanelDomain(context.Context, *connect.Request[v1.SetPanelDomainApiRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	// 修改面板名称（App 的顶部栏、解锁页和面板列表用它）。为空时恢复默认（面板机器的主机名）。
 	SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
+	// 打开或关闭 mesh 自动切路（全局，默认关闭，见 docs/mesh.md#自动切路），立即下发给各节点。只有管理员能用。
+	SetMeshAutoRoute(context.Context, *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error)
 	GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error)
 	UpdateAlertConfig(context.Context, *connect.Request[v1.UpdateAlertConfigRequest]) (*connect.Response[v1.UpdateAlertConfigResponse], error)
 	// 用面板发一条测试消息到某个渠道。
@@ -3793,6 +3843,12 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 		SettingsServiceSetPanelNameProcedure,
 		svc.SetPanelName,
 		connect.WithSchema(settingsServiceMethods.ByName("SetPanelName")),
+		connect.WithHandlerOptions(opts...),
+	)
+	settingsServiceSetMeshAutoRouteHandler := connect.NewUnaryHandler(
+		SettingsServiceSetMeshAutoRouteProcedure,
+		svc.SetMeshAutoRoute,
+		connect.WithSchema(settingsServiceMethods.ByName("SetMeshAutoRoute")),
 		connect.WithHandlerOptions(opts...),
 	)
 	settingsServiceGetAlertConfigHandler := connect.NewUnaryHandler(
@@ -4093,6 +4149,8 @@ func NewSettingsServiceHandler(svc SettingsServiceHandler, opts ...connect.Handl
 			settingsServiceSetPanelDomainHandler.ServeHTTP(w, r)
 		case SettingsServiceSetPanelNameProcedure:
 			settingsServiceSetPanelNameHandler.ServeHTTP(w, r)
+		case SettingsServiceSetMeshAutoRouteProcedure:
+			settingsServiceSetMeshAutoRouteHandler.ServeHTTP(w, r)
 		case SettingsServiceGetAlertConfigProcedure:
 			settingsServiceGetAlertConfigHandler.ServeHTTP(w, r)
 		case SettingsServiceUpdateAlertConfigProcedure:
@@ -4212,6 +4270,10 @@ func (UnimplementedSettingsServiceHandler) SetPanelDomain(context.Context, *conn
 
 func (UnimplementedSettingsServiceHandler) SetPanelName(context.Context, *connect.Request[v1.SetPanelNameRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetPanelName is not implemented"))
+}
+
+func (UnimplementedSettingsServiceHandler) SetMeshAutoRoute(context.Context, *connect.Request[v1.SetMeshAutoRouteRequest]) (*connect.Response[v1.UpdateSettingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.SettingsService.SetMeshAutoRoute is not implemented"))
 }
 
 func (UnimplementedSettingsServiceHandler) GetAlertConfig(context.Context, *connect.Request[v1.GetAlertConfigRequest]) (*connect.Response[v1.GetAlertConfigResponse], error) {

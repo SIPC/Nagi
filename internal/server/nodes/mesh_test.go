@@ -35,6 +35,28 @@ func TestMeshPeersFiltersReportedEndpoints(t *testing.T) {
 	if !slices.Equal(list[0].Endpoints, want) {
 		t.Fatalf("地址不对：%v", list[0].Endpoints)
 	}
+	if list[0].NodeRelayEnabled == nil || list[0].GetNodeRelayEnabled() || peers[0].NodeRelayEnabled == nil || *peers[0].NodeRelayEnabled {
+		t.Fatal("disabled relay must be explicit, not a legacy missing field")
+	}
+	c.mesh.Relay = true
+	peers, list = r.meshPeers()
+	if !list[0].GetNodeRelayEnabled() || peers[0].NodeRelayEnabled == nil || !*peers[0].NodeRelayEnabled {
+		t.Fatal("relay permission must be independent of an empty candidate ranking")
+	}
+	// 中转池默认关闭；面板开了而且节点自己愿意中转才下发。
+	if list[0].GetRelayPool() || peers[0].RelayPool {
+		t.Fatal("relay pool must default to off")
+	}
+	r.iso.pool = map[string]bool{"n": true}
+	peers, list = r.meshPeers()
+	if !list[0].GetRelayPool() || !peers[0].RelayPool {
+		t.Fatal("pooled node not announced")
+	}
+	c.mesh.Relay = false
+	peers, list = r.meshPeers()
+	if list[0].GetRelayPool() || peers[0].RelayPool {
+		t.Fatal("pool must not apply when the node refuses to relay")
+	}
 }
 
 func TestCleanEndpoints(t *testing.T) {

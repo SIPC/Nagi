@@ -17,7 +17,108 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
+
+func TestMeshRelayAuthorizationMerge(t *testing.T) {
+	m, err := mesh.New(mesh.Config{PrivateKey: randKey(), NoQUIC: true, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	n := &meshNode{m: m, log: slog.Default(), panelPeers: map[string][]*nagiv1.MeshPeer{}, panelKeys: map[string]mesh.Key{},
+		panelAddr: map[string]string{}, names: map[mesh.Key]string{}, file: filepath.Join(t.TempDir(), "mesh-peers.json")}
+	x := mesh.PublicKey(randKey())
+	panel := mesh.PublicKey(randKey())
+	set := func(fp string, permission *bool) {
+		n.update(fp, "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:], Peers: []*nagiv1.MeshPeer{{PublicKey: x[:], NodeRelayEnabled: permission}}})
+	}
+	want := func(value *bool) {
+		t.Helper()
+		n.mu.Lock()
+		got := n.recent[x].peer.NodeRelayEnabled
+		n.mu.Unlock()
+		if (got == nil) != (value == nil) || (got != nil && value != nil && *got != *value) {
+			t.Fatalf("permission got %v want %v", got, value)
+		}
+	}
+	set("a", proto.Bool(true))
+	set("old", nil)
+	want(proto.Bool(true))
+	set("b", proto.Bool(false))
+	for range 12 { // map 遍历顺序不同，显式 false 总要优先。
+		n.apply()
+		want(proto.Bool(false))
+	}
+	n.retain([]string{"a", "old"})
+	want(proto.Bool(true)) // 不信任的旧面板不再有撤权权威。
+	n.retain([]string{"old"})
+	want(nil) // 旧面板不能延长新面板的钉住许可。
+	n.update("old", "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:]})
+	want(proto.Bool(false)) // 仅剩不可信面板的宽限记录不能回落到旧式许可。
+	// 成员宽限仍留着，但不保留授权。recent 保存原观测，真正下发不延长许可。
+	if len(m.Status()) == 0 {
+		t.Fatal("member grace was lost")
+	}
+	n.retain([]string{})
+	want(proto.Bool(false))
+
+	// 中转池：所有可信面板都开了才算；任一可信面板没开、旧面板（没有这一项）或者只剩不可信面板时都不是。
+	pool := func(fp string, on bool) {
+		n.update(fp, "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:], Peers: []*nagiv1.MeshPeer{{PublicKey: x[:], NodeRelayEnabled: proto.Bool(true), RelayPool: on}}})
+	}
+	wantPool := func(value bool) {
+		t.Helper()
+		n.mu.Lock()
+		got := n.recent[x].peer.RelayPool
+		n.mu.Unlock()
+		if got != value {
+			t.Fatalf("relay pool got %v want %v", got, value)
+		}
+	}
+	n.retain([]string{"a", "b"})
+	pool("a", true)
+	pool("b", true)
+	wantPool(true)
+	pool("b", false)
+	for range 12 {
+		n.apply()
+		wantPool(false)
+	}
+	n.retain([]string{"a"})
+	wantPool(true) // 不再信任的面板没有否决权。
+	n.retain([]string{"b"})
+	wantPool(false) // 不信任的面板也不能把节点加进池。
+
+	// 自动切路总开关：同样要所有可信面板都打开；旧面板（没有这一项）、不可信面板都不能打开它。
+	route := func(fp string, on bool) {
+		n.update(fp, "127.0.0.1:2", &nagiv1.MeshConfig{PanelKey: panel[:], AutoRoute: on})
+	}
+	n.retain([]string{"a", "b"})
+	route("a", true)
+	route("b", false)
+	for range 12 {
+		n.apply()
+		if m.AutoRoute() {
+			t.Fatal("one trusted panel off must keep auto routing off")
+		}
+	}
+	route("b", true)
+	if !m.AutoRoute() {
+		t.Fatal("all trusted panels on")
+	}
+	route("old", false)
+	n.retain([]string{"a", "b"})
+	if !m.AutoRoute() {
+		t.Fatal("untrusted panel vetoed")
+	}
+	n.retain([]string{"old"})
+	route("old", true)
+	n.retain([]string{"c"})
+	if m.AutoRoute() {
+		t.Fatal("no trusted panel has spoken, but auto routing is on")
+	}
+}
 
 func randKey() mesh.Key {
 	var k mesh.Key
@@ -141,11 +242,13 @@ func TestMeshRates(t *testing.T) {
 		t.Fatalf("计数器重置后从新值算起：%v", got)
 	}
 
-	// 直连时记延迟，第一次见到也记；中转时不记。
+	// 即使业务将来走中转，物理直连仍上报；不能把所选路径 RTT 混进直连基线。
 	d := st(b, 0, 0)
-	d.Path, d.RTT = "direct", 12500*time.Microsecond
+	d.Path, d.RTT = "node-relay", 3*time.Millisecond
+	d.PhysicalDirect = netip.MustParseAddrPort("127.0.0.1:12345")
+	d.DirectRTT = 12500 * time.Microsecond
 	r := st(a, 30, 30)
-	r.Path, r.RTT = "udp-relay", 0
+	r.Path, r.RTT = "udp-relay", 17*time.Millisecond
 	got = meshRates(prev, []mesh.Status{d, r}, 10)
 	if got[name(b, "rtt")] != 12.5 {
 		t.Fatalf("直连的延迟：%v", got)

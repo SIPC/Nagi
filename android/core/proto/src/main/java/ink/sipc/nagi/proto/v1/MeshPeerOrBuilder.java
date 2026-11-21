@@ -123,4 +123,25 @@ public interface MeshPeerOrBuilder extends
    * @return The relays at the given index.
    */
   com.google.protobuf.ByteString getRelays(int index);
+
+  /**
+   * <pre>
+   * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+   * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+   * </pre>
+   *
+   * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+   * @return Whether the nodeRelayEnabled field is set.
+   */
+  boolean hasNodeRelayEnabled();
+  /**
+   * <pre>
+   * 这个成员是否允许承担节点中转，独立于 relays 排名。false 立即撤权；缺失表示旧面板，只沿用候选、不钉住。
+   * 仅授权现有故障兜底，不代表允许为了性能增加中转流量。
+   * </pre>
+   *
+   * <code>optional bool node_relay_enabled = 7 [json_name = "nodeRelayEnabled"];</code>
+   * @return The nodeRelayEnabled.
+   */
+  boolean getNodeRelayEnabled();
 }
