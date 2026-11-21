@@ -126,7 +126,9 @@ func (m *Manager) TakeSnapshot(ctx context.Context, projectID, container string,
 	return m.takeSnapshot(ctx, projectID, container, kind, nil, onLine)
 }
 
-func (m *Manager) takeSnapshot(ctx context.Context, projectID, container string, kind snapshot.Kind, tags map[string]string, onLine func(string)) (string, error) {
+func (m *Manager) takeSnapshot(ctx context.Context, projectID, container string, kind snapshot.Kind, tags map[string]string, onLine func(string)) (sid string, err error) {
+	onLine, finish := m.taskLog("snapshot."+string(kind), projectID, container, onLine)
+	defer func() { finish(err) }()
 	c, err := m.Get(ctx, projectID, container)
 	if err != nil {
 		return "", err
@@ -139,7 +141,7 @@ func (m *Manager) takeSnapshot(ctx context.Context, projectID, container string,
 		return "", err
 	}
 	defer rep.Close(ctx)
-	sid, err := m.snapshotWithPause(ctx, rep, containerLabel(projectID, container), kind, snapshotDirs(c.Spec),
+	sid, err = m.snapshotWithPause(ctx, rep, containerLabel(projectID, container), kind, snapshotDirs(c.Spec),
 		snapshotIgnore, tags, c.Spec.GetStateful(), onLine)
 	if err != nil {
 		return "", err
@@ -270,7 +272,9 @@ func (m *Manager) scheduledMaintain(ctx context.Context, s *nagiv1.ContainerSpec
 // ReclaimSpace 立即清理容器的快照仓库：回收没有快照用到的数据（过期、删除的快照，失败的快照留下的），
 // 返回释放的字节数。不用 kopia 的安全等待期，所以期间独占仓库：同一容器的部署、快照、恢复（lock），
 // 以及读快照和同步副本（repoLock）都要等它结束。清理完检查每份快照的数据都还在，缺了就报错。
-func (m *Manager) ReclaimSpace(ctx context.Context, projectID, container string) (int64, error) {
+func (m *Manager) ReclaimSpace(ctx context.Context, projectID, container string) (freed int64, err error) {
+	_, finish := m.taskLog("reclaim_space", projectID, container, nil)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()
@@ -296,7 +300,7 @@ func (m *Manager) ReclaimSpace(ctx context.Context, projectID, container string)
 	_ = m.nodeQ.SetContainerMaintenanceTime(ctx, nodestore.SetContainerMaintenanceTimeParams{
 		LastMaintenance: time.Now().Unix(), ProjectID: projectID, Name: container,
 	})
-	freed := max(before-dirSize(dir), 0)
+	freed = max(before-dirSize(dir), 0)
 	if err := rep.Verify(ctx); err != nil {
 		return freed, fmt.Errorf("清理后检查快照：%w", err)
 	}
@@ -318,7 +322,9 @@ func dirSize(dir string) int64 {
 }
 
 // maintain 运行快照仓库维护，回收过期快照和失败的快照留下的空间。每个容器每天一次，不依赖快照成功。
-func (m *Manager) maintain(ctx context.Context, s *nagiv1.ContainerSpec) error {
+func (m *Manager) maintain(ctx context.Context, s *nagiv1.ContainerSpec) (err error) {
+	_, finish := m.taskLog("maintain", s.GetProjectId(), s.GetName(), nil)
+	defer func() { finish(err) }()
 	l := m.lock(s.GetProjectId(), s.GetName())
 	l.Lock()
 	defer l.Unlock()
@@ -336,7 +342,9 @@ func (m *Manager) maintain(ctx context.Context, s *nagiv1.ContainerSpec) error {
 }
 
 // RestoreSnapshot 从定时或手动快照恢复容器的 data/ 和 volumes/：先停止、恢复，再重新启动。配置不变。
-func (m *Manager) RestoreSnapshot(ctx context.Context, projectID, container, sid string, onLine func(string)) error {
+func (m *Manager) RestoreSnapshot(ctx context.Context, projectID, container, sid string, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("restore_snapshot", projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()

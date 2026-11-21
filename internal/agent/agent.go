@@ -160,6 +160,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	projects.Journal = cfg.Logs
 	a := &agent{
 		cfg:      cfg,
 		log:      log,

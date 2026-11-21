@@ -42,8 +42,9 @@ type DeployResult struct {
 }
 
 // Deploy 部署一个容器：s.Version 是这次部署的版本号。容器还没放到本节点时先检查并建好目录。
-func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployOptions, onLine func(string)) (DeployResult, error) {
-	var res DeployResult
+func (m *Manager) Deploy(ctx context.Context, s *nagiv1.ContainerSpec, o DeployOptions, onLine func(string)) (res DeployResult, err error) {
+	onLine, finish := m.taskLog("deploy", s.GetProjectId(), s.GetName(), onLine)
+	defer func() { finish(err) }()
 	if err := checkSpec(s); err != nil {
 		return res, err
 	}
@@ -315,7 +316,9 @@ func (m *Manager) Start(ctx context.Context, s *nagiv1.ContainerSpec, onLine fun
 }
 
 // Control 手动启动、停止或重启容器，不重建容器，配置和版本都不变。容器被删掉时，启动会按当前配置建回来。
-func (m *Manager) Control(ctx context.Context, projectID, container string, action nagiv1.ContainerAction, onLine func(string)) error {
+func (m *Manager) Control(ctx context.Context, projectID, container string, action nagiv1.ContainerAction, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("control."+action.String(), projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()
@@ -353,7 +356,9 @@ func (m *Manager) Control(ctx context.Context, projectID, container string, acti
 
 // ControlService 手动启动、停止或重启容器组里的一个服务，其他服务不动。服务名要是 compose 里有的，
 // 不能拿它往 docker compose 的命令行里塞参数。
-func (m *Manager) ControlService(ctx context.Context, projectID, container, service string, action nagiv1.ContainerAction, onLine func(string)) error {
+func (m *Manager) ControlService(ctx context.Context, projectID, container, service string, action nagiv1.ContainerAction, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("control_service."+service+"."+action.String(), projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()
