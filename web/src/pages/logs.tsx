@@ -4,7 +4,7 @@ import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ChevronDown, ChevronRight, Download, ListFilter, Play, X } from "lucide-react";
-import { AutoHeight, Badge, Button, Check, CodeBlock, Collapse, Dialog, DialogActions, EmptyRow, Field, FormBody, Input, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Select, Spinner, Status, Tabs } from "@/components/ui";
+import { AutoHeight, Badge, Button, Check, CodeBlock, Collapse, Dialog, DialogActions, EmptyRow, Field, FormBody, HelpTip, Input, KeyValue, List, Notice, QueryError, Row, RowsSkeleton, Select, Spinner, Status, Tabs } from "@/components/ui";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { RecordingDialog } from "@/components/recording";
 import { PageHeader } from "@/pages/layout";
@@ -122,7 +122,7 @@ export function LogsPage() {
   const tab = !isAdmin || search.tab === "audit" || search.id || search.failed || search.cat ? "audit" : "logs";
   return <>
     <PageHeader title={t.logs.title} description={t.logs.description} />
-    {isAdmin && <Tabs className="mb-5" value={tab} onChange={(v) => navigate({ search: { tab: v === "audit" ? "audit" : undefined }, replace: true })} items={[{ value: "logs", label: t.logs.entries }, { value: "audit", label: t.logs.audit }]} />}
+    {isAdmin && <Tabs className="mb-6" value={tab} onChange={(v) => navigate({ search: { tab: v === "audit" ? "audit" : undefined }, replace: true })} items={[{ value: "logs", label: t.logs.entries }, { value: "audit", label: t.logs.audit }]} />}
     {tab === "audit" ? <AuditList /> : <LogEntries />}
   </>;
 }
@@ -196,8 +196,8 @@ function AuditList() {
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-xl text-muted-foreground">{t.logs.auditHelp}</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <p className="flex items-center gap-1 text-muted-foreground">{t.logs.auditSummary}<HelpTip>{t.logs.auditHelp}</HelpTip></p>
         <div className="flex flex-wrap gap-2">
           <AuditChain />
           <Button readOnlyOk variant="outline" disabled={exporting} onClick={exportJSONL}>

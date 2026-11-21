@@ -1,7 +1,11 @@
 import type zh from "../zh/logs";
 export default {
-  title: "Logs", description: "Query local facts with explicit collection, retention and copy boundaries.",
+  title: "Logs", description: "Explore panel and node logs, audit records and recordings.",
   entries: "All logs", audit: "Audit & recordings", auditHelp: "Original audit-chain records, child calls, exports and recording playback. Redacted unified copies are not the original audit chain.",
+  auditSummary: "Original audit records and recordings", search: "Search", event: "Event",
+  coverageSummary: "Collection and retention limit coverage. No records doesn't mean nothing happened.",
+  coverageIssues: (count) => `${count} collection gaps or pruning notices found.`,
+  showCoverage: "View collection info", hideCoverage: "Hide collection info", copySummary: "Only recently received logs; history may be incomplete.",
   chainHelp: "Verifies only the original audit database hash chain, not unified logs, recent copies or exported redacted payloads.",
   source: "Source", panel: "This panel's local logs", offline: "Offline", keyword: "Keyword", searchHelp: "Event, object or redacted payload",
   from: "From (local time)", to: "Until (exclusive, local time)", invalidTime: "Enter valid dates. The start must be earlier than the end.",

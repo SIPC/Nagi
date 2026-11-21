@@ -1,6 +1,10 @@
 export default {
-  title: "日志", description: "按来源查询本地事实，保留缺口、清理与副本边界。",
+  title: "日志", description: "查询面板与节点日志，查看审计记录和录制。",
   entries: "全部日志", audit: "审计与录制", auditHelp: "原审计链的记录、父子调用、导出和录制回放。统一日志中的脱敏副本不等于原审计链。",
+  auditSummary: "原始审计记录与录制", search: "查询", event: "事件",
+  coverageSummary: "日志受采集与保留范围限制，无记录不代表无事发生。",
+  coverageIssues: (count: number) => `已发现 ${count} 项采集缺口或清理信息。`,
+  showCoverage: "查看采集信息", hideCoverage: "收起采集信息", copySummary: "仅含近期收到的日志，可能不完整。",
   chainHelp: "只校验原审计库的哈希链，不为统一日志、近期副本或导出的脱敏正文背书。",
   source: "来源", panel: "当前面板本机", offline: "离线", keyword: "关键字", searchHelp: "事件、对象或脱敏正文",
   from: "开始时间（本地）", to: "结束时间（不含，本地）", invalidTime: "请输入有效时间，开始时间必须早于结束时间。",
