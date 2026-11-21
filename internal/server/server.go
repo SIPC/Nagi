@@ -57,7 +57,8 @@ type Config struct {
 	// DevAppKeys：安卓 App 的开发模式（--dev-app-keys），接受软件密钥和模拟器的证明（见 docs/android.md#工程）。
 	DevAppKeys bool
 	// Logs 是本机库，不是从其他节点接收的近期副本；由启动入口管理，主备切换时不替换。
-	Logs *logstore.Store
+	Logs      *logstore.Store
+	LogConfig logstore.Config
 }
 
 const (
@@ -468,6 +469,33 @@ func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if s.cfg.Logs != nil {
+		copies, err := s.cfg.Logs.OpenCopies(ctx, s.cfg.LogConfig)
+		if err != nil {
+			s.log.Error("无法打开面板近期副本，不返回日志持久确认", "err", err)
+		} else {
+			s.nodes.LogCopies = copies
+			defer copies.Close()
+			expiryCtx, stopExpiry := context.WithCancel(ctx)
+			expiryDone := make(chan struct{})
+			go func() {
+				defer close(expiryDone)
+				t := time.NewTicker(time.Minute)
+				defer t.Stop()
+				for {
+					if err := copies.Expire(expiryCtx); err != nil && expiryCtx.Err() == nil {
+						s.log.Error("清理面板近期副本失败", "err", err)
+					}
+					select {
+					case <-expiryCtx.Done():
+						return
+					case <-t.C:
+					}
+				}
+			}()
+			defer func() { stopExpiry(); <-expiryDone }()
+		}
+	}
 	if s.cfg.Logs != nil {
 		historyCtx, stopHistory := context.WithCancel(ctx)
 		historyDone := make(chan struct{})

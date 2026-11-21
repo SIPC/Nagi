@@ -167,6 +167,152 @@ var LogService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	LogCopyService_GetLogReceipt_FullMethodName = "/nagi.v1.LogCopyService/GetLogReceipt"
+	LogCopyService_PushLogs_FullMethodName      = "/nagi.v1.LogCopyService/PushLogs"
+)
+
+// LogCopyServiceClient is the client API for LogCopyService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Node-initiated replication, registered on mesh only. Node identity is resolved
+// from the authenticated mesh key, never supplied in the batch.
+type LogCopyServiceClient interface {
+	GetLogReceipt(ctx context.Context, in *LogReceiptQuery, opts ...grpc.CallOption) (*LogReceipt, error)
+	PushLogs(ctx context.Context, in *LogCopyBatch, opts ...grpc.CallOption) (*LogReceipt, error)
+}
+
+type logCopyServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewLogCopyServiceClient(cc grpc.ClientConnInterface) LogCopyServiceClient {
+	return &logCopyServiceClient{cc}
+}
+
+func (c *logCopyServiceClient) GetLogReceipt(ctx context.Context, in *LogReceiptQuery, opts ...grpc.CallOption) (*LogReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogReceipt)
+	err := c.cc.Invoke(ctx, LogCopyService_GetLogReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *logCopyServiceClient) PushLogs(ctx context.Context, in *LogCopyBatch, opts ...grpc.CallOption) (*LogReceipt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogReceipt)
+	err := c.cc.Invoke(ctx, LogCopyService_PushLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// LogCopyServiceServer is the server API for LogCopyService service.
+// All implementations must embed UnimplementedLogCopyServiceServer
+// for forward compatibility.
+//
+// Node-initiated replication, registered on mesh only. Node identity is resolved
+// from the authenticated mesh key, never supplied in the batch.
+type LogCopyServiceServer interface {
+	GetLogReceipt(context.Context, *LogReceiptQuery) (*LogReceipt, error)
+	PushLogs(context.Context, *LogCopyBatch) (*LogReceipt, error)
+	mustEmbedUnimplementedLogCopyServiceServer()
+}
+
+// UnimplementedLogCopyServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedLogCopyServiceServer struct{}
+
+func (UnimplementedLogCopyServiceServer) GetLogReceipt(context.Context, *LogReceiptQuery) (*LogReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLogReceipt not implemented")
+}
+func (UnimplementedLogCopyServiceServer) PushLogs(context.Context, *LogCopyBatch) (*LogReceipt, error) {
+	return nil, status.Error(codes.Unimplemented, "method PushLogs not implemented")
+}
+func (UnimplementedLogCopyServiceServer) mustEmbedUnimplementedLogCopyServiceServer() {}
+func (UnimplementedLogCopyServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeLogCopyServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LogCopyServiceServer will
+// result in compilation errors.
+type UnsafeLogCopyServiceServer interface {
+	mustEmbedUnimplementedLogCopyServiceServer()
+}
+
+func RegisterLogCopyServiceServer(s grpc.ServiceRegistrar, srv LogCopyServiceServer) {
+	// If the following call panics, it indicates UnimplementedLogCopyServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&LogCopyService_ServiceDesc, srv)
+}
+
+func _LogCopyService_GetLogReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogReceiptQuery)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogCopyServiceServer).GetLogReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogCopyService_GetLogReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogCopyServiceServer).GetLogReceipt(ctx, req.(*LogReceiptQuery))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LogCopyService_PushLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogCopyBatch)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogCopyServiceServer).PushLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogCopyService_PushLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogCopyServiceServer).PushLogs(ctx, req.(*LogCopyBatch))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// LogCopyService_ServiceDesc is the grpc.ServiceDesc for LogCopyService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var LogCopyService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "nagi.v1.LogCopyService",
+	HandlerType: (*LogCopyServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetLogReceipt",
+			Handler:    _LogCopyService_GetLogReceipt_Handler,
+		},
+		{
+			MethodName: "PushLogs",
+			Handler:    _LogCopyService_PushLogs_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "nagi/v1/logs.proto",
+}
+
+const (
 	NodeLogService_QueryNodeLogs_FullMethodName = "/nagi.v1.NodeLogService/QueryNodeLogs"
 )
 

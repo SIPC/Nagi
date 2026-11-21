@@ -113,6 +113,10 @@ type Store struct {
 // Open 允许小额度供本地测试和未来近期副本使用；生产节点的 5～10 GiB 范围由 LoadConfig 校验。
 // 额度包含此库的索引、WAL 和 SHM。20% 空间留给写事务/清理，不把逻辑正文大小冒充实际占盘。
 func Open(ctx context.Context, path string, budget int64) (*Store, error) {
+	return open(ctx, path, budget, true)
+}
+
+func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*Store, error) {
 	if budget < 2<<20 {
 		return nil, fmt.Errorf("日志库额度不能小于 2 MiB")
 	}
@@ -179,8 +183,10 @@ func Open(ctx context.Context, path string, budget int64) (*Store, error) {
 		return fail(err)
 	}
 	// 缩小配置时先清历史，再限制新页数；不以新配额静默启动一个已经超大的库。
-	if err := s.prune(ctx, s.dbLimit*8/10, 4); err != nil {
-		return fail(err)
+	if pruneOnOpen {
+		if err := s.prune(ctx, s.dbLimit*8/10, 4); err != nil {
+			return fail(err)
+		}
 	}
 	if err := s.compact(ctx); err != nil {
 		return fail(err)

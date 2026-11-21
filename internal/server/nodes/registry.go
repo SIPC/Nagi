@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -77,6 +78,8 @@ type Registry struct {
 	ca     *tlsutil.CA
 	// Audit 是审计日志（见 docs/audit.md），节点和面板发出的告警记在这里。
 	Audit *audit.Log
+	// LogCopies is local history, not part of standby configuration snapshots.
+	LogCopies *logstore.Copies
 	// OnIsolate 在节点被隔离或解除隔离后调用：面板据此重算各节点的代理计划，撤销它的项目放行。
 	OnIsolate func(ctx context.Context)
 	iso       isolation

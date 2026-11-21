@@ -23,6 +23,8 @@ const _ = connect.IsAtLeastVersion1_13_0
 const (
 	// LogServiceName is the fully-qualified name of the LogService service.
 	LogServiceName = "nagi.v1.LogService"
+	// LogCopyServiceName is the fully-qualified name of the LogCopyService service.
+	LogCopyServiceName = "nagi.v1.LogCopyService"
 	// NodeLogServiceName is the fully-qualified name of the NodeLogService service.
 	NodeLogServiceName = "nagi.v1.NodeLogService"
 )
@@ -39,6 +41,11 @@ const (
 	LogServiceQueryLogsProcedure = "/nagi.v1.LogService/QueryLogs"
 	// LogServiceQueryMetricsProcedure is the fully-qualified name of the LogService's QueryMetrics RPC.
 	LogServiceQueryMetricsProcedure = "/nagi.v1.LogService/QueryMetrics"
+	// LogCopyServiceGetLogReceiptProcedure is the fully-qualified name of the LogCopyService's
+	// GetLogReceipt RPC.
+	LogCopyServiceGetLogReceiptProcedure = "/nagi.v1.LogCopyService/GetLogReceipt"
+	// LogCopyServicePushLogsProcedure is the fully-qualified name of the LogCopyService's PushLogs RPC.
+	LogCopyServicePushLogsProcedure = "/nagi.v1.LogCopyService/PushLogs"
 	// NodeLogServiceQueryNodeLogsProcedure is the fully-qualified name of the NodeLogService's
 	// QueryNodeLogs RPC.
 	NodeLogServiceQueryNodeLogsProcedure = "/nagi.v1.NodeLogService/QueryNodeLogs"
@@ -140,6 +147,102 @@ func (UnimplementedLogServiceHandler) QueryLogs(context.Context, *connect.Reques
 
 func (UnimplementedLogServiceHandler) QueryMetrics(context.Context, *connect.Request[v1.QueryMetricsRequest]) (*connect.Response[v1.QueryMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogService.QueryMetrics is not implemented"))
+}
+
+// LogCopyServiceClient is a client for the nagi.v1.LogCopyService service.
+type LogCopyServiceClient interface {
+	GetLogReceipt(context.Context, *connect.Request[v1.LogReceiptQuery]) (*connect.Response[v1.LogReceipt], error)
+	PushLogs(context.Context, *connect.Request[v1.LogCopyBatch]) (*connect.Response[v1.LogReceipt], error)
+}
+
+// NewLogCopyServiceClient constructs a client for the nagi.v1.LogCopyService service. By default,
+// it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and
+// sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC()
+// or connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewLogCopyServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) LogCopyServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	logCopyServiceMethods := v1.File_nagi_v1_logs_proto.Services().ByName("LogCopyService").Methods()
+	return &logCopyServiceClient{
+		getLogReceipt: connect.NewClient[v1.LogReceiptQuery, v1.LogReceipt](
+			httpClient,
+			baseURL+LogCopyServiceGetLogReceiptProcedure,
+			connect.WithSchema(logCopyServiceMethods.ByName("GetLogReceipt")),
+			connect.WithClientOptions(opts...),
+		),
+		pushLogs: connect.NewClient[v1.LogCopyBatch, v1.LogReceipt](
+			httpClient,
+			baseURL+LogCopyServicePushLogsProcedure,
+			connect.WithSchema(logCopyServiceMethods.ByName("PushLogs")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// logCopyServiceClient implements LogCopyServiceClient.
+type logCopyServiceClient struct {
+	getLogReceipt *connect.Client[v1.LogReceiptQuery, v1.LogReceipt]
+	pushLogs      *connect.Client[v1.LogCopyBatch, v1.LogReceipt]
+}
+
+// GetLogReceipt calls nagi.v1.LogCopyService.GetLogReceipt.
+func (c *logCopyServiceClient) GetLogReceipt(ctx context.Context, req *connect.Request[v1.LogReceiptQuery]) (*connect.Response[v1.LogReceipt], error) {
+	return c.getLogReceipt.CallUnary(ctx, req)
+}
+
+// PushLogs calls nagi.v1.LogCopyService.PushLogs.
+func (c *logCopyServiceClient) PushLogs(ctx context.Context, req *connect.Request[v1.LogCopyBatch]) (*connect.Response[v1.LogReceipt], error) {
+	return c.pushLogs.CallUnary(ctx, req)
+}
+
+// LogCopyServiceHandler is an implementation of the nagi.v1.LogCopyService service.
+type LogCopyServiceHandler interface {
+	GetLogReceipt(context.Context, *connect.Request[v1.LogReceiptQuery]) (*connect.Response[v1.LogReceipt], error)
+	PushLogs(context.Context, *connect.Request[v1.LogCopyBatch]) (*connect.Response[v1.LogReceipt], error)
+}
+
+// NewLogCopyServiceHandler builds an HTTP handler from the service implementation. It returns the
+// path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewLogCopyServiceHandler(svc LogCopyServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	logCopyServiceMethods := v1.File_nagi_v1_logs_proto.Services().ByName("LogCopyService").Methods()
+	logCopyServiceGetLogReceiptHandler := connect.NewUnaryHandler(
+		LogCopyServiceGetLogReceiptProcedure,
+		svc.GetLogReceipt,
+		connect.WithSchema(logCopyServiceMethods.ByName("GetLogReceipt")),
+		connect.WithHandlerOptions(opts...),
+	)
+	logCopyServicePushLogsHandler := connect.NewUnaryHandler(
+		LogCopyServicePushLogsProcedure,
+		svc.PushLogs,
+		connect.WithSchema(logCopyServiceMethods.ByName("PushLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/nagi.v1.LogCopyService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case LogCopyServiceGetLogReceiptProcedure:
+			logCopyServiceGetLogReceiptHandler.ServeHTTP(w, r)
+		case LogCopyServicePushLogsProcedure:
+			logCopyServicePushLogsHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedLogCopyServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedLogCopyServiceHandler struct{}
+
+func (UnimplementedLogCopyServiceHandler) GetLogReceipt(context.Context, *connect.Request[v1.LogReceiptQuery]) (*connect.Response[v1.LogReceipt], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogCopyService.GetLogReceipt is not implemented"))
+}
+
+func (UnimplementedLogCopyServiceHandler) PushLogs(context.Context, *connect.Request[v1.LogCopyBatch]) (*connect.Response[v1.LogReceipt], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.LogCopyService.PushLogs is not implemented"))
 }
 
 // NodeLogServiceClient is a client for the nagi.v1.NodeLogService service.

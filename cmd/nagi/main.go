@@ -89,6 +89,7 @@ func serverCmd() *cobra.Command {
 					StandbyCode:  standbyCode,
 					DevAppKeys:   devAppKeys,
 					Logs:         logs,
+					LogConfig:    logConfig,
 				})
 				if err != nil {
 					return err

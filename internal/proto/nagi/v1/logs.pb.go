@@ -22,6 +22,210 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type LogReceiptQuery struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Category      string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogReceiptQuery) Reset() {
+	*x = LogReceiptQuery{}
+	mi := &file_nagi_v1_logs_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogReceiptQuery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogReceiptQuery) ProtoMessage() {}
+
+func (x *LogReceiptQuery) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_logs_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogReceiptQuery.ProtoReflect.Descriptor instead.
+func (*LogReceiptQuery) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *LogReceiptQuery) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *LogReceiptQuery) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+type LogReceipt struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Category      string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	After         int64                  `protobuf:"varint,3,opt,name=after,proto3" json:"after,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogReceipt) Reset() {
+	*x = LogReceipt{}
+	mi := &file_nagi_v1_logs_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogReceipt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogReceipt) ProtoMessage() {}
+
+func (x *LogReceipt) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_logs_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogReceipt.ProtoReflect.Descriptor instead.
+func (*LogReceipt) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LogReceipt) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *LogReceipt) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *LogReceipt) GetAfter() int64 {
+	if x != nil {
+		return x.After
+	}
+	return 0
+}
+
+type LogCopyBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Category      string                 `protobuf:"bytes,2,opt,name=category,proto3" json:"category,omitempty"`
+	After         int64                  `protobuf:"varint,3,opt,name=after,proto3" json:"after,omitempty"`
+	Through       int64                  `protobuf:"varint,4,opt,name=through,proto3" json:"through,omitempty"`
+	Entries       []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
+	Pruned        []*LogPruned           `protobuf:"bytes,6,rep,name=pruned,proto3" json:"pruned,omitempty"`
+	WriteErrors   uint64                 `protobuf:"varint,7,opt,name=write_errors,json=writeErrors,proto3" json:"write_errors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogCopyBatch) Reset() {
+	*x = LogCopyBatch{}
+	mi := &file_nagi_v1_logs_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogCopyBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogCopyBatch) ProtoMessage() {}
+
+func (x *LogCopyBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_logs_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogCopyBatch.ProtoReflect.Descriptor instead.
+func (*LogCopyBatch) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *LogCopyBatch) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *LogCopyBatch) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *LogCopyBatch) GetAfter() int64 {
+	if x != nil {
+		return x.After
+	}
+	return 0
+}
+
+func (x *LogCopyBatch) GetThrough() int64 {
+	if x != nil {
+		return x.Through
+	}
+	return 0
+}
+
+func (x *LogCopyBatch) GetEntries() []*LogEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *LogCopyBatch) GetPruned() []*LogPruned {
+	if x != nil {
+		return x.Pruned
+	}
+	return nil
+}
+
+func (x *LogCopyBatch) GetWriteErrors() uint64 {
+	if x != nil {
+		return x.WriteErrors
+	}
+	return 0
+}
+
 type LogQuery struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
@@ -38,7 +242,7 @@ type LogQuery struct {
 
 func (x *LogQuery) Reset() {
 	*x = LogQuery{}
-	mi := &file_nagi_v1_logs_proto_msgTypes[0]
+	mi := &file_nagi_v1_logs_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -50,7 +254,7 @@ func (x *LogQuery) String() string {
 func (*LogQuery) ProtoMessage() {}
 
 func (x *LogQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_logs_proto_msgTypes[0]
+	mi := &file_nagi_v1_logs_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63,7 +267,7 @@ func (x *LogQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogQuery.ProtoReflect.Descriptor instead.
 func (*LogQuery) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{0}
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *LogQuery) GetSource() string {
@@ -123,16 +327,18 @@ func (x *LogQuery) GetLimit() int32 {
 }
 
 type NodeLogQuery struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Query         *LogQuery              `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Query  *LogQuery              `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	// Explicitly query the panel's bounded copy, including while the node is offline.
+	RecentCopy    bool `protobuf:"varint,3,opt,name=recent_copy,json=recentCopy,proto3" json:"recent_copy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeLogQuery) Reset() {
 	*x = NodeLogQuery{}
-	mi := &file_nagi_v1_logs_proto_msgTypes[1]
+	mi := &file_nagi_v1_logs_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -144,7 +350,7 @@ func (x *NodeLogQuery) String() string {
 func (*NodeLogQuery) ProtoMessage() {}
 
 func (x *NodeLogQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_logs_proto_msgTypes[1]
+	mi := &file_nagi_v1_logs_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -157,7 +363,7 @@ func (x *NodeLogQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeLogQuery.ProtoReflect.Descriptor instead.
 func (*NodeLogQuery) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{1}
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NodeLogQuery) GetNodeId() string {
@@ -172,6 +378,13 @@ func (x *NodeLogQuery) GetQuery() *LogQuery {
 		return x.Query
 	}
 	return nil
+}
+
+func (x *NodeLogQuery) GetRecentCopy() bool {
+	if x != nil {
+		return x.RecentCopy
+	}
+	return false
 }
 
 type LogEntry struct {
@@ -190,7 +403,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_nagi_v1_logs_proto_msgTypes[2]
+	mi := &file_nagi_v1_logs_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -202,7 +415,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_logs_proto_msgTypes[2]
+	mi := &file_nagi_v1_logs_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -215,7 +428,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{2}
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *LogEntry) GetSeq() int64 {
@@ -287,7 +500,7 @@ type LogPruned struct {
 
 func (x *LogPruned) Reset() {
 	*x = LogPruned{}
-	mi := &file_nagi_v1_logs_proto_msgTypes[3]
+	mi := &file_nagi_v1_logs_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +512,7 @@ func (x *LogPruned) String() string {
 func (*LogPruned) ProtoMessage() {}
 
 func (x *LogPruned) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_logs_proto_msgTypes[3]
+	mi := &file_nagi_v1_logs_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +525,7 @@ func (x *LogPruned) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogPruned.ProtoReflect.Descriptor instead.
 func (*LogPruned) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{3}
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *LogPruned) GetCategory() string {
@@ -344,23 +557,26 @@ func (x *LogPruned) GetCount() int64 {
 }
 
 type LogPage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	LatestSeq     int64                  `protobuf:"varint,2,opt,name=latest_seq,json=latestSeq,proto3" json:"latest_seq,omitempty"`
-	NextAfter     int64                  `protobuf:"varint,3,opt,name=next_after,json=nextAfter,proto3" json:"next_after,omitempty"`
-	More          bool                   `protobuf:"varint,4,opt,name=more,proto3" json:"more,omitempty"`
-	Entries       []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
-	Pruned        []*LogPruned           `protobuf:"bytes,6,rep,name=pruned,proto3" json:"pruned,omitempty"`
-	WriteErrors   uint64                 `protobuf:"varint,7,opt,name=write_errors,json=writeErrors,proto3" json:"write_errors,omitempty"`
-	DiskBytes     int64                  `protobuf:"varint,8,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
-	BudgetBytes   int64                  `protobuf:"varint,9,opt,name=budget_bytes,json=budgetBytes,proto3" json:"budget_bytes,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Source      string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	LatestSeq   int64                  `protobuf:"varint,2,opt,name=latest_seq,json=latestSeq,proto3" json:"latest_seq,omitempty"`
+	NextAfter   int64                  `protobuf:"varint,3,opt,name=next_after,json=nextAfter,proto3" json:"next_after,omitempty"`
+	More        bool                   `protobuf:"varint,4,opt,name=more,proto3" json:"more,omitempty"`
+	Entries     []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
+	Pruned      []*LogPruned           `protobuf:"bytes,6,rep,name=pruned,proto3" json:"pruned,omitempty"`
+	WriteErrors uint64                 `protobuf:"varint,7,opt,name=write_errors,json=writeErrors,proto3" json:"write_errors,omitempty"`
+	DiskBytes   int64                  `protobuf:"varint,8,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`
+	BudgetBytes int64                  `protobuf:"varint,9,opt,name=budget_bytes,json=budgetBytes,proto3" json:"budget_bytes,omitempty"`
+	RecentCopy  bool                   `protobuf:"varint,10,opt,name=recent_copy,json=recentCopy,proto3" json:"recent_copy,omitempty"`
+	// Kept separate from pruned (panel-side expiry/capacity) to avoid double counts.
+	SourcePruned  []*LogPruned `protobuf:"bytes,11,rep,name=source_pruned,json=sourcePruned,proto3" json:"source_pruned,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LogPage) Reset() {
 	*x = LogPage{}
-	mi := &file_nagi_v1_logs_proto_msgTypes[4]
+	mi := &file_nagi_v1_logs_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -372,7 +588,7 @@ func (x *LogPage) String() string {
 func (*LogPage) ProtoMessage() {}
 
 func (x *LogPage) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_logs_proto_msgTypes[4]
+	mi := &file_nagi_v1_logs_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -385,7 +601,7 @@ func (x *LogPage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogPage.ProtoReflect.Descriptor instead.
 func (*LogPage) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{4}
+	return file_nagi_v1_logs_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LogPage) GetSource() string {
@@ -451,11 +667,41 @@ func (x *LogPage) GetBudgetBytes() int64 {
 	return 0
 }
 
+func (x *LogPage) GetRecentCopy() bool {
+	if x != nil {
+		return x.RecentCopy
+	}
+	return false
+}
+
+func (x *LogPage) GetSourcePruned() []*LogPruned {
+	if x != nil {
+		return x.SourcePruned
+	}
+	return nil
+}
+
 var File_nagi_v1_logs_proto protoreflect.FileDescriptor
 
 const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\n" +
-	"\x12nagi/v1/logs.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x13nagi/v1/agent.proto\"\xf8\x01\n" +
+	"\x12nagi/v1/logs.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x13nagi/v1/agent.proto\"E\n" +
+	"\x0fLogReceiptQuery\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
+	"\bcategory\x18\x02 \x01(\tR\bcategory\"V\n" +
+	"\n" +
+	"LogReceipt\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
+	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x14\n" +
+	"\x05after\x18\x03 \x01(\x03R\x05after\"\xee\x01\n" +
+	"\fLogCopyBatch\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1a\n" +
+	"\bcategory\x18\x02 \x01(\tR\bcategory\x12\x14\n" +
+	"\x05after\x18\x03 \x01(\x03R\x05after\x12\x18\n" +
+	"\athrough\x18\x04 \x01(\x03R\athrough\x12+\n" +
+	"\aentries\x18\x05 \x03(\v2\x11.nagi.v1.LogEntryR\aentries\x12*\n" +
+	"\x06pruned\x18\x06 \x03(\v2\x12.nagi.v1.LogPrunedR\x06pruned\x12!\n" +
+	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\"\xf8\x01\n" +
 	"\bLogQuery\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
 	"\x05after\x18\x02 \x01(\x03R\x05after\x12.\n" +
@@ -464,10 +710,12 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\bcategory\x18\x05 \x01(\tR\bcategory\x12\x18\n" +
 	"\aproject\x18\x06 \x01(\tR\aproject\x12\x16\n" +
 	"\x06object\x18\a \x01(\tR\x06object\x12\x14\n" +
-	"\x05limit\x18\b \x01(\x05R\x05limit\"P\n" +
+	"\x05limit\x18\b \x01(\x05R\x05limit\"q\n" +
 	"\fNodeLogQuery\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12'\n" +
-	"\x05query\x18\x02 \x01(\v2\x11.nagi.v1.LogQueryR\x05query\"\x83\x02\n" +
+	"\x05query\x18\x02 \x01(\v2\x11.nagi.v1.LogQueryR\x05query\x12\x1f\n" +
+	"\vrecent_copy\x18\x03 \x01(\bR\n" +
+	"recentCopy\"\x83\x02\n" +
 	"\bLogEntry\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x03R\x03seq\x12.\n" +
 	"\x04time\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x126\n" +
@@ -481,7 +729,7 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\bcategory\x18\x01 \x01(\tR\bcategory\x12\x14\n" +
 	"\x05first\x18\x02 \x01(\x03R\x05first\x12\x12\n" +
 	"\x04last\x18\x03 \x01(\x03R\x04last\x12\x14\n" +
-	"\x05count\x18\x04 \x01(\x03R\x05count\"\xb1\x02\n" +
+	"\x05count\x18\x04 \x01(\x03R\x05count\"\x8b\x03\n" +
 	"\aLogPage\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x1d\n" +
 	"\n" +
@@ -494,11 +742,18 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\x12\x1d\n" +
 	"\n" +
 	"disk_bytes\x18\b \x01(\x03R\tdiskBytes\x12!\n" +
-	"\fbudget_bytes\x18\t \x01(\x03R\vbudgetBytes2\x8b\x01\n" +
+	"\fbudget_bytes\x18\t \x01(\x03R\vbudgetBytes\x12\x1f\n" +
+	"\vrecent_copy\x18\n" +
+	" \x01(\bR\n" +
+	"recentCopy\x127\n" +
+	"\rsource_pruned\x18\v \x03(\v2\x12.nagi.v1.LogPrunedR\fsourcePruned2\x8b\x01\n" +
 	"\n" +
 	"LogService\x120\n" +
 	"\tQueryLogs\x12\x11.nagi.v1.LogQuery\x1a\x10.nagi.v1.LogPage\x12K\n" +
-	"\fQueryMetrics\x12\x1c.nagi.v1.QueryMetricsRequest\x1a\x1d.nagi.v1.QueryMetricsResponse2J\n" +
+	"\fQueryMetrics\x12\x1c.nagi.v1.QueryMetricsRequest\x1a\x1d.nagi.v1.QueryMetricsResponse2\x88\x01\n" +
+	"\x0eLogCopyService\x12>\n" +
+	"\rGetLogReceipt\x12\x18.nagi.v1.LogReceiptQuery\x1a\x13.nagi.v1.LogReceipt\x126\n" +
+	"\bPushLogs\x12\x15.nagi.v1.LogCopyBatch\x1a\x13.nagi.v1.LogReceipt2J\n" +
 	"\x0eNodeLogService\x128\n" +
 	"\rQueryNodeLogs\x12\x15.nagi.v1.NodeLogQuery\x1a\x10.nagi.v1.LogPageB4Z2github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1b\x06proto3"
 
@@ -514,36 +769,46 @@ func file_nagi_v1_logs_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_logs_proto_rawDescData
 }
 
-var file_nagi_v1_logs_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_nagi_v1_logs_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_nagi_v1_logs_proto_goTypes = []any{
-	(*LogQuery)(nil),              // 0: nagi.v1.LogQuery
-	(*NodeLogQuery)(nil),          // 1: nagi.v1.NodeLogQuery
-	(*LogEntry)(nil),              // 2: nagi.v1.LogEntry
-	(*LogPruned)(nil),             // 3: nagi.v1.LogPruned
-	(*LogPage)(nil),               // 4: nagi.v1.LogPage
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
-	(*QueryMetricsRequest)(nil),   // 6: nagi.v1.QueryMetricsRequest
-	(*QueryMetricsResponse)(nil),  // 7: nagi.v1.QueryMetricsResponse
+	(*LogReceiptQuery)(nil),       // 0: nagi.v1.LogReceiptQuery
+	(*LogReceipt)(nil),            // 1: nagi.v1.LogReceipt
+	(*LogCopyBatch)(nil),          // 2: nagi.v1.LogCopyBatch
+	(*LogQuery)(nil),              // 3: nagi.v1.LogQuery
+	(*NodeLogQuery)(nil),          // 4: nagi.v1.NodeLogQuery
+	(*LogEntry)(nil),              // 5: nagi.v1.LogEntry
+	(*LogPruned)(nil),             // 6: nagi.v1.LogPruned
+	(*LogPage)(nil),               // 7: nagi.v1.LogPage
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*QueryMetricsRequest)(nil),   // 9: nagi.v1.QueryMetricsRequest
+	(*QueryMetricsResponse)(nil),  // 10: nagi.v1.QueryMetricsResponse
 }
 var file_nagi_v1_logs_proto_depIdxs = []int32{
-	5,  // 0: nagi.v1.LogQuery.from:type_name -> google.protobuf.Timestamp
-	5,  // 1: nagi.v1.LogQuery.to:type_name -> google.protobuf.Timestamp
-	0,  // 2: nagi.v1.NodeLogQuery.query:type_name -> nagi.v1.LogQuery
-	5,  // 3: nagi.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
-	5,  // 4: nagi.v1.LogEntry.received:type_name -> google.protobuf.Timestamp
-	2,  // 5: nagi.v1.LogPage.entries:type_name -> nagi.v1.LogEntry
-	3,  // 6: nagi.v1.LogPage.pruned:type_name -> nagi.v1.LogPruned
-	0,  // 7: nagi.v1.LogService.QueryLogs:input_type -> nagi.v1.LogQuery
-	6,  // 8: nagi.v1.LogService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
-	1,  // 9: nagi.v1.NodeLogService.QueryNodeLogs:input_type -> nagi.v1.NodeLogQuery
-	4,  // 10: nagi.v1.LogService.QueryLogs:output_type -> nagi.v1.LogPage
-	7,  // 11: nagi.v1.LogService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
-	4,  // 12: nagi.v1.NodeLogService.QueryNodeLogs:output_type -> nagi.v1.LogPage
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	5,  // 0: nagi.v1.LogCopyBatch.entries:type_name -> nagi.v1.LogEntry
+	6,  // 1: nagi.v1.LogCopyBatch.pruned:type_name -> nagi.v1.LogPruned
+	8,  // 2: nagi.v1.LogQuery.from:type_name -> google.protobuf.Timestamp
+	8,  // 3: nagi.v1.LogQuery.to:type_name -> google.protobuf.Timestamp
+	3,  // 4: nagi.v1.NodeLogQuery.query:type_name -> nagi.v1.LogQuery
+	8,  // 5: nagi.v1.LogEntry.time:type_name -> google.protobuf.Timestamp
+	8,  // 6: nagi.v1.LogEntry.received:type_name -> google.protobuf.Timestamp
+	5,  // 7: nagi.v1.LogPage.entries:type_name -> nagi.v1.LogEntry
+	6,  // 8: nagi.v1.LogPage.pruned:type_name -> nagi.v1.LogPruned
+	6,  // 9: nagi.v1.LogPage.source_pruned:type_name -> nagi.v1.LogPruned
+	3,  // 10: nagi.v1.LogService.QueryLogs:input_type -> nagi.v1.LogQuery
+	9,  // 11: nagi.v1.LogService.QueryMetrics:input_type -> nagi.v1.QueryMetricsRequest
+	0,  // 12: nagi.v1.LogCopyService.GetLogReceipt:input_type -> nagi.v1.LogReceiptQuery
+	2,  // 13: nagi.v1.LogCopyService.PushLogs:input_type -> nagi.v1.LogCopyBatch
+	4,  // 14: nagi.v1.NodeLogService.QueryNodeLogs:input_type -> nagi.v1.NodeLogQuery
+	7,  // 15: nagi.v1.LogService.QueryLogs:output_type -> nagi.v1.LogPage
+	10, // 16: nagi.v1.LogService.QueryMetrics:output_type -> nagi.v1.QueryMetricsResponse
+	1,  // 17: nagi.v1.LogCopyService.GetLogReceipt:output_type -> nagi.v1.LogReceipt
+	1,  // 18: nagi.v1.LogCopyService.PushLogs:output_type -> nagi.v1.LogReceipt
+	7,  // 19: nagi.v1.NodeLogService.QueryNodeLogs:output_type -> nagi.v1.LogPage
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_logs_proto_init() }
@@ -558,9 +823,9 @@ func file_nagi_v1_logs_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_logs_proto_rawDesc), len(file_nagi_v1_logs_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   8,
 			NumExtensions: 0,
-			NumServices:   2,
+			NumServices:   3,
 		},
 		GoTypes:           file_nagi_v1_logs_proto_goTypes,
 		DependencyIndexes: file_nagi_v1_logs_proto_depIdxs,

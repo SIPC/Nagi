@@ -15,6 +15,34 @@ service LogService {
   rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
 }
 
+// Node-initiated replication, registered on mesh only. Node identity is resolved
+// from the authenticated mesh key, never supplied in the batch.
+service LogCopyService {
+  rpc GetLogReceipt(LogReceiptQuery) returns (LogReceipt);
+  rpc PushLogs(LogCopyBatch) returns (LogReceipt);
+}
+
+message LogReceiptQuery {
+  string source = 1;
+  string category = 2;
+}
+
+message LogReceipt {
+  string source = 1;
+  string category = 2;
+  int64 after = 3;
+}
+
+message LogCopyBatch {
+  string source = 1;
+  string category = 2;
+  int64 after = 3;
+  int64 through = 4;
+  repeated LogEntry entries = 5;
+  repeated LogPruned pruned = 6;
+  uint64 write_errors = 7;
+}
+
 // Browser-to-panel queries; the panel forwards through mesh, never the control RPC.
 service NodeLogService {
   rpc QueryNodeLogs(NodeLogQuery) returns (LogPage);
@@ -34,6 +62,8 @@ message LogQuery {
 message NodeLogQuery {
   string node_id = 1;
   LogQuery query = 2;
+  // Explicitly query the panel's bounded copy, including while the node is offline.
+  bool recent_copy = 3;
 }
 
 message LogEntry {
@@ -65,4 +95,7 @@ message LogPage {
   uint64 write_errors = 7;
   int64 disk_bytes = 8;
   int64 budget_bytes = 9;
+  bool recent_copy = 10;
+  // Kept separate from pruned (panel-side expiry/capacity) to avoid double counts.
+  repeated LogPruned source_pruned = 11;
 }

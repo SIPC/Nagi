@@ -314,6 +314,10 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
+	copyCtx, stopCopies := context.WithCancel(ctx)
+	copiesDone := make(chan struct{})
+	go func() { defer close(copiesDone); a.logCopiesLoop(copyCtx) }()
+	defer func() { stopCopies(); <-copiesDone }()
 	go a.intranet.run(ctx)
 	go a.egress.run(ctx)
 	// 任何容器（包括不是 Nagi 管理的）接入网络时都重新生成出站规则：拦截模式的网桥上，地址不在规则里的连接会被丢弃，

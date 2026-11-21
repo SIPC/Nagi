@@ -19,11 +19,15 @@ type Config struct {
 	ContainerRetrySeconds   int    `json:"container_retry_seconds"`
 	ContainerLineBytes      int    `json:"container_line_bytes"`
 	TransferProgressSeconds int    `json:"transfer_progress_seconds"`
+	RecentCapacityMiB       int    `json:"recent_capacity_mib"`
+	RecentHours             int    `json:"recent_hours"`
+	CopyImportantSeconds    int    `json:"copy_important_seconds"`
+	CopyOrdinarySeconds     int    `json:"copy_ordinary_seconds"`
 	RuntimeLevel            string `json:"runtime_level"`
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RuntimeLevel: "INFO"}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO"}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。
@@ -53,6 +57,12 @@ func LoadConfig(dir string) (Config, error) {
 	}
 	if c.TransferProgressSeconds < 1 || c.TransferProgressSeconds > 3600 {
 		return c, fmt.Errorf("transfer_progress_seconds 必须在 1～3600 之间")
+	}
+	if c.RecentCapacityMiB < 16 || c.RecentCapacityMiB > 1024 || c.RecentHours < 1 || c.RecentHours > 24 {
+		return c, fmt.Errorf("近期副本容量必须在 16～1024 MiB，保留时间在 1～24 小时")
+	}
+	if c.CopyImportantSeconds < 1 || c.CopyImportantSeconds > 300 || c.CopyOrdinarySeconds < 1 || c.CopyOrdinarySeconds > 300 {
+		return c, fmt.Errorf("近期副本发送间隔必须在 1～300 秒")
 	}
 	c.RuntimeLevel = strings.ToUpper(c.RuntimeLevel)
 	switch c.RuntimeLevel {
