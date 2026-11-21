@@ -230,7 +230,7 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 			t.Fatalf("standby sender lost identity or ignored revocation: %+v %v", page, err)
 		}
 	} else {
-		testCopyCatchup(ctx, t, local, copies, r, node, panel)
+		testCopyCatchup(t, local, copies, r, node, panel)
 	}
 	for _, change := range []string{`UPDATE nodes SET pending=1`, `UPDATE nodes SET pending=0,revoked=1`, `UPDATE nodes SET revoked=0,isolated=1`} {
 		if _, err := d.ExecContext(ctx, change); err != nil {
@@ -248,8 +248,12 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 // A backlog far beyond one default batch drains through the real sender at
 // the catch-up rate while the panel accepts it, and only at the normal
 // schedule while the panel refuses catch-up under pressure.
-func testCopyCatchup(ctx context.Context, t *testing.T, local *logstore.Store, copies *logstore.Copies, r *nodes.Registry, node, panel *mesh.Mesh) {
-	const backlog = 1500
+func testCopyCatchup(t *testing.T, local *logstore.Store, copies *logstore.Copies, r *nodes.Registry, node, panel *mesh.Mesh) {
+	// Separate from the parent's 30 s: seeding is one durable write per entry,
+	// slow under -race on a loaded machine. The timed part below is not.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	const backlog = 600
 	for i := range backlog {
 		if err := local.Record(ctx, logstore.Event{Category: logstore.Access, Kind: "request", Data: fmt.Sprintf("GET /item/%d %s", i, strings.Repeat("p", 150))}); err != nil {
 			t.Fatal(err)
@@ -285,22 +289,29 @@ func testCopyCatchup(ctx context.Context, t *testing.T, local *logstore.Store, c
 		}
 		return receipt.After
 	}
-	// Panel under pressure: catch-up refused, the first normal batch still lands.
-	time.Sleep(3 * time.Second)
-	if got := acked(); got == 0 || got >= st.Last-backlog+256 {
+	// Panel under pressure: catch-up refused, the first normal batch still lands
+	// and nothing more within one normal interval (10 s).
+	for acked() == 0 {
+		if ctx.Err() != nil {
+			t.Fatal("first normal batch never acknowledged")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	time.Sleep(5 * time.Second)
+	if got := acked(); got >= st.Last-backlog+256 {
 		t.Fatalf("refused catch-up: acknowledged through %d of %d, want only the first normal batch", got, st.Last)
 	}
 	pressure.Store(0)
 	start := time.Now()
 	for acked() < st.Last {
-		// Without catch-up the remaining ~1370 entries need about 110 s.
+		// Without catch-up the remaining ~470 entries need about 40 s.
 		if time.Since(start) > 12*time.Second {
 			t.Fatalf("backlog not drained by catch-up: %d of %d after %v", acked(), st.Last, time.Since(start))
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	page, _, err := copies.Read(ctx, "actual-node", st.Source, logstore.Filter{Category: logstore.Access, Limit: 1000})
-	if err != nil || len(page.Events) != 1000 || !page.More {
+	if err != nil || len(page.Events) != backlog || page.More {
 		t.Fatalf("copied page: %d events more=%v %v", len(page.Events), page.More, err)
 	}
 	t.Logf("drained %d entries %v after pressure cleared", backlog, time.Since(start))
