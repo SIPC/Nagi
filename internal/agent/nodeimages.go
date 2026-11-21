@@ -259,18 +259,51 @@ func deleteRefusal(ni *nagiv1.NodeImage) string {
 	return ""
 }
 
-func (s *agentService) DeleteImages(ctx context.Context, req *nagiv1.DeleteImagesRequest) (*nagiv1.DeleteImagesResponse, error) {
+func (s *agentService) DeleteImages(ctx context.Context, req *nagiv1.DeleteImagesRequest) (out *nagiv1.DeleteImagesResponse, retErr error) {
 	if len(req.GetImages()) == 0 || len(req.GetImages()) > maxImageBatch {
 		return nil, status.Errorf(codes.InvalidArgument, "一次可删除 1 至 %d 个镜像", maxImageBatch)
 	}
+	taskID, started := rand.Text(), time.Now()
+	s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.delete",
+		Data: map[string]any{"task_id": taskID, "phase": "started", "requested": len(req.GetImages())}})
+	defer func() {
+		data := map[string]any{"task_id": taskID, "phase": "finished", "result": "ok", "duration_ms": time.Since(started).Milliseconds()}
+		if retErr != nil {
+			data["result"], data["error"] = "failed", retErr.Error()
+		} else {
+			failed := 0
+			for _, r := range out.GetResults() {
+				if r.GetError() != "" {
+					failed++
+				}
+			}
+			data["completed"], data["failed"] = len(out.GetResults())-failed, failed
+			if failed > 0 {
+				data["result"] = "partial"
+				if failed == len(out.GetResults()) {
+					data["result"] = "failed"
+				}
+			}
+		}
+		s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.delete", Data: data})
+	}()
 	st, err := s.node.imageState(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := &nagiv1.DeleteImagesResponse{Results: deleteImages(ctx, s.node.docker, computeImages(st), req.GetImages())}
-	for _, r := range out.GetResults() {
-		if r.GetError() != "" {
-			s.node.log.Warn("删除镜像失败", "image", r.GetId(), "tag", r.GetTag(), "err", r.GetError())
+	out = &nagiv1.DeleteImagesResponse{}
+	list := computeImages(st)
+	for _, ref := range req.GetImages() {
+		// Persist each completed decision before attempting the next image. The
+		// same initial snapshot and Docker's non-forced checks still apply.
+		for _, r := range deleteImages(ctx, s.node.docker, list, []*nagiv1.ImageRef{ref}) {
+			out.Results = append(out.Results, r)
+			data := map[string]any{"task_id": taskID, "phase": "item", "tag": r.GetTag(), "result": "ok"}
+			if r.GetError() != "" {
+				data["result"], data["error"] = "failed", r.GetError()
+				s.node.log.Warn("删除镜像失败", "image", r.GetId(), "tag", r.GetTag(), "err", r.GetError())
+			}
+			s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.delete", Object: r.GetId(), Data: data})
 		}
 	}
 	return out, nil
@@ -361,24 +394,65 @@ func removeWholeImage(ctx context.Context, rm imageRemover, ni *nagiv1.NodeImage
 	return nil
 }
 
-func (s *agentService) PruneImages(ctx context.Context, req *nagiv1.PruneImagesRequest) (*nagiv1.PruneImagesResponse, error) {
+func (s *agentService) PruneImages(ctx context.Context, req *nagiv1.PruneImagesRequest) (out *nagiv1.PruneImagesResponse, retErr error) {
 	if len(req.GetIds()) > maxImageBatch {
 		return nil, status.Errorf(codes.InvalidArgument, "一次最多清理 %d 个镜像", maxImageBatch)
 	}
 	if len(req.GetIds()) == 0 && !req.GetBuildCache() {
 		return nil, status.Error(codes.InvalidArgument, "没有可清理的内容")
 	}
+	taskID, started := rand.Text(), time.Now()
+	s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.prune",
+		Data: map[string]any{"task_id": taskID, "phase": "started", "requested": len(req.GetIds()), "build_cache": req.GetBuildCache()}})
+	defer func() {
+		data := map[string]any{"task_id": taskID, "phase": "finished", "result": "ok", "duration_ms": time.Since(started).Milliseconds(),
+			"deleted": out.GetDeleted(), "failed": len(out.GetFailed()), "skipped": out.GetSkipped(), "build_cache_freed": out.GetBuildCacheFreed()}
+		if retErr != nil {
+			data["result"], data["error"] = "failed", retErr.Error()
+		} else if len(out.GetFailed()) > 0 {
+			data["result"] = "partial"
+		}
+		s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.prune", Data: data})
+	}()
 	st, err := s.node.imageState(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := pruneImages(ctx, s.node.docker, computeImages(st), req.GetIds())
+	out = &nagiv1.PruneImagesResponse{}
+	list := computeImages(st)
+	// Deduplicate across the batch exactly as before, while retaining each
+	// rejected/duplicate request as a skipped decision rather than a deletion.
+	targets := pruneTargets(req.GetIds(), list.GetPruneIds())
+	allowed := make(map[string]bool, len(targets))
+	for _, id := range targets {
+		allowed[id] = true
+	}
+	for _, id := range req.GetIds() {
+		data := map[string]any{"task_id": taskID, "phase": "item", "result": "skipped"}
+		if !allowed[id] {
+			out.Skipped++
+		} else {
+			delete(allowed, id)
+			r := pruneImages(ctx, s.node.docker, list, []string{id})
+			out.Deleted += r.GetDeleted()
+			out.DeletedIds = append(out.DeletedIds, r.GetDeletedIds()...)
+			out.Failed = append(out.Failed, r.GetFailed()...)
+			data["result"] = "ok"
+			if len(r.GetFailed()) > 0 {
+				data["result"], data["error"] = "failed", r.GetFailed()[0].GetError()
+			}
+		}
+		s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.prune", Object: id, Data: data})
+	}
 	if req.GetBuildCache() {
 		freed, err := s.node.docker.PruneBuildCache(ctx)
+		data := map[string]any{"task_id": taskID, "phase": "build_cache", "result": "ok", "freed_bytes": freed}
 		if err != nil {
 			out.Failed = append(out.Failed, &nagiv1.ImageDeleteResult{Error: fmt.Sprintf("清理构建缓存失败：%s", err)})
+			data["result"], data["error"] = "failed", err.Error()
 		}
 		out.BuildCacheFreed = freed
+		s.node.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.prune", Data: data})
 	}
 	s.node.log.Info("已清理镜像", "deleted", out.Deleted, "failed", len(out.Failed), "skipped", out.Skipped, "build_cache_freed", out.BuildCacheFreed)
 	return out, nil
