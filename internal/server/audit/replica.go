@@ -3,9 +3,6 @@ package audit
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/recording"
@@ -83,38 +80,37 @@ func (l *Log) ReadBatch(ctx context.Context, after int64, limit int, rec *Record
 		trows.Close()
 	}
 	if rec != nil {
+		// Read through the recording store: since v0.37 the chunks are in its
+		// database, and legacy files may already be verified and removed.
 		for _, e := range b.Events {
 			if !recording.ValidID(e.RecordingID) {
 				continue
 			}
-			dir := filepath.Join(rec.Dir, e.RecordingID[:6], e.RecordingID)
-			entries, _ := os.ReadDir(dir)
-			for _, f := range entries {
-				seq, err := strconv.Atoi(f.Name())
-				if err != nil {
-					continue
-				}
-				data, err := os.ReadFile(filepath.Join(dir, f.Name()))
-				if err == nil {
-					b.Chunks = append(b.Chunks, Chunk{Recording: e.RecordingID, Seq: seq, Data: data})
-				}
-			}
+			_ = rec.SealedChunks(e.RecordingID, func(seq int, data []byte) error {
+				b.Chunks = append(b.Chunks, Chunk{Recording: e.RecordingID, Seq: seq, Data: data})
+				return nil
+			})
 		}
 	}
 	return b, marshalReplica(out, b), nil
 }
 
-// WriteBatch 把同步来的一批写进备用面板的审计库：按原来的 id、prev_hash、hash 写入，录制的块写进录制目录。
+// WriteBatch 把同步来的一批写进备用面板的审计库：按原来的 id、prev_hash、hash 写入。录制的块先原样写进录制库，
+// 再提交引用它们的记录：中途断开时记录没有提交，续传从同一处重发，块重复写入是空操作。
 func (l *Log) WriteBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone, chunks []Chunk, rec *Recordings) error {
+	if rec != nil {
+		for _, c := range chunks {
+			if err := rec.PutReplicated(ctx, c.Recording, c.Seq, c.Data); err != nil {
+				return err
+			}
+		}
+	}
 	reserve := int64(64<<10) + int64(len(tombs))*256
 	for _, e := range events {
 		reserve += int64(len(Canonical(e.Event)))*2 + 4096
 	}
-	for _, c := range chunks {
-		reserve += int64(len(c.Data)) + 4096
-	}
 	return l.budget.WriteArchive(ctx, 4, reserve, func() error {
-		if err := l.writeBatch(ctx, events, tombs, chunks, rec); err != nil {
+		if err := l.writeBatch(ctx, events, tombs); err != nil {
 			return err
 		}
 		if l.budget != nil {
@@ -125,7 +121,7 @@ func (l *Log) WriteBatch(ctx context.Context, events []replicaEvent, tombs []Tom
 	})
 }
 
-func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone, chunks []Chunk, rec *Recordings) error {
+func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tombstone) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	tx, err := l.db.BeginTx(ctx, nil)
@@ -162,20 +158,6 @@ func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tom
 		return err
 	}
 	l.lastHash = last
-	if rec != nil {
-		for _, c := range chunks {
-			if !recording.ValidID(c.Recording) {
-				continue
-			}
-			dir := filepath.Join(rec.Dir, c.Recording[:6], c.Recording)
-			if err := os.MkdirAll(dir, 0o700); err != nil {
-				return err
-			}
-			if err := os.WriteFile(filepath.Join(dir, recording.ChunkName(c.Seq)), c.Data, 0o600); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 

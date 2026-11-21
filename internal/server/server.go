@@ -100,14 +100,20 @@ type Server struct {
 	role    role
 }
 
-// openAudit 打开审计日志（见 docs/audit.md#存储与保留）。审计记录在单独的 audit.db 里：备用面板同步主库时不用带上它。
+// openAudit 打开审计日志（见 docs/audit.md#存储与保留）。审计记录在本机日志目录的 audit/audit.db 里（auditDir），
+// 不在面板业务库旁边：备用面板同步主库时不用带上它。
 //   - 主面板：audit.db 既写也读。备用面板刚提升上来时，把它做备用面板时自己的记录（audit-standby.db）并进来。
 //   - 备用面板：audit.db 是从主面板增量同步来的（auditReplica，界面上看的是它），自己的记录（登录等）写进
 //     audit-standby.db。原来是主面板、刚降为备用的，audit.db 里有新主面板没有的记录，归档为 audit-term<任期>.db。
+//
+// 旧版本放在面板目录里的审计库先逐个核验后搬过来；没搬成的继续在原处使用（auditPath）。
 func (s *Server) openAudit(ctx context.Context, isStandby bool) error {
-	dir := s.cfg.DataDir
+	dir := s.auditDir()
 	alog := s.log.With("component", "audit")
-	main := filepath.Join(dir, "audit.db")
+	if err := s.relocateAudit(ctx, dir); err != nil {
+		return err
+	}
+	main := s.auditPath("audit.db")
 	l, err := audit.Open(ctx, main, alog)
 	if err != nil {
 		return fmt.Errorf("打开审计库: %w", err)
@@ -123,10 +129,10 @@ func (s *Server) openAudit(ctx context.Context, isStandby bool) error {
 		} else if n > 0 {
 			s.log.Info("活动记录已迁移到审计库", "count", n)
 		}
-		local := filepath.Join(dir, "audit-standby.db")
+		local := s.auditPath("audit-standby.db")
 		if _, err := os.Stat(local); err == nil {
 			if n, err := l.ImportFrom(ctx, local); err == nil {
-				_ = os.Rename(local, filepath.Join(dir, fmt.Sprintf("audit-standby-%d.imported.db", time.Now().Unix())))
+				_ = os.Rename(local, filepath.Join(filepath.Dir(local), fmt.Sprintf("audit-standby-%d.imported.db", time.Now().Unix())))
 				s.log.Info("已并入做备用面板时的审计记录", "count", n)
 			}
 		}
@@ -136,19 +142,19 @@ func (s *Server) openAudit(ctx context.Context, isStandby bool) error {
 	if l.Meta(ctx, "role") == "primary" {
 		term, _ := s.q.GetSetting(ctx, standby.SettingSeenTerm)
 		l.Close()
-		archive := filepath.Join(dir, fmt.Sprintf("audit-term%s-%d.db", term, time.Now().Unix()))
+		archive := filepath.Join(filepath.Dir(main), fmt.Sprintf("audit-term%s-%d.db", term, time.Now().Unix()))
 		for _, suffix := range []string{"", "-wal", "-shm"} {
 			_ = os.Rename(main+suffix, archive+suffix)
 		}
 		s.log.Warn("本面板已降为备用面板，原来的审计库已归档", "path", archive)
-		if l, err = audit.Open(ctx, main, alog); err != nil {
+		if l, err = audit.Open(ctx, filepath.Join(dir, "audit.db"), alog); err != nil {
 			return fmt.Errorf("打开审计库: %w", err)
 		}
 	}
 	// 迁移活动记录只在主面板上做，备用面板的记录全部从主面板同步。
 	_ = l.SetMeta(ctx, "activity_migrated", "done")
 	s.auditReplica = l
-	if s.audit, err = audit.Open(ctx, filepath.Join(dir, "audit-standby.db"), alog); err != nil {
+	if s.audit, err = audit.Open(ctx, s.auditPath("audit-standby.db"), alog); err != nil {
 		return fmt.Errorf("打开审计库: %w", err)
 	}
 	return nil
@@ -296,12 +302,12 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	// Former panel terms remain evidence until explicitly migrated. Account for
 	// them too, but never silently unlink an unimported audit chain to make space.
-	archives, err := filepath.Glob(filepath.Join(cfg.DataDir, "audit-*.db"))
+	archives, err := s.auditGlob("audit-*.db")
 	if err != nil {
 		return nil, err
 	}
 	for _, path := range archives {
-		if s.auditReplica != nil && path == filepath.Join(cfg.DataDir, "audit-standby.db") {
+		if s.auditReplica != nil && path == s.auditPath("audit-standby.db") {
 			continue
 		}
 		if err := cfg.Logs.RegisterArchive(ctx, logstore.Archive{Name: path, Priority: 4,
@@ -536,8 +542,8 @@ func (s *Server) Run(ctx context.Context) error {
 			}
 			// Only closed former-role archives, never the actively replicated
 			// primary chain. One broken file must not hide the other archives.
-			for _, pattern := range []string{"audit-term*.db", "audit-standby-*.imported.db"} {
-				paths, err := filepath.Glob(filepath.Join(s.cfg.DataDir, pattern))
+			for _, pattern := range []string{"audit-term*.db", "audit-standby-*.imported.db", "audit-rollback-*.db"} {
+				paths, err := s.auditGlob(pattern)
 				if err != nil {
 					s.log.Error("查找旧角色审计归档失败", "err", err)
 					continue

@@ -1,6 +1,7 @@
 package recording
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -124,6 +125,47 @@ func (r *Recordings) putChunk(ctx context.Context, id string, seq int, sealed []
 		}
 		_, err := r.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
 		return err
+	})
+}
+
+// PutReplicated stores a chunk received from the primary panel exactly as sealed
+// there (standby replication). Re-sending a chunk with the same content is a
+// no-op, so a resumed sync cannot duplicate it; different content is an error.
+func (r *Recordings) PutReplicated(ctx context.Context, id string, seq int, sealed []byte) error {
+	if !ValidID(id) || seq < 0 {
+		return errors.New("无效的录制块")
+	}
+	if r.db == nil {
+		dir := filepath.Join(r.Dir, id[:6], id)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, ChunkName(seq)), sealed, 0o600)
+	}
+	return r.budget.WriteArchive(ctx, 3, int64(len(sealed))*2+(32<<10), func() error {
+		tx, err := r.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		at, _ := time.Parse("200601", id[:6])
+		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO recording_sessions(id,started_ns) VALUES(?,?)`, id, at.UnixNano()); err != nil {
+			return err
+		}
+		var saved []byte
+		err = tx.QueryRowContext(ctx, `SELECT body FROM recording_chunks WHERE recording=? AND seq=?`, id, seq).Scan(&saved)
+		switch {
+		case err == nil && bytes.Equal(saved, sealed):
+			return nil
+		case err == nil:
+			return errors.New("同步来的录制块与已有内容不同")
+		case !errors.Is(err, sql.ErrNoRows):
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO recording_chunks(recording,seq,body) VALUES(?,?,?)`, id, seq, sealed); err != nil {
+			return err
+		}
+		return tx.Commit()
 	})
 }
 

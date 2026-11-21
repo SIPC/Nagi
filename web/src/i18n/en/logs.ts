@@ -26,7 +26,7 @@ export default {
   pruned: (origin, category, first, last, count) => `${origin} · ${category}: ${count} entries removed within sequences ${first}–${last}; exact time range unknown.`,
   cleanup: {
     title: "Old data cleanup",
-    targets: { "cleanup.metrics": "the emptied old metric tables in the node's node.db", "cleanup.recordings": "the panel's old recording files" },
+    targets: { "cleanup.metrics": "the emptied old metric tables in the node's node.db", "cleanup.recordings": "the panel's old recording files", "cleanup.audit": "the old audit databases in the panel directory (whole chains copied to the local log directory)", "cleanup.nodeAudit": "the node's old audit files (imported into the new hash-chained audit store)" },
     running: (what) => `Migrated and verified. Deleting ${what} and reclaiming space.`,
     failed: (what) => `Couldn't delete ${what}. The originals are kept and it retries on the next start.`,
   },

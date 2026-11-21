@@ -445,7 +445,11 @@ func auditCmd() *cobra.Command {
 		Use:   "verify",
 		Short: "校验审计日志的哈希链：中间的记录被修改或删除时报错",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := filepath.Join(dataDir, "panel", "audit.db")
+			// v0.37.1 起在本机日志目录；还没迁移（或迁移未通过核验）的在面板目录。
+			path := filepath.Join(dataDir, "logs", "audit", "audit.db")
+			if _, err := os.Stat(path); err != nil {
+				path = filepath.Join(dataDir, "panel", "audit.db")
+			}
 			if _, err := os.Stat(path); err != nil {
 				return fmt.Errorf("找不到审计库 %s", path)
 			}

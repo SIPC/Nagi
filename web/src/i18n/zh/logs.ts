@@ -25,7 +25,7 @@ export default {
   pruned: (origin: string, category: string, first: string, last: string, count: string) => `${origin} · ${category}：序号 ${first}–${last} 范围内累计移除 ${count} 条，确切时间范围未知。`,
   cleanup: {
     title: "旧数据清理",
-    targets: { "cleanup.metrics": "节点 node.db 中迁移后清空的旧监控表", "cleanup.recordings": "面板旧录制文件" },
+    targets: { "cleanup.metrics": "节点 node.db 中迁移后清空的旧监控表", "cleanup.recordings": "面板旧录制文件", "cleanup.audit": "面板目录中的旧审计库（已整链复制到本机日志目录）", "cleanup.nodeAudit": "节点旧审计文件（已导入带哈希链的新审计库）" },
     running: (what: string) => `已迁移并核验，正在删除${what}并回收空间。`,
     failed: (what: string) => `删除${what}失败，原件已保留，下次启动重试。`,
   },

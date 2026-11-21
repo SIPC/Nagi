@@ -3,6 +3,8 @@ package audit
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -48,6 +50,14 @@ func TestReplicaPromote(t *testing.T) {
 	if err := recS.Read(s.ID, func(b []byte) error { out.Write(b); return nil }); err != nil || !bytes.Contains(out.Bytes(), []byte("hello from primary")) {
 		t.Fatalf("录制没有同步过来：%v", err)
 	}
+	// Re-sending the same frame (a resumed sync) neither fails nor duplicates.
+	_, frame, err := primary.ReadBatch(ctx, 0, 100, recP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := standby.ApplyFrame(ctx, frame, recS); err != nil {
+		t.Fatalf("重复同步：%v", err)
+	}
 	// 提升：重新打开备用面板的库，接着写。
 	standby.Close()
 	promoted, err := Open(ctx, standby.path, standby.log)
@@ -62,5 +72,39 @@ func TestReplicaPromote(t *testing.T) {
 	r, err := promoted.Verify(ctx)
 	if err != nil || !r.OK() {
 		t.Fatalf("提升后哈希链：%+v %v", r, err)
+	}
+}
+
+// Since v0.37 recording chunks live in the recording database and legacy files
+// are removed after a verified import. Replication must read chunks from the
+// database, and the standby must store them where it can replay them.
+func TestReplicaRecordingsFromDatabase(t *testing.T) {
+	ctx := t.Context()
+	primary, standby := openTestLog(t), openTestLog(t)
+	recP, recS := testRecordings(t), testRecordings(t)
+	recP.Sealer = recS.Sealer
+	for _, r := range []*Recordings{recP, recS} {
+		if err := r.UseDatabase(ctx, filepath.Join(t.TempDir(), "panel-recordings.db"), nil); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { r.Close() })
+	}
+	s := recP.WriteOnce(ctx, "replicated from the database")
+	primary.Record(ctx, Event{Category: Session, Action: "NodeExec", RecordingID: s.ID})
+	if entries, _ := os.ReadDir(recP.Dir); len(entries) != 0 {
+		t.Fatal("fixture: the primary must have no recording files")
+	}
+	_, frame, err := primary.ReadBatch(ctx, 0, 100, recP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := standby.ApplyFrame(ctx, frame, recS); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	if err := recS.Read(s.ID, func(b []byte) error { out.Write(b); return nil }); err != nil || !bytes.Contains(out.Bytes(), []byte("replicated from the database")) {
+		t.Fatalf("standby cannot replay the replicated recording: %v", err)
 	}
 }
