@@ -29,10 +29,13 @@ type Config struct {
 	CopyImportantSeconds    int    `json:"copy_important_seconds"`
 	CopyOrdinarySeconds     int    `json:"copy_ordinary_seconds"`
 	RuntimeLevel            string `json:"runtime_level"`
+	HostJournal             bool   `json:"host_journal"`
+	HostRetrySeconds        int    `json:"host_retry_seconds"`
+	HostLookbackHours       int    `json:"host_lookback_hours"`
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, DecisionQueueEntries: 256, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO"}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, DecisionQueueEntries: 256, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, RuntimeLevel: "INFO", HostJournal: true, HostRetrySeconds: 30, HostLookbackHours: 24}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。
@@ -80,6 +83,9 @@ func LoadConfig(dir string) (Config, error) {
 	}
 	if c.CopyImportantSeconds < 1 || c.CopyImportantSeconds > 300 || c.CopyOrdinarySeconds < 1 || c.CopyOrdinarySeconds > 300 {
 		return c, fmt.Errorf("近期副本发送间隔必须在 1～300 秒")
+	}
+	if c.HostRetrySeconds < 1 || c.HostRetrySeconds > 3600 || c.HostLookbackHours < 1 || c.HostLookbackHours > 168 {
+		return c, fmt.Errorf("宿主机日志重试须在 1～3600 秒，首次/缺口回看须在 1～168 小时")
 	}
 	c.RuntimeLevel = strings.ToUpper(c.RuntimeLevel)
 	switch c.RuntimeLevel {

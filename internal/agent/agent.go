@@ -221,11 +221,16 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if cfg.Logs != nil {
 		logCtx, stopLogs := context.WithCancel(ctx)
 		logsDone := make(chan struct{})
+		hostDone := make(chan struct{})
+		go func() {
+			defer close(hostDone)
+			logging.RunHost(logCtx, cfg.Logs, cfg.LogConfig)
+		}()
 		go func() {
 			defer close(logsDone)
 			logging.RunContainers(logCtx, dc, cfg.Logs, cfg.LogConfig)
 		}()
-		defer func() { stopLogs(); <-logsDone }()
+		defer func() { stopLogs(); <-logsDone; <-hostDone }()
 	}
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
