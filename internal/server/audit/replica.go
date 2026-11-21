@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/recording"
 )
 
 // 备用面板的增量同步（见 docs/audit.md#备用面板）：主面板按 id 把记录（连同墓碑和录制的块）原样发给备用面板，
@@ -82,7 +84,7 @@ func (l *Log) ReadBatch(ctx context.Context, after int64, limit int, rec *Record
 	}
 	if rec != nil {
 		for _, e := range b.Events {
-			if !recordingIDRe.MatchString(e.RecordingID) {
+			if !recording.ValidID(e.RecordingID) {
 				continue
 			}
 			dir := filepath.Join(rec.Dir, e.RecordingID[:6], e.RecordingID)
@@ -162,14 +164,14 @@ func (l *Log) writeBatch(ctx context.Context, events []replicaEvent, tombs []Tom
 	l.lastHash = last
 	if rec != nil {
 		for _, c := range chunks {
-			if !recordingIDRe.MatchString(c.Recording) {
+			if !recording.ValidID(c.Recording) {
 				continue
 			}
 			dir := filepath.Join(rec.Dir, c.Recording[:6], c.Recording)
 			if err := os.MkdirAll(dir, 0o700); err != nil {
 				return err
 			}
-			if err := os.WriteFile(filepath.Join(dir, chunkName(c.Seq)), c.Data, 0o600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, recording.ChunkName(c.Seq)), c.Data, 0o600); err != nil {
 				return err
 			}
 		}
