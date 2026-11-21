@@ -143,6 +143,8 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle("GET /api/volume-file", a.VolumeFileHandler())
 	// 经面板下载的签名链接（见 downloadlink.go）：只凭链接，不看 cookie。节点文件在备用面板上不能下载，由处理函数判断。
 	mux.Handle("GET /api/download/{token}", a.DownloadLinkHandler())
+	// 加密 HTTP 下载的短命令取脚本（见 dlscript.go）：只凭令牌。
+	mux.Handle("GET /dl/{file}", a.DownloadScriptHandler())
 	mux.Handle("POST /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))
 	// 分块上传的一块和放弃（见 chunkupload.go）。
 	mux.Handle("PUT /api/volume-file", a.standbyBlock(a.VolumeFileHandler()))

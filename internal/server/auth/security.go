@@ -252,7 +252,8 @@ func (s *Service) EntranceMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if strings.HasPrefix(p, "/hooks/") || appEntranceRequest(r) {
+		// /dl/：加密 HTTP 下载的短命令取脚本，只凭令牌（不认识的令牌同样 404，见 api/dlscript.go）。
+		if strings.HasPrefix(p, "/hooks/") || strings.HasPrefix(p, "/dl/") || appEntranceRequest(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
