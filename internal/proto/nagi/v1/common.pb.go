@@ -3863,12 +3863,23 @@ type Alert struct {
 	// 同一个问题的唯一标识，例如 disk、cert:example.com。
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	// firing：出现；resolved：已恢复。
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	Node          string                 `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
-	Project       string                 `protobuf:"bytes,6,opt,name=project,proto3" json:"project,omitempty"`
-	Time          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=time,proto3" json:"time,omitempty"`
+	Status  string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Title   string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Message string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Node    string                 `protobuf:"bytes,5,opt,name=node,proto3" json:"node,omitempty"`
+	Project string                 `protobuf:"bytes,6,opt,name=project,proto3" json:"project,omitempty"`
+	Time    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=time,proto3" json:"time,omitempty"`
+	// 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+	Occurrence string `protobuf:"bytes,8,opt,name=occurrence,proto3" json:"occurrence,omitempty"`
+	Revision   uint64 `protobuf:"varint,9,opt,name=revision,proto3" json:"revision,omitempty"`
+	Source     string `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
+	// valid / unknown；缺数据不改 detection status。
+	Validity string `protobuf:"bytes,11,opt,name=validity,proto3" json:"validity,omitempty"`
+	// recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+	EndReason string                 `protobuf:"bytes,12,opt,name=end_reason,json=endReason,proto3" json:"end_reason,omitempty"`
+	Since     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=since,proto3" json:"since,omitempty"`
+	// critical / warning / info；空值按现有单项规则保守处理。
+	Severity      string `protobuf:"bytes,14,opt,name=severity,proto3" json:"severity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3950,6 +3961,55 @@ func (x *Alert) GetTime() *timestamppb.Timestamp {
 		return x.Time
 	}
 	return nil
+}
+
+func (x *Alert) GetOccurrence() string {
+	if x != nil {
+		return x.Occurrence
+	}
+	return ""
+}
+
+func (x *Alert) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *Alert) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *Alert) GetValidity() string {
+	if x != nil {
+		return x.Validity
+	}
+	return ""
+}
+
+func (x *Alert) GetEndReason() string {
+	if x != nil {
+		return x.EndReason
+	}
+	return ""
+}
+
+func (x *Alert) GetSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Since
+	}
+	return nil
+}
+
+func (x *Alert) GetSeverity() string {
+	if x != nil {
+		return x.Severity
+	}
+	return ""
 }
 
 // TrustedPanel 是节点信任列表里的一个面板。
@@ -6307,7 +6367,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vAlertConfig\x121\n" +
 	"\bchannels\x18\x01 \x03(\v2\x15.nagi.v1.AlertChannelR\bchannels\x12)\n" +
 	"\x05rules\x18\x02 \x01(\v2\x13.nagi.v1.AlertRulesR\x05rules\x12\x1b\n" +
-	"\tnode_name\x18\x03 \x01(\tR\bnodeName\"\xbf\x01\n" +
+	"\tnode_name\x18\x03 \x01(\tR\bnodeName\"\x9c\x03\n" +
 	"\x05Alert\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
@@ -6315,7 +6375,18 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12\x12\n" +
 	"\x04node\x18\x05 \x01(\tR\x04node\x12\x18\n" +
 	"\aproject\x18\x06 \x01(\tR\aproject\x12.\n" +
-	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"\xb4\x01\n" +
+	"\x04time\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x1e\n" +
+	"\n" +
+	"occurrence\x18\b \x01(\tR\n" +
+	"occurrence\x12\x1a\n" +
+	"\brevision\x18\t \x01(\x04R\brevision\x12\x16\n" +
+	"\x06source\x18\n" +
+	" \x01(\tR\x06source\x12\x1a\n" +
+	"\bvalidity\x18\v \x01(\tR\bvalidity\x12\x1d\n" +
+	"\n" +
+	"end_reason\x18\f \x01(\tR\tendReason\x120\n" +
+	"\x05since\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x1a\n" +
+	"\bseverity\x18\x0e \x01(\tR\bseverity\"\xb4\x01\n" +
 	"\fTrustedPanel\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\vfingerprint\x18\x02 \x01(\tR\vfingerprint\x12\x1c\n" +
@@ -6677,30 +6748,31 @@ var file_nagi_v1_common_proto_depIdxs = []int32{
 	35, // 65: nagi.v1.AlertConfig.channels:type_name -> nagi.v1.AlertChannel
 	36, // 66: nagi.v1.AlertConfig.rules:type_name -> nagi.v1.AlertRules
 	65, // 67: nagi.v1.Alert.time:type_name -> google.protobuf.Timestamp
-	65, // 68: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
-	41, // 69: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
-	65, // 70: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
-	65, // 71: nagi.v1.BackupStatus.started_at:type_name -> google.protobuf.Timestamp
-	65, // 72: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
-	49, // 73: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
-	49, // 74: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
-	49, // 75: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
-	50, // 76: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
-	65, // 77: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
-	55, // 78: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
-	57, // 79: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
-	53, // 80: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
-	54, // 81: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
-	5,  // 82: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
-	56, // 83: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
-	36, // 84: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
-	56, // 85: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
-	16, // 86: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
-	87, // [87:87] is the sub-list for method output_type
-	87, // [87:87] is the sub-list for method input_type
-	87, // [87:87] is the sub-list for extension type_name
-	87, // [87:87] is the sub-list for extension extendee
-	0,  // [0:87] is the sub-list for field type_name
+	65, // 68: nagi.v1.Alert.since:type_name -> google.protobuf.Timestamp
+	65, // 69: nagi.v1.MeshPeerStatus.last_handshake:type_name -> google.protobuf.Timestamp
+	41, // 70: nagi.v1.MeshStatus.peers:type_name -> nagi.v1.MeshPeerStatus
+	65, // 71: nagi.v1.BackupStatus.last_sync:type_name -> google.protobuf.Timestamp
+	65, // 72: nagi.v1.BackupStatus.started_at:type_name -> google.protobuf.Timestamp
+	65, // 73: nagi.v1.Replica.last_sync:type_name -> google.protobuf.Timestamp
+	49, // 74: nagi.v1.FailoverConfig.a:type_name -> nagi.v1.FailoverParticipant
+	49, // 75: nagi.v1.FailoverConfig.b:type_name -> nagi.v1.FailoverParticipant
+	49, // 76: nagi.v1.FailoverConfig.witness:type_name -> nagi.v1.FailoverParticipant
+	50, // 77: nagi.v1.FailoverStatus.config:type_name -> nagi.v1.FailoverConfig
+	65, // 78: nagi.v1.FailoverStatus.last_sync:type_name -> google.protobuf.Timestamp
+	55, // 79: nagi.v1.LinkPlan.proxies:type_name -> nagi.v1.LinkProxy
+	57, // 80: nagi.v1.LinkPlan.allows:type_name -> nagi.v1.LinkAllow
+	53, // 81: nagi.v1.LinkPlan.entries:type_name -> nagi.v1.LinkEntry
+	54, // 82: nagi.v1.LinkPlan.entry_allows:type_name -> nagi.v1.LinkEntryAllow
+	5,  // 83: nagi.v1.LinkPlan.egress:type_name -> nagi.v1.ProjectEgress
+	56, // 84: nagi.v1.LinkEntry.nodes:type_name -> nagi.v1.LinkNode
+	36, // 85: nagi.v1.LinkEntry.alert_rules:type_name -> nagi.v1.AlertRules
+	56, // 86: nagi.v1.LinkProxy.nodes:type_name -> nagi.v1.LinkNode
+	16, // 87: nagi.v1.ContainerConfig.ServiceEnvEntry.value:type_name -> nagi.v1.EnvList
+	88, // [88:88] is the sub-list for method output_type
+	88, // [88:88] is the sub-list for method input_type
+	88, // [88:88] is the sub-list for extension type_name
+	88, // [88:88] is the sub-list for extension extendee
+	0,  // [0:88] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_common_proto_init() }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 )
 
@@ -83,6 +84,7 @@ func (e *egress) setErr(s string) {
 	e.err = s
 	e.mu.Unlock()
 	if changed {
+		e.a.cfg.Logs.Report(logstore.Event{Category: logstore.Security, Kind: "egress.availability", Data: map[string]any{"available": s == "", "error": s}})
 		e.a.changed()
 	}
 }
@@ -234,6 +236,10 @@ func (e *egress) hit(ctx context.Context, h egressHit) {
 		title = i18n.Errorf("容器 %s 尝试连接 %s，未拦截", name, target).Error()
 	}
 	e.a.log.Warn("容器出站", "container", c.name, "target", target, "mode", mode)
+	e.a.cfg.Logs.Report(logstore.Event{Category: logstore.Security, Kind: "egress.observed", Project: c.project, Object: name, Data: map[string]any{
+		"instance": c.name, "target": target, "mode_at_observation": mode,
+		"observation_seconds": 5, "dedup_seconds": 600, "complete_connections": false,
+	}})
 	// 告警可以在项目或容器的告警规则里关掉（规则 egress），关掉后照常拦截，只记日志。
 	if !e.a.alerts.ContainerEnabled(c.project, name, alert.RuleEgress) {
 		return

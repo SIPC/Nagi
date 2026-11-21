@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
 // Interval 是采样间隔。
@@ -49,10 +51,12 @@ type Collector struct {
 	docker   *docker.Client
 	diskPath string
 	log      *slog.Logger
+	budget   *logstore.Store
 
-	mu     sync.RWMutex
-	latest map[string]float64
-	disks  []Disk
+	mu       sync.RWMutex
+	latest   map[string]float64
+	latestAt time.Time
+	disks    []Disk
 
 	prevTime          time.Time
 	prevCPUTotal      uint64
@@ -67,6 +71,9 @@ type Collector struct {
 	ExtraRestarts func(containerID string) int
 	// ProjectDirs 返回所有项目目录。项目目录可能在另一块磁盘上（例如 /srv 挂的数据盘），那块盘也要监控。
 	ProjectDirs func() []string
+	// OnSample 保存原始采样到统一日志库，不依赖旧指标库成功，也不受旧图表降采样/过期清理影响。
+	// 回调在采样协程执行，不能修改 values。
+	OnSample func(time.Time, map[string]float64)
 }
 
 // Source 是额外的指标来源，每次采样时调用，elapsed 是距上次采样的秒数。
@@ -153,6 +160,23 @@ func (c *Collector) Latest() map[string]float64 {
 	return out
 }
 
+// LatestFresh returns no values once sampling has stopped for three intervals.
+// A cached sample is not evidence that a fault has recovered.
+func (c *Collector) LatestFresh(now time.Time) map[string]float64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.latestAt.IsZero() || now.Before(c.latestAt) || now.Sub(c.latestAt) > 3*Interval {
+		return nil
+	}
+	out := make(map[string]float64, len(c.latest))
+	for k, v := range c.latest {
+		if v >= 0 && !math.IsNaN(v) && !math.IsInf(v, 0) {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // Run 每 10 秒采集一次，直到 ctx 取消。
 func (c *Collector) Run(ctx context.Context) {
 	t := time.NewTicker(Interval)
@@ -197,6 +221,16 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		v["node:disk@"+mount] = pct
 	}
 	disks := c.readDisks()
+	for _, disk := range disks {
+		prefix := "node:filesystem@" + disk.Mount + ":"
+		v[prefix+"total_bytes"] = float64(disk.Total)
+		v[prefix+"used_bytes"] = float64(disk.Used)
+		v[prefix+"available_bytes"] = float64(disk.Total - disk.Used)
+		if total, free := DiskInodes(disk.Mount); total > 0 && free >= 0 && free <= total {
+			v[prefix+"inodes_total"] = float64(total)
+			v[prefix+"inodes_free"] = float64(free)
+		}
+	}
 	c.mu.Lock()
 	c.disks = disks
 	c.mu.Unlock()
@@ -212,8 +246,11 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	if err == nil {
 		seen := map[string]bool{}
 		limits := map[string]*limitSum{}
+		missing := map[string]bool{}
+		missingCPU := map[string]bool{}
 		for _, ct := range containers {
 			prefix := "c:" + ct.Project + "/" + ct.Container + "/" + ct.Service + ":"
+			key := "l:" + ct.Project + "/" + ct.Container + ":"
 			rt, rtErr := c.docker.Runtime(ctx, ct.ID)
 			if rtErr == nil {
 				n := rt.RestartCount
@@ -226,18 +263,27 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 				continue
 			}
 			st, err := c.docker.ContainerStats(ctx, ct.ID)
+			instance := "i:" + ct.Project + "/" + ct.Container + "/" + ct.Service + "/" + ct.ID + ":"
 			if err != nil {
+				v[instance+"available"] = 0
+				missing[key] = true
 				continue
+			}
+			v[instance+"available"] = 1
+			for metric, value := range st.Details {
+				v[instance+metric] = value
 			}
 			seen[ct.ID] = true
 			v[prefix+"mem"] += float64(st.MemUsed)
 			if rtErr == nil {
-				key := "l:" + ct.Project + "/" + ct.Container + ":"
 				if limits[key] == nil {
 					limits[key] = &limitSum{}
 				}
 				limits[key].add(rt, st)
+			} else {
+				missing[key] = true
 			}
+			cpuOK := false
 			if prev, ok := c.prevContainer[ct.ID]; ok && elapsed > 0 {
 				if st.SystemTotal > prev.SystemTotal && st.CPUTotal >= prev.CPUTotal {
 					cpus := float64(st.OnlineCPUs)
@@ -245,11 +291,15 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 						cpus = 1
 					}
 					v[prefix+"cpu"] += 100 * float64(st.CPUTotal-prev.CPUTotal) / float64(st.SystemTotal-prev.SystemTotal) * cpus
+					cpuOK = true
 				}
 				if st.NetRx >= prev.NetRx && st.NetTx >= prev.NetTx {
 					v[prefix+"net_rx"] += float64(st.NetRx-prev.NetRx) / elapsed
 					v[prefix+"net_tx"] += float64(st.NetTx-prev.NetTx) / elapsed
 				}
+			}
+			if !cpuOK {
+				missingCPU[key] = true
 			}
 			c.prevContainer[ct.ID] = st
 		}
@@ -259,10 +309,18 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 			}
 		}
 		for key, l := range limits {
+			// Never compare a partial group sum with a partial or full limit.
+			if missing[key] {
+				continue
+			}
 			cpu, mem := l.result(memTotal)
-			v[key+"cpu"] = cpu
+			if !missingCPU[key] {
+				v[key+"cpu"] = cpu
+			}
 			v[key+"mem"] = mem
 		}
+	} else {
+		clear(c.prevContainer)
 	}
 
 	if !first && elapsed > 0 {
@@ -276,6 +334,7 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 	c.prevTime = now
 	c.mu.Lock()
 	c.latest = v
+	c.latestAt = now
 	c.mu.Unlock()
 	return v
 }
@@ -325,6 +384,15 @@ func (l *limitSum) result(memTotal uint64) (cpu, mem float64) {
 }
 
 func (c *Collector) store(ctx context.Context, now time.Time, values map[string]float64) error {
+	if c.OnSample != nil {
+		c.OnSample(now, values)
+	}
+	return c.budget.WriteArchive(ctx, 2, int64(len(values))*16384+(64<<10), func() error {
+		return c.storeHistory(ctx, now, values)
+	})
+}
+
+func (c *Collector) storeHistory(ctx context.Context, now time.Time, values map[string]float64) error {
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -337,7 +405,14 @@ func (c *Collector) store(ctx context.Context, now time.Time, values map[string]
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if c.budget != nil {
+		_, err := c.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+		return err
+	}
+	return nil
 }
 
 // maintain 把完整的 5 分钟窗口降采样，并清理过期数据。
@@ -360,12 +435,26 @@ func (c *Collector) maintain(ctx context.Context, now time.Time) {
 			if want := float64(bucket / Interval); rateSeries(r.Series) && float64(r.Samples) < want {
 				v *= float64(r.Samples) / want
 			}
-			_ = c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v})
+			if err := c.budget.WriteArchive(ctx, 2, 64<<10, func() error {
+				if err := c.q.InsertM5(ctx, nodestore.InsertM5Params{Series: r.Series, Ts: from.Unix(), Value: v}); err != nil {
+					return err
+				}
+				if c.budget != nil {
+					_, err := c.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+					return err
+				}
+				return nil
+			}); err != nil {
+				return
+			}
 		}
 		c.lastDownsampledTo = to
 	}
-	_ = c.q.DeleteRawBefore(ctx, now.Add(-keepRaw).Unix())
-	_ = c.q.DeleteM5Before(ctx, now.Add(-keepM5).Unix())
+	// 统一预算接管后历史按容量淘汰，不再另套 24 小时/30 天过期规则。
+	if c.budget == nil {
+		_ = c.q.DeleteRawBefore(ctx, now.Add(-keepRaw).Unix())
+		_ = c.q.DeleteM5Before(ctx, now.Add(-keepM5).Unix())
+	}
 }
 
 // rateSeries 报告序列是不是端口映射按每秒速率记的计数：请求、各类状态码、连接、失败、流量。

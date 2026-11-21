@@ -4,6 +4,8 @@ package metrics
 
 // 节点只支持 Linux。其他系统（开发机）上不采集节点指标。
 
+func NodeDetails() Source { return func(float64) map[string]float64 { return nil } }
+
 // DiskSpace 返回 path 所在文件系统的总量和可用量，其他系统上都是 0。
 func DiskSpace(string) (total, free int64) { return 0, 0 }
 

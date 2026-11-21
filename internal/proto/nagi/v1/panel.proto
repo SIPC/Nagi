@@ -4,6 +4,7 @@ package nagi.v1;
 
 import "google/protobuf/timestamp.proto";
 import "nagi/v1/common.proto";
+import "nagi/v1/alert_state.proto";
 
 option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
 option java_multiple_files = true;
@@ -98,6 +99,7 @@ message ReportRequest {
   repeated string panels = 9;
   // 本节点开放的域名（只开 HTTP 的除外）的证书状态。
   repeated DomainCert certs = 10;
+  AlertSync alerts = 11;
 }
 
 message ReportResponse {

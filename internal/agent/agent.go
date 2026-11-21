@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/nodefiles"
 	"github.com/SIPC/nagi/internal/agent/project"
@@ -29,6 +31,9 @@ import (
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
+	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/recording"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -59,6 +64,10 @@ type Config struct {
 	PanelRelay func() (rx, tx uint64)
 	Version    string
 	Logger     *slog.Logger
+	// Logs 只给内嵌节点复用面板本机库（和已经接入该库的 Logger），避免同一台机器分配两份容量。
+	// 独立节点从 DataDir/logs/config.json 读取配置并自行打开。
+	Logs      *logstore.Store
+	LogConfig logstore.Config
 }
 
 // Enrolled 判断节点是否已经信任某个面板，用于决定是否需要生成加入令牌。
@@ -90,7 +99,7 @@ func Enroll(ctx context.Context, cfg Config) error {
 }
 
 // Run 运行节点，直到 ctx 取消。
-func Run(ctx context.Context, cfg Config) error {
+func Run(ctx context.Context, cfg Config) (runErr error) {
 	log := cfg.Logger
 	if log == nil {
 		log = slog.Default()
@@ -107,7 +116,26 @@ func Run(ctx context.Context, cfg Config) error {
 	if !cfg.Embedded {
 		confirmUpgrade = guardUpgrade(filepath.Join(cfg.DataDir, "identity"), cfg.Version, log)
 	}
+	if cfg.Logs == nil && !cfg.Embedded {
+		var err error
+		cfg.Logs, cfg.LogConfig, err = logstore.OpenLocal(ctx, filepath.Join(cfg.DataDir, "logs"))
+		if err != nil {
+			log.Error("无法打开本机日志，继续运行；新日志未入库，请检查磁盘和日志配置", "err", err)
+		} else {
+			defer cfg.Logs.Close()
+			log = cfg.Logs.Logger(log, cfg.LogConfig)
+		}
+	}
 
+	started := time.Now()
+	cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.starting", Data: map[string]any{"version": cfg.Version, "embedded": cfg.Embedded}})
+	defer func() {
+		data := map[string]any{"duration_ms": time.Since(started).Milliseconds(), "result": "stopped", "context_canceled": ctx.Err() != nil}
+		if runErr != nil {
+			data["result"], data["error"] = "failed", runErr.Error()
+		}
+		cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.stopped", Data: data})
+	}()
 	id, err := loadIdentity(filepath.Join(cfg.DataDir, "identity"))
 	if err != nil {
 		return fmt.Errorf("读取节点身份: %w", err)
@@ -133,6 +161,28 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer nodeDB.Close()
 
+	var hadLegacyMetrics bool
+	if err := nodeDB.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM metrics_raw UNION ALL SELECT 1 FROM metrics_m5)`).Scan(&hadLegacyMetrics); err != nil {
+		log.Warn("无法检查旧监控历史", "err", err)
+	}
+	metricDB := nodeDB
+	if history, err := metrics.OpenHistory(ctx, filepath.Join(cfg.DataDir, "logs", "metrics.db"), nodeDB, cfg.Logs); err != nil {
+		log.Error("无法分离监控历史，保留并继续使用旧库", "err", err)
+	} else {
+		metricDB = history
+		defer history.Close()
+		if hadLegacyMetrics {
+			st, statErr := os.Stat(filepath.Join(cfg.DataDir, "node.db"))
+			if statErr != nil {
+				log.Warn("监控历史已迁移，无法检查旧配置库大小", "err", statErr)
+			} else if err := metrics.CheckDisk(cfg.DataDir, st.Size()); err != nil {
+				log.Warn("监控历史已迁移，空间不足，暂不整理旧配置库", "err", err)
+			} else if _, err := nodeDB.ExecContext(ctx, `VACUUM`); err != nil {
+				log.Warn("监控历史已迁移，旧配置库空闲空间暂未回收", "err", err)
+			}
+		}
+	}
+
 	dc, err := docker.New()
 	if err != nil {
 		return fmt.Errorf("连接 Docker: %w", err)
@@ -144,6 +194,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
+	projects.Journal = cfg.Logs
 	a := &agent{
 		cfg:      cfg,
 		log:      log,
@@ -163,7 +214,24 @@ func Run(ctx context.Context, cfg Config) error {
 	a.direct = newDirectDL(a)
 	a.egress = newEgress(a)
 	a.violations = newViolations(a)
-	a.openAudit(ctx)
+	closeAudit := a.openAudit(ctx)
+	defer closeAudit()
+	closeRecordings := a.openRecordings(ctx)
+	defer closeRecordings()
+	if cfg.Logs != nil {
+		logCtx, stopLogs := context.WithCancel(ctx)
+		logsDone := make(chan struct{})
+		hostDone := make(chan struct{})
+		go func() {
+			defer close(hostDone)
+			logging.RunHost(logCtx, cfg.Logs, cfg.LogConfig)
+		}()
+		go func() {
+			defer close(logsDone)
+			logging.RunContainers(logCtx, dc, cfg.Logs, cfg.LogConfig)
+		}()
+		defer func() { stopLogs(); <-logsDone; <-hostDone }()
+	}
 	projects.EntryPorts = a.intranet.entryPorts
 	projects.ProxyPorts = func() []spec.PortKey {
 		if a.proxy == nil {
@@ -188,6 +256,9 @@ func Run(ctx context.Context, cfg Config) error {
 	a.backups = newBackupStates(filepath.Join(cfg.DataDir, "backup-status.json"))
 	projects.BackupStatus = a.backups.statuses
 	a.failovers = newFailovers(cfg.DataDir)
+	a.failovers.history = logging.NewDecisions(cfg.Logs, cfg.LogConfig.DecisionQueueEntries)
+	defer a.failovers.history.Close()
+	projects.Decisions = a.failovers.history
 	a.votes = &voteBatcher{a: a}
 	projects.ManagedRestart = a.managed
 	projects.FastSnapshot = a.managed
@@ -216,17 +287,33 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 		}
 	}()
-	a.metrics = metrics.New(nodeDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	a.metrics = metrics.New(metricDB, dc, cfg.DataDir, log.With("component", "metrics"))
+	if err := a.metrics.UseBudget(ctx, cfg.Logs, filepath.Join(cfg.DataDir, "logs", "metrics.db"), metricDB != nodeDB); err != nil {
+		log.Error("无法把监控历史接入统一本机容量", "err", err)
+	}
+	if cfg.Logs != nil {
+		a.metrics.OnSample = logging.CaptureMetrics(cfg.Logs, cfg.LogConfig)
+	}
+	if cfg.LogConfig.NodeDetails {
+		a.metrics.AddSource(metrics.NodeDetails())
+	}
 	a.metrics.ExtraRestarts = projects.ManagedRestartCount
 	a.metrics.ProjectDirs = func() []string { return projects.Dirs(context.Background()) }
 	hintDirs = func() []string { return append([]string{cfg.DataDir}, projects.Dirs(context.Background())...) }
 	if !cfg.DisableProxy {
+		proxy.OnAccess(a.logProxyAccess)
+		defer proxy.OnAccess(nil)
+		proxy.OnConnection(a.logProxyConnection)
+		defer proxy.OnConnection(nil)
 		a.metrics.AddSource(routeMetrics())
 	}
 	a.metrics.AddSource(a.meshMetrics())
-	go a.metrics.Run(ctx)
+	statistics := logging.Statistics{Store: cfg.Logs}
+	if metricDB != nodeDB {
+		statistics.History = a.metrics
+	}
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
-		filepath.Join(cfg.DataDir, "caddy"), a.metrics, dc,
+		filepath.Join(cfg.DataDir, "caddy"), statistics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert)
 	a.alerts.Report = a.reportAlert
 	a.alerts.ContainerRules = a.containerAlertRules
@@ -253,6 +340,22 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := a.startMesh(ctx, cfg.MeshPort); err != nil {
 		log.Warn("mesh 启动失败，依赖 mesh 的功能不可用", "err", err)
 	}
+	if cfg.Logs != nil {
+		captureMesh := logging.CaptureMesh(cfg.Logs, cfg.LogConfig)
+		a.metrics.AddSource(func(float64) map[string]float64 {
+			if a.mesh == nil {
+				captureMesh(time.Now(), nil)
+			} else {
+				captureMesh(time.Now(), mesh.StatusProto(a.mesh.m, a.mesh.name))
+			}
+			return nil
+		})
+	}
+	go a.metrics.Run(ctx)
+	copyCtx, stopCopies := context.WithCancel(ctx)
+	copiesDone := make(chan struct{})
+	go func() { defer close(copiesDone); a.logCopiesLoop(copyCtx) }()
+	defer func() { stopCopies(); <-copiesDone }()
 	go a.intranet.run(ctx)
 	go a.egress.run(ctx)
 	// 任何容器（包括不是 Nagi 管理的）接入网络时都重新生成出站规则：拦截模式的网桥上，地址不在规则里的连接会被丢弃，
@@ -266,6 +369,11 @@ func Run(ctx context.Context, cfg Config) error {
 		a.startFailover(ctx, id)
 	}
 	proxy.OnCertEvent(func(domain string, err error) {
+		data := map[string]any{"domain": domain, "result": "obtained"}
+		if err != nil {
+			data["result"], data["error"] = "failed", err.Error()
+		}
+		cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "proxy.certificate", Object: domain, Data: data})
 		if a.direct.certEvent(domain, err) {
 			go a.changed() // 直连下载的 IP 证书：只更新状态，不告警
 			return
@@ -297,6 +405,7 @@ func Run(ctx context.Context, cfg Config) error {
 		go a.proxyLoop(ctx)
 	}
 
+	cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "node.ready", Data: map[string]any{"version": cfg.Version, "hostname": hostname, "embedded": cfg.Embedded}})
 	a.superviseLoop(ctx)
 	return nil
 }
@@ -327,13 +436,14 @@ type agent struct {
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
 	violations *violations
 	// audit 是节点本地审计，面板用 ReadAuditLog 读走后代为外送（见 audit.go）。
-	audit     *auditlog.Log
-	replicas  *replicas
-	backups   *backupStates
-	failovers *failovers
-	votes     *voteBatcher
-	ctx       context.Context
-	startedAt time.Time
+	audit      *auditlog.Log
+	recordings *recording.Recordings
+	replicas   *replicas
+	backups    *backupStates
+	failovers  *failovers
+	votes      *voteBatcher
+	ctx        context.Context
+	startedAt  time.Time
 	// confirmUpgrade 在连上面板后调用：刚升级时表示新版本能用（见 upgrade_guard.go）。
 	confirmUpgrade func()
 
@@ -473,15 +583,20 @@ func (a *agent) applyProxy(ctx context.Context) {
 	if err == nil {
 		err = a.proxy.Apply(routes)
 	}
+	data := map[string]any{"result": "ok", "rules": len(routes)}
+	if err != nil {
+		data["result"], data["error"] = "failed", err.Error()
+	}
+	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "proxy.apply", Data: data})
 	if err == nil {
-		// 已经不用的域名，"申请证书失败"的告警标为已恢复。
+		// 域名移除不是证书恢复的证据，保留未确认恢复的记录。
 		domains := map[string]bool{}
 		for _, r := range routes {
 			for _, d := range r.Domains {
 				domains[d] = true
 			}
 		}
-		a.alerts.ResolveUnless(ctx, "cert_failed:", func(d string) bool { return domains[d] })
+		a.alerts.MarkUnavailableUnless("cert_failed:", func(d string) bool { return domains[d] })
 	}
 	if err != nil && ctx.Err() == nil {
 		a.log.Warn("更新对外访问规则失败", "err", err)
@@ -579,6 +694,11 @@ func (a *agent) connectLoop(ctx context.Context, fingerprint string) {
 		}
 		start := time.Now()
 		err := a.session(ctx, p)
+		data := map[string]any{"duration_ms": time.Since(start).Milliseconds(), "context_canceled": ctx.Err() != nil}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "panel.connection.ended", Object: fingerprint, Data: data})
 		if ctx.Err() != nil {
 			return
 		}
@@ -634,6 +754,7 @@ func (a *agent) session(ctx context.Context, p trustedPanel) error {
 	panel := nagiv1.NewPanelServiceClient(cc)
 
 	a.log.Info("已连接面板", "panel", p.Address)
+	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "panel.connection.established", Object: p.Fingerprint, Data: map[string]any{"panel": p.Address}})
 	a.confirmUpgrade()
 	a.setConnectError(p.Fingerprint, nil)
 	a.mu.Lock()
@@ -759,8 +880,9 @@ func (a *agent) domainProject(ctx context.Context, domain string) string {
 // 超过一天没有就不再记录（规则可能已经删除）。
 func routeMetrics() metrics.Source {
 	type seen struct {
-		at time.Time
-		l4 bool
+		at       time.Time
+		l4       bool
+		statuses map[int]bool
 	}
 	lastActive := map[string]seen{}
 	return func(elapsed float64) map[string]float64 {
@@ -768,7 +890,15 @@ func routeMetrics() metrics.Source {
 		stats := proxy.TakeStats()
 		for k, s := range stats {
 			if s.Requests > 0 || s.Conns > 0 || s.Active > 0 {
-				lastActive[k] = seen{now, s.L4}
+				t := lastActive[k]
+				t.at, t.l4 = now, s.L4
+				if t.statuses == nil {
+					t.statuses = map[int]bool{}
+				}
+				for status := range s.Statuses {
+					t.statuses[status] = true
+				}
+				lastActive[k] = t
 			}
 		}
 		out := map[string]float64{}
@@ -789,6 +919,13 @@ func routeMetrics() metrics.Source {
 				continue
 			}
 			out[prefix+"req"] = float64(s.Requests) / elapsed
+			out[prefix+"interval_seconds"] = elapsed
+			out[prefix+"request_count"] = float64(s.Requests)
+			out[prefix+"timed_count"] = float64(s.Timed)
+			out[prefix+"latency_samples"] = float64(len(s.Durations))
+			for status := range t.statuses {
+				out[prefix+"status@"+strconv.Itoa(status)] = float64(s.Statuses[status])
+			}
 			out[prefix+"2xx"] = float64(s.Classes[2]) / elapsed
 			out[prefix+"3xx"] = float64(s.Classes[3]) / elapsed
 			out[prefix+"4xx"] = float64(s.Classes[4]) / elapsed
@@ -798,6 +935,7 @@ func routeMetrics() metrics.Source {
 			// 只有 WebSocket 的时段没有耗时，和没有请求一样不报。
 			if s.Timed > 0 {
 				out[prefix+"lat"] = 1000 * s.Seconds / float64(s.Timed)
+				out[prefix+"max_latency"] = 1000 * s.Maximum
 				out[prefix+"p50"] = 1000 * s.Percentile(0.50)
 				out[prefix+"p95"] = 1000 * s.Percentile(0.95)
 				out[prefix+"p99"] = 1000 * s.Percentile(0.99)

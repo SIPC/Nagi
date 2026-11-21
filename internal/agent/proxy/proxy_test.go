@@ -123,6 +123,9 @@ func TestRouteStats(t *testing.T) {
 	if s.Requests != 4 || s.Errors != 1 || s.Classes[2] != 2 || s.Classes[4] != 1 || s.Classes[5] != 1 {
 		t.Fatalf("统计不对：%+v", s)
 	}
+	if s.Statuses[200] != 2 || s.Statuses[404] != 1 || s.Statuses[500] != 1 || len(s.Statuses) != 3 || s.Timed != 4 || s.Maximum <= 0 {
+		t.Fatalf("具体响应码/完整耗时证据不对：%+v", s)
+	}
 	if s.BytesOut != 10 || len(s.Durations) != 4 {
 		t.Fatalf("响应字节或耗时样本不对：BytesOut=%d 样本=%d", s.BytesOut, len(s.Durations))
 	}

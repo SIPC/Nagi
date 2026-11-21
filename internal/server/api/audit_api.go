@@ -11,6 +11,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/recording"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
 	"github.com/SIPC/nagi/internal/server/audit"
@@ -725,6 +726,11 @@ func (a *API) RecordingEnabled(ctx context.Context) bool {
 
 // GetRecording 回放终端录制。角色检查要「审计日志」，高权限确认由 elevationCheck 检查；回放本身作为敏感查询记一条。
 func (s *settingsService) GetRecording(ctx context.Context, req *connect.Request[nagiv1.GetRecordingRequest], stream *connect.ServerStream[nagiv1.RecordingChunk]) error {
+	if node, id, remote := recording.ParseReference(req.Msg.GetId()); remote {
+		return s.readNodeRecording(ctx, node, id, func(body []byte) error {
+			return stream.Send(&nagiv1.RecordingChunk{Data: body})
+		})
+	}
 	if s.Recordings == nil {
 		return connect.NewError(connect.CodeNotFound, i18n.New("录制不存在"))
 	}

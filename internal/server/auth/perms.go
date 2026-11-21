@@ -229,6 +229,8 @@ var selfProcedures = map[string]bool{
 }
 
 var adminProcedures = map[string]bool{
+	// 混合主机/审计/容器日志暂不向项目成员开放，避免跨项目正文泄露。
+	"/nagi.v1.NodeLogService/QueryNodeLogs": true,
 	// 节点接入码和安装命令里有面板的地址和指纹。
 	"/nagi.v1.SettingsService/CreateInvite": true, "/nagi.v1.SettingsService/ListInvites": true,
 	"/nagi.v1.SettingsService/RevokeInvite": true, "/nagi.v1.NodeService/CreateEnrollCommand": true,

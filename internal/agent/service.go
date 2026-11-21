@@ -38,6 +38,19 @@ func (s *agentService) SetAlertConfig(_ context.Context, req *nagiv1.SetAlertCon
 }
 
 func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetricsRequest) (*nagiv1.QueryMetricsResponse, error) {
+	return queryMetrics(ctx, s.metrics, req)
+}
+
+// Both the legacy control API and mesh use the same local history and aggregation.
+func queryMetrics(ctx context.Context, collector *metrics.Collector, req *nagiv1.QueryMetricsRequest) (*nagiv1.QueryMetricsResponse, error) {
+	if collector == nil {
+		return nil, status.Error(codes.Unavailable, "本机统计历史库没有启动")
+	}
+	for _, ts := range []*timestamppb.Timestamp{req.GetFrom(), req.GetTo()} {
+		if ts != nil && ts.CheckValid() != nil {
+			return nil, status.Error(codes.InvalidArgument, "无效的日志时间")
+		}
+	}
 	to := time.Now()
 	if req.GetTo() != nil {
 		to = req.GetTo().AsTime()
@@ -46,7 +59,10 @@ func (s *agentService) QueryMetrics(ctx context.Context, req *nagiv1.QueryMetric
 	if req.GetFrom() != nil {
 		from = req.GetFrom().AsTime()
 	}
-	data, w, err := s.metrics.QueryWindow(ctx, req.GetPrefix(), from, to)
+	if !from.Before(to) || req.GetStep() < 0 || req.GetStep() > int64((30*24*time.Hour)/time.Second) {
+		return nil, status.Error(codes.InvalidArgument, "无效的统计时间范围或聚合步长")
+	}
+	data, w, err := collector.QueryWindow(ctx, req.GetPrefix(), from, to)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -328,6 +344,11 @@ func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
 		return toStatus(err)
 	}
 	defer ex.Close()
+	rec, finishRecording := s.startRecording(stream, int(size.GetCols()), int(size.GetRows()), start.GetProjectId(), start.GetContainer(), "container.exec")
+	defer finishRecording()
+	if len(start.GetCommand()) > 0 {
+		rec.Output([]byte("\x1b[2m$\x1b[0m " + strings.ReplaceAll(strings.Join(start.GetCommand(), " "), "\n", "\r\n") + "\r\n"))
+	}
 
 	// 输入：面板 → 终端
 	go func() {
@@ -339,10 +360,13 @@ func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
 			}
 			switch v := in.Input.(type) {
 			case *nagiv1.ExecInput_Stdin:
-				if _, err := ex.Write(v.Stdin); err != nil {
+				n, err := ex.Write(v.Stdin)
+				rec.Input(v.Stdin[:n])
+				if err != nil {
 					return
 				}
 			case *nagiv1.ExecInput_Resize:
+				rec.Resize(v.Resize.GetCols(), v.Resize.GetRows())
 				_ = ex.Resize(ctx, uint(v.Resize.GetCols()), uint(v.Resize.GetRows()))
 			}
 		}
@@ -353,6 +377,7 @@ func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
 	for {
 		n, err := ex.Read(buf)
 		if n > 0 {
+			rec.Output(buf[:n])
 			if err := stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_Stdout{Stdout: append([]byte(nil), buf[:n]...)}}); err != nil {
 				return err
 			}
@@ -362,6 +387,10 @@ func (s *agentService) Exec(stream nagiv1.AgentService_ExecServer) error {
 		}
 	}
 	code := ex.ExitCode(context.WithoutCancel(ctx))
+	if len(start.GetCommand()) > 0 {
+		rec.Output([]byte(fmt.Sprintf("\r\n\x1b[2m[退出码 %d]\x1b[0m\r\n", code)))
+	}
+	finishRecording()
 	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
 }
 

@@ -23,8 +23,9 @@ import (
 // 网页的会话不走这里。每次执行都记进活动记录（连同命令），并发一条告警。节点上关闭了节点访问时节点会拒绝。
 func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, timeout time.Duration) (ExecResult, error) {
 	u := auth.CurrentUser(ctx)
+	var rec *sessionRecording
 	fail := func(err error) (ExecResult, error) {
-		a.recordNodeExec(ctx, nodeID, command, auditFailure(err), audit.Summary{})
+		a.recordNodeExec(ctx, nodeID, command, auditFailure(err), rec.Close())
 		return ExecResult{}, err
 	}
 	switch {
@@ -42,6 +43,7 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 	// 节点那边按同一个超时结束命令；这里多等一会儿，好收到它的退出码。
 	ctx2, cancel := context.WithTimeout(ctx, timeout+10*time.Second)
 	defer cancel()
+	ctx2 = a.recordingContext(ctx2)
 	stream, err := conn.Agent.NodeExec(ctx2, &nagiv1.NodeExecRequest{
 		Command: command, Cwd: cwd, TimeoutSeconds: uint32(timeout / time.Second), Actor: u.Name + " (" + u.Via + ")", Ip: auth.RequestMeta(ctx).IP,
 	})
@@ -52,7 +54,7 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 	res := ExecResult{ExitCode: -1}
 	began, started := time.Now(), false
 	// 录制的是完整的输出流，返回给 agent 的只有开头和结尾；开头先写上目录和命令。
-	rec := a.Recordings.Start(ctx, 200, 50)
+	rec = a.startSessionRecording(ctx2, stream, nodeID, 200, 50)
 	rec.Output([]byte(commandLine(cwd, command)))
 	for {
 		msg, err := stream.Recv()
@@ -60,7 +62,6 @@ func (a *API) RunNodeCommand(ctx context.Context, nodeID, command, cwd string, t
 			if ctx2.Err() != nil {
 				res.TimedOut = true
 			} else if !errors.Is(err, io.EOF) {
-				rec.Close()
 				return fail(nodeExecError(err))
 			}
 			break

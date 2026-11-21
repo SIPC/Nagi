@@ -21,6 +21,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
 	"github.com/SIPC/nagi/internal/pkg/tunnel"
@@ -55,6 +56,9 @@ type Config struct {
 	StandbyCode string
 	// DevAppKeys：安卓 App 的开发模式（--dev-app-keys），接受软件密钥和模拟器的证明（见 docs/android.md#工程）。
 	DevAppKeys bool
+	// Logs 是本机库，不是从其他节点接收的近期副本；由启动入口管理，主备切换时不替换。
+	Logs      *logstore.Store
+	LogConfig logstore.Config
 }
 
 const (
@@ -81,12 +85,13 @@ type Server struct {
 	auth  *auth.Service
 	audit *audit.Log
 	// auditReplica 是备用面板从主面板同步来的审计库（界面上看的是它），主面板上为 nil。
-	auditReplica *audit.Log
-	recordings   *audit.Recordings
-	nodes        *nodes.Registry
-	projects     *projects.Service
-	sealer       *sealer.Sealer
-	domainCh     chan string
+	auditReplica     *audit.Log
+	auditHistoryHead int64
+	recordings       *audit.Recordings
+	nodes            *nodes.Registry
+	projects         *projects.Service
+	sealer           *sealer.Sealer
+	domainCh         chan string
 
 	// 主备面板（见 docs/standby.md）：本面板是主面板时 primary 给备用面板发数据；是备用面板时 standby 不为空。
 	primary *standby.Primary
@@ -274,7 +279,47 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		d.Close()
 		return nil, err
 	}
+	if s.auditHistoryHead, err = s.audit.HistoryHead(ctx); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("读取面板旧审计迁移边界: %w", err)
+	}
+	s.audit.Capture = func(e audit.Event) {
+		s.cfg.Logs.Report(audit.JournalEvent(e))
+	}
+	for _, l := range []*audit.Log{s.audit, s.auditReplica} {
+		if l != nil {
+			if err := l.UseBudget(ctx, cfg.Logs, l == s.auditReplica); err != nil {
+				log.Error("无法把旧面板审计接入统一本机容量", "err", err)
+			}
+		}
+	}
+	// Former panel terms remain evidence until explicitly migrated. Account for
+	// them too, but never silently unlink an unimported audit chain to make space.
+	archives, err := filepath.Glob(filepath.Join(cfg.DataDir, "audit-*.db"))
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range archives {
+		if s.auditReplica != nil && path == filepath.Join(cfg.DataDir, "audit-standby.db") {
+			continue
+		}
+		if err := cfg.Logs.RegisterArchive(ctx, logstore.Archive{Name: path, Priority: 4,
+			Size: func() (int64, error) { return logstore.FileBytes(path) },
+			Trim: func(context.Context) (bool, error) { return false, nil },
+		}); err != nil {
+			log.Error("无法把旧任期审计接入统一本机容量", "path", path, "err", err)
+		}
+	}
 	s.recordings = &audit.Recordings{Dir: filepath.Join(cfg.DataDir, "audit", "recordings"), Sealer: s.sealer}
+	if cfg.Logs != nil {
+		s.recordings.FlushInterval = time.Duration(cfg.LogConfig.RecordingFlushSeconds) * time.Second
+		if err := s.recordings.UseDatabase(ctx, filepath.Join(cfg.Logs.Directory(), "panel-recordings.db"), cfg.Logs); err != nil {
+			log.Error("无法打开本机旧录制迁移库，保留旧文件", "err", err)
+		}
+	}
+	if err := s.recordings.UseBudget(ctx, cfg.Logs); err != nil {
+		log.Error("无法把终端录制接入统一本机容量", "err", err)
+	}
 	s.auth = auth.New(s.q, s.sealer)
 	s.auth.SetAudit(s.audit)
 	if cfg.DevAppKeys {
@@ -428,8 +473,69 @@ func mountPublicRoutes(mux *http.ServeMux, pair, status http.Handler) {
 
 func (s *Server) Run(ctx context.Context) error {
 	defer s.db.Close()
+	defer s.recordings.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if s.cfg.Logs != nil {
+		copies, err := s.cfg.Logs.OpenCopies(ctx, s.cfg.LogConfig)
+		if err != nil {
+			s.log.Error("无法打开面板近期副本，不返回日志持久确认", "err", err)
+		} else {
+			s.nodes.LogCopies = copies
+			defer copies.Close()
+			expiryCtx, stopExpiry := context.WithCancel(ctx)
+			expiryDone := make(chan struct{})
+			go func() {
+				defer close(expiryDone)
+				t := time.NewTicker(time.Minute)
+				defer t.Stop()
+				for {
+					if err := copies.Expire(expiryCtx); err != nil && expiryCtx.Err() == nil {
+						s.log.Error("清理面板近期副本失败", "err", err)
+					}
+					select {
+					case <-expiryCtx.Done():
+						return
+					case <-t.C:
+					}
+				}
+			}()
+			defer func() { stopExpiry(); <-expiryDone }()
+		}
+	}
+	if s.cfg.Logs != nil {
+		historyCtx, stopHistory := context.WithCancel(ctx)
+		historyDone := make(chan struct{})
+		go func() {
+			defer close(historyDone)
+			if s.standby == nil {
+				if err := s.recordings.ImportLegacy(historyCtx); err != nil && historyCtx.Err() == nil {
+					s.log.Error("旧录制正文迁移未完成，保留原件和已提交位置", "err", err)
+				}
+			}
+			if err := s.audit.MigrateHistory(historyCtx, s.cfg.Logs, s.auditHistoryHead); err != nil && historyCtx.Err() == nil {
+				s.log.Error("面板旧审计迁移未完成，保留原库和已提交位置", "err", err)
+			}
+			// Only closed former-role archives, never the actively replicated
+			// primary chain. One broken file must not hide the other archives.
+			for _, pattern := range []string{"audit-term*.db", "audit-standby-*.imported.db"} {
+				paths, err := filepath.Glob(filepath.Join(s.cfg.DataDir, pattern))
+				if err != nil {
+					s.log.Error("查找旧角色审计归档失败", "err", err)
+					continue
+				}
+				for _, path := range paths {
+					if historyCtx.Err() != nil {
+						return
+					}
+					if err := audit.ImportArchive(historyCtx, path, s.cfg.Logs); err != nil && historyCtx.Err() == nil {
+						s.log.Error("旧角色审计归档迁移未完成，保留原库和已提交位置", "path", path, "err", err)
+					}
+				}
+			}
+		}()
+		defer func() { stopHistory(); <-historyDone }()
+	}
 	if s.standby != nil {
 		go s.standby.Run(ctx)
 		go s.standby.RunAudit(ctx, s.auditReplica, s.recordings)
@@ -465,6 +571,7 @@ func (s *Server) Run(ctx context.Context) error {
 		Standby: s.standby,
 		Promote: s.Promote,
 	}}
+	a.Logs, a.LogConfig = s.cfg.Logs, s.cfg.LogConfig
 	// 旧版本存下的节点名称可能带着现在不允许的字符，按现在的规则整理一次（见 docs/control-plane.md#节点加入流程）。
 	// 备用面板只读，名称随主面板同步。
 	if s.standby == nil {
@@ -521,7 +628,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	httpLn := newChanListener(s.listener.Addr())
 	srv := &http.Server{
-		Handler: securityHeaders(s.auth.EntranceMiddleware(a.OriginCheck(mux)), false),
+		Handler: s.accessLog(securityHeaders(s.auth.EntranceMiddleware(a.OriginCheck(mux)), false)),
 		// TLS 指纹（见 docs/panel.md#会话）：握手时按底层连接记下，这里放进请求的 ctx。
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			if tc, ok := c.(*tls.Conn); ok {
@@ -546,7 +653,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	domainDone := make(chan struct{})
 	go func() {
-		s.serveDomain(ctx, s.auth.EntranceMiddleware(mux))
+		s.serveDomain(ctx, s.accessLog(s.auth.EntranceMiddleware(mux)))
 		close(domainDone)
 	}()
 	if m := s.nodes.Mesh(); m != nil {

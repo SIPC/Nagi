@@ -3,6 +3,7 @@ package agent
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
@@ -187,6 +189,16 @@ func (p *pending) writeTo(w io.Writer) error {
 
 // forward 按计划里的顺序找目标所在的节点，把连接 c（数据从 r 读）转给目标的端口 port：先发数据，确认以后双向转发。
 func (n *intranet) forward(c net.Conn, r io.Reader, p *nagiv1.LinkProxy, port uint16) {
+	started, id := time.Now(), rand.Text()
+	selected := ""
+	record := func(phase string) {
+		n.a.cfg.Logs.Report(logstore.Event{Category: logstore.Access, Kind: "intranet.tcp." + phase, Project: p.GetProjectId(), Object: p.GetAlias(), Data: map[string]any{
+			"session_id": id, "target_project": p.GetTargetProject(), "target_name": p.GetTargetName(), "port": port,
+			"selected_peer": selected, "duration_ms": time.Since(started).Milliseconds(),
+		}})
+	}
+	record("opened")
+	defer record("observer_finished")
 	targets := p.GetNodes()
 	if len(targets) > maxProxyTarget {
 		targets = targets[:maxProxyTarget]
@@ -205,6 +217,7 @@ func (n *intranet) forward(c net.Conn, r io.Reader, p *nagiv1.LinkProxy, port ui
 			if !found || err != nil {
 				continue
 			}
+			selected = fmt.Sprintf("%x", k[:])
 			if early.writeTo(tc) == nil {
 				relay(c, tc, tc, pump, early.eof)
 			}
@@ -215,6 +228,7 @@ func (n *intranet) forward(c net.Conn, r io.Reader, p *nagiv1.LinkProxy, port ui
 		if !ok {
 			continue
 		}
+		selected = fmt.Sprintf("%x", k[:])
 		relay(c, mc, mbr, pump, early.eof)
 		mc.Close()
 		return
@@ -227,6 +241,13 @@ func (n *intranet) tryRemote(k mesh.Key, name string, p *nagiv1.LinkProxy, port 
 	if n.a.mesh == nil {
 		return nil, nil, false
 	}
+	started, outcome := time.Now(), "dial_failed"
+	defer func() {
+		n.a.cfg.Logs.Report(logstore.Event{Category: logstore.Access, Kind: "intranet.tcp.attempt", Project: p.GetProjectId(), Object: p.GetAlias(), Data: map[string]any{
+			"target_project": p.GetTargetProject(), "target_name": p.GetTargetName(), "port": port, "peer": fmt.Sprintf("%x", k[:]),
+			"outcome": outcome, "duration_ms": time.Since(started).Milliseconds(),
+		}})
+	}()
 	ctx, cancel := context.WithTimeout(n.a.ctx, 10*time.Second)
 	mc, err := n.a.mesh.m.Dial(ctx, k, linkPort)
 	cancel()
@@ -234,6 +255,7 @@ func (n *intranet) tryRemote(k mesh.Key, name string, p *nagiv1.LinkProxy, port 
 		n.a.log.Debug("经 mesh 连接目标节点失败", "name", p.GetAlias(), "node", name, "err", err)
 		return nil, nil, false
 	}
+	outcome = "handshake_failed"
 	// 请求和已有的数据合在一次写里，通常一个包就发出去了。
 	head := fmt.Appendf(nil, "%s %s %d\n", p.GetTargetProject(), p.GetTargetName(), port)
 	for _, b := range early.sent {
@@ -272,11 +294,15 @@ func (n *intranet) tryRemote(k mesh.Key, name string, p *nagiv1.LinkProxy, port 
 			_, _ = mc.Write(b) // 写失败时下面读 OK 也会失败
 		case line := <-reply:
 			if line != "OK" {
+				if line != "" {
+					outcome = "target_rejected"
+				}
 				n.a.log.Debug("目标节点没有接受连接", "name", p.GetAlias(), "node", name, "reply", line)
 				mc.Close()
 				return nil, nil, false
 			}
 			_ = mc.SetReadDeadline(time.Time{})
+			outcome = "accepted"
 			early.sent, early.size = nil, 0
 			return mc, mbr, true
 		}

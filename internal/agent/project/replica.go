@@ -112,7 +112,9 @@ func (m *Manager) CheckPlacement(ctx context.Context, s *nagiv1.ContainerSpec) e
 // RestoreReplica 把副本恢复成本节点上的容器：复制快照仓库，恢复快照里的 data/ 和 volumes/
 // （还没有定时或手动快照时，用部署的版本的文件恢复 data/），然后按 s 里部署过的版本启动，不生成新版本。
 // snapshotID 为空时用最新的定时或手动快照。文件恢复好以后启动失败，容器保留在本节点上，返回错误。
-func (m *Manager) RestoreReplica(ctx context.Context, s *nagiv1.ContainerSpec, repoDir, snapshotID string, onLine func(string)) error {
+func (m *Manager) RestoreReplica(ctx context.Context, s *nagiv1.ContainerSpec, repoDir, snapshotID string, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("restore_replica", s.GetProjectId(), s.GetName(), onLine)
+	defer func() { finish(err) }()
 	if err := checkSpec(s); err != nil {
 		return err
 	}
@@ -209,7 +211,9 @@ func restoreData(ctx context.Context, rep *snapshot.Repo, s *nagiv1.ContainerSpe
 
 // MigrateStop 是迁移的停止阶段：停止并移除容器（命名卷都绑定在容器目录里，删除卷对象不会删数据），
 // 再保存最后一次快照，之后由节点做最后一次增量同步。
-func (m *Manager) MigrateStop(ctx context.Context, projectID, container string, onLine func(string)) error {
+func (m *Manager) MigrateStop(ctx context.Context, projectID, container string, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("migrate_stop", projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()
@@ -234,7 +238,9 @@ func (m *Manager) MigrateStop(ctx context.Context, projectID, container string, 
 }
 
 // MigrateResume 撤销迁移：按缓存的配置重新启动容器。
-func (m *Manager) MigrateResume(ctx context.Context, projectID, container string, onLine func(string)) error {
+func (m *Manager) MigrateResume(ctx context.Context, projectID, container string, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("migrate_resume", projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()
@@ -254,7 +260,9 @@ var ErrRetireStale = errors.New("容器在本节点上的配置比面板核对�
 //
 // revision 是面板核对时这个容器的修订号（节点上报的那份），大于 0 时核对：缓存的比它新，说明面板核对以后
 // 又把容器部署或推到了本节点，这一份不能停，返回 ErrRetireStale。核对、删除和改名都在容器的锁里，中间插不进部署。
-func (m *Manager) Retire(ctx context.Context, projectID, container string, revision int64, onLine func(string)) (string, error) {
+func (m *Manager) Retire(ctx context.Context, projectID, container string, revision int64, onLine func(string)) (dest string, err error) {
+	onLine, finish := m.taskLog("retire", projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()
@@ -269,7 +277,7 @@ func (m *Manager) Retire(ctx context.Context, projectID, container string, revis
 		return "", err
 	}
 	dir := c.Spec.GetDir()
-	dest := dir + ".replaced-" + time.Now().Format("20060102-150405")
+	dest = dir + ".replaced-" + time.Now().Format("20060102-150405")
 	if err := os.Rename(dir, dest); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("目录改名: %w", err)
 	}

@@ -4,11 +4,13 @@ package alerts
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -22,11 +24,21 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Relay 请某个面板代发告警到它的渠道。panel 是面板的公钥指纹。
 type Relay func(ctx context.Context, panel string, a *nagiv1.Alert, channelIDs []string) error
+
+type metricSource interface {
+	LatestFresh(time.Time) map[string]float64
+	Query(context.Context, string, time.Time, time.Time) (map[string][]metrics.Point, error)
+}
+
+type containerSource interface {
+	ManagedInstances(context.Context, string) ([]docker.Instance, error)
+}
 
 // Engine 是节点的告警引擎。
 type Engine struct {
@@ -34,8 +46,8 @@ type Engine struct {
 	node        string // 主机名；面板下发了节点名称时用面板的（见 nodeName）
 	dir         string // 保存告警配置和待补发队列
 	certDir     string // Caddy 的证书目录
-	metrics     *metrics.Collector
-	docker      *docker.Client
+	metrics     metricSource
+	docker      containerSource
 	projectName func(id string) string
 	relay       Relay
 	// Report 告诉面板发出了一条告警，记入活动记录。发送结果不影响告警本身。
@@ -54,12 +66,20 @@ type Engine struct {
 	memSince time.Time
 	load     loadState
 	queue    []queued
+	source   string
+	revision uint64
+	history  []*nagiv1.Alert
+	stateErr error // fail closed: never publish an uncommitted source version
 }
 
 type state struct {
-	firing       bool
-	lastNotified time.Time
-	alert        *nagiv1.Alert
+	firing        bool
+	lastNotified  time.Time
+	lastDelivered time.Time // only accepted deliveries suppress repeats after restart
+	alert         *nagiv1.Alert
+	occurrence    string
+	since         time.Time
+	confirmed     bool
 }
 
 type restartSample struct {
@@ -67,21 +87,15 @@ type restartSample struct {
 	count float64
 }
 
-// queued 是待补发的告警。
-type queued struct {
-	Alert   json.RawMessage `json:"alert"`
-	Channel json.RawMessage `json:"channel"`
-	Panel   string          `json:"panel"`
-}
-
 // New 创建告警引擎，读取本地保存的配置和待补发队列。
-func New(log *slog.Logger, node, dir, certDir string, m *metrics.Collector, dc *docker.Client, projectName func(string) string, relay Relay) *Engine {
+func New(log *slog.Logger, node, dir, certDir string, m metricSource, dc *docker.Client, projectName func(string) string, relay Relay) *Engine {
 	e := &Engine{
 		log: log, node: node, dir: dir, certDir: certDir, metrics: m, docker: dc,
 		projectName: projectName, relay: relay,
 		configs: map[string]*nagiv1.AlertConfig{}, states: map[string]*state{}, restarts: map[string][]restartSample{},
 	}
 	e.loadConfigs()
+	e.loadStates()
 	e.loadQueue()
 	return e
 }
@@ -293,15 +307,26 @@ func (e *Engine) evaluate(ctx context.Context) {
 	e.mu.Unlock()
 	node := judge{rules, func(rule string) bool { return enabled[rule] }}
 	now := time.Now()
-	latest := e.metrics.Latest()
+	latest := e.metrics.LatestFresh(now)
 	active := map[string]*nagiv1.Alert{}
+	// Only an explicitly evaluated, healthy item may resolve an existing alert.
+	// An absent series, disabled rule or failed query is not a healthy result.
+	healthy := map[string]bool{}
 
-	if v, ok := latest["node:disk"]; ok && v > rules.DiskPercent && enabled[alert.RuleDisk] {
-		active["disk"] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘使用 %.0f%%，超过 %.0f%%", v, rules.DiskPercent)}
+	if v, ok := latest["node:disk"]; ok && enabled[alert.RuleDisk] {
+		if v > rules.DiskPercent {
+			active["disk"] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘使用 %.0f%%，超过 %.0f%%", v, rules.DiskPercent)}
+		} else {
+			healthy["disk"] = true
+		}
 	}
 	for series, v := range latest {
-		if mount, ok := strings.CutPrefix(series, "node:disk@"); ok && v > rules.DiskPercent && enabled[alert.RuleDisk] {
-			active["disk:"+mount] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘 %s（项目目录所在）使用 %.0f%%，超过 %.0f%%", mount, v, rules.DiskPercent)}
+		if mount, ok := strings.CutPrefix(series, "node:disk@"); ok && enabled[alert.RuleDisk] {
+			if v > rules.DiskPercent {
+				active["disk:"+mount] = &nagiv1.Alert{Title: fmt.Sprintf("磁盘 %s（项目目录所在）使用 %.0f%%，超过 %.0f%%", mount, v, rules.DiskPercent)}
+			} else {
+				healthy["disk:"+mount] = true
+			}
 		}
 	}
 	if v, ok := latest["node:mem"]; ok && v > rules.MemPercent && enabled[alert.RuleMem] {
@@ -313,9 +338,17 @@ func (e *Engine) evaluate(ctx context.Context) {
 		}
 	} else {
 		e.memSince = time.Time{}
+		if v, ok := latest["node:mem"]; ok && v <= rules.MemPercent && enabled[alert.RuleMem] {
+			healthy["mem"] = true
+		}
 	}
 
 	// 容器重启：比较时间窗口内累计重启次数的增量。
+	for series := range e.restarts {
+		if _, ok := latest[series]; !ok {
+			delete(e.restarts, series)
+		}
+	}
 	for series, count := range latest {
 		name, ok := strings.CutSuffix(series, ":restarts")
 		if !ok {
@@ -324,16 +357,27 @@ func (e *Engine) evaluate(ctx context.Context) {
 		project, service := splitContainer(name)
 		container, _, _ := strings.Cut(service, "/")
 		j := e.forContainer(project, container, node)
-		hist := append(e.restarts[series], restartSample{at: now, count: count})
-		for len(hist) > 0 && now.Sub(hist[0].at) > j.RestartWindow {
+		hist := e.restarts[series]
+		if len(hist) > 0 && (count < hist[len(hist)-1].count || now.Sub(hist[len(hist)-1].at) > time.Minute) {
+			hist = nil
+		}
+		hist = append(hist, restartSample{at: now, count: count})
+		for len(hist) > 1 && now.Sub(hist[1].at) >= j.RestartWindow {
 			hist = hist[1:]
 		}
 		e.restarts[series] = hist
-		if n := int(count - hist[0].count); n >= j.RestartCount && j.on(alert.RuleRestart) {
+		baseline := hist[0]
+		if now.Sub(baseline.at) > j.RestartWindow && len(hist) > 1 {
+			baseline = hist[1]
+		}
+		if n := int(count - baseline.count); n >= j.RestartCount && j.on(alert.RuleRestart) {
 			active["restart:"+name] = &nagiv1.Alert{
 				Title:   fmt.Sprintf("%s 在 %d 分钟内重启了 %d 次", describeService(service), int(j.RestartWindow.Minutes()), n),
 				Project: e.projectName(project),
 			}
+		} else if j.on(alert.RuleRestart) && now.Sub(hist[0].at) >= j.RestartWindow && count >= hist[0].count {
+			// After a restart or a sampling gap, rebuild a full window before recovery.
+			healthy["restart:"+name] = true
 		}
 	}
 
@@ -351,20 +395,28 @@ func (e *Engine) evaluate(ctx context.Context) {
 					name, int(alert.ErrorWindow.Minutes()), 100*x.errors/x.requests, x.requests),
 				Project: e.projectName(project),
 			}
+		} else if x.requests >= alert.ErrorMinRequests && j.on(alert.RuleErrors) {
+			healthy["errors:"+route] = true
 		}
 	}
 
 	// CPU 和流量。
-	e.evaluateLoad(ctx, now, latest, node, enabled, active)
+	e.evaluateLoad(ctx, now, latest, node, enabled, active, healthy)
 
 	// 健康检查失败。
 	if containers, err := e.docker.ManagedInstances(ctx, "nagi.project"); err == nil {
 		for _, c := range containers {
-			if c.Health == "unhealthy" && e.forContainer(c.Project, c.Container, node).on(alert.RuleHealth) {
+			key := "health:" + c.Project + "/" + c.Container + "/" + c.Service
+			if !e.forContainer(c.Project, c.Container, node).on(alert.RuleHealth) {
+				continue
+			}
+			if c.Health == "unhealthy" {
 				what := describeService(c.Container + "/" + c.Service)
 				active["health:"+c.Project+"/"+c.Container+"/"+c.Service] = &nagiv1.Alert{
 					Title: what + " 健康检查失败", Project: e.projectName(c.Project),
 				}
+			} else if c.State == "running" && c.Health == "healthy" {
+				healthy[key] = true
 			}
 		}
 	}
@@ -375,6 +427,8 @@ func (e *Engine) evaluate(ctx context.Context) {
 			active["cert:"+domain] = &nagiv1.Alert{
 				Title: fmt.Sprintf("域名 %s 的证书将在 %d 天内过期", domain, int(left.Hours()/24)),
 			}
+		} else if enabled[alert.RuleCert] {
+			healthy["cert:"+domain] = true
 		}
 	}
 
@@ -388,10 +442,13 @@ func (e *Engine) evaluate(ctx context.Context) {
 	}
 	for key, st := range e.states {
 		// 事件类告警（例如快照失败）由 Fire/Resolve 控制，这里只处理规则类告警。
-		if st.firing && !isEventKey(key) && active[key] == nil {
+		if st.firing && !isEventKey(key) && active[key] == nil && healthy[key] {
 			send = append(send, e.setResolved(key))
+		} else if !isEventKey(key) {
+			st.confirmed = active[key] != nil
 		}
 	}
+	e.saveStates()
 	e.mu.Unlock()
 	for _, a := range send {
 		e.dispatch(ctx, a)
@@ -402,27 +459,43 @@ type errorRate struct{ requests, errors float64 }
 
 // errorRates 统计每条 http 规则最近一段时间的请求数和 5xx 数（序列存的是每秒速率，每 10 秒一个点）。
 func (e *Engine) errorRates(ctx context.Context, now time.Time) map[string]errorRate {
+	return e.windowRates(ctx, now, "5xx")
+}
+
+// windowRates requires matching, fresh request and status samples throughout
+// the window. A missing error counter is not a zero error counter.
+func (e *Engine) windowRates(ctx context.Context, now time.Time, kind string) map[string]errorRate {
 	data, err := e.metrics.Query(ctx, "r:", now.Add(-alert.ErrorWindow), now)
 	if err != nil {
 		return nil
 	}
 	out := map[string]errorRate{}
 	for series, points := range data {
-		route, kind, ok := cutLast(strings.TrimPrefix(series, "r:"), ":")
-		if !ok || (kind != "req" && kind != "5xx") {
+		route, ok := strings.CutSuffix(strings.TrimPrefix(series, "r:"), ":req")
+		if !ok || len(points) == 0 {
 			continue
 		}
-		var sum float64
-		for _, p := range points {
-			sum += p.Value * metrics.Interval.Seconds()
+		errors := data["r:"+route+":"+kind]
+		if len(errors) != len(points) {
+			continue
 		}
-		x := out[route]
-		if kind == "req" {
-			x.requests = sum
-		} else {
-			x.errors = sum
+		previous := now.Add(-alert.ErrorWindow)
+		x := errorRate{}
+		valid := true
+		for i, p := range points {
+			e := errors[i]
+			if !e.Time.Equal(p.Time) || p.Time.Before(previous) || p.Time.After(now) || p.Time.Sub(previous) > 3*metrics.Interval ||
+				math.IsNaN(p.Value) || math.IsInf(p.Value, 0) || math.IsNaN(e.Value) || math.IsInf(e.Value, 0) || p.Value < 0 || e.Value < 0 || e.Value > p.Value {
+				valid = false
+				break
+			}
+			x.requests += p.Value * metrics.Interval.Seconds()
+			x.errors += e.Value * metrics.Interval.Seconds()
+			previous = p.Time
 		}
-		out[route] = x
+		if valid && now.Sub(previous) <= 3*metrics.Interval {
+			out[route] = x
+		}
 	}
 	return out
 }
@@ -500,6 +573,7 @@ func (e *Engine) Fire(ctx context.Context, key, title, message, projectID string
 	}
 	e.mu.Lock()
 	send := e.setFiring(a.Key, a)
+	e.saveStates()
 	e.mu.Unlock()
 	if send != nil {
 		e.dispatch(ctx, send)
@@ -537,26 +611,23 @@ func (e *Engine) Resolve(ctx context.Context, key string) {
 	if st := e.states["event:"+key]; st != nil && st.firing {
 		send = e.setResolved("event:" + key)
 	}
+	e.saveStates()
 	e.mu.Unlock()
 	if send != nil {
 		e.dispatch(ctx, send)
 	}
 }
 
-// ResolveUnless 把 key 以 prefix 开头、keep 判断不再需要的事件类告警都标为已恢复
-// （例如域名已经删掉了，它的"申请证书失败"不会再有成功的那一刻）。
-func (e *Engine) ResolveUnless(ctx context.Context, prefix string, keep func(rest string) bool) {
-	var keys []string
+// MarkUnavailableUnless invalidates removed objects without inventing recovery.
+func (e *Engine) MarkUnavailableUnless(prefix string, keep func(rest string) bool) {
 	e.mu.Lock()
+	defer e.mu.Unlock()
 	for k, st := range e.states {
 		if rest, ok := strings.CutPrefix(k, "event:"+prefix); ok && st.firing && !keep(rest) {
-			keys = append(keys, strings.TrimPrefix(k, "event:"))
+			st.confirmed = false
 		}
 	}
-	e.mu.Unlock()
-	for _, k := range keys {
-		e.Resolve(ctx, k)
-	}
+	e.saveStates()
 }
 
 // ---- 状态与发送 ----
@@ -566,24 +637,49 @@ func (e *Engine) setFiring(key string, a *nagiv1.Alert) *nagiv1.Alert {
 	st := e.states[key]
 	now := time.Now()
 	if st == nil {
-		st = &state{}
+		if len(e.states) >= 200 {
+			return nil
+		}
+		st = &state{occurrence: rand.Text(), since: now}
 		e.states[key] = st
 	}
-	if st.firing && now.Sub(st.lastNotified) < alert.RepeatInterval {
+	st.confirmed = true
+	a.Status, a.Node, a.Time = "firing", e.nodeName(), timestamppb.New(now)
+	a.Occurrence, a.Source, a.Since, a.Validity = st.occurrence, e.source, timestamppb.New(st.since), "valid"
+	pending := false
+	for _, q := range e.queue {
+		pending = pending || q.Source == e.source && q.Occurrence == st.occurrence
+	}
+	if st.firing && now.Sub(st.lastNotified) < alert.RepeatInterval && (!st.lastDelivered.IsZero() || pending || len(e.channels()) == 0) {
 		st.alert = a
 		return nil
 	}
 	st.firing, st.lastNotified, st.alert = true, now, a
-	a.Status, a.Node, a.Time = "firing", e.nodeName(), timestamppb.New(now)
 	return a
 }
 
 // setResolved 清除告警状态，返回恢复通知。调用方持有 e.mu。
 func (e *Engine) setResolved(key string) *nagiv1.Alert {
+	return e.end(key, "recovered")
+}
+
+func (e *Engine) end(key, reason string) *nagiv1.Alert {
 	st := e.states[key]
 	st.firing = false
-	a := &nagiv1.Alert{Key: key, Status: "resolved", Title: st.alert.GetTitle(), Project: st.alert.GetProject(),
-		Node: e.nodeName(), Time: timestamppb.Now()}
+	status := "ended"
+	if reason == "recovered" {
+		status = "resolved"
+	}
+	a := &nagiv1.Alert{Key: key, Status: status, Title: st.alert.GetTitle(), Project: st.alert.GetProject(),
+		Node: e.nodeName(), Time: timestamppb.Now(), Occurrence: st.occurrence, Source: e.source,
+		Since: timestamppb.New(st.since), EndReason: reason, Validity: "unknown"}
+	if reason == "recovered" {
+		a.Validity = "valid"
+	}
+	e.history = append(e.history, a)
+	if len(e.history) > 200 {
+		e.history = e.history[len(e.history)-200:]
+	}
 	delete(e.states, key)
 	return a
 }
@@ -591,76 +687,73 @@ func (e *Engine) setResolved(key string) *nagiv1.Alert {
 // dispatch 发到所有渠道。直接发送失败的，请配置它的面板代发；面板也不可达时放进队列。
 // 发送时不持有 e.mu，避免网络慢的时候卡住配置下发。
 func (e *Engine) dispatch(ctx context.Context, a *nagiv1.Alert) {
+	e.mu.Lock()
+	if a.GetStatus() != "info" {
+		a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
+	}
+	if a == nil {
+		e.mu.Unlock()
+		return
+	}
+	a = proto.CloneOf(a)
+	chans := e.channels()
+	e.mu.Unlock()
 	e.log.Info("告警", "status", a.GetStatus(), "title", a.GetTitle())
 	if e.Report != nil {
 		go e.Report(context.WithoutCancel(ctx), a)
 	}
-	e.mu.Lock()
-	chans := e.channels()
-	e.mu.Unlock()
+	accepted := len(chans) > 0
 	for _, c := range chans {
 		if !e.deliver(ctx, a, c.ch, c.panel) {
+			accepted = false
 			e.mu.Lock()
 			e.enqueue(a, c)
 			e.mu.Unlock()
 		}
 	}
+	if accepted && a.GetStatus() == "firing" {
+		e.mu.Lock()
+		if st := e.states[a.GetKey()]; st != nil && st.occurrence == a.GetOccurrence() && st.confirmed {
+			st.lastDelivered = st.lastNotified
+			e.saveStates()
+		}
+		e.mu.Unlock()
+	}
+}
+
+// Revalidate between network attempts; config changes cannot redirect a delayed
+// relay to a replacement destination with the same channel ID.
+func (e *Engine) currentDelivery(a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string) (*nagiv1.Alert, *nagiv1.AlertChannel) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, current := range e.configs[panel].GetChannels() {
+		if current.GetId() != ch.GetId() || destination(current) != destination(ch) {
+			continue
+		}
+		if a.GetStatus() != "info" {
+			a = e.notificationAlert(queued{Source: a.GetSource(), Occurrence: a.GetOccurrence(), Key: a.GetKey(), Status: a.GetStatus()})
+		}
+		if a != nil {
+			return proto.CloneOf(a), proto.CloneOf(current)
+		}
+	}
+	return nil, nil
 }
 
 // deliver 先直接发送，失败再请面板代发。
 func (e *Engine) deliver(ctx context.Context, a *nagiv1.Alert, ch *nagiv1.AlertChannel, panel string) bool {
+	a, ch = e.currentDelivery(a, ch, panel)
+	if a == nil || ch == nil {
+		return false
+	}
 	err := alert.Send(ctx, ch, a)
 	if err == nil {
 		return true
 	}
 	e.log.Warn("直接发送告警失败，交给面板代发", "channel", ch.GetName(), "err", err)
+	a, ch = e.currentDelivery(a, ch, panel)
+	if a == nil || ch == nil {
+		return false
+	}
 	return e.relay != nil && e.relay(ctx, panel, a, []string{ch.GetId()}) == nil
-}
-
-// enqueue 把发送失败的告警放进待补发队列。调用方持有 e.mu。
-func (e *Engine) enqueue(a *nagiv1.Alert, c channel) {
-	ab, _ := protojson.Marshal(a)
-	cb, _ := protojson.Marshal(c.ch)
-	e.queue = append(e.queue, queued{Alert: ab, Channel: cb, Panel: c.panel})
-	if len(e.queue) > 200 {
-		e.queue = e.queue[len(e.queue)-200:]
-	}
-	e.saveQueue()
-}
-
-func (e *Engine) saveQueue() {
-	data, _ := json.Marshal(e.queue)
-	_ = os.WriteFile(e.queueFile(), data, 0o600)
-}
-
-func (e *Engine) loadQueue() {
-	data, err := os.ReadFile(e.queueFile())
-	if err == nil {
-		_ = json.Unmarshal(data, &e.queue)
-	}
-}
-
-// flushQueue 补发队列里的告警。
-func (e *Engine) flushQueue(ctx context.Context) {
-	e.mu.Lock()
-	pending := e.queue
-	e.queue = nil
-	e.mu.Unlock()
-	if len(pending) == 0 {
-		return
-	}
-	var rest []queued
-	for _, q := range pending {
-		a, c := &nagiv1.Alert{}, &nagiv1.AlertChannel{}
-		if protojson.Unmarshal(q.Alert, a) != nil || protojson.Unmarshal(q.Channel, c) != nil {
-			continue
-		}
-		if !e.deliver(ctx, a, c, q.Panel) {
-			rest = append(rest, q)
-		}
-	}
-	e.mu.Lock()
-	e.queue = append(rest, e.queue...)
-	e.saveQueue()
-	e.mu.Unlock()
 }

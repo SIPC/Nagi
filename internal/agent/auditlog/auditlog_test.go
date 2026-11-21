@@ -6,7 +6,49 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
+
+func TestIndependentHistorySurvivesLegacyWriteFailure(t *testing.T) {
+	dir := t.TempDir()
+	history, err := logstore.Open(t.Context(), filepath.Join(dir, "history.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer history.Close()
+	legacy, err := Open(filepath.Join(dir, "audit"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	legacy.Capture = func(e Event) {
+		history.Report(logstore.Event{Time: e.Time, Category: logstore.Audit, Kind: e.Action, Data: e})
+	}
+	if id := legacy.Record(Event{Action: "before", Result: "denied"}); id != 1 {
+		t.Fatalf("旧读取编号发生变化: %d", id)
+	}
+	if err := legacy.Close(); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 11, 21, 12, 3, 4, 0, time.FixedZone("local", 8*3600))
+	if id := legacy.Record(Event{Time: at, Action: "after", Actor: strings.Repeat("人", 3000)}); id != 0 {
+		t.Fatalf("旧文件写失败不能返回已保存的编号: %d", id)
+	}
+	rows, err := history.Query(t.Context(), logstore.Filter{Category: logstore.Audit})
+	if err != nil || len(rows) != 2 || rows[0].Kind != "before" || rows[1].Kind != "after" || !rows[1].Time.Equal(at) {
+		t.Fatalf("独立历史丢失或重复: %+v err=%v", rows, err)
+	}
+	var captured Event
+	if err := json.Unmarshal(rows[1].Data.(json.RawMessage), &captured); err != nil || captured.Result != "ok" || len(captured.Actor) > maxField+3 {
+		t.Fatalf("独立历史没有沿用来源规范化: %+v err=%v", captured, err)
+	}
+	lines, _, _ := legacy.After(0, 10)
+	if len(lines) != 1 {
+		t.Fatalf("旧历史不能伪装写入成功: %d", len(lines))
+	}
+}
 
 func TestRecordRotateResume(t *testing.T) {
 	old := maxSize

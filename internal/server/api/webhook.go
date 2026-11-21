@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/server/projects"
 )
 
@@ -56,8 +58,11 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 	key := hook.projectID + "/" + hook.container
 	h.mu.Lock()
 	if h.running[key] {
+		coalesced := h.again[key]
 		h.again[key] = true
 		h.mu.Unlock()
+		h.api.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "webhook.queued", Project: projectID, Object: container,
+			Data: map[string]any{"coalesced": coalesced}})
 		w.WriteHeader(http.StatusAccepted)
 		io.WriteString(w, i18n.Sprintf(lang, "已排队：当前部署完成后再部署一次")+"\n")
 		return
@@ -65,6 +70,7 @@ func (h *webhooks) serve(w http.ResponseWriter, r *http.Request) {
 	h.running[key] = true
 	h.mu.Unlock()
 
+	h.api.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "webhook.accepted", Project: projectID, Object: container})
 	go h.deployLoop(hook)
 	w.WriteHeader(http.StatusAccepted)
 	io.WriteString(w, i18n.Sprintf(lang, "已开始拉取并部署")+"\n")
@@ -91,8 +97,19 @@ func (h *webhooks) deploy(hook hookTarget) {
 	log := h.api.Log.With("project", hook.projectID, "container", hook.container)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	id, started := rand.Text(), time.Now()
+	h.api.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "webhook.deploy.started", Project: hook.projectID, Object: hook.container,
+		Data: map[string]any{"task_id": id}})
 	version, err := h.api.Projects.Deploy(ctx, hook.projectID, []projects.Target{{Container: hook.container}},
-		projects.DeployOptions{Pull: true, Source: "git"}, func(string) {})
+		projects.DeployOptions{Pull: true, Source: "git"}, func(line string) {
+			h.api.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "webhook.deploy.output", Project: hook.projectID, Object: hook.container,
+				Data: map[string]any{"task_id": id, "text": line}})
+		})
+	data := map[string]any{"task_id": id, "duration_ms": time.Since(started).Milliseconds(), "version": version, "result": "ok"}
+	if err != nil {
+		data["result"], data["error"] = "failed", err.Error()
+	}
+	h.api.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "webhook.deploy.finished", Project: hook.projectID, Object: hook.container, Data: data})
 	if err != nil {
 		log.Warn("webhook 部署失败", "err", err)
 		return

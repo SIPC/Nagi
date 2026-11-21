@@ -2,11 +2,14 @@ package agent
 
 import (
 	"context"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/SIPC/nagi/internal/agent/auditlog"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -19,21 +22,35 @@ import (
 // 和被拒绝的越权请求在各自的处理函数里记（带上成员和来源地址）。
 
 // openAudit 打开本地审计。打不开时只记日志，节点照常工作。外送由面板代为进行（ReadAuditLog）。
-func (a *agent) openAudit(ctx context.Context) {
+func (a *agent) openAudit(ctx context.Context) func() {
 	l, err := auditlog.Open(filepath.Join(a.cfg.DataDir, "audit"))
 	if err != nil {
 		a.log.Warn("无法打开节点本地审计", "err", err)
-		return
+		return func() {}
 	}
+	through := l.Seq()
 	a.audit = l
+	l.Capture = func(e auditlog.Event) {
+		a.cfg.Logs.Report(logstore.Event{Time: e.Time, Category: logstore.Audit, Kind: "node." + e.Action, Object: e.Target, Data: e})
+	}
+	if err := l.UseBudget(ctx, a.cfg.Logs); err != nil {
+		a.log.Error("无法把节点旧审计接入统一本机容量", "err", err)
+	}
 	// 升级前节点自己外送，保存过面板的外送凭据：删掉。
 	if err := l.MigrateShipping(a.auditSinksPath()); err != nil {
 		a.log.Warn("无法删除旧的外送配置", "err", err)
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
+		defer l.Close()
+		if err := l.MigrateHistory(ctx, a.cfg.Logs, through); err != nil && ctx.Err() == nil {
+			a.log.Error("节点旧审计迁移未完成，保留源文件和已提交位置", "err", err)
+		}
 		<-ctx.Done()
-		l.Close()
 	}()
+	return func() { cancel(); <-done }
 }
 
 // auditSkip 是不记的方法：查询、上报、心跳、轮询（升级期间面板每秒问一次的 UpgradeProgress），
@@ -107,7 +124,33 @@ func auditResult(err error) (string, string) {
 func (a *agent) auditInterceptors(panel string) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	unary := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		method, ok := auditMethod(info.FullMethod)
+		started := time.Now()
 		resp, err := handler(ctx, req)
+		// Diagnostics are read-only and intentionally absent from the legacy
+		// operation chain, but their measured result belongs to this node.
+		if method == "MeshPing" || method == "MeshSpeedTest" {
+			in, _ := req.(*nagiv1.MeshPingRequest)
+			result, message := auditResult(err)
+			peer, mode := in.GetPublicKey(), in.GetSpeedVia()
+			data := map[string]any{"panel": panel, "method": method, "peer": hex.EncodeToString(peer[:min(len(peer), 32)]), "peer_bytes": len(peer), "mode": mode[:min(len(mode), 64)],
+				"result": result, "duration_ms": time.Since(started).Milliseconds()}
+			if err != nil {
+				data["error"] = message
+			} else {
+				switch out := resp.(type) {
+				case *nagiv1.MeshPingResponse:
+					data["rtt_ms"] = out.GetRttMs()
+				case *nagiv1.MeshSpeedResponse:
+					data["upload_bytes_per_second"], data["download_bytes_per_second"] = out.GetUpload(), out.GetDownload()
+					data["quic"], data["wireguard_tested"] = out.GetQuic(), out.GetWireguardTested()
+					data["quic_off_here"], data["quic_off_peer"] = out.GetQuicOffHere(), out.GetQuicOffPeer()
+					if out.GetWireguardTested() {
+						data["wireguard_upload_bytes_per_second"], data["wireguard_download_bytes_per_second"] = out.GetWireguardUpload(), out.GetWireguardDownload()
+					}
+				}
+			}
+			a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "mesh.diagnostic", Data: data})
+		}
 		if ok {
 			result, msg := auditResult(err)
 			a.audit.Record(auditlog.Event{Panel: panel, Action: method, Target: auditTarget(req), Result: result, Error: msg})

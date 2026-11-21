@@ -16,10 +16,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
 	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
 //go:embed migrations/*.sql
@@ -112,7 +114,13 @@ type Log struct {
 	hooksMu sync.RWMutex
 	hooks   []func(Event)
 
-	path string
+	path           string
+	budget         *logstore.Store
+	historyPending atomic.Bool
+	// Capture 独立采集规范化后的本机审计事实，旧库写失败仍会调用。
+	// 启动时设置，运行时不修改，不能递归写本 Log；旧库失败时 ID/哈希为空。
+	// 检测规则和旧外送继续使用仅在旧库提交成功后运行的 OnRecord。
+	Capture func(Event)
 }
 
 // Open 打开（必要时创建）审计库。
@@ -136,6 +144,7 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Log, error) {
 		d.Close()
 		return nil, err
 	}
+	l.historyPending.Store(l.lastHash != "")
 	return l, nil
 }
 
@@ -166,8 +175,27 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 		return 0
 	}
 	normalize(&e)
-	id, err := l.insert(context.WithoutCancel(ctx), &e)
+	if l.Capture != nil {
+		defer func() { l.Capture(e) }()
+	}
+	persistCtx := context.WithoutCancel(ctx)
+	if l.budget != nil {
+		var cancel context.CancelFunc
+		persistCtx, cancel = context.WithTimeout(persistCtx, 500*time.Millisecond)
+		defer cancel()
+	}
+	var id int64
+	err := l.budget.WriteArchive(persistCtx, 4, 64<<10, func() error {
+		var err error
+		id, err = l.insert(persistCtx, &e)
+		if err == nil && l.budget != nil {
+			_, err = l.db.ExecContext(persistCtx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+		}
+		return err
+	})
 	if err != nil {
+		// insertTx 可能已经分配了 ID/计算了哈希，但事务没有提交，不能当成旧库证据。
+		e.ID, e.Hash, e.PrevHash = 0, "", ""
 		l.log.Warn("写入审计记录失败", "err", err, "action", e.Action)
 		return 0
 	}
@@ -546,6 +574,9 @@ var LongCategories = []string{Security, Session, Login, MCP}
 
 // Prune 删掉过期的记录；超过总量上限时再从最旧的普通记录删起。
 func (l *Log) Prune(ctx context.Context, r Retention, now time.Time) error {
+	if l.budget != nil {
+		return l.budget.WriteArchive(ctx, 4, 0, func() error { return nil })
+	}
 	long := "category IN (" + placeholders(len(LongCategories)) + ")"
 	args := anySlice(LongCategories)
 	if err := l.deleteWhere(ctx, `NOT `+long+` AND time < ?`, append(args, now.Add(-r.Normal).UnixMilli())...); err != nil {

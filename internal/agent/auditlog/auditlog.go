@@ -7,6 +7,7 @@ package auditlog
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,7 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
 // maxSize 是每个文件的大小上限（测试里改小）。
@@ -46,10 +50,16 @@ type Event struct {
 type Log struct {
 	dir string
 
-	mu   sync.Mutex
-	f    *os.File
-	size int64
-	seq  int64
+	mu     sync.Mutex
+	f      *os.File
+	size   int64
+	seq    int64
+	budget *logstore.Store
+	// Unimported source history stays protected if migration is interrupted.
+	historyPending atomic.Bool
+	// Capture 独立采集规范化后的审计事实，不以旧文件写成功为前提。
+	// 启动时设置，运行时不修改，不能递归写本 Log；序号不代表旧文件已保存。
+	Capture func(Event)
 }
 
 // Open 打开（必要时创建）审计目录，接着上次的序号写。
@@ -59,6 +69,7 @@ func Open(dir string) (*Log, error) {
 	}
 	l := &Log{dir: dir}
 	l.seq = lastSeq(dir)
+	l.historyPending.Store(l.seq > 0)
 	if err := l.openCurrent(); err != nil {
 		return nil, err
 	}
@@ -100,6 +111,17 @@ func (l *Log) Record(e Event) int64 {
 		e.Result = "ok"
 	}
 	e.Actor, e.Target, e.Detail, e.Error = clip(e.Actor), clip(e.Target), clip(e.Detail), clip(e.Error)
+	var seq int64
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_ = l.budget.WriteArchive(ctx, 4, 64<<10, func() error { seq = l.record(&e); return nil })
+	if l.Capture != nil {
+		l.Capture(e)
+	}
+	return seq
+}
+
+func (l *Log) record(e *Event) int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.seq++
@@ -131,7 +153,7 @@ func (l *Log) rotate() {
 	}
 	_ = os.Rename(filepath.Join(l.dir, current), filepath.Join(l.dir, fmt.Sprintf("audit.%020d.jsonl", l.seq-1)))
 	old := rotated(l.dir)
-	for len(old) > maxFiles-1 {
+	for l.budget == nil && len(old) > maxFiles-1 {
 		_ = os.Remove(filepath.Join(l.dir, old[0]))
 		old = old[1:]
 	}

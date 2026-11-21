@@ -639,6 +639,17 @@ message Alert {
   string node = 5;
   string project = 6;
   google.protobuf.Timestamp time = 7;
+  // 同一轮异常的身份和来源持久化版本；版本不按墙上时钟排序。
+  string occurrence = 8;
+  uint64 revision = 9;
+  string source = 10;
+  // valid / unknown；缺数据不改 detection status。
+  string validity = 11;
+  // recovered / rule_disabled / object_removed；只有 recovered 表示健康恢复。
+  string end_reason = 12;
+  google.protobuf.Timestamp since = 13;
+  // critical / warning / info；空值按现有单项规则保守处理。
+  string severity = 14;
 }
 // TrustedPanel 是节点信任列表里的一个面板。
 message TrustedPanel {

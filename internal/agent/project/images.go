@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/distribution/reference"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -79,7 +80,9 @@ func registryAuth(dockerConfig []byte, domain string) string {
 }
 
 // CheckImages 检查容器正在用的镜像有没有新版本。回滚时固定了摘要的镜像、本地构建的镜像跳过。
-func (m *Manager) CheckImages(ctx context.Context, projectID, container string) ([]*nagiv1.ImageUpdate, error) {
+func (m *Manager) CheckImages(ctx context.Context, projectID, container string) (_ []*nagiv1.ImageUpdate, retErr error) {
+	_, finished := m.taskLog("check_images", projectID, container, nil)
+	defer func() { finished(retErr) }()
 	c, err := m.Get(ctx, projectID, container)
 	if err != nil {
 		return nil, err
@@ -118,6 +121,18 @@ func (m *Manager) CheckImages(ctx context.Context, projectID, container string) 
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		remote, err := m.docker.RemoteDigest(cctx, named.String(), registryAuth(c.Spec.GetDockerConfig(), reference.Domain(named)))
 		cancel()
+		result := "unchanged"
+		if err != nil || remote == "" {
+			result = "unknown"
+		} else if remote != local {
+			result = "update_available"
+		}
+		data := map[string]any{"service": in.Service, "image": reference.FamiliarString(named), "result": result,
+			"current_digest": local, "latest_digest": remote}
+		if err != nil {
+			data["error"] = err.Error()
+		}
+		m.Journal.Report(logstore.Event{Category: logstore.Task, Kind: "image.check", Project: projectID, Object: container, Data: data})
 		if err != nil || remote == "" || remote == local {
 			continue
 		}

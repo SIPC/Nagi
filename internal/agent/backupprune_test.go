@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
@@ -62,7 +64,12 @@ func TestBackupPruneCancelsRun(t *testing.T) {
 
 // 排着队（等同一个容器前一个备份节点）的同步在备份节点被去掉后马上结束，不留在队里，结果不写回状态。
 func TestBackupPruneQueuedRunEnds(t *testing.T) {
-	a := &agent{backups: newBackupStates(filepath.Join(t.TempDir(), "backup-status.json"))}
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	a := &agent{cfg: Config{Logs: logs}, backups: newBackupStates(filepath.Join(t.TempDir(), "backup-status.json"))}
 	unlock, err := lockSync(context.Background(), "backup/p-q")
 	if err != nil {
 		t.Fatal(err)
@@ -91,5 +98,13 @@ func TestBackupPruneQueuedRunEnds(t *testing.T) {
 	defer a.backups.mu.Unlock()
 	if len(a.backups.m) != 0 {
 		t.Errorf("去掉的备份节点的状态被写回了：%v", a.backups.m)
+	}
+	rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Task})
+	if err != nil || len(rows) != 1 || rows[0].Kind != "replica.queue" {
+		t.Fatalf("取消排队也应保留结果、不能假装开始传输: %+v %v", rows, err)
+	}
+	var data struct{ Phase, Result string }
+	if err := json.Unmarshal(rows[0].Data.(json.RawMessage), &data); err != nil || data.Phase != "finished" || data.Result != "stopped" {
+		t.Fatalf("取消结果: %s %v", rows[0].Data, err)
 	}
 }

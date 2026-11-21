@@ -6,13 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
 
-// CPU 和流量规则（见 docs/monitoring.md#告警）：挖矿程序最常见的表现是 CPU 长时间占满；CC 攻击、被刷接口表现为
-// 请求量突增；扫描路径、猜接口表现为 4xx 比例过高。阈值是固定的默认值，规则可以在节点和项目的告警规则里关掉。
+// CPU 和流量规则只报告单项事实，不从 CPU、请求量或 4xx 推断攻击原因。
+// 阈值沿用现有默认值，规则可以在节点和项目的告警规则里关掉。
 
 const (
 	cpuPercent    = 90.0
@@ -34,16 +33,16 @@ type loadState struct {
 }
 
 // evaluateLoad 判断 CPU 和流量规则，把出现的告警放进 active。node 是节点自己的规则，调用方持有的锁已释放。
-func (e *Engine) evaluateLoad(ctx context.Context, now time.Time, latest map[string]float64, node judge, enabled map[string]bool, active map[string]*nagiv1.Alert) {
+func (e *Engine) evaluateLoad(ctx context.Context, now time.Time, latest map[string]float64, node judge, enabled map[string]bool, active map[string]*nagiv1.Alert, healthy map[string]bool) {
 	rates := e.routeRates(ctx, now)
 	if now.Sub(e.load.baselineAt) >= baselineRefresh {
 		e.load.baseline, e.load.baselineAt = e.baselines(ctx, now), now
 	}
-	e.judgeLoad(now, latest, rates, node, enabled, active)
+	e.judgeLoad(now, latest, rates, node, enabled, active, healthy)
 }
 
 // judgeLoad 按最新的指标、最近 5 分钟的请求量和基线判断。
-func (e *Engine) judgeLoad(now time.Time, latest map[string]float64, rates map[string]routeRate, node judge, enabled map[string]bool, active map[string]*nagiv1.Alert) {
+func (e *Engine) judgeLoad(now time.Time, latest map[string]float64, rates map[string]routeRate, node judge, enabled map[string]bool, active map[string]*nagiv1.Alert, healthy map[string]bool) {
 	st := &e.load
 	// 节点 CPU 持续过高。
 	if v, ok := latest["node:cpu"]; ok && v > cpuPercent && enabled[alert.RuleCPU] {
@@ -55,6 +54,9 @@ func (e *Engine) judgeLoad(now time.Time, latest map[string]float64, rates map[s
 		}
 	} else {
 		st.cpuSince = time.Time{}
+		if v, ok := latest["node:cpu"]; ok && v <= cpuPercent && enabled[alert.RuleCPU] {
+			healthy["cpu"] = true
+		}
 	}
 
 	// 容器 CPU 持续超过限额（没有限额时是整机）的 90%：各服务加起来和 l:<项目>/<容器>:cpu 比。
@@ -76,6 +78,9 @@ func (e *Engine) judgeLoad(now time.Time, latest map[string]float64, rates map[s
 		project, container, _ := strings.Cut(key, "/")
 		if limit <= 0 || v < limit*cpuPercent/100 || !e.forContainer(project, container, node).on(alert.RuleContainerCPU) {
 			delete(st.ctrSince, key)
+			if limit > 0 && v < limit*cpuPercent/100 && e.forContainer(project, container, node).on(alert.RuleContainerCPU) {
+				healthy["container_cpu:"+key] = true
+			}
 			continue
 		}
 		if st.ctrSince[key].IsZero() {
@@ -109,41 +114,33 @@ func (e *Engine) judgeLoad(now time.Time, latest map[string]float64, rates map[s
 				Title:   fmt.Sprintf("规则 %s 最近 %d 分钟每秒 %.0f 个请求，是过去 24 小时平均的 %.0f 倍", name, int(alert.ErrorWindow.Minutes()), rate, rate/base),
 				Project: e.projectName(project),
 			}
+		} else if j.on(alert.RuleTraffic) && (rate <= surgeMinRate || st.baseline[route] > 0) {
+			healthy["traffic:"+route] = true
 		}
-		if x.requests >= clientMinReq && 100*x.client/x.requests > clientPercent && j.on(alert.RuleClientErrors) {
+		if !x.missingClient && x.requests >= clientMinReq && 100*x.client/x.requests > clientPercent && j.on(alert.RuleClientErrors) {
 			active["4xx:"+route] = &nagiv1.Alert{
 				Title:   fmt.Sprintf("规则 %s 最近 %d 分钟 4xx 占 %.0f%%（共 %.0f 个请求）", name, int(alert.ErrorWindow.Minutes()), 100*x.client/x.requests, x.requests),
 				Project: e.projectName(project),
 			}
+		} else if !x.missingClient && x.requests >= clientMinReq && j.on(alert.RuleClientErrors) {
+			healthy["4xx:"+route] = true
 		}
 	}
 }
 
-type routeRate struct{ requests, client float64 }
+type routeRate struct {
+	requests, client float64
+	missingClient    bool
+}
 
 // routeRates 统计每条 http 规则最近 5 分钟的请求数和 4xx 数。
 func (e *Engine) routeRates(ctx context.Context, now time.Time) map[string]routeRate {
-	data, err := e.metrics.Query(ctx, "r:", now.Add(-alert.ErrorWindow), now)
-	if err != nil {
-		return nil
-	}
 	out := map[string]routeRate{}
-	for series, points := range data {
-		route, kind, ok := cutLast(strings.TrimPrefix(series, "r:"), ":")
-		if !ok || (kind != "req" && kind != "4xx") {
-			continue
-		}
-		var sum float64
-		for _, p := range points {
-			sum += p.Value * metrics.Interval.Seconds()
-		}
-		x := out[route]
-		if kind == "req" {
-			x.requests = sum
-		} else {
-			x.client = sum
-		}
-		out[route] = x
+	for route, x := range e.windowRates(ctx, now, "req") {
+		out[route] = routeRate{requests: x.requests, missingClient: true}
+	}
+	for route, x := range e.windowRates(ctx, now, "4xx") {
+		out[route] = routeRate{requests: x.requests, client: x.errors}
 	}
 	return out
 }

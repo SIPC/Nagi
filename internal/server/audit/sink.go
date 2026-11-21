@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SIPC/nagi/internal/pkg/auditsink"
+	"github.com/SIPC/nagi/internal/pkg/recording"
 )
 
 // 日志外送（见 docs/audit.md#外送）：面板被攻破、机器被格式化以后，日志在别处还有一份。每个目标一个游标，
@@ -466,7 +467,7 @@ func (s *Shipper) postHTTP(ctx context.Context, sk SinkConfig, lines [][]byte) e
 // ---- S3（SigV4 签名的 PUT） ----
 
 func (s *Shipper) uploadRecording(ctx context.Context, sk SinkConfig, id string) error {
-	if !recordingIDRe.MatchString(id) {
+	if !recording.ValidID(id) {
 		return nil
 	}
 	dir := filepath.Join(s.Recordings.Dir, id[:6], id)

@@ -18,7 +18,9 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/compose"
 	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/logging"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/proto"
@@ -57,6 +59,11 @@ type Manager struct {
 	pool   netip.Prefix
 	// stateDir 是节点目录下存放快照仓库连接配置和缓存的地方。
 	stateDir string
+
+	// Journal 在启动时设置；任务事实写进本节点的统一本地日志。
+	Journal *logstore.Store
+	// Decisions shares the lease-safe bounded queue; never wait for disk in Supervise.
+	Decisions *logging.Decisions
 
 	mu    sync.Mutex
 	locks map[string]*sync.Mutex
@@ -640,7 +647,9 @@ func (m *Manager) Statuses(ctx context.Context) []*nagiv1.ContainerStatus {
 
 // Delete 删除容器：停止并删除它的 Docker 容器，删除缓存和网段。容器目录默认保留，deleteDir 时一起删除。
 // 本节点上已经没有这个项目的其他容器时，删除项目内网。
-func (m *Manager) Delete(ctx context.Context, projectID, container string, deleteDir bool, onLine func(string)) error {
+func (m *Manager) Delete(ctx context.Context, projectID, container string, deleteDir bool, onLine func(string)) (err error) {
+	onLine, finish := m.taskLog("delete", projectID, container, onLine)
+	defer func() { finish(err) }()
 	l := m.lock(projectID, container)
 	l.Lock()
 	defer l.Unlock()

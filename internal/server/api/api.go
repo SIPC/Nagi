@@ -17,6 +17,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/release"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
@@ -53,14 +54,16 @@ type API struct {
 	// 不能插进别的修改，否则能造出指向已删角色的成员、把管理员删光（2026-11-19-87c02b5#7、#8）。
 	membersMu sync.Mutex
 
-	Q        *store.Queries
-	Auth     *auth.Service
-	Nodes    *nodes.Registry
-	Projects *projects.Service
-	CA       *tlsutil.CA
-	Sealer   *sealer.Sealer
-	Panel    *PanelInfo
-	Log      *slog.Logger
+	Q         *store.Queries
+	Auth      *auth.Service
+	Nodes     *nodes.Registry
+	Projects  *projects.Service
+	CA        *tlsutil.CA
+	Sealer    *sealer.Sealer
+	Panel     *PanelInfo
+	Log       *slog.Logger
+	Logs      *logstore.Store
+	LogConfig logstore.Config
 	// OAuth 是给 MCP 客户端用的授权服务器（见 docs/mcp.md#oauth），授权页的接口要用它。
 	OAuth *oauth.Server
 	// Audit 是审计日志（见 docs/audit.md）。
@@ -116,6 +119,7 @@ func (a *API) Mount(mux *http.ServeMux) {
 	mux.Handle(nagiv1connect.NewSetupServiceHandler(&setupService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewAuthServiceHandler(&authService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewNodeServiceHandler(&nodeService{a}, interceptors))
+	mux.Handle(nagiv1connect.NewNodeLogServiceHandler(&nodeLogService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewProjectServiceHandler(&projectService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewEnrollServiceHandler(&enrollService{a}, interceptors))
 	mux.Handle(nagiv1connect.NewSettingsServiceHandler(&settingsService{a}, interceptors))
@@ -489,15 +493,11 @@ func (s *nodeService) QueryNodeMetrics(ctx context.Context, req *connect.Request
 	if req.Msg.GetNodeId() == "" {
 		return s.hiddenNodeMetrics(ctx, req.Msg)
 	}
-	conn, err := s.Nodes.Get(req.Msg.GetNodeId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnavailable, err)
-	}
-	resp, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{
+	resp, err := s.queryNodeMetrics(ctx, req.Msg.GetNodeId(), &nagiv1.QueryMetricsRequest{
 		Prefix: req.Msg.GetPrefix(), From: req.Msg.GetFrom(), To: req.Msg.GetTo(), Step: req.Msg.GetStep(),
 	})
 	if err != nil {
-		return nil, fromGRPC(err)
+		return nil, err
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -816,11 +816,7 @@ func (s *nodeService) hiddenNodeMetrics(ctx context.Context, m *nagiv1.QueryNode
 			continue
 		}
 		seen[id] = true
-		conn, err := s.Nodes.Get(id)
-		if err != nil {
-			continue
-		}
-		res, err := conn.Agent.QueryMetrics(ctx, &nagiv1.QueryMetricsRequest{Prefix: m.GetPrefix(), From: m.GetFrom(), To: m.GetTo(), Step: m.GetStep()})
+		res, err := s.queryNodeMetrics(ctx, id, &nagiv1.QueryMetricsRequest{Prefix: m.GetPrefix(), From: m.GetFrom(), To: m.GetTo(), Step: m.GetStep()})
 		if err != nil {
 			continue
 		}

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -114,6 +116,12 @@ func (n *intranet) set(p *nagiv1.LinkPlan) error {
 	}
 	n.changed = make(chan struct{})
 	n.mu.Unlock()
+	if n.a != nil {
+		n.a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "intranet.plan.saved", Data: map[string]any{
+			"sha256": fmt.Sprintf("%x", sha256.Sum256(b)), "proxies": len(p.GetProxies()), "allows": len(p.GetAllows()),
+			"entries": len(p.GetEntries()), "entry_allows": len(p.GetEntryAllows()), "egress_projects": len(p.GetEgress()),
+		}})
+	}
 	n.trigger()
 	return nil
 }

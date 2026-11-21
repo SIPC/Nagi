@@ -87,6 +87,7 @@ func (a *API) TerminalHandler() http.Handler {
 			fail(i18n.Localize(lang, a.scrubFor(ctx, u, lang, err)))
 			return
 		}
+		ctx = a.recordingContext(ctx)
 		stream, err := conn.Agent.Exec(ctx)
 		if err == nil {
 			err = stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Start{Start: start}})
@@ -97,7 +98,7 @@ func (a *API) TerminalHandler() http.Handler {
 			return
 		}
 		// 录制先开始，打开终端的记录带上它的 ID：终端还开着时也能回放已经录下的部分。
-		rec := a.Recordings.Start(ctx, cols, rows)
+		rec := a.startSessionRecording(ctx, stream, nodeID, cols, rows)
 		a.recordOperation(withRecording(ctx, rec.ID()), "/OpenTerminal", start, "")
 
 		// 定时重查：踢出登录、退出手机、降权、移出项目范围之后要断开。管理员降为操作员时，特权容器的终端也要断开。
@@ -118,7 +119,7 @@ func (a *API) TerminalHandler() http.Handler {
 			a.recordSessionEnd(ctx, "CloseTerminal", "container", start.Container, start.ProjectId, rec.Close())
 		}()
 		bridgeTerminal(ctx, cancel, ws, lang, newActivityClock(), terminalStream{
-			rec: rec,
+			rec: rec.Recorder,
 			stdin: func(b []byte) error {
 				return stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Stdin{Stdin: b}})
 			},
@@ -126,7 +127,7 @@ func (a *API) TerminalHandler() http.Handler {
 				return stream.Send(&nagiv1.ExecInput{Input: &nagiv1.ExecInput_Resize{Resize: &nagiv1.TerminalSize{Cols: cols, Rows: rows}}})
 			},
 			closeSend: stream.CloseSend,
-			recv:      stream.Recv,
+			recv:      func() (*nagiv1.ExecOutput, error) { return rec.receive(stream.Recv) },
 		})
 	})
 }

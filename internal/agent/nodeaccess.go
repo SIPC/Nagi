@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/auditlog"
 	"github.com/SIPC/nagi/internal/agent/nodefiles"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
+	"github.com/SIPC/nagi/internal/pkg/recording"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -108,11 +110,13 @@ const nodeExecMax = 10 * time.Minute
 type streamWriter struct {
 	mu   sync.Mutex
 	send func(*nagiv1.ExecOutput) error
+	rec  *recording.Recorder
 }
 
 func (w *streamWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.rec.Output([]byte(strings.ReplaceAll(strings.ReplaceAll(string(p), "\r\n", "\n"), "\n", "\r\n")))
 	if err := w.send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_Stdout{Stdout: append([]byte(nil), p...)}}); err != nil {
 		return 0, err
 	}
@@ -138,10 +142,16 @@ func (s *agentService) NodeExec(req *nagiv1.NodeExecRequest, stream nagiv1.Agent
 	}
 	ctx, cancel := context.WithTimeout(stream.Context(), timeout)
 	defer cancel()
+	rec, finishRecording := s.startRecording(stream, 200, 50, "", "", "node.exec")
+	defer finishRecording()
+	if req.GetCwd() != "" {
+		rec.Output([]byte("\x1b[2m# " + req.GetCwd() + "\x1b[0m\r\n"))
+	}
+	rec.Output([]byte("\x1b[2m$\x1b[0m " + strings.ReplaceAll(req.GetCommand(), "\n", "\r\n") + "\r\n"))
 	// 面板的记录被篡改时还能在节点上查。命令本身也记下。
 	log := s.node.log.With("panel", s.panel, "user", req.GetActor())
 	log.Info("在节点上执行命令", "command", req.GetCommand())
-	code := runNodeCommand(ctx, req.GetCwd(), req.GetCommand(), &streamWriter{send: stream.Send})
+	code := runNodeCommand(ctx, req.GetCwd(), req.GetCommand(), &streamWriter{send: stream.Send, rec: rec})
 	log.Info("节点命令结束", "exit_code", code)
 	result := "ok"
 	if code != 0 {
@@ -149,6 +159,8 @@ func (s *agentService) NodeExec(req *nagiv1.NodeExecRequest, stream nagiv1.Agent
 	}
 	s.node.audit.Record(auditlog.Event{Panel: s.panel, Actor: req.GetActor(), IP: req.GetIp(), Action: "node_exec", Target: req.GetCwd(),
 		Detail: fmt.Sprintf("%s（退出码 %d）", req.GetCommand(), code), Result: result})
+	rec.Output([]byte(fmt.Sprintf("\r\n\x1b[2m[退出码 %d]\x1b[0m\r\n", code)))
+	finishRecording()
 	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(code)}})
 }
 
@@ -190,6 +202,8 @@ func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) err
 		s.node.audit.Record(ev)
 	}()
 	defer sh.Close()
+	rec, finishRecording := s.startRecording(stream, int(size.GetCols()), int(size.GetRows()), "", "", "node.shell")
+	defer finishRecording()
 
 	ctx, cancel := context.WithTimeout(stream.Context(), nodeShellMaxAge)
 	defer cancel()
@@ -207,10 +221,13 @@ func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) err
 			}
 			switch v := in.Input.(type) {
 			case *nagiv1.NodeShellInput_Stdin:
-				if _, err := sh.Write(v.Stdin); err != nil {
+				n, err := sh.Write(v.Stdin)
+				rec.Input(v.Stdin[:n])
+				if err != nil {
 					return
 				}
 			case *nagiv1.NodeShellInput_Resize:
+				rec.Resize(v.Resize.GetCols(), v.Resize.GetRows())
 				sh.Resize(uint16(v.Resize.GetCols()), uint16(v.Resize.GetRows()))
 			}
 		}
@@ -220,6 +237,7 @@ func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) err
 	for {
 		n, err := sh.Read(buf)
 		if n > 0 {
+			rec.Output(buf[:n])
 			if err := stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_Stdout{Stdout: append([]byte(nil), buf[:n]...)}}); err != nil {
 				return err
 			}
@@ -228,6 +246,7 @@ func (s *agentService) NodeShell(stream nagiv1.AgentService_NodeShellServer) err
 			break
 		}
 	}
+	finishRecording()
 	return stream.Send(&nagiv1.ExecOutput{Output: &nagiv1.ExecOutput_ExitCode{ExitCode: int32(sh.Wait())}})
 }
 

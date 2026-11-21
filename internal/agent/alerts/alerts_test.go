@@ -8,9 +8,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/SIPC/nagi/internal/agent/docker"
+	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/pkg/alert"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 )
@@ -189,5 +193,196 @@ func TestRuleSwitches(t *testing.T) {
 	}
 	if j := e.forContainer("p", "old", fallback); j.RestartCount != 3 {
 		t.Errorf("old 用告警配置里最严格的重启次数，得到 %d", j.RestartCount)
+	}
+}
+
+type observations struct {
+	latest     map[string]float64
+	data       map[string][]metrics.Point
+	queryErr   error
+	containers []docker.Instance
+	dockerErr  error
+}
+
+func (o *observations) LatestFresh(time.Time) map[string]float64 { return o.latest }
+func (o *observations) Query(context.Context, string, time.Time, time.Time) (map[string][]metrics.Point, error) {
+	return o.data, o.queryErr
+}
+func (o *observations) ManagedInstances(context.Context, string) ([]docker.Instance, error) {
+	return o.containers, o.dockerErr
+}
+
+func routeSamples(at time.Time, requests, client, server float64) map[string][]metrics.Point {
+	at = at.Truncate(metrics.Interval)
+	out := map[string][]metrics.Point{}
+	for kind, value := range map[string]float64{"req": requests, "4xx": client, "5xx": server} {
+		for i := 0; i < 30; i++ {
+			key := "r:p/web:" + kind
+			out[key] = append(out[key], metrics.Point{Time: at.Add(time.Duration(i-29) * metrics.Interval), Value: value})
+		}
+	}
+	return out
+}
+
+func TestRecoveryRequiresPositiveEvidence(t *testing.T) {
+	for _, failure := range []string{"query failure", "missing counters", "stale window", "time mismatch", "low sample", "gap", "disabled", "empty docker list", "starting"} {
+		t.Run(failure, func(t *testing.T) {
+			rcv := &receiver{}
+			srv := httptest.NewServer(rcv)
+			defer srv.Close()
+			e := newEngine(t, nil)
+			e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+			o := &observations{latest: map[string]float64{"node:disk": 95}, data: routeSamples(time.Now(), 1, .6, .2),
+				containers: []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "unhealthy"}}}
+			e.metrics, e.docker = o, o
+			e.evaluate(context.Background())
+			if rcv.count() != 4 {
+				t.Fatalf("expected disk, health, 4xx and 5xx firing, got %v", rcv.got)
+			}
+
+			// No fresh disk evidence. The container is missing/unknown, not healthy.
+			o.latest, o.containers = nil, nil
+			o.dockerErr = errors.New("Docker unavailable")
+			o.data = nil
+			switch failure {
+			case "query failure":
+				o.queryErr = errors.New("database unavailable")
+			case "missing counters":
+				o.data = routeSamples(time.Now(), 1, 0, 0)
+				delete(o.data, "r:p/web:4xx")
+				delete(o.data, "r:p/web:5xx")
+			case "stale window":
+				o.data = routeSamples(time.Now().Add(-time.Minute), 1, 0, 0)
+			case "time mismatch":
+				o.data = routeSamples(time.Now(), 1, 0, 0)
+				o.data["r:p/web:req"][10].Time = o.data["r:p/web:req"][10].Time.Add(time.Second)
+			case "low sample":
+				o.data = routeSamples(time.Now(), .01, 0, 0)
+			case "gap":
+				o.data = routeSamples(time.Now(), 1, 0, 0)
+				for key, points := range o.data {
+					o.data[key] = append(points[:5], points[15:]...)
+				}
+			case "disabled":
+				o.latest, o.data, o.dockerErr = map[string]float64{"node:disk": 5}, routeSamples(time.Now(), 1, 0, 0), nil
+				o.containers = []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "healthy"}}
+				e.SetConfig("p", &nagiv1.AlertConfig{Channels: e.configs["p"].Channels, Rules: &nagiv1.AlertRules{Enabled: map[string]bool{"disk": false, "health": false, "4xx": false, "errors": false}}})
+			case "empty docker list":
+				o.dockerErr = nil
+			case "starting":
+				o.dockerErr = nil
+				o.containers = []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "starting"}}
+			}
+			e.evaluate(context.Background())
+			if rcv.count() != 4 {
+				t.Fatalf("%s sent a false recovery: %v", failure, rcv.got)
+			}
+			e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+			e.metrics, e.docker = o, o
+			e.evaluate(context.Background())
+			if rcv.count() != 4 {
+				t.Fatalf("restart invented a new failure or recovery: %v", rcv.got)
+			}
+
+			// Restore the rules and provide actual fresh healthy evidence.
+			e.SetConfig("p", &nagiv1.AlertConfig{Channels: e.configs["p"].Channels})
+			o.latest, o.data, o.queryErr, o.dockerErr = map[string]float64{"node:disk": 10}, routeSamples(time.Now(), 1, 0, 0), nil, nil
+			o.containers = []docker.Instance{{Project: "p", Container: "web", Service: "app", State: "running", Health: "healthy"}}
+			e.evaluate(context.Background())
+			if rcv.count() != 8 {
+				t.Fatalf("expected four genuine recoveries: %v", rcv.got)
+			}
+			for _, a := range rcv.got[4:] {
+				if a["status"] != "resolved" {
+					t.Fatalf("unexpected recovery: %v", a)
+				}
+			}
+		})
+	}
+}
+
+func TestOccurrenceSurvivesRestartAndRemovalDoesNotResolve(t *testing.T) {
+	rcv := &receiver{}
+	srv := httptest.NewServer(rcv)
+	defer srv.Close()
+	e := newEngine(t, nil)
+	e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+	ctx := context.Background()
+	e.Fire(ctx, "cert_failed:example.com", "certificate failed", "", "")
+	e.Fire(ctx, "cert_failed:example.com", "certificate still failed", "", "")
+	before := e.states["event:cert_failed:example.com"].occurrence
+
+	restart := func() *Engine {
+		return New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+	}
+	e = restart()
+	e.Fire(ctx, "cert_failed:example.com", "certificate still failed", "", "")
+	if rcv.count() != 1 || e.states["event:cert_failed:example.com"].occurrence != before {
+		t.Fatal("restart created a duplicate first occurrence")
+	}
+	e.MarkUnavailableUnless("cert_failed:", func(string) bool { return false })
+	e = restart()
+	if rcv.count() != 1 || e.states["event:cert_failed:example.com"].confirmed {
+		t.Fatal("object removal or restart invented recovery evidence")
+	}
+	e.Resolve(ctx, "cert_failed:example.com")
+	e = restart()
+	e.Resolve(ctx, "cert_failed:example.com")
+	if rcv.count() != 2 || rcv.got[1]["status"] != "resolved" {
+		t.Fatalf("recovery was lost or duplicated: %v", rcv.got)
+	}
+	e.Fire(ctx, "cert_failed:example.com", "new failure", "", "")
+	if rcv.count() != 3 || e.states["event:cert_failed:example.com"].occurrence == before {
+		t.Fatal("a new failure must have a new occurrence")
+	}
+	if data, err := os.ReadFile(e.stateFile()); err != nil || !json.Valid(data) {
+		t.Fatalf("state checkpoint invalid: %s %v", data, err)
+	}
+}
+
+func TestDurationRulesDoNotResolveDuringReconfirmation(t *testing.T) {
+	rcv := &receiver{}
+	srv := httptest.NewServer(rcv)
+	defer srv.Close()
+	e := newEngine(t, nil)
+	e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+	o := &observations{latest: map[string]float64{"node:cpu": 95, "node:mem": 95, "c:p/web/app:cpu": 190, "l:p/web:cpu": 200}}
+	e.metrics, e.docker = o, o
+	// Advance the duration gates without making the test wait ten minutes.
+	e.memSince = time.Now().Add(-e.rules().MemFor)
+	e.load.cpuSince = time.Now().Add(-cpuFor)
+	e.load.ctrSince = map[string]time.Time{"p/web": time.Now().Add(-cpuFor)}
+	ctx := context.Background()
+	e.evaluate(ctx)
+	if rcv.count() != 3 {
+		t.Fatalf("expected node CPU, memory and container CPU firing: %v", rcv.got)
+	}
+	high := o.latest
+	o.latest = nil
+	e.evaluate(ctx)
+	o.latest = high
+	e.evaluate(ctx)
+	if rcv.count() != 3 {
+		t.Fatalf("a gap or fresh high values incorrectly resolved duration alerts: %v", rcv.got)
+	}
+	o.latest = map[string]float64{"node:cpu": 20, "node:mem": 30, "c:p/web/app:cpu": 40, "l:p/web:cpu": 200}
+	e.evaluate(ctx)
+	if rcv.count() != 6 {
+		t.Fatalf("fresh low values did not resolve duration alerts: %v", rcv.got)
+	}
+}
+
+func TestNoChannelDoesNotCheckpointDelivery(t *testing.T) {
+	e := newEngine(t, nil)
+	ctx := context.Background()
+	e.Fire(ctx, "backup:p/web", "backup failed", "", "")
+	e = New(e.log, e.node, e.dir, e.certDir, nil, nil, e.projectName, nil)
+	rcv := &receiver{}
+	srv := httptest.NewServer(rcv)
+	defer srv.Close()
+	e.SetConfig("p", &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{{Id: "c", Type: "webhook", Url: srv.URL}}})
+	e.Fire(ctx, "backup:p/web", "backup still failed", "", "")
+	if rcv.count() != 1 {
+		t.Fatal("checkpoint treated an unsent alert as already accepted")
 	}
 }

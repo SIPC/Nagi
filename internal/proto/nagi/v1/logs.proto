@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package nagi.v1;
+
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+option java_multiple_files = true;
+option java_package = "ink.sipc.nagi.proto.v1";
+
+import "google/protobuf/timestamp.proto";
+import "nagi/v1/agent.proto";
+
+// Registered on mesh only. Existing trusted-panel authorization still applies;
+// standby membership/authorization is deliberately not added here.
+service LogService {
+  rpc QueryLogs(LogQuery) returns (LogPage);
+  // Includes indexed metric history migrated from the old node database.
+  rpc QueryMetrics(QueryMetricsRequest) returns (QueryMetricsResponse);
+  // Decrypted recording bodies travel only inside the authenticated mesh.
+  rpc ReadRecording(LocalRecordingQuery) returns (stream LocalRecordingChunk);
+}
+
+message LocalRecordingQuery {
+  string id = 1;
+}
+
+message LocalRecordingChunk {
+  bytes data = 1;
+}
+
+// Node-initiated replication, registered on mesh only. Node identity is resolved
+// from the authenticated mesh key, never supplied in the batch.
+service LogCopyService {
+  rpc GetLogReceipt(LogReceiptQuery) returns (LogReceipt);
+  rpc PushLogs(LogCopyBatch) returns (LogReceipt);
+}
+
+message LogReceiptQuery {
+  string source = 1;
+  string category = 2;
+}
+
+message LogReceipt {
+  string source = 1;
+  string category = 2;
+  int64 after = 3;
+}
+
+message LogCopyBatch {
+  string source = 1;
+  string category = 2;
+  int64 after = 3;
+  int64 through = 4;
+  repeated LogEntry entries = 5;
+  repeated LogPruned pruned = 6;
+  uint64 write_errors = 7;
+}
+
+// Browser-to-panel queries; the panel forwards through mesh, never the control RPC.
+service NodeLogService {
+  rpc QueryNodeLogs(NodeLogQuery) returns (LogPage);
+}
+
+message LogQuery {
+  string source = 1;
+  int64 after = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  string category = 5;
+  string project = 6;
+  string object = 7;
+  int32 limit = 8;
+}
+
+message NodeLogQuery {
+  string node_id = 1;
+  LogQuery query = 2;
+  // Explicitly query the panel's bounded copy, including while the node is offline.
+  bool recent_copy = 3;
+}
+
+message LogEntry {
+  int64 seq = 1;
+  google.protobuf.Timestamp time = 2;
+  google.protobuf.Timestamp received = 3;
+  string category = 4;
+  string kind = 5;
+  string project = 6;
+  string object = 7;
+  bytes data_json = 8;
+}
+
+// Envelope of deleted sequences, not a claim that every sequence in it was removed.
+message LogPruned {
+  string category = 1;
+  int64 first = 2;
+  int64 last = 3;
+  int64 count = 4;
+}
+
+message LogPage {
+  string source = 1;
+  int64 latest_seq = 2;
+  int64 next_after = 3;
+  bool more = 4;
+  repeated LogEntry entries = 5;
+  repeated LogPruned pruned = 6;
+  uint64 write_errors = 7;
+  int64 disk_bytes = 8;
+  int64 budget_bytes = 9;
+  bool recent_copy = 10;
+  // Kept separate from pruned (panel-side expiry/capacity) to avoid double counts.
+  repeated LogPruned source_pruned = 11;
+}

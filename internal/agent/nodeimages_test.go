@@ -2,7 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,7 +16,12 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
+	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/agent/store/nodestore"
+	"github.com/SIPC/nagi/internal/pkg/db"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -374,5 +385,256 @@ func TestPullImageFollowsCaller(t *testing.T) {
 	}
 	if !readOnlyRPCs[nagiv1.AgentService_ListImages_FullMethodName] || readOnlyRPCs[nagiv1.AgentService_DeleteImages_FullMethodName] || readOnlyRPCs[nagiv1.AgentService_PullImage_FullMethodName] {
 		t.Error("备用面板只能列出镜像")
+	}
+}
+
+type imageHistoryStream struct {
+	grpc.ServerStream
+	ctx     context.Context
+	sendErr error
+}
+
+func (s *imageHistoryStream) Context() context.Context          { return s.ctx }
+func (s *imageHistoryStream) Send(*nagiv1.ImagePullEvent) error { return s.sendErr }
+
+func TestImagePullHistory(t *testing.T) {
+	for _, mode := range []string{"ok", "daemon_failure", "viewer_gone"} {
+		t.Run(mode, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/info"):
+					io.WriteString(w, `{}`)
+				case strings.HasSuffix(r.URL.Path, "/images/create"):
+					io.WriteString(w, "{\"id\":\"layer\",\"status\":\"Downloading\",\"progressDetail\":{\"current\":17,\"total\":91}}\n")
+					if mode == "daemon_failure" {
+						io.WriteString(w, "{\"errorDetail\":{\"message\":\"registry unavailable\"}}\n")
+					}
+				case strings.HasSuffix(r.URL.Path, "/json"):
+					io.WriteString(w, `{"Id":"`+idNginx+`"}`)
+				default:
+					t.Errorf("unexpected Docker endpoint: %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+			t.Setenv("DOCKER_API_VERSION", "1.56")
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			t.Setenv("DOCKER_CONFIG", t.TempDir())
+			dc, err := docker.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dc.Close()
+			path := filepath.Join(t.TempDir(), "logs.db")
+			journal, err := logstore.Open(t.Context(), path, 2<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &agent{docker: dc, cfg: Config{Logs: journal}, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			stream := &imageHistoryStream{ctx: t.Context()}
+			if mode == "viewer_gone" {
+				stream.sendErr = io.ErrClosedPipe
+			}
+			err = (&agentService{node: a}).PullImage(&nagiv1.PullImageRequest{Image: "nginx:1.27"}, stream)
+			if mode == "ok" && err != nil || mode == "daemon_failure" && status.Code(err) != codes.FailedPrecondition || mode == "viewer_gone" && !errors.Is(err, io.ErrClosedPipe) {
+				t.Fatalf("pull result changed: %v", err)
+			}
+			if err := journal.Close(); err != nil {
+				t.Fatal(err)
+			}
+			journal, err = logstore.Open(t.Context(), path, 2<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer journal.Close()
+			rows, err := journal.Query(t.Context(), logstore.Filter{Category: logstore.Task})
+			if err != nil || len(rows) != 3 {
+				t.Fatalf("history: %+v %v", rows, err)
+			}
+			var taskID string
+			for i, row := range rows {
+				var data struct {
+					TaskID               string `json:"task_id"`
+					Phase, Result, Error string
+					Pulled               bool
+					Current, Total       int64
+				}
+				if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+					t.Fatal(err)
+				}
+				if i == 0 {
+					taskID = data.TaskID
+				}
+				if taskID == "" || data.TaskID != taskID || row.Kind != "image.pull" || row.Object != "docker.io/library/nginx:1.27" || data.Phase != []string{"started", "progress", "finished"}[i] {
+					t.Fatalf("task association: %+v %s", row, row.Data)
+				}
+				if i == 1 && (data.Current != 17 || data.Total != 91) {
+					t.Fatalf("progress: %s", row.Data)
+				}
+				if i == 2 && (data.Pulled != (mode != "daemon_failure") || (data.Result == "ok") != (mode == "ok") || (data.Error != "") != (mode != "ok")) {
+					t.Fatalf("completion: %s", row.Data)
+				}
+			}
+		})
+	}
+}
+
+func TestImageDeletionHistoryPreservesResultsAndGuards(t *testing.T) {
+	for _, mode := range []string{"delete", "prune", "cache_failure", "scan_failure"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx := t.Context()
+			path := filepath.Join(t.TempDir(), "logs.db")
+			journal, err := logstore.Open(ctx, path, 2<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { journal.Close() }()
+			var removed []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case r.Method == http.MethodDelete:
+					if strings.HasSuffix(r.URL.Path, "/images/bad:1") {
+						// The preceding image must already have its own durable
+						// result; don't wait for the whole batch to finish.
+						rows, err := journal.Query(ctx, logstore.Filter{Object: idUnused})
+						if err != nil || len(rows) != 1 {
+							t.Errorf("previous decision missing before next deletion: %+v %v", rows, err)
+						}
+						w.WriteHeader(http.StatusConflict)
+						io.WriteString(w, `{"message":"safe-db --password Sensitive123"}`)
+						return
+					}
+					if !strings.HasSuffix(r.URL.Path, "/images/good:1") || r.URL.Query().Get("force") == "1" || r.URL.Query().Get("force") == "true" {
+						t.Errorf("unsafe or unexpected deletion: %s", r.URL)
+					}
+					removed = append(removed, r.URL.Path)
+					io.WriteString(w, `[{"Deleted":"`+idUnused+`"}]`)
+				case strings.HasSuffix(r.URL.Path, "/images/json"):
+					if mode == "scan_failure" {
+						w.WriteHeader(http.StatusInternalServerError)
+						io.WriteString(w, `{"message":"daemon unavailable"}`)
+						return
+					}
+					io.WriteString(w, `[{"Id":"`+idUnused+`","RepoTags":["good:1"],"Size":17},`+
+						`{"Id":"`+idOld+`","RepoTags":["bad:1"],"Size":91},`+
+						`{"Id":"`+idOther+`","RepoTags":["protected:1"],"Size":123}]`)
+				case strings.HasSuffix(r.URL.Path, "/containers/json"):
+					io.WriteString(w, `[{"Id":"c","Names":["/protected"],"ImageID":"`+idOther+`","State":"running"}]`)
+				case strings.HasSuffix(r.URL.Path, "/build/prune"):
+					if mode == "cache_failure" {
+						w.WriteHeader(http.StatusInternalServerError)
+						io.WriteString(w, `{"message":"cache unavailable"}`)
+						return
+					}
+					io.WriteString(w, `{"SpaceReclaimed":37}`)
+				default:
+					t.Errorf("unexpected Docker endpoint: %s %s", r.Method, r.URL)
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+			t.Setenv("DOCKER_API_VERSION", "1.56")
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			dc, err := docker.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dc.Close()
+			d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			projects, err := project.NewManager(d, dc, project.DefaultSubnetPool, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &agent{docker: dc, projects: projects, replicas: newReplicas(t.TempDir()), cfg: Config{Logs: journal},
+				log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			s := &agentService{node: a}
+			kind, wantItems, wantCache := "image.prune", 4, 1
+			if mode == "delete" || mode == "scan_failure" {
+				kind, wantItems, wantCache = "image.delete", 3, 0
+				out, err := s.DeleteImages(ctx, &nagiv1.DeleteImagesRequest{Images: []*nagiv1.ImageRef{{Id: idUnused, Tag: "good:1"}, {Id: idOld, Tag: "bad:1"}, {Id: idOther}}})
+				if mode == "scan_failure" {
+					wantItems = 0
+					if status.Code(err) != codes.Unavailable {
+						t.Fatalf("scan failure changed: %+v %v", out, err)
+					}
+				} else if err != nil || len(out.GetResults()) != 3 || out.Results[0].GetError() != "" || out.Results[1].GetError() == "" || out.Results[2].GetError() == "" {
+					t.Fatalf("delete guards/results changed: %+v %v", out, err)
+				}
+			} else {
+				out, err := s.PruneImages(ctx, &nagiv1.PruneImagesRequest{Ids: []string{idUnused, idOld, idOther, idUnused}, BuildCache: true})
+				wantFailed, wantFreed := 1, int64(37)
+				if mode == "cache_failure" {
+					wantFailed, wantFreed = 2, 0
+				}
+				if err != nil || out.GetDeleted() != 1 || out.GetSkipped() != 2 || len(out.GetFailed()) != wantFailed || out.GetBuildCacheFreed() != wantFreed || !slices.Equal(out.GetDeletedIds(), []string{idUnused}) {
+					t.Fatalf("prune results changed: %+v %v", out, err)
+				}
+			}
+			if mode != "scan_failure" && len(removed) != 1 || mode == "scan_failure" && len(removed) != 0 {
+				t.Fatalf("duplicate or protected image deleted: %v", removed)
+			}
+			if err := journal.Close(); err != nil {
+				t.Fatal(err)
+			}
+			journal, err = logstore.Open(ctx, path, 2<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rows, err := journal.Query(ctx, logstore.Filter{Category: logstore.Task})
+			if err != nil || len(rows) != 2+wantItems+wantCache {
+				t.Fatalf("persistent lifecycle: %+v %v", rows, err)
+			}
+			var taskID string
+			item := 0
+			for i, row := range rows {
+				var data struct {
+					TaskID               string `json:"task_id"`
+					Phase, Result, Error string
+					FreedBytes           int64 `json:"freed_bytes"`
+				}
+				if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+					t.Fatal(err)
+				}
+				if i == 0 {
+					taskID = data.TaskID
+					if data.Phase != "started" {
+						t.Fatal("missing task start")
+					}
+				}
+				if taskID == "" || data.TaskID != taskID || row.Kind != kind || strings.Contains(string(row.Data.(json.RawMessage)), "Sensitive123") {
+					t.Fatalf("task correlation or redaction: %+v", row)
+				}
+				if data.Phase == "item" {
+					want := []string{"ok", "failed", "failed"}
+					if mode != "delete" {
+						want = []string{"ok", "failed", "skipped", "skipped"}
+					}
+					if data.Result != want[item] {
+						t.Fatalf("item result: %+v", data)
+					}
+					item++
+				}
+				if data.Phase == "build_cache" && mode == "prune" && (data.FreedBytes != 37 || data.Result != "ok") {
+					t.Fatalf("cache result: %+v", data)
+				}
+				if i == len(rows)-1 {
+					want := "partial"
+					if mode == "scan_failure" {
+						want = "failed"
+					}
+					if data.Phase != "finished" || data.Result != want {
+						t.Fatalf("failed items became success: %+v", data)
+					}
+				}
+			}
+		})
 	}
 }

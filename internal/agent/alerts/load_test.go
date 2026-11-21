@@ -24,7 +24,7 @@ func TestLoadRules(t *testing.T) {
 	}
 	run := func(at time.Time, rates map[string]routeRate) map[string]*nagiv1.Alert {
 		active := map[string]*nagiv1.Alert{}
-		e.judgeLoad(at, latest, rates, node, enabled, active)
+		e.judgeLoad(at, latest, rates, node, enabled, active, map[string]bool{})
 		return active
 	}
 	if a := run(start, nil); len(a) != 0 {

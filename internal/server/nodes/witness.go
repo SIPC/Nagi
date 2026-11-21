@@ -127,6 +127,7 @@ func (r *Registry) ClearWitness(projectID, container string) {
 // panelMesh 是面板在 mesh 上的服务：Ping 和见证人投票。
 type panelMesh struct {
 	mesh.Service
+	nagiv1.UnimplementedLogCopyServiceServer
 	r *Registry
 }
 

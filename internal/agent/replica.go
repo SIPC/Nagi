@@ -26,6 +26,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/pkg/alert"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/spec"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
@@ -596,8 +597,15 @@ const replicaIdle = 2 * time.Minute
 const replicaPutMax = 6 * time.Hour
 
 // ReplicaPut 接收源节点同步来的文件。不限大小（快照仓库可以很大），但磁盘剩余空间不够时停下（见 metrics.CheckDisk）。
-func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) error {
-	return receiveReplica(stream, func(projectID, container string) (string, *metrics.DiskGuard, func(), error) {
+func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) (retErr error) {
+	observed := &replicaLogStream{MeshService_ReplicaPutServer: stream}
+	var finish func(error)
+	defer func() {
+		if finish != nil {
+			finish(retErr)
+		}
+	}()
+	return receiveReplica(observed, func(projectID, container string) (string, *metrics.DiskGuard, func(), error) {
 		if _, err := replicaID(projectID, container); err != nil {
 			return "", nil, nil, err
 		}
@@ -612,6 +620,7 @@ func (s *meshService) ReplicaPut(stream nagiv1.MeshService_ReplicaPutServer) err
 			unlock()
 			return "", nil, nil, err
 		}
+		finish = s.a.receiveLog(observed, projectID, container)
 		return files, guard, func() { done(); unlock() }, nil
 	})
 }
@@ -818,15 +827,29 @@ func checkPlainDirs(paths ...string) error {
 	return nil
 }
 
-func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaCommitRequest) (*nagiv1.ReplicaCommitResponse, error) {
+func (s *meshService) ReplicaCommit(ctx context.Context, req *nagiv1.ReplicaCommitRequest) (_ *nagiv1.ReplicaCommitResponse, retErr error) {
 	if _, err := replicaID(req.GetProjectId(), req.GetContainer()); err != nil {
 		return nil, err
 	}
-	defer s.a.replicas.lock(req.GetProjectId(), req.GetContainer())()
+	var authorized bool
+	started := time.Now()
+	unlock := s.a.replicas.lock(req.GetProjectId(), req.GetContainer())
+	defer func() {
+		unlock()
+		if !authorized || s.a.cfg.Logs == nil {
+			return
+		}
+		data := map[string]any{"result": "committed", "duration_ms": time.Since(started).Milliseconds()}
+		if retErr != nil {
+			data["result"], data["error"] = "failed", retErr.Error()
+		}
+		s.a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "replica.commit", Project: req.GetProjectId(), Object: req.GetContainer(), Data: data})
+	}()
 	files, err := s.authorizeReplica(ctx, req.GetProjectId(), req.GetContainer(), true)
 	if err != nil {
 		return nil, err
 	}
+	authorized = true
 	m, _, _, err := s.a.replicas.load(req.GetProjectId(), req.GetContainer())
 	if err != nil {
 		return nil, err
@@ -901,6 +924,9 @@ func (a *agent) startBackupSync(parent context.Context, projectID, container, ta
 		}
 		if run := b.claim(parent, id, t.GetNodeId()); run != nil {
 			list, runs = append(list, t), append(runs, run)
+			a.queueLog(projectID, container, t, run, "queued", nil)
+		} else {
+			a.queueLog(projectID, container, t, nil, "repeat_requested", nil)
 		}
 	}
 	if len(runs) == 0 {
@@ -940,7 +966,9 @@ func (a *agent) runBackupSyncs(projectID, container string, targets, list []*nag
 func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget, run *syncRun) {
 	id := projectID + "-" + container
 	b := a.backups
+	var finalErr error
 	defer func() {
+		a.queueLog(projectID, container, t, run, "finished", finalErr)
 		run.cancel(nil)
 		close(run.done)
 	}()
@@ -950,6 +978,10 @@ func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget
 		if e == nil || e.run != run {
 			// 备份节点已经去掉了、容器已经删除（prune 停下了这次同步）：不把状态加回来。
 			b.mu.Unlock()
+			finalErr = context.Cause(run.ctx)
+			if finalErr == nil {
+				finalErr = errors.New("备份目标已移除")
+			}
 			return
 		}
 		// 上次是用户停止的：这次开始了就不再显示「已停止」，失败的原因留到这次有结果再换。
@@ -966,12 +998,14 @@ func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget
 		if err == nil {
 			run.progress.begin(time.Now())
 			a.changed()
+			a.queueLog(projectID, container, t, run, "active", nil)
 			_, err = a.syncTo(run.ctx, projectID, container, t, run.progress)
 			unlock()
 		}
 		if status.Code(err) == codes.NotFound {
 			err = fmt.Errorf("%s 上已经没有这个容器的副本登记（可能已经在那里恢复成了容器）。要继续备份，请重新添加这个备份节点（%w）", t.GetName(), err)
 		}
+		finalErr = err
 		cause := context.Cause(run.ctx)
 		shutdown := err != nil && run.ctx.Err() != nil && !errors.Is(cause, errSyncStopped)
 		b.mu.Lock()
@@ -1002,6 +1036,7 @@ func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget
 		if !again {
 			return
 		}
+		a.queueLog(projectID, container, t, run, "repeat_queued", nil)
 	}
 }
 
@@ -1009,7 +1044,7 @@ func (a *agent) syncBackupTo(projectID, container string, t *nagiv1.BackupTarget
 // 连接中途断了（大文件走慢线路时连接超时，或者对方节点刚重启，旧的 QUIC 连接收到无状态重置）时换一条新连接接着传：
 // 对方每收完一个文件就落盘，传了一半的文件也留着（见 ReplicaPut），下次核对清单时跳过已有的、从一半处接着传，
 // 所以每次重试都从断开的地方往后。规则见 resumeSync。
-func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget, p *syncProgress) (int64, error) {
+func (a *agent) syncTo(ctx context.Context, projectID, container string, target *nagiv1.BackupTarget, p *syncProgress) (sent int64, retErr error) {
 	// 同一个容器到同一个目标同时只有一次同步：定时快照后的同步、每 15 分钟一次的热备同步、迁移、切回可能重叠，
 	// 两次同步交错时，一次提交会删掉另一次刚传的文件。后来的等前一次结束。
 	unlock, err := lockSync(ctx, projectID+"/"+container+"/"+string(target.GetKey()))
@@ -1020,8 +1055,12 @@ func (a *agent) syncTo(ctx context.Context, projectID, container string, target 
 	if p == nil {
 		p = &syncProgress{}
 	}
+	p.begin(time.Now())
+	retry, finished := a.transferLog(ctx, projectID, container, target, p)
+	defer func() { finished(sent, retErr) }()
 	return resumeSync(ctx, func() (int64, int64, error) { return a.syncOnce(ctx, projectID, container, target, p) }, func(attempt int, n int64, err error) {
 		p.retried(err)
+		retry(attempt, n, err)
 		a.changed()
 		a.log.Info("同步时连接断开，接着传", "project", projectID, "container", container, "target", target.GetName(),
 			"attempt", attempt, "bytes", n, "err", err)

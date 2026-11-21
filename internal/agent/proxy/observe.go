@@ -3,13 +3,16 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/modules/caddyevents"
@@ -39,8 +42,10 @@ type RouteStats struct {
 	Seconds float64
 	// Classes 是各类状态码的响应数，下标是状态码的百位（1xx～5xx）。
 	Classes  [6]int
-	BytesIn  int64 // 请求体字节数；tcp/udp 是从客户端收到的字节数
-	BytesOut int64 // 响应体字节数；tcp/udp 是发给客户端的字节数
+	Statuses map[int]int // 具体 HTTP 状态码；只收 100～599，避免无界标签。
+	Maximum  float64     // 全部非 WebSocket 请求的最大耗时，不从抽样估算。
+	BytesIn  int64       // 请求体字节数；tcp/udp 是从客户端收到的字节数
+	BytesOut int64       // 响应体字节数；tcp/udp 是发给客户端的字节数
 	// L4 表示这是 tcp/udp 规则：Conns 是新连接数（UDP 按会话），Fails 是其中连不上容器的，Active 是取统计时的连接数。
 	L4     bool
 	Conns  int
@@ -65,10 +70,12 @@ func (s *RouteStats) Percentile(q float64) float64 {
 }
 
 type observerT struct {
-	mu     sync.Mutex
-	stats  map[string]*RouteStats
-	l4     map[string]*l4Counter
-	onCert func(domain string, err error)
+	mu           sync.Mutex
+	stats        map[string]*RouteStats
+	l4           map[string]*l4Counter
+	onCert       func(domain string, err error)
+	onAccess     func(AccessRecord)
+	onConnection func(ConnectionRecord)
 }
 
 var observer = &observerT{stats: map[string]*RouteStats{}, l4: map[string]*l4Counter{}}
@@ -93,15 +100,64 @@ func OnCertEvent(fn func(domain string, err error)) {
 	observer.mu.Unlock()
 }
 
+// AccessRecord 只取访问日志的白名单字段，不把 Caddy 的请求头/凭据原文交给日志库。
+// PathHash 用于关联同一路径；路径本身暂不记录，避免任意业务路径内的秘密泄露。
+type AccessRecord struct {
+	Time      time.Time `json:"time"`
+	Route     string    `json:"route"`
+	Status    int       `json:"status"`
+	Duration  float64   `json:"duration_seconds"`
+	BytesRead int64     `json:"bytes_in"`
+	Size      int64     `json:"bytes_out"`
+	Method    string    `json:"method"`
+	Host      string    `json:"host"`
+	Remote    string    `json:"remote"`
+	Protocol  string    `json:"protocol"`
+	PathHash  string    `json:"path_hash"`
+}
+
+// OnAccess 包括没有匹配业务规则的请求；不会改变已有告警聚合只统计业务规则的行为。
+func OnAccess(fn func(AccessRecord)) {
+	observer.mu.Lock()
+	observer.onAccess = fn
+	observer.mu.Unlock()
+}
+
 func (o *observerT) record(line []byte) {
 	var entry struct {
+		Time      float64 `json:"ts"`
 		Route     string  `json:"nagi_route"`
 		Status    int     `json:"status"`
 		Duration  float64 `json:"duration"`
 		BytesRead int64   `json:"bytes_read"`
 		Size      int64   `json:"size"`
+		Request   struct {
+			Method   string `json:"method"`
+			Host     string `json:"host"`
+			Remote   string `json:"remote_ip"`
+			Protocol string `json:"proto"`
+			URI      string `json:"uri"`
+		} `json:"request"`
 	}
-	if json.Unmarshal(line, &entry) != nil || entry.Route == "" {
+	if json.Unmarshal(line, &entry) != nil {
+		return
+	}
+	o.mu.Lock()
+	fn := o.onAccess
+	o.mu.Unlock()
+	if fn != nil {
+		e := AccessRecord{Time: time.Unix(0, int64(entry.Time*1e9)), Route: entry.Route, Status: entry.Status,
+			Duration: entry.Duration, BytesRead: entry.BytesRead, Size: entry.Size,
+			Method: entry.Request.Method, Host: entry.Request.Host, Remote: entry.Request.Remote, Protocol: entry.Request.Protocol}
+		if entry.Time == 0 {
+			e.Time = time.Now()
+		}
+		if uri, err := url.ParseRequestURI(entry.Request.URI); err == nil {
+			e.PathHash = fmt.Sprintf("%x", sha256.Sum256([]byte(uri.Path)))
+		}
+		fn(e)
+	}
+	if entry.Route == "" {
 		return
 	}
 	o.mu.Lock()
@@ -117,6 +173,10 @@ func (o *observerT) record(line []byte) {
 	}
 	if c := entry.Status / 100; c >= 1 && c <= 5 {
 		s.Classes[c]++
+		if s.Statuses == nil {
+			s.Statuses = map[int]int{}
+		}
+		s.Statuses[entry.Status]++
 	}
 	s.BytesIn += entry.BytesRead
 	s.BytesOut += entry.Size
@@ -125,6 +185,7 @@ func (o *observerT) record(line []byte) {
 	}
 	s.Timed++
 	s.Seconds += entry.Duration
+	s.Maximum = max(s.Maximum, entry.Duration)
 	// 蓄水池抽样：每个请求被留下的概率相同，内存有上限。
 	if len(s.Durations) < maxSamples {
 		s.Durations = append(s.Durations, entry.Duration)

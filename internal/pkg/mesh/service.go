@@ -35,6 +35,12 @@ func Serve(ctx context.Context, m *Mesh, impl nagiv1.MeshServiceServer) error {
 	srv := grpc.NewServer(grpc.InitialWindowSize(grpcWindow), grpc.InitialConnWindowSize(grpcWindow),
 		grpc.ReadBufferSize(grpcBuffer), grpc.WriteBufferSize(grpcBuffer))
 	nagiv1.RegisterMeshServiceServer(srv, impl)
+	if logs, ok := impl.(nagiv1.LogServiceServer); ok {
+		nagiv1.RegisterLogServiceServer(srv, logs)
+	}
+	if copies, ok := impl.(nagiv1.LogCopyServiceServer); ok {
+		nagiv1.RegisterLogCopyServiceServer(srv, copies)
+	}
 	go func() {
 		<-ctx.Done()
 		srv.Stop()

@@ -1,0 +1,43 @@
+syntax = "proto3";
+package nagi.v1;
+import "google/protobuf/timestamp.proto";
+import "nagi/v1/common.proto";
+option go_package = "github.com/SIPC/nagi/internal/proto/nagi/v1;nagiv1";
+option java_multiple_files = true;
+option java_package = "ink.sipc.nagi.proto.v1";
+
+// 当前快照先于有界历史。完整也不允许把缺席解释成健康，只能标记 unknown。
+message AlertSync {
+  string source = 1;
+  uint64 revision = 2;
+  repeated Alert current = 3;
+  repeated Alert history = 4;
+  bool complete = 5;
+}
+
+message AlertState {
+  string node_id = 1;
+  Alert alert = 2;
+  bool acknowledged = 3;
+  string conclusion = 4;
+  google.protobuf.Timestamp silence_until = 5;
+  google.protobuf.Timestamp maintenance_until = 6;
+  uint64 handling_revision = 7;
+  // 面板接收到该条状态的时间；来源中断时动态返回 stale，而非健康。
+  google.protobuf.Timestamp received_at = 8;
+  string validity = 9;
+}
+
+message ListAlertStatesRequest { string node_id = 1; bool include_history = 2; }
+message ListAlertStatesResponse { repeated AlertState alerts = 1; }
+message HandleAlertRequest {
+  string node_id = 1;
+  string key = 2;
+  string occurrence = 3;
+  uint64 handling_revision = 4;
+  // acknowledge / conclusion / silence / maintenance / clear_silence / clear_maintenance
+  string action = 5;
+  string conclusion = 6;
+  google.protobuf.Timestamp until = 7;
+}
+message HandleAlertResponse { AlertState alert = 1; }
