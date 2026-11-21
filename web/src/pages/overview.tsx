@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
-import { errorMessage, orOther, nodeClient, projectClient } from "@/lib/api";
+import { errorMessage, logClient, orOther, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
 import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, spanOf, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
@@ -744,8 +744,22 @@ export function OverviewPage() {
 
   const sample = liveRates(readable.map((n) => n.id), liveMesh.data, keys);
   const ready = !!sample && !!live.data;
-  // 要升级才有节点之间的数据：查询成功但没有 m: 序列。
-  const outdated = readable.filter((_, i) => liveMesh.data?.[i]?.series.length === 0).map((n) => n.name);
+  // 版本够新、查询成功却没有近期 m: 序列：不是版本问题（版本过旧的节点在 oldNotice 里按版本列出）。
+  // 管理员能看到节点的监控历史迁移状态，据此说明是迁移中、迁移失败，还是在等采样。
+  const noMesh = readable.filter((_, i) => liveMesh.data?.[i]?.series.length === 0);
+  const noMeshKey = noMesh.map((n) => n.id).join(",");
+  const meshMigrations = useQuery({
+    queryKey: ["overview-mesh-migrations", noMeshKey],
+    queryFn: async () => Promise.all(noMesh.map((n) => logClient.queryNodeLogs({ nodeId: n.id, query: { limit: 1, migrationsOnly: true } }).then((r) => r.migrations.find((m) => m.id === "metrics")?.phase ?? "", () => "error"))),
+    enabled: isAdmin && noMesh.length > 0,
+    refetchInterval: refresh,
+  });
+  // 非管理员读不到迁移状态，读取失败也一样：只说近期暂无，不猜原因。
+  const meshGap = (want: (phase: string) => boolean) => noMesh.filter((_, i) => want(isAdmin && meshMigrations.data ? meshMigrations.data[i] : "unknown")).map((n) => n.name);
+  const meshMigrating = meshGap((p) => p === "pending" || p === "copying" || p === "cleanup");
+  const meshFailed = meshGap((p) => p === "failed");
+  const meshWaiting = meshGap((p) => p === "" || p === "complete");
+  const meshUnknown = meshGap((p) => p === "unknown" || p === "error");
   const extRate = (id: string, dir: "rx" | "tx") => Math.max(0, (live.data?.get(id)?.[dir] ?? 0) - (sample?.[dir].get(id) ?? 0));
   const extIn = readable.reduce((sum, n) => sum + extRate(n.id, "rx"), 0);
   const extOut = readable.reduce((sum, n) => sum + extRate(n.id, "tx"), 0);
@@ -923,18 +937,14 @@ export function OverviewPage() {
           >
             {oldNotice}
             {flowError && <QueryError error={errorMessage(flowError)} onRetry={() => { live.refetch(); liveMesh.refetch(); }} />}
-            {outdated.length > 0 && (
-              <Notice
-                tone="warning"
-                actions={
-                  <ButtonLink to="/nodes" variant="outline" readOnlyOk>
-                    {o.viewNodes}
-                  </ButtonLink>
-                }
-              >
-                {o.flow.outdated(t.common.list(outdated))}
+            {meshMigrating.length > 0 && <Notice>{o.flow.meshMigrating(t.common.list(meshMigrating))}</Notice>}
+            {meshFailed.length > 0 && (
+              <Notice tone="warning" actions={<ButtonLink to="/logs" search={{ node: noMesh.find((n) => n.name === meshFailed[0])?.id }} variant="outline" readOnlyOk>{o.flow.viewLogs}</ButtonLink>}>
+                {o.flow.meshFailed(t.common.list(meshFailed))}
               </Notice>
             )}
+            {meshWaiting.length > 0 && <Notice>{o.flow.meshWaiting(t.common.list(meshWaiting))}</Notice>}
+            {meshUnknown.length > 0 && <Notice>{o.flow.meshNone(t.common.list(meshUnknown))}</Notice>}
             {nodes.isPending ? (
               <RowsSkeleton />
             ) : allOffline ? (
