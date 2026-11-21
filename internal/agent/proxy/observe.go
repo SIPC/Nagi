@@ -42,8 +42,10 @@ type RouteStats struct {
 	Seconds float64
 	// Classes 是各类状态码的响应数，下标是状态码的百位（1xx～5xx）。
 	Classes  [6]int
-	BytesIn  int64 // 请求体字节数；tcp/udp 是从客户端收到的字节数
-	BytesOut int64 // 响应体字节数；tcp/udp 是发给客户端的字节数
+	Statuses map[int]int // 具体 HTTP 状态码；只收 100～599，避免无界标签。
+	Maximum  float64     // 全部非 WebSocket 请求的最大耗时，不从抽样估算。
+	BytesIn  int64       // 请求体字节数；tcp/udp 是从客户端收到的字节数
+	BytesOut int64       // 响应体字节数；tcp/udp 是发给客户端的字节数
 	// L4 表示这是 tcp/udp 规则：Conns 是新连接数（UDP 按会话），Fails 是其中连不上容器的，Active 是取统计时的连接数。
 	L4     bool
 	Conns  int
@@ -171,6 +173,10 @@ func (o *observerT) record(line []byte) {
 	}
 	if c := entry.Status / 100; c >= 1 && c <= 5 {
 		s.Classes[c]++
+		if s.Statuses == nil {
+			s.Statuses = map[int]int{}
+		}
+		s.Statuses[entry.Status]++
 	}
 	s.BytesIn += entry.BytesRead
 	s.BytesOut += entry.Size
@@ -179,6 +185,7 @@ func (o *observerT) record(line []byte) {
 	}
 	s.Timed++
 	s.Seconds += entry.Duration
+	s.Maximum = max(s.Maximum, entry.Duration)
 	// 蓄水池抽样：每个请求被留下的概率相同，内存有上限。
 	if len(s.Durations) < maxSamples {
 		s.Durations = append(s.Durations, entry.Duration)

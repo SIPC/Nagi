@@ -23,6 +23,9 @@ func TestObserveSkipsWebSocketDuration(t *testing.T) {
 	if s.Timed != 2 || s.Seconds < 0.39 || s.Seconds > 0.41 || len(s.Durations) != 2 {
 		t.Errorf("耗时不能包括 WebSocket：timed=%d seconds=%g samples=%v", s.Timed, s.Seconds, s.Durations)
 	}
+	if s.Statuses[200] != 2 || s.Statuses[101] != 1 || s.Maximum != 0.3 {
+		t.Fatalf("具体状态或最大耗时丢失: %+v", s)
+	}
 	if p := s.Percentile(0.99); p > 0.31 {
 		t.Errorf("P99 = %g，被 WebSocket 拉高了", p)
 	}
@@ -31,6 +34,14 @@ func TestObserveSkipsWebSocketDuration(t *testing.T) {
 	o.record(fmt.Appendf(nil, `{"nagi_route":"p/ws","status":101,"duration":300}`))
 	if s := o.stats["p/ws"]; s.Requests != 1 || s.Timed != 0 || len(s.Durations) != 0 {
 		t.Errorf("只有 WebSocket：%+v", s)
+	}
+	for range maxSamples + 13 {
+		o.record(line(429, 0.2))
+	}
+	o.record(line(503, 3.75))
+	o.record(line(99999, 0.1))
+	if s.Statuses[429] != maxSamples+13 || s.Statuses[503] != 1 || len(s.Statuses) != 4 || s.Maximum != 3.75 || len(s.Durations) != maxSamples {
+		t.Fatalf("抽样影响了完整计数/状态码维度没有界限: %+v", s)
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -833,8 +834,9 @@ func (a *agent) domainProject(ctx context.Context, domain string) string {
 // 超过一天没有就不再记录（规则可能已经删除）。
 func routeMetrics() metrics.Source {
 	type seen struct {
-		at time.Time
-		l4 bool
+		at       time.Time
+		l4       bool
+		statuses map[int]bool
 	}
 	lastActive := map[string]seen{}
 	return func(elapsed float64) map[string]float64 {
@@ -842,7 +844,15 @@ func routeMetrics() metrics.Source {
 		stats := proxy.TakeStats()
 		for k, s := range stats {
 			if s.Requests > 0 || s.Conns > 0 || s.Active > 0 {
-				lastActive[k] = seen{now, s.L4}
+				t := lastActive[k]
+				t.at, t.l4 = now, s.L4
+				if t.statuses == nil {
+					t.statuses = map[int]bool{}
+				}
+				for status := range s.Statuses {
+					t.statuses[status] = true
+				}
+				lastActive[k] = t
 			}
 		}
 		out := map[string]float64{}
@@ -863,6 +873,13 @@ func routeMetrics() metrics.Source {
 				continue
 			}
 			out[prefix+"req"] = float64(s.Requests) / elapsed
+			out[prefix+"interval_seconds"] = elapsed
+			out[prefix+"request_count"] = float64(s.Requests)
+			out[prefix+"timed_count"] = float64(s.Timed)
+			out[prefix+"latency_samples"] = float64(len(s.Durations))
+			for status := range t.statuses {
+				out[prefix+"status@"+strconv.Itoa(status)] = float64(s.Statuses[status])
+			}
 			out[prefix+"2xx"] = float64(s.Classes[2]) / elapsed
 			out[prefix+"3xx"] = float64(s.Classes[3]) / elapsed
 			out[prefix+"4xx"] = float64(s.Classes[4]) / elapsed
@@ -872,6 +889,7 @@ func routeMetrics() metrics.Source {
 			// 只有 WebSocket 的时段没有耗时，和没有请求一样不报。
 			if s.Timed > 0 {
 				out[prefix+"lat"] = 1000 * s.Seconds / float64(s.Timed)
+				out[prefix+"max_latency"] = 1000 * s.Maximum
 				out[prefix+"p50"] = 1000 * s.Percentile(0.50)
 				out[prefix+"p95"] = 1000 * s.Percentile(0.95)
 				out[prefix+"p99"] = 1000 * s.Percentile(0.99)
