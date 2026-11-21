@@ -133,7 +133,7 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 
 ## 发布
 
-版本号从 v0.1.0 开始，按语义化版本号（`v<主>.<次>.<修订>`）打标签：修复问题加修订号，新增功能加次版本号。`nagi version` 和面板显示的版本就是标签名，本地构建显示 `dev`。
+版本号从 v0.1.0 开始，按语义化版本号（`v<主>.<次>.<修订>`）打标签：修复问题加修订号，新增功能加次版本号。正式版之前先发预发布版（`v<主>.<次>.<修订>-pre.<序号>`，见[预发布版本](#预发布版本)）。`nagi version` 和面板显示的版本就是标签名，本地构建显示 `dev`。
 
 从 v0.1.0 起，已安装的面板和节点会直接升级到新版本，改动要兼容已有数据：
 
@@ -151,18 +151,19 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 用「支持」「新增」「修复」「移至」等动词开头，例如「支持删除快照。」「修复面板重启后 MCP 客户端无法获取工具列表的问题。」
 - 升级说明只写用户需要做的事，例如「需将节点升级到 v0.14.1。」
 - 漏洞修复不逐条列出，在「修复」里只写一条「修复已知漏洞，提升安全性。」，英文写「Fixed known vulnerabilities and improved security.」，不透露漏洞的位置、成因和利用方式。
+- 预发布版的写法见[预发布版本](#预发布版本)。
 
 提交更新日志后，main 和标签一起推送（`git push origin main v<版本>`），不用等 main 上的 CI：推送 `v*` 标签时，`.github/workflows/release.yml` 自己运行 `go test ./...` 和 govulncheck，构建前端，取最新的证明证书吊销列表放进面板（`scripts/attestation-status.sh`，见 [android.md](android.md#吊销列表)），编译 `nagi-linux-amd64`、`nagi-linux-arm64`（`-s -w`，`main.version` 为标签名），连同 `scripts/install.sh`、`scripts/uninstall.sh`、`SHA256SUMS` 和两份更新日志上传到 GitHub Release。
 
 同一个流程里的 `android` 任务编译安卓 App（见 [android.md](android.md)），和面板同一个版本号，产出 `nagi-android.apk`，加进 `SHA256SUMS` 一起上传，签名证书的 SHA-256 写在发布正文末尾。App 的自动更新从 `releases/latest/download/nagi-android.apk` 下载，文件名不要改。
 
-- **版本号**：`-PnagiVersion=<标签名>`，`versionName` 是去掉 `v` 的版本号，`versionCode` 是 主版本 × 1000000 + 次版本 × 1000 + 修订号。本地编译是 `dev`。
+- **版本号**：`-PnagiVersion=<标签名>`，`versionName` 是去掉 `v` 的版本号，`versionCode` 是 (主版本 × 1000000 + 次版本 × 1000 + 修订号) × 100，正式版加 99，预发布版 `-pre.N` 加 N（见[预发布版本](#预发布版本)）。本地编译是 `dev`。
 - **混淆和压缩**：release 构建开启 R8 的代码裁剪和混淆（`isMinifyEnabled`）和资源裁剪（`isShrinkResources`），规则在 `android/app/proguard-rules.pro`。
 - **签名**：用仓库 Secrets 里的签名密钥（`NAGI_KEYSTORE_BASE64` 是密钥库文件的 base64，`NAGI_KEYSTORE_PASSWORD`、`NAGI_KEY_ALIAS`、`NAGI_KEY_PASSWORD`），解出到临时文件、用完删除。签名密钥一旦发布就不能换：换了以后已安装的 App 无法升级，只能卸载重装，所以密钥库要另外备份。
 - **失败时**：没配签名密钥时跳过这一步（不发未签名的包），面板照常发布。配了签名密钥时 App 编译失败整个发布就停下（App 的自动更新要找这个版本的 APK），修好后重新运行流程。
 - **日常构建**：`.github/workflows/android.yml` 在 `main` 上 `android/` 或 proto 有改动时编译 debug 包、跑单元测试。
 
-`scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。
+`scripts/install.sh` 是面板的一键安装脚本，从 `releases/latest/download/`（或 `--version` 指定的版本、`--channel pre` 时发布列表里最新的版本、`--download-url` 指定的镜像）下载上述文件并校验 SHA-256，安装到 `/usr/local/bin/nagi`，写入 systemd 服务 `nagi-server` 并启动，然后从日志中取出面板地址、公钥指纹和初始化链接。文件名是脚本和发布流程之间的约定，改名时两边一起改。
 
 节点安装脚本（面板生成的 `/install.sh`）和面板上节点的一键升级也从 GitHub Release 下载同样的文件（和面板同一版本，地址见 `internal/pkg/release`），面板不提供二进制。本地编译的面板（`dev`）加入的节点会装上最新发布的版本；要在测试环境里用本地编译的 nagi，把 `nagi-linux-<架构>` 和对应的 `SHA256SUMS`（要看「关于」里的更新日志，再放上两份更新日志）放到一个 HTTP 目录下，安装命令加 `--download-url <该地址>`。
 
@@ -181,6 +182,38 @@ nagi 要静态编译（`CGO_ENABLED=0`）：项目内网的代理容器用空镜
 - 默认：停止并删除 `nagi-server`、`nagi-agent` 服务，删除 `/usr/local/bin/nagi`、`/usr/bin/nagi` 链接和 bash 补全，删除代理容器（`nagi.link` 标签）和它们的镜像 `nagi-link:empty`。
 - `--purge`：另外按 `nagi.project` 标签删除项目容器及其 compose 网络和 volume 对象、项目内网，以及服务配置里 `--data-dir` 指向的数据目录。
 - 容器目录（含运行数据和快照）任何情况下都不删，只列出位置；Docker 和 `/etc/docker/daemon.json` 不动。
+
+### 预发布版本
+
+正式版之前先发预发布版，在自己的机器上运行一段时间，没有问题再发同号的正式版。先读的实现在 `internal/pkg/release`（版本比较、渠道）和 `internal/server/api/channels.go`（面板和节点的渠道）。
+
+**版本号**：`v<主>.<次>.<修订>-pre.<序号>`，例如 `v0.38.0-pre.1`、`v0.38.0-pre.2`，最后发 `v0.38.0`。序号从 1 开始，最大 98（安卓 App 的 `versionCode` 给每个修订号留了 100 个位置），没有前导 0。其他写法（`-rc.1`、`-beta`、构建信息）不发布，`release.yml` 的 `tag` 任务用 `scripts/release-tag.sh` 检查。
+
+**比较**：按语义化版本号（`release.Older`、`web/src/pages/update.tsx` 的 `isOlder`、安装脚本的 `newest_version`，三处一致）：先比主、次、修订号；相同时预发布版早于正式版（`v0.38.0-pre.2 < v0.38.0`）；两个预发布版逐段比较，数字段按数值（`pre.2 < pre.10`）。所以从预发布版可以一键升级到同号正式版，`v0.37.0` 的节点也能升级到 `v0.38.0-pre.1`。
+
+**同一版本号不重新发布**：面板和节点按版本号判断要不要更新，同号的新包装不上（v0.37.0 重新发布时就是这样）。`tag` 任务发现 GitHub 上已经有同名 Release 时停下，查询失败也停下；要修正就发下一个序号或修订号。
+
+**发布流程**：和正式版完全一样（测试、govulncheck、两个架构的编译、签名的安卓 App、`SHA256SUMS`、两份更新日志），只是 GitHub 上标成 prerelease、不设为 latest（`make_latest: false`）：`releases/latest` 和它的下载地址仍然指向上一个正式版，正式版渠道的面板、节点和不带参数的安装脚本都看不到预发布版。
+
+**更新渠道**：面板和每个节点各有一个，正式版（`stable`，默认）或预发布（`pre`）。
+
+- **面板**：「设置 → 关于」的「更新渠道」，只有管理员能改（`SettingsService.SetPanelUpdateChannel`），记入审计。存在 settings 表的 `update_channel`，每个面板自己一份，不随备用面板同步（`standby.LocalSettings`）：主、备用面板分别选、分别更新。正式版渠道查 `releases/latest` 的重定向；预发布渠道读发布列表 `releases.atom`（最近的十几个版本，含预发布版，同样不占 GitHub API 的限额），取版本号最大的一个，正式版发布后也会更新到正式版。查到的版本不属于当前渠道时当作查询失败（经加速代理查到的结果由代理决定）。改渠道后清掉缓存的最新版本，下次检查按新渠道查。
+- **节点**：节点「设置」里的「更新渠道」，要「节点管理」权限（`NodeService.SetNodeUpdateChannel`），记入审计。存在 settings 表的 `node_update_channel:<节点 ID>`，随备用面板同步；节点离线也能改，节点本身不知道自己的渠道。移除节点时删掉，重新加入时回到正式版。面板自带的节点随面板更新，没有自己的渠道。见证人是节点时同样按这台节点的渠道处理；见证人是面板时随面板。
+- **节点升级的目标**仍然是面板正在运行的版本，渠道只决定能不能升级（`nodeUpgradeTarget`）：面板是正式版时所有节点都能升级到它；面板是预发布版时只有预发布渠道的节点能升级，正式版渠道的节点留在原来的正式版。单个升级（`UpgradeNode`）、批量升级（`UpgradeAllNodes`，可以用 `channel` 只升级某个渠道的节点）、MCP 的 `upgrade_nodes` 都在面板上按这条规则判断，排队的节点开始下载前再核对一次（期间渠道改回正式版就不升级），请求和界面都绕不过去。`ListNodes` 返回每个节点的 `update_channel` 和 `upgrade_target`。
+
+**面板是预发布版、节点是正式版**：这是预发布渠道的常见用法（先只升级面板和少数节点观察），兼容范围按现有规则：
+
+- 面板兼容比自己旧一个次版本的节点（见 [control-plane.md](control-plane.md) 的「版本兼容」）。`v0.38.0-pre.N` 的面板必须能正常管理 `v0.37.x` 的节点：查看、部署、快照、顶替、见证、升级到同号正式版。这是发预发布版前的必要检查，发版测试流程要覆盖。
+- 新功能需要新节点时，按已有做法在界面上提示「节点版本过低」，不能让旧节点出错。proto 只新增字段，数据库只新增迁移。
+- 预发布版之间（`pre.1` 到 `pre.2`）可以改预发布版新增的内容，已发布正式版的数据和接口不能改：正式版渠道的节点和备用面板可能一直停在上一个正式版。
+- 预发布版的面板加入的新节点：节点安装脚本下载面板的版本，所以新节点也是预发布版，记得把它的渠道改为「预发布」，否则它不会被一键升级到之后的预发布版（能升级到下一个正式版）。
+- 面板不会退回正式版：预发布版的面板改回正式版渠道后，要等下一个正式版（同号或更新）才有更新；要立刻回到旧版本，用安装脚本 `--version` 并恢复备份的数据库（和正式版一样，新版本启动时会迁移数据库）。
+
+**安装脚本**：默认装最新的正式版。`--channel pre`（或环境变量 `NAGI_CHANNEL=pre`）装发布列表里版本号最大的版本，`--version vX.Y.Z-pre.N` 装指定版本，`--version` 优先。取不到发布列表时停下，不退回正式版。渠道参数只决定这次装哪个版本，之后一键更新的渠道在面板上选。
+
+**安卓 App**：预发布版也编译、签名和上传 `nagi-android.apk`，和正式版同一个签名。App 现在没有自动更新，用户手动安装。`versionCode` 是 (主 × 1000000 + 次 × 1000 + 修订) × 100，正式版加 99，`-pre.N` 加 N，所以 `pre.1 < pre.2 < 正式版`，装了预发布版的手机能直接装上同号正式版；v0.37.0 及以前按旧公式算出的值都比它小，已安装的 App 照常升级。以后做 App 的自动更新时，只跟随 `releases/latest`（正式版），不提示预发布版。
+
+**更新日志**：每个预发布版在 `CHANGELOG.md`、`CHANGELOG.en.md` 顶部写自己的 `## v0.38.0-pre.N`，只写比上一个预发布版新增的改动，写法和正式版相同；第一个预发布版可以在开头用一句提示说明这是预发布版。发正式版时写完整的 `## v0.38.0`，汇总各预发布版的条目（用户从上一个正式版直接升级时只看这一节），预发布版的小节保留在它下面。`scripts/release-notes.sh` 按标签取对应的小节；预发布版的 Release 正文末尾写安装这个版本的命令（`--version`），不写 `releases/latest` 的命令。面板「关于」里的更新日志：更新到预发布版时列出之间的各预发布版，更新到正式版时只列正式版的小节（`release.Sections`）。`release-notes.yml` 照常同步预发布版的正文。
 
 ## 改为项目在面板、容器分节点
 

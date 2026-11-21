@@ -245,7 +245,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `set_node_projects_root` | 修改节点的项目根目录，只影响新建的容器。等于节点的 root（节点以 root 在根目录下建目录、写数据），令牌要勾「节点终端」 | — | `SetNodeProjectsRoot` |
 | `set_node_mesh_options` | 关闭 QUIC 快速通道、不替别的节点中转、关闭直连下载、设置 HTTPS 不能用时加密 HTTP 下载的端口（`direct_http_port`，0 是默认的 80，见 [agent.md](agent.md#加密-http-下载)），只改传了的项 | — | `GetNodeMesh`、`SetNodeMeshOptions` |
 | `test_mesh_speed` | 节点和一个成员之间测速（几秒的真实流量），返回上传、下载（MB/s），走 QUIC 时附 WireGuard 的对比 | — | `TestNodeMeshSpeed` |
-| `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本，后台进行，用 `list_nodes` 看版本，用 `check_panel_update` 看各节点的阶段和下载进度；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
+| `upgrade_nodes` | 把一个节点（`node` 填节点名）或所有落后的节点（`all`）升级到面板的版本（正式版渠道的节点不升级到预发布版），后台进行，用 `list_nodes` 看版本，用 `check_panel_update` 看各节点的阶段和下载进度；`cancel` 取消排队和下载中的升级（不用确认） | 节点名或 `all` | `UpgradeNode`、`UpgradeAllNodes`、`CancelNodeUpgrade` |
 | `reclaim_node_snapshots` | 立即清理节点上每个容器的快照仓库，回收没用到的数据，快照本身不删 | — | `ReclaimNodeSnapshots` |
 | `remove_node_panel` | 从节点的信任列表移除一个面板；移除的是本面板时本面板忘记这个节点 | 面板指纹 | `ListNodePanels`、`RemoveNodePanel` |
 | `delete_node_replica` | 删除节点上已经没有容器使用的副本（`get_node` 里 `in_use` 为 false） | 容器名 | `ListNodeReplicas`、`DeleteNodeReplica` |

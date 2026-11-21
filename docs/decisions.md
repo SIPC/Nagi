@@ -90,6 +90,7 @@
 | 前端 | **Vite + React + TS + TanStack Router/Query + shadcn/ui** | 纯静态输出可打包进二进制；路由类型安全 | [development.md](development.md#依赖库) |
 | 界面风格 | **组件全部用 shadcn/ui，图表用 shadcn Charts，字体用 MiSans；保留三列结构** | 简约精致、易懂优先；不混用其他设计系统 | [ui.md](ui.md) |
 | 全局流量图 | **桑基图，对外流量 = 网卡流量 − 节点之间的流量** | 一眼看清从哪来到哪去；网卡流量覆盖所有对外流量，代价是估算值 | [monitoring.md](monitoring.md#全局概览) |
+| 预发布版本 | **`vX.Y.Z-pre.N` 走同一个发布流程，GitHub 上标成 prerelease、不设为 latest；面板和每个节点各选更新渠道，默认正式版；同一版本号不重新发布** | 先在自己的机器上运行一段时间再发正式版；正式版渠道永远看不到预发布版；面板按版本号判断更新，同号的新包认不出 | [development.md](development.md#预发布版本) |
 | 许可证 | **Apache-2.0** | 宽松，允许商用，带专利授权条款 | [development.md](development.md) |
 
 ## 待定问题
