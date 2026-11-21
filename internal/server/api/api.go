@@ -17,6 +17,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	"github.com/SIPC/nagi/internal/pkg/mesh"
 	"github.com/SIPC/nagi/internal/pkg/release"
 	"github.com/SIPC/nagi/internal/pkg/tlsutil"
@@ -53,14 +54,16 @@ type API struct {
 	// 不能插进别的修改，否则能造出指向已删角色的成员、把管理员删光（2026-11-19-87c02b5#7、#8）。
 	membersMu sync.Mutex
 
-	Q        *store.Queries
-	Auth     *auth.Service
-	Nodes    *nodes.Registry
-	Projects *projects.Service
-	CA       *tlsutil.CA
-	Sealer   *sealer.Sealer
-	Panel    *PanelInfo
-	Log      *slog.Logger
+	Q         *store.Queries
+	Auth      *auth.Service
+	Nodes     *nodes.Registry
+	Projects  *projects.Service
+	CA        *tlsutil.CA
+	Sealer    *sealer.Sealer
+	Panel     *PanelInfo
+	Log       *slog.Logger
+	Logs      *logstore.Store
+	LogConfig logstore.Config
 	// OAuth 是给 MCP 客户端用的授权服务器（见 docs/mcp.md#oauth），授权页的接口要用它。
 	OAuth *oauth.Server
 	// Audit 是审计日志（见 docs/audit.md）。

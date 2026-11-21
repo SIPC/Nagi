@@ -571,6 +571,7 @@ func (s *Server) Run(ctx context.Context) error {
 		Standby: s.standby,
 		Promote: s.Promote,
 	}}
+	a.Logs, a.LogConfig = s.cfg.Logs, s.cfg.LogConfig
 	// 旧版本存下的节点名称可能带着现在不允许的字符，按现在的规则整理一次（见 docs/control-plane.md#节点加入流程）。
 	// 备用面板只读，名称随主面板同步。
 	if s.standby == nil {

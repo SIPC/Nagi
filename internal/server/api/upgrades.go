@@ -198,7 +198,9 @@ func (s *settingsService) GetUpdateStatus(ctx context.Context, _ *connect.Reques
 
 // runPanelUpdate 在后台下载并替换面板，成功后原地重启。
 func (a *API) runPanelUpdate(ctx context.Context, latest string) {
+	finish := func(string, error) {}
 	fail := func(err error) {
+		finish("failed", err)
 		a.updates.running.Store(false)
 		a.withUpdates(ctx, func(r *updateRecords) {
 			if r.Panel != nil {
@@ -215,6 +217,7 @@ func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 		installCtx = release.WithProgress(installCtx, func(p release.Progress) { a.updates.setProgress(mine, p, time.Now()) })
 		defer a.updates.clearProgress(mine)
 	}
+	installCtx, finish = release.Journal(installCtx, a.Logs, time.Duration(a.LogConfig.UpgradeProgressSeconds)*time.Second, a.Panel.Version, latest)
 	exe, src, err := release.Install(installCtx, a.Panel.DataDir, latest, a.Log)
 	if errors.Is(err, context.DeadlineExceeded) {
 		err = i18n.New("10 分钟内没有完成下载和校验，已停止更新")
@@ -229,6 +232,7 @@ func (a *API) runPanelUpdate(ctx context.Context, latest string) {
 		}
 	})
 	a.Log.Info("面板已替换为新版本，重启", "from", a.Panel.Version, "to", latest, "source", src.Name())
+	finish("restarting", nil)
 	time.Sleep(time.Second) // 让界面看到状态
 	if err := release.Reexec(exe); err != nil {
 		a.Log.Error("重启失败，请手动重启面板", "err", err)
