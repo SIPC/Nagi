@@ -3,10 +3,16 @@ package project_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/project"
 	"github.com/SIPC/nagi/internal/agent/store/nodestore"
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -14,6 +20,84 @@ import (
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"google.golang.org/protobuf/proto"
 )
+
+func TestImageCheckHistoryDistinguishesUnknownAndUpdate(t *testing.T) {
+	var phase atomic.Int32
+	local, remote := "sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("b", 64)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/containers/json"):
+			io.WriteString(w, `[{"Id":"one","Image":"nginx:latest","ImageID":"image1","Labels":{"com.docker.compose.service":"app"}}]`)
+		case strings.Contains(r.URL.Path, "/images/"):
+			fmt.Fprintf(w, `{"RepoDigests":["nginx@%s"]}`, local)
+		case strings.Contains(r.URL.Path, "/distribution/"):
+			if phase.Load() == 0 {
+				http.Error(w, "registry unavailable", 503)
+				return
+			}
+			digest := local
+			if phase.Load() == 1 {
+				digest = remote
+			}
+			fmt.Fprintf(w, `{"Descriptor":{"digest":%q}}`, digest)
+		default:
+			t.Errorf("unexpected endpoint: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+	t.Setenv("DOCKER_API_VERSION", "1.56")
+	t.Setenv("DOCKER_TLS_VERIFY", "")
+	dc, err := docker.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dc.Close()
+	d, err := db.OpenMigrated(t.Context(), filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	m, err := project.NewManager(d, dc, project.DefaultSubnetPool, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Journal, err = logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Journal.Close()
+	const pid = "0123456789abcdef"
+	spec := &nagiv1.ContainerSpec{ProjectId: pid, Name: "web", Dir: t.TempDir(), Config: &nagiv1.ContainerConfig{}}
+	b, err := proto.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := nodestore.New(d).UpsertContainer(t.Context(), nodestore.UpsertContainerParams{ProjectID: pid, Name: "web", Dir: spec.Dir, Spec: b}); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"unknown", "update_available", "unchanged"} {
+		phase.Store(int32(i))
+		updates, err := m.CheckImages(t.Context(), pid, "web")
+		if err != nil || (len(updates) == 1) != (i == 1) {
+			t.Fatalf("business result changed: %+v %v", updates, err)
+		}
+		rows, err := m.Journal.Query(t.Context(), logstore.Filter{Category: logstore.Task, Project: pid})
+		if err != nil || len(rows) != (i+1)*3 {
+			t.Fatalf("history: %+v %v", rows, err)
+		}
+		row := rows[i*3+1]
+		var data struct{ Result, Service, Error string }
+		if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+			t.Fatal(err)
+		}
+		if row.Kind != "image.check" || row.Object != "web" || data.Service != "app" || data.Result != want || (data.Error != "") != (i == 0) {
+			t.Fatalf("missing/error was called unchanged: %+v %s", row, row.Data)
+		}
+	}
+}
 
 func TestTaskHistoryWithoutViewer(t *testing.T) {
 	ctx := t.Context()

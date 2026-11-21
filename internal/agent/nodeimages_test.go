@@ -2,7 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,7 +16,9 @@ import (
 
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -374,5 +382,98 @@ func TestPullImageFollowsCaller(t *testing.T) {
 	}
 	if !readOnlyRPCs[nagiv1.AgentService_ListImages_FullMethodName] || readOnlyRPCs[nagiv1.AgentService_DeleteImages_FullMethodName] || readOnlyRPCs[nagiv1.AgentService_PullImage_FullMethodName] {
 		t.Error("备用面板只能列出镜像")
+	}
+}
+
+type imageHistoryStream struct {
+	grpc.ServerStream
+	ctx     context.Context
+	sendErr error
+}
+
+func (s *imageHistoryStream) Context() context.Context          { return s.ctx }
+func (s *imageHistoryStream) Send(*nagiv1.ImagePullEvent) error { return s.sendErr }
+
+func TestImagePullHistory(t *testing.T) {
+	for _, mode := range []string{"ok", "daemon_failure", "viewer_gone"} {
+		t.Run(mode, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/info"):
+					io.WriteString(w, `{}`)
+				case strings.HasSuffix(r.URL.Path, "/images/create"):
+					io.WriteString(w, "{\"id\":\"layer\",\"status\":\"Downloading\",\"progressDetail\":{\"current\":17,\"total\":91}}\n")
+					if mode == "daemon_failure" {
+						io.WriteString(w, "{\"errorDetail\":{\"message\":\"registry unavailable\"}}\n")
+					}
+				case strings.HasSuffix(r.URL.Path, "/json"):
+					io.WriteString(w, `{"Id":"`+idNginx+`"}`)
+				default:
+					t.Errorf("unexpected Docker endpoint: %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+			t.Setenv("DOCKER_HOST", "tcp://"+strings.TrimPrefix(srv.URL, "http://"))
+			t.Setenv("DOCKER_API_VERSION", "1.56")
+			t.Setenv("DOCKER_TLS_VERIFY", "")
+			t.Setenv("DOCKER_CONFIG", t.TempDir())
+			dc, err := docker.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer dc.Close()
+			path := filepath.Join(t.TempDir(), "logs.db")
+			journal, err := logstore.Open(t.Context(), path, 2<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := &agent{docker: dc, cfg: Config{Logs: journal}, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			stream := &imageHistoryStream{ctx: t.Context()}
+			if mode == "viewer_gone" {
+				stream.sendErr = io.ErrClosedPipe
+			}
+			err = (&agentService{node: a}).PullImage(&nagiv1.PullImageRequest{Image: "nginx:1.27"}, stream)
+			if mode == "ok" && err != nil || mode == "daemon_failure" && status.Code(err) != codes.FailedPrecondition || mode == "viewer_gone" && !errors.Is(err, io.ErrClosedPipe) {
+				t.Fatalf("pull result changed: %v", err)
+			}
+			if err := journal.Close(); err != nil {
+				t.Fatal(err)
+			}
+			journal, err = logstore.Open(t.Context(), path, 2<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer journal.Close()
+			rows, err := journal.Query(t.Context(), logstore.Filter{Category: logstore.Task})
+			if err != nil || len(rows) != 3 {
+				t.Fatalf("history: %+v %v", rows, err)
+			}
+			var taskID string
+			for i, row := range rows {
+				var data struct {
+					TaskID               string `json:"task_id"`
+					Phase, Result, Error string
+					Pulled               bool
+					Current, Total       int64
+				}
+				if err := json.Unmarshal(row.Data.(json.RawMessage), &data); err != nil {
+					t.Fatal(err)
+				}
+				if i == 0 {
+					taskID = data.TaskID
+				}
+				if taskID == "" || data.TaskID != taskID || row.Kind != "image.pull" || row.Object != "docker.io/library/nginx:1.27" || data.Phase != []string{"started", "progress", "finished"}[i] {
+					t.Fatalf("task association: %+v %s", row, row.Data)
+				}
+				if i == 1 && (data.Current != 17 || data.Total != 91) {
+					t.Fatalf("progress: %s", row.Data)
+				}
+				if i == 2 && (data.Pulled != (mode != "daemon_failure") || (data.Result == "ok") != (mode == "ok") || (data.Error != "") != (mode != "ok")) {
+					t.Fatalf("completion: %s", row.Data)
+				}
+			}
+		})
 	}
 }

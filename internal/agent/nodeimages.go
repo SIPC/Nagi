@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/docker"
 	"github.com/SIPC/nagi/internal/agent/metrics"
 	"github.com/SIPC/nagi/internal/agent/project"
+	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/distribution/reference"
 	"google.golang.org/grpc/codes"
@@ -463,7 +465,7 @@ func watchPullDisk(ctx context.Context, check func() error, stop context.CancelC
 	}
 }
 
-func (s *agentService) PullImage(req *nagiv1.PullImageRequest, stream nagiv1.AgentService_PullImageServer) error {
+func (s *agentService) PullImage(req *nagiv1.PullImageRequest, stream nagiv1.AgentService_PullImageServer) (retErr error) {
 	ref, domain, err := normalizeImageRef(req.GetImage())
 	if err != nil {
 		return err
@@ -481,6 +483,17 @@ func (s *agentService) PullImage(req *nagiv1.PullImageRequest, stream nagiv1.Age
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
 	a := s.node
+	taskID, started := rand.Text(), time.Now()
+	pulled := false
+	a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.pull", Object: ref,
+		Data: map[string]any{"task_id": taskID, "phase": "started"}})
+	defer func() {
+		data := map[string]any{"task_id": taskID, "phase": "finished", "result": "ok", "pulled": pulled, "duration_ms": time.Since(started).Milliseconds()}
+		if retErr != nil {
+			data["result"], data["error"], data["code"] = "failed", retErr.Error(), status.Code(retErr).String()
+		}
+		a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.pull", Object: ref, Data: data})
+	}()
 	if root, err := a.docker.DockerRoot(ctx); err == nil && root != "" {
 		if err := metrics.CheckDisk(root, 0); err != nil {
 			return status.Error(codes.ResourceExhausted, err.Error())
@@ -490,6 +503,9 @@ func (s *agentService) PullImage(req *nagiv1.PullImageRequest, stream nagiv1.Age
 	}
 	a.log.Info("拉取镜像", "image", ref)
 	err = a.docker.Pull(ctx, ref, globalRegistryAuth(ctx, domain), func(p docker.PullProgress) {
+		a.cfg.Logs.Report(logstore.Event{Category: logstore.Task, Kind: "image.pull", Object: ref,
+			Data: map[string]any{"task_id": taskID, "phase": "progress", "status": p.Status, "current": p.Current,
+				"total": p.Total, "layers_done": p.LayersDone, "layers": p.Layers}})
 		_ = stream.Send(&nagiv1.ImagePullEvent{Status: p.Status, Current: p.Current, Total: p.Total, LayersDone: int32(p.LayersDone), Layers: int32(p.Layers)})
 	})
 	var low *metrics.LowDiskError
@@ -505,6 +521,7 @@ func (s *agentService) PullImage(req *nagiv1.PullImageRequest, stream nagiv1.Age
 		a.log.Warn("拉取镜像失败", "image", ref, "err", err)
 		return status.Error(codes.FailedPrecondition, fmt.Sprintf("拉取镜像失败：%s", err))
 	}
+	pulled = true
 	id, _ := a.docker.ImageID(ctx, ref)
 	return stream.Send(&nagiv1.ImagePullEvent{Status: "Pull complete", Done: true, Id: id})
 }
