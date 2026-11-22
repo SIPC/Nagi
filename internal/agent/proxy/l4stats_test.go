@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net"
@@ -43,10 +44,13 @@ func TestL4Stats(t *testing.T) {
 		deadPort = freePort(t, "tcp")
 	}
 
+	// Caddy may finish an old UDP session after Stop returns. Scope the
+	// process-wide route statistics to this test's own project.
+	project := rand.Text()
 	routes := []Route{
-		{Project: "p", Name: "game", Protocol: "tcp", Published: tcpPort, Upstreams: []string{tcpUp.Addr().String()}},
-		{Project: "p", Name: "game", Protocol: "udp", Published: udpPort, Upstreams: []string{udpUp.LocalAddr().String()}},
-		{Project: "p", Name: "down", Protocol: "tcp", Published: deadPort, Upstreams: []string{"127.0.0.1:" + strconv.Itoa(int(dead))}},
+		{Project: project, Name: "game", Protocol: "tcp", Published: tcpPort, Upstreams: []string{tcpUp.Addr().String()}},
+		{Project: project, Name: "game", Protocol: "udp", Published: udpPort, Upstreams: []string{udpUp.LocalAddr().String()}},
+		{Project: project, Name: "down", Protocol: "tcp", Published: deadPort, Upstreams: []string{"127.0.0.1:" + strconv.Itoa(int(dead))}},
 	}
 	data, err := json.Marshal(build(routes, t.TempDir(), func(string) bool { return false }))
 	if err != nil {
@@ -76,7 +80,7 @@ func TestL4Stats(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 连接还开着：当前连接数是 1。
-	if s := TakeStats()["p/game"]; !s.L4 || s.Active != 1 || s.Conns != 1 || s.BytesIn != 5 {
+	if s := TakeStats()[project+"/game"]; !s.L4 || s.Active != 1 || s.Conns != 1 || s.BytesIn != 5 {
 		t.Fatalf("连接开着时：%+v", s)
 	}
 	if _, err := up.Write([]byte("bye")); err != nil {
@@ -132,7 +136,7 @@ func TestL4Stats(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		s := TakeStats()
-		g, dn := s["p/game"], s["p/down"]
+		g, dn := s[project+"/game"], s[project+"/down"]
 		game.Conns += g.Conns
 		game.BytesIn += g.BytesIn
 		game.BytesOut += g.BytesOut
@@ -189,10 +193,10 @@ func TestL4Stats(t *testing.T) {
 		if !ok || !e.Opened.Equal(start.Time) || e.Duration < 0 || e.Time.Before(start.Time) {
 			t.Fatalf("unmatched end %+v", e)
 		}
-		if e.Route == "p/game" && e.Protocol == "tcp" {
+		if e.Route == project+"/game" && e.Protocol == "tcp" {
 			closed = e.BytesIn == 5 && e.BytesOut == 3 && e.EndReason == "observer_finished" && e.Error == ""
 		}
-		if e.Route == "p/down" {
+		if e.Route == project+"/down" {
 			rejected = e.EndReason == "handler_error" && e.Error != ""
 		}
 	}
