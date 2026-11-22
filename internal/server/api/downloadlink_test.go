@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -417,20 +418,26 @@ func TestDownloadLinkBindsFirstUse(t *testing.T) {
 
 // 每个被拒绝的地址只报一次，记下的地址有上限；会话不再允许时不绑定，失败的请求不会占住链接。
 func TestDownloadLinkBindAfterAuth(t *testing.T) {
-	if b, r := bindLink("bind-test", "192.0.2.1"); b != "192.0.2.1" || r {
+	bindingID := rand.Text()
+	t.Cleanup(func() {
+		linkBinds.Lock()
+		delete(linkBinds.m, bindingID)
+		linkBinds.Unlock()
+	})
+	if b, r := bindLink(bindingID, "192.0.2.1"); b != "192.0.2.1" || r {
 		t.Fatalf("第一次：%q %v", b, r)
 	}
-	if b, r := bindLink("bind-test", "192.0.2.2"); b != "192.0.2.1" || !r {
+	if b, r := bindLink(bindingID, "192.0.2.2"); b != "192.0.2.1" || !r {
 		t.Fatalf("别的地址：%q %v", b, r)
 	}
-	if _, r := bindLink("bind-test", "192.0.2.2"); r {
+	if _, r := bindLink(bindingID, "192.0.2.2"); r {
 		t.Error("同一个地址只报一次")
 	}
 	for i := range maxLinkDenied + 5 {
-		bindLink("bind-test", "198.51.100."+strconv.Itoa(i+1))
+		bindLink(bindingID, "198.51.100."+strconv.Itoa(i+1))
 	}
 	linkBinds.Lock()
-	n := len(linkBinds.m["bind-test"].denied)
+	n := len(linkBinds.m[bindingID].denied)
 	linkBinds.Unlock()
 	if n > maxLinkDenied {
 		t.Errorf("拒绝的地址记了 %d 个", n)
