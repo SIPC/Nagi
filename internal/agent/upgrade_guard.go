@@ -28,17 +28,23 @@ type pendingUpgrade struct {
 	Starts int    `json:"starts"`
 }
 
+// Serialize the file's readers and writers across guard instances too: a
+// previous confirmation window may still be resetting the same record.
+var upgradeGuardMu sync.Mutex
+
 func pendingUpgradeFile(identityDir string) string {
 	return filepath.Join(identityDir, "upgrade-pending.json")
 }
 
 // markUpgrade 在替换可执行文件以后、重启之前调用。
 func markUpgrade(identityDir, from, to string) error {
+	upgradeGuardMu.Lock()
+	defer upgradeGuardMu.Unlock()
 	b, err := json.Marshal(pendingUpgrade{From: from, To: to})
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(pendingUpgradeFile(identityDir), b, 0o600)
+	return writeAtomic(pendingUpgradeFile(identityDir), b)
 }
 
 // guardUpgrade 在节点启动时最先调用。刚升级到 version 时开始自检，返回的 confirm 在连上面板后调用；
@@ -48,6 +54,8 @@ func guardUpgrade(identityDir, version string, log *slog.Logger) (confirm func()
 }
 
 func guardUpgradeWith(identityDir, version string, log *slog.Logger, window time.Duration, rollback func(string, pendingUpgrade, *slog.Logger, string)) func() {
+	upgradeGuardMu.Lock()
+	defer upgradeGuardMu.Unlock()
 	file := pendingUpgradeFile(identityDir)
 	b, err := os.ReadFile(file)
 	if err != nil {
@@ -65,14 +73,13 @@ func guardUpgradeWith(identityDir, version string, log *slog.Logger, window time
 		return func() {}
 	}
 	if b, err := json.Marshal(p); err == nil {
-		_ = os.WriteFile(file, b, 0o600)
+		_ = writeAtomic(file, b)
 	}
-	var mu sync.Mutex
 	confirmed := false
 	go func() {
 		time.Sleep(window)
-		mu.Lock()
-		defer mu.Unlock()
+		upgradeGuardMu.Lock()
+		defer upgradeGuardMu.Unlock()
 		if confirmed {
 			return
 		}
@@ -80,12 +87,12 @@ func guardUpgradeWith(identityDir, version string, log *slog.Logger, window time
 		log.Warn("新版本启动后 2 分钟内没有连上面板，继续重试", "version", version)
 		p.Starts = 0
 		if b, err := json.Marshal(p); err == nil {
-			_ = os.WriteFile(file, b, 0o600)
+			_ = writeAtomic(file, b)
 		}
 	}()
 	return func() {
-		mu.Lock()
-		defer mu.Unlock()
+		upgradeGuardMu.Lock()
+		defer upgradeGuardMu.Unlock()
 		if confirmed {
 			return
 		}
