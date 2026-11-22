@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
 
 	"connectrpc.com/connect"
 	"github.com/SIPC/nagi/internal/pkg/db"
@@ -20,6 +21,11 @@ func (plainSealer) Open(c, _ []byte) ([]byte, error) { return c, nil }
 
 // 知道密码的人换 IP 猜两步验证码：验证码猜错按账号计数，换 IP 也会被锁。
 func TestLoginTOTPLimitedPerAccount(t *testing.T) {
+	// 密码校验的真实 CPU 耗时不能耗尽测试要核对的一秒锁定窗口。
+	synctest.Test(t, testLoginTOTPLimitedPerAccount)
+}
+
+func testLoginTOTPLimitedPerAccount(t *testing.T) {
 	ctx := context.Background()
 	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "panel.db"), store.Migrations)
 	if err != nil {
