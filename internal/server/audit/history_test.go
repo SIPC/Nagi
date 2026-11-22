@@ -131,6 +131,11 @@ func TestJournalRedactsLiveAndImportedAuditWithoutChangingOldChain(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Reconciliation is against already persisted live facts. Report queues
+	// them asynchronously; production snapshots its head before live capture.
+	if err := dest.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if err := l.MigrateHistory(ctx, dest, 3); err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +182,9 @@ func TestPanelHistoryReconcilesLiveCaptureAndPreservesEvidence(t *testing.T) {
 			Action: "OpenNodeShell", ProjectID: "project-a", TargetID: "node-a", RecordingID: summary.ID}) == 0 {
 			t.Fatal("seed")
 		}
+	}
+	if err := dest.Flush(ctx); err != nil {
+		t.Fatal(err)
 	}
 	if err := l.MigrateHistory(ctx, dest, 137); err != nil {
 		t.Fatal(err)
