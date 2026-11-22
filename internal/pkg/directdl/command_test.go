@@ -361,9 +361,11 @@ func TestWindowsScript(t *testing.T) {
 			if err != nil || !bytes.Equal(got, small) {
 				t.Fatalf("解密的内容不对：%v\n%s", err, out)
 			}
+			srv3.mu.Lock()
 			if want := fmt.Sprintf("bytes=%d-%d", len(enc), len(small)-1); len(srv3.requests) != 1 || srv3.requests[0] != want {
 				t.Errorf("应该续传（%s）：%q", want, srv3.requests)
 			}
+			srv3.mu.Unlock()
 			// 内容不对时提示失败。
 			c3.SHA256 = strings.Repeat("0", 64)
 			if out := runPS(t, host, env, t.TempDir(), t.TempDir(), c3.Windows(), true); !strings.Contains(out, "FAILED: SHA-256 mismatch") {

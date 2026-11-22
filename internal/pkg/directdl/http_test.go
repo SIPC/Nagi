@@ -340,9 +340,11 @@ func TestCommandOpenSSL(t *testing.T) {
 	if len(entries) != 1 {
 		t.Errorf("只应该留下解密的文件：%v", entries)
 	}
+	srv.mu.Lock()
 	if want := fmt.Sprintf("bytes=%d-%d", len(enc), len(plain)-1); len(srv.requests) != 1 || srv.requests[0] != want {
 		t.Errorf("应该从断开的地方续传（%s）：%q", want, srv.requests)
 	}
+	srv.mu.Unlock()
 	// 内容不对时提示失败。
 	c.SHA256 = strings.Repeat("0", 64)
 	cmd = exec.Command("sh", "-c", c.String())
