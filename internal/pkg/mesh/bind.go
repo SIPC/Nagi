@@ -856,8 +856,14 @@ func (b *Bind) handleControl(c *net.UDPConn, local int, from netip.AddrPort, pkt
 			b.flushPending()
 			b.mu.Lock()
 			caps := b.capsPacket(p)
+			onCaps := b.onCaps
+			quicReady := p.has(capQUIC, now)
 			b.mu.Unlock()
 			b.write(c, caps, from)
+			// 能力包可能先于本端的 pong 到达；路径就绪后补建此前无法建立的 QUIC。
+			if quicReady && onCaps != nil {
+				go onCaps(m.key)
+			}
 		}
 	case typeCaps:
 		b.mu.Lock()

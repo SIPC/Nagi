@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"io"
@@ -157,6 +158,53 @@ func TestQUICBadProof(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestQUICCapabilitiesBeforeDirectPath(t *testing.T) {
+	a, b := newNode(t, false), newNode(t, false)
+	ak, bk := a.m.PublicKey(), b.m.PublicKey()
+	if bytes.Compare(ak[:], bk[:]) > 0 {
+		a, b = b, a
+		ak, bk = bk, ak
+	}
+	if err := a.m.SetPeers([]Peer{{Key: bk}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.m.SetPeers([]Peer{{Key: ak}}); err != nil {
+		t.Fatal(err)
+	}
+	// 先送达已认证的能力包，再让双方发现直连，复现合法的 UDP 控制包乱序。
+	bb := b.m.bind
+	bb.mu.Lock()
+	caps := bb.capsPacket(bb.peers[ak])
+	sock := bb.sock(0)
+	bb.mu.Unlock()
+	if _, err := sock.WriteToUDPAddrPort(caps, local(a.port)[0]); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		a.m.bind.mu.Lock()
+		known := a.m.bind.peers[bk].has(capQUIC, time.Now())
+		a.m.bind.mu.Unlock()
+		if known {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("未收到能力包")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if err := a.m.SetPeers([]Peer{{Key: bk, Endpoints: local(b.port)}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.m.SetPeers([]Peer{{Key: ak, Endpoints: local(a.port)}}); err != nil {
+		t.Fatal(err)
+	}
+	waitPath(t, a.m, bk, "direct")
+	waitPath(t, b.m, ak, "direct")
+	waitQUIC(t, a.m, bk)
 }
 
 var _ net.Conn = (*quicStream)(nil)
