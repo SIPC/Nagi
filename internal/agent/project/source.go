@@ -140,8 +140,16 @@ type lineWriter struct {
 
 func (w *lineWriter) Write(b []byte) (int, error) {
 	n := len(b)
+	lf := bytes.IndexByte(b, '\n')
 	for len(b) > 0 {
-		i := bytes.IndexAny(b, "\r\n")
+		i := lf
+		beforeLF := b
+		if i >= 0 {
+			beforeLF = b[:i]
+		}
+		if cr := bytes.IndexByte(beforeLF, '\r'); cr >= 0 {
+			i = cr
+		}
 		if i < 0 {
 			w.add(b)
 			break
@@ -152,6 +160,11 @@ func (w *lineWriter) Write(b []byte) (int, error) {
 		}
 		w.buf, w.skip = w.buf[:0], false
 		b = b[i+1:]
+		if i == lf {
+			lf = bytes.IndexByte(b, '\n')
+		} else if lf >= 0 {
+			lf -= i + 1
+		}
 	}
 	return n, nil
 }

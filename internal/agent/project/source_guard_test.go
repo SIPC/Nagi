@@ -3,6 +3,7 @@ package project
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,6 +46,38 @@ func TestLineWriterLongLine(t *testing.T) {
 	w.Write([]byte(strings.Repeat("a", maxProgressLine-1) + "中\n"))
 	if len(lines) != 2 || lines[0] != "Receiving objects" || !utf8.ValidString(lines[1]) || lines[1] != strings.Repeat("a", maxProgressLine-1)+"…" {
 		t.Fatalf("分几次写和截断：%q", lines)
+	}
+}
+
+func TestLineWriterCarriageReturns(t *testing.T) {
+	for _, row := range []string{"\r", "progress\r"} {
+		t.Run(fmt.Sprintf("row-%d", len(row)), func(t *testing.T) {
+			count := 0
+			w := &lineWriter{onLine: func(line string) {
+				if line != "progress" {
+					t.Fatalf("unexpected progress: %q", line)
+				}
+				count++
+			}}
+			rows := (1 << 20) / len(row)
+			input := []byte(strings.Repeat(row, rows))
+			start := time.Now()
+			if n, err := w.Write(input); n != len(input) || err != nil {
+				t.Fatal(n, err)
+			}
+			elapsed := time.Since(start)
+			t.Logf("%d bytes, %d CR rows: %v", len(input), rows, elapsed)
+			if elapsed > 2*time.Second {
+				t.Fatalf("1 MiB of CR progress took %v", elapsed)
+			}
+			want := 0
+			if row != "\r" {
+				want = rows
+			}
+			if count != want {
+				t.Fatalf("progress count: %d, want %d", count, want)
+			}
+		})
 	}
 }
 
