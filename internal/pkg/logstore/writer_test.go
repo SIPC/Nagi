@@ -98,4 +98,64 @@ func TestReportOverflowIsCountedAndImportantRecordsSurvive(t *testing.T) {
 	if lost == 0 || uint64(kept)+lost != 12000 {
 		t.Fatalf("overflow not accounted: kept=%d lost=%d", kept, lost)
 	}
+	st, err := s.State(ctx)
+	if err != nil || st.WriteErrors < lost {
+		t.Fatalf("recent copies must see overflow errors: errors=%d lost=%d err=%v", st.WriteErrors, lost, err)
+	}
+}
+
+// Keep ordinary writes queued behind real SQLite work. Loss summaries must
+// still reach the important queue without waiting for an idle writer.
+func TestLossSummaryWhileOrdinaryQueueRemainsBusy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "logs.db")
+	s := openStore(t, path, 128<<20)
+	d, err := db.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if _, err := d.Exec(`CREATE TRIGGER slow_access BEFORE INSERT ON log_events WHEN NEW.category='access'
+		BEGIN SELECT (WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100) SELECT sum(x) FROM n); END`); err != nil {
+		t.Fatal(err)
+	}
+	batch := make([]logstore.Event, 512)
+	for i := range batch {
+		batch[i] = logstore.Event{Category: logstore.Access, Kind: "busy.request"}
+	}
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(5 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			s.ReportBatch(batch)
+			select {
+			case <-stop:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+	defer func() {
+		close(stop)
+		<-done
+		if err := s.Flush(t.Context()); err != nil {
+			t.Error(err)
+		}
+		if _, err := d.Exec(`DROP TRIGGER slow_access`); err != nil {
+			t.Error(err)
+		}
+	}()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		var summaries int
+		if err := d.QueryRow(`SELECT count(*) FROM log_events WHERE kind='logstore.write.lost'`).Scan(&summaries); err != nil {
+			t.Fatal(err)
+		}
+		if summaries > 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("confirmed loss summary did not persist while ordinary writes stayed busy")
 }

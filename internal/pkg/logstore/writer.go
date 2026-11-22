@@ -76,7 +76,9 @@ func (s *Store) fail(category string, failed, lost uint64, err error) {
 	if failed == 0 && lost == 0 {
 		return
 	}
-	s.errors.Add(failed)
+	// A dropped record is an error even if it never reached SQLite. Failed
+	// and Lost can describe the same record, so do not count their sum.
+	s.errors.Add(max(failed, lost))
 	w := &s.w
 	w.mu.Lock()
 	if w.failures == nil {
@@ -218,6 +220,11 @@ func (s *Store) run() {
 	lostTick := time.NewTicker(lostEverySecs * time.Second)
 	defer lostTick.Stop()
 	for {
+		select {
+		case <-lostTick.C:
+			s.reportLost()
+		default:
+		}
 		batch, k := w.take()
 		if batch == nil {
 			w.mu.Lock()
