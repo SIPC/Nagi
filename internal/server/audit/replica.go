@@ -216,15 +216,17 @@ func (l *Log) ApplyFrame(ctx context.Context, frame []byte, rec *Recordings) (in
 	if err := l.WriteBatch(ctx, w.Events, w.Tombstones, w.Chunks, rec); err != nil {
 		return 0, err
 	}
-	// The cursors may only move forward and never past what this replica
-	// holds: a promoted panel must not believe records it lacks were sent.
+	// Cursors only move forward. Panel cursors cannot pass this replica's
+	// head; node cursors use each node's independent sequence, not panel IDs.
 	if len(w.Cursors) > 0 {
 		have := l.MaxID(ctx)
 		for k, v := range w.Cursors {
-			if !strings.HasPrefix(k, "sink:") || !strings.HasSuffix(k, ":cursor") || strings.Contains(k, ":node:") {
+			if !strings.HasPrefix(k, "sink:") || !strings.HasSuffix(k, ":cursor") {
 				continue
 			}
-			v = min(v, have)
+			if !strings.Contains(k, ":node:") {
+				v = min(v, have)
+			}
 			if old, err := strconv.ParseInt(l.Meta(ctx, k), 10, 64); err == nil && old >= v {
 				continue
 			}

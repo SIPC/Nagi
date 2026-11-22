@@ -204,3 +204,83 @@ func TestReplicaCarriesSinkCursorAcrossPromotion(t *testing.T) {
 		}
 	}
 }
+
+func TestReplicaCarriesNodeSinkCursorsAcrossPromotion(t *testing.T) {
+	ctx := t.Context()
+	primary, standby := openTestLog(t), openTestLog(t)
+	primary.Record(ctx, Event{Category: Operation, Action: "PanelHead"})
+	for key, value := range map[string]string{"sink:h:node:a:cursor": "100", "sink:h:node:b:cursor": "103"} {
+		if err := primary.SetMeta(ctx, key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, frame, err := primary.ReadBatch(ctx, 0, 50, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := standby.ApplyFrame(ctx, frame, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, cursors := range []map[string]int64{primary.SinkCursors(ctx), {"sink:h:node:a:cursor": 99, "sink:h:node:b:cursor": 102}} {
+		if _, err := standby.ApplyFrame(ctx, CursorFrame(cursors), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	standby.Close()
+	promoted, err := Open(ctx, standby.path, standby.log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer promoted.Close()
+	var mu sync.Mutex
+	got := map[string]map[int64]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		sc := bufio.NewScanner(r.Body)
+		for sc.Scan() {
+			var line struct {
+				NodeID string `json:"node_id"`
+				Seq    int64  `json:"seq"`
+			}
+			if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
+				t.Error(err)
+				continue
+			}
+			if got[line.NodeID] == nil {
+				got[line.NodeID] = map[int64]int{}
+			}
+			got[line.NodeID][line.Seq]++
+		}
+	}))
+	defer srv.Close()
+	sk := SinkConfig{ID: "h", Type: "http", URL: srv.URL}
+	sh := &Shipper{Log: promoted, client: srv.Client()}
+	for node, start := range map[string]int64{"a": 100, "b": 103} {
+		n := NodeSource{ID: node, Read: func(ctx context.Context, after int64, limit int) ([][]byte, int64, int64, int64, error) {
+			if after < 0 {
+				return nil, 0, 0, 110, nil // Old migration window expired: discovery would skip the backlog.
+			}
+			var lines [][]byte
+			for seq := after + 1; seq <= 110; seq++ {
+				lines = append(lines, []byte(`{"seq":`+strconv.FormatInt(seq, 10)+`}`))
+			}
+			return lines, after + 1, 110, 110, nil
+		}}
+		for range 2 {
+			if err := sh.relayNode(ctx, sk, n); err != nil {
+				t.Fatal(err)
+			}
+		}
+		mu.Lock()
+		for seq := start + 1; seq <= 110; seq++ {
+			if got[node][seq] != 1 {
+				t.Fatalf("node %s sequence %d delivered %d times: %v", node, seq, got[node][seq], got)
+			}
+		}
+		if len(got[node]) != int(110-start) || promoted.Meta(ctx, nodeCursorKey("h", node)) != "110" {
+			t.Fatalf("node %s cursor or delivered range is wrong: %v", node, got)
+		}
+		mu.Unlock()
+	}
+}
