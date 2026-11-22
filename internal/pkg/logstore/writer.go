@@ -17,12 +17,13 @@ import (
 // lost when their queue overflows or the process dies before the commit.
 // Ordinary records get one batched attempt; a failed batch is counted as lost.
 const (
-	queueEntries  = 8192
-	queueBytes    = 16 << 20
-	batchEntries  = 512
-	batchBytes    = 1 << 20
-	retryMax      = 10 * time.Second
-	lostEverySecs = 10
+	queueEntries         = 8192
+	queueBytes           = 16 << 20
+	batchEntries         = 512
+	ordinaryBatchEntries = 128
+	batchBytes           = 1 << 20
+	retryMax             = 10 * time.Second
+	lostEverySecs        = 10
 )
 
 // WriteFailure is this process's per-category write outcome. Failed counts
@@ -188,8 +189,14 @@ func (w *writer) take() ([]row, int) {
 		if len(q.items) == 0 {
 			continue
 		}
+		// Ordinary transactions must yield frequently enough for loss summaries
+		// and important records; keep the important queue's full batching.
+		limit := batchEntries
+		if k == 0 {
+			limit = ordinaryBatchEntries
+		}
 		n, size := 0, int64(0)
-		for n < len(q.items) && n < batchEntries && (n == 0 || size+q.items[n].size() <= batchBytes) {
+		for n < len(q.items) && n < limit && (n == 0 || size+q.items[n].size() <= batchBytes) {
 			size += q.items[n].size()
 			n++
 		}

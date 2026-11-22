@@ -2,6 +2,7 @@ package logstore_test
 
 import (
 	"context"
+	"database/sql/driver"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
+	"modernc.org/sqlite"
 )
 
 // A slow recent-copy transaction (many nodes, slow disk) must not hold the
@@ -104,9 +106,20 @@ func TestReportOverflowIsCountedAndImportantRecordsSurvive(t *testing.T) {
 	}
 }
 
-// Keep ordinary writes queued behind real SQLite work. Loss summaries must
-// still reach the important queue without waiting for an idle writer.
+var registerSlowLogWrite = sync.OnceValue(func() error {
+	return sqlite.RegisterScalarFunction("nagi_test_slow_log_write", 0, func(_ *sqlite.FunctionContext, _ []driver.Value) (driver.Value, error) {
+		time.Sleep(41 * time.Millisecond)
+		return int64(1), nil
+	})
+})
+
+// Keep ordinary writes queued behind real SQLite work. Controlled row latency
+// makes the busy interval independent of host speed and race instrumentation.
+// Loss summaries must reach the important queue before the ordinary queue drains.
 func TestLossSummaryWhileOrdinaryQueueRemainsBusy(t *testing.T) {
+	if err := registerSlowLogWrite(); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(t.TempDir(), "logs.db")
 	s := openStore(t, path, 128<<20)
 	d, err := db.Open(path)
@@ -114,8 +127,9 @@ func TestLossSummaryWhileOrdinaryQueueRemainsBusy(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	if _, err := d.Exec(`CREATE TRIGGER slow_access BEFORE INSERT ON log_events WHEN NEW.category='access'
-		BEGIN SELECT (WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100) SELECT sum(x) FROM n); END`); err != nil {
+	if _, err := d.Exec(`CREATE TRIGGER slow_access BEFORE INSERT ON log_events
+		WHEN NEW.category='access' AND COALESCE((SELECT max(seq) FROM log_events),0)<512
+		BEGIN SELECT nagi_test_slow_log_write(); END`); err != nil {
 		t.Fatal(err)
 	}
 	batch := make([]logstore.Event, 512)
