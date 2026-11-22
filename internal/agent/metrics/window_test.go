@@ -76,7 +76,7 @@ func TestDownsampleAndWindow(t *testing.T) {
 	}
 }
 
-// 按前缀查询走主键范围，结果必须和逐条比较前缀完全一致：边界上的序列、空前缀、多字节字符都不能多也不能少。
+// 前缀和时间范围都必须精确，且每条曲线保持时间顺序。
 func TestQueryPrefixRange(t *testing.T) {
 	ctx := context.Background()
 	d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
@@ -89,19 +89,36 @@ func TestQueryPrefixRange(t *testing.T) {
 	all := []string{"r", "r:", "r:a", "r:\u9879\u76ee/web:req", "r;", "r;x", "r9", "c:p/web:cpu", "node:cpu", "\u9879"}
 	v := map[string]float64{}
 	for _, name := range all {
+		v[name] = 3
+	}
+	if err := c.store(ctx, at.Add(Interval), v); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range all {
+		v[name] = 9
+	}
+	if err := c.store(ctx, at.Add(2*Interval), v); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range all {
 		v[name] = 1
 	}
 	if err := c.store(ctx, at, v); err != nil {
 		t.Fatal(err)
 	}
 	for _, prefix := range []string{"r:", "r", "", "r:\u9879", "\u9879", "node:cpu", "zz"} {
-		got, err := c.Query(ctx, prefix, at.Add(-time.Second), at.Add(time.Second))
+		got, err := c.Query(ctx, prefix, at.Add(-time.Second), at.Add(Interval+time.Second))
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, name := range all {
 			if _, ok := got[name]; ok != strings.HasPrefix(name, prefix) {
 				t.Fatalf("prefix %q: series %q returned=%v", prefix, name, ok)
+			}
+			if points, ok := got[name]; ok {
+				if len(points) != 2 || points[0].Value != 1 || points[1].Value != 3 || !points[0].Time.Equal(time.Unix(at.Unix(), 0)) || !points[1].Time.Equal(time.Unix(at.Add(Interval).Unix(), 0)) {
+					t.Fatalf("prefix %q: series %q points=%+v", prefix, name, points)
+				}
 			}
 		}
 	}

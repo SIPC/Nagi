@@ -56,8 +56,8 @@ DELETE FROM metrics_m5 WHERE ts < ?;
 
 -- name: QueryRaw :many
 SELECT series, ts, value FROM metrics_raw
-WHERE series >= @prefix AND series < @prefix_end AND instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY series, ts;
+WHERE series >= @prefix AND series < @prefix_end AND instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY ts, series;
 
 -- name: QueryM5 :many
 SELECT series, ts, value FROM metrics_m5
-WHERE series >= @prefix AND series < @prefix_end AND instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY series, ts;
+WHERE series >= @prefix AND series < @prefix_end AND instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts ORDER BY ts, series;
