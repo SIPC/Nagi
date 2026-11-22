@@ -79,6 +79,26 @@ func openTestLog(t *testing.T) *Log {
 	return l
 }
 
+func TestVerifyWhileWriterBusy(t *testing.T) {
+	l := openTestLog(t)
+	if id := l.Record(t.Context(), Event{Action: "before"}); id != 1 {
+		t.Fatalf("initial record: %d", id)
+	}
+	// A busy writer must not prevent the independent WAL reader from verifying
+	// committed records. Saving last_verify remains best effort.
+	writer, err := l.DB().Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	result, err := l.Verify(ctx)
+	if err != nil || !result.OK() || result.Records != 1 || result.LastID != 1 {
+		t.Fatalf("verification blocked by busy writer: %+v, %v", result, err)
+	}
+}
+
 func TestChildCounts(t *testing.T) {
 	l := openTestLog(t)
 	ctx := t.Context()

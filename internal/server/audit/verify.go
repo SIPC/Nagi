@@ -35,7 +35,9 @@ const metaLastVerify = "last_verify"
 
 // Verify 校验整条哈希链。
 func (l *Log) Verify(ctx context.Context) (VerifyResult, error) {
-	res, err := verifyDB(ctx, l.db)
+	// A full-chain scan must not occupy the only connection used by live
+	// records, list queries and standby synchronization.
+	res, err := VerifyFile(ctx, l.path)
 	if err == nil {
 		b, _ := json.Marshal(res)
 		_ = l.SetMeta(ctx, metaLastVerify, string(b))
@@ -62,8 +64,15 @@ func VerifyFile(ctx context.Context, path string) (VerifyResult, error) {
 
 func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
 	res := VerifyResult{Time: time.Now()}
+	// Tombstones and events must come from one WAL snapshot even if retention
+	// deletes records while the independent verifier is scanning.
+	tx, err := d.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return res, err
+	}
+	defer tx.Rollback()
 	tomb := map[int64]string{}
-	if rows, err := d.QueryContext(ctx, `SELECT id, hash FROM tombstones`); err == nil {
+	if rows, err := tx.QueryContext(ctx, `SELECT id, hash FROM tombstones`); err == nil {
 		for rows.Next() {
 			var id int64
 			var h string
@@ -73,7 +82,7 @@ func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
 		}
 		rows.Close()
 	}
-	rows, err := d.QueryContext(ctx, `SELECT `+columns+` FROM events ORDER BY id`)
+	rows, err := tx.QueryContext(ctx, `SELECT `+columns+` FROM events ORDER BY id`)
 	if err != nil {
 		return res, err
 	}
@@ -139,7 +148,7 @@ func verifyDB(ctx context.Context, d *sql.DB) (VerifyResult, error) {
 	}
 	if res.Records == 0 && res.BadID == 0 {
 		var n int64
-		_ = d.QueryRowContext(ctx, `SELECT COUNT(*) FROM tombstones`).Scan(&n)
+		_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tombstones`).Scan(&n)
 		if n > 0 {
 			return res, errors.New("审计库里只剩墓碑，记录被清空了")
 		}
