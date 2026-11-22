@@ -115,6 +115,15 @@ func DefOf(name string) (Def, bool) {
 
 func (d Def) Has(field string) bool { return slices.Contains(d.Fields, field) }
 
+// Recovered 判断一个值有没有回到恢复阈值的好的一侧：要降到恢复阈值以下，等于不算；
+// 恢复阈值是 0 时（不能更低）回到 0 就算。lower 的规则（证书剩余天数）反过来，≥ 恢复阈值算。
+func (d Def) Recovered(v, recover float64) bool {
+	if d.Lower {
+		return v >= recover
+	}
+	return v < recover || recover <= 0 && v <= 0
+}
+
 func f(v float64) *float64 { return &v }
 func u(v uint32) *uint32   { return &v }
 func b(v bool) *bool       { return &v }

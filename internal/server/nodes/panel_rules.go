@@ -189,5 +189,5 @@ func (r *Registry) checkClock(ctx context.Context, c *Conn, nodeTime, received t
 	}
 	v := skew
 	r.EvaluatePanelRule(ctx, PanelObservation{Key: "clock_skew:" + c.NodeID, Rule: alert.RuleClockSkew, NodeID: c.NodeID, Node: c.Name(),
-		Value: &v, Bad: skew > rule.GetThreshold(), Good: skew <= rule.GetRecoverThreshold()}, received)
+		Value: &v, Bad: skew > rule.GetThreshold(), Good: alert.Def{}.Recovered(skew, rule.GetRecoverThreshold())}, received)
 }

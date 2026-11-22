@@ -31,17 +31,19 @@ type restartSample struct {
 	count float64
 }
 
-// threshold 按规则判断一个值：超过触发阈值是 bad，回到恢复阈值以内是 good。lower 的规则（证书）反过来。
+// threshold 按规则判断一个值：超过触发阈值是 bad，回到恢复阈值的好的一侧是 good（alert.Def.Recovered）。
+// lower 的规则（证书）反过来。
 func threshold(o *obs, v float64) *obs {
 	r := o.set.get(o.rule)
 	d, _ := alert.DefOf(o.rule)
 	o.value, o.hasValue = v, true
 	o.threshold, o.recover = r.GetThreshold(), r.GetRecoverThreshold()
 	if d.Lower {
-		o.bad, o.good = v < o.threshold, v >= o.recover
+		o.bad = v < o.threshold
 	} else {
-		o.bad, o.good = v > o.threshold, v <= o.recover
+		o.bad = v > o.threshold
 	}
+	o.good = d.Recovered(v, o.recover)
 	o.disabled = !alert.On(r)
 	return o
 }

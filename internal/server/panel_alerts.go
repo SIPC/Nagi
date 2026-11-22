@@ -82,7 +82,7 @@ func (s *Server) panelLogAlerts(ctx context.Context, now time.Time, times *[]tim
 		f := rules[alert.RuleLogFull]
 		pct := math.Min(100, 100*float64(disk)/float64(budget))
 		s.nodes.EvaluatePanelRule(ctx, nodes.PanelObservation{Key: "logstore_full:panel", Rule: alert.RuleLogFull, Node: "panel", Value: &pct,
-			Bad: pct > f.GetThreshold(), Good: pct <= f.GetRecoverThreshold()}, now)
+			Bad: pct > f.GetThreshold(), Good: alert.Def{}.Recovered(pct, f.GetRecoverThreshold())}, now)
 	}
 }
 

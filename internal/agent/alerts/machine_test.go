@@ -107,6 +107,8 @@ func TestMemoryHysteresisAndRecoveryText(t *testing.T) {
 	h.feed(mem(89.9), 2) // 截图里在这里发了「已恢复」
 	h.feed(mem(86), 4)
 	h.expect(1, "还在回差区间（> 85%）里，不算恢复")
+	h.feed(mem(85), 12) // 正好等于恢复阈值 6 分钟：要降到 85% 以下才算
+	h.expect(1, "等于恢复阈值不算恢复")
 
 	h.feed(mem(84), 6)
 	h.feed(mem(87), 1) // 恢复中又超过恢复阈值：回到告警中，不发通知，重新计时
