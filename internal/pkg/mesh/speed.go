@@ -74,7 +74,15 @@ func serveSpeed(ctx context.Context, m *Mesh) error {
 			return err
 		}
 		go func() {
-			defer c.Close()
+			var response []byte
+			// Completion must reach the caller only after busy is released: the
+			// next direction or WireGuard comparison can start as soon as it does.
+			defer func() {
+				if response != nil {
+					_, _ = c.Write(response)
+				}
+				c.Close()
+			}()
 			_ = c.SetDeadline(time.Now().Add(5 * time.Second))
 			var hdr [5]byte
 			if _, err := io.ReadFull(c, hdr[:]); err != nil {
@@ -85,12 +93,12 @@ func serveSpeed(ctx context.Context, m *Mesh) error {
 				return
 			}
 			if !busy.TryLock() {
-				_, _ = c.Write([]byte{1})
+				response = []byte{1}
 				return
 			}
 			defer busy.Unlock()
 			if !limit.take(caller, time.Now()) {
-				_, _ = c.Write([]byte{2})
+				response = []byte{2}
 				return
 			}
 			d := min(time.Duration(binary.BigEndian.Uint32(hdr[1:]))*time.Millisecond, speedMax)
@@ -106,7 +114,7 @@ func serveSpeed(ctx context.Context, m *Mesh) error {
 				}
 				var out [8]byte
 				binary.BigEndian.PutUint64(out[:], math.Float64bits(rate))
-				_, _ = c.Write(out[:])
+				response = out[:]
 			case 'd':
 				_ = send(c, d)
 			}
@@ -197,6 +205,11 @@ func speedRound(ctx context.Context, dial dialer, k Key, dir byte, d time.Durati
 	if err := send(c, d); err != nil {
 		return 0, viaQUIC, err
 	}
+	if cw, ok := c.(interface{ CloseWrite() error }); ok {
+		if err := cw.CloseWrite(); err != nil {
+			return 0, viaQUIC, err
+		}
+	}
 	var out [8]byte
 	if _, err := io.ReadFull(c, out[:]); err != nil {
 		return 0, viaQUIC, err
@@ -204,7 +217,7 @@ func speedRound(ctx context.Context, dial dialer, k Key, dir byte, d time.Durati
 	return math.Float64frombits(binary.BigEndian.Uint64(out[:])), viaQUIC, nil
 }
 
-// send 发 d 这么久，然后半关闭。
+// send 发 d 这么久；由调用方在释放测速占用后发出结束信号。
 func send(c net.Conn, d time.Duration) error {
 	buf := make([]byte, speedChunk)
 	end := time.Now().Add(d)
@@ -212,9 +225,6 @@ func send(c net.Conn, d time.Duration) error {
 		if _, err := c.Write(buf); err != nil {
 			return err
 		}
-	}
-	if cw, ok := c.(interface{ CloseWrite() error }); ok {
-		return cw.CloseWrite()
 	}
 	return nil
 }
