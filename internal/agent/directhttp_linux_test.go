@@ -24,6 +24,7 @@ import (
 	"github.com/SIPC/nagi/internal/agent/proxy"
 	"github.com/SIPC/nagi/internal/pkg/directdl"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
+	"github.com/caddyserver/caddy/v2"
 )
 
 // 加密 HTTP 下载整条路径：节点的 Caddy 在单独的端口上开规则（只匹配 IP 和下载路径），面板那边登记、派生密钥、
@@ -205,6 +206,12 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 	a.direct.httpUntil = time.Now().Add(-time.Second)
 	a.direct.mu.Unlock()
 	a.direct.reload(context.Background())
+	// Caddy Load 返回时关闭 goroutine 只保证已启动，尚不保证监听器已释放。
+	// 在原连接探针的一秒预算内同步关闭，再验证不能连接及端口可重新占用。
+	deadline := time.Now().Add(time.Second)
+	for caddy.ListenerUsage("tcp", ":"+strconv.Itoa(port)) > 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
 	if listening() {
 		t.Error("空闲以后应关掉端口")
 	}
