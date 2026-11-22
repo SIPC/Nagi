@@ -10,52 +10,42 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ## v0.37.1
 
-### Fixes
+### New features
 
-- Fixed an issue where, with many nodes or a slow disk, the panel kept timing out when writing logs and failed to save audit records, alert events, and runtime logs.
-- Fixed an issue where alert state could not be saved while log writes were congested, which paused alert notifications and sync.
-- Fixed an issue where container monitoring charts on nodes and the panel had gaps under heavy load.
-- Fixed an issue where, when upgrading from an earlier version, migrating a large amount of legacy monitoring history blocked local log, audit, and alert state writes.
-- Fixed an issue where, on nodes with a lot of legacy monitoring history, the alert baseline query held the database for a long time during the post-upgrade migration, so the node repeatedly disconnected from and reconnected to the panel.
+- Added centralized global alert defaults and field-level overrides for nodes, projects, containers and port mappings in Settings → Alerts; fields without overrides continue to follow the level above.
+- Added configurable trigger thresholds, durations, recovery thresholds, recovery stability periods and reminder intervals, with baseline progress for surge rules on the Logs page.
+- Added alerts for log writes and capacity, upgrades, certificates, mesh, witnesses, container OOM, kernel faults, inodes, NICs, conntrack, clocks, snapshots, replicas, migrations, audit verification and token expiry, plus TCP/UDP connection, failure-rate, bandwidth and listener alerts.
+- Added individual switches for account, session, cluster, panel-setting and failover notifications, plus notifications for member, role, session-policy, node, panel, invitation and backup-setting changes. Turning notifications off requires privileged verification, and security items are administrator-only; notification languages include Chinese and English.
+- Added independent stable or prerelease update channels for the panel and each node, with channel and version selection in the install script; nodes newly added to a prerelease panel default to the stable channel.
+- Added one-line direct-download commands for Linux and Windows.
 
 ### Improvements
 
-- Audit, security, and alert records are retried automatically when a write fails temporarily, instead of being dropped after a timeout. Other logs are written in batches. If a long disk stall makes a single write to the panel audit database take more than 10 seconds, the record moves to a retry queue and is written later in its original order. It counts as confirmed lost, with the reason shown on the Logs page, only if the retry queue is full or the panel shuts down before it is written.
-- The collection details on the Logs page now show, per category, failed write attempts, records confirmed lost, and the latest reason and time.
+- Improved recovery and flap protection to reduce repeated notifications near thresholds; recovery messages include the recovery value, duration and peak. Silence and maintenance cover new occurrences of the same alert, and disabling a rule or deleting its object ends the alert.
+- Added bounded catch-up of backlogged recent log copies when load permits; receipt speed remains limited by panel disk performance, with no guarantee of catching up under arbitrary load.
+- Separated panel and node audit storage from business databases and added a hash chain to node audit records. Audit shares the log capacity budget, is pruned last, and leaves tombstones and chain records when pruned.
+- Added background audit-chain verification with prominent failure notices, and cleanup of old audit, metric and recording data after migration and verification.
+- Changed log writes to background batches, retrying temporarily failed important records; timed-out panel audit writes queue in their original order. The Logs page shows failures, confirmed losses, and the latest reason and time per category.
+- Changed log lists to show newest entries first and labeled combined overview traffic as “Remaining N (combined)”.
+
+### Fixes
+
+- Fixed log write timeouts with many nodes or slow disks, and alert-state save failures pausing notifications and synchronization.
+- Fixed log writes delaying metric sampling and new chart points not being saved during legacy-history migration; removed the full-table count that blocked the node database at migration startup.
+- Fixed legacy-history migration and alert baseline queries holding the database too long and affecting core services and control connections.
+- Fixed empty log-list summaries, structured Current alerts titles remaining Chinese in English, and new nodes being incorrectly reported as outdated; older nodes without the required capabilities explicitly prompt an upgrade.
+- Fixed unwritable default direct-download directories, unclear resume errors and insufficient integrity checks, with segmented resume and SHA-256 verification.
+- Fixed recovery notifications reusing stale values, backup and standby retries ignoring rule switches, and log redaction changing metric series names.
 
 ### Behavior changes
 
-- To improve write performance, logs other than audit, security, and alert records may lose the last few seconds of saved records after a power loss or system crash; process crashes are not affected. When the log write queue is full, new records are dropped and counted as confirmed lost.
+- Changed ordinary-log durability: power loss or system crashes may lose the last few seconds of committed ordinary records; process crashes do not affect committed records. Audit, security and alert commits retain stronger durability guarantees.
+- Changed log queuing: records still in memory may be lost on forced termination or power loss; full queues, exhausted capacity, unrecoverable write errors or undrained queues at normal shutdown count as confirmed losses. The panel audit retry queue is also not durable.
 
-### Known limitations
+### Upgrade notes
 
-- After upgrading a node with a large amount of legacy monitoring history (tens of millions of records), counting the records at the start of the migration holds the node database for about a minute. During that time the node may disconnect from and reconnect to the panel once or twice, then works normally.
-- How fast recent copies are received is limited by the panel's disk performance. With heavy logging, recent copies may still fall behind; the node originals are not affected.
-- The audit retry queue is kept in memory. If the panel process is killed or loses power, audit records still in the queue are lost.
-> [!TIP]
-> Alert rules are migrated to the new settings automatically on the panel's first start; thresholds you changed and rules you turned off are kept. Upgrade the panel and nodes together: older nodes keep using the previous rules and don't know the new ones.
-
-### New features
-
-- All alert rules are now managed in Settings → Alerts: global defaults plus overrides per node, project, container and port mapping. Each level stores only the fields it changes and follows the level above for the rest, so a container no longer stops following its project after getting its own rules. Node, project and container pages show how many fields are overridden and link to the settings page.
-- Every rule has a configurable trigger threshold, how long it must last, recovery threshold (hysteresis), how long recovery must hold and reminder interval.
-- New alerts: log store write failures, log store nearly full, node upgrade failed or rolled back, mesh peer disconnected, witness unreachable, node certificate renewal failed, container OOM, inodes nearly full, kernel disk errors, kernel OOM, no recent successful snapshot, replica sync lag, background migration failed, scheduled audit chain verification failed, NIC errors and drops, conntrack nearly full, clock skew, mesh loss and latency, and access tokens about to expire.
-- New TCP/UDP mapping alerts: new connection surge, too many active connections, high connection failure rate, bandwidth above a limit and port cannot listen, with project and mapping overrides.
-- The Logs page shows baseline progress for surge rules: how long they need, how much has been collected and when they will be ready. It collapses once everything is ready.
-- All event notifications (accounts, sessions, cluster, panel settings, failover) are listed in Settings → Alerts and can be turned off one by one; all are on by default. Turning one off requires re-authentication, notifies the current channels first, and is audited; security items can only be changed by administrators.
-- New notifications: member deleted, administrator role removed, role created, changed or deleted, session policy changed, node removed, panel removed, join command or invite created, failover and backup settings changed.
-- Notifications can be sent in Chinese or English.
-
-### Improvements
-
-- An alert recovers only after dropping below its recovery threshold and staying there for a while, so values hovering around a threshold no longer cause repeated alert and recovery messages. Alerts that keep firing pause individual notifications.
-- Notifications state the current value and threshold. Recovery messages state the value at recovery, how long the alert lasted and its peak, instead of repeating the alert text.
-- Silences and maintenance also cover new occurrences of the same alert. Turning a rule off or deleting its object ends the alert instead of leaving it in Current alerts.
-
-### Fixes
-
-- Fixed recovery messages showing a higher memory value than the alert and "for more than 5 minutes" when memory hovered around the threshold.
-- Fixed backup and standby alerts being rechecked against node rules before resending, so they were sent even when turned off.
+- Back up data directories and upgrade primary and standby panels, nodes and witnesses to the same version; allow enough migration space for both source data and destination stores, and inspect logs before restarting a failed migration.
+- Check migrated thresholds, rules and notification switches in Settings → Alerts. Older nodes continue using old rules without new rules or structured titles; chart samples that were never collected cannot be recovered.
 
 ## v0.37.0
 
