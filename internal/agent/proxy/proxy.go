@@ -346,10 +346,7 @@ func buildFull(routes []Route, storage string, hasCert func(string) bool, direct
 	}
 
 	// 证书申请成功或失败时通知节点（见 observe.go）。
-	apps := obj{"events": obj{"subscriptions": []obj{{
-		"events":   []string{"cert_obtained", "cert_failed"},
-		"handlers": []obj{{"handler": "nagi"}},
-	}}}}
+	apps := obj{"nagi_cert_events": obj{}}
 	if len(httpServers) > 0 {
 		apps["http"] = obj{"servers": httpServers}
 	}

@@ -20,7 +20,7 @@ import (
 
 // 这里注册两个 Caddy 模块，把 Caddy 内部的信息交给节点：
 //   - 日志输出 nagi_metrics：读访问日志，按规则统计请求数、各类状态码、收发字节和耗时；
-//   - 事件处理 nagi：证书申请成功或失败时通知节点，用于告警。
+//   - 应用 nagi_cert_events：证书申请成功或失败时通知节点，用于告警。
 //
 // Caddy 模块由 Caddy 自己创建，拿不到 Proxy，所以通过包级变量 observer 传递。
 
@@ -243,10 +243,26 @@ type certEvents struct{}
 
 func (certEvents) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
-		ID:  "events.handlers.nagi",
+		ID:  "nagi_cert_events",
 		New: func() caddy.Module { return new(certEvents) },
 	}
 }
+
+func (h *certEvents) Provision(ctx caddy.Context) error {
+	app, err := ctx.App("events")
+	if err != nil {
+		return err
+	}
+	// Caddy starts apps in arbitrary order. Subscribe before any app starts:
+	// TLS can emit events from background certificate jobs as soon as it starts.
+	return app.(*caddyevents.App).Subscribe(&caddyevents.Subscription{
+		Events:   []string{"cert_obtained", "cert_failed"},
+		Handlers: []caddyevents.Handler{h},
+	})
+}
+
+func (*certEvents) Start() error { return nil }
+func (*certEvents) Stop() error  { return nil }
 
 func (certEvents) Handle(_ context.Context, e caddy.Event) error {
 	observer.mu.Lock()
@@ -271,5 +287,7 @@ func (certEvents) Handle(_ context.Context, e caddy.Event) error {
 
 var (
 	_ caddy.WriterOpener  = (*metricsWriter)(nil)
+	_ caddy.App           = (*certEvents)(nil)
+	_ caddy.Provisioner   = (*certEvents)(nil)
 	_ caddyevents.Handler = (*certEvents)(nil)
 )

@@ -31,6 +31,17 @@ func TestDirectDownloadThroughCaddy(t *testing.T) {
 	proxy.DirectIssuer = map[string]any{"module": "internal"}
 	defer func() { proxy.DirectIssuer = map[string]any{"module": "acme", "profile": "shortlived"} }()
 
+	obtained := make(chan struct{}, 1)
+	proxy.OnCertEvent(func(domain string, err error) {
+		if domain == "127.0.0.1" && err == nil {
+			select {
+			case obtained <- struct{}{}:
+			default:
+			}
+		}
+	})
+	defer proxy.OnCertEvent(nil)
+
 	dataDir := t.TempDir()
 	id, err := loadIdentity(filepath.Join(dataDir, "identity"))
 	if err != nil {
@@ -91,6 +102,11 @@ func TestDirectDownloadThroughCaddy(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNoContent || res.Header.Get("Access-Control-Allow-Origin") != "*" {
 		t.Fatalf("探测：%d %v", res.StatusCode, res.Header)
+	}
+	select {
+	case <-obtained:
+	case <-time.After(time.Until(deadline)):
+		t.Fatal("签发成功但节点没有收到证书事件")
 	}
 
 	// 整个文件。
