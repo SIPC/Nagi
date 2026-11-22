@@ -22,7 +22,8 @@ function body(e: LogEntry): Record<string, unknown> {
 }
 function summary(e: LogEntry) {
   const data = body(e);
-  return [data.message ?? data.msg ?? data.text ?? data.action ?? data.error ?? "", e.object].filter(Boolean).join(" · ");
+  const text = data.message ?? data.msg ?? data.text ?? data.action ?? data.error ?? data.reason ?? data.value ?? data;
+  return [typeof text === "string" ? text : JSON.stringify(text), e.object].filter(Boolean).join(" · ");
 }
 
 export function LogEntries() {
