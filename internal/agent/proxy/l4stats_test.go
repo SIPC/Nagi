@@ -143,7 +143,9 @@ func TestL4Stats(t *testing.T) {
 		game.Active = g.Active
 		down.Conns += dn.Conns
 		down.Fails += dn.Fails
-		if game.Conns >= 1 && game.BytesOut >= 7 && down.Fails >= 1 {
+		// The peer can receive EOF before the handler's deferred active
+		// decrement runs. Wait for that observable completion as well.
+		if game.Conns >= 1 && game.BytesOut >= 7 && game.Active == 1 && down.Fails >= 1 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
