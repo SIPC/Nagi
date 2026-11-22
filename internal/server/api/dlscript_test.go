@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -88,4 +89,76 @@ func pinFlag(pin bool) string {
 		return "-k --pinnedpubkey 'sha256//abc=' "
 	}
 	return ""
+}
+
+func TestDownloadScriptCacheBoundsAndExpiry(t *testing.T) {
+	reset := func() {
+		dlScripts.Lock()
+		dlScripts.m = map[string]*dlScript{}
+		dlScripts.Unlock()
+	}
+	reset()
+	t.Cleanup(reset)
+	a := &API{}
+	issue := func(command, windows string, expires time.Time) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "https://panel.test/command", nil)
+		w := httptest.NewRecorder()
+		a.writeCommand(w, r, &nodes.DirectHTTPCommand{Command: command, CommandWindows: windows, Expires: expires})
+		return w
+	}
+	for _, large := range []bool{false, true} {
+		reset()
+		command, windows := "sh", "ps1"
+		if large {
+			command, windows = strings.Repeat("x", 2<<20), strings.Repeat("y", 2<<20)
+		}
+		n := 0
+		for ; n <= 1024; n++ {
+			w := issue(command, windows, time.Now().Add(time.Minute))
+			if w.Code == http.StatusTooManyRequests {
+				break
+			}
+			if w.Code != http.StatusOK {
+				t.Fatalf("issue: %d %s", w.Code, w.Body)
+			}
+		}
+		if (!large && n != 1024) || (large && n != 4) {
+			t.Fatalf("cache admission bound: large=%v accepted=%d", large, n)
+		}
+		expireScripts()
+		if w := issue("new", "new-windows", time.Now().Add(time.Minute)); w.Code != http.StatusOK {
+			t.Fatalf("expired entries did not free capacity: %d", w.Code)
+		}
+	}
+	reset()
+	tok := saveScript(&nodes.DirectHTTPCommand{Command: "secret-sh", CommandWindows: "secret-ps1", Expires: time.Now().Add(50 * time.Millisecond)})
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		dlScripts.Lock()
+		s := dlScripts.m[tok]
+		cleared := s != nil && s.posix == "" && s.windows == ""
+		dlScripts.Unlock()
+		if cleared {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("idle cache retained expired script bodies")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("GET /dl/{file}", a.DownloadScriptHandler())
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Go(func() {
+			r := httptest.NewRequest(http.MethodGet, "https://panel.test/dl/"+tok+".sh", nil)
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, r)
+			if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "expired") || strings.Contains(w.Body.String(), "secret") {
+				t.Errorf("expired script response: %d %s", w.Code, w.Body)
+			}
+		})
+		wg.Go(expireScripts)
+	}
+	wg.Wait()
 }

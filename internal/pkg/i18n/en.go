@@ -1088,4 +1088,5 @@ var en = map[string]string{
 	"节点 %s 退出了中转池":                   "Node %s left the relay pool",
 	"节点 %s 加入了中转池":                   "Node %s joined the relay pool",
 	"覆盖只能设置在节点、项目、容器或端口映射上":          "Overrides can only be set on a node, project, container or port mapping",
+	"下载命令缓存已满，请稍后再试":                 "The download command cache is full. Try again later",
 }

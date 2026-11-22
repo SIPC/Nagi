@@ -25,7 +25,11 @@ import (
 // 同一个令牌返回一个只提示「已过期，请到面板重新生成」的脚本；不认识的令牌 404。面板重启、撤销权限时作废。
 
 // scriptTTLGrace：过期的令牌再记这么久，用来提示已过期。
-const scriptTTLGrace = time.Hour
+const (
+	scriptTTLGrace = time.Hour
+	scriptEntries  = 1024
+	scriptBytes    = 16 << 20
+)
 
 const scriptPathPrefix = "/dl/"
 
@@ -36,10 +40,39 @@ type dlScript struct {
 
 var dlScripts = struct {
 	sync.Mutex
-	m map[string]*dlScript
+	m     map[string]*dlScript
+	timer *time.Timer
 }{m: map[string]*dlScript{}}
 
-// saveScript 存下这次下载的脚本，返回令牌。
+// cleanScriptsLocked drops expired secrets even when nobody requests a script
+// or issues another command. Expired notices remain small and bounded.
+func cleanScriptsLocked(now time.Time) int {
+	size := 0
+	for k, s := range dlScripts.m {
+		if !now.Before(s.expires.Add(scriptTTLGrace)) {
+			delete(dlScripts.m, k)
+			continue
+		}
+		if !now.Before(s.expires) {
+			s.posix, s.windows = "", ""
+		}
+		size += len(s.posix) + len(s.windows)
+	}
+	return size
+}
+
+func cleanScripts() {
+	dlScripts.Lock()
+	defer dlScripts.Unlock()
+	cleanScriptsLocked(time.Now())
+	if len(dlScripts.m) > 0 {
+		dlScripts.timer.Reset(time.Second)
+	} else {
+		dlScripts.timer = nil
+	}
+}
+
+// saveScript 存下这次下载的脚本，返回令牌；缓存已满或单份脚本过大时返回空字符串。
 func saveScript(cmd *nodes.DirectHTTPCommand) string {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
@@ -47,12 +80,22 @@ func saveScript(cmd *nodes.DirectHTTPCommand) string {
 	now := time.Now()
 	dlScripts.Lock()
 	defer dlScripts.Unlock()
-	for k, s := range dlScripts.m {
-		if now.After(s.expires.Add(scriptTTLGrace)) {
-			delete(dlScripts.m, k)
+	size := cleanScriptsLocked(now)
+	if len(dlScripts.m) >= scriptEntries {
+		for k, s := range dlScripts.m {
+			if !now.Before(s.expires) {
+				delete(dlScripts.m, k)
+				break
+			}
 		}
 	}
+	if len(dlScripts.m) >= scriptEntries || len(cmd.Command)+len(cmd.CommandWindows) > scriptBytes-size {
+		return ""
+	}
 	dlScripts.m[tok] = &dlScript{posix: cmd.Command, windows: cmd.CommandWindows, expires: cmd.Expires}
+	if dlScripts.timer == nil {
+		dlScripts.timer = time.AfterFunc(time.Second, cleanScripts)
+	}
 	return tok
 }
 
@@ -64,6 +107,7 @@ func expireScripts() {
 		if s.expires.After(now) {
 			s.expires = now
 		}
+		s.posix, s.windows = "", ""
 	}
 	dlScripts.Unlock()
 }
@@ -80,12 +124,18 @@ func (a *API) DownloadScriptHandler() http.Handler {
 		file := r.PathValue("file")
 		tok, ext, _ := strings.Cut(file, ".")
 		dlScripts.Lock()
+		cleanScriptsLocked(time.Now())
 		s := dlScripts.m[tok]
+		var snapshot dlScript
+		if s != nil {
+			snapshot = *s
+		}
 		dlScripts.Unlock()
 		if s == nil || (ext != "sh" && ext != "ps1") || r.TLS == nil {
 			http.NotFound(w, r)
 			return
 		}
+		s = &snapshot
 		body := s.posix
 		if ext == "ps1" {
 			body = s.windows

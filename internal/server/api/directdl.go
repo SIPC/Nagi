@@ -78,7 +78,12 @@ func (a *API) writeCommand(w http.ResponseWriter, r *http.Request, cmd *nodes.Di
 		jsonFail(w, r, http.StatusConflict, i18n.New("该节点现在不能生成下载命令"))
 		return
 	}
-	short, shortWin := a.shortCommands(r, saveScript(cmd))
+	tok := saveScript(cmd)
+	if tok == "" {
+		jsonFail(w, r, http.StatusTooManyRequests, i18n.New("下载命令缓存已满，请稍后再试"))
+		return
+	}
+	short, shortWin := a.shortCommands(r, tok)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(map[string]any{
