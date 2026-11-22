@@ -43,6 +43,10 @@ type obs struct {
 // staleAfter：连续这么久没有数据，就把待触发、恢复中的计时清零。
 const staleAfter = 90 * time.Second
 
+// tickJitter：判断每 30 秒跑一次，前后两次的时间差会比整 30 秒少几微秒。持续时间按这个余量比较，
+// 不然刚好满 for_seconds / recover_seconds 的那一轮会被判成「还差一点」，触发和恢复都晚整整一轮。
+const tickJitter = time.Second
+
 // track 是一个告警键在状态机里的计时（不保存：重启后重新计时，宁可晚恢复，也不误报恢复）。
 type track struct {
 	badSince  time.Time // 进入待触发的时间
@@ -115,7 +119,7 @@ func (e *Engine) step(key string, o *obs, now time.Time) *nagiv1.Alert {
 		if d, _ := alert.DefOf(o.rule); d.Unit == "seconds" && !d.Has(alert.FieldFor) {
 			hold = time.Duration(r.GetThreshold()) * time.Second // mesh 成员断开、见证人失联：阈值就是要持续多久
 		}
-		if now.Sub(tr.badSince) < hold {
+		if now.Sub(tr.badSince)+tickJitter < hold {
 			return nil
 		}
 		return e.fireRule(key, o, now, now.Sub(tr.badSince))
@@ -129,7 +133,7 @@ func (e *Engine) step(key string, o *obs, now time.Time) *nagiv1.Alert {
 		if tr.goodSince.IsZero() {
 			tr.goodSince = now
 		}
-		if now.Sub(tr.goodSince) >= time.Duration(r.GetRecoverSeconds())*time.Second {
+		if now.Sub(tr.goodSince)+tickJitter >= time.Duration(r.GetRecoverSeconds())*time.Second {
 			a := e.end(key, "recovered")
 			a.Value, a.RecoverSeconds = valuePtr(o), uint32(now.Sub(tr.goodSince)/time.Second)
 			tr.badSince, tr.goodSince = time.Time{}, time.Time{}

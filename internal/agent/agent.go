@@ -295,6 +295,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		filepath.Join(cfg.DataDir, "caddy"), statistics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert, cfg.Logs)
 	a.alerts.Report = a.reportAlert
+	a.alerts.Committed = a.notifyReport
 	a.alerts.ContainerRules = a.containerAlertRules
 	a.alerts.RouteRules = a.routeAlertRules
 	a.alerts.Probes = a.alertProbes

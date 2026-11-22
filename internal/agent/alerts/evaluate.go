@@ -368,6 +368,7 @@ func (e *Engine) evaluate(ctx context.Context) {
 	send = append(send, e.settleFlaps(now)...)
 	send = append(send, e.notices...)
 	e.notices = nil
+	e.announce = e.announce || len(send) > 0
 	e.saveStates()
 	e.mu.Unlock()
 	for _, a := range send {

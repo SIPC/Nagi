@@ -123,6 +123,44 @@ func TestMemoryHysteresisAndRecoveryText(t *testing.T) {
 	h.expect(2, "待触发期间回落要重新计时")
 }
 
+// 真实的判断节拍比整 30 秒短一点点。刚好满 5 分钟的那一轮就要触发、恢复，不能再等一轮；
+// 状态提交后马上通知节点上报，面板不用等下一个上报节拍。
+func TestHoldBoundaryOnRealTicksAndCommittedReport(t *testing.T) {
+	h := newHarness(t, nil)
+	reports := make(chan struct{}, 8)
+	h.e.Committed = func() { reports <- struct{}{} }
+	tick := func(v float64, n int) {
+		for range n {
+			h.now = h.now.Add(30*time.Second - 3*time.Millisecond)
+			h.o.latest = mem(v)
+			h.e.evaluate(context.Background())
+		}
+	}
+	tick(92, 10)
+	h.expect(0, "第 10 轮离开始超标才 4 分 30 秒")
+	select {
+	case <-reports:
+		t.Fatal("没有状态变化，不应该提前上报")
+	default:
+	}
+	tick(92, 1)
+	h.expect(1, "第 11 轮离开始超标差几毫秒满 5 分钟，就是满 5 分钟的那一轮")
+	select {
+	case <-reports:
+	case <-time.After(5 * time.Second):
+		t.Fatal("出现提交后应该马上上报")
+	}
+	tick(84, 10)
+	h.expect(1, "回到恢复阈值以内还不满 5 分钟")
+	tick(84, 1)
+	h.expect(2, "满 5 分钟的那一轮恢复")
+	select {
+	case <-reports:
+	case <-time.After(5 * time.Second):
+		t.Fatal("恢复提交后应该马上上报")
+	}
+}
+
 // 缺数据不判定恢复，短暂缺数据也不清零恢复计时。
 func TestMissingDataNeitherRecoversNorResets(t *testing.T) {
 	h := newHarness(t, &nagiv1.AlertPolicy{Rules: map[string]*nagiv1.AlertRule{alert.RuleMem: {ForSeconds: u32(0)}}})

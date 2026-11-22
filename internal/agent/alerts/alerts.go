@@ -76,7 +76,11 @@ type Engine struct {
 	pending      *pendingSave      // newest version waiting for a congested store
 	saving       bool              // retrySaves is running and is the only writer
 	congestedLog time.Time
-	suppressed   map[string]time.Time // occurrence -> bounded primary-authorized mute
+	// Committed 在一次出现、恢复或结束写入成功后调用（另起 goroutine），让节点马上上报，
+	// 面板不用等下一个 15 秒的上报节拍才看到。announce 记下还没随提交发出的变化。
+	Committed  func()
+	announce   bool
+	suppressed map[string]time.Time // occurrence -> bounded primary-authorized mute
 	// mutedKeys：静默、维护按告警键记下，截止之前同一个键新一轮的出现也不通知（见 ApplyHandling）。
 	mutedKeys map[string]time.Time
 	// egressSent：出站拦截通知最近一次发送的时间（按 egress 键），用来按规则的提醒间隔去重。

@@ -158,6 +158,10 @@ func (e *Engine) finishSave(p *pendingSave, err error) {
 	}
 	if e.committed == nil || p.snap.Revision > e.committed.Revision {
 		e.committed = p.snap
+		if e.announce && e.Committed != nil {
+			go e.Committed()
+		}
+		e.announce = false
 	}
 }
 
