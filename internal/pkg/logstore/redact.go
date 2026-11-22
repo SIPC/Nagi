@@ -37,6 +37,11 @@ func clipText(s string, limit int) string {
 }
 
 func scrubText(s string) string {
+	// Every pattern needs a separator, credential marker, or private-key dash.
+	// Avoid running the regexp machines over long plain output without any.
+	if !strings.ContainsAny(s, ":=@- \t\r\n\f") {
+		return s
+	}
 	s = privateKey.ReplaceAllString(s, hidden)
 	s = urls.ReplaceAllStringFunc(s, func(raw string) string {
 		u, err := url.Parse(raw)
@@ -48,7 +53,9 @@ func scrubText(s string) string {
 		u.Path, u.RawPath = SafePanelPath(u.Path), ""
 		return u.String()
 	})
-	s = userInfo.ReplaceAllString(s, "${1}"+hidden+"@")
+	if strings.Contains(s, "@") {
+		s = userInfo.ReplaceAllString(s, "${1}"+hidden+"@")
+	}
 	s = bearer.ReplaceAllString(s, hidden)
 	s = credentials.ReplaceAllString(s, "$1="+hidden)
 	return shortCredential.ReplaceAllString(s, "${1}${2}"+hidden)

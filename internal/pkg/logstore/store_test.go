@@ -66,6 +66,10 @@ func TestNestedParamsAndCommandSecretsAreRedactedBeforeStorage(t *testing.T) {
 		`mongodb+srv://user:Sensitive123@db01/app`,
 		`user:Sensitive123@db01`,
 		`https://user:Sensitive123@db01/private?token=Sensitive456`,
+		"db01 Bearer\tSensitive123",
+		"db01 Basic\fSensitive123",
+		"password\rSensitive123 db01",
+		"db01 -----BEGIN PRIVATE KEY-----\nSensitive123\n-----END PRIVATE KEY-----",
 		`{"password":"Sensitive123", "target":"db01"`,
 		`{"target":"db01"} --password Sensitive123`,
 		`{"key":"Sensitive123","target":"db01"}`,
@@ -107,6 +111,51 @@ func TestNestedParamsAndCommandSecretsAreRedactedBeforeStorage(t *testing.T) {
 	}
 	if strings.Contains(body, "Sensitive") {
 		t.Fatalf("nested JSON escaped redaction: %s", body)
+	}
+}
+
+func TestRedactBareCredentialAssignments(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"password=Sensitive123", "password=[已隐藏]"},
+		{"token=Sensitive123", "token=[已隐藏]"},
+		{"command=Sensitive123", "command=[已隐藏]"},
+		{"PASSWORD=Sensitive123", "PASSWORD=[已隐藏]"},
+		{"private_key=Sensitive123", "private_key=[已隐藏]"},
+		{"plainOutput123", "plainOutput123"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			input, err := json.Marshal(tc.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := logstore.RedactJSON(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got string
+			if err := json.Unmarshal(out, &got); err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Errorf("redacted string: got %q, want %q", got, tc.want)
+			}
+			s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+			record(t, s, logstore.Event{Category: logstore.Runtime, Kind: "container.output", Data: map[string]string{"text": tc.input}})
+			if err := s.Flush(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			rows := query(t, s, logstore.Filter{Category: logstore.Runtime})
+			if len(rows) != 1 {
+				t.Fatalf("stored rows: got %d, want 1", len(rows))
+			}
+			var stored map[string]string
+			if err := json.Unmarshal(rows[0].Data.(json.RawMessage), &stored); err != nil {
+				t.Fatal(err)
+			}
+			if stored["text"] != tc.want {
+				t.Fatalf("stored text: got %q, want %q", stored["text"], tc.want)
+			}
+		})
 	}
 }
 
