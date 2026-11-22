@@ -204,6 +204,7 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 			project TEXT NOT NULL, object TEXT NOT NULL, data BLOB NOT NULL);
 		CREATE INDEX IF NOT EXISTS log_prune ON log_events(priority, seq);
 		CREATE INDEX IF NOT EXISTS log_time ON log_events(time_ns, seq);
+		CREATE INDEX IF NOT EXISTS log_category ON log_events(category, seq);
 		CREATE TABLE IF NOT EXISTS log_pruned (
 			category TEXT PRIMARY KEY, first_seq INTEGER NOT NULL, last_seq INTEGER NOT NULL, count INTEGER NOT NULL);
 		CREATE TABLE IF NOT EXISTS log_checkpoints (
@@ -413,7 +414,9 @@ func (s *Store) write(ctx context.Context, rows []row, key string, position []by
 		args := []any{e.Time.UnixNano(), received, e.Category, r.p, e.Kind, e.Project, e.Object, r.data}
 		if reconcile {
 			at := e.Time.Truncate(time.Millisecond)
-			query += ` WHERE NOT EXISTS (SELECT 1 FROM log_events WHERE time_ns>=? AND time_ns<? AND category=? AND kind=? AND project=? AND object=? AND data=?)`
+			// A millisecond window is narrower than a category's entire history.
+			// Keep the category-page index from turning each import into a full scan.
+			query += ` WHERE NOT EXISTS (SELECT 1 FROM log_events INDEXED BY log_time WHERE time_ns>=? AND time_ns<? AND category=? AND kind=? AND project=? AND object=? AND data=?)`
 			args = append(args, at.UnixNano(), at.Add(time.Millisecond).UnixNano(), e.Category, e.Kind, e.Project, e.Object, r.data)
 		}
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
