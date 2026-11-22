@@ -74,8 +74,8 @@ func (r *Registry) NoticeOn(ctx context.Context, key string) bool {
 	return err != nil || alert.NoticeOn(p.GetNotifications(), key)
 }
 
-// SetAlertNotification 打开或关掉一项事件通知；before 在保存之前调用（关掉时用来先发通知到当前渠道）。
-func (r *Registry) SetAlertNotification(ctx context.Context, key string, enabled bool, base int64, before func()) (*nagiv1.AlertPolicy, error) {
+// SetAlertNotification 打开或关掉一项事件通知；before 在保存之前调用，失败时不保存（关掉时用来先发通知到当前渠道）。
+func (r *Registry) SetAlertNotification(ctx context.Context, key string, enabled bool, base int64, before func() error) (*nagiv1.AlertPolicy, error) {
 	if _, ok := alert.NoticeByKey(key); !ok {
 		return nil, i18n.Errorf("没有事件通知 %s", key)
 	}
@@ -99,7 +99,9 @@ func (r *Registry) SetAlertNotification(ctx context.Context, key string, enabled
 		next.Notifications[key] = false
 	}
 	if before != nil {
-		before()
+		if err := before(); err != nil {
+			return nil, err
+		}
 	}
 	if err := r.savePolicy(ctx, next); err != nil {
 		return nil, err

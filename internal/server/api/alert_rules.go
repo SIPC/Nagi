@@ -114,7 +114,7 @@ func (s *alertService) SetAlertOverride(ctx context.Context, req *connect.Reques
 }
 
 // SetAlertNotification 打开或关掉一项事件通知（见 docs/monitoring.md#事件通知）：安全类只有管理员能改，其余要「面板设置」。
-// 关掉要先做高权限确认，并在保存之前用当前的渠道发一条通知（攻击者关掉通知这件事本身瞒不住）；打开不用确认。
+// 关掉要先做高权限确认，并在保存之前用当前的所有渠道发一条通知；任一渠道失败都不保存，打开不用确认。
 // 调用照常记进审计（activityLog）。「告警配置被修改」也能关，关掉它这一次仍然先通知。
 func (s *alertService) SetAlertNotification(ctx context.Context, req *connect.Request[nagiv1.SetAlertNotificationRequest]) (*connect.Response[nagiv1.AlertPolicy], error) {
 	u := auth.CurrentUser(ctx)
@@ -129,9 +129,9 @@ func (s *alertService) SetAlertNotification(ctx context.Context, req *connect.Re
 	if !m.GetEnabled() && !u.ElevatedFor(nagiv1connect.AlertServiceSetAlertNotificationProcedure) {
 		return nil, elevationError()
 	}
-	var before func()
+	var before func() error
 	if !m.GetEnabled() && s.Panel != nil && s.Panel.Standby == nil {
-		before = func() {
+		before = func() error {
 			lang := "zh-CN"
 			if p, err := s.Nodes.AlertPolicy(ctx); err == nil {
 				lang = alert.Language(p.GetLanguage())
@@ -142,7 +142,7 @@ func (s *alertService) SetAlertNotification(ctx context.Context, req *connect.Re
 			}
 			msg := i18n.Errorf("成员：%s；来源：%s", u.Name, auth.RequestMeta(ctx).IP).Error()
 			// 发到当前渠道并等发完；用自己的键，不受被关掉的这一项影响。
-			_ = s.Nodes.SendAlert(ctx, &nagiv1.Alert{Key: "security:alert-notification:" + n.Key, Status: "firing",
+			return s.Nodes.SendAlert(ctx, &nagiv1.Alert{Key: "security:alert-notification:" + n.Key, Status: "firing",
 				Title: i18n.Errorf("账号 %s 关闭了通知：%s", u.Name, what).Error(), Message: msg, Time: timestamppb.Now()}, nil)
 		}
 	}

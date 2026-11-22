@@ -176,6 +176,29 @@ func TestSetAlertNotificationPermissionsAndNoticeFirst(t *testing.T) {
 		t.Fatalf("打开通知不用确认：%v", err)
 	}
 	_, admin := clientFor("admin", "admin-password-1")
+	failed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer failed.Close()
+	goodChannel := &nagiv1.AlertChannel{Id: "c1", Name: "ops", Type: "webhook", Url: hook.URL}
+	badChannel := &nagiv1.AlertChannel{Id: "c2", Name: "unavailable", Type: "webhook", Url: failed.URL}
+	// Every configured channel must receive the notice. Partial delivery must
+	// not silently disable the notice for the channel that failed.
+	for _, channels := range [][]*nagiv1.AlertChannel{{badChannel}, {goodChannel, badChannel}} {
+		if err := h.a.Nodes.SetAlertConfig(ctx, &nagiv1.AlertConfig{Channels: channels}); err != nil {
+			t.Fatal(err)
+		}
+		before := rev()
+		if _, err := admin.SetAlertNotification(ctx, connect.NewRequest(&nagiv1.SetAlertNotificationRequest{Key: "token", BaseRevision: before})); err == nil {
+			t.Fatal("failed delivery must reject disabling the notification")
+		}
+		if rev() != before || !h.a.Nodes.NoticeOn(ctx, "security:token:1") {
+			t.Fatal("failed delivery changed the saved notification policy")
+		}
+	}
+	if err := h.a.Nodes.SetAlertConfig(ctx, &nagiv1.AlertConfig{Channels: []*nagiv1.AlertChannel{goodChannel}}); err != nil {
+		t.Fatal(err)
+	}
 	mu.Lock()
 	received = nil
 	mu.Unlock()

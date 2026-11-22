@@ -203,7 +203,9 @@ func TestAlertNotificationSwitches(t *testing.T) {
 	if err := q.SetSetting(ctx, store.SetSettingParams{Key: "alert_login_ratelimit", Value: "0"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.MigrateAlertPolicy(ctx, func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error) { return nil, nil, nil }); err != nil {
+	if err := r.MigrateAlertPolicy(ctx, func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error) {
+		return nil, nil, nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	p, _ := r.AlertPolicy(ctx)
@@ -216,10 +218,17 @@ func TestAlertNotificationSwitches(t *testing.T) {
 	if _, err := r.SetAlertNotification(ctx, "takeover", false, p.GetRevision()-1, nil); err != ErrAlertConflict {
 		t.Fatalf("旧版本应被拒绝：%v", err)
 	}
+	if _, err := r.SetAlertNotification(ctx, "takeover", false, p.GetRevision(), func() error { return context.DeadlineExceeded }); err != context.DeadlineExceeded {
+		t.Fatalf("notification timeout must propagate: %v", err)
+	}
+	if cur, err := r.AlertPolicy(ctx); err != nil || cur.GetRevision() != p.GetRevision() || !r.NoticeOn(ctx, "takeover:node") {
+		t.Fatalf("notification timeout changed the policy: %v, %v", cur, err)
+	}
 	var savedBefore bool
-	p, err := r.SetAlertNotification(ctx, "takeover", false, p.GetRevision(), func() {
+	p, err := r.SetAlertNotification(ctx, "takeover", false, p.GetRevision(), func() error {
 		cur, _ := r.AlertPolicy(ctx)
 		_, savedBefore = cur.GetNotifications()["takeover"]
+		return nil
 	})
 	if err != nil || savedBefore {
 		t.Fatalf("before 应在保存之前调用：%v %v", savedBefore, err)
@@ -231,7 +240,9 @@ func TestAlertNotificationSwitches(t *testing.T) {
 	if p, err = r.SetAlertNotification(ctx, "login_ratelimit", true, p.GetRevision(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.MigrateAlertPolicy(ctx, func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error) { return nil, nil, nil }); err != nil {
+	if err := r.MigrateAlertPolicy(ctx, func(context.Context) (map[string]*nagiv1.AlertRules, []LegacyContainerRules, error) {
+		return nil, nil, nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if !r.NoticeOn(ctx, "ratelimit:hour") {
