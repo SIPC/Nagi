@@ -212,6 +212,9 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 	`); err != nil {
 		return fail(err)
 	}
+	if err := indexGaps(ctx, d); err != nil {
+		return fail(err)
+	}
 	var source [16]byte
 	if _, err := rand.Read(source[:]); err != nil {
 		return fail(err)
@@ -242,6 +245,54 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 		return fail(err)
 	}
 	return s, nil
+}
+
+// gapMarker marks collection gaps. The logs page always searches the runtime
+// and logstore categories for it, and its few matches are spread through the
+// whole history, so checking the search on each record reads the category:
+// seconds with a cold page cache, all under the gate. Triggers keep the
+// matching sequence numbers in log_gaps; an existing history is indexed once.
+const gapMarker = `"history_complete":false`
+
+var gapSchema = fmt.Sprintf(`
+	CREATE TABLE log_gaps (seq INTEGER PRIMARY KEY);
+	CREATE TRIGGER log_gaps_insert AFTER INSERT ON log_events
+		WHEN NEW.category IN ('%[1]s','%[2]s') AND instr(lower(NEW.kind || ' ' || NEW.project || ' ' || NEW.object || ' ' || CAST(NEW.data AS TEXT)),'%[3]s')>0
+		BEGIN INSERT OR IGNORE INTO log_gaps(seq) VALUES (NEW.seq); END;
+	CREATE TRIGGER log_gaps_delete AFTER DELETE ON log_events WHEN OLD.category IN ('%[1]s','%[2]s')
+		BEGIN DELETE FROM log_gaps WHERE seq=OLD.seq; END;
+	INSERT INTO log_gaps(seq) SELECT seq FROM log_events WHERE category IN ('%[1]s','%[2]s')
+		AND instr(lower(kind || ' ' || project || ' ' || object || ' ' || CAST(data AS TEXT)),'%[3]s')>0;`, Runtime, System, gapMarker)
+
+func indexGaps(ctx context.Context, d *sql.DB) error {
+	var exists bool
+	if err := d.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='log_gaps')`).Scan(&exists); err != nil || exists {
+		return err
+	}
+	tx, err := d.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, gapSchema); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// gapSearch reports whether every record matching f is in log_gaps: the
+// search contains the marker under SQLite's lower(), which folds ASCII only.
+func gapSearch(f Filter) bool {
+	if f.Category != Runtime && f.Category != System {
+		return false
+	}
+	b := []byte(f.Search)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return strings.Contains(string(b), gapMarker)
 }
 
 // Close 等待正在写入的记录，刷新 WAL；关闭后不会生成第二个来源或复用已删除序号。
@@ -625,6 +676,9 @@ func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 	if f.Search != "" {
 		where = append(where, "instr(lower(kind || ' ' || project || ' ' || object || ' ' || CAST(data AS TEXT)),lower(?))>0")
 		args = append(args, f.Search)
+		if gapSearch(f) {
+			where = append(where, "seq IN (SELECT seq FROM log_gaps)")
+		}
 	}
 	if f.KindPrefix != "" {
 		where = append(where, "substr(kind,1,length(?))=?")
