@@ -108,7 +108,7 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 		t.Fatalf("重新生成配置以后：%v", st)
 	}
 	url := directdl.HTTPURL("127.0.0.1", port, token)
-	cmd := directdl.Command{URL: url, Name: res.GetName(), Key: directdl.FileKey(key, c, res.GetEtag()), SHA256: res.GetSha256(), Resume: true}
+	cmd := directdl.Command{URL: url, Name: res.GetName(), Key: directdl.FileKey(key, c, res.GetEtag()), SHA256: res.GetSha256(), Resume: true, Size: res.GetSize()}
 
 	// 别的路径、别的 Host 是 404。
 	for _, bad := range []string{"http://127.0.0.1:" + strconv.Itoa(port) + "/", "http://localhost:" + strconv.Itoa(port) + directdl.HTTPPathPrefix + token} {
@@ -139,7 +139,8 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 	}
 	work := t.TempDir()
 	// 先放一半密文，模拟断开的下载：命令接着续传。
-	if err := os.WriteFile(filepath.Join(work, res.GetName()+"."+cmd.Key.Tag+".part"), enc[:1234567], 0o644); err != nil {
+	partial := filepath.Join(work, res.GetName()+"."+cmd.Key.Tag+".1.part0")
+	if err := os.WriteFile(partial, enc[:1234567], 0o644); err != nil {
 		t.Fatal(err)
 	}
 	sh := exec.Command("sh", "-c", cmd.String())
@@ -152,6 +153,9 @@ func TestDirectHTTPThroughCaddy(t *testing.T) {
 	sum := sha256.Sum256(got)
 	if hex.EncodeToString(sum[:]) != res.GetSha256() || !bytes.Equal(got, content) {
 		t.Fatal("解密的内容不对")
+	}
+	if _, err := os.Stat(partial); !os.IsNotExist(err) {
+		t.Fatalf("续传片段未被消费清理: %v", err)
 	}
 
 	// 端到端（真的 Caddy、curl）：别的来源地址拿同一个链接是 404（127.0.0.2 也在回环上）。
