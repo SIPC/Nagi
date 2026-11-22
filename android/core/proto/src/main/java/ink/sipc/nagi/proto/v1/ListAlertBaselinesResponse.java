@@ -29,7 +29,7 @@ public  final class ListAlertBaselinesResponse extends
   /**
    * <code>repeated .nagi.v1.AlertBaselineState baselines = 1 [json_name = "baselines"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertBaselineStateOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertBaselineStateOrBuilder>
       getBaselinesOrBuilderList() {
     return baselines_;
   }
@@ -207,7 +207,6 @@ public  final class ListAlertBaselinesResponse extends
       super(DEFAULT_INSTANCE);
     }
 
-
     /**
      * <code>repeated .nagi.v1.AlertBaselineState baselines = 1 [json_name = "baselines"];</code>
      */
@@ -362,7 +361,6 @@ public  final class ListAlertBaselinesResponse extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.ListAlertBaselinesResponse)
   private static final ink.sipc.nagi.proto.v1.ListAlertBaselinesResponse DEFAULT_INSTANCE;
   static {
@@ -384,4 +382,3 @@ public  final class ListAlertBaselinesResponse extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

@@ -486,7 +486,7 @@ public  final class Alert extends
    * @param value The revision to set.
    */
   private void setRevision(long value) {
-    
+
     revision_ = value;
   }
   /**
@@ -1101,7 +1101,7 @@ public  final class Alert extends
    * @param value The durationSeconds to set.
    */
   private void setDurationSeconds(int value) {
-    
+
     durationSeconds_ = value;
   }
   /**
@@ -1139,7 +1139,7 @@ public  final class Alert extends
    * @param value The recoverSeconds to set.
    */
   private void setRecoverSeconds(int value) {
-    
+
     recoverSeconds_ = value;
   }
   /**
@@ -1177,7 +1177,7 @@ public  final class Alert extends
    * @param value The reminder to set.
    */
   private void setReminder(boolean value) {
-    
+
     reminder_ = value;
   }
   /**
@@ -1358,7 +1358,6 @@ public  final class Alert extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <pre>
@@ -2707,7 +2706,6 @@ public  final class Alert extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.Alert)
   private static final ink.sipc.nagi.proto.v1.Alert DEFAULT_INSTANCE;
   static {
@@ -2729,4 +2727,3 @@ public  final class Alert extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

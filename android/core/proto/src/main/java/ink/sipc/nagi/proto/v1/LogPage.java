@@ -84,7 +84,7 @@ public  final class LogPage extends
    * @param value The latestSeq to set.
    */
   private void setLatestSeq(long value) {
-    
+
     latestSeq_ = value;
   }
   /**
@@ -110,7 +110,7 @@ public  final class LogPage extends
    * @param value The nextAfter to set.
    */
   private void setNextAfter(long value) {
-    
+
     nextAfter_ = value;
   }
   /**
@@ -136,7 +136,7 @@ public  final class LogPage extends
    * @param value The more to set.
    */
   private void setMore(boolean value) {
-    
+
     more_ = value;
   }
   /**
@@ -159,7 +159,7 @@ public  final class LogPage extends
   /**
    * <code>repeated .nagi.v1.LogEntry entries = 5 [json_name = "entries"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogEntryOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogEntryOrBuilder>
       getEntriesOrBuilderList() {
     return entries_;
   }
@@ -253,7 +253,7 @@ public  final class LogPage extends
   /**
    * <code>repeated .nagi.v1.LogPruned pruned = 6 [json_name = "pruned"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogPrunedOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogPrunedOrBuilder>
       getPrunedOrBuilderList() {
     return pruned_;
   }
@@ -350,7 +350,7 @@ public  final class LogPage extends
    * @param value The writeErrors to set.
    */
   private void setWriteErrors(long value) {
-    
+
     writeErrors_ = value;
   }
   /**
@@ -376,7 +376,7 @@ public  final class LogPage extends
    * @param value The diskBytes to set.
    */
   private void setDiskBytes(long value) {
-    
+
     diskBytes_ = value;
   }
   /**
@@ -402,7 +402,7 @@ public  final class LogPage extends
    * @param value The budgetBytes to set.
    */
   private void setBudgetBytes(long value) {
-    
+
     budgetBytes_ = value;
   }
   /**
@@ -428,7 +428,7 @@ public  final class LogPage extends
    * @param value The recentCopy to set.
    */
   private void setRecentCopy(boolean value) {
-    
+
     recentCopy_ = value;
   }
   /**
@@ -459,7 +459,7 @@ public  final class LogPage extends
    *
    * <code>repeated .nagi.v1.LogPruned source_pruned = 11 [json_name = "sourcePruned"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogPrunedOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogPrunedOrBuilder>
       getSourcePrunedOrBuilderList() {
     return sourcePruned_;
   }
@@ -597,7 +597,7 @@ public  final class LogPage extends
    *
    * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogMigrationOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogMigrationOrBuilder>
       getMigrationsOrBuilderList() {
     return migrations_;
   }
@@ -735,7 +735,7 @@ public  final class LogPage extends
    *
    * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogWriteFailureOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogWriteFailureOrBuilder>
       getWriteFailuresOrBuilderList() {
     return writeFailures_;
   }
@@ -948,7 +948,6 @@ public  final class LogPage extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string source = 1 [json_name = "source"];</code>
@@ -1919,7 +1918,6 @@ public  final class LogPage extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.LogPage)
   private static final ink.sipc.nagi.proto.v1.LogPage DEFAULT_INSTANCE;
   static {
@@ -1941,4 +1939,3 @@ public  final class LogPage extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

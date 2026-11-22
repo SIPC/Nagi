@@ -85,7 +85,7 @@ public  final class LogQuery extends
    * @param value The after to set.
    */
   private void setAfter(long value) {
-    
+
     after_ = value;
   }
   /**
@@ -346,7 +346,7 @@ public  final class LogQuery extends
    * @param value The limit to set.
    */
   private void setLimit(int value) {
-    
+
     limit_ = value;
   }
   /**
@@ -514,7 +514,7 @@ public  final class LogQuery extends
    * @param value The migrationsOnly to set.
    */
   private void setMigrationsOnly(boolean value) {
-    
+
     migrationsOnly_ = value;
   }
   /**
@@ -668,7 +668,6 @@ public  final class LogQuery extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string source = 1 [json_name = "source"];</code>
@@ -1304,7 +1303,6 @@ public  final class LogQuery extends
     // Should never happen. Generates tight code to throw an exception.
     throw null;
   }
-
 
   // @@protoc_insertion_point(class_scope:nagi.v1.LogQuery)
   private static final ink.sipc.nagi.proto.v1.LogQuery DEFAULT_INSTANCE;

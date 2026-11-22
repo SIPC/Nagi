@@ -43,7 +43,7 @@ public interface LogPageOrBuilder extends
   /**
    * <code>repeated .nagi.v1.LogEntry entries = 5 [json_name = "entries"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.LogEntry> 
+  java.util.List<ink.sipc.nagi.proto.v1.LogEntry>
       getEntriesList();
   /**
    * <code>repeated .nagi.v1.LogEntry entries = 5 [json_name = "entries"];</code>
@@ -57,7 +57,7 @@ public interface LogPageOrBuilder extends
   /**
    * <code>repeated .nagi.v1.LogPruned pruned = 6 [json_name = "pruned"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.LogPruned> 
+  java.util.List<ink.sipc.nagi.proto.v1.LogPruned>
       getPrunedList();
   /**
    * <code>repeated .nagi.v1.LogPruned pruned = 6 [json_name = "pruned"];</code>
@@ -99,7 +99,7 @@ public interface LogPageOrBuilder extends
    *
    * <code>repeated .nagi.v1.LogPruned source_pruned = 11 [json_name = "sourcePruned"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.LogPruned> 
+  java.util.List<ink.sipc.nagi.proto.v1.LogPruned>
       getSourcePrunedList();
   /**
    * <pre>
@@ -125,7 +125,7 @@ public interface LogPageOrBuilder extends
    *
    * <code>repeated .nagi.v1.LogMigration migrations = 12 [json_name = "migrations"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.LogMigration> 
+  java.util.List<ink.sipc.nagi.proto.v1.LogMigration>
       getMigrationsList();
   /**
    * <pre>
@@ -151,7 +151,7 @@ public interface LogPageOrBuilder extends
    *
    * <code>repeated .nagi.v1.LogWriteFailure write_failures = 13 [json_name = "writeFailures"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.LogWriteFailure> 
+  java.util.List<ink.sipc.nagi.proto.v1.LogWriteFailure>
       getWriteFailuresList();
   /**
    * <pre>

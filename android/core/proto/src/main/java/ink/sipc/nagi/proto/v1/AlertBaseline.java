@@ -249,7 +249,7 @@ public  final class AlertBaseline extends
    * @param value The requiredSeconds to set.
    */
   private void setRequiredSeconds(int value) {
-    
+
     requiredSeconds_ = value;
   }
   /**
@@ -279,7 +279,7 @@ public  final class AlertBaseline extends
    * @param value The collectedSeconds to set.
    */
   private void setCollectedSeconds(int value) {
-    
+
     collectedSeconds_ = value;
   }
   /**
@@ -523,7 +523,6 @@ public  final class AlertBaseline extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <pre>
@@ -999,7 +998,6 @@ public  final class AlertBaseline extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertBaseline)
   private static final ink.sipc.nagi.proto.v1.AlertBaseline DEFAULT_INSTANCE;
   static {
@@ -1021,4 +1019,3 @@ public  final class AlertBaseline extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

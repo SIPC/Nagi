@@ -148,7 +148,7 @@ public  final class LogMigration extends
    * @param value The completed to set.
    */
   private void setCompleted(long value) {
-    
+
     completed_ = value;
   }
   /**
@@ -174,7 +174,7 @@ public  final class LogMigration extends
    * @param value The total to set.
    */
   private void setTotal(long value) {
-    
+
     total_ = value;
   }
   /**
@@ -327,7 +327,6 @@ public  final class LogMigration extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string id = 1 [json_name = "id"];</code>
@@ -608,7 +607,6 @@ public  final class LogMigration extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.LogMigration)
   private static final ink.sipc.nagi.proto.v1.LogMigration DEFAULT_INSTANCE;
   static {
@@ -630,4 +628,3 @@ public  final class LogMigration extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

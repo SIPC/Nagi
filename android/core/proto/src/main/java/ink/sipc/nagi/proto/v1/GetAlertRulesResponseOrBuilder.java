@@ -43,7 +43,7 @@ public interface GetAlertRulesResponseOrBuilder extends
   /**
    * <code>repeated .nagi.v1.AlertOverride overrides = 3 [json_name = "overrides"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.AlertOverride> 
+  java.util.List<ink.sipc.nagi.proto.v1.AlertOverride>
       getOverridesList();
   /**
    * <code>repeated .nagi.v1.AlertOverride overrides = 3 [json_name = "overrides"];</code>
@@ -67,7 +67,7 @@ public interface GetAlertRulesResponseOrBuilder extends
    *
    * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.AlertRuleDef> 
+  java.util.List<ink.sipc.nagi.proto.v1.AlertRuleDef>
       getDefsList();
   /**
    * <pre>
@@ -93,7 +93,7 @@ public interface GetAlertRulesResponseOrBuilder extends
    *
    * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.AlertNoticeDef> 
+  java.util.List<ink.sipc.nagi.proto.v1.AlertNoticeDef>
       getNoticesList();
   /**
    * <pre>

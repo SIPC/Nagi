@@ -491,7 +491,6 @@ public  final class AlertRule extends
       super(DEFAULT_INSTANCE);
     }
 
-
     /**
      * <code>optional bool enabled = 1 [json_name = "enabled"];</code>
      * @return Whether the enabled field is set.
@@ -937,7 +936,6 @@ public  final class AlertRule extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertRule)
   private static final ink.sipc.nagi.proto.v1.AlertRule DEFAULT_INSTANCE;
   static {
@@ -959,4 +957,3 @@ public  final class AlertRule extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

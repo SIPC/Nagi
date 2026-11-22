@@ -129,7 +129,7 @@ public  final class LogCopyBatch extends
    * @param value The after to set.
    */
   private void setAfter(long value) {
-    
+
     after_ = value;
   }
   /**
@@ -155,7 +155,7 @@ public  final class LogCopyBatch extends
    * @param value The through to set.
    */
   private void setThrough(long value) {
-    
+
     through_ = value;
   }
   /**
@@ -178,7 +178,7 @@ public  final class LogCopyBatch extends
   /**
    * <code>repeated .nagi.v1.LogEntry entries = 5 [json_name = "entries"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogEntryOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogEntryOrBuilder>
       getEntriesOrBuilderList() {
     return entries_;
   }
@@ -272,7 +272,7 @@ public  final class LogCopyBatch extends
   /**
    * <code>repeated .nagi.v1.LogPruned pruned = 6 [json_name = "pruned"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogPrunedOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.LogPrunedOrBuilder>
       getPrunedOrBuilderList() {
     return pruned_;
   }
@@ -369,7 +369,7 @@ public  final class LogCopyBatch extends
    * @param value The writeErrors to set.
    */
   private void setWriteErrors(long value) {
-    
+
     writeErrors_ = value;
   }
   /**
@@ -405,7 +405,7 @@ public  final class LogCopyBatch extends
    * @param value The catchup to set.
    */
   private void setCatchup(boolean value) {
-    
+
     catchup_ = value;
   }
   /**
@@ -516,7 +516,6 @@ public  final class LogCopyBatch extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string source = 1 [json_name = "source"];</code>
@@ -1008,7 +1007,6 @@ public  final class LogCopyBatch extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.LogCopyBatch)
   private static final ink.sipc.nagi.proto.v1.LogCopyBatch DEFAULT_INSTANCE;
   static {
@@ -1030,4 +1028,3 @@ public  final class LogCopyBatch extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

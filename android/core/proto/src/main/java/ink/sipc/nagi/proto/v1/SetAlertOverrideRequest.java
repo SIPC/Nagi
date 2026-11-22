@@ -321,7 +321,7 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
    * @param value The baseRevision to set.
    */
   private void setBaseRevision(long value) {
-    
+
     baseRevision_ = value;
   }
   /**
@@ -474,7 +474,6 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string scope = 1 [json_name = "scope"];</code>
@@ -908,7 +907,6 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.SetAlertOverrideRequest)
   private static final ink.sipc.nagi.proto.v1.SetAlertOverrideRequest DEFAULT_INSTANCE;
   static {
@@ -930,4 +928,3 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

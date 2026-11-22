@@ -149,7 +149,7 @@ public  final class AlertNoticeDef extends
    * @param value The recovers to set.
    */
   private void setRecovers(boolean value) {
-    
+
     recovers_ = value;
   }
   /**
@@ -183,7 +183,7 @@ public  final class AlertNoticeDef extends
    * @param value The risky to set.
    */
   private void setRisky(boolean value) {
-    
+
     risky_ = value;
   }
   /**
@@ -221,7 +221,7 @@ public  final class AlertNoticeDef extends
    * @param value The security to set.
    */
   private void setSecurity(boolean value) {
-    
+
     security_ = value;
   }
   /**
@@ -425,7 +425,6 @@ public  final class AlertNoticeDef extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string key = 1 [json_name = "key"];</code>
@@ -809,7 +808,6 @@ public  final class AlertNoticeDef extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertNoticeDef)
   private static final ink.sipc.nagi.proto.v1.AlertNoticeDef DEFAULT_INSTANCE;
   static {
@@ -831,4 +829,3 @@ public  final class AlertNoticeDef extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

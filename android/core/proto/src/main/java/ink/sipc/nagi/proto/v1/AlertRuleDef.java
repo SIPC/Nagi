@@ -89,7 +89,7 @@ public  final class AlertRuleDef extends
    * @param value The node to set.
    */
   private void setNode(boolean value) {
-    
+
     node_ = value;
   }
   /**
@@ -119,7 +119,7 @@ public  final class AlertRuleDef extends
    * @param value The route to set.
    */
   private void setRoute(boolean value) {
-    
+
     route_ = value;
   }
   /**
@@ -145,7 +145,7 @@ public  final class AlertRuleDef extends
    * @param value The panel to set.
    */
   private void setPanel(boolean value) {
-    
+
     panel_ = value;
   }
   /**
@@ -226,7 +226,7 @@ public  final class AlertRuleDef extends
    * @param value The lower to set.
    */
   private void setLower(boolean value) {
-    
+
     lower_ = value;
   }
   /**
@@ -465,7 +465,6 @@ public  final class AlertRuleDef extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string name = 1 [json_name = "name"];</code>
@@ -887,7 +886,6 @@ public  final class AlertRuleDef extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertRuleDef)
   private static final ink.sipc.nagi.proto.v1.AlertRuleDef DEFAULT_INSTANCE;
   static {
@@ -909,4 +907,3 @@ public  final class AlertRuleDef extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

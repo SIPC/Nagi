@@ -79,7 +79,7 @@ public  final class UpdateAlertPolicyRequest extends
    * @param value The baseRevision to set.
    */
   private void setBaseRevision(long value) {
-    
+
     baseRevision_ = value;
   }
   /**
@@ -185,7 +185,6 @@ public  final class UpdateAlertPolicyRequest extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>.nagi.v1.AlertPolicy policy = 1 [json_name = "policy"];</code>
@@ -316,7 +315,6 @@ public  final class UpdateAlertPolicyRequest extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.UpdateAlertPolicyRequest)
   private static final ink.sipc.nagi.proto.v1.UpdateAlertPolicyRequest DEFAULT_INSTANCE;
   static {
@@ -338,4 +336,3 @@ public  final class UpdateAlertPolicyRequest extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

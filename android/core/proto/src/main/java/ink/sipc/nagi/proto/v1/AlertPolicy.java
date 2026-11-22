@@ -208,7 +208,7 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
    * @param value The flapWindowMinutes to set.
    */
   private void setFlapWindowMinutes(int value) {
-    
+
     flapWindowMinutes_ = value;
   }
   /**
@@ -238,7 +238,7 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
    * @param value The flapCount to set.
    */
   private void setFlapCount(int value) {
-    
+
     flapCount_ = value;
   }
   /**
@@ -272,7 +272,7 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
    * @param value The revision to set.
    */
   private void setRevision(long value) {
-    
+
     revision_ = value;
   }
   /**
@@ -501,7 +501,6 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     @java.lang.Override
 
@@ -965,7 +964,6 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertPolicy)
   private static final ink.sipc.nagi.proto.v1.AlertPolicy DEFAULT_INSTANCE;
   static {
@@ -987,4 +985,3 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

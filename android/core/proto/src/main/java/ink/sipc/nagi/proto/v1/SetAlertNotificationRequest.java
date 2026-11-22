@@ -79,7 +79,7 @@ public  final class SetAlertNotificationRequest extends
    * @param value The enabled to set.
    */
   private void setEnabled(boolean value) {
-    
+
     enabled_ = value;
   }
   /**
@@ -105,7 +105,7 @@ public  final class SetAlertNotificationRequest extends
    * @param value The baseRevision to set.
    */
   private void setBaseRevision(long value) {
-    
+
     baseRevision_ = value;
   }
   /**
@@ -211,7 +211,6 @@ public  final class SetAlertNotificationRequest extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string key = 1 [json_name = "key"];</code>
@@ -372,7 +371,6 @@ public  final class SetAlertNotificationRequest extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.SetAlertNotificationRequest)
   private static final ink.sipc.nagi.proto.v1.SetAlertNotificationRequest DEFAULT_INSTANCE;
   static {
@@ -394,4 +392,3 @@ public  final class SetAlertNotificationRequest extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

@@ -31,7 +31,7 @@ public interface AlertSyncOrBuilder extends
   /**
    * <code>repeated .nagi.v1.Alert current = 3 [json_name = "current"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.Alert> 
+  java.util.List<ink.sipc.nagi.proto.v1.Alert>
       getCurrentList();
   /**
    * <code>repeated .nagi.v1.Alert current = 3 [json_name = "current"];</code>
@@ -45,7 +45,7 @@ public interface AlertSyncOrBuilder extends
   /**
    * <code>repeated .nagi.v1.Alert history = 4 [json_name = "history"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.Alert> 
+  java.util.List<ink.sipc.nagi.proto.v1.Alert>
       getHistoryList();
   /**
    * <code>repeated .nagi.v1.Alert history = 4 [json_name = "history"];</code>
@@ -69,7 +69,7 @@ public interface AlertSyncOrBuilder extends
    *
    * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.AlertBaseline> 
+  java.util.List<ink.sipc.nagi.proto.v1.AlertBaseline>
       getBaselinesList();
   /**
    * <pre>

@@ -180,7 +180,6 @@ public  final class SetPanelUpdateChannelRequest extends
       super(DEFAULT_INSTANCE);
     }
 
-
     /**
      * <pre>
      * stable 或 pre。
@@ -301,7 +300,6 @@ public  final class SetPanelUpdateChannelRequest extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.SetPanelUpdateChannelRequest)
   private static final ink.sipc.nagi.proto.v1.SetPanelUpdateChannelRequest DEFAULT_INSTANCE;
   static {
@@ -323,4 +321,3 @@ public  final class SetPanelUpdateChannelRequest extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

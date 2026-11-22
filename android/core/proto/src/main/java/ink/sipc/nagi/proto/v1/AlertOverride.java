@@ -345,7 +345,7 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
    * @param value The revision to set.
    */
   private void setRevision(long value) {
-    
+
     revision_ = value;
   }
   /**
@@ -522,7 +522,6 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <pre>
@@ -996,7 +995,6 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertOverride)
   private static final ink.sipc.nagi.proto.v1.AlertOverride DEFAULT_INSTANCE;
   static {
@@ -1018,4 +1016,3 @@ ink.sipc.nagi.proto.v1.AlertRule defaultValue) {
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

@@ -112,7 +112,6 @@ public  final class SetNodeUpdateChannelResponse extends
       super(DEFAULT_INSTANCE);
     }
 
-
     // @@protoc_insertion_point(builder_scope:nagi.v1.SetNodeUpdateChannelResponse)
   }
   @java.lang.Override
@@ -162,7 +161,6 @@ public  final class SetNodeUpdateChannelResponse extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.SetNodeUpdateChannelResponse)
   private static final ink.sipc.nagi.proto.v1.SetNodeUpdateChannelResponse DEFAULT_INSTANCE;
   static {
@@ -184,4 +182,3 @@ public  final class SetNodeUpdateChannelResponse extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

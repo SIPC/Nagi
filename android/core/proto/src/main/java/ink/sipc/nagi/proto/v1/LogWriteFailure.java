@@ -87,7 +87,7 @@ public  final class LogWriteFailure extends
    * @param value The failed to set.
    */
   private void setFailed(long value) {
-    
+
     failed_ = value;
   }
   /**
@@ -113,7 +113,7 @@ public  final class LogWriteFailure extends
    * @param value The lost to set.
    */
   private void setLost(long value) {
-    
+
     lost_ = value;
   }
   /**
@@ -319,7 +319,6 @@ public  final class LogWriteFailure extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string category = 1 [json_name = "category"];</code>
@@ -579,7 +578,6 @@ public  final class LogWriteFailure extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.LogWriteFailure)
   private static final ink.sipc.nagi.proto.v1.LogWriteFailure DEFAULT_INSTANCE;
   static {
@@ -601,4 +599,3 @@ public  final class LogWriteFailure extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

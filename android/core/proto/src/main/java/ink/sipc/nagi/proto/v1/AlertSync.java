@@ -86,7 +86,7 @@ public  final class AlertSync extends
    * @param value The revision to set.
    */
   private void setRevision(long value) {
-    
+
     revision_ = value;
   }
   /**
@@ -109,7 +109,7 @@ public  final class AlertSync extends
   /**
    * <code>repeated .nagi.v1.Alert current = 3 [json_name = "current"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertOrBuilder>
       getCurrentOrBuilderList() {
     return current_;
   }
@@ -203,7 +203,7 @@ public  final class AlertSync extends
   /**
    * <code>repeated .nagi.v1.Alert history = 4 [json_name = "history"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertOrBuilder>
       getHistoryOrBuilderList() {
     return history_;
   }
@@ -300,7 +300,7 @@ public  final class AlertSync extends
    * @param value The complete to set.
    */
   private void setComplete(boolean value) {
-    
+
     complete_ = value;
   }
   /**
@@ -331,7 +331,7 @@ public  final class AlertSync extends
    *
    * <code>repeated .nagi.v1.AlertBaseline baselines = 6 [json_name = "baselines"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertBaselineOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertBaselineOrBuilder>
       getBaselinesOrBuilderList() {
     return baselines_;
   }
@@ -472,7 +472,7 @@ public  final class AlertSync extends
    * @param value The baselinesSupported to set.
    */
   private void setBaselinesSupported(boolean value) {
-    
+
     baselinesSupported_ = value;
   }
   /**
@@ -586,7 +586,6 @@ public  final class AlertSync extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string source = 1 [json_name = "source"];</code>
@@ -1148,7 +1147,6 @@ public  final class AlertSync extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertSync)
   private static final ink.sipc.nagi.proto.v1.AlertSync DEFAULT_INSTANCE;
   static {
@@ -1170,4 +1168,3 @@ public  final class AlertSync extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

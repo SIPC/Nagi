@@ -112,7 +112,6 @@ public  final class GetAlertRulesRequest extends
       super(DEFAULT_INSTANCE);
     }
 
-
     // @@protoc_insertion_point(builder_scope:nagi.v1.GetAlertRulesRequest)
   }
   @java.lang.Override
@@ -162,7 +161,6 @@ public  final class GetAlertRulesRequest extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.GetAlertRulesRequest)
   private static final ink.sipc.nagi.proto.v1.GetAlertRulesRequest DEFAULT_INSTANCE;
   static {
@@ -184,4 +182,3 @@ public  final class GetAlertRulesRequest extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

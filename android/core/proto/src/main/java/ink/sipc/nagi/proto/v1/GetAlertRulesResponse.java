@@ -146,7 +146,7 @@ public  final class GetAlertRulesResponse extends
   /**
    * <code>repeated .nagi.v1.AlertOverride overrides = 3 [json_name = "overrides"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertOverrideOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertOverrideOrBuilder>
       getOverridesOrBuilderList() {
     return overrides_;
   }
@@ -243,7 +243,7 @@ public  final class GetAlertRulesResponse extends
    * @param value The canEditPolicy to set.
    */
   private void setCanEditPolicy(boolean value) {
-    
+
     canEditPolicy_ = value;
   }
   /**
@@ -274,7 +274,7 @@ public  final class GetAlertRulesResponse extends
    *
    * <code>repeated .nagi.v1.AlertRuleDef defs = 5 [json_name = "defs"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertRuleDefOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertRuleDefOrBuilder>
       getDefsOrBuilderList() {
     return defs_;
   }
@@ -412,7 +412,7 @@ public  final class GetAlertRulesResponse extends
    *
    * <code>repeated .nagi.v1.AlertNoticeDef notices = 6 [json_name = "notices"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertNoticeDefOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.AlertNoticeDefOrBuilder>
       getNoticesOrBuilderList() {
     return notices_;
   }
@@ -553,7 +553,7 @@ public  final class GetAlertRulesResponse extends
    * @param value The canEditSecurityNotices to set.
    */
   private void setCanEditSecurityNotices(boolean value) {
-    
+
     canEditSecurityNotices_ = value;
   }
   /**
@@ -583,7 +583,7 @@ public  final class GetAlertRulesResponse extends
    * @param value The canEditNotices to set.
    */
   private void setCanEditNotices(boolean value) {
-    
+
     canEditNotices_ = value;
   }
   /**
@@ -689,7 +689,6 @@ public  final class GetAlertRulesResponse extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <pre>
@@ -1370,7 +1369,6 @@ public  final class GetAlertRulesResponse extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.GetAlertRulesResponse)
   private static final ink.sipc.nagi.proto.v1.GetAlertRulesResponse DEFAULT_INSTANCE;
   static {
@@ -1392,4 +1390,3 @@ public  final class GetAlertRulesResponse extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

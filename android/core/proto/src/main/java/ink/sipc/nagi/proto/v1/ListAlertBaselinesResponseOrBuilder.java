@@ -13,7 +13,7 @@ public interface ListAlertBaselinesResponseOrBuilder extends
   /**
    * <code>repeated .nagi.v1.AlertBaselineState baselines = 1 [json_name = "baselines"];</code>
    */
-  java.util.List<ink.sipc.nagi.proto.v1.AlertBaselineState> 
+  java.util.List<ink.sipc.nagi.proto.v1.AlertBaselineState>
       getBaselinesList();
   /**
    * <code>repeated .nagi.v1.AlertBaselineState baselines = 1 [json_name = "baselines"];</code>

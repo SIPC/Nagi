@@ -271,7 +271,7 @@ public  final class AlertBaselineState extends
    * @param value The unsupported to set.
    */
   private void setUnsupported(boolean value) {
-    
+
     unsupported_ = value;
   }
   /**
@@ -381,7 +381,6 @@ public  final class AlertBaselineState extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string node_id = 1 [json_name = "nodeId"];</code>
@@ -714,7 +713,6 @@ public  final class AlertBaselineState extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertBaselineState)
   private static final ink.sipc.nagi.proto.v1.AlertBaselineState DEFAULT_INSTANCE;
   static {
@@ -736,4 +734,3 @@ public  final class AlertBaselineState extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

@@ -228,7 +228,6 @@ public  final class SetNodeUpdateChannelRequest extends
       super(DEFAULT_INSTANCE);
     }
 
-
     /**
      * <code>string node_id = 1 [json_name = "nodeId"];</code>
      * @return The nodeId.
@@ -400,7 +399,6 @@ public  final class SetNodeUpdateChannelRequest extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.SetNodeUpdateChannelRequest)
   private static final ink.sipc.nagi.proto.v1.SetNodeUpdateChannelRequest DEFAULT_INSTANCE;
   static {
@@ -422,4 +420,3 @@ public  final class SetNodeUpdateChannelRequest extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-
