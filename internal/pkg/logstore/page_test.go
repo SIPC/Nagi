@@ -56,6 +56,56 @@ func TestByteBoundedPagesDoNotSkipRecords(t *testing.T) {
 	}
 }
 
+// A Live page skips imported history in bounded scans and never skips a live
+// record: callers resume at Next until they reach the live tail.
+func TestLivePagesSkipLargeImportedHistoryInBoundedSteps(t *testing.T) {
+	ctx := t.Context()
+	t.Cleanup(logstore.SetLiveScan(1000))
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 32<<20)
+	record(t, s, logstore.Event{Category: logstore.Audit, Kind: "live.before"})
+	const imported = 2500 // more than two scan bounds
+	for i := 0; i < imported; i += 500 {
+		var batch []logstore.Event
+		for j := i; j < i+500; j++ {
+			batch = append(batch, logstore.Event{Time: time.Unix(1700000000+int64(j), 0), Category: logstore.Audit, Kind: "node.Imported", Data: j})
+		}
+		if err := s.ImportBatch(ctx, batch, "legacy", i+500); err != nil {
+			t.Fatal(err)
+		}
+	}
+	record(t, s, logstore.Event{Category: logstore.Audit, Kind: "live.after"})
+	var kinds []string
+	after, pages := int64(0), 0
+	for {
+		p, err := s.ReadPage(ctx, logstore.Filter{Category: logstore.Audit, After: after, Limit: 128, Live: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages++
+		for _, e := range p.Events {
+			kinds = append(kinds, e.Kind)
+		}
+		if p.Next <= after || pages > 10 {
+			t.Fatalf("live pages did not advance: next=%d after=%d pages=%d", p.Next, after, pages)
+		}
+		after = p.Next
+		if !p.More {
+			if after != p.State.Last {
+				t.Fatalf("last page stopped short of the tail: %d < %d", after, p.State.Last)
+			}
+			break
+		}
+	}
+	if got := strings.Join(kinds, ","); got != "live.before,live.after" || pages < 3 {
+		t.Fatalf("live pages: %s in %d pages", got, pages)
+	}
+	// The log page itself still shows imported history.
+	all, err := s.ReadPage(ctx, logstore.Filter{Category: logstore.Audit, Limit: 10})
+	if err != nil || len(all.Events) != 10 || all.Events[1].Kind != "node.Imported" {
+		t.Fatalf("ordinary read lost imported history: %+v %v", all.Events, err)
+	}
+}
+
 func TestLogSearchFiltersBeforePaginationIncludingCopies(t *testing.T) {
 	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), 32<<20)
 	c, err := s.OpenCopies(t.Context(), logstore.Config{RecentCapacityMiB: 16, RecentHours: 24})

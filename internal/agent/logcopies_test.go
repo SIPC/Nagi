@@ -161,6 +161,44 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 			t.Fatalf("bounded batch/lost ack/catchup: %+v %v", p, err)
 		}
 	}
+	// Pre-upgrade history imported into the journal stays out of recent copies:
+	// it is already in the node's own audit chain, and ~750k imported rows
+	// filled a panel's recent.db until live copies stalled. The receipt still
+	// advances past it, and live records on either side of it are copied.
+	if err := local.Record(ctx, logstore.Event{Category: logstore.Audit, Kind: "live.before"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3 {
+		if err := local.ImportCheckpoint(ctx, logstore.Event{Time: time.Unix(1700000000+int64(i), 0), Category: logstore.Audit, Kind: "node.Imported", Data: i}, "legacy.node.audit", i+1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := local.Record(ctx, logstore.Event{Category: logstore.Audit, Kind: "live.after"}); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := copyLogCategory(ctx, local, client, logstore.Audit, 128, 1<<20, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st, err := local.State(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := copies.Receipt(ctx, "actual-node", st.Source, logstore.Audit); err != nil || r.After != st.Last {
+		t.Fatalf("receipt did not advance past imported history: %+v last=%d %v", r, st.Last, err)
+	}
+	p, _, err := copies.Read(ctx, "actual-node", "", logstore.Filter{Category: logstore.Audit})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, e := range p.Events {
+		kinds = append(kinds, e.Kind)
+	}
+	if got := strings.Join(kinds, ","); got != "event,event,live.before,live.after" {
+		t.Fatalf("recent copy must hold live records only: %s", got)
+	}
 	// No user-supplied node ID can select a different account's receipt.
 	if _, _, err := copies.Read(ctx, "invented-node", "", logstore.Filter{Category: logstore.Audit}); err == nil {
 		t.Fatal("wrong node obtained copies")
@@ -204,7 +242,7 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if receipt.After == 5 {
+			if receipt.After == st.Last {
 				break
 			}
 			select {
@@ -227,7 +265,7 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 		stop()
 		<-done
 		page, _, err := copies.Read(ctx, "actual-node", st.Source, logstore.Filter{Category: logstore.Security})
-		if err != nil || len(page.Events) != 1 || page.Events[0].Seq != 5 || page.Events[0].Kind != "primary.offline" {
+		if err != nil || len(page.Events) != 1 || page.Events[0].Seq != st.Last || page.Events[0].Kind != "primary.offline" {
 			t.Fatalf("standby sender lost identity or ignored revocation: %+v %v", page, err)
 		}
 	} else {

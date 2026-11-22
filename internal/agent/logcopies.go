@@ -229,7 +229,9 @@ func copyLogCategory(ctx context.Context, logs *logstore.Store, client nagiv1.Lo
 	if r.GetSource() != st.Source || r.GetCategory() != category || r.GetAfter() < 0 {
 		return sent, fmt.Errorf("面板返回了不匹配的日志确认")
 	}
-	page, err := logs.ReadPage(ctx, logstore.Filter{Category: category, After: r.GetAfter(), Limit: maxEntries})
+	// Imported pre-upgrade audit stays in the node's audit chain; the receipt
+	// still advances past it so live records are not held behind history.
+	page, err := logs.ReadPage(ctx, logstore.Filter{Category: category, After: r.GetAfter(), Limit: maxEntries, Live: true})
 	if err != nil {
 		return sent, err
 	}

@@ -32,15 +32,20 @@ func (s *Store) ReadPage(ctx context.Context, f Filter) (Page, error) {
 	if f.Limit == 0 {
 		f.Limit = 100
 	}
+	p.Next = p.State.Last
+	if f.NewestFirst {
+		p.Next = 0
+	} else if f.Live && p.State.Last-f.After > liveScan {
+		// Hundreds of thousands of imported records would otherwise be walked
+		// in one call under the gate; the caller resumes at this bound.
+		f.through = f.After + liveScan
+		p.Next = f.through
+	}
 	events, err := s.query(ctx, f)
 	if err != nil {
 		return p, err
 	}
-	p.Next = p.State.Last
-	if f.NewestFirst {
-		p.Next = 0
-	}
-	p.More = len(events) == f.Limit
+	full := len(events) == f.Limit
 	var size int
 	for _, e := range events {
 		b, err := json.Marshal(e)
@@ -48,14 +53,15 @@ func (s *Store) ReadPage(ctx context.Context, f Filter) (Page, error) {
 			return p, err
 		}
 		if size+len(b) > 1<<20 {
-			p.More = true
+			full = true
 			break
 		}
 		size += len(b)
 		p.Events = append(p.Events, e)
 	}
-	if p.More && len(p.Events) > 0 {
+	if full && len(p.Events) > 0 {
 		p.Next = p.Events[len(p.Events)-1].Seq
 	}
+	p.More = full || !f.NewestFirst && p.Next < p.State.Last
 	return p, nil
 }

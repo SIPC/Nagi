@@ -129,7 +129,7 @@ func (s *Server) copyPanelLocalLogs(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		page, err := s.cfg.Logs.ReadPage(ctx, logstore.Filter{Category: category, After: r.After, Limit: 128})
+		page, err := s.cfg.Logs.ReadPage(ctx, logstore.Filter{Category: category, After: r.After, Limit: 128, Live: true})
 		if err != nil {
 			return err
 		}

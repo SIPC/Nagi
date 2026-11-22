@@ -81,7 +81,15 @@ type Filter struct {
 	Search      string
 	KindPrefix  string
 	Limit       int
+	// Live skips records imported from pre-upgrade history (ImportCheckpoint,
+	// ImportBatch). Recent copies send only what this machine observed live:
+	// imported history stays in its own verifiable stores and their sync.
+	Live    bool
+	through int64 // ReadPage's scan bound for Live pages; 0 means none
 }
+
+// liveScan bounds how many sequence numbers one Live page walks.
+var liveScan int64 = 20000
 
 // Pruned 是某类别累计主动清理的范围包络，范围内不表示每条都已删除。
 // 每类别只占一行，不会因为清理日志而生成无限增长的清理日志。
@@ -209,6 +217,9 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 			category TEXT PRIMARY KEY, first_seq INTEGER NOT NULL, last_seq INTEGER NOT NULL, count INTEGER NOT NULL);
 		CREATE TABLE IF NOT EXISTS log_checkpoints (
 			key TEXT PRIMARY KEY, data BLOB NOT NULL);
+		CREATE TABLE IF NOT EXISTS log_imported (seq INTEGER PRIMARY KEY);
+		CREATE TRIGGER IF NOT EXISTS log_imported_delete AFTER DELETE ON log_events
+			BEGIN DELETE FROM log_imported WHERE seq=OLD.seq; END;
 	`); err != nil {
 		return fail(err)
 	}
@@ -470,8 +481,19 @@ func (s *Store) write(ctx context.Context, rows []row, key string, position []by
 			query += ` WHERE NOT EXISTS (SELECT 1 FROM log_events INDEXED BY log_time WHERE time_ns>=? AND time_ns<? AND category=? AND kind=? AND project=? AND object=? AND data=?)`
 			args = append(args, at.UnixNano(), at.Add(time.Millisecond).UnixNano(), e.Category, e.Kind, e.Project, e.Object, r.data)
 		}
-		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		res, err := tx.ExecContext(ctx, query, args...)
+		if err != nil {
 			return err
+		}
+		if reconcile {
+			// Only history imports reconcile; mark them so recent copies skip them.
+			if n, err := res.RowsAffected(); err != nil {
+				return err
+			} else if n > 0 {
+				if _, err := tx.ExecContext(ctx, `INSERT INTO log_imported(seq) VALUES (last_insert_rowid())`); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	if key != "" {
@@ -683,6 +705,12 @@ func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 	if f.KindPrefix != "" {
 		where = append(where, "substr(kind,1,length(?))=?")
 		args = append(args, f.KindPrefix, f.KindPrefix)
+	}
+	if f.Live {
+		where = append(where, "seq NOT IN (SELECT seq FROM log_imported)")
+	}
+	if f.through > 0 {
+		where, args = append(where, "seq <= ?"), append(args, f.through)
 	}
 	args = append(args, f.Limit)
 	rows, err := s.db.QueryContext(ctx, `SELECT seq,time_ns,received_ns,category,kind,project,object,data FROM log_events WHERE `+strings.Join(where, " AND ")+` ORDER BY `+order+` LIMIT ?`, args...)
