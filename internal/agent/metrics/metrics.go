@@ -685,26 +685,45 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 			out[series] = merged
 		}
 	}()
+	// Match the bounded queries in nodestore. Returning the connection between
+	// batches lets reporting and migration writes proceed during large reads.
+	const queryBatch = 2048
 	if to.Sub(from) <= keepRaw+rawSlack && from.After(now.Add(-keepRaw-rawSlack)) {
 		for _, q := range queries {
-			rows, err := q.QueryRaw(ctx, nodestore.QueryRawParams{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
-			if err != nil {
-				return nil, Window{}, err
-			}
-			for _, r := range rows {
-				add(r.Series, r.Ts, r.Value)
+			params := nodestore.QueryRawParams{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()}
+			for {
+				rows, err := q.QueryRaw(ctx, params)
+				if err != nil {
+					return nil, Window{}, err
+				}
+				for _, r := range rows {
+					add(r.Series, r.Ts, r.Value)
+				}
+				if len(rows) < queryBatch {
+					break
+				}
+				last := rows[len(rows)-1]
+				params.FromTs, params.AfterSeries = last.Ts, last.Series+"\x00"
 			}
 		}
 		// 超过 keepRaw 的部分已经删掉了，不算在覆盖的时间段里。
 		return out, Window{Res: Interval, From: maxTime(from, now.Add(-keepRaw)), To: minTime(to, now)}, nil
 	}
 	for _, q := range queries {
-		rows, err := q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
-		if err != nil {
-			return nil, Window{}, err
-		}
-		for _, r := range rows {
-			add(r.Series, r.Ts, r.Value)
+		params := nodestore.QueryM5Params{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()}
+		for {
+			rows, err := q.QueryM5(ctx, params)
+			if err != nil {
+				return nil, Window{}, err
+			}
+			for _, r := range rows {
+				add(r.Series, r.Ts, r.Value)
+			}
+			if len(rows) < queryBatch {
+				break
+			}
+			last := rows[len(rows)-1]
+			params.FromTs, params.AfterSeries = last.Ts, last.Series+"\x00"
 		}
 	}
 	// 5 分钟的点取窗口起点：覆盖起点不早于 from 的窗口，到 to 所在的窗口为止，且只有已经降采样的（留两个采样间隔的余量）。

@@ -124,6 +124,47 @@ func TestQueryPrefixRange(t *testing.T) {
 	}
 }
 
+func TestQueryWindowKeepsEveryPointAcrossBatches(t *testing.T) {
+	for _, table := range []string{"metrics_raw", "metrics_m5"} {
+		t.Run(table, func(t *testing.T) {
+			ctx := t.Context()
+			d, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer d.Close()
+			at, step := time.Now().Add(-time.Hour).Truncate(Interval), Interval
+			if table == "metrics_m5" {
+				at, step = at.Add(-48*time.Hour).Truncate(bucket), bucket
+			}
+			// Multiple series share each timestamp, including a page boundary.
+			// The fourth timestamp is outside the inclusive query window.
+			_, err = d.ExecContext(ctx, `WITH RECURSIVE n(i) AS (VALUES(0) UNION ALL SELECT i+1 FROM n WHERE i<1030),
+				t(j) AS (VALUES(0),(1),(2),(3)) INSERT INTO `+table+`
+				SELECT printf('r:%04d:req',i),?+j*?,i+j*10000 FROM n CROSS JOIN t`, at.Unix(), int64(step/time.Second))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _, err := New(d, nil, "", nil).QueryWindow(ctx, "r:", at, at.Add(2*step))
+			if err != nil || len(got) != 1031 {
+				t.Fatalf("series=%d err=%v", len(got), err)
+			}
+			for i := range 1031 {
+				series := fmt.Sprintf("r:%04d:req", i)
+				points := got[series]
+				if len(points) != 3 {
+					t.Fatalf("%s: points=%v", series, points)
+				}
+				for j, point := range points {
+					if point.Value != float64(i+j*10000) || !point.Time.Equal(at.Add(time.Duration(j)*step)) {
+						t.Fatalf("%s point %d: %+v", series, j, point)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestLatestFresh(t *testing.T) {
 	at := time.Now()
 	c := &Collector{latestAt: at, latest: map[string]float64{"node:disk": 42, "bad": math.NaN(), "reset": -1}}
