@@ -243,6 +243,80 @@ func TestCleanupLegacyResumesAndCarriesRollbackLines(t *testing.T) {
 	}
 }
 
+// A restart after the import but before cleanup checks the legacy files again
+// on every start. Record must not wait for that scan, lines written by an older
+// version are carried exactly once across restarts, and cleanup still succeeds.
+func TestRestartBeforeCleanupDoesNotBlockRecord(t *testing.T) {
+	dir := t.TempDir()
+	legacyDir := filepath.Join(dir, "audit")
+	writeLegacy(t, legacyDir, 1, 3000)
+	l := openTest(t, dir)
+	l.Record(Event{Action: "after-import"})
+	l.Close()
+	writeLegacy(t, filepath.Join(dir, "rolled-back"), 3001, 3002)
+	rollback, _ := os.ReadFile(filepath.Join(dir, "rolled-back", current))
+	f, _ := os.OpenFile(filepath.Join(legacyDir, current), os.O_APPEND|os.O_WRONLY, 0o600)
+	f.Write(rollback)
+	f.Close()
+
+	for start := range 2 {
+		l, err := Open(filepath.Join(dir, "logs", "audit", "node-audit.db"), legacyDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan time.Duration)
+		began := time.Now()
+		go func() {
+			if err := l.ImportLegacy(t.Context()); err != nil {
+				t.Error(err)
+			}
+			done <- time.Since(began)
+		}()
+		var slowest time.Duration
+		var scan time.Duration
+	wait:
+		for {
+			select {
+			case scan = <-done:
+				break wait
+			default:
+			}
+			t0 := time.Now()
+			if l.Record(Event{Action: "during-start"}) == 0 {
+				t.Fatal("record failed")
+			}
+			slowest = max(slowest, time.Since(t0))
+			time.Sleep(2 * time.Millisecond)
+		}
+		if slowest*3 > scan {
+			t.Fatalf("start %d: Record waited %v for a %v legacy scan", start, slowest, scan)
+		}
+		lines, _, _ := l.After(0, 10000)
+		var carried int
+		for _, line := range lines {
+			var e Event
+			_ = json.Unmarshal(line, &e)
+			if e.Action == legacyLine && bytes.Contains(rollback, []byte(e.Detail)) {
+				carried++
+			}
+		}
+		if carried != 2 {
+			t.Fatalf("start %d: rollback lines carried %d times, want 2", start, carried)
+		}
+		l.Close()
+	}
+	l = openTest(t, dir)
+	if err := l.CleanupLegacy(t.Context(), journalStore(t)); err != nil {
+		t.Fatal(err)
+	}
+	if len(files(legacyDir)) != 0 {
+		t.Fatal("legacy files left after cleanup")
+	}
+	if r, err := l.Verify(t.Context()); err != nil || !r.OK() {
+		t.Fatalf("%+v %v", r, err)
+	}
+}
+
 // The unified-log copy is resumable, skips chain bookkeeping records, and
 // records sequences missing from the store as an explicit gap.
 func TestHistoryCopyResumesWithoutDuplicates(t *testing.T) {

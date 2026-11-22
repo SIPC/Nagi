@@ -298,21 +298,47 @@ func (l *Log) importLegacy(ctx context.Context, names []string, final bool) erro
 }
 
 // importRollback appends lines an older version wrote after the import, as new
-// records carrying each original line unchanged.
+// records carrying each original line unchanged. It runs on every start until
+// CleanupLegacy deletes the files, including a start right after the import of
+// a few hundred thousand lines, so each line is looked up by its number and
+// l.mu is held only to append: Record must not wait for the scan. After the
+// import nothing else writes these files or legacy_line records.
 func (l *Log) importRollback(ctx context.Context, names []string) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	through, _ := strconv.ParseInt(l.meta("legacy_imported"), 10, 64)
+	carried := map[string]bool{}
+	rows, err := l.db.QueryContext(ctx, `SELECT json_extract(line,'$.detail') FROM audit_events WHERE seq>? AND json_extract(line,'$.action')=?`, through, legacyLine)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			rows.Close()
+			return err
+		}
+		carried[d] = true
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
 	for _, name := range names {
 		var fresh [][]byte
 		err := scanLines(filepath.Join(l.legacy, name), func(raw []byte) error {
-			var n int
-			if err := l.db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE line=?`, raw).Scan(&n); err != nil || n > 0 {
-				return err // imported before, with its original number
-			}
-			if err := l.db.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE json_extract(line,'$.action')=? AND json_extract(line,'$.detail')=?`, legacyLine, string(raw)).Scan(&n); err != nil {
+			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if n == 0 {
+			if s := lineSeq(raw); s > 0 {
+				var saved []byte
+				err := l.db.QueryRowContext(ctx, `SELECT line FROM audit_events WHERE seq=?`, s).Scan(&saved)
+				if err != nil && !errors.Is(err, sqlNoRows) {
+					return err
+				}
+				if bytes.Equal(saved, raw) {
+					return nil // imported before, with its original number
+				}
+			}
+			if !carried[string(raw)] {
+				carried[string(raw)] = true
 				fresh = append(fresh, append([]byte(nil), raw...))
 			}
 			return nil
@@ -320,19 +346,24 @@ func (l *Log) importRollback(ctx context.Context, names []string) error {
 		if err != nil {
 			return err
 		}
-		if len(fresh) == 0 {
-			continue
-		}
-		for _, raw := range fresh {
-			if err := l.appendRawLocked(ctx, Event{Action: legacyLine, Target: name, Detail: string(raw), Result: "ok"}); err != nil {
+		if len(fresh) > 0 {
+			if err := l.appendRollback(ctx, name, fresh); err != nil {
 				return err
 			}
 		}
-		if err := l.appendSystemLocked(ctx, legacyImport, importSummary{Rollback: true, Lines: int64(len(fresh)), Files: []string{name}, Through: l.seq}); err != nil {
+	}
+	return nil
+}
+
+func (l *Log) appendRollback(ctx context.Context, name string, fresh [][]byte) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, raw := range fresh {
+		if err := l.appendRawLocked(ctx, Event{Action: legacyLine, Target: name, Detail: string(raw), Result: "ok"}); err != nil {
 			return err
 		}
 	}
-	return nil
+	return l.appendSystemLocked(ctx, legacyImport, importSummary{Rollback: true, Lines: int64(len(fresh)), Files: []string{name}, Through: l.seq})
 }
 
 func (l *Log) appendSystemLocked(ctx context.Context, action string, data any) error {
