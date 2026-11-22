@@ -534,6 +534,14 @@ func (c *Copies) Read(ctx context.Context, node, source string, f Filter) (Page,
 		return page, nil, err
 	}
 	where, args := []string{"o.node=?", "o.origin=?", "o.remote_seq>?"}, []any{node, source, f.After}
+	order := "o.remote_seq"
+	if f.NewestFirst {
+		order = "o.remote_seq DESC"
+		where, args = []string{"o.node=?", "o.origin=?"}, []any{node, source}
+		if f.After > 0 {
+			where, args = append(where, "o.remote_seq<?"), append(args, f.After)
+		}
+	}
 	for _, v := range []struct{ key, value string }{{"category", f.Category}, {"project", f.Project}, {"object", f.Object}} {
 		if v.value != "" {
 			where = append(where, "e."+v.key+"=?")
@@ -560,7 +568,7 @@ func (c *Copies) Read(ctx context.Context, node, source string, f Filter) (Page,
 		f.Limit = 100
 	}
 	args = append(args, f.Limit)
-	rows, err := c.s.db.QueryContext(ctx, `SELECT o.remote_seq,e.time_ns,e.received_ns,e.category,e.kind,e.project,e.object,e.data FROM log_events e JOIN copy_origins o ON o.local_seq=e.seq WHERE `+strings.Join(where, " AND ")+` ORDER BY o.remote_seq LIMIT ?`, args...)
+	rows, err := c.s.db.QueryContext(ctx, `SELECT o.remote_seq,e.time_ns,e.received_ns,e.category,e.kind,e.project,e.object,e.data FROM log_events e JOIN copy_origins o ON o.local_seq=e.seq WHERE `+strings.Join(where, " AND ")+` ORDER BY `+order+` LIMIT ?`, args...)
 	if err != nil {
 		return page, nil, err
 	}
@@ -621,7 +629,7 @@ func (c *Copies) Read(ctx context.Context, node, source string, f Filter) (Page,
 	if f.After > page.State.Last {
 		return page, nil, fmt.Errorf("日志游标超过近期副本已确认位置")
 	}
-	if !page.More {
+	if !page.More && !f.NewestFirst {
 		page.Next = max(page.Next, page.State.Last)
 	}
 	rows, err = c.s.db.QueryContext(ctx, `SELECT category,first_seq,last_seq,count FROM copy_pruned WHERE node=? AND origin=?`, node, source)

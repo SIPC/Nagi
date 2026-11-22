@@ -141,4 +141,16 @@ public interface LogQueryOrBuilder extends
    * @return The migrationsOnly.
    */
   boolean getMigrationsOnly();
+
+  /**
+   * <pre>
+   * Descending collection sequence for browsing. after is an exclusive upper
+   * bound (0 starts at the latest entry); next_after continues in this direction.
+   * Replication and older callers remain ascending by default.
+   * </pre>
+   *
+   * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+   * @return The newestFirst.
+   */
+  boolean getNewestFirst();
 }

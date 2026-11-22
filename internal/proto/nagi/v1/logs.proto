@@ -78,6 +78,10 @@ message LogQuery {
   string kind_prefix = 10;
   // Live migration state only, without waiting for the log disk writer.
   bool migrations_only = 11;
+  // Descending collection sequence for browsing. after is an exclusive upper
+  // bound (0 starts at the latest entry); next_after continues in this direction.
+  // Replication and older callers remain ascending by default.
+  bool newest_first = 12;
 }
 
 message NodeLogQuery {

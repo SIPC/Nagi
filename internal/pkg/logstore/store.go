@@ -69,16 +69,18 @@ type Event struct {
 	Data     any       `json:"data"`
 }
 
-// Filter 只查本库；After 为独占游标，From/To 为事件时间的闭开区间。
+// Filter 只查本库；After 为独占序号游标（倒序时为上界，0 从最新开始）。
+// From/To 为事件时间的闭开区间；副本传输仍默认正序。
 type Filter struct {
-	After      int64
-	From, To   time.Time
-	Category   string
-	Project    string
-	Object     string
-	Search     string
-	KindPrefix string
-	Limit      int
+	After       int64
+	NewestFirst bool
+	From, To    time.Time
+	Category    string
+	Project     string
+	Object      string
+	Search      string
+	KindPrefix  string
+	Limit       int
 }
 
 // Pruned 是某类别累计主动清理的范围包络，范围内不表示每条都已删除。
@@ -598,6 +600,14 @@ func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 		f.Limit = 100
 	}
 	where, args := []string{"seq > ?"}, []any{f.After}
+	order := "seq"
+	if f.NewestFirst {
+		order = "seq DESC"
+		where, args = []string{"1=1"}, nil
+		if f.After > 0 {
+			where, args = []string{"seq < ?"}, []any{f.After}
+		}
+	}
 	for _, v := range []struct{ col, value string }{{"category", f.Category}, {"project", f.Project}, {"object", f.Object}} {
 		if v.value != "" {
 			where, args = append(where, v.col+"=?"), append(args, v.value)
@@ -618,7 +628,7 @@ func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 		args = append(args, f.KindPrefix, f.KindPrefix)
 	}
 	args = append(args, f.Limit)
-	rows, err := s.db.QueryContext(ctx, `SELECT seq,time_ns,received_ns,category,kind,project,object,data FROM log_events WHERE `+strings.Join(where, " AND ")+` ORDER BY seq LIMIT ?`, args...)
+	rows, err := s.db.QueryContext(ctx, `SELECT seq,time_ns,received_ns,category,kind,project,object,data FROM log_events WHERE `+strings.Join(where, " AND ")+` ORDER BY `+order+` LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}

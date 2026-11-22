@@ -340,8 +340,12 @@ type LogQuery struct {
 	KindPrefix string `protobuf:"bytes,10,opt,name=kind_prefix,json=kindPrefix,proto3" json:"kind_prefix,omitempty"`
 	// Live migration state only, without waiting for the log disk writer.
 	MigrationsOnly bool `protobuf:"varint,11,opt,name=migrations_only,json=migrationsOnly,proto3" json:"migrations_only,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Descending collection sequence for browsing. after is an exclusive upper
+	// bound (0 starts at the latest entry); next_after continues in this direction.
+	// Replication and older callers remain ascending by default.
+	NewestFirst   bool `protobuf:"varint,12,opt,name=newest_first,json=newestFirst,proto3" json:"newest_first,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LogQuery) Reset() {
@@ -447,6 +451,13 @@ func (x *LogQuery) GetKindPrefix() string {
 func (x *LogQuery) GetMigrationsOnly() bool {
 	if x != nil {
 		return x.MigrationsOnly
+	}
+	return false
+}
+
+func (x *LogQuery) GetNewestFirst() bool {
+	if x != nil {
+		return x.NewestFirst
 	}
 	return false
 }
@@ -1014,7 +1025,7 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\aentries\x18\x05 \x03(\v2\x11.nagi.v1.LogEntryR\aentries\x12*\n" +
 	"\x06pruned\x18\x06 \x03(\v2\x12.nagi.v1.LogPrunedR\x06pruned\x12!\n" +
 	"\fwrite_errors\x18\a \x01(\x04R\vwriteErrors\x12\x18\n" +
-	"\acatchup\x18\b \x01(\bR\acatchup\"\xda\x02\n" +
+	"\acatchup\x18\b \x01(\bR\acatchup\"\xfd\x02\n" +
 	"\bLogQuery\x12\x16\n" +
 	"\x06source\x18\x01 \x01(\tR\x06source\x12\x14\n" +
 	"\x05after\x18\x02 \x01(\x03R\x05after\x12.\n" +
@@ -1028,7 +1039,8 @@ const file_nagi_v1_logs_proto_rawDesc = "" +
 	"\vkind_prefix\x18\n" +
 	" \x01(\tR\n" +
 	"kindPrefix\x12'\n" +
-	"\x0fmigrations_only\x18\v \x01(\bR\x0emigrationsOnly\"\x92\x01\n" +
+	"\x0fmigrations_only\x18\v \x01(\bR\x0emigrationsOnly\x12!\n" +
+	"\fnewest_first\x18\f \x01(\bR\vnewestFirst\"\x92\x01\n" +
 	"\fNodeLogQuery\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12'\n" +
 	"\x05query\x18\x02 \x01(\v2\x11.nagi.v1.LogQueryR\x05query\x12\x1f\n" +

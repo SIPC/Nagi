@@ -37,6 +37,9 @@ func (s *Store) ReadPage(ctx context.Context, f Filter) (Page, error) {
 		return p, err
 	}
 	p.Next = p.State.Last
+	if f.NewestFirst {
+		p.Next = 0
+	}
 	p.More = len(events) == f.Limit
 	var size int
 	for _, e := range events {

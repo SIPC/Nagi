@@ -12,7 +12,7 @@ import type { LogEntry, LogPage, LogQuery, NodeLogQuery } from "@/gen/nagi/v1/lo
 import { lacksLogService } from "@/pages/update";
 import { t } from "@/i18n";
 
-type Request = Pick<NodeLogQuery, "nodeId" | "panelLocal" | "recentCopy"> & { query: Pick<LogQuery, "category" | "kindPrefix" | "project" | "search" | "limit" | "from" | "to"> };
+type Request = Pick<NodeLogQuery, "nodeId" | "panelLocal" | "recentCopy"> & { query: Pick<LogQuery, "category" | "kindPrefix" | "project" | "search" | "limit" | "from" | "to" | "newestFirst"> };
 const categories = ["audit", "access", "container", "task", "security", "alert", "runtime", "host", "metrics", "logstore"] as const;
 const categoryName = (category: string) => (t.logs.categories as Record<string, string>)[category] ?? category;
 const decoder = new TextDecoder();
@@ -22,7 +22,7 @@ function body(e: LogEntry): Record<string, unknown> {
 }
 function summary(e: LogEntry) {
   const data = body(e);
-  return [data.message ?? data.text ?? data.action ?? data.error ?? "", e.object].filter(Boolean).join(" · ");
+  return [data.message ?? data.msg ?? data.text ?? data.action ?? data.error ?? "", e.object].filter(Boolean).join(" · ");
 }
 
 export function LogEntries() {
@@ -43,6 +43,7 @@ export function LogEntries() {
     nodeId: search.node ?? "",
     recentCopy: !!search.node && (!!search.copy || search.node.startsWith("panel:")),
     query: {
+      newestFirst: true,
       category: search.category === "host" ? (search.copy || search.node?.startsWith("panel:") ? "runtime" : "") : search.category || (search.copy || search.node?.startsWith("panel:") ? "audit" : ""),
       kindPrefix: search.category === "host" ? "host." : "",
       project: search.project ?? "", search: search.q ?? "", limit: 50,

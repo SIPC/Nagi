@@ -76,7 +76,7 @@ func (s *nodeLogService) storedLogs(ctx context.Context, req *nagiv1.NodeLogQuer
 	if q.GetMigrationsOnly() {
 		return connect.NewResponse(&nagiv1.LogPage{RecentCopy: req.GetRecentCopy(), Migrations: migrations}), nil
 	}
-	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
+	f := logstore.Filter{After: q.GetAfter(), NewestFirst: q.GetNewestFirst(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
 	for _, v := range []struct {
 		in  *timestamppb.Timestamp
 		out *time.Time

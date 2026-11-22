@@ -36,7 +36,7 @@ func (s *meshService) QueryLogs(ctx context.Context, q *nagiv1.LogQuery) (*nagiv
 	if q.GetMigrationsOnly() {
 		return &nagiv1.LogPage{Migrations: migrations}, nil
 	}
-	f := logstore.Filter{After: q.GetAfter(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
+	f := logstore.Filter{After: q.GetAfter(), NewestFirst: q.GetNewestFirst(), Limit: int(q.GetLimit()), Category: q.GetCategory(), Project: q.GetProject(), Object: q.GetObject(), Search: q.GetSearch(), KindPrefix: q.GetKindPrefix()}
 	for _, v := range []struct {
 		in  *timestamppb.Timestamp
 		out *time.Time

@@ -529,6 +529,50 @@ public  final class LogQuery extends
     migrationsOnly_ = false;
   }
 
+  public static final int NEWEST_FIRST_FIELD_NUMBER = 12;
+  private boolean newestFirst_;
+  /**
+   * <pre>
+   * Descending collection sequence for browsing. after is an exclusive upper
+   * bound (0 starts at the latest entry); next_after continues in this direction.
+   * Replication and older callers remain ascending by default.
+   * </pre>
+   *
+   * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+   * @return The newestFirst.
+   */
+  @java.lang.Override
+  public boolean getNewestFirst() {
+    return newestFirst_;
+  }
+  /**
+   * <pre>
+   * Descending collection sequence for browsing. after is an exclusive upper
+   * bound (0 starts at the latest entry); next_after continues in this direction.
+   * Replication and older callers remain ascending by default.
+   * </pre>
+   *
+   * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+   * @param value The newestFirst to set.
+   */
+  private void setNewestFirst(boolean value) {
+
+    newestFirst_ = value;
+  }
+  /**
+   * <pre>
+   * Descending collection sequence for browsing. after is an exclusive upper
+   * bound (0 starts at the latest entry); next_after continues in this direction.
+   * Replication and older callers remain ascending by default.
+   * </pre>
+   *
+   * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+   */
+  private void clearNewestFirst() {
+
+    newestFirst_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.LogQuery parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1150,6 +1194,52 @@ public  final class LogQuery extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Descending collection sequence for browsing. after is an exclusive upper
+     * bound (0 starts at the latest entry); next_after continues in this direction.
+     * Replication and older callers remain ascending by default.
+     * </pre>
+     *
+     * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+     * @return The newestFirst.
+     */
+    @java.lang.Override
+    public boolean getNewestFirst() {
+      return instance.getNewestFirst();
+    }
+    /**
+     * <pre>
+     * Descending collection sequence for browsing. after is an exclusive upper
+     * bound (0 starts at the latest entry); next_after continues in this direction.
+     * Replication and older callers remain ascending by default.
+     * </pre>
+     *
+     * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+     * @param value The newestFirst to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNewestFirst(boolean value) {
+      copyOnWrite();
+      instance.setNewestFirst(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Descending collection sequence for browsing. after is an exclusive upper
+     * bound (0 starts at the latest entry); next_after continues in this direction.
+     * Replication and older callers remain ascending by default.
+     * </pre>
+     *
+     * <code>bool newest_first = 12 [json_name = "newestFirst"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNewestFirst() {
+      copyOnWrite();
+      instance.clearNewestFirst();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.LogQuery)
   }
   @java.lang.Override
@@ -1178,11 +1268,12 @@ public  final class LogQuery extends
             "search_",
             "kindPrefix_",
             "migrationsOnly_",
+            "newestFirst_",
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0000\u0000\u0001\u0208\u0002\u0002" +
-              "\u0003\u1009\u0000\u0004\u1009\u0001\u0005\u0208\u0006\u0208\u0007\u0208\b\u0004" +
-              "\t\u0208\n\u0208\u000b\u0007";
+              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0000\u0000\u0001\u0208\u0002\u0002\u0003\u1009" +
+              "\u0000\u0004\u1009\u0001\u0005\u0208\u0006\u0208\u0007\u0208\b\u0004\t\u0208\n\u0208" +
+              "\u000b\u0007\f\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
@@ -1236,4 +1327,3 @@ public  final class LogQuery extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-
