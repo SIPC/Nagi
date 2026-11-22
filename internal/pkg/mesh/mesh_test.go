@@ -181,6 +181,72 @@ func TestDirect(t *testing.T) {
 	echo(t, a, b)
 }
 
+func TestCloseDuringTraffic(t *testing.T) {
+	_, a, b := setupWith(t, func(_, a, b testNode) {
+		a.m.SetQUIC(false)
+		b.m.SetQUIC(false)
+	})
+	waitPath(t, a.m, b.m.PublicKey(), "direct")
+	ln, err := b.m.Listen(7000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	received, reader := make(chan struct{}), make(chan error, 1)
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			reader <- err
+			return
+		}
+		defer c.Close()
+		var first [1]byte
+		if _, err := io.ReadFull(c, first[:]); err != nil {
+			reader <- err
+			return
+		}
+		close(received)
+		_, err = io.Copy(io.Discard, c)
+		reader <- err
+	}()
+	c, err := a.m.Dial(ctx, b.m.PublicKey(), 7000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	writer := make(chan struct{})
+	go func() {
+		defer close(writer)
+		buf := make([]byte, 64<<10)
+		for {
+			if _, err := c.Write(buf); err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case <-received:
+	case err := <-reader:
+		t.Fatalf("traffic did not start: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	a.m.Close()
+	b.m.Close()
+	select {
+	case <-writer:
+	case <-ctx.Done():
+		t.Fatal("writer blocked after mesh closed")
+	}
+	select {
+	case <-reader:
+	case <-ctx.Done():
+		t.Fatal("reader blocked after mesh closed")
+	}
+}
+
 func TestUDPRelay(t *testing.T) {
 	t.Parallel()
 	_, a, b := setupWith(t, func(_, a, b testNode) {

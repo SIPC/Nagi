@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"sync"
 	"syscall"
 
 	"golang.zx2c4.com/wireguard/tun"
@@ -32,6 +33,8 @@ type netTUN struct {
 	events         chan tun.Event
 	notifyHandle   *channel.NotificationHandle
 	incomingPacket chan *buffer.View
+	writeMu        sync.Mutex
+	done           chan struct{}
 	mtu            int
 }
 
@@ -56,6 +59,7 @@ func newNetTUN(addr netip.Addr, mtu int, t tcpTuning) (*netTUN, error) {
 		stack:          stack.New(opts),
 		events:         make(chan tun.Event, 10),
 		incomingPacket: make(chan *buffer.View, tunQueue),
+		done:           make(chan struct{}),
 		mtu:            mtu,
 	}
 	if err := t.apply(dev.stack); err != nil {
@@ -141,16 +145,29 @@ func (t *netTUN) Write(bufs [][]byte, offset int) (int, error) {
 
 // WriteNotify：协议栈有包要发。
 func (t *netTUN) WriteNotify() {
+	t.writeMu.Lock()
+	defer t.writeMu.Unlock()
+	select {
+	case <-t.done:
+		return
+	default:
+	}
 	pkt := t.ep.Read()
 	if pkt == nil {
 		return
 	}
 	view := pkt.ToView()
 	pkt.DecRef()
-	t.incomingPacket <- view
+	select {
+	case t.incomingPacket <- view:
+	case <-t.done:
+		view.Release()
+	}
 }
 
 func (t *netTUN) Close() error {
+	// Wake a callback blocked on a full queue before waiting for the stack.
+	close(t.done)
 	t.stack.RemoveNIC(1)
 	t.stack.Close()
 	t.ep.RemoveNotify(t.notifyHandle)
@@ -159,7 +176,10 @@ func (t *netTUN) Close() error {
 		close(t.events)
 	}
 	if t.incomingPacket != nil {
+		// Removing notifications does not join callbacks already in flight.
+		t.writeMu.Lock()
 		close(t.incomingPacket)
+		t.writeMu.Unlock()
 	}
 	return nil
 }
