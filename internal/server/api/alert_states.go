@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,6 +16,28 @@ import (
 
 type alertService struct{ *API }
 
+// ruleEventTitles are node events that belong to a rule rather than to an
+// event notification (alert.Notices), so NoticeOf has no title for them. The
+// node stores a Chinese title with the container or domain; the clean copy
+// shows the event kind in the request language and keeps that title in the
+// message.
+var ruleEventTitles = []alert.Notice{
+	{Prefixes: []string{"event:snapshot:"}, Zh: "定时快照失败", En: "Scheduled snapshot failed"},
+	{Prefixes: []string{"event:maintain:"}, Zh: "快照仓库维护失败", En: "Snapshot repository maintenance failed"},
+	{Prefixes: []string{"event:backup:"}, Zh: "同步到备份节点失败", En: "Sync to backup node failed"},
+	{Prefixes: []string{"event:standby:"}, Zh: "同步给热备节点失败", En: "Sync to standby node failed"},
+	{Prefixes: []string{"event:cert_failed:"}, Zh: "域名申请证书失败", En: "Domain certificate request failed"},
+}
+
+func ruleEventTitle(key string) (alert.Notice, bool) {
+	for _, n := range ruleEventTitles {
+		if strings.HasPrefix(key, n.Prefixes[0]) {
+			return n, true
+		}
+	}
+	return alert.Notice{}, false
+}
+
 func (s *alertService) cleanAlert(ctx context.Context, a *nagiv1.AlertState) (*nagiv1.AlertState, error) {
 	x, err := s.loadAccess(ctx, auth.CurrentUser(ctx))
 	if err != nil {
@@ -22,7 +45,11 @@ func (s *alertService) cleanAlert(ctx context.Context, a *nagiv1.AlertState) (*n
 	}
 	v := proto.CloneOf(a)
 	if v.Alert.GetRule() == "" {
-		if n, ok := alert.NoticeOf(v.Alert.GetKey()); ok {
+		n, ok := alert.NoticeOf(v.Alert.GetKey())
+		if !ok {
+			n, ok = ruleEventTitle(v.Alert.GetKey())
+		}
+		if ok {
 			title := n.Zh
 			if i18n.FromContext(ctx) == i18n.En {
 				title = n.En

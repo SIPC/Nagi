@@ -66,6 +66,7 @@ func TestAlertAPIEventTitlesFollowRequestLanguage(t *testing.T) {
 		{Key: "session:browser:session_key_missing", Title: "登录安全", Message: "browser details"},
 		{Key: "security:token:123", Title: "账号 alice 生成了访问令牌 deploy", Message: "actor details"},
 		{Key: "unknown:legacy", Title: "Original legacy title", Message: "original details"},
+		{Key: "event:snapshot:p1/work", Title: "容器 work 定时快照失败", Message: "repo locked"},
 	} {
 		h.a.Nodes.PanelAlert(ctx, event)
 	}
@@ -80,10 +81,10 @@ func TestAlertAPIEventTitlesFollowRequestLanguage(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := nagiv1connect.NewAlertServiceClient(&hc, h.srv.URL)
-	for _, tc := range []struct{ lang, session, token string }{
-		{"en", "Session missing its signing key", "Access token created"},
-		{"zh-CN", "会话拿不出签名密钥", "生成访问令牌"},
-		{"en", "Session missing its signing key", "Access token created"},
+	for _, tc := range []struct{ lang, session, token, snapshot string }{
+		{"en", "Session missing its signing key", "Access token created", "Scheduled snapshot failed"},
+		{"zh-CN", "会话拿不出签名密钥", "生成访问令牌", "定时快照失败"},
+		{"en", "Session missing its signing key", "Access token created", "Scheduled snapshot failed"},
 	} {
 		req := connect.NewRequest(&nagiv1.ListAlertStatesRequest{})
 		req.Header().Set("Accept-Language", tc.lang)
@@ -95,10 +96,13 @@ func TestAlertAPIEventTitlesFollowRequestLanguage(t *testing.T) {
 		for _, state := range res.Msg.Alerts {
 			got[state.Alert.Key] = state.Alert
 		}
-		for key, title := range map[string]string{"session:browser:session_key_missing": tc.session, "security:token:123": tc.token, "unknown:legacy": "Original legacy title"} {
+		for key, title := range map[string]string{"session:browser:session_key_missing": tc.session, "security:token:123": tc.token, "unknown:legacy": "Original legacy title", "event:snapshot:p1/work": tc.snapshot} {
 			if got[key] == nil || got[key].Title != title {
 				t.Fatalf("%s title for %s: got %v, want %q", tc.lang, key, got[key], title)
 			}
+		}
+		if got["event:snapshot:p1/work"].Message != "容器 work 定时快照失败\nrepo locked" {
+			t.Fatalf("snapshot event lost its container or detail: %v", got["event:snapshot:p1/work"])
 		}
 		if got["session:browser:session_key_missing"].Message != "登录安全\nbrowser details" || got["unknown:legacy"].Message != "original details" || !strings.Contains(got["security:token:123"].Message, "账号 alice 生成了访问令牌 deploy\nactor details") {
 			t.Fatalf("event details lost or repeatedly prefixed: %v", res.Msg)
