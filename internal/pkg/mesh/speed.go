@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/apernet/quic-go"
 )
 
 // 测速（见 docs/mesh.md#测速）：经 mesh 和某个成员互传数据，量两个方向的吞吐。走的是和业务一样的路
@@ -184,6 +186,12 @@ func speedRound(ctx context.Context, dial dialer, k Key, dir byte, d time.Durati
 	hdr[0] = dir
 	binary.BigEndian.PutUint32(hdr[1:], uint32(d.Milliseconds()))
 	if _, err := c.Write(hdr[:]); err != nil {
+		// A missing QUIC listener can reject the stream before the request
+		// header is written, not only while waiting for its acknowledgement.
+		var reset *quic.StreamError
+		if errors.As(err, &reset) && reset.Remote && reset.ErrorCode == 1 {
+			return 0, viaQUIC, ErrSpeedUnsupported
+		}
 		return 0, viaQUIC, err
 	}
 	var ack [1]byte
