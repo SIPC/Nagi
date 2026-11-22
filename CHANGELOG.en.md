@@ -42,6 +42,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 - Changed ordinary-log durability: power loss or system crashes may lose the last few seconds of committed ordinary records; process crashes do not affect committed records. Audit, security and alert commits retain stronger durability guarantees.
 - Changed log queuing: records still in memory may be lost on forced termination or power loss; full queues, exhausted capacity, unrecoverable write errors or undrained queues at normal shutdown count as confirmed losses. The panel audit retry queue is also not durable.
+- Known limitation: on CPU-constrained nodes with many series (for example hundreds of mount, interface and container series), the last-hour node chart may take several seconds to query and occasionally exceed 10 seconds and fail to load; refreshing retries it. This is unchanged from v0.37.0.
 
 ### Upgrade notes
 
