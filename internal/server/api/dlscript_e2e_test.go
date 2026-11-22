@@ -40,13 +40,12 @@ func TestShortCommandPOSIX(t *testing.T) {
 }
 
 func shortCommandE2E(t *testing.T, hosts []string, run func(host, cmd string) *exec.Cmd, windows bool) {
-	srv := httptest.NewTLSServer(nil)
+	mux := http.NewServeMux()
+	srv := httptest.NewTLSServer(mux)
 	defer srv.Close()
 	sum := sha256.Sum256(srv.Certificate().RawSubjectPublicKeyInfo)
 	a := &API{Panel: &PanelInfo{Fingerprint: "sha256//" + base64.StdEncoding.EncodeToString(sum[:])}}
-	mux := http.NewServeMux()
 	mux.Handle("GET /dl/{file}", a.DownloadScriptHandler())
-	srv.Config.Handler = mux
 	host := strings.TrimPrefix(srv.URL, "https://")
 	marker := filepath.Join(t.TempDir(), "ran")
 	tok := saveScript(&nodes.DirectHTTPCommand{
