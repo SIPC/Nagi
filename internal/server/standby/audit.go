@@ -32,8 +32,18 @@ func (p *Primary) ServeAudit(ctx context.Context, conn *tls.Conn, log *audit.Log
 	if len(state.VerifiedChains) == 0 || len(state.PeerCertificates) == 0 {
 		return
 	}
-	if _, err := p.Q.GetStandbyPanelByServerFP(ctx, tlsutil.Fingerprint(state.PeerCertificates[0])); err != nil {
+	fp := tlsutil.Fingerprint(state.PeerCertificates[0])
+	if _, err := p.Q.GetStandbyPanelByServerFP(ctx, fp); err != nil {
 		return
+	}
+	send := func(frame []byte) error {
+		// Reading a batch or its recording chunks can take time. Recheck
+		// registration immediately before every data, cursor or heartbeat frame.
+		if _, err := p.Q.GetStandbyPanelByServerFP(ctx, fp); err != nil {
+			return err
+		}
+		_ = conn.SetWriteDeadline(time.Now().Add(time.Minute))
+		return writeFrame(conn, frame)
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	b, err := readFrame(conn)
@@ -48,6 +58,9 @@ func (p *Primary) ServeAudit(ctx context.Context, conn *tls.Conn, log *audit.Log
 	lastSent := time.Now()
 	var sentCursors map[string]int64
 	for ctx.Err() == nil {
+		if _, err := p.Q.GetStandbyPanelByServerFP(ctx, fp); err != nil {
+			return
+		}
 		batch, frame, err := log.ReadBatch(ctx, cursor, auditBatchSize, rec)
 		if err != nil {
 			return
@@ -55,14 +68,12 @@ func (p *Primary) ServeAudit(ctx context.Context, conn *tls.Conn, log *audit.Log
 		if len(batch.Events) == 0 && len(batch.Tombstones) == 0 {
 			// 追上了：隔一会儿再看。外送游标变了就发过去，否则按时发心跳。
 			if c := log.SinkCursors(ctx); len(c) > 0 && !maps.Equal(c, sentCursors) {
-				_ = conn.SetWriteDeadline(time.Now().Add(time.Minute))
-				if writeFrame(conn, audit.CursorFrame(c)) != nil {
+				if send(audit.CursorFrame(c)) != nil {
 					return
 				}
 				sentCursors, lastSent = c, time.Now()
 			} else if time.Since(lastSent) >= heartbeat {
-				_ = conn.SetWriteDeadline(time.Now().Add(time.Minute))
-				if writeFrame(conn, nil) != nil {
+				if send(nil) != nil {
 					return
 				}
 				lastSent = time.Now()
@@ -74,8 +85,7 @@ func (p *Primary) ServeAudit(ctx context.Context, conn *tls.Conn, log *audit.Log
 			}
 			continue
 		}
-		_ = conn.SetWriteDeadline(time.Now().Add(time.Minute))
-		if writeFrame(conn, frame) != nil {
+		if send(frame) != nil {
 			return
 		}
 		lastSent = time.Now()
