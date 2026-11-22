@@ -755,14 +755,21 @@ func (s *Server) listen(ctx context.Context) error {
 		}
 		s.port, s.listener = port, ln
 	} else {
-		// 首次启动：随机选一个空闲的高位端口。
+		// 首次启动：面板 TCP 与 mesh UDP 使用同一号码，两者都必须空闲。
 		for i := 0; i < 50; i++ {
 			p := 20000 + rand.IntN(40000)
 			ln, err := net.Listen("tcp", ":"+strconv.Itoa(p))
-			if err == nil {
-				s.port, s.listener = p, ln
-				break
+			if err != nil {
+				continue
 			}
+			udp, err := net.ListenPacket("udp", ":"+strconv.Itoa(p))
+			if err != nil {
+				ln.Close()
+				continue
+			}
+			udp.Close()
+			s.port, s.listener = p, ln
+			break
 		}
 		if s.listener == nil {
 			return errors.New("找不到可用的面板端口，请用 --port 指定")
