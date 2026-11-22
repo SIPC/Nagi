@@ -45,6 +45,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Known limitation: on CPU-constrained nodes with many series (for example hundreds of mount, interface and container series), the last-hour node chart may take several seconds to query and occasionally exceed 10 seconds and fail to load; refreshing retries it. This is unchanged from v0.37.0.
 - Known limitation: after a container or project is deleted, its unrecovered alerts, such as health checks, stay in Current alerts and must be handled manually. This is unchanged from v0.37.0.
 - Known limitation: when a node automatically switches back to its previous version after an upgrade, only the program is restored, and the previous version cannot see migrated chart history; panel upgrades are judged successful by version alone and are not rolled back automatically. This is unchanged from v0.37.0.
+- Known limitation: failover to the hot standby takes up to about 50 seconds, not 30. The witness switches its vote to the standby only about 31 seconds after the original node's last successful renewal; renewals happen every 10 seconds and the original node may have just renewed as it stops, adding up to 10 seconds; after winning the majority, the standby needs about 10 more seconds to restore the snapshot and start the container. Measured from starting to stop the original node until the standby responds: 39.3 seconds on v0.37.0 and 48.4 seconds on v0.37.1; the difference comes from renewal timing. This is unchanged from v0.37.0.
 
 ### Upgrade notes
 
