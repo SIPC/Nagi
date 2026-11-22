@@ -105,8 +105,12 @@ const (
 
 // Log 是审计日志。
 type Log struct {
-	db  *sql.DB
-	log *slog.Logger
+	db *sql.DB
+	// read serves page queries (List/Each/Get/ChildCounts) on separate WAL
+	// reader connections: a search over a large audit.db can take minutes and
+	// must not hold the single writer connection that Record and retention use.
+	read *sql.DB
+	log  *slog.Logger
 
 	mu       sync.Mutex
 	lastHash string
@@ -149,8 +153,15 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Log, error) {
 		d.Close()
 		return nil, err
 	}
-	l := &Log{db: d, log: log, path: path}
+	read, err := openRead(path)
+	if err != nil {
+		d.Close()
+		return nil, err
+	}
+	read.SetMaxOpenConns(4)
+	l := &Log{db: d, read: read, log: log, path: path}
 	if err := d.QueryRowContext(ctx, `SELECT hash FROM events ORDER BY id DESC LIMIT 1`).Scan(&l.lastHash); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		read.Close()
 		d.Close()
 		return nil, err
 	}
@@ -163,7 +174,20 @@ func (l *Log) Close() error {
 	l.recordMu.Lock()
 	defer l.recordMu.Unlock()
 	l.stopRetry()
-	return l.db.Close()
+	var err error
+	if l.read != nil {
+		err = l.read.Close()
+	}
+	return errors.Join(err, l.db.Close())
+}
+
+// reader is the page-query pool; Logs built over a bare read-only handle
+// (archive imports, tests) read through that handle.
+func (l *Log) reader() *sql.DB {
+	if l.read != nil {
+		return l.read
+	}
+	return l.db
 }
 
 // DB 返回底层的数据库，给迁移和测试用。
@@ -511,7 +535,7 @@ func (l *Log) List(ctx context.Context, f Filter) ([]Event, error) {
 		limit = 50
 	}
 	where, args := f.where()
-	rows, err := l.db.QueryContext(ctx, `SELECT `+columns+` FROM events`+where+` ORDER BY id DESC LIMIT ?`, append(args, limit)...)
+	rows, err := l.reader().QueryContext(ctx, `SELECT `+columns+` FROM events`+where+` ORDER BY id DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +554,7 @@ func (l *Log) List(ctx context.Context, f Filter) ([]Event, error) {
 // Each 按 ID 从小到大逐条读出符合条件的记录（导出用）。
 func (l *Log) Each(ctx context.Context, f Filter, fn func(Event) error) error {
 	where, args := f.where()
-	rows, err := l.db.QueryContext(ctx, `SELECT `+columns+` FROM events`+where+` ORDER BY id`, args...)
+	rows, err := l.reader().QueryContext(ctx, `SELECT `+columns+` FROM events`+where+` ORDER BY id`, args...)
 	if err != nil {
 		return err
 	}
@@ -549,7 +573,7 @@ func (l *Log) Each(ctx context.Context, f Filter, fn func(Event) error) error {
 
 // Get 返回一条记录。
 func (l *Log) Get(ctx context.Context, id int64) (Event, error) {
-	return scan(l.db.QueryRowContext(ctx, `SELECT `+columns+` FROM events WHERE id = ?`, id))
+	return scan(l.reader().QueryRowContext(ctx, `SELECT `+columns+` FROM events WHERE id = ?`, id))
 }
 
 // ChildCounts 返回这些记录各有几条下级记录。
@@ -567,7 +591,7 @@ func (l *Log) ChildCounts(ctx context.Context, ids []int64) (map[int64]int, erro
 		// Match the partial events_parent index without changing counts for 0.
 		where += ` AND parent_id <> 0`
 	}
-	rows, err := l.db.QueryContext(ctx, `SELECT parent_id, COUNT(*) FROM events WHERE `+where+` GROUP BY parent_id`, args...)
+	rows, err := l.reader().QueryContext(ctx, `SELECT parent_id, COUNT(*) FROM events WHERE `+where+` GROUP BY parent_id`, args...)
 	if err != nil {
 		return nil, err
 	}

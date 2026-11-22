@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -164,5 +165,47 @@ func TestVerifyDetectsDeletion(t *testing.T) {
 	}
 	if r, _ := l2.Verify(ctx); r.BadID != 2 {
 		t.Fatalf("修改之后：%+v", r)
+	}
+}
+
+// An audit page query over a large audit.db can take minutes. While it runs,
+// new audit records must still commit instead of timing out into the retry
+// queue: the query must not occupy the connection the writer uses.
+func TestRecordCommitsWhileAuditPageQueryRuns(t *testing.T) {
+	l := openTestLog(t)
+	for i := range 3 {
+		if l.Record(t.Context(), Event{Action: "seed", TargetName: strconv.Itoa(i)}) == 0 {
+			t.Fatal("seed")
+		}
+	}
+	// Each streams rows; holding it at the first row keeps its query open the
+	// way a slow search does.
+	reading, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		first := true
+		done <- l.Each(t.Context(), Filter{}, func(Event) error {
+			if first {
+				first = false
+				close(reading)
+				<-release
+			}
+			return nil
+		})
+	}()
+	<-reading
+	began := time.Now()
+	id := l.Record(t.Context(), Event{Category: Security, Action: "during-query"})
+	took := time.Since(began)
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if id == 0 || took > 2*time.Second {
+		t.Fatalf("record while a page query was open: id=%d after %v", id, took)
+	}
+	rows, err := l.List(t.Context(), Filter{Limit: 10})
+	if err != nil || len(rows) != 4 || rows[0].Action != "during-query" {
+		t.Fatalf("committed record not visible to later queries: %+v %v", rows, err)
 	}
 }
