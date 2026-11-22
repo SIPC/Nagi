@@ -442,9 +442,11 @@ type agent struct {
 	certFails certFailures
 	metrics   *metrics.Collector
 	alerts    *alerts.Engine
-	mesh      *meshNode
-	intranet  *intranet
-	direct    *directDL // 直连下载（见 directdl.go）
+	// countAlert 替换 alerts.Count，只给测试记录日志事件的计数。
+	countAlert func(key, rule, subject, project, container string, at time.Time)
+	mesh       *meshNode
+	intranet   *intranet
+	direct     *directDL // 直连下载（见 directdl.go）
 	// egress 是容器出站限制（见 docs/agent.md#出站限制）。
 	egress *egress
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。

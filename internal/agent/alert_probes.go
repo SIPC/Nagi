@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"math"
 	"regexp"
 	"strconv"
@@ -35,9 +36,8 @@ type alertFacts struct {
 	// logErrors：日志库上一次的写入失败累计数（Count 记增量）。
 	logErrors uint64
 	logSeen   bool
-	// logFrom、logAfter：读日志库事件的起点（节点启动时间）和读到的位置。
-	logFrom  time.Time
-	logAfter int64
+	// logAfter：各类别读到的位置（节点启动时从日志库末尾开始，不把以前的事件当成新的）。
+	logAfter map[string]int64
 }
 
 // alertProbes 返回这一轮的事实。
@@ -336,34 +336,45 @@ func (a *agent) pollLogEvents(ctx context.Context, now time.Time) {
 		return
 	}
 	f := &a.facts
+	// Each read is limited to its category's index and moves the cursor to the
+	// page watermark even when nothing matched. An unfiltered prefix scan from
+	// the start time held the shared log gate for seconds every round and made
+	// the alert and audit writes queued behind it time out.
 	f.mu.Lock()
-	if f.logFrom.IsZero() {
-		f.logFrom = now
-	}
-	from, after := f.logFrom, f.logAfter
-	f.mu.Unlock()
-	last := after
-	for _, prefix := range []string{"host.kernel.", "docker.container.oom"} {
-		q := logstore.Filter{After: after, KindPrefix: prefix, Limit: 1000}
-		if after == 0 {
-			q.From = from
+	if f.logAfter == nil {
+		st, err := logs.State(ctx)
+		if err != nil {
+			f.mu.Unlock()
+			return
 		}
-		events, err := logs.Query(ctx, q)
+		f.logAfter = map[string]int64{logstore.Runtime: st.Last, logstore.Task: st.Last}
+	}
+	after := maps.Clone(f.logAfter)
+	f.mu.Unlock()
+	// Host journal lines are Runtime records; Docker engine events are Task records.
+	for _, src := range []struct{ category, prefix string }{{logstore.Runtime, "host.kernel."}, {logstore.Task, "docker.container.oom"}} {
+		page, err := logs.ReadPage(ctx, logstore.Filter{Category: src.category, After: after[src.category], KindPrefix: src.prefix, Limit: 1000})
 		if err != nil {
 			continue
 		}
-		for _, e := range events {
-			last = max(last, e.Seq)
+		for _, e := range page.Events {
 			a.countLogEvent(e)
 		}
+		after[src.category] = page.Next
 	}
 	f.mu.Lock()
-	f.logAfter = max(f.logAfter, last)
+	for c, seq := range after {
+		f.logAfter[c] = max(f.logAfter[c], seq)
+	}
 	f.mu.Unlock()
 }
 
 // countLogEvent 按事件记一次：内核磁盘错误、内核 OOM（只算杀进程的，不含 lockup、hung task）、容器 OOM。
 func (a *agent) countLogEvent(e logstore.Event) {
+	count := a.alerts.Count
+	if a.countAlert != nil {
+		count = a.countAlert
+	}
 	at := e.Time
 	if at.IsZero() {
 		at = time.Now()
@@ -377,17 +388,17 @@ func (a *agent) countLogEvent(e logstore.Event) {
 	}
 	switch e.Kind {
 	case "host.kernel.storage":
-		a.alerts.Count("kernel_storage", alert.RuleKernelStorage, "", "", "", at)
+		count("kernel_storage", alert.RuleKernelStorage, "", "", "", at)
 	case "host.kernel.memory":
 		if containsAny(strings.ToLower(data.Message), "oom-kill", "out of memory", "killed process") {
-			a.alerts.Count("kernel_oom", alert.RuleKernelOOM, "", "", "", at)
+			count("kernel_oom", alert.RuleKernelOOM, "", "", "", at)
 		}
 	case "docker.container.oom":
 		container := data.Attributes["nagi.container"]
 		if e.Project == "" || container == "" {
 			return
 		}
-		a.alerts.Count(alert.RuleContainerOOM+":"+e.Project+"/"+container, alert.RuleContainerOOM, describeContainer(container), e.Project, container, at)
+		count(alert.RuleContainerOOM+":"+e.Project+"/"+container, alert.RuleContainerOOM, describeContainer(container), e.Project, container, at)
 	}
 }
 

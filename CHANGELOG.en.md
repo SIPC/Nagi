@@ -31,7 +31,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### Fixes
 
 - Fixed known vulnerabilities and improved security.
-- Fixed log write timeouts with many nodes or slow disks, and alert-state save failures pausing notifications and synchronization.
+- Fixed log write timeouts with many nodes or slow disks, and alert-state save failures pausing notifications and synchronization; audit-page queries over many records no longer block new audit writes, and OOM alert checks no longer rescan the whole log database.
 - Fixed log writes delaying metric sampling and new chart points not being saved during legacy-history migration; removed the full-table count that blocked the node database at migration startup.
 - Fixed legacy-history migration and alert baseline queries holding the database too long and affecting core services and control connections.
 - Fixed empty log-list summaries, structured Current alerts titles remaining Chinese in English, and new nodes being incorrectly reported as outdated; older nodes without the required capabilities explicitly prompt an upgrade.
