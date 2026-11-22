@@ -49,6 +49,9 @@ const (
 	udpPokeTimeout = 3 * time.Second
 	// udpDial 是建通道时连接对方节点的超时。短一点：对方重启期间的连接尝试会卡在 SYN 重传上，不如快点重新连。
 	udpDial = 3 * time.Second
+	// udpRedial：连对方节点这么久还没连上时，在 udpDial 内再并行发起一次。mesh 里的 TCP 按 1 秒、2 秒退避重传 SYN，
+	// 对方刚重启好、隧道刚重新握手时，卡在退避里的连接要等下一次重传（常常已经超时了）；新发起的连接马上发 SYN。
+	udpRedial = time.Second
 	// udpRetry 是通道连续刚建好就断了时，重试前等的时间；udpRetryDial 是哪个节点都连不上时重试前等的时间。
 	udpRetry     = 3 * time.Second
 	udpRetryDial = time.Second
@@ -468,9 +471,7 @@ func (n *intranet) dialRemoteUDP(k mesh.Key, name string, p *nagiv1.LinkProxy, p
 		pc.Close()
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(n.a.ctx, udpDial)
-	mc, err := n.a.mesh.m.Dial(ctx, k, linkPort)
-	cancel()
+	mc, err := n.dialLink(k)
 	if err != nil {
 		n.a.log.Debug("经 mesh 连接目标节点失败", "name", p.GetAlias(), "node", name, "err", err)
 		pc.Close()
@@ -526,6 +527,53 @@ func (n *intranet) dialRemoteUDP(k mesh.Key, name string, p *nagiv1.LinkProxy, p
 		}
 	}()
 	return r
+}
+
+// dialLink 经 mesh 连接 k 的项目内网端口，最多等 udpDial；每过 udpRedial 还没连上就再并行发起一次，用最先连上的。
+func (n *intranet) dialLink(k mesh.Key) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(n.a.ctx, udpDial)
+	defer cancel()
+	type result struct {
+		c   net.Conn
+		err error
+	}
+	results := make(chan result, int(udpDial/udpRedial)+1) // 发起的次数不超过这么多，发结果不会阻塞
+	pending := 0
+	dial := func() {
+		pending++
+		go func() {
+			c, err := n.a.mesh.m.Dial(ctx, k, linkPort)
+			results <- result{c, err}
+		}()
+	}
+	dial()
+	t := time.NewTicker(udpRedial)
+	defer t.Stop()
+	var last error
+	for pending > 0 {
+		select {
+		case <-t.C:
+			if ctx.Err() == nil {
+				dial()
+			}
+		case r := <-results:
+			pending--
+			if r.err != nil {
+				last = r.err
+				continue
+			}
+			// 其余的在 cancel 以后很快结束，碰巧也连上了的关掉。
+			go func(left int) {
+				for range left {
+					if r := <-results; r.err == nil {
+						r.c.Close()
+					}
+				}
+			}(pending)
+			return r.c, nil
+		}
+	}
+	return nil, last
 }
 
 // ---- 目标这一侧：经 mesh 连进来 ----
