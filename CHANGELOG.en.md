@@ -21,7 +21,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ### Improvements
 
-- Improved recovery and flap protection to reduce repeated notifications near thresholds; recovery messages include the recovery value, duration and peak. Silence and maintenance cover new occurrences of the same alert, and disabling a rule or deleting its object ends the alert.
+- Improved recovery and flap protection to reduce repeated notifications near thresholds; a value must drop below the recovery threshold and stay there before the alert recovers, and recovery messages include the recovery value, duration and peak. Silence and maintenance cover new occurrences of the same alert, and disabling a rule or no longer using a domain ends the corresponding alert.
 - Added bounded catch-up of backlogged recent log copies when load permits; receipt speed remains limited by panel disk performance, with no guarantee of catching up under arbitrary load.
 - Separated panel and node audit storage from business databases and added a hash chain to node audit records. Audit shares the log capacity budget, is pruned last, and leaves tombstones and chain records when pruned.
 - Added background audit-chain verification with prominent failure notices, and cleanup of old audit, metric and recording data after migration and verification.
@@ -43,6 +43,8 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Changed ordinary-log durability: power loss or system crashes may lose the last few seconds of committed ordinary records; process crashes do not affect committed records. Audit, security and alert commits retain stronger durability guarantees.
 - Changed log queuing: records still in memory may be lost on forced termination or power loss; full queues, exhausted capacity, unrecoverable write errors or undrained queues at normal shutdown count as confirmed losses. The panel audit retry queue is also not durable.
 - Known limitation: on CPU-constrained nodes with many series (for example hundreds of mount, interface and container series), the last-hour node chart may take several seconds to query and occasionally exceed 10 seconds and fail to load; refreshing retries it. This is unchanged from v0.37.0.
+- Known limitation: after a container or project is deleted, its unrecovered alerts, such as health checks, stay in Current alerts and must be handled manually. This is unchanged from v0.37.0.
+- Known limitation: when a node automatically switches back to its previous version after an upgrade, only the program is restored, and the previous version cannot see migrated chart history; panel upgrades are judged successful by version alone and are not rolled back automatically. This is unchanged from v0.37.0.
 
 ### Upgrade notes
 
