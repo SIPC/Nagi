@@ -79,6 +79,28 @@ func openTestLog(t *testing.T) *Log {
 	return l
 }
 
+func TestChildCounts(t *testing.T) {
+	l := openTestLog(t)
+	ctx := t.Context()
+	a := l.Record(ctx, Event{Action: "parent-a"})
+	b := l.Record(ctx, Event{Action: "parent-b"})
+	c := l.Record(ctx, Event{Action: "parent-c"})
+	for _, parent := range []int64{a, b, a} {
+		if id := l.Record(ctx, Event{Action: "child", ParentID: parent}); id == 0 {
+			t.Fatal("child not recorded")
+		}
+	}
+	counts, err := l.ChildCounts(ctx, []int64{b, c, a, 999})
+	if err != nil || len(counts) != 2 || counts[a] != 2 || counts[b] != 1 {
+		t.Fatalf("child counts: %v, %v", counts, err)
+	}
+	// Explicitly asking for root records still counts parent_id=0 as before.
+	counts, err = l.ChildCounts(ctx, []int64{0, a})
+	if err != nil || len(counts) != 2 || counts[0] != 3 || counts[a] != 2 {
+		t.Fatalf("root and child counts: %v, %v", counts, err)
+	}
+}
+
 // 完成标准（docs/security.md 第 5 步）：删掉中间的一条记录，校验报错；按保留时间清理不影响校验。
 func TestVerifyDetectsDeletion(t *testing.T) {
 	ctx := context.Background()

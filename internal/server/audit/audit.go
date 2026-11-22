@@ -562,7 +562,12 @@ func (l *Log) ChildCounts(ctx context.Context, ids []int64) (map[int64]int, erro
 	for i, id := range ids {
 		args[i] = id
 	}
-	rows, err := l.db.QueryContext(ctx, `SELECT parent_id, COUNT(*) FROM events WHERE parent_id IN (`+placeholders(len(ids))+`) GROUP BY parent_id`, args...)
+	where := `parent_id IN (` + placeholders(len(ids)) + `)`
+	if !slices.Contains(ids, int64(0)) {
+		// Match the partial events_parent index without changing counts for 0.
+		where += ` AND parent_id <> 0`
+	}
+	rows, err := l.db.QueryContext(ctx, `SELECT parent_id, COUNT(*) FROM events WHERE `+where+` GROUP BY parent_id`, args...)
 	if err != nil {
 		return nil, err
 	}
