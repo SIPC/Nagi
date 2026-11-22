@@ -77,10 +77,11 @@ type Engine struct {
 	saving       bool              // retrySaves is running and is the only writer
 	congestedLog time.Time
 	// Committed 在一次出现、恢复或结束写入成功后调用（另起 goroutine），让节点马上上报，
-	// 面板不用等下一个 15 秒的上报节拍才看到。announce 记下还没随提交发出的变化。
-	Committed  func()
-	announce   bool
-	suppressed map[string]time.Time // occurrence -> bounded primary-authorized mute
+	// 面板不用等下一个 15 秒的上报节拍才看到。announceRev 是带着这次变化的版本号：
+	// 只有提交到它（或更新的版本，快照是全量的）才算发出，更早的在途版本提交不算。
+	Committed   func()
+	announceRev uint64
+	suppressed  map[string]time.Time // occurrence -> bounded primary-authorized mute
 	// mutedKeys：静默、维护按告警键记下，截止之前同一个键新一轮的出现也不通知（见 ApplyHandling）。
 	mutedKeys map[string]time.Time
 	// egressSent：出站拦截通知最近一次发送的时间（按 egress 键），用来按规则的提醒间隔去重。

@@ -3,7 +3,9 @@ package alerts
 import (
 	"context"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -158,6 +160,40 @@ func TestHoldBoundaryOnRealTicksAndCommittedReport(t *testing.T) {
 	case <-reports:
 	case <-time.After(5 * time.Second):
 		t.Fatal("恢复提交后应该马上上报")
+	}
+}
+
+// 日志库拥堵时，较早的版本 A 还在后台写，判断又产生了新的告警 B。A 写成功时的上报只带 A；
+// B 提交以后必须再上报一次，不能因为 A 已经上报过就等下一个 15 秒节拍。
+func TestCommittedReportWaitsForTheVersionCarryingTheChange(t *testing.T) {
+	h := newHarness(t, &nagiv1.AlertPolicy{Rules: map[string]*nagiv1.AlertRule{
+		alert.RuleMem: {ForSeconds: u32(0)}, alert.RuleCPU: {ForSeconds: u32(0)}}})
+	var mu sync.Mutex
+	var reported []int // 每次上报时已提交快照里的当前告警数
+	h.e.Committed = func() {
+		s := h.e.Snapshot()
+		mu.Lock()
+		reported = append(reported, len(s.GetCurrent()))
+		mu.Unlock()
+	}
+	held, release := make(chan struct{}), make(chan struct{})
+	go h.e.logs.WriteArchive(context.Background(), 4, 0, func() error { close(held); <-release; return nil })
+	<-held
+	h.feed(map[string]float64{"node:mem": 95}, 1)                 // A：内存告警，写不进去，转后台重试
+	h.feed(map[string]float64{"node:mem": 95, "node:cpu": 99}, 1) // B：CPU 告警，排在 A 后面
+	close(release)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		mu.Lock()
+		got := slices.Clone(reported)
+		mu.Unlock()
+		if slices.Contains(got, 2) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("带着 B 的版本提交后没有上报：%v", got)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
