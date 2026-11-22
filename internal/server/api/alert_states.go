@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/SIPC/nagi/internal/pkg/alert"
 	"github.com/SIPC/nagi/internal/pkg/i18n"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/server/auth"
@@ -20,6 +21,19 @@ func (s *alertService) cleanAlert(ctx context.Context, a *nagiv1.AlertState) (*n
 		return nil, err
 	}
 	v := proto.CloneOf(a)
+	if v.Alert.GetRule() == "" {
+		if n, ok := alert.NoticeOf(v.Alert.GetKey()); ok {
+			title := n.Zh
+			if i18n.FromContext(ctx) == i18n.En {
+				title = n.En
+			}
+			// Localize known event kinds without losing the original event details.
+			if v.Alert.Title != "" && v.Alert.Title != title {
+				v.Alert.Message = v.Alert.Title + "\n" + v.Alert.Message
+			}
+			v.Alert.Title = title
+		}
+	}
 	if x != nil {
 		if !x.node(v.NodeId) {
 			v.NodeId = ""

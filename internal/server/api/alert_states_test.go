@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http/cookiejar"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -48,6 +49,69 @@ func TestStandbyAlertAPIReturnsRecentCopyWhenPrimaryTimesOut(t *testing.T) {
 	}
 	if !res.Msg.RecentCopy || len(res.Msg.Alerts) != 1 || res.Msg.Alerts[0].Alert.Key != "saved-event" {
 		t.Fatalf("saved alert unavailable after primary timeout: %v", res.Msg)
+	}
+}
+
+func TestAlertAPIEventTitlesFollowRequestLanguage(t *testing.T) {
+	h := newAuditHarness(t)
+	ctx := t.Context()
+	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 16<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	h.a.Nodes = nodes.NewRegistry(h.a.Q, h.a.Log, h.a.Sealer, nil)
+	h.a.Nodes.AlertLogs = logs
+	for _, event := range []*nagiv1.Alert{
+		{Key: "session:browser:session_key_missing", Title: "登录安全", Message: "browser details"},
+		{Key: "security:token:123", Title: "账号 alice 生成了访问令牌 deploy", Message: "actor details"},
+		{Key: "unknown:legacy", Title: "Original legacy title", Message: "original details"},
+	} {
+		h.a.Nodes.PanelAlert(ctx, event)
+	}
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "language-test-password", auth.AdminRoleID); err != nil {
+		t.Fatal(err)
+	}
+	jar, _ := cookiejar.New(nil)
+	hc := *h.srv.Client()
+	hc.Jar = jar
+	ac := nagiv1connect.NewAuthServiceClient(&hc, h.srv.URL)
+	if _, err := ac.Login(ctx, connect.NewRequest(&nagiv1.LoginRequest{Username: "admin", Password: "language-test-password"})); err != nil {
+		t.Fatal(err)
+	}
+	client := nagiv1connect.NewAlertServiceClient(&hc, h.srv.URL)
+	for _, tc := range []struct{ lang, session, token string }{
+		{"en", "Session missing its signing key", "Access token created"},
+		{"zh-CN", "会话拿不出签名密钥", "生成访问令牌"},
+		{"en", "Session missing its signing key", "Access token created"},
+	} {
+		req := connect.NewRequest(&nagiv1.ListAlertStatesRequest{})
+		req.Header().Set("Accept-Language", tc.lang)
+		res, err := client.ListAlertStates(ctx, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := make(map[string]*nagiv1.Alert)
+		for _, state := range res.Msg.Alerts {
+			got[state.Alert.Key] = state.Alert
+		}
+		for key, title := range map[string]string{"session:browser:session_key_missing": tc.session, "security:token:123": tc.token, "unknown:legacy": "Original legacy title"} {
+			if got[key] == nil || got[key].Title != title {
+				t.Fatalf("%s title for %s: got %v, want %q", tc.lang, key, got[key], title)
+			}
+		}
+		if got["session:browser:session_key_missing"].Message != "登录安全\nbrowser details" || got["unknown:legacy"].Message != "original details" || !strings.Contains(got["security:token:123"].Message, "账号 alice 生成了访问令牌 deploy\nactor details") {
+			t.Fatalf("event details lost or repeatedly prefixed: %v", res.Msg)
+		}
+	}
+	stored, err := h.a.Nodes.AlertStates(ctx, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range stored {
+		if state.Alert.Key == "session:browser:session_key_missing" && (state.Alert.Title != "登录安全" || state.Alert.Message != "browser details") {
+			t.Fatalf("request language changed stored event: %v", state)
+		}
 	}
 }
 
