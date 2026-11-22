@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -86,11 +87,18 @@ func TestHandshakeDropsFingerprint(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	ln.Close()
 	wg.Wait()
+	defer func() {
+		for _, c := range ok {
+			c.Close()
+		}
+	}()
 	if n := auth.FingerprintCount() - before; n != 0 {
 		t.Errorf("握手结束后指纹表里还剩 %d 项", n)
 	}
-	// 声明了 h2 的那个是最后的正常连接：指纹照常拿到。
-	i := len(fps) - 1
+	// 握手并发完成，按连接身份找到声明了 h2 的客户端，不能依赖完成顺序。
+	i := slices.IndexFunc(ok, func(c *tls.Conn) bool {
+		return c.RemoteAddr().String() == good.LocalAddr().String()
+	})
 	if i < 0 || !strings.Contains(fps[i], "h2_") {
 		t.Fatalf("成功的握手应该带着指纹：%q", fps)
 	}
