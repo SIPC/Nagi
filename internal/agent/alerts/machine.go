@@ -199,7 +199,7 @@ func (e *Engine) remind(key string, st *state, r *nagiv1.AlertRule, now time.Tim
 	if every <= 0 || now.Sub(st.lastNotified) < every || e.flapActive(key) {
 		return nil
 	}
-	if st.lastDelivered.IsZero() && e.pending(st.occurrence) {
+	if st.lastDelivered.IsZero() && e.notificationPending(st.occurrence) {
 		return nil // 第一条还没发出去，补发队列会发
 	}
 	st.lastNotified = now
@@ -209,7 +209,7 @@ func (e *Engine) remind(key string, st *state, r *nagiv1.AlertRule, now time.Tim
 	return a
 }
 
-func (e *Engine) pending(occurrence string) bool {
+func (e *Engine) notificationPending(occurrence string) bool {
 	for _, q := range e.queue {
 		if q.Source == e.source && q.Occurrence == occurrence {
 			return true
@@ -238,7 +238,7 @@ func (e *Engine) setFiring(key string, a *nagiv1.Alert, set ruleSet, now time.Ti
 		if rule := ruleOfKey(key); rule != "" {
 			every = time.Duration(set.get(rule).GetRepeatMinutes()) * time.Minute
 		}
-		if !st.lastDelivered.IsZero() || e.pending(st.occurrence) || len(e.channels()) == 0 {
+		if !st.lastDelivered.IsZero() || e.notificationPending(st.occurrence) || len(e.channels()) == 0 {
 			if every <= 0 || now.Sub(st.lastNotified) < every {
 				st.alert = a
 				return nil
