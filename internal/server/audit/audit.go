@@ -110,6 +110,7 @@ type Log struct {
 
 	mu       sync.Mutex
 	lastHash string
+	recordMu sync.Mutex // Keep a failed insert and its enqueue ahead of later calls.
 
 	hooksMu sync.RWMutex
 	hooks   []func(Event)
@@ -159,6 +160,8 @@ func Open(ctx context.Context, path string, log *slog.Logger) (*Log, error) {
 
 // Close 关闭审计库。还没写进去的重试记录计入确认丢失。
 func (l *Log) Close() error {
+	l.recordMu.Lock()
+	defer l.recordMu.Unlock()
 	l.stopRetry()
 	return l.db.Close()
 }
@@ -191,6 +194,8 @@ func (l *Log) Record(ctx context.Context, e Event) int64 {
 	if l.Capture != nil {
 		defer func() { l.Capture(e) }()
 	}
+	l.recordMu.Lock()
+	defer l.recordMu.Unlock()
 	persistCtx := context.WithoutCancel(ctx)
 	if l.budget != nil {
 		// The quota check may wait briefly for the shared journal gate. A slow
