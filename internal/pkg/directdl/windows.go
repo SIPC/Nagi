@@ -93,7 +93,12 @@ const winPrelude = `$dir = $env:NAGI_DOWNLOAD_DIR
 if (-not $dir) { try { $dir = [Environment]::ExpandEnvironmentVariables((Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders').'{374DE290-123F-4565-9164-39C4925E467B}') } catch { } }
 if (-not $dir) { $dir = [IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
 $dir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)
-try { $null = [IO.Directory]::CreateDirectory($dir); $t = [IO.Path]::Combine($dir, '.nagi-write-test'); [IO.File]::WriteAllText($t, ''); [IO.File]::Delete($t) }
+try {
+  $null = [IO.Directory]::CreateDirectory($dir)
+  $t = [IO.Path]::Combine($dir, '.nagi-write-test.' + [Guid]::NewGuid().ToString('N'))
+  $probe = [IO.File]::Open($t, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try { } finally { $probe.Dispose(); [IO.File]::Delete($t) }
+}
 catch { Write-Host ('FAILED: cannot write to ' + $dir + ' (folder not writable). Set $env:NAGI_DOWNLOAD_DIR to a writable folder and run the command again.'); return }
 $o = [IO.Path]::Combine($dir, $out)
 Write-Host ('Saving to ' + $o)

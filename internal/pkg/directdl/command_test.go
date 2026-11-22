@@ -120,6 +120,37 @@ func TestSegmented(t *testing.T) {
 	}
 }
 
+func TestDownloadDirectoryProbeDoesNotOverwriteExistingFiles(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(t.TempDir(), "victim")
+	const contents = "must not be truncated"
+	if err := os.WriteFile(victim, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		// This also runs without Windows symlink privileges: even a regular
+		// file at the old fixed probe path must not be overwritten or removed.
+		probe := filepath.Join(dir, ".nagi-write-test")
+		if err := os.WriteFile(probe, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		victim = probe
+		cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference = 'Stop'; $out='download'; "+winPrelude)
+	} else {
+		cmd = exec.Command("sh", "-c", `ln -s "$VICTIM" "$NAGI_DOWNLOAD_DIR/.nagi-write-test.$$" || exit 2
+out=download
+`+posixPrelude)
+	}
+	cmd.Env = append(os.Environ(), "NAGI_DOWNLOAD_DIR="+dir, "VICTIM="+victim)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("directory probe: %v\n%s", err, out)
+	}
+	if got, err := os.ReadFile(victim); err != nil || string(got) != contents {
+		t.Fatalf("probe overwrote an existing file: %q, %v", got, err)
+	}
+}
+
 // rangeServer 像节点那样按 Range 发密文（每段从它的起点取密钥流），记下发出的字节数。interrupt 为 true 时，
 // 第一个从 cut 开始的请求只发一半就断开（模拟其中一段下载中断）。
 type rangeServer struct {

@@ -178,7 +178,7 @@ const segmentRetries = 3
 
 // posixPrelude 选保存的目录并确认能写：$NAGI_DOWNLOAD_DIR，没有时用当前目录，当前目录不可写时用 ~/Downloads；
 // 进入这个目录，写明保存的位置。why 把 curl 的退出码（和它写的日志）说成原因：节点对无效的链接一律回 404。
-const posixPrelude = `nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t="$1/.nagi-write-test.$$" && (: > "$nagi_t") 2>/dev/null && rm -f -- "$nagi_t"; }
+const posixPrelude = `nagi_w() { mkdir -p -- "$1" 2>/dev/null && nagi_t=$(mktemp "$1/.nagi-write-test.XXXXXXXXXX") 2>/dev/null && rm -f -- "$nagi_t"; }
 if [ -n "${NAGI_DOWNLOAD_DIR:-}" ]; then dir=$NAGI_DOWNLOAD_DIR; elif nagi_w .; then dir=.; else dir="$HOME/Downloads"; fi
 if ! nagi_w "$dir" || ! cd -- "$dir"; then
   echo "FAILED: cannot write to $dir (folder not writable). Set NAGI_DOWNLOAD_DIR to a writable folder and run the command again." >&2; exit 1
