@@ -399,7 +399,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		log.Info("开始后台迁移监控历史，基础服务无需等待")
 		closeHistory, err := a.metrics.MigrateHistory(historyCtx, historyPath, cfg.Logs)
 		if err != nil && historyCtx.Err() == nil {
-			log.Error("监控历史后台迁移失败，历史只读；基础服务继续运行，重启后重试", "err", err)
+			log.Error("监控历史后台迁移失败，保留旧历史；独立库就绪后新采样继续写入，重启后重试", "err", err)
 		} else if err == nil {
 			log.Info("监控历史后台迁移完成", "duration", time.Since(started))
 			// The migration verified every value before emptying the old tables;

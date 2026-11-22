@@ -8,8 +8,8 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
 
-// UseBudget enables quota-gated writes only to separated history. If migration
-// failed, the source remains queryable but cannot receive samples or maintenance.
+// UseBudget enables quota-gated writes only to separated history. Until the
+// destination is ready, the source remains queryable but never receives samples.
 func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path string, separated bool) error {
 	c.historyMu.Lock()
 	defer c.historyMu.Unlock()

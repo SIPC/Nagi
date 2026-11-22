@@ -122,8 +122,18 @@ func TestBackgroundHistoryMigrationKeepsQueriesAndSwitchesWrites(t *testing.T) {
 			t.Fatalf("history disappeared during migration: %v %v", data, err)
 		}
 		for _, p := range journal.Migrations() {
-			if p.Phase == "copying" && p.Completed > 0 && p.Completed < p.Total {
+			if p.Phase == "copying" && p.Completed > 0 {
 				sawCopy = true
+				if p.Total != 0 {
+					t.Fatalf("migration performed an up-front full count: %+v", p)
+				}
+				if err := c.store(ctx, at.Add(9000*time.Second), map[string]float64{"node:new": 71}); err != nil {
+					t.Fatalf("live graph write blocked during migration: %v", err)
+				}
+				live, err := c.Query(ctx, "node:new", at.Add(8999*time.Second), at.Add(9001*time.Second))
+				if err != nil || len(live["node:new"]) != 1 || live["node:new"][0].Value != 71 {
+					t.Fatalf("live sample unavailable during migration: %v %v", live, err)
+				}
 			}
 		}
 		select {
@@ -186,12 +196,15 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 	if err := c.UseBudget(ctx, nil, path, false); err != nil {
 		t.Fatal(err)
 	}
-	if closeHistory, err := c.MigrateHistory(ctx, path, nil); err == nil {
-		closeHistory()
+	closeHistory, migrateErr := c.MigrateHistory(ctx, path, nil)
+	if closeHistory != nil {
+		defer closeHistory()
+	}
+	if migrateErr == nil {
 		t.Fatal("冲突被静默覆盖")
 	}
-	if err := c.store(ctx, time.Now(), map[string]float64{"node:new": 71}); err == nil {
-		t.Fatal("迁移失败后继续向业务库写指标")
+	if err := c.store(ctx, time.Now(), map[string]float64{"node:new": 71}); err != nil {
+		t.Fatalf("迁移失败后无法向独立库写入新指标: %v", err)
 	}
 	c.lastDownsampledTo = time.Unix(0, 0)
 	c.maintain(ctx, time.Now())
@@ -213,6 +226,11 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 		var value float64
 		if err := legacy.QueryRow(`SELECT count(*),value FROM `+tc.table).Scan(&n, &value); err != nil || n != 1 || value != tc.value {
 			t.Fatalf("失败后源历史受损: %s %d %v %v", tc.table, n, value, err)
+		}
+	}
+	if closeHistory != nil {
+		if err := closeHistory(); err != nil {
+			t.Fatal(err)
 		}
 	}
 	target, err = db.Open(path)
@@ -243,7 +261,7 @@ func TestHistoryConflictAndCancellationKeepBothSourceTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer target.Close()
-	if err := target.QueryRow(`SELECT (SELECT count(*) FROM metrics_raw)+(SELECT count(*) FROM metrics_m5)`).Scan(&left); err != nil || left != 2 {
+	if err := target.QueryRow(`SELECT (SELECT count(*) FROM metrics_raw)+(SELECT count(*) FROM metrics_m5)`).Scan(&left); err != nil || left != 3 {
 		t.Fatalf("中断后的重试丢失或重复: %d %v", left, err)
 	}
 }

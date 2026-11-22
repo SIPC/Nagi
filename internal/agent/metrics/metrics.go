@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"math"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -56,6 +57,7 @@ type Collector struct {
 	log             *slog.Logger
 	budget          *logstore.Store
 	historyReadOnly bool
+	historyLegacy   *sql.DB // Read-only source until copy/verification finishes.
 
 	mu       sync.RWMutex
 	latest   map[string]float64
@@ -496,7 +498,7 @@ func (c *Collector) storeHistory(ctx context.Context, batch []sample) error {
 func (c *Collector) maintain(ctx context.Context, now time.Time) {
 	c.historyMu.RLock()
 	defer c.historyMu.RUnlock()
-	if c.historyReadOnly {
+	if c.historyReadOnly || c.historyLegacy != nil {
 		return
 	}
 	end := now.Truncate(bucket)
@@ -660,23 +662,50 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 	add := func(series string, ts int64, value float64) {
 		out[series] = append(out[series], Point{Time: time.Unix(ts, 0), Value: value})
 	}
+	queries := []*nodestore.Queries{c.q}
+	if c.historyLegacy != nil {
+		queries = append(queries, nodestore.New(c.historyLegacy))
+	}
+	// While copying, the source remains authoritative for duplicate old points;
+	// destination-only points are live samples and must also be visible.
+	defer func() {
+		if c.historyLegacy == nil {
+			return
+		}
+		for series, points := range out {
+			sort.SliceStable(points, func(i, j int) bool { return points[i].Time.Before(points[j].Time) })
+			merged := points[:0]
+			for _, p := range points {
+				if len(merged) > 0 && merged[len(merged)-1].Time.Equal(p.Time) {
+					merged[len(merged)-1] = p
+				} else {
+					merged = append(merged, p)
+				}
+			}
+			out[series] = merged
+		}
+	}()
 	if to.Sub(from) <= keepRaw+rawSlack && from.After(now.Add(-keepRaw-rawSlack)) {
-		rows, err := c.q.QueryRaw(ctx, nodestore.QueryRawParams{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
+		for _, q := range queries {
+			rows, err := q.QueryRaw(ctx, nodestore.QueryRawParams{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
+			if err != nil {
+				return nil, Window{}, err
+			}
+			for _, r := range rows {
+				add(r.Series, r.Ts, r.Value)
+			}
+		}
+		// 超过 keepRaw 的部分已经删掉了，不算在覆盖的时间段里。
+		return out, Window{Res: Interval, From: maxTime(from, now.Add(-keepRaw)), To: minTime(to, now)}, nil
+	}
+	for _, q := range queries {
+		rows, err := q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
 		if err != nil {
 			return nil, Window{}, err
 		}
 		for _, r := range rows {
 			add(r.Series, r.Ts, r.Value)
 		}
-		// 超过 keepRaw 的部分已经删掉了，不算在覆盖的时间段里。
-		return out, Window{Res: Interval, From: maxTime(from, now.Add(-keepRaw)), To: minTime(to, now)}, nil
-	}
-	rows, err := c.q.QueryM5(ctx, nodestore.QueryM5Params{Prefix: prefix, PrefixEnd: prefixEnd(prefix), FromTs: from.Unix(), ToTs: to.Unix()})
-	if err != nil {
-		return nil, Window{}, err
-	}
-	for _, r := range rows {
-		add(r.Series, r.Ts, r.Value)
 	}
 	// 5 分钟的点取窗口起点：覆盖起点不早于 from 的窗口，到 to 所在的窗口为止，且只有已经降采样的（留两个采样间隔的余量）。
 	first := from.Truncate(bucket)

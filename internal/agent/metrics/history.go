@@ -19,7 +19,7 @@ import (
 // collector starts. Copy/verify durable destination batches before deleting either
 // source table; interruption can leave duplicates, never a partially deleted source.
 func OpenHistory(ctx context.Context, path string, legacy *sql.DB, budget *logstore.Store) (*sql.DB, error) {
-	d, finish, err := prepareHistory(ctx, path, legacy, budget, nil)
+	d, finish, err := prepareHistory(ctx, path, legacy, budget, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -30,8 +30,8 @@ func OpenHistory(ctx context.Context, path string, legacy *sql.DB, budget *logst
 	return d, nil
 }
 
-// MigrateHistory keeps the existing collector available while copying. Only the
-// final source deletion and backend handoff exclude readers. The caller owns the
+// MigrateHistory writes new samples to separated history while copying and keeps
+// the source queryable until verification succeeds. The caller owns the
 // returned database closer, including when quota registration returns an error.
 func (c *Collector) MigrateHistory(ctx context.Context, path string, budget *logstore.Store) (func() error, error) {
 	progress := logstore.Migration{ID: "metrics", Phase: "pending"}
@@ -47,20 +47,34 @@ func (c *Collector) MigrateHistory(ctx context.Context, path string, budget *log
 	}
 	c.historyMu.RLock()
 	legacy := c.db
+	if c.historyLegacy != nil {
+		legacy = c.historyLegacy
+	}
 	c.historyMu.RUnlock()
-	history, finish, err := prepareHistory(ctx, path, legacy, budget, report)
+	history, finish, err := prepareHistory(ctx, path, legacy, budget, report, func(history *sql.DB, sourceTables bool) {
+		c.historyMu.Lock()
+		defer c.historyMu.Unlock()
+		if sourceTables {
+			c.historyLegacy = legacy
+		}
+		c.db, c.q = history, nodestore.New(history)
+		c.historyReadOnly = false
+		if c.lastDownsampledTo.IsZero() {
+			c.lastDownsampledTo = time.Now().Truncate(bucket)
+		}
+	})
 	if err != nil {
+		if history != nil {
+			return history.Close, fail(err)
+		}
 		return nil, fail(err)
 	}
 	c.historyMu.Lock()
-	err = finish()
-	if err == nil {
-		c.db, c.q = history, nodestore.New(history)
-	}
+	c.historyLegacy = nil // Both tables are now fully verified in the target.
 	c.historyMu.Unlock()
-	if err != nil {
-		history.Close()
-		return nil, fail(err)
+	// Source deletion can be slow; it must not exclude live graph reads/writes.
+	if err := finish(); err != nil {
+		return history.Close, fail(err)
 	}
 	if err := c.UseBudget(ctx, budget, path, true); err != nil {
 		return history.Close, fail(err)
@@ -71,8 +85,8 @@ func (c *Collector) MigrateHistory(ctx context.Context, path string, budget *log
 }
 
 // prepareHistory copies and verifies bounded batches without changing the source.
-// finish commits source cleanup; the collector holds its backend lock during it.
-func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *logstore.Store, report func(logstore.Migration)) (*sql.DB, func() error, error) {
+// finish commits source cleanup after readers no longer need the source.
+func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *logstore.Store, report func(logstore.Migration), ready func(*sql.DB, bool)) (*sql.DB, func() error, error) {
 	var copied atomic.Bool
 	progress := logstore.Migration{ID: "metrics", Phase: "copying"}
 	var legacyPath string
@@ -88,10 +102,9 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 			return nil, nil, err
 		}
 	}
-	if report != nil && !dropped {
-		if err := legacy.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM metrics_raw)+(SELECT count(*) FROM metrics_m5)`).Scan(&progress.Total); err != nil {
-			return nil, nil, err
-		}
+	// The total stays unknown until copying completes. Counting millions of rows
+	// here monopolizes node.db's only connection and delays live node services.
+	if report != nil {
 		report(progress)
 	}
 	if budget != nil {
@@ -122,7 +135,14 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 	if err != nil {
 		return nil, nil, err
 	}
-	fail := func(err error) (*sql.DB, func() error, error) { d.Close(); return nil, nil, err }
+	published := false
+	fail := func(err error) (*sql.DB, func() error, error) {
+		if published {
+			return d, nil, err // The collector still owns live samples and reads here.
+		}
+		d.Close()
+		return nil, nil, err
+	}
 	var tables int
 	if err := d.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table'`).Scan(&tables); err != nil {
 		return fail(err)
@@ -141,6 +161,10 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 		return err
 	}); err != nil {
 		return fail(err)
+	}
+	if ready != nil {
+		ready(d, !dropped)
+		published = true
 	}
 	for _, table := range []string{"metrics_raw", "metrics_m5"} {
 		if dropped {
@@ -260,6 +284,7 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 			}
 		}
 	}
+	progress.Total = progress.Completed
 	// Both source tables remain untouched until every row of both tables matches.
 	var reserve int64
 	if hasLegacy {
@@ -273,7 +298,10 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 		if report != nil {
 			report(progress)
 		}
-		if err := budget.WriteArchive(ctx, 2, reserve+(64<<10), func() error {
+		if err := budget.Reserve(ctx, 2, reserve+(64<<10)); err != nil {
+			return err
+		}
+		if err := func() error {
 			if dropped {
 				return nil
 			}
@@ -286,7 +314,7 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 				return err
 			}
 			return tx.Commit()
-		}); err != nil {
+		}(); err != nil {
 			return err
 		}
 		copied.Store(true)
