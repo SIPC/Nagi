@@ -110,9 +110,10 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 	defer copies.Close()
 	r.LogCopies = copies
 	r.SetMesh(panel, "panel")
+	serveCtx, stopServe := context.WithCancel(t.Context())
 	done := make(chan struct{})
-	go func() { defer close(done); r.ServeMesh(ctx) }()
-	defer func() { cancel(); <-done }()
+	go func() { defer close(done); r.ServeMesh(serveCtx) }()
+	defer func() { stopServe(); <-done }()
 	cc, err := mesh.Client(node, panel.PublicKey())
 	if err != nil {
 		t.Fatal(err)
@@ -232,14 +233,16 @@ func testRecentLogCopiesOverAuthenticatedMesh(t *testing.T, standby bool) {
 	} else {
 		testCopyCatchup(t, local, copies, r, node, panel)
 	}
+	checkCtx, stopCheck := context.WithTimeout(t.Context(), 30*time.Second)
+	defer stopCheck()
 	for _, change := range []string{`UPDATE nodes SET pending=1`, `UPDATE nodes SET pending=0,revoked=1`, `UPDATE nodes SET revoked=0,isolated=1`} {
-		if _, err := d.ExecContext(ctx, change); err != nil {
+		if _, err := d.ExecContext(checkCtx, change); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := client.GetLogReceipt(ctx, &nagiv1.LogReceiptQuery{Source: "s", Category: logstore.Audit}); status.Code(err) != codes.PermissionDenied {
+		if _, err := client.GetLogReceipt(checkCtx, &nagiv1.LogReceiptQuery{Source: "s", Category: logstore.Audit}); status.Code(err) != codes.PermissionDenied {
 			t.Fatalf("revoked/pending/isolated caller accepted: %s %v", change, err)
 		}
-		if _, err := client.PushLogs(ctx, &nagiv1.LogCopyBatch{Source: "s", Category: logstore.Audit}); status.Code(err) != codes.PermissionDenied {
+		if _, err := client.PushLogs(checkCtx, &nagiv1.LogCopyBatch{Source: "s", Category: logstore.Audit}); status.Code(err) != codes.PermissionDenied {
 			t.Fatalf("revoked/pending/isolated caller could push: %s %v", change, err)
 		}
 	}
