@@ -326,13 +326,24 @@ func TestFECLossyLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(30 * time.Second)
-	for fecTo(a.m, b.m.PublicKey()) <= 0 && time.Now().Before(deadline) {
+	trained := false
+	for !trained && time.Now().Before(deadline) {
+		// 编码器初始就带一个校验包，不能据此判断 B 的丢包反馈已到。
+		// 继续发训练数据，直到收到实际测量；首个能力包本身也可能丢失。
+		for _, s := range a.m.Status() {
+			if s.Key == b.m.PublicKey() {
+				trained = s.FEC > 0 && s.TxLoss >= 0
+			}
+		}
+		if trained {
+			break
+		}
 		_, _ = c.Write(want[4<<20 : 4<<20+64<<10])
 		want = append(want[:4<<20+64<<10:4<<20+64<<10], want[4<<20:]...)
 		time.Sleep(200 * time.Millisecond)
 	}
-	if fecTo(a.m, b.m.PublicKey()) <= 0 {
-		t.Fatal("丢包 2% 时没有开启 FEC")
+	if !trained {
+		t.Fatal("丢包 2% 时没有收到丢包反馈并开启 FEC")
 	}
 	if _, err := c.Write(want[len(want)-4<<20:]); err != nil {
 		t.Fatal(err)
