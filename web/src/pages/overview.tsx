@@ -136,7 +136,7 @@ function mergeSmall(rows: SankeyRow[], flows: Flow[]) {
     if (old) old.rate += f.rate;
     else merged.set(key, { ...f, from: pick(f.from), to: pick(f.to) });
   }
-  return { rows: [...rows.filter((r) => r.id === external || keep.has(r.id)), { id: other, name: o.flow.other }], flows: [...merged.values()] };
+  return { rows: [...rows.filter((r) => r.id === external || keep.has(r.id)), { id: other, name: o.flow.other(nodes.length - keep.size) }], flows: [...merged.values()] };
 }
 
 // layoutEase：和 AutoHeight 同一条曲线，CSS 的 cubic-bezier 在 JS 里的算法。
@@ -833,7 +833,7 @@ export function OverviewPage() {
   if (pairKeys.length > topPairs.length) {
     const rest = new Set(pairKeys.slice(topPairs.length));
     pairSeries.push({
-      label: o.trend.other,
+      label: o.trend.other(rest.size),
       className: "text-muted-foreground/50",
       points: [...buckets.entries()].sort((x, y) => x[0] - y[0]).map(([at, v]): Pt => [at, [...v.pairs.entries()].reduce((sum, [k, x]) => (rest.has(k) ? sum + x : sum), 0)]),
     });
