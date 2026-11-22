@@ -20,6 +20,47 @@ func flush(t *testing.T, logs *logstore.Store) {
 	}
 }
 
+// The alert engine reads the latest sample every round. With a long metrics
+// history the read must start at the recent window, not walk the whole
+// category under the shared log gate.
+func TestLatestFreshDoesNotWalkMetricsHistory(t *testing.T) {
+	now := time.Now().UTC()
+	values := map[string]float64{"node:cpu": 3}
+	for i := range 40 {
+		values[fmt.Sprintf("c:p/service%d:mem", i)] = float64(i)
+	}
+	timed := func(history int) time.Duration {
+		logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 256<<20)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer logs.Close()
+		collect := CaptureMetrics(logs, logstore.DefaultConfig())
+		for i := history; i > 0; i-- {
+			collect(now.Add(-time.Minute-time.Duration(i)*10*time.Second), values)
+			if i%500 == 0 {
+				flush(t, logs) // stay inside the bounded write queue
+			}
+		}
+		collect(now.Add(-10*time.Second), values)
+		flush(t, logs)
+		s := Statistics{Store: logs}
+		best := time.Hour
+		for range 5 {
+			t0 := time.Now()
+			if got := s.LatestFresh(now); got["node:cpu"] != 3 || len(got) != 41 {
+				t.Fatalf("latest sample incomplete: %d series", len(got))
+			}
+			best = min(best, time.Since(t0))
+		}
+		return best
+	}
+	short, long := timed(0), timed(20000)
+	if long > 10*short+10*time.Millisecond {
+		t.Fatalf("LatestFresh took %v after a long history, %v without", long, short)
+	}
+}
+
 func TestRecordedStatisticsRequireCompleteFreshSamples(t *testing.T) {
 	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
 	if err != nil {

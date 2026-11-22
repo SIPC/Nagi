@@ -704,6 +704,21 @@ func (s *Store) query(ctx context.Context, f Filter) ([]Event, error) {
 	return out, rows.Err()
 }
 
+// FirstSeqSince returns a cursor just below the oldest record whose event time
+// is at or after since, found on the time index. A reader of a short recent
+// window can start there instead of walking its category from the beginning;
+// event times are not ordered by seq, so the reader still filters by time.
+func (s *Store) FirstSeqSince(ctx context.Context, since time.Time) (int64, error) {
+	if err := s.lock(ctx); err != nil {
+		return 0, err
+	}
+	defer func() { <-s.gate }()
+	var seq int64
+	err := s.db.QueryRowContext(ctx, `SELECT coalesce((SELECT min(seq) FROM log_events INDEXED BY log_time WHERE time_ns>=?)-1,
+ (SELECT seq FROM sqlite_sequence WHERE name='log_events'), 0)`, since.UnixNano()).Scan(&seq)
+	return seq, err
+}
+
 func (s *Store) State(ctx context.Context) (State, error) {
 	if err := s.lock(ctx); err != nil {
 		return State{}, err

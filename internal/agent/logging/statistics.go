@@ -108,7 +108,14 @@ func (s Statistics) readSamples(ctx context.Context, prefix string, from, to tim
 		end    *metricSample
 	}
 	batches := map[time.Time]*batch{}
-	var after, watermark int64
+	// Start at the window on the time index: walking the whole metrics
+	// category from the beginning every alert round held the shared log gate
+	// long enough to time out live container writes.
+	after, err := s.Store.FirstSeqSince(ctx, from)
+	if err != nil {
+		return nil, latest, err
+	}
+	var watermark int64
 	for pages := 0; ; pages++ {
 		if pages == 32 {
 			return nil, latest, fmt.Errorf("日志统计窗口超过单次读取上限，不能视作完整证据")
