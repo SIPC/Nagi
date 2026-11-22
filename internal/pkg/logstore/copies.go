@@ -328,13 +328,35 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 			return err
 		}
 		defer tx.Rollback()
+		// Reuse each statement for the bounded batch instead of parsing the
+		// same SQL up to 256 times while holding the receipt transaction.
+		findEvent, err := tx.PrepareContext(ctx, `SELECT e.time_ns,e.category,e.kind,e.project,e.object,e.data FROM log_events e JOIN copy_origins o ON o.local_seq=e.seq WHERE o.node=? AND o.origin=? AND o.remote_seq=?`)
+		if err != nil {
+			return err
+		}
+		defer findEvent.Close()
+		findDeleted, err := tx.PrepareContext(ctx, `SELECT EXISTS(SELECT 1 FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?)`)
+		if err != nil {
+			return err
+		}
+		defer findDeleted.Close()
+		insertEvent, err := tx.PrepareContext(ctx, `INSERT INTO log_events(time_ns,received_ns,category,priority,kind,project,object,data) VALUES (?,?,?,?,?,?,?,?)`)
+		if err != nil {
+			return err
+		}
+		defer insertEvent.Close()
+		insertOrigin, err := tx.PrepareContext(ctx, `INSERT INTO copy_origins VALUES (?,?,?,?)`)
+		if err != nil {
+			return err
+		}
+		defer insertOrigin.Close()
 		now := time.Now().UTC().UnixNano()
 		for _, v := range entries {
 			e := v.e
 			var at int64
 			var category, kind, project, object string
 			var data []byte
-			err := tx.QueryRowContext(ctx, `SELECT e.time_ns,e.category,e.kind,e.project,e.object,e.data FROM log_events e JOIN copy_origins o ON o.local_seq=e.seq WHERE o.node=? AND o.origin=? AND o.remote_seq=?`, node, b.Source, e.Seq).Scan(&at, &category, &kind, &project, &object, &data)
+			err := findEvent.QueryRowContext(ctx, node, b.Source, e.Seq).Scan(&at, &category, &kind, &project, &object, &data)
 			if err == nil {
 				if at != e.Time.UnixNano() || category != e.Category || kind != clipText(e.Kind, 200) || project != clipText(e.Project, 200) || object != clipText(e.Object, 1000) || !bytes.Equal(data, v.data) {
 					return ErrCopyConflict
@@ -357,13 +379,13 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 			// A node may reconnect behind a peer-recovered record that this
 			// panel has since pruned. Neither upload path may resurrect it.
 			var deleted bool
-			if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?)`, node, b.Source, b.Category, e.Seq, e.Seq).Scan(&deleted); err != nil {
+			if err := findDeleted.QueryRowContext(ctx, node, b.Source, b.Category, e.Seq, e.Seq).Scan(&deleted); err != nil {
 				return err
 			}
 			if deleted {
 				continue
 			}
-			res, err := tx.ExecContext(ctx, `INSERT INTO log_events(time_ns,received_ns,category,priority,kind,project,object,data) VALUES (?,?,?,?,?,?,?,?)`, e.Time.UnixNano(), received, e.Category, p, clipText(e.Kind, 200), clipText(e.Project, 200), clipText(e.Object, 1000), v.data)
+			res, err := insertEvent.ExecContext(ctx, e.Time.UnixNano(), received, e.Category, p, clipText(e.Kind, 200), clipText(e.Project, 200), clipText(e.Object, 1000), v.data)
 			if err != nil {
 				return err
 			}
@@ -371,7 +393,7 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 			if err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO copy_origins VALUES (?,?,?,?)`, seq, node, b.Source, e.Seq); err != nil {
+			if _, err := insertOrigin.ExecContext(ctx, seq, node, b.Source, e.Seq); err != nil {
 				return err
 			}
 		}
