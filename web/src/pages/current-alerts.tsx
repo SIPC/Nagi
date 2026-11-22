@@ -11,6 +11,14 @@ import { lacksLogService } from "@/pages/update";
 import { formatDateTime } from "@/lib/utils";
 import { t } from "@/i18n";
 
+function alertTitle(state: AlertState | undefined) {
+  const a = state?.alert;
+  if (!a) return t.logs.alerts.title;
+  const rule = (t.alerts.policy.rule as Record<string, string>)[a.rule];
+  // Older nodes and event alerts have no structured rule; preserve their text.
+  return rule ? [rule, a.node, a.subject].filter(Boolean).join(" · ") : a.title;
+}
+
 export function CurrentAlerts() {
   const { can } = useRole();
   const qc = useQueryClient();
@@ -62,11 +70,11 @@ export function CurrentAlerts() {
     {oldNotice}
     {query.data?.recentCopy && <Notice tone="warning">{m.recent}</Notice>}
     {query.error && <QueryError error={query.error} onRetry={() => query.refetch()} />}
-    <List>{current.map((a) => <Row key={`${a.nodeId}/${a.alert?.occurrence}`} title={a.alert?.title} sub={[a.alert?.project, a.conclusion].filter(Boolean).join(" · ")}
+    <List>{current.map((a) => <Row key={`${a.nodeId}/${a.alert?.occurrence}`} title={alertTitle(a)} sub={[a.alert?.project, a.conclusion].filter(Boolean).join(" · ")}
       cols={[{ content: <Status tone="warning">{status(a)}</Status>, phone: true }]}
       actions={<Button variant="ghost" size="row" readOnlyOk onClick={() => show(a)}>{m.handle}</Button>} actionsWidth="w-28" />)}</List>
-    {history && <div className="flex flex-col gap-4"><p className="text-sm text-muted-foreground">{m.historyHelp}</p><List>{past.map((a) => <Row key={`${a.nodeId}/${a.alert?.occurrence}`} title={a.alert?.title} sub={status(a)} actions={<Button variant="ghost" size="row" readOnlyOk onClick={() => show(a)}>{m.handle}</Button>} actionsWidth="w-28" />)}</List></div>}
-    <Dialog open={!!selected} onClose={() => !busy && setSelected(undefined)} title={selected?.alert?.title ?? m.title} description={m.help}>
+    {history && <div className="flex flex-col gap-4"><p className="text-sm text-muted-foreground">{m.historyHelp}</p><List>{past.map((a) => <Row key={`${a.nodeId}/${a.alert?.occurrence}`} title={alertTitle(a)} sub={status(a)} actions={<Button variant="ghost" size="row" readOnlyOk onClick={() => show(a)}>{m.handle}</Button>} actionsWidth="w-28" />)}</List></div>}
+    <Dialog open={!!selected} onClose={() => !busy && setSelected(undefined)} title={alertTitle(selected)} description={m.help}>
       {selected && <FormBody>
         <Status tone={live(selected) ? "warning" : "neutral"}>{status(selected)}</Status>
         <p className="whitespace-pre-wrap break-words text-sm">{selected.alert?.message}</p>
