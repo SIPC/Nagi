@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -211,7 +213,7 @@ func (e *Engine) complete(ctx context.Context, cfg Config, material []byte) (str
 	// Never retain errors or response bodies from the provider: either can echo
 	// the URL, request, Authorization header, or reasoning_content.
 	if err != nil {
-		return "", "request_failed"
+		return "", transportFailure(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -251,6 +253,34 @@ func (e *Engine) complete(ctx context.Context, cfg Config, material []byte) (str
 		return "", "invalid_response"
 	}
 	return safe["content"], ""
+}
+
+// transportFailure maps a request error to a stable code so administrators can
+// tell a blocked address from DNS, TLS, or connection problems. Only the code is
+// kept; the error text can contain the endpoint.
+func transportFailure(err error) string {
+	var dnsErr *net.DNSError
+	var certErr *tls.CertificateVerificationError
+	var recordErr tls.RecordHeaderError
+	var alertErr tls.AlertError
+	var opErr *net.OpError
+	if _, ok := safehttp.Blocked(err); ok {
+		return "address_blocked"
+	}
+	switch {
+	case errors.As(err, &dnsErr):
+		return "dns_failed"
+	case errors.As(err, &certErr), errors.As(err, &recordErr), errors.As(err, &alertErr):
+		return "tls_failed"
+	case errors.As(err, &opErr) && opErr.Op == "dial":
+		return "connect_failed"
+	}
+	// TLS handshake and response header timeouts are shorter than the report timeout.
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "network_timeout"
+	}
+	return "request_failed"
 }
 
 func (e *Engine) List(ctx context.Context) ([]*Report, error) {

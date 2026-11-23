@@ -136,6 +136,31 @@ func TestCancellationIsPersistedAndConcurrentRequestIsRejected(t *testing.T) {
 	}
 }
 
+// A failed connection must say why, without keeping the error text.
+func TestTransportFailureIsClassified(t *testing.T) {
+	tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer tlsServer.Close()
+	closed := httptest.NewServer(nil)
+	closedURL := closed.URL
+	closed.Close()
+	for _, c := range []struct {
+		endpoint string
+		client   *http.Client // nil uses the production safehttp client
+		want     string
+	}{
+		{tlsServer.URL, nil, "address_blocked"},
+		{tlsServer.URL, &http.Client{}, "tls_failed"},
+		{closedURL, &http.Client{}, "connect_failed"},
+		{"https://model.invalid/v1/chat/completions", &http.Client{}, "dns_failed"},
+	} {
+		e := &Engine{client: c.client}
+		_, got := e.complete(t.Context(), Config{Endpoint: c.endpoint, Model: "m", APIKey: "k"}, []byte("{}"))
+		if got != c.want {
+			t.Errorf("%s: failure=%q, want %q", c.endpoint, got, c.want)
+		}
+	}
+}
+
 func TestQuotaAndInputLimits(t *testing.T) {
 	ctx := context.Background()
 	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 8<<20)
