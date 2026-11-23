@@ -8,6 +8,13 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.3
+
+### Fixes
+
+- Fixed large nodes with many containers and monitoring series (for example bare-metal servers) where, after upgrading to v0.37.2, viewing long-range charts or background cleanup of old chart points made ordinary logs, task records and alert records time out while waiting to be written. Affected nodes raised "log store write failed" alerts, and those records were lost or delayed. Chart reads and background cleanup no longer block log writes. To recover, update the panel, then upgrade these nodes to v0.37.3 on the "Nodes" page; no data needs to be deleted by hand. Logs that were not written before the upgrade cannot be recovered, and the Logs page records that period as a gap.
+- Fixed the "may be incomplete" notice on the Logs page counting only the first 1,000 records. When restarts left many records, later collection interruptions or losses were missed. The count now continues through later records; when there are too many to count, the notice says "at least N" or that the count is incomplete, instead of showing no gaps.
+
 ## v0.37.2
 
 ### Fixes
