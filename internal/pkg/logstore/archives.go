@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 )
 
 // Archive is a legacy history owner sharing this machine's budget. Size includes
@@ -122,8 +123,17 @@ func (s *Store) prepare(ctx context.Context, p int, reserve int64) error {
 	if p == 4 {
 		maxPriority = 4
 	}
-	if live+reserve > s.dbLimit*9/10 || physical+reserve > s.dbLimit {
-		if err := s.prune(ctx, s.dbLimit*8/10, maxPriority); err != nil {
+	if live+reserve > s.dbLimit*9/10 {
+		// Past the cleanup line: the background cleanup (cleanupLoop) brings
+		// usage back to 80% in short steps between writes. A writer frees space
+		// itself only when this write would not fit under the hard limit, and
+		// then only what it needs: reclaiming down to 80% here could mean
+		// gigabytes on a node whose history filled the quota, far beyond any
+		// writer's deadline, so every write would time out under the gate.
+		s.kickCleanup()
+	}
+	if live+reserve > s.dbLimit*95/100 || physical+reserve > s.dbLimit {
+		if err := s.prune(ctx, s.dbLimit*95/100-reserve, maxPriority, time.Time{}); err != nil {
 			return err
 		}
 		if err := s.compact(ctx); err != nil {

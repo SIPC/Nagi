@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -438,5 +439,53 @@ func BenchmarkLocalJournal(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		logger.Info("request", "status", 401)
+	}
+}
+
+// A history that sits past the cleanup line (CN-001 after the v0.37.1
+// migration) must not make each write pay for the whole cleanup: the old code
+// trimmed down to 80% inside every write, which took longer than any writer's
+// deadline, so all writes failed. Writes now stay fast while the background
+// cleanup brings usage back under the line.
+func TestWritesStayFastWhileArchivePastCleanupLine(t *testing.T) {
+	const budget = 50 << 20
+	limit := int64(budget * 4 / 5)
+	var size atomic.Int64
+	size.Store(limit * 93 / 100)
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), budget)
+	if err := s.RegisterArchive(t.Context(), logstore.Archive{Name: "history", Priority: 2,
+		Size: func() (int64, error) { return size.Load(), nil },
+		// One batch on a CN-001-sized history takes longer than a cleanup step,
+		// and cancelling it mid-way rolls it back like SQLite does.
+		Trim: func(ctx context.Context) (bool, error) {
+			select {
+			case <-time.After(600 * time.Millisecond):
+			case <-ctx.Done():
+				return false, ctx.Err()
+			}
+			size.Add(-limit / 200) // 0.5% of the limit per batch
+			return true, nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 5 {
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+		started := time.Now()
+		err := s.Record(ctx, logstore.Event{Category: logstore.Audit, Kind: "write", Data: i})
+		cancel()
+		if err != nil || time.Since(started) > 1500*time.Millisecond {
+			t.Fatalf("write %d took %v: %v", i, time.Since(started), err)
+		}
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for size.Load() > limit*82/100 {
+		if time.Now().After(deadline) {
+			t.Fatalf("background cleanup stalled at %.1f%% of the limit", 100*float64(size.Load())/float64(limit))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err := s.Record(t.Context(), logstore.Event{Category: logstore.Audit, Kind: "after"}); err != nil {
+		t.Fatal(err)
 	}
 }

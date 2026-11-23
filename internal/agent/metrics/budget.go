@@ -3,7 +3,6 @@ package metrics
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
@@ -24,26 +23,43 @@ func (c *Collector) UseBudget(ctx context.Context, budget *logstore.Store, path 
 	}
 	if err := budget.ReplaceArchive(ctx, logstore.Archive{
 		Name: path, Priority: 2, Size: func() (int64, error) { return logstore.FileBytes(path) },
-		Trim: func(ctx context.Context) (bool, error) {
-			var table string
-			err := c.db.QueryRowContext(ctx, `SELECT name FROM (SELECT 'metrics_raw' AS name,ts FROM metrics_raw UNION ALL SELECT 'metrics_m5',ts FROM metrics_m5) ORDER BY ts LIMIT 1`).Scan(&table)
-			if errors.Is(err, sql.ErrNoRows) {
-				return false, nil
-			}
-			if err != nil {
-				return false, err
-			}
-			if _, err := c.db.ExecContext(ctx, `DELETE FROM `+table+` WHERE (series,ts) IN (SELECT series,ts FROM `+table+` ORDER BY ts LIMIT 256)`); err != nil {
-				return false, err
-			}
-			if err := logstore.CompactHistory(ctx, c.db); err != nil {
-				return false, err
-			}
-			return true, nil
-		},
+		Trim: c.trimOldest,
 	}); err != nil {
 		return err
 	}
 	c.historyReadOnly = false
 	return nil
+}
+
+// trimBatch is how many of the oldest points one Trim removes. The log store
+// calls Trim under its write lock until usage is back under the line, so each
+// call must make real progress: 256 points per call could not keep up once
+// a node's chart history alone filled the quota. 2048 points take about
+// 150 ms on a 25M-point history, short enough to hold the gate.
+const trimBatch = 2048
+
+// trimOldest deletes the oldest batch from whichever table holds the oldest
+// point. Each table's oldest point comes from its ts index (two lookups),
+// instead of sorting both tables, which took seconds on a large history.
+func (c *Collector) trimOldest(ctx context.Context) (bool, error) {
+	table, oldest := "", int64(0)
+	for _, t := range []string{"metrics_raw", "metrics_m5"} {
+		var ts sql.NullInt64
+		if err := c.db.QueryRowContext(ctx, `SELECT min(ts) FROM `+t).Scan(&ts); err != nil {
+			return false, err
+		}
+		if ts.Valid && (table == "" || ts.Int64 < oldest) {
+			table, oldest = t, ts.Int64
+		}
+	}
+	if table == "" {
+		return false, nil
+	}
+	if _, err := c.db.ExecContext(ctx, `DELETE FROM `+table+` WHERE (series,ts) IN (SELECT series,ts FROM `+table+` ORDER BY ts LIMIT ?)`, trimBatch); err != nil {
+		return false, err
+	}
+	if err := logstore.CompactHistory(ctx, c.db); err != nil {
+		return false, err
+	}
+	return true, nil
 }

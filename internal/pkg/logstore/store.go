@@ -135,6 +135,9 @@ type Store struct {
 	// Report 的失败仅写原始 stderr logger，不能递归写回自身。
 	lastError  atomic.Int64
 	archives   []Archive
+	// cleanup wakes cleanupLoop once a write reaches the cleanup line.
+	cleanup     chan struct{}
+	cleanupOnce sync.Once
 	migrations sync.Map // string → immutable Migration; independent of the disk writer gate.
 }
 
@@ -170,7 +173,7 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: d, path: path, budget: budget, dbLimit: budget * 4 / 5, gate: make(chan struct{}, 1)}
+	s := &Store{db: d, path: path, budget: budget, dbLimit: budget * 4 / 5, gate: make(chan struct{}, 1), cleanup: make(chan struct{}, 1)}
 	fail := func(err error) (*Store, error) { d.Close(); return nil, err }
 	var vacuum int
 	if err := d.QueryRowContext(ctx, `PRAGMA auto_vacuum`).Scan(&vacuum); err != nil {
@@ -242,7 +245,7 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 	}
 	// 缩小配置时先清历史，再限制新页数；不以新配额静默启动一个已经超大的库。
 	if pruneOnOpen {
-		if err := s.prune(ctx, s.dbLimit*8/10, 4); err != nil {
+		if err := s.prune(ctx, s.dbLimit*8/10, 4, time.Time{}); err != nil {
 			return fail(err)
 		}
 	}
@@ -541,18 +544,29 @@ func (s *Store) liveBytes(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
-func (s *Store) prune(ctx context.Context, target int64, maxPriority int) error {
+// pruneBatch is how many journal records one cleanup transaction deletes.
+const pruneBatch = 512
+
+// errStepEnded stops a background cleanup step between batches.
+var errStepEnded = errors.New("cleanup step ended")
+
+// prune deletes batches until usage is at target. A non-zero stop ends it
+// between batches: cancelling ctx mid-batch would roll that batch back, so a
+// step shorter than one batch would never make progress.
+func (s *Store) prune(ctx context.Context, target int64, maxPriority int, stop time.Time) error {
 	exhausted := map[string]bool{}
 	for {
+		if !stop.IsZero() && time.Now().After(stop) {
+			return errStepEnded
+		}
 		live, err := s.liveBytes(ctx)
 		if err != nil || live <= target {
 			return err
 		}
 		// 小批次删除，给 WAL 留足预算；每批与缺口摘要原子提交。
 		var seq int64
-		var category string
 		var p int
-		err = s.db.QueryRowContext(ctx, `SELECT seq, category, priority FROM log_events WHERE priority<=? ORDER BY priority, seq LIMIT 1`, maxPriority).Scan(&seq, &category, &p)
+		err = s.db.QueryRowContext(ctx, `SELECT seq, priority FROM log_events WHERE priority<=? ORDER BY priority, seq LIMIT 1`, maxPriority).Scan(&seq, &p)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
@@ -587,14 +601,26 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int) error 
 		if seq == 0 {
 			return ErrCapacity
 		}
+		// One batch of the oldest records at this priority (log_prune index), with
+		// the gap envelope per category in the same transaction. Deleting one row
+		// per transaction made a large cleanup take minutes under the write lock.
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM log_events WHERE seq=?`, seq)
+		_, err = tx.ExecContext(ctx, `CREATE TEMP TABLE IF NOT EXISTS prune_batch(seq INTEGER PRIMARY KEY, category TEXT NOT NULL)`)
 		if err == nil {
-			_, err = tx.ExecContext(ctx, `INSERT INTO log_pruned(category,first_seq,last_seq,count) VALUES (?,?,?,1)
-				ON CONFLICT(category) DO UPDATE SET first_seq=min(first_seq,excluded.first_seq), last_seq=max(last_seq,excluded.last_seq), count=count+1`, category, seq, seq)
+			_, err = tx.ExecContext(ctx, `DELETE FROM prune_batch`)
+		}
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `INSERT INTO prune_batch SELECT seq, category FROM log_events WHERE priority=? ORDER BY seq LIMIT ?`, p, pruneBatch)
+		}
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `INSERT INTO log_pruned(category,first_seq,last_seq,count) SELECT category,min(seq),max(seq),count(*) FROM prune_batch GROUP BY category
+				ON CONFLICT(category) DO UPDATE SET first_seq=min(first_seq,excluded.first_seq), last_seq=max(last_seq,excluded.last_seq), count=count+excluded.count`)
+		}
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `DELETE FROM log_events WHERE seq IN (SELECT seq FROM prune_batch)`)
 		}
 		if err != nil {
 			tx.Rollback()
@@ -814,4 +840,59 @@ func OpenLocal(ctx context.Context, dir string) (*Store, Config, error) {
 	}
 	s, err := Open(ctx, filepath.Join(dir, "logs.db"), int64(c.CapacityGiB)*GiB)
 	return s, c, err
+}
+
+// cleanupStep is how long the background cleanup keeps starting new batches
+// before it releases the journal gate to queued writers. A batch already
+// started runs to completion, so one step can exceed this by one batch.
+const cleanupStep = 300 * time.Millisecond
+
+// kickCleanup wakes the background cleanup. The caller holds the gate.
+func (s *Store) kickCleanup() {
+	s.cleanupOnce.Do(func() { go s.cleanupLoop() })
+	select {
+	case s.cleanup <- struct{}{}:
+	default:
+	}
+}
+
+// cleanupLoop reclaims space down to 80% of the limit in short steps under
+// the gate. prepare only frees what one write needs; without this, a store
+// sitting at its line would make every write pay for cleanup.
+func (s *Store) cleanupLoop() {
+	for range s.cleanup {
+		for {
+			done, err := s.cleanupOnceStep()
+			if done || err != nil {
+				break
+			}
+		}
+	}
+}
+
+func (s *Store) cleanupOnceStep() (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute) // only for a stuck disk
+	defer cancel()
+	s.gate <- struct{}{}
+	defer func() { <-s.gate }()
+	if s.closed {
+		return true, nil
+	}
+	live, err := s.liveBytes(ctx)
+	if err != nil {
+		return true, err
+	}
+	if live <= s.dbLimit*8/10 {
+		return true, nil
+	}
+	err = s.prune(ctx, s.dbLimit*8/10, 3, time.Now().Add(cleanupStep))
+	if err == nil || errors.Is(err, errStepEnded) {
+		if err := s.compact(ctx); err != nil {
+			return true, err
+		}
+	}
+	if errors.Is(err, errStepEnded) {
+		return false, nil // continue after queued writers
+	}
+	return true, err
 }
