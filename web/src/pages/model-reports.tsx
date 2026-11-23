@@ -45,6 +45,7 @@ function ReportConfigDialog({ config, onClose }: { config?: ReportConfig; onClos
   const [enabled, setEnabled] = useState(config?.enabled ?? false);
   const [endpoint, setEndpoint] = useState(config?.endpoint ?? "");
   const [model, setModel] = useState(config?.model ?? "");
+  const [allowPrivate, setAllowPrivate] = useState(config?.allowPrivate ?? false);
   const [apiKey, setApiKey] = useState("");
   const [clearApiKey, setClear] = useState(!config);
   const save = useMutation({
@@ -55,6 +56,7 @@ function ReportConfigDialog({ config, onClose }: { config?: ReportConfig; onClos
         model,
         apiKey,
         clearApiKey,
+        allowPrivate,
       }),
     onSuccess: (cfg) => {
       setApiKey("");
@@ -80,6 +82,9 @@ function ReportConfigDialog({ config, onClose }: { config?: ReportConfig; onClos
           <Field label={m.endpoint} htmlFor="report-endpoint">
             <Input id="report-endpoint" type="url" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} required={enabled} maxLength={500} autoComplete="off" placeholder="https://…/v1/chat/completions" />
           </Field>
+          <Check checked={allowPrivate} onChange={setAllowPrivate} help={m.allowPrivateHelp}>
+            {m.allowPrivate}
+          </Check>
           <FormRow>
             <Field label={m.model} htmlFor="report-model">
               <Input id="report-model" value={model} onChange={(e) => setModel(e.target.value)} required={enabled} maxLength={120} autoComplete="off" />

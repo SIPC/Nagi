@@ -59,11 +59,14 @@ func (*GetReportConfigRequest) Descriptor() ([]byte, []int) {
 }
 
 type ReportConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Endpoint      string                 `protobuf:"bytes,2,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
-	HasApiKey     bool                   `protobuf:"varint,4,opt,name=has_api_key,json=hasApiKey,proto3" json:"has_api_key,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Enabled   bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Endpoint  string                 `protobuf:"bytes,2,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
+	Model     string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	HasApiKey bool                   `protobuf:"varint,4,opt,name=has_api_key,json=hasApiKey,proto3" json:"has_api_key,omitempty"`
+	// Also connect to private addresses (LAN, CGNAT, this machine's own interface
+	// addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+	AllowPrivate  bool `protobuf:"varint,5,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -126,6 +129,13 @@ func (x *ReportConfig) GetHasApiKey() bool {
 	return false
 }
 
+func (x *ReportConfig) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
+	}
+	return false
+}
+
 type UpdateReportConfigRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Enabled  bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
@@ -134,6 +144,7 @@ type UpdateReportConfigRequest struct {
 	// Empty preserves the stored key; clear_api_key explicitly removes it.
 	ApiKey        string `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
 	ClearApiKey   bool   `protobuf:"varint,5,opt,name=clear_api_key,json=clearApiKey,proto3" json:"clear_api_key,omitempty"`
+	AllowPrivate  bool   `protobuf:"varint,6,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -199,6 +210,13 @@ func (x *UpdateReportConfigRequest) GetApiKey() string {
 func (x *UpdateReportConfigRequest) GetClearApiKey() bool {
 	if x != nil {
 		return x.ClearApiKey
+	}
+	return false
+}
+
+func (x *UpdateReportConfigRequest) GetAllowPrivate() bool {
+	if x != nil {
+		return x.AllowPrivate
 	}
 	return false
 }
@@ -508,18 +526,20 @@ var File_nagi_v1_model_report_proto protoreflect.FileDescriptor
 const file_nagi_v1_model_report_proto_rawDesc = "" +
 	"\n" +
 	"\x1anagi/v1/model_report.proto\x12\anagi.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x18\n" +
-	"\x16GetReportConfigRequest\"z\n" +
+	"\x16GetReportConfigRequest\"\x9f\x01\n" +
 	"\fReportConfig\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\x12\x14\n" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12\x1e\n" +
-	"\vhas_api_key\x18\x04 \x01(\bR\thasApiKey\"\xae\x01\n" +
+	"\vhas_api_key\x18\x04 \x01(\bR\thasApiKey\x12#\n" +
+	"\rallow_private\x18\x05 \x01(\bR\fallowPrivate\"\xd3\x01\n" +
 	"\x19UpdateReportConfigRequest\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1f\n" +
 	"\bendpoint\x18\x02 \x01(\tB\x03\x80\x01\x01R\bendpoint\x12\x14\n" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12\x1c\n" +
 	"\aapi_key\x18\x04 \x01(\tB\x03\x80\x01\x01R\x06apiKey\x12\"\n" +
-	"\rclear_api_key\x18\x05 \x01(\bR\vclearApiKey\"3\n" +
+	"\rclear_api_key\x18\x05 \x01(\bR\vclearApiKey\x12#\n" +
+	"\rallow_private\x18\x06 \x01(\bR\fallowPrivate\"3\n" +
 	"\x15GenerateReportRequest\x12\x1a\n" +
 	"\blanguage\x18\x01 \x01(\tR\blanguage\"\x14\n" +
 	"\x12ListReportsRequest\"\"\n" +

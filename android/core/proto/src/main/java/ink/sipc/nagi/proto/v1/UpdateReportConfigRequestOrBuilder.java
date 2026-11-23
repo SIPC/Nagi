@@ -65,4 +65,10 @@ public interface UpdateReportConfigRequestOrBuilder extends
    * @return The clearApiKey.
    */
   boolean getClearApiKey();
+
+  /**
+   * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+   * @return The allowPrivate.
+   */
+  boolean getAllowPrivate();
 }

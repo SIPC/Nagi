@@ -33,7 +33,7 @@ public  final class ReportConfig extends
    * @param value The enabled to set.
    */
   private void setEnabled(boolean value) {
-    
+
     enabled_ = value;
   }
   /**
@@ -153,7 +153,7 @@ public  final class ReportConfig extends
    * @param value The hasApiKey to set.
    */
   private void setHasApiKey(boolean value) {
-    
+
     hasApiKey_ = value;
   }
   /**
@@ -162,6 +162,47 @@ public  final class ReportConfig extends
   private void clearHasApiKey() {
 
     hasApiKey_ = false;
+  }
+
+  public static final int ALLOW_PRIVATE_FIELD_NUMBER = 5;
+  private boolean allowPrivate_;
+  /**
+   * <pre>
+   * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+   * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+   * </pre>
+   *
+   * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+   * @return The allowPrivate.
+   */
+  @java.lang.Override
+  public boolean getAllowPrivate() {
+    return allowPrivate_;
+  }
+  /**
+   * <pre>
+   * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+   * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+   * </pre>
+   *
+   * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+   * @param value The allowPrivate to set.
+   */
+  private void setAllowPrivate(boolean value) {
+
+    allowPrivate_ = value;
+  }
+  /**
+   * <pre>
+   * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+   * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+   * </pre>
+   *
+   * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+   */
+  private void clearAllowPrivate() {
+
+    allowPrivate_ = false;
   }
 
   public static ink.sipc.nagi.proto.v1.ReportConfig parseFrom(
@@ -415,6 +456,49 @@ public  final class ReportConfig extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+     * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+     * </pre>
+     *
+     * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+     * @return The allowPrivate.
+     */
+    @java.lang.Override
+    public boolean getAllowPrivate() {
+      return instance.getAllowPrivate();
+    }
+    /**
+     * <pre>
+     * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+     * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+     * </pre>
+     *
+     * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+     * @param value The allowPrivate to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowPrivate(boolean value) {
+      copyOnWrite();
+      instance.setAllowPrivate(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+     * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+     * </pre>
+     *
+     * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowPrivate() {
+      copyOnWrite();
+      instance.clearAllowPrivate();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.ReportConfig)
   }
   @java.lang.Override
@@ -435,10 +519,11 @@ public  final class ReportConfig extends
             "endpoint_",
             "model_",
             "hasApiKey_",
+            "allowPrivate_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0007\u0002\u0208" +
-              "\u0003\u0208\u0004\u0007";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0007\u0002\u0208" +
+              "\u0003\u0208\u0004\u0007\u0005\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

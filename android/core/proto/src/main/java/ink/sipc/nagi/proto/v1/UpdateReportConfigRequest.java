@@ -34,7 +34,7 @@ public  final class UpdateReportConfigRequest extends
    * @param value The enabled to set.
    */
   private void setEnabled(boolean value) {
-    
+
     enabled_ = value;
   }
   /**
@@ -221,7 +221,7 @@ public  final class UpdateReportConfigRequest extends
    * @param value The clearApiKey to set.
    */
   private void setClearApiKey(boolean value) {
-    
+
     clearApiKey_ = value;
   }
   /**
@@ -230,6 +230,32 @@ public  final class UpdateReportConfigRequest extends
   private void clearClearApiKey() {
 
     clearApiKey_ = false;
+  }
+
+  public static final int ALLOW_PRIVATE_FIELD_NUMBER = 6;
+  private boolean allowPrivate_;
+  /**
+   * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+   * @return The allowPrivate.
+   */
+  @java.lang.Override
+  public boolean getAllowPrivate() {
+    return allowPrivate_;
+  }
+  /**
+   * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+   * @param value The allowPrivate to set.
+   */
+  private void setAllowPrivate(boolean value) {
+
+    allowPrivate_ = value;
+  }
+  /**
+   * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+   */
+  private void clearAllowPrivate() {
+
+    allowPrivate_ = false;
   }
 
   public static ink.sipc.nagi.proto.v1.UpdateReportConfigRequest parseFrom(
@@ -552,6 +578,34 @@ public  final class UpdateReportConfigRequest extends
       return this;
     }
 
+    /**
+     * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+     * @return The allowPrivate.
+     */
+    @java.lang.Override
+    public boolean getAllowPrivate() {
+      return instance.getAllowPrivate();
+    }
+    /**
+     * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+     * @param value The allowPrivate to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowPrivate(boolean value) {
+      copyOnWrite();
+      instance.setAllowPrivate(value);
+      return this;
+    }
+    /**
+     * <code>bool allow_private = 6 [json_name = "allowPrivate"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowPrivate() {
+      copyOnWrite();
+      instance.clearAllowPrivate();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.UpdateReportConfigRequest)
   }
   @java.lang.Override
@@ -573,10 +627,11 @@ public  final class UpdateReportConfigRequest extends
             "model_",
             "apiKey_",
             "clearApiKey_",
+            "allowPrivate_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0007\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007";
+              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0007\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

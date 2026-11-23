@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -157,6 +158,48 @@ func TestTransportFailureIsClassified(t *testing.T) {
 		_, got := e.complete(t.Context(), Config{Endpoint: c.endpoint, Model: "m", APIKey: "k"}, []byte("{}"))
 		if got != c.want {
 			t.Errorf("%s: failure=%q, want %q", c.endpoint, got, c.want)
+		}
+	}
+}
+
+// A relay on the panel's own machine is reached through one of its interface
+// addresses, which counts as private: blocked by default, reachable with
+// AllowPrivate. Loopback stays blocked either way.
+func TestAllowPrivateReachesOwnInterfaceAddress(t *testing.T) {
+	var ip net.IP
+	addrs, _ := net.InterfaceAddrs()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && n.IP.To4() != nil && !n.IP.IsLoopback() && !n.IP.IsLinkLocalUnicast() {
+			ip = n.IP
+			break
+		}
+	}
+	if ip == nil {
+		t.Skip("no non-loopback IPv4 interface address")
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(ip.String(), "0"))
+	if err != nil {
+		t.Skip(err)
+	}
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	srv.Listener = ln
+	srv.StartTLS()
+	defer srv.Close()
+	loopback := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer loopback.Close()
+	for _, c := range []struct {
+		endpoint     string
+		allowPrivate bool
+		want         string
+	}{
+		{srv.URL, false, "address_blocked"},
+		// The address check passed; the self-signed test certificate then fails.
+		{srv.URL, true, "tls_failed"},
+		{loopback.URL, true, "address_blocked"},
+	} {
+		_, got := (&Engine{}).complete(t.Context(), Config{Endpoint: c.endpoint, Model: "m", APIKey: "k", AllowPrivate: c.allowPrivate}, []byte("{}"))
+		if got != c.want {
+			t.Errorf("%s allowPrivate=%v: failure=%q, want %q", c.endpoint, c.allowPrivate, got, c.want)
 		}
 	}
 }

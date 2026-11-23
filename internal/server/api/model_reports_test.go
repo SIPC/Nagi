@@ -63,9 +63,12 @@ func TestReportConfigurationAndPermissions(t *testing.T) {
 		if err != nil || !cfg.Msg.HasApiKey || strings.Contains(string(b), update.ApiKey) {
 			t.Fatalf("read leaked credential: %v", err)
 		}
-		update.Enabled, update.ApiKey = false, ""
+		update.Enabled, update.ApiKey, update.AllowPrivate = false, "", true
 		if cfg, err = c.UpdateReportConfig(t.Context(), connect.NewRequest(update)); err != nil || !cfg.Msg.HasApiKey {
 			t.Fatalf("preserve: %v", err)
+		}
+		if cfg, err = c.GetReportConfig(t.Context(), connect.NewRequest(&nagiv1.GetReportConfigRequest{})); err != nil || !cfg.Msg.AllowPrivate {
+			t.Fatalf("allow_private not stored: %v %v", cfg, err)
 		}
 		update.ClearApiKey = true
 		if cfg, err = c.UpdateReportConfig(t.Context(), connect.NewRequest(update)); err != nil || cfg.Msg.HasApiKey {

@@ -45,4 +45,15 @@ public interface ReportConfigOrBuilder extends
    * @return The hasApiKey.
    */
   boolean getHasApiKey();
+
+  /**
+   * <pre>
+   * Also connect to private addresses (LAN, CGNAT, this machine's own interface
+   * addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+   * </pre>
+   *
+   * <code>bool allow_private = 5 [json_name = "allowPrivate"];</code>
+   * @return The allowPrivate.
+   */
+  boolean getAllowPrivate();
 }

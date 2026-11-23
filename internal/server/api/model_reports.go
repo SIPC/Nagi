@@ -45,7 +45,7 @@ func (s *modelReportService) config(ctx context.Context) (modelreport.Config, er
 }
 
 func reportConfigView(c modelreport.Config) *nagiv1.ReportConfig {
-	return &nagiv1.ReportConfig{Enabled: c.Enabled, Endpoint: c.Endpoint, Model: c.Model, HasApiKey: c.APIKey != ""}
+	return &nagiv1.ReportConfig{Enabled: c.Enabled, Endpoint: c.Endpoint, Model: c.Model, HasApiKey: c.APIKey != "", AllowPrivate: c.AllowPrivate}
 }
 
 func reportError(err error) error {
@@ -74,7 +74,7 @@ func (s *modelReportService) UpdateReportConfig(ctx context.Context, req *connec
 	if req.Msg.ApiKey != "" {
 		c.APIKey = req.Msg.ApiKey
 	}
-	c.Enabled, c.Endpoint, c.Model = req.Msg.Enabled, strings.TrimSpace(req.Msg.Endpoint), strings.TrimSpace(req.Msg.Model)
+	c.Enabled, c.Endpoint, c.Model, c.AllowPrivate = req.Msg.Enabled, strings.TrimSpace(req.Msg.Endpoint), strings.TrimSpace(req.Msg.Model), req.Msg.AllowPrivate
 	if c.Enabled || c.Endpoint != "" || c.Model != "" || c.APIKey != "" {
 		// Disabled configurations can remove the key. Enabling needs a real key.
 		check := c

@@ -41,6 +41,8 @@ type Config struct {
 	Endpoint string `json:"endpoint"`
 	Model    string `json:"model"`
 	APIKey   string `json:"api_key"`
+	// AllowPrivate also connects to private addresses, see safehttp.Check.
+	AllowPrivate bool `json:"allow_private,omitempty"`
 }
 
 func (c Config) Validate() error {
@@ -207,7 +209,7 @@ func (e *Engine) complete(ctx context.Context, cfg Config, material []byte) (str
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 	client := e.client
 	if client == nil {
-		client = safehttp.Client(Timeout, false)
+		client = safehttp.Client(Timeout, cfg.AllowPrivate)
 	}
 	resp, err := client.Do(req)
 	// Never retain errors or response bodies from the provider: either can echo

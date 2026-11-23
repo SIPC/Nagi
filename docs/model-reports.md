@@ -2,9 +2,9 @@
 
 ## 安全边界 / Safety
 
-默认关闭，只有管理员在设置中明确启用后才能手动生成。接口为用户自己的 OpenAI 兼容 **完整 HTTPS chat/completions 地址**、模型名和 API 密钥；不提供默认供应商、不自动测试连接。沿用面板主密钥 AES-GCM 加密配置，密钥只写不读，留空保留原值。不得使用 URL 用户信息、查询串或片段承载凭据。外发使用现有 safehttp：仅公网、拒绝重定向、DNS 重绑定、环境代理和元数据地址；本版暂不支持内网模型。
+默认关闭，只有管理员在设置中明确启用后才能手动生成。接口为用户自己的 OpenAI 兼容 **完整 HTTPS chat/completions 地址**、模型名和 API 密钥；不提供默认供应商、不自动测试连接。沿用面板主密钥 AES-GCM 加密配置，密钥只写不读，留空保留原值。不得使用 URL 用户信息、查询串或片段承载凭据。外发使用现有 safehttp：默认仅公网，拒绝重定向、DNS 重绑定、环境代理和元数据地址。勾选「允许内网地址」后也可连接内网、CGNAT 和面板本机网卡上的地址（例如与面板同机的中转），本机回环、链路本地和云元数据地址始终不允许，规则与 webhook 渠道相同。连接失败只记录稳定类别（address_blocked、dns_failed、connect_failed、tls_failed、network_timeout、request_failed）。
 
-Disabled by default. An administrator must explicitly enable their own OpenAI-compatible full HTTPS chat/completions URL, model and write-only API key. No default provider or automatic connection test. Credentials use the panel's existing master-key encryption. Public destinations only, no redirects or environment proxy; private model endpoints are not supported in this version.
+Disabled by default. An administrator must explicitly enable their own OpenAI-compatible full HTTPS chat/completions URL, model and write-only API key. No default provider or automatic connection test. Credentials use the panel's existing master-key encryption. Public destinations only by default, no redirects or environment proxy. "Allow private addresses" also permits LAN, CGNAT and the panel machine's own interface addresses (e.g. a relay on the same server); loopback, link-local and cloud metadata stay blocked, as for webhook channels. Connection failures record only a stable category.
 
 只外发白名单告警摘要（规则种类、状态、有效性、时间和报告内别名）及数值统计，再经现有统一脱敏。不发送原始日志、告警自由文本标题/正文、人工结论、IP、域名、项目/容器名称、凭据或配置。模型结果也是敏感、未经事实核验的建议；只以纯文本显示，不执行操作、不封 IP。不发送工具、不保存 reasoning_content 或模型私密推理。脱敏并非任意文本绝不泄密的保证，因此源材料首先按白名单选字段。
 

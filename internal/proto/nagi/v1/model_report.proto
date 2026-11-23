@@ -19,6 +19,9 @@ message ReportConfig {
   string endpoint = 2;
   string model = 3;
   bool has_api_key = 4;
+  // Also connect to private addresses (LAN, CGNAT, this machine's own interface
+  // addresses). Loopback, link-local and cloud metadata addresses stay blocked.
+  bool allow_private = 5;
 }
 message UpdateReportConfigRequest {
   bool enabled = 1;
@@ -27,6 +30,7 @@ message UpdateReportConfigRequest {
   // Empty preserves the stored key; clear_api_key explicitly removes it.
   string api_key = 4 [debug_redact = true];
   bool clear_api_key = 5;
+  bool allow_private = 6;
 }
 message GenerateReportRequest { string language = 1; }
 message ListReportsRequest {}
