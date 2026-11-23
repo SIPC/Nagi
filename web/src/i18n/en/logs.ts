@@ -6,7 +6,7 @@ export default {
   entries: "All logs", audit: "Audit & recordings", auditHelp: "Original audit-chain records, child calls, exports and recording playback. Redacted unified copies are not the original audit chain.",
   auditSummary: "Original audit records and recordings", search: "Search", event: "Event",
   coverageSummary: "Collection and retention limit coverage. No records doesn't mean nothing happened.",
-  coverageIssues: (count) => `${count} collection gaps or pruning notices found.`,
+  coverageIssues: (count) => `${count} collection interruptions or losses in the last 24 hours; normal re-attachment after a restart is not counted.`,
   showCoverage: "View collection info", hideCoverage: "Hide collection info", copySummary: "Only recently received logs; history may be incomplete.",
   chainHelp: "Verifies only the original audit database hash chain, not unified logs, recent copies or exported redacted payloads.",
   source: "Source", panel: "This panel's local logs", offline: "Offline", keyword: "Keyword", searchHelp: "Event, object or redacted payload",

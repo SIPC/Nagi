@@ -10,6 +10,7 @@ import { errorMessage, logClient, nodeClient, projectClient, toDate } from "@/li
 import { formatDateTime } from "@/lib/utils";
 import type { LogEntry, LogPage, LogQuery, NodeLogQuery } from "@/gen/nagi/v1/logs_pb";
 import { lacksLogService } from "@/pages/update";
+import { countRecentGaps, recentGapWindowMs } from "@/lib/log-gaps";
 import { t } from "@/i18n";
 
 type Request = Pick<NodeLogQuery, "nodeId" | "panelLocal" | "recentCopy"> & { query: Pick<LogQuery, "category" | "kindPrefix" | "project" | "search" | "limit" | "from" | "to" | "newestFirst"> };
@@ -236,19 +237,42 @@ function useGapEvidence(request: Request, category: string) {
   });
 }
 
+// The warning counts real gaps in the last day across both categories, not the
+// first page of each list: restarts write one normal re-attach record per source.
+function useRecentGaps(request: Request) {
+  const [since] = useState(() => new Date(Date.now() - recentGapWindowMs));
+  return useQuery({
+    queryKey: ["log-recent-gaps", request.nodeId, request.panelLocal, request.recentCopy],
+    queryFn: async ({ signal }) => {
+      let total = 0;
+      for (const category of ["runtime", "logstore"]) {
+        const page = await logClient.queryNodeLogs({ ...request, query: { from: timestampFromDate(since), category, search: '"history_complete":false', limit: 1000 } }, { signal });
+        total += countRecentGaps(page.entries.map((e) => ({ kind: e.kind, time: e.time && toDate(e.time) })), since);
+      }
+      return total;
+    },
+    retry: false, refetchOnWindowFocus: false,
+  });
+}
+
 function LogCoverage({ request, state, onOpen }: { request: Request; state?: LogPage; onOpen: (entry: LogEntry, source: string) => void }) {
   // These queries stay mounted even while the explanation is collapsed, so gaps
   // still surface immediately and are never hidden by the main list's filters.
   const runtime = useGapEvidence(request, "runtime");
   const logstore = useGapEvidence(request, "logstore");
+  const recent = useRecentGaps(request);
   const [open, setOpen] = useState(false);
   const evidence = [{ category: "runtime", result: runtime }, { category: "logstore", result: logstore }];
   const pruned = [...(state?.pruned ?? []).map((p) => ({ ...p, origin: request.recentCopy ? t.logs.copyPruned : t.logs.sourcePruned })), ...(state?.sourcePruned ?? []).map((p) => ({ ...p, origin: t.logs.sourcePruned }))];
-  const issues = evidence.reduce((count, { result }) => count + (result.data?.pages.reduce((n, page) => n + page.entries.length, 0) ?? 0), 0) + pruned.length + (state?.writeFailures.length || (state && state.writeErrors > 0n) ? 1 : 0);
+  // Write failures are already reported in the gap records (logstore.write.lost) and
+  // the details; pruning by capacity is expected, so only an explicit gap or loss warns.
+  const lost = state?.writeFailures.some((f) => f.lost > 0n) ? 1 : 0;
+  const issues = (recent.data ?? 0) + (recent.data ? 0 : lost);
   return <div className="grid gap-2">
     <Notice tone={issues || request.recentCopy ? "warning" : "neutral"} title={<span className="inline-flex items-center gap-1">{request.recentCopy ? t.logs.copy : issues ? t.logs.gap : t.logs.gaps}<HelpTip>{t.logs.coverage}</HelpTip></span>} actions={<Button readOnlyOk variant="ghost" className="-mr-3" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? t.logs.hideCoverage : t.logs.showCoverage}</Button>}>
       {request.recentCopy ? <>{t.logs.copySummary}{issues > 0 && <> {t.logs.coverageIssues(issues)}</>}</> : issues ? t.logs.coverageIssues(issues) : t.logs.coverageSummary}
     </Notice>
+    {recent.error && <QueryError error={recent.error} onRetry={() => recent.refetch()} />}
     {evidence.map(({ category, result }) => result.error && <QueryError key={category} error={result.error} onRetry={() => result.refetch()} />)}
     <Collapse open={open}>
       <div className="grid gap-4 pt-2">
