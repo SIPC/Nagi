@@ -244,12 +244,16 @@ function useRecentGaps(request: Request) {
   return useQuery({
     queryKey: ["log-recent-gaps", request.nodeId, request.panelLocal, request.recentCopy],
     queryFn: async ({ signal }) => {
-      let total = 0;
+      let count = 0, complete = true;
       for (const category of ["runtime", "logstore"]) {
-        const page = await logClient.queryNodeLogs({ ...request, query: { from: timestampFromDate(since), category, search: '"history_complete":false', limit: 1000 } }, { signal });
-        total += countRecentGaps(page.entries.map((e) => ({ kind: e.kind, time: e.time && toDate(e.time) })), since);
+        const got = await countRecentGaps<{ source: string; after: bigint }>(async (page) => {
+          const r = await logClient.queryNodeLogs({ ...request, query: { from: timestampFromDate(since), category, search: '"history_complete":false', limit: 1000, ...page } }, { signal });
+          return { entries: r.entries.map((e) => ({ kind: e.kind, time: e.time && toDate(e.time) })), next: r.more ? { source: r.source, after: r.nextAfter } : undefined };
+        }, since);
+        count += got.count;
+        complete &&= got.complete;
       }
-      return total;
+      return { count, complete };
     },
     retry: false, refetchOnWindowFocus: false,
   });
@@ -267,10 +271,11 @@ function LogCoverage({ request, state, onOpen }: { request: Request; state?: Log
   // Write failures are already reported in the gap records (logstore.write.lost) and
   // the details; pruning by capacity is expected, so only an explicit gap or loss warns.
   const lost = state?.writeFailures.some((f) => f.lost > 0n) ? 1 : 0;
-  const issues = (recent.data ?? 0) + (recent.data ? 0 : lost);
+  const issues = (recent.data?.count ?? 0) + (recent.data?.count ? 0 : lost);
+  const issueText = (n: number) => recent.data?.complete === false ? t.logs.coverageIssuesAtLeast(n) : t.logs.coverageIssues(n);
   return <div className="grid gap-2">
     <Notice tone={issues || request.recentCopy ? "warning" : "neutral"} title={<span className="inline-flex items-center gap-1">{request.recentCopy ? t.logs.copy : issues ? t.logs.gap : t.logs.gaps}<HelpTip>{t.logs.coverage}</HelpTip></span>} actions={<Button readOnlyOk variant="ghost" className="-mr-3" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? t.logs.hideCoverage : t.logs.showCoverage}</Button>}>
-      {request.recentCopy ? <>{t.logs.copySummary}{issues > 0 && <> {t.logs.coverageIssues(issues)}</>}</> : issues ? t.logs.coverageIssues(issues) : t.logs.coverageSummary}
+      {request.recentCopy ? <>{t.logs.copySummary}{issues > 0 && <> {issueText(issues)}</>}</> : issues ? issueText(issues) : t.logs.coverageSummary}
     </Notice>
     {recent.error && <QueryError error={recent.error} onRetry={() => recent.refetch()} />}
     {evidence.map(({ category, result }) => result.error && <QueryError key={category} error={result.error} onRetry={() => result.refetch()} />)}

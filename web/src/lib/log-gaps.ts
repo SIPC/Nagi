@@ -11,7 +11,23 @@ export function isReattach(kind: string) {
 // 提示里统计的时间范围。
 export const recentGapWindowMs = 24 * 60 * 60 * 1000;
 
-// countRecentGaps 数出 since 之后的真实缺口记录。
-export function countRecentGaps(entries: { kind: string; time: Date | undefined }[], since: Date) {
-  return entries.filter((e) => !isReattach(e.kind) && !!e.time && e.time >= since).length;
+// 一页缺口记录：next 为下一页的位置，没有下一页时为 undefined。
+export type GapPage<P> = { entries: { kind: string; time: Date | undefined }[]; next: P | undefined };
+
+// 最多读的页数（每页 1000 条）。读到上限还有下一页时，返回的计数只是下限。
+export const recentGapMaxPages = 20;
+
+// countRecentGaps 按页读完 since 之后的缺口记录，数出其中的真实缺口。重启接续记录
+// 可能多过一页，真实缺口排在后面，只读第一页会把它们漏成 0。complete 为 false 时，
+// count 只是下限（「至少 N 条」）。
+export async function countRecentGaps<P>(read: (page: P | undefined) => Promise<GapPage<P>>, since: Date) {
+  let count = 0;
+  let page: P | undefined;
+  for (let i = 0; i < recentGapMaxPages; i++) {
+    const got = await read(page);
+    count += got.entries.filter((e) => !isReattach(e.kind) && !!e.time && e.time >= since).length;
+    if (got.next === undefined) return { count, complete: true };
+    page = got.next;
+  }
+  return { count, complete: false };
 }

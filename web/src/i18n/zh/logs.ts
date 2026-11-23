@@ -6,6 +6,7 @@ export default {
   auditSummary: "原始审计记录与录制", search: "查询", event: "事件",
   coverageSummary: "日志受采集与保留范围限制，无记录不代表无事发生。",
   coverageIssues: (count: number) => `最近 24 小时有 ${count} 条采集中断或丢失记录；重启时正常的重新接上采集不计入。`,
+  coverageIssuesAtLeast: (count: number) => `最近 24 小时至少有 ${count} 条采集中断或丢失记录（记录太多，没有数完）；重启时正常的重新接上采集不计入。`,
   showCoverage: "查看采集信息", hideCoverage: "收起采集信息", copySummary: "仅含近期收到的日志，可能不完整。",
   chainHelp: "只校验原审计库的哈希链，不为统一日志、近期副本或导出的脱敏正文背书。",
   source: "来源", panel: "当前面板本机", offline: "离线", keyword: "关键字", searchHelp: "事件、对象或脱敏正文",
