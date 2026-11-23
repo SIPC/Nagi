@@ -1,7 +1,7 @@
 // node --test scripts/*.test.mjs（Node 22.18+ 直接加载 .ts）。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { countRecentGaps, isReattach, recentGapMaxPages } from "../src/lib/log-gaps.ts";
+import { countRecentGaps, gapNotice, isReattach, recentGapMaxPages } from "../src/lib/log-gaps.ts";
 
 const now = new Date("2026-11-23T09:00:00Z");
 const since = new Date(now.getTime() - 24 * 3600 * 1000);
@@ -56,6 +56,19 @@ test("读到页数上限还有下一页时，只报下限，不当成数完", as
   const { read, calls } = pager(entries, 10);
   assert.deepEqual(await countRecentGaps(read, since), { count: recentGapMaxPages, complete: false });
   assert.equal(calls.length, recentGapMaxPages);
+});
+
+test("没数完时即使数到 0 条也按警告提示，不显示成没有缺口", async () => {
+  // 前 20 页全是接续记录，还有下一页：真实缺口可能在后面。
+  const entries = Array.from({ length: (recentGapMaxPages + 1) * 10 }, () => ({ kind: "container.output.attaching", time: at(1) }));
+  const recent = await countRecentGaps(pager(entries, 10).read, since);
+  assert.deepEqual(recent, { count: 0, complete: false });
+  assert.deepEqual(gapNotice(recent, 0), { issues: 0, truncated: true, warn: true });
+  // 数完且没有缺口才是中性提示；确认丢失写入时补 1 条。
+  assert.deepEqual(gapNotice({ count: 0, complete: true }, 0), { issues: 0, truncated: false, warn: false });
+  assert.deepEqual(gapNotice({ count: 0, complete: true }, 1), { issues: 1, truncated: false, warn: true });
+  assert.deepEqual(gapNotice({ count: 3, complete: true }, 1), { issues: 3, truncated: false, warn: true });
+  assert.deepEqual(gapNotice(undefined, 0), { issues: 0, truncated: false, warn: false });
 });
 
 test("只把接续记录当成正常", () => {

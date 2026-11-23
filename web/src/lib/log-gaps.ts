@@ -31,3 +31,12 @@ export async function countRecentGaps<P>(read: (page: P | undefined) => Promise<
   }
   return { count, complete: false };
 }
+
+// gapNotice 决定提示怎么显示。issues 为 0 但没数完（读到页数上限）时不能显示成「没有缺口」：
+// 前 20 页可能全是接续记录，真实缺口在后面，此时也按警告显示「没有数完」。
+// lost 是本进程确认丢失写入的类别数（只在没数到缺口时补 1 条）。
+export function gapNotice(recent: { count: number; complete: boolean } | undefined, lost: number) {
+  const issues = (recent?.count ?? 0) + (recent?.count ? 0 : lost);
+  const truncated = recent?.complete === false;
+  return { issues, truncated, warn: issues > 0 || truncated };
+}

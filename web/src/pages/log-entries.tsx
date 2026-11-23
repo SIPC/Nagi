@@ -10,7 +10,7 @@ import { errorMessage, logClient, nodeClient, projectClient, toDate } from "@/li
 import { formatDateTime } from "@/lib/utils";
 import type { LogEntry, LogPage, LogQuery, NodeLogQuery } from "@/gen/nagi/v1/logs_pb";
 import { lacksLogService } from "@/pages/update";
-import { countRecentGaps, recentGapWindowMs } from "@/lib/log-gaps";
+import { countRecentGaps, gapNotice, recentGapWindowMs } from "@/lib/log-gaps";
 import { t } from "@/i18n";
 
 type Request = Pick<NodeLogQuery, "nodeId" | "panelLocal" | "recentCopy"> & { query: Pick<LogQuery, "category" | "kindPrefix" | "project" | "search" | "limit" | "from" | "to" | "newestFirst"> };
@@ -271,11 +271,11 @@ function LogCoverage({ request, state, onOpen }: { request: Request; state?: Log
   // Write failures are already reported in the gap records (logstore.write.lost) and
   // the details; pruning by capacity is expected, so only an explicit gap or loss warns.
   const lost = state?.writeFailures.some((f) => f.lost > 0n) ? 1 : 0;
-  const issues = (recent.data?.count ?? 0) + (recent.data?.count ? 0 : lost);
-  const issueText = (n: number) => recent.data?.complete === false ? t.logs.coverageIssuesAtLeast(n) : t.logs.coverageIssues(n);
+  const { issues, truncated, warn } = gapNotice(recent.data, lost);
+  const issueText = truncated ? t.logs.coverageIssuesAtLeast(issues) : warn ? t.logs.coverageIssues(issues) : "";
   return <div className="grid gap-2">
-    <Notice tone={issues || request.recentCopy ? "warning" : "neutral"} title={<span className="inline-flex items-center gap-1">{request.recentCopy ? t.logs.copy : issues ? t.logs.gap : t.logs.gaps}<HelpTip>{t.logs.coverage}</HelpTip></span>} actions={<Button readOnlyOk variant="ghost" className="-mr-3" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? t.logs.hideCoverage : t.logs.showCoverage}</Button>}>
-      {request.recentCopy ? <>{t.logs.copySummary}{issues > 0 && <> {issueText(issues)}</>}</> : issues ? issueText(issues) : t.logs.coverageSummary}
+    <Notice tone={warn || request.recentCopy ? "warning" : "neutral"} title={<span className="inline-flex items-center gap-1">{request.recentCopy ? t.logs.copy : warn ? t.logs.gap : t.logs.gaps}<HelpTip>{t.logs.coverage}</HelpTip></span>} actions={<Button readOnlyOk variant="ghost" className="-mr-3" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? t.logs.hideCoverage : t.logs.showCoverage}</Button>}>
+      {request.recentCopy ? <>{t.logs.copySummary}{warn && <> {issueText}</>}</> : warn ? issueText : t.logs.coverageSummary}
     </Notice>
     {recent.error && <QueryError error={recent.error} onRetry={() => recent.refetch()} />}
     {evidence.map(({ category, result }) => result.error && <QueryError key={category} error={result.error} onRetry={() => result.refetch()} />)}
