@@ -8,6 +8,15 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.2
+
+### Fixes
+
+- Fixed nodes whose chart history and logs together reached the log capacity line after upgrading to v0.37.1 (4/5 of the 5 GiB default). Every write first ran a slow cleanup and timed out. Affected nodes (for example CN-001) raised "log store write failed" alerts; from then on charts stopped receiving points, and ordinary logs, task records and alert records were lost or delayed. Cleanup now runs in small steps in the background, writes no longer queue behind it, and usage returns below the line by itself. To recover, update the panel, then upgrade these nodes to v0.37.2 on the "Nodes" page; no data needs to be deleted by hand, and the background cleanup finishes within about 20 to 30 minutes. Chart points and logs that were not written during the outage cannot be recovered, and the Logs page records that period as a gap.
+- Fixed chart history queries over long ranges (such as 24 hours) scanning point by point, loading slowly or timing out.
+- Fixed idle TCP/UDP mappings showing "data interrupted" after a node restart, with baseline progress starting over; mappings without connections now show "no connections" and their baseline keeps accumulating.
+- Fixed the Logs page counting the normal "collection reattached" records left by restarts as gaps, and the count stopping at 10 per category; the "may be incomplete" notice now counts only real collection interruptions or losses from the last 24 hours.
+
 ## v0.37.1
 
 ### New features
