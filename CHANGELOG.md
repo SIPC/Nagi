@@ -8,6 +8,20 @@
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.4
+
+### 新功能
+
+- 模型报告支持「允许内网地址」，可使用与面板同机的中转或局域网模型接口；本机回环和云元数据地址仍禁止。
+
+### 改进
+
+- 模型报告连接失败时区分地址被拦截、DNS、连接、TLS 和网络超时。
+
+### 修复
+
+- 修复已知漏洞，提升安全性。
+
 ## v0.37.3
 
 ### 修复

@@ -8,6 +8,20 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.4
+
+### New features
+
+- Model reports support "Allow private addresses", so a relay on the panel's own machine or a model endpoint on the local network can be used; loopback and cloud metadata addresses remain blocked.
+
+### Improvements
+
+- When a model report fails to connect, the error now distinguishes a blocked address, DNS, connection, TLS and network timeouts.
+
+### Fixes
+
+- Fixed known vulnerabilities and improved security.
+
 ## v0.37.3
 
 ### Fixes
