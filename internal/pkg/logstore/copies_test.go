@@ -271,3 +271,76 @@ func TestPanelReconciliationFillsHolesWithoutResurrectingPrunedCopies(t *testing
 		t.Fatalf("restart lost local deletion: %v %v", needed, err)
 	}
 }
+
+// A panel that pruned interleaved node streams holds tens of thousands of
+// non-adjacent tombstones per stream (v0.37.1 lab: 23k for one node). Every
+// receipt checks each record against them while holding recent.db; a scan
+// per record made a 128-record batch miss the node's 3 s deadline, so copies
+// fell further behind the more they were pruned.
+func TestRecentCopyReceiptsStayFastWithManyTombstones(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+	s := openStore(t, filepath.Join(dir, "logs.db"), 64<<20)
+	cfg := logstore.Config{RecentCapacityMiB: 64, RecentHours: 24}
+	c, err := s.OpenCopies(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	// Offline fixture: odd sequences 1..2n-1 deleted, even ones never received.
+	const n = 60000
+	d, err := db.Open(filepath.Join(dir, "recent.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.ExecContext(ctx, `WITH RECURSIVE k(i) AS (SELECT 0 UNION ALL SELECT i+1 FROM k WHERE i<?) INSERT INTO copy_deleted SELECT 'node','disk','container',2*i+1,2*i+1 FROM k`, n-1)
+	d.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.OpenCopies(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	// Peer reconciliation over the deleted region: deleted odd sequences stay
+	// deleted, never-received even ones are filled, including at both ends.
+	at := time.Now().Add(-time.Minute).Truncate(time.Second)
+	for _, seq := range []int64{1, 2, 2*n - 1, 2 * n, 2*n + 1} {
+		e := logstore.Event{Seq: seq, Source: "disk", Time: at, Received: at, Category: logstore.Container, Kind: "stdout", Data: fmt.Sprint(seq)}
+		needed, err := c.Needs(ctx, (logstore.CopyItem{Node: "node", Event: e}).Index())
+		if want := seq%2 == 0 || seq > 2*n; err != nil || needed != want {
+			t.Fatalf("needs %d = %v %v, want %v", seq, needed, err, want)
+		}
+	}
+	// Ten live batches of 128 new records each. With per-record scans of every
+	// tombstone the run took 48-49 s here; one index probe each takes ~0.4 s.
+	start, after := time.Now(), int64(0)
+	for b := range 10 {
+		// The first batch also acknowledges the unsent prefix up to 2n.
+		through := int64(2*n + (b+1)*128)
+		batch := logstore.CopyBatch{Source: "disk", Category: logstore.Container, After: after, Through: through}
+		for seq := through - 127; seq <= through; seq++ {
+			batch.Events = append(batch.Events, logstore.Event{Seq: seq, Time: at, Category: logstore.Container, Kind: "stdout", Data: fmt.Sprint(seq)})
+		}
+		r, err := c.Receive(ctx, "node", batch)
+		if err != nil {
+			t.Fatalf("batch %d: %v", b, err)
+		}
+		after = r.After
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("1280 copied records took %v with %d tombstones", elapsed, n)
+	}
+	got, next := 0, int64(2*n)
+	for next < 2*n+1280 {
+		p, _, err := c.Read(ctx, "node", "disk", logstore.Filter{Category: logstore.Container, After: next, Limit: 1000})
+		if err != nil || len(p.Events) == 0 {
+			t.Fatalf("copies after %d: %+v %v", next, p.State, err)
+		}
+		got, next = got+len(p.Events), p.Next
+	}
+	if got != 1280 || next != 2*n+1280 {
+		t.Fatalf("copies: %d next %d", got, next)
+	}
+}

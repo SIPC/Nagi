@@ -153,7 +153,7 @@ func (c *Copies) Needs(ctx context.Context, v CopyIndex) (bool, error) {
 	}
 	defer func() { <-c.s.gate }()
 	var deleted bool
-	err = c.s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?)`, v.Node, v.Source, v.Category, v.Seq, v.Seq).Scan(&deleted)
+	err = c.s.db.QueryRowContext(ctx, deletedQuery, v.Node, v.Source, v.Category, v.Seq, v.Seq).Scan(&deleted)
 	return !deleted, err
 }
 

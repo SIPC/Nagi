@@ -42,6 +42,12 @@ type CopyReceipt struct {
 var ErrCopyCursor = errors.New("近期副本确认位置不匹配，请重新读取确认位置")
 var ErrCopyConflict = errors.New("重发的日志正文与面板已保存证据冲突")
 
+// deletedQuery reports whether (node, origin, category, seq) was deleted
+// locally. trim keeps each stream's tombstones disjoint and non-adjacent, so
+// only the nearest range starting at or below seq can cover it: one index
+// probe, not a scan of every tombstone of that stream.
+const deletedQuery = `SELECT EXISTS(SELECT 1 FROM (SELECT last_seq FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? ORDER BY first_seq DESC LIMIT 1) WHERE last_seq>=?)`
+
 // OpenCopies puts recent.db beside this machine's logs.db, outside role-swapped
 // panel configuration directories. The 1 GiB physical cap includes WAL/SHM;
 // this is a sub-budget, not another allowance on top of the machine's capacity.
@@ -335,7 +341,7 @@ func (c *Copies) receive(ctx context.Context, node string, b CopyBatch, fromPane
 			return err
 		}
 		defer findEvent.Close()
-		findDeleted, err := tx.PrepareContext(ctx, `SELECT EXISTS(SELECT 1 FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?)`)
+		findDeleted, err := tx.PrepareContext(ctx, deletedQuery)
 		if err != nil {
 			return err
 		}
@@ -505,10 +511,10 @@ func (c *Copies) trim(ctx context.Context, p int, before time.Time) (bool, error
 		// Merge adjacent exact tombstones, never the unreceived holes between
 		// them. This keeps sequential deletion metadata compact across restarts.
 		first, last := r.remote, r.remote
-		if err := tx.QueryRowContext(ctx, `SELECT min(?,coalesce(min(first_seq),?)),max(?,coalesce(max(last_seq),?)) FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?`, first, first, last, last, r.node, r.origin, r.category, last+1, first-1).Scan(&first, &last); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT min(?,coalesce(min(first_seq),?)),max(?,coalesce(max(last_seq),?)) FROM (SELECT first_seq,last_seq FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? ORDER BY first_seq DESC LIMIT 3) WHERE last_seq>=?`, first, first, last, last, r.node, r.origin, r.category, last+1, first-1).Scan(&first, &last); err != nil {
 			return false, err
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq<=? AND last_seq>=?`, r.node, r.origin, r.category, last, first); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM copy_deleted WHERE node=? AND origin=? AND category=? AND first_seq BETWEEN ? AND ?`, r.node, r.origin, r.category, first, last); err != nil {
 			return false, err
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO copy_deleted VALUES (?,?,?,?,?)`, r.node, r.origin, r.category, first, last); err != nil {
