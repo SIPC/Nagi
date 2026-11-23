@@ -54,12 +54,28 @@ DELETE FROM metrics_raw WHERE ts < ?;
 -- name: DeleteM5Before :exec
 DELETE FROM metrics_m5 WHERE ts < ?;
 
+-- QueryRaw/QueryM5 visit each matching series through the (series, ts) primary
+-- key: the recursive part steps to the next series name, so neither a long time
+-- range nor many other series makes SQLite fall back to the ts index. Pages
+-- continue after (after_series, after_ts); the first page passes an empty
+-- after_series and after_ts = from_ts - 1.
+
 -- name: QueryRaw :many
-SELECT series, ts, value FROM metrics_raw
-WHERE series >= @prefix AND series < @prefix_end AND instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts
-AND (ts, series) >= (@from_ts, CAST(@after_series AS TEXT)) ORDER BY ts, series LIMIT 2048;
+WITH RECURSIVE s(name) AS (
+  SELECT (SELECT min(x.series) FROM metrics_raw x WHERE x.series >= max(@prefix, CAST(@after_series AS TEXT)) AND x.series < @prefix_end)
+  UNION ALL
+  SELECT (SELECT min(x.series) FROM metrics_raw x WHERE x.series > s.name AND x.series < @prefix_end) FROM s WHERE s.name IS NOT NULL
+)
+SELECT m.series, m.ts, m.value FROM s JOIN metrics_raw m ON m.series = s.name
+WHERE instr(m.series, @prefix) = 1 AND m.ts >= @from_ts AND m.ts <= @to_ts
+AND (m.series, m.ts) > (CAST(@after_series AS TEXT), CAST(@after_ts AS INTEGER)) ORDER BY m.series, m.ts LIMIT 2048;
 
 -- name: QueryM5 :many
-SELECT series, ts, value FROM metrics_m5
-WHERE series >= @prefix AND series < @prefix_end AND instr(series, @prefix) = 1 AND ts >= @from_ts AND ts <= @to_ts
-AND (ts, series) >= (@from_ts, CAST(@after_series AS TEXT)) ORDER BY ts, series LIMIT 2048;
+WITH RECURSIVE s(name) AS (
+  SELECT (SELECT min(x.series) FROM metrics_m5 x WHERE x.series >= max(@prefix, CAST(@after_series AS TEXT)) AND x.series < @prefix_end)
+  UNION ALL
+  SELECT (SELECT min(x.series) FROM metrics_m5 x WHERE x.series > s.name AND x.series < @prefix_end) FROM s WHERE s.name IS NOT NULL
+)
+SELECT m.series, m.ts, m.value FROM s JOIN metrics_m5 m ON m.series = s.name
+WHERE instr(m.series, @prefix) = 1 AND m.ts >= @from_ts AND m.ts <= @to_ts
+AND (m.series, m.ts) > (CAST(@after_series AS TEXT), CAST(@after_ts AS INTEGER)) ORDER BY m.series, m.ts LIMIT 2048;

@@ -275,26 +275,33 @@ func (q *Queries) ListSubnets(ctx context.Context) ([]string, error) {
 }
 
 const queryM5 = `-- name: QueryM5 :many
-SELECT series, ts, value FROM metrics_m5
-WHERE series >= ?1 AND series < ?2 AND instr(series, ?1) = 1 AND ts >= ?3 AND ts <= ?4
-AND (ts, series) >= (?3, CAST(?5 AS TEXT)) ORDER BY ts, series LIMIT 2048
+WITH RECURSIVE s(name) AS (
+  SELECT (SELECT min(x.series) FROM metrics_m5 x WHERE x.series >= max(?1, CAST(?4 AS TEXT)) AND x.series < ?6)
+  UNION ALL
+  SELECT (SELECT min(x.series) FROM metrics_m5 x WHERE x.series > s.name AND x.series < ?6) FROM s WHERE s.name IS NOT NULL
+)
+SELECT m.series, m.ts, m.value FROM s JOIN metrics_m5 m ON m.series = s.name
+WHERE instr(m.series, ?1) = 1 AND m.ts >= ?2 AND m.ts <= ?3
+AND (m.series, m.ts) > (CAST(?4 AS TEXT), CAST(?5 AS INTEGER)) ORDER BY m.series, m.ts LIMIT 2048
 `
 
 type QueryM5Params struct {
 	Prefix      string
-	PrefixEnd   string
 	FromTs      int64
 	ToTs        int64
 	AfterSeries string
+	AfterTs     int64
+	PrefixEnd   string
 }
 
 func (q *Queries) QueryM5(ctx context.Context, arg QueryM5Params) ([]MetricsM5, error) {
 	rows, err := q.db.QueryContext(ctx, queryM5,
 		arg.Prefix,
-		arg.PrefixEnd,
 		arg.FromTs,
 		arg.ToTs,
 		arg.AfterSeries,
+		arg.AfterTs,
+		arg.PrefixEnd,
 	)
 	if err != nil {
 		return nil, err
@@ -318,26 +325,39 @@ func (q *Queries) QueryM5(ctx context.Context, arg QueryM5Params) ([]MetricsM5, 
 }
 
 const queryRaw = `-- name: QueryRaw :many
-SELECT series, ts, value FROM metrics_raw
-WHERE series >= ?1 AND series < ?2 AND instr(series, ?1) = 1 AND ts >= ?3 AND ts <= ?4
-AND (ts, series) >= (?3, CAST(?5 AS TEXT)) ORDER BY ts, series LIMIT 2048
+
+WITH RECURSIVE s(name) AS (
+  SELECT (SELECT min(x.series) FROM metrics_raw x WHERE x.series >= max(?1, CAST(?4 AS TEXT)) AND x.series < ?6)
+  UNION ALL
+  SELECT (SELECT min(x.series) FROM metrics_raw x WHERE x.series > s.name AND x.series < ?6) FROM s WHERE s.name IS NOT NULL
+)
+SELECT m.series, m.ts, m.value FROM s JOIN metrics_raw m ON m.series = s.name
+WHERE instr(m.series, ?1) = 1 AND m.ts >= ?2 AND m.ts <= ?3
+AND (m.series, m.ts) > (CAST(?4 AS TEXT), CAST(?5 AS INTEGER)) ORDER BY m.series, m.ts LIMIT 2048
 `
 
 type QueryRawParams struct {
 	Prefix      string
-	PrefixEnd   string
 	FromTs      int64
 	ToTs        int64
 	AfterSeries string
+	AfterTs     int64
+	PrefixEnd   string
 }
 
+// QueryRaw/QueryM5 visit each matching series through the (series, ts) primary
+// key: the recursive part steps to the next series name, so neither a long time
+// range nor many other series makes SQLite fall back to the ts index. Pages
+// continue after (after_series, after_ts); the first page passes an empty
+// after_series and after_ts = from_ts - 1.
 func (q *Queries) QueryRaw(ctx context.Context, arg QueryRawParams) ([]MetricsRaw, error) {
 	rows, err := q.db.QueryContext(ctx, queryRaw,
 		arg.Prefix,
-		arg.PrefixEnd,
 		arg.FromTs,
 		arg.ToTs,
 		arg.AfterSeries,
+		arg.AfterTs,
+		arg.PrefixEnd,
 	)
 	if err != nil {
 		return nil, err
