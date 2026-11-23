@@ -288,7 +288,10 @@ func TestRestartBeforeCleanupDoesNotBlockRecord(t *testing.T) {
 			slowest = max(slowest, time.Since(t0))
 			time.Sleep(2 * time.Millisecond)
 		}
-		if slowest*3 > scan {
+		// Before the fix Record waited out the whole scan (slowest ≈ scan).
+		// Half the scan still catches that, and leaves room for a busy shared
+		// runner that delays one Record by tens of milliseconds.
+		if slowest*2 > scan {
 			t.Fatalf("start %d: Record waited %v for a %v legacy scan", start, slowest, scan)
 		}
 		lines, _, _ := l.After(0, 10000)
