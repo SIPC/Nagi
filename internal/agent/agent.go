@@ -937,7 +937,8 @@ func routeMetrics() metrics.Source {
 		now := time.Now()
 		stats := proxy.TakeStats()
 		for k, s := range stats {
-			if s.Requests > 0 || s.Conns > 0 || s.Active > 0 {
+			// 已加载的 tcp/udp 规则（s.Loaded）节点重启后还没有连接也记 0，基线不会因此显示数据中断。
+			if s.Requests > 0 || s.Conns > 0 || s.Active > 0 || s.Loaded {
 				t := lastActive[k]
 				t.at, t.l4 = now, s.L4
 				if t.statuses == nil {

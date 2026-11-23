@@ -63,6 +63,25 @@ func (l4Stats) CaddyModule() caddy.ModuleInfo {
 	}
 }
 
+// Provision 记下加载的配置里有这条规则：节点重启后没有连接的映射也每次报 0，
+// 告警基线看到的是「没有连接」而不是「数据中断」。重载时新配置先加载、旧配置后清理，所以按次数计。
+func (h *l4Stats) Provision(caddy.Context) error {
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	observer.l4Loaded[h.Route]++
+	return nil
+}
+
+// Cleanup 在配置卸载时调用；规则不在任何已加载的配置里以后不再报 0。
+func (h *l4Stats) Cleanup() error {
+	observer.mu.Lock()
+	defer observer.mu.Unlock()
+	if observer.l4Loaded[h.Route]--; observer.l4Loaded[h.Route] <= 0 {
+		delete(observer.l4Loaded, h.Route)
+	}
+	return nil
+}
+
 // Handle 计入一个新连接，把连接包一层交给后面的 proxy。proxy 返回错误说明连不上容器（连上以后传输中断不返回错误）。
 func (h *l4Stats) Handle(cx *layer4.Connection, next layer4.Handler) error {
 	c := observer.l4Open(h.Route)
@@ -112,7 +131,13 @@ func (o *observerT) l4Open(route string) *l4Counter {
 
 // takeL4 把 tcp/udp 规则的计数合进 out 并清零。没有连接、也没有新计数的规则删掉（规则可能已经删除）。调用方持有 o.mu。
 // 先取 active：为 0 时没有连接在用这份计数（新连接要先拿锁），之后清零的值不会再变，删掉不丢计数。
+// 已加载的配置里的规则即使没有计数也返回一条全 0 的统计。
 func (o *observerT) takeL4(out map[string]RouteStats) {
+	for k := range o.l4Loaded {
+		s := out[k]
+		s.L4, s.Loaded = true, true
+		out[k] = s
+	}
 	for k, c := range o.l4 {
 		s := out[k]
 		s.L4 = true

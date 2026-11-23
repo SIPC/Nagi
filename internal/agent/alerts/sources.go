@@ -379,13 +379,15 @@ func (e *Engine) Baselines() []*nagiv1.AlertBaseline {
 func (e *Engine) baselines() []*nagiv1.AlertBaseline {
 	now := e.now()
 	var out []*nagiv1.AlertBaseline
-	add := func(rule, project, subject string, required, collected time.Duration, last time.Time, ready bool) {
+	add := func(rule, project, subject string, required, collected time.Duration, last time.Time, ready bool, rate float64) {
 		status := "building"
 		switch {
 		case ready && collected >= required:
 			status = "ready"
 		case !last.IsZero() && now.Sub(last) > baselineStalled:
 			status = "stalled"
+		case rule == alert.RuleL4Surge && rate <= 0 && collected >= required:
+			status = "idle" // 样本够了但一直没有连接：不是中断，也没有可比的平时水平
 		case ready && rule == alert.RuleTraffic:
 			status = "ready" // HTTP 保持原规则：有数据就能判断，进度条只作参考
 		}
@@ -399,13 +401,13 @@ func (e *Engine) baselines() []*nagiv1.AlertBaseline {
 	for route, b := range e.load.baseline {
 		project, name := splitContainer(route)
 		if e.forRoute(project, name).on(alert.RuleTraffic) {
-			add(alert.RuleTraffic, project, name, baselineWindow, b.collected, b.last, b.ready)
+			add(alert.RuleTraffic, project, name, baselineWindow, b.collected, b.last, b.ready, b.rate)
 		}
 	}
 	for route, b := range e.load.l4Base {
 		project, name := splitContainer(route)
 		if e.forRoute(project, name).on(alert.RuleL4Surge) {
-			add(alert.RuleL4Surge, project, name, L4BaselineRequired, b.collected, b.last, b.ready)
+			add(alert.RuleL4Surge, project, name, L4BaselineRequired, b.collected, b.last, b.ready, b.rate)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {

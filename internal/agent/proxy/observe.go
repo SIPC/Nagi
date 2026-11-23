@@ -47,7 +47,9 @@ type RouteStats struct {
 	BytesIn  int64       // 请求体字节数；tcp/udp 是从客户端收到的字节数
 	BytesOut int64       // 响应体字节数；tcp/udp 是发给客户端的字节数
 	// L4 表示这是 tcp/udp 规则：Conns 是新连接数（UDP 按会话），Fails 是其中连不上容器的，Active 是取统计时的连接数。
-	L4     bool
+	L4 bool
+	// Loaded：规则在已加载的配置里（tcp/udp）。没有连接时也照常记 0。
+	Loaded bool
 	Conns  int
 	Fails  int
 	Active int
@@ -73,12 +75,13 @@ type observerT struct {
 	mu           sync.Mutex
 	stats        map[string]*RouteStats
 	l4           map[string]*l4Counter
+	l4Loaded     map[string]int // 已加载配置里的 tcp/udp 规则（见 l4Stats.Provision）
 	onCert       func(domain string, err error)
 	onAccess     func(AccessRecord)
 	onConnection func(ConnectionRecord)
 }
 
-var observer = &observerT{stats: map[string]*RouteStats{}, l4: map[string]*l4Counter{}}
+var observer = &observerT{stats: map[string]*RouteStats{}, l4: map[string]*l4Counter{}, l4Loaded: map[string]int{}}
 
 // TakeStats 返回上次调用以来每条规则的请求统计，键是 "<项目 ID>/<规则名>"。
 func TakeStats() map[string]RouteStats {

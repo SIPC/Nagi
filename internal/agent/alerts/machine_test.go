@@ -371,6 +371,28 @@ func TestL4SurgeWaitsForBaseline(t *testing.T) {
 	h.expect(2, "低于每秒下限，持续 5 分钟后恢复")
 }
 
+// 一直没有连接的映射（样本都是 0）：样本够了以后是「暂无连接」，不是「数据中断」或一直「建立中」；
+// 样本不够时照常是建立中。
+func TestL4BaselineIdleRoute(t *testing.T) {
+	h := newHarness(t, nil)
+	h.e.metrics = ranged{h.o}
+	history := 5 * time.Hour
+	h.routes = func(now time.Time) map[string][]metrics.Point {
+		return l4Samples(now, history, 0, 0, 0, 0)
+	}
+	h.feed(nil, 1)
+	if b := h.e.Baselines(); len(b) != 1 || b[0].GetStatus() != "building" {
+		t.Fatalf("样本不够时应该在建立中：%v", b)
+	}
+	history = 7 * time.Hour
+	h.e.load.baselineAt = time.Time{}
+	h.feed(nil, 1)
+	if b := h.e.Baselines(); len(b) != 1 || b[0].GetStatus() != "idle" || b[0].GetCollectedSeconds() != 6*3600 {
+		t.Fatalf("一直没有连接应该是暂无连接：%v", b)
+	}
+	h.expect(0, "没有连接不告警")
+}
+
 // 连接失败比例：连接数不够时不判断，告警中一直不够 30 分钟就以「数据不足」结束。
 func TestL4FailNeedsEnoughConnections(t *testing.T) {
 	h := newHarness(t, nil)

@@ -14,13 +14,13 @@ const m = t.alerts.policy.baselines;
 
 const hours = (s: number) => m.hours(Math.round((s / 3600) * 10) / 10);
 
-function state(b: AlertBaselineState): "building" | "ready" | "stalled" | "unsupported" {
+function state(b: AlertBaselineState): "building" | "ready" | "stalled" | "idle" | "unsupported" {
   if (b.unsupported) return "unsupported";
   const s = b.baseline?.status;
-  return s === "ready" || s === "stalled" ? s : "building";
+  return s === "ready" || s === "stalled" || s === "idle" ? s : "building";
 }
 
-const tone = { building: "info", ready: "success", stalled: "warning", unsupported: "neutral" } as const;
+const tone = { building: "info", ready: "success", stalled: "warning", idle: "neutral", unsupported: "neutral" } as const;
 
 export function AlertBaselines() {
   const { can } = useRole();
@@ -29,7 +29,8 @@ export function AlertBaselines() {
   const [open, setOpen] = useState(false);
   const rows = query.data?.baselines ?? [];
   if (!allowed || rows.length === 0) return null;
-  const pending = rows.filter((b) => state(b) !== "ready").length;
+  // 一直没有连接的映射没什么要处理的，不算未就绪。
+  const pending = rows.filter((b) => state(b) !== "ready" && state(b) !== "idle").length;
   const expanded = pending > 0 || open;
   return (
     <section className="mb-6 flex flex-col gap-4" aria-label={m.title}>
@@ -75,7 +76,7 @@ function BaselineRow({ b }: { b: AlertBaselineState }) {
           <span className={s === "stalled" ? "block h-full rounded-full bg-warning" : "block h-full rounded-full bg-primary"} style={{ width: `${pct}%` }} />
         </span>
         <span>
-          {[m.progress(hours(have), hours(need)), eta, s === "stalled" ? m.stalledHelp + (b.baseline?.lastSample ? ` ${m.lastSample(formatDateTime(toDate(b.baseline.lastSample)) ?? "")}` : "") : undefined].filter(Boolean).join(" · ")}
+          {[m.progress(hours(have), hours(need)), eta, s === "stalled" ? m.stalledHelp + (b.baseline?.lastSample ? ` ${m.lastSample(formatDateTime(toDate(b.baseline.lastSample)) ?? "")}` : "") : s === "idle" ? m.idleHelp : undefined].filter(Boolean).join(" · ")}
         </span>
       </span>
     );

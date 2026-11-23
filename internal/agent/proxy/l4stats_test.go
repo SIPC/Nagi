@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net"
 	"path/filepath"
 	"strconv"
@@ -204,5 +205,35 @@ func TestL4Stats(t *testing.T) {
 	}
 	if !closed || !udpOpen || !rejected {
 		t.Fatalf("missing TCP bytes/UDP open/upstream failure: %v %v %v", closed, udpOpen, rejected)
+	}
+}
+
+// 节点重启后，还没有连接的 tcp/udp 映射也要每次报一条（全 0），告警基线才不会把空闲当成数据中断；
+// 映射从配置里删掉以后不再报。
+func TestL4StatsReportIdleLoadedRoutes(t *testing.T) {
+	project := rand.Text()
+	p := New(t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	defer p.Stop()
+	idle := Route{Project: project, Name: "idle", Protocol: "tcp", Published: freePort(t, "tcp"), Upstreams: []string{"127.0.0.1:9"}}
+	other := Route{Project: project, Name: "other", Protocol: "tcp", Published: freePort(t, "tcp"), Upstreams: []string{"127.0.0.1:9"}}
+	if err := p.Apply([]Route{idle, other}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // 每次取统计都要有，不是只有第一次
+		s, ok := TakeStats()[project+"/idle"]
+		if !ok || !s.L4 || !s.Loaded || s.Conns != 0 || s.Active != 0 {
+			t.Fatalf("空闲映射应该报 0：%+v %v", s, ok)
+		}
+	}
+	// 重载成只剩 other：idle 不再报，other 继续报。
+	if err := p.Apply([]Route{other}); err != nil {
+		t.Fatal(err)
+	}
+	s := TakeStats()
+	if _, ok := s[project+"/idle"]; ok {
+		t.Fatalf("删掉的映射不应该再报：%+v", s[project+"/idle"])
+	}
+	if !s[project+"/other"].Loaded {
+		t.Fatalf("重载时留下的映射不能丢：%+v", s[project+"/other"])
 	}
 }
