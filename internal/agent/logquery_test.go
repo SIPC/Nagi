@@ -88,7 +88,9 @@ func TestQueryLocalLogsOverMesh(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer history.Close()
-	a := &agent{id: id, cfg: Config{Logs: store}, metrics: metrics.New(history, nil, "", logger),
+	collector := metrics.New(history, nil, "", logger)
+	defer collector.CloseReader()
+	a := &agent{id: id, cfg: Config{Logs: store}, metrics: collector,
 		mesh: &meshNode{m: node, panelKeys: map[string]mesh.Key{"panel-fp": panel.PublicKey()}}}
 	a.cfg.DataDir, a.log = dir, logger
 	closeRecordings := a.openRecordings(ctx)

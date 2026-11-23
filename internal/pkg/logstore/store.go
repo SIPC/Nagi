@@ -39,6 +39,21 @@ const maxRecordBytes = 64 << 10
 
 var ErrCapacity = errors.New("本地日志额度不足")
 
+// ErrArchiveBusy is returned by an Archive's Trim for the background cleanup
+// (see BackgroundTrim) that could not make progress promptly, for example
+// because its database is in use. Trim runs under the journal lock, so it
+// gives up instead of waiting; cleanup retries it later.
+var ErrArchiveBusy = errors.New("历史库正忙，稍后再清理")
+
+type backgroundTrim struct{}
+
+// BackgroundTrim reports whether a Trim runs for the background cleanup, which
+// retries later: such a Trim may return ErrArchiveBusy instead of waiting.
+func BackgroundTrim(ctx context.Context) bool {
+	v, _ := ctx.Value(backgroundTrim{}).(bool)
+	return v
+}
+
 func priority(category string) (int, bool) {
 	switch category {
 	case Runtime:
@@ -581,7 +596,14 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int, stop t
 		}
 		if chosen >= 0 {
 			a := s.archives[chosen]
+			// For the background cleanup (BackgroundTrim) a trim waiting on its
+			// database gives up after a bounded time and is retried later, so
+			// queued journal writes are not stuck behind it. A writer past the
+			// hard line still trims fully.
 			changed, err := a.Trim(ctx)
+			if errors.Is(err, ErrArchiveBusy) {
+				return err // background cleanup: release the gate, retry later
+			}
 			if err != nil {
 				return err
 			}
@@ -641,9 +663,21 @@ func (s *Store) compact(ctx context.Context) error {
 
 // CompactHistory incrementally reclaims a history-only SQLite database without
 // creating a second full-size copy. Its owner must serialize writers.
-func CompactHistory(ctx context.Context, d *sql.DB) error {
+// For the background cleanup (see BackgroundTrim) one call reclaims for at most
+// compactStep and does not wait for readers to checkpoint; later calls reclaim
+// the rest, so the journal lock it runs under is held for a bounded time.
+func CompactHistory(ctx context.Context, d Conn) error {
 	previous := int(^uint(0) >> 1)
-	for {
+	background := BackgroundTrim(ctx)
+	checkpoint := func() error {
+		if background {
+			return checkpointNoWait(ctx, d)
+		}
+		_, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+		return err
+	}
+	stop := time.Now().Add(compactStep)
+	for !background || time.Now().Before(stop) {
 		var free int
 		if err := d.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil {
 			return err
@@ -658,13 +692,48 @@ func CompactHistory(ctx context.Context, d *sql.DB) error {
 		if _, err := d.ExecContext(ctx, `PRAGMA incremental_vacuum(128)`); err != nil {
 			return err
 		}
-		if _, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		if err := checkpoint(); err != nil {
 			return err
 		}
 	}
-	_, err := d.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
-	return err
+	return checkpoint()
 }
+
+// checkpointNoWait truncates the WAL if no reader is in the way. A chart read
+// on its own connection keeps a snapshot; a TRUNCATE checkpoint would wait out
+// busy_timeout (seconds) for it while the background cleanup holds the journal
+// lock. When readers are active the WAL is left for a later call to truncate.
+func checkpointNoWait(ctx context.Context, d Conn) error {
+	conn := d
+	if db, ok := d.(*sql.DB); ok {
+		c, err := db.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		defer c.Close()
+		conn = c
+	}
+	var timeout int
+	if err := conn.QueryRowContext(ctx, `PRAGMA busy_timeout`).Scan(&timeout); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `PRAGMA busy_timeout=0`); err != nil {
+		return err
+	}
+	_, err := conn.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+	_, restore := conn.ExecContext(context.WithoutCancel(ctx), fmt.Sprintf(`PRAGMA busy_timeout=%d`, timeout))
+	return errors.Join(err, restore)
+}
+
+// Conn is a database handle CompactHistory runs on: a *sql.DB, or a *sql.Conn
+// the caller already holds.
+type Conn interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// compactStep bounds one CompactHistory call of the background cleanup.
+const compactStep = 250 * time.Millisecond
 
 func (s *Store) diskBytes() (int64, error) {
 	size, err := FileBytes(s.path)
@@ -863,6 +932,10 @@ func (s *Store) cleanupLoop() {
 	for range s.cleanup {
 		for {
 			done, err := s.cleanupOnceStep()
+			if errors.Is(err, ErrArchiveBusy) {
+				time.Sleep(cleanupStep)
+				continue
+			}
 			if done || err != nil {
 				break
 			}
@@ -885,14 +958,18 @@ func (s *Store) cleanupOnceStep() (bool, error) {
 	if live <= s.dbLimit*8/10 {
 		return true, nil
 	}
+	ctx = context.WithValue(ctx, backgroundTrim{}, true)
 	err = s.prune(ctx, s.dbLimit*8/10, 3, time.Now().Add(cleanupStep))
-	if err == nil || errors.Is(err, errStepEnded) {
+	if err == nil || errors.Is(err, errStepEnded) || errors.Is(err, ErrArchiveBusy) {
 		if err := s.compact(ctx); err != nil {
 			return true, err
 		}
 	}
 	if errors.Is(err, errStepEnded) {
 		return false, nil // continue after queued writers
+	}
+	if errors.Is(err, ErrArchiveBusy) {
+		return false, err // cleanupLoop waits a step, without the gate
 	}
 	return true, err
 }

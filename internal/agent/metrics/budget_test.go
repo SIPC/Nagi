@@ -53,6 +53,7 @@ func TestMetricHistorySharesPhysicalBudgetAndRetainsAudit(t *testing.T) {
 	}
 	defer journal.Close()
 	c := New(history, nil, "", nil)
+	defer c.CloseReader()
 	if err := c.UseBudget(ctx, journal, path, true); err != nil {
 		t.Fatal(err)
 	}

@@ -58,6 +58,13 @@ type Collector struct {
 	budget          *logstore.Store
 	historyReadOnly bool
 	historyLegacy   *sql.DB // Read-only source until copy/verification finishes.
+	// reader is a read-only connection to the separated history (metrics.db),
+	// opened on first chart read. db has a single connection shared by sample
+	// writes and capacity cleanup; a long chart read on it made cleanup, which
+	// holds the journal lock, wait, and every journal write timed out behind it.
+	readerMu  sync.Mutex
+	reader    *sql.DB
+	readerFor *sql.DB
 
 	mu       sync.RWMutex
 	latest   map[string]float64
@@ -662,7 +669,7 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 	add := func(series string, ts int64, value float64) {
 		out[series] = append(out[series], Point{Time: time.Unix(ts, 0), Value: value})
 	}
-	queries := []*nodestore.Queries{c.q}
+	queries := []*nodestore.Queries{nodestore.New(c.read())}
 	if c.historyLegacy != nil {
 		queries = append(queries, nodestore.New(c.historyLegacy))
 	}

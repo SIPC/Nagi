@@ -65,7 +65,7 @@ func (c *Collector) MigrateHistory(ctx context.Context, path string, budget *log
 	})
 	if err != nil {
 		if history != nil {
-			return history.Close, fail(err)
+			return c.closer(history), fail(err)
 		}
 		return nil, fail(err)
 	}
@@ -74,14 +74,14 @@ func (c *Collector) MigrateHistory(ctx context.Context, path string, budget *log
 	c.historyMu.Unlock()
 	// Source deletion can be slow; it must not exclude live graph reads/writes.
 	if err := finish(); err != nil {
-		return history.Close, fail(err)
+		return c.closer(history), fail(err)
 	}
 	if err := c.UseBudget(ctx, budget, path, true); err != nil {
-		return history.Close, fail(err)
+		return c.closer(history), fail(err)
 	}
 	progress.Phase = "complete"
 	report(progress)
-	return history.Close, nil
+	return c.closer(history), nil
 }
 
 // prepareHistory copies and verifies bounded batches without changing the source.

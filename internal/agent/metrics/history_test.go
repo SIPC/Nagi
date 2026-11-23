@@ -47,6 +47,7 @@ func TestSeparateHistoryPreservesQueriesAndNodeState(t *testing.T) {
 		}
 	}
 	c := New(history, nil, "", nil)
+	defer c.CloseReader()
 	for _, tc := range []struct {
 		at    time.Time
 		value float64
@@ -59,13 +60,16 @@ func TestSeparateHistoryPreservesQueriesAndNodeState(t *testing.T) {
 	if err := c.store(ctx, at.Add(Interval), map[string]float64{"node:cpu": 71}); err != nil {
 		t.Fatal(err)
 	}
+	c.CloseReader()
 	history.Close()
 	history, err = OpenHistory(ctx, path, legacy, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer history.Close()
-	data, err := New(history, nil, "", nil).Query(ctx, "node:", at, at.Add(2*Interval))
+	reopened := New(history, nil, "", nil)
+	defer reopened.CloseReader()
+	data, err := reopened.Query(ctx, "node:", at, at.Add(2*Interval))
 	if err != nil || len(data["node:cpu"]) != 1 || data["node:cpu"][0].Value != 71 {
 		t.Fatalf("重启丢失新采样: %+v %v", data, err)
 	}
