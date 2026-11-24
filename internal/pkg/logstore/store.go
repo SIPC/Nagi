@@ -45,14 +45,37 @@ var ErrCapacity = errors.New("本地日志额度不足")
 // gives up instead of waiting; cleanup retries it later.
 var ErrArchiveBusy = errors.New("历史库正忙，稍后再清理")
 
+// backgroundTrim holds the end of the current background cleanup step.
 type backgroundTrim struct{}
 
 // BackgroundTrim reports whether a Trim runs for the background cleanup, which
 // retries later: such a Trim may return ErrArchiveBusy instead of waiting.
 func BackgroundTrim(ctx context.Context) bool {
-	v, _ := ctx.Value(backgroundTrim{}).(bool)
-	return v
+	_, ok := ctx.Value(backgroundTrim{}).(time.Time)
+	return ok
 }
+
+// stepEnd is when the current background cleanup step must release the
+// journal gate; ok is false outside the background cleanup.
+func stepEnd(ctx context.Context) (time.Time, bool) {
+	end, ok := ctx.Value(backgroundTrim{}).(time.Time)
+	return end, ok
+}
+
+// TrimWait bounds how long a background Trim may wait for its database: at
+// most limit, and never past the end of the cleanup step holding the gate.
+func TrimWait(ctx context.Context, limit time.Duration) time.Duration {
+	if end, ok := stepEnd(ctx); ok {
+		return max(0, min(limit, time.Until(end)))
+	}
+	return limit
+}
+
+// ErrBusy marks a write that gave up waiting for the journal gate: nothing was
+// written. It wraps the context error. A write with a source position
+// (RecordCheckpoint, SaveAlertLedger) is retried by its caller from that
+// position, so it is not counted as a write failure.
+var ErrBusy = errors.New("日志库正忙，稍后重试")
 
 func priority(category string) (int, bool) {
 	switch category {
@@ -448,7 +471,7 @@ func (s *Store) record(ctx context.Context, e Event, key string, position []byte
 	if err == nil {
 		err = s.write(ctx, []row{r}, key, position, reconcile)
 	}
-	if err != nil {
+	if err != nil && !(key != "" && errors.Is(err, ErrBusy)) {
 		s.fail(e.Category, 1, 0, err)
 	}
 	return err
@@ -589,8 +612,12 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int, stop t
 			p = maxPriority + 1
 		}
 		chosen := -1
+		// At equal priority the journal's own records go first. Chart history
+		// (metrics.db) shares the metrics priority with the journal's metrics
+		// records; trimming it first emptied the charts on 裸金属 while
+		// gigabytes of journal metrics records were never trimmed.
 		for i, a := range s.archives {
-			if !exhausted[a.Name] && a.Priority <= maxPriority && a.Priority <= p {
+			if !exhausted[a.Name] && a.Priority <= maxPriority && a.Priority < p {
 				chosen, p = i, a.Priority
 			}
 		}
@@ -677,7 +704,12 @@ func CompactHistory(ctx context.Context, d Conn) error {
 		return err
 	}
 	stop := time.Now().Add(compactStep)
-	for !background || time.Now().Before(stop) {
+	if end, ok := stepEnd(ctx); ok {
+		stop = end
+	}
+	// The background cleanup always reclaims one round, so a step whose time
+	// went to deleting still makes progress on the freed pages.
+	for first := true; !background || first || time.Now().Before(stop); first = false {
 		var free int
 		if err := d.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil {
 			return err
@@ -732,8 +764,9 @@ type Conn interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// compactStep bounds one CompactHistory call of the background cleanup.
-const compactStep = 250 * time.Millisecond
+// compactStep bounds one CompactHistory call of the background cleanup. Inside
+// a cleanup step, reclaiming shares that step's end instead.
+const compactStep = 100 * time.Millisecond
 
 func (s *Store) diskBytes() (int64, error) {
 	size, err := FileBytes(s.path)
@@ -890,11 +923,11 @@ func (s *Store) lock(ctx context.Context) error {
 	case s.gate <- struct{}{}:
 		if err := ctx.Err(); err != nil {
 			<-s.gate
-			return err
+			return fmt.Errorf("%w: %w", ErrBusy, err)
 		}
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("%w: %w", ErrBusy, ctx.Err())
 	}
 }
 
@@ -912,9 +945,13 @@ func OpenLocal(ctx context.Context, dir string) (*Store, Config, error) {
 }
 
 // cleanupStep is how long the background cleanup keeps starting new batches
-// before it releases the journal gate to queued writers. A batch already
-// started runs to completion, so one step can exceed this by one batch.
-const cleanupStep = 300 * time.Millisecond
+// before it releases the journal gate to queued writers; reclaiming the freed
+// pages then gets compactStep. A batch already started runs to completion, so
+// one step can exceed this by one batch. Together they stay well under the
+// 500 ms deadline of position-keeping writes (container output, Docker
+// events, alert state), which queue behind one step: v0.37.4 held the gate
+// for a second or more and these writes timed out in bulk on 裸金属.
+const cleanupStep = 150 * time.Millisecond
 
 // kickCleanup wakes the background cleanup. The caller holds the gate.
 func (s *Store) kickCleanup() {
@@ -955,13 +992,19 @@ func (s *Store) cleanupOnceStep() (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	start := time.Now()
 	if live <= s.dbLimit*8/10 {
-		return true, nil
+		// Usage is back under the line; return the freed pages to the disk in
+		// short steps too, so the file shrinks without one long hold.
+		var free int
+		if err := s.db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil || free == 0 {
+			return true, err
+		}
+		return false, s.compact(context.WithValue(ctx, backgroundTrim{}, start.Add(compactStep)))
 	}
-	ctx = context.WithValue(ctx, backgroundTrim{}, true)
-	err = s.prune(ctx, s.dbLimit*8/10, 3, time.Now().Add(cleanupStep))
+	err = s.prune(context.WithValue(ctx, backgroundTrim{}, start.Add(cleanupStep)), s.dbLimit*8/10, 3, start.Add(cleanupStep))
 	if err == nil || errors.Is(err, errStepEnded) || errors.Is(err, ErrArchiveBusy) {
-		if err := s.compact(ctx); err != nil {
+		if err := s.compact(context.WithValue(ctx, backgroundTrim{}, start.Add(cleanupStep+compactStep))); err != nil {
 			return true, err
 		}
 	}

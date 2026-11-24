@@ -58,7 +58,7 @@ func (c *Collector) trimOldest(ctx context.Context, path string) (bool, error) {
 		// hold it). Once held, the batch runs to completion: cancelling it would
 		// roll it back and the cleanup would never progress.
 		var cancel context.CancelFunc
-		wait, cancel = context.WithTimeout(ctx, trimWait)
+		wait, cancel = context.WithTimeout(ctx, logstore.TrimWait(ctx, trimWait))
 		defer cancel()
 	}
 	conn, err := c.db.Conn(wait)

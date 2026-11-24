@@ -125,3 +125,104 @@ func TestJournalWritesStayFastWhileChartReadAndCleanupOverlap(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 }
+
+// 裸金属 on v0.37.4: past the cleanup line, each cleanup step held the journal
+// lock for 0.3–1 s while trimming chart history, and the 500 ms writes that
+// keep a source position (container output, Docker events, alert state) timed
+// out in bulk: 100–120 failures per wave and a "日志库写入失败" alert. Every such
+// write must now fit between two cleanup steps.
+func TestPositionWritesFitBetweenCleanupSteps(t *testing.T) {
+	ctx := t.Context()
+	dir := t.TempDir()
+	legacy, err := db.OpenMigrated(ctx, filepath.Join(dir, "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	path := filepath.Join(dir, "metrics.db")
+	history, err := OpenHistory(ctx, path, legacy, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer history.Close()
+	start := time.Now().Add(-6 * time.Hour).Truncate(Interval).Unix()
+	if _, err := history.ExecContext(ctx, `WITH RECURSIVE s(i) AS (VALUES(0) UNION ALL SELECT i+1 FROM s WHERE i<199),
+		t(j) AS (VALUES(0) UNION ALL SELECT j+1 FROM t WHERE j<1999)
+		INSERT INTO metrics_raw SELECT printf('c:p/c%03d:net_rx',i), ?+j*10, i FROM s CROSS JOIN t`, start); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := history.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		t.Fatal(err)
+	}
+	size, err := logstore.FileBytes(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget := size * 3 / 2 * 5 / 4
+	journal, err := logstore.Open(ctx, filepath.Join(dir, "logs.db"), budget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer journal.Close()
+	// Journal metrics records (same priority as chart history) take the rest
+	// past the cleanup line, like the sample records on 裸金属.
+	for i := 0; ; i++ {
+		st, err := journal.State(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.DiskBytes+size > budget*4/5*93/100 {
+			break
+		}
+		if err := journal.Record(ctx, logstore.Event{Category: logstore.Metrics, Kind: "sample", Data: strings.Repeat("x", 32<<10) + fmt.Sprint(i)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := New(history, nil, "", nil)
+	defer c.CloseReader()
+	if err := c.UseBudget(ctx, journal, path, true); err != nil {
+		t.Fatal(err)
+	}
+	before, err := journal.State(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var slowest time.Duration
+	for i := range 60 {
+		wctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		began := time.Now()
+		err := journal.RecordCheckpoint(wctx, logstore.Event{Category: logstore.Container, Kind: "container.output", Data: fmt.Sprint(i)}, "docker.logs/c", i)
+		cancel()
+		if err != nil {
+			t.Fatalf("position write %d during cleanup failed after %v: %v", i, time.Since(began), err)
+		}
+		slowest = max(slowest, time.Since(began))
+		time.Sleep(50 * time.Millisecond)
+	}
+	after, err := journal.State(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.WriteErrors != before.WriteErrors {
+		t.Fatalf("write failures during cleanup: %d → %d", before.WriteErrors, after.WriteErrors)
+	}
+	if after.DiskBytes+mustSize(t, path) >= before.DiskBytes+size {
+		t.Fatalf("cleanup made no progress: %d → %d", before.DiskBytes+size, after.DiskBytes+mustSize(t, path))
+	}
+	// One cleanup step holds the lock for at most about cleanupStep+compactStep
+	// (250 ms) plus a batch. On a fast test disk v0.37.4's steps already held
+	// it for about 300 ms; on 裸金属's busy disk the same steps took past 500 ms.
+	if slowest > 250*time.Millisecond {
+		t.Fatalf("a position write waited %v behind one cleanup step; it must leave margin under 500 ms", slowest)
+	}
+	t.Logf("slowest position write during cleanup: %v", slowest)
+}
+
+func mustSize(t *testing.T, path string) int64 {
+	t.Helper()
+	n, err := logstore.FileBytes(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}

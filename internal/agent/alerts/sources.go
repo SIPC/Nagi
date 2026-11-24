@@ -67,6 +67,24 @@ func (e *Engine) Count(key, rule, subject, project, container string, at time.Ti
 	}
 }
 
+// restoreCount 给重启前在告警中的次数类告警建一个空的计数：发生时间没有保存，重启后没有新的发生就是
+// 「连续没有新的」，满 recover_seconds 照常恢复；不建的话这个键再也没有观测，告警一直挂着（CN-001
+// 11-23 的日志库写入失败）。调用方持有 e.mu 或还没开始判断。
+func (e *Engine) restoreCount(key string, a *nagiv1.Alert) {
+	if d, ok := alert.DefOf(a.GetRule()); !ok || d.Unit != "count" || e.counts[key] != nil {
+		return
+	}
+	if e.counts == nil {
+		e.counts = map[string]*counted{}
+	}
+	c := &counted{rule: a.GetRule(), subject: a.GetSubject()}
+	// 容器的键是 rule:项目ID/容器（见 countLogEvent），告警里只有项目名。
+	if rest, ok := strings.CutPrefix(key, a.GetRule()+":"); ok {
+		c.project, c.container, _ = strings.Cut(rest, "/")
+	}
+	e.counts[key] = c
+}
+
 // observeCounts：窗口内发生了 threshold 次以上是 bad；上一轮以后没有新的是 good，状态机再要求连续
 // recover_seconds 都是 good 才恢复（「连续 recover_seconds 没有新的」）。调用方持有 e.mu。
 func (e *Engine) observeCounts(now time.Time, out map[string]*obs) {

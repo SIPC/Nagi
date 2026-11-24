@@ -502,3 +502,32 @@ func TestBackupRecheckUsesContainerRule(t *testing.T) {
 	}
 	h.e.mu.Unlock()
 }
+
+// 重启前在告警中的次数类告警（CN-001 11-23 的日志库写入失败）：发生时间不保存，重启后没有新的发生，
+// 连续 recover_seconds 没有新的要照常恢复，不能一直挂着；重启后还在发生则不恢复。
+func TestCountAlertRestoredAfterRestartRecovers(t *testing.T) {
+	for _, again := range []bool{false, true} {
+		h := newHarness(t, nil)
+		h.e.Count("kernel_oom", alert.RuleKernelOOM, "", "", "", h.now)
+		h.feed(nil, 1)
+		h.expect(1, "发生 1 次就告警")
+		h.e = New(h.e.log, h.e.node, h.e.dir, h.e.certDir, nil, nil, h.e.projectName, nil, h.e.logs)
+		h.e.clock = func() time.Time { return h.now }
+		h.e.metrics, h.e.docker = h.o, h.o
+		h.policy(nil)
+		if again {
+			for range 4 { // 40 分钟里每 10 分钟发生一次
+				h.feed(nil, 20)
+				h.e.Count("kernel_oom", alert.RuleKernelOOM, "", "", "", h.now)
+			}
+			h.feed(nil, 1)
+			h.expect(1, "重启后还在发生，不能恢复")
+			continue
+		}
+		h.feed(nil, 61)
+		h.expect(2, "重启后 30 分钟没有新的发生")
+		if h.last()["status"] != "resolved" {
+			t.Fatalf("应该是恢复：%v", h.last())
+		}
+	}
+}

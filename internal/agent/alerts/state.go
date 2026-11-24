@@ -237,6 +237,7 @@ func (e *Engine) loadStates() {
 			return
 		}
 		e.states[key] = &state{firing: true, lastNotified: s.LastNotified, lastDelivered: s.LastNotified, alert: a, occurrence: s.Occurrence, since: s.Since, confirmed: s.Confirmed && isEventKey(key)}
+		e.restoreCount(key, a)
 	}
 	for _, b := range raw.History {
 		a := &nagiv1.Alert{}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -331,6 +332,33 @@ func TestHistoryAndCheckpointCommitTogetherAcrossRestart(t *testing.T) {
 	if err := s.RecordCheckpoint(ctx, e, "container-a", 8); err == nil {
 		t.Fatal("失败记录却确认了位置")
 	}
+	// Waiting for a busy store wrote nothing and keeps the position, so the
+	// collector retries from it: not a write failure, no alert count (裸金属).
+	before, err := s.State(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	whileBusy := func(write func(context.Context) error) error {
+		release := logstore.HoldGate(s)
+		defer release()
+		busy, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+		return write(busy)
+	}
+	err = whileBusy(func(ctx context.Context) error { return s.RecordCheckpoint(ctx, e, "container-a", 8) })
+	if !errors.Is(err, logstore.ErrBusy) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("waiting for the gate should report ErrBusy: %v", err)
+	}
+	if st, _ := s.State(t.Context()); st.WriteErrors != before.WriteErrors {
+		t.Fatalf("a busy write retried from its position counted as a failure: %d → %d", before.WriteErrors, st.WriteErrors)
+	}
+	// Without a position nothing retries the record: it is lost and counts.
+	err = whileBusy(func(ctx context.Context) error {
+		return s.Record(ctx, logstore.Event{Category: logstore.Task, Kind: "no.position"})
+	})
+	if st, _ := s.State(t.Context()); !errors.Is(err, logstore.ErrBusy) || st.WriteErrors != before.WriteErrors+1 {
+		t.Fatalf("a busy write without a position must count: %v %d", err, st.WriteErrors)
+	}
 	s.Close()
 	s = openStore(t, path, 2<<20)
 	b, err := s.Checkpoint(t.Context(), "container-a")
@@ -487,5 +515,56 @@ func TestWritesStayFastWhileArchivePastCleanupLine(t *testing.T) {
 	}
 	if err := s.Record(t.Context(), logstore.Event{Category: logstore.Audit, Kind: "after"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 裸金属 on v0.37.4: chart history (an archive at the metrics priority) was
+// trimmed before the journal's own metrics records, so every cleanup emptied
+// the charts while journal metrics records from days earlier stayed. At equal
+// priority the journal's records go first now; the archive is trimmed only
+// once the journal has none left at that priority.
+func TestCleanupTrimsJournalBeforeArchiveAtEqualPriority(t *testing.T) {
+	const budget = 8 << 20
+	limit := int64(budget * 4 / 5)
+	var size, trims atomic.Int64
+	size.Store(limit / 2)
+	s := openStore(t, filepath.Join(t.TempDir(), "logs.db"), budget)
+	if err := s.RegisterArchive(t.Context(), logstore.Archive{Name: "charts", Priority: 2,
+		Size: func() (int64, error) { return size.Load(), nil },
+		Trim: func(context.Context) (bool, error) {
+			trims.Add(1)
+			size.Add(-limit / 50)
+			return true, nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Journal metrics records fill the rest past the cleanup line (90%).
+	for i := 0; ; i++ {
+		st, err := s.State(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.DiskBytes > limit*92/100 {
+			break
+		}
+		record(t, s, logstore.Event{Category: logstore.Metrics, Kind: "sample", Data: strings.Repeat("m", 8<<10) + fmt.Sprint(i)})
+	}
+	first := query(t, s, logstore.Filter{Category: logstore.Metrics, Limit: 1})[0].Seq
+	// Further writes keep usage past the line and wake the cleanup; wait until
+	// it has freed something, then see what it freed.
+	deadline := time.Now().Add(20 * time.Second)
+	for i := 0; ; i++ {
+		record(t, s, logstore.Event{Category: logstore.Metrics, Kind: "sample", Data: strings.Repeat("w", 8<<10) + fmt.Sprint(i)})
+		if n := trims.Load(); n != 0 {
+			t.Fatalf("chart history trimmed %d times while journal metrics records remained", n)
+		}
+		if now := query(t, s, logstore.Filter{Category: logstore.Metrics, Limit: 1}); len(now) == 0 || now[0].Seq != first {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("cleanup never pruned the oldest journal metrics records")
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
