@@ -8,6 +8,18 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.5
+
+### Fixes
+
+- Fixed large nodes (for example bare-metal servers) where, once log usage reached the cleanup line, background cleanup deleted chart history first, leaving only the last hour or two of charts, while the log store's own monitoring records were never cleaned up and kept growing. The log store's own records are now cleaned up first, and chart history comes after them.
+- Fixed background cleanup steps holding up writes for too long, which made container output, Docker events and alert state writes time out in batches and raised a round of "Log store write failures" alerts about every two hours. Writes that only timed out while waiting and are retried from their saved position no longer count as write failures.
+- Fixed count alerts such as "Log store write failures" and "Kernel out-of-memory kills" that were firing before a node restart staying active after the restart even with no new occurrences.
+
+### Upgrade notes
+
+- If you raised a node's log capacity by hand to work around this (`capacity_gib` in `logs/config.json`), you can keep it after upgrading, or change it back and restart the node service.
+
 ## v0.37.4
 
 ### New features
