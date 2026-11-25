@@ -10,6 +10,10 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 
 ## v0.37.5
 
+### New features
+
+- Node, container and service monitoring now has disk I/O charts: read and write throughput and operations per second. Nodes show the total across physical disks, containers are recorded per service, and the time range matches the other charts. The node list and the overview's node table also show each node's current disk I/O. Older nodes need an upgrade to report this data.
+
 ### Fixes
 
 - Fixed large nodes (for example bare-metal servers) where, once log usage reached the cleanup line, background cleanup deleted chart history first, leaving only the last hour or two of charts, while the log store's own monitoring records were never cleaned up and kept growing. The log store's own records are now cleaned up first, and chart history comes after them.
