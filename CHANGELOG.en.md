@@ -13,6 +13,7 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 ### New features
 
 - Node, container and service monitoring now has disk I/O charts: read and write throughput and operations per second. Nodes show the total across physical disks, containers are recorded per service, and the time range matches the other charts. The node list and the overview's node table also show each node's current disk I/O. Older nodes need an upgrade to report this data.
+- Admins can clear current alerts from the alerts page in one go, for all sources, the panel, or one node. It asks for confirmation and identity verification, and is recorded in the audit log. Cleared alerts end as "Cleared" (not a recovery) and stay in history and the audit log; if the problem is still there, the next check alerts again as a new occurrence. On older nodes a cleared alert stays hidden, but detection only restarts after the node is upgraded to v0.37.5.
 
 ### Fixes
 
