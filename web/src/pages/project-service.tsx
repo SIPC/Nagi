@@ -218,7 +218,7 @@ function ServiceMetrics({ project, container, service }: { project: Project; con
   const { range, picker } = useRange();
   return (
     <Section title={t.service.resources} actions={picker}>
-      <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} container={container.name} service={service} range={range} />
+      <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} nodeId={container.nodeId} container={container.name} service={service} range={range} />
     </Section>
   );
 }

@@ -3,9 +3,11 @@
 //
 // 序列名：
 //   - node:cpu、node:mem（百分比），node:mem_used、node:disk_free（字节），node:disk（百分比），
-//     node:net_rx、node:net_tx（字节/秒）
+//     node:net_rx、node:net_tx（字节/秒），node:disk_read、node:disk_write（物理磁盘合计，字节/秒）、
+//     node:disk_read_ops、node:disk_write_ops（次/秒）
 //   - node:disk@<挂载点>（百分比）：项目目录所在、和节点目录不是同一块的磁盘
-//   - c:<项目 ID>/<容器>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx（字节/秒）、:restarts（累计次数）
+//   - c:<项目 ID>/<容器>/<服务>:cpu（百分比）、:mem（字节）、:net_rx、:net_tx、:disk_read、:disk_write（字节/秒）、
+//     :disk_read_ops、:disk_write_ops（次/秒）、:restarts（累计次数）
 //   - l:<项目 ID>/<容器>:cpu（百分比，每核 100）、:mem（字节）：运行中的容器最多能用多少。
 //     设了限制按限制，没设按主机；容器组把各服务的限制加起来，有一个没设或加起来超过主机就按主机
 //   - r:<项目 ID>/<规则名>:req、:2xx、:3xx、:4xx、:5xx（请求/秒）、:in、:out（字节/秒）、
@@ -77,6 +79,7 @@ type Collector struct {
 	prevCPUIdle       uint64
 	prevNetRx         uint64
 	prevNetTx         uint64
+	prevDiskIO        map[string]diskIO
 	prevContainer     map[string]docker.Stats
 	lastDownsampledTo time.Time
 	sources           []Source
@@ -388,6 +391,17 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 		}
 		c.prevNetRx, c.prevNetTx = rx, tx
 	}
+	diskIO, diskOK := readDiskIO()
+	if diskOK {
+		if !first && elapsed > 0 && c.prevDiskIO != nil {
+			for i, x := range diskRates(c.prevDiskIO, diskIO) {
+				v["node:"+diskIOMetrics[i]] = x / elapsed
+			}
+		}
+		c.prevDiskIO = diskIO
+	} else {
+		c.prevDiskIO = nil
+	}
 
 	containers, err := c.docker.ManagedInstances(ctx, labelLabel)
 	if err == nil {
@@ -443,6 +457,12 @@ func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float
 				if st.NetRx >= prev.NetRx && st.NetTx >= prev.NetTx {
 					v[prefix+"net_rx"] += float64(st.NetRx-prev.NetRx) / elapsed
 					v[prefix+"net_tx"] += float64(st.NetTx-prev.NetTx) / elapsed
+				}
+				io, measured := containerDiskIO(prev.Details, st.Details, diskIO)
+				for i, x := range io {
+					if measured[i] {
+						v[prefix+diskIOMetrics[i]] += x / elapsed
+					}
 				}
 			}
 			if !cpuOK {

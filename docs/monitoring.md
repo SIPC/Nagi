@@ -4,8 +4,8 @@
 
 | 来源 | 指标 |
 | --- | --- |
-| 节点 | CPU、内存、磁盘、网络 |
-| 容器 | CPU、内存、网络、重启次数 |
+| 节点 | CPU、内存、磁盘、磁盘读写、网络 |
+| 容器 | CPU、内存、网络、磁盘读写、重启次数 |
 | 健康检查 | compose 中 healthcheck 的结果 |
 | Caddy | 请求数、错误率、延迟（所有对外流量都经过 Caddy，采集很容易） |
 
@@ -24,9 +24,12 @@
 | `node:disk@<挂载点>` | 使用率（%）。容器目录所在、和节点数据目录不是同一块的磁盘（例如项目根目录 `/srv` 挂在数据盘上），按挂载点去重 |
 | `node:mem_used`、`node:disk_free` | 字节 |
 | `node:net_rx`、`node:net_tx` | 物理网卡收发速率（字节/秒），不算回环、Docker 网桥、veth、WireGuard |
+| `node:disk_read`、`node:disk_write` | 物理磁盘读写速率合计（字节/秒），来自 /proc/diskstats。只算整块的物理盘（/sys/block 下有 device 的，iSCSI 盘也算），不算分区、device-mapper、md、loop，否则同一次读写会算两遍。磁盘刚接上、计数变小（重新接上）的那一轮不算。v0.37.5 起 |
+| `node:disk_read_ops`、`node:disk_write_ops` | 同上，读写次数（次/秒） |
 | `c:<项目 ID>/<容器>/<服务>:cpu` | 容器 CPU（%，单核 100%）。同一服务的多个副本相加 |
 | `c:<项目 ID>/<容器>/<服务>:mem` | 容器内存（字节） |
 | `c:<项目 ID>/<容器>/<服务>:net_rx`、`:net_tx` | 容器网络（字节/秒） |
+| `c:<项目 ID>/<容器>/<服务>:disk_read`、`:disk_write`、`:disk_read_ops`、`:disk_write_ops` | 容器磁盘读写（字节/秒、次/秒），来自 Docker 按设备报的累计值（cgroup v2 的 io.stat，v1 的 blkio）。同一次读写会同时记在 device-mapper 和下面的物理盘上，所以容器在物理盘上有记录时只算物理盘。只算直接落盘的读写，写进页缓存、稍后由内核刷盘的部分在 cgroup v1 上不计入。Docker 拿不到读写统计时不记（不是 0）；cgroup v2 上 Docker 只报字节、不报次数，所以那里没有 `:disk_read_ops`、`:disk_write_ops`，界面只显示读取、写入两块。每个运行中的服务最多 4 条，同一服务的多个副本相加。v0.37.5 起 |
 | `c:<项目 ID>/<容器>/<服务>:restarts` | 累计重启次数 |
 
 容器组按服务记（多个副本加在一起），面板的服务页直接用这些序列显示一个服务的监控，不另外存一份；资源上限（`l:`）只按整个容器记。各版本的节点都按服务上报，所以服务页的监控不需要升级节点。

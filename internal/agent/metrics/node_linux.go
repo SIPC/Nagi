@@ -115,6 +115,20 @@ func readMounts() []mountEntry {
 	return parseMountInfo(f)
 }
 
+// readDiskIO 返回各块物理磁盘的累计读写。物理盘是 /sys/block 下有 device 的（sda、nvme0n1、vda，iSCSI 盘也是），
+// 没有的是 device-mapper、md、loop、zram 这些叠加或内存里的设备。
+func readDiskIO() (map[string]diskIO, bool) {
+	f, err := os.Open("/proc/diskstats")
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	return parseDiskstats(f, func(name string) bool {
+		_, err := os.Stat("/sys/block/" + strings.ReplaceAll(name, "/", "!") + "/device")
+		return err == nil
+	}), true
+}
+
 // readNet 返回物理网卡累计收发的字节数，不算回环、Docker 网桥、容器虚拟网卡和 WireGuard。
 func readNet() (rx, tx uint64, ok bool) {
 	f, err := os.Open("/proc/net/dev")

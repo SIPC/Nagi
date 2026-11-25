@@ -332,7 +332,7 @@ func TestPartialContainerGroupIsNotHealthyEvidence(t *testing.T) {
 				http.Error(w, "stats unavailable", 500)
 				return
 			}
-			fmt.Fprintf(w, `{"cpu_stats":{"cpu_usage":{"total_usage":%d},"system_cpu_usage":%d,"online_cpus":1},"memory_stats":{"usage":256,"limit":1024}}`, 50+n*50, 100+n*1000)
+			fmt.Fprintf(w, `{"cpu_stats":{"cpu_usage":{"total_usage":%d},"system_cpu_usage":%d,"online_cpus":1},"memory_stats":{"usage":256,"limit":1024},"blkio_stats":{"io_service_bytes_recursive":[{"major":8,"minor":0,"op":"Read","value":%d},{"major":8,"minor":0,"op":"Write","value":%d}],"io_serviced_recursive":[{"major":8,"minor":0,"op":"Write","value":%d}]}}`, 50+n*50, 100+n*1000, 7, n*1000, n*20)
 		default:
 			t.Errorf("unexpected Docker endpoint: %s", r.URL.Path)
 			http.NotFound(w, r)
@@ -360,6 +360,13 @@ func TestPartialContainerGroupIsNotHealthyEvidence(t *testing.T) {
 		}
 		if cpuOK && (v["l:p/web:cpu"] != 100 || v["c:p/web/a:cpu"]+v["c:p/web/b:cpu"] != 10) {
 			t.Fatalf("phase %d: incorrect full group CPU result: %v", n, v)
+		}
+		// 容器读写按两次采样之间的增量算：每轮多写 1000 字节、隔 10 秒，即 100 B/s；读没有变，是 0 不是缺失。
+		if _, present := v["c:p/web/a:disk_write"]; present != (n > 0) || n > 0 && (v["c:p/web/a:disk_write"] != 100 || v["c:p/web/a:disk_read"] != 0 || v["c:p/web/a:disk_write_ops"] != 2) {
+			t.Fatalf("phase %d: container disk rates %v", n, v)
+		}
+		if _, present := v["c:p/web/a:disk_read_ops"]; present {
+			t.Fatalf("phase %d: container disk rates %v", n, v)
 		}
 		if memOK && v["l:p/web:mem"] != 2048 {
 			t.Fatalf("phase %d: incorrect full group memory limit: %v", n, v)

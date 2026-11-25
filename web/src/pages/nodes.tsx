@@ -9,7 +9,7 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtRate, metricRanges, nodeUsage, useRangeSearch } from "@/components/metrics";
+import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtIops, fmtRate, metricRanges, nodeUsage, useRangeSearch } from "@/components/metrics";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeDirectDownload, NodeMesh, NodeQUIC, NodeRelay, NodeRelayPool, ratePair } from "@/pages/mesh";
@@ -60,7 +60,7 @@ import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/na
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { requireElevation, withPrivilegedElevation } from "@/components/elevate";
-import { cancelable, isPrerelease, lacksLogService, progressText, updateActive, UpdateChannelRow, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { cancelable, isPrerelease, lacksDiskIO, lacksLogService, progressText, updateActive, UpdateChannelRow, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
@@ -145,6 +145,7 @@ const ago = (seconds: number) => timestampFromDate(new Date(Date.now() - seconds
 const fmtPercent = fmtCpuShort;
 
 // NodeResources：节点页的监控，4 个数值块：CPU、内存、磁盘、流量，每块一个数字加一条小折线；时间范围在区块标题右侧。
+// 下面一排是物理磁盘合计的读写：读取、写入（字节/秒）和读写次数，v0.37.5 以前的节点没有，换成升级提示。
 // 内存和磁盘写成「已用 / 总量」；流量是入站、出站两条线，数字写成「↑ 出站 ↓ 入站」，和节点网络的测速一致。
 function NodeResources({ n }: { n: Node }) {
   const [range, setRange] = useRangeSearch();
@@ -191,7 +192,26 @@ function NodeResources({ n }: { n: Node }) {
       title: net ? `${t.metrics.netTx} ${fmtRate(net.tx)} · ${t.metrics.netRx} ${fmtRate(net.rx)}` : undefined,
     },
   ];
+  const diskTiles = [
+    one(t.metrics.diskRead, "node:disk_read", fmtRate),
+    one(t.metrics.diskWrite, "node:disk_write", fmtRate),
+    one(t.metrics.diskReadOps, "node:disk_read_ops", fmtIops),
+    one(t.metrics.diskWriteOps, "node:disk_write_ops", fmtIops),
+  ];
   const now = Date.now() / 1000;
+  const grid = (list: typeof tiles) => (
+    <div className={tileGrid}>
+      {list.map((it) => (
+        <div key={it.label} className="grid min-w-0 content-start gap-1">
+          <div className="text-muted-foreground">{it.label}</div>
+          <div className="truncate text-xl leading-7 font-medium tracking-tight" title={it.title}>
+            <Roll value={it.value} n={it.n} />
+          </div>
+          <TimeChart className="mt-2" series={it.series} from={now - r.seconds} to={now} step={r.step} format={it.format} height={40} axis={false} minMax={it.minMax} />
+        </div>
+      ))}
+    </div>
+  );
   return (
     <Section title={t.metrics.resourceUsage} actions={<RangePicker value={range} onChange={setRange} />}>
       {lacksLogService(n.info?.version) ? (
@@ -201,17 +221,10 @@ function NodeResources({ n }: { n: Node }) {
       ) : q.error ? (
         <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />
       ) : (
-        <div className={tileGrid}>
-          {tiles.map((it) => (
-            <div key={it.label} className="grid min-w-0 content-start gap-1">
-              <div className="text-muted-foreground">{it.label}</div>
-              <div className="truncate text-xl leading-7 font-medium tracking-tight" title={it.title}>
-                <Roll value={it.value} n={it.n} />
-              </div>
-              <TimeChart className="mt-2" series={it.series} from={now - r.seconds} to={now} step={r.step} format={it.format} height={40} axis={false} minMax={it.minMax} />
-            </div>
-          ))}
-        </div>
+        <>
+          {grid(tiles)}
+          {lacksDiskIO(n.info?.version) ? <Notice tone="warning">{t.metrics.diskIOTooOld}</Notice> : grid(diskTiles)}
+        </>
       )}
     </Section>
   );

@@ -16,6 +16,90 @@ type Disk struct {
 	Used  uint64
 }
 
+// diskIO 是一块磁盘自开机以来累计读写的字节数和次数（/proc/diskstats）。
+type diskIO struct{ readBytes, writeBytes, reads, writes uint64 }
+
+// parseDiskstats 解析 /proc/diskstats，只留整块的物理磁盘（physical 按设备名判断），键是「主.次设备号」，
+// 和 Docker 按设备报的容器读写（device@8.0）同一种写法。分区、device-mapper、md、loop 上的读写最终都落在物理盘上，
+// 再算一遍就重复了。格式见内核的 Documentation/admin-guide/iostats.rst：主 次 名称 读次数 合并 读扇区 读耗时 写次数 合并 写扇区 …，
+// 扇区固定按 512 字节算。
+func parseDiskstats(r io.Reader, physical func(name string) bool) map[string]diskIO {
+	out := map[string]diskIO{}
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		f := strings.Fields(sc.Text())
+		if len(f) < 10 || !physical(f[2]) {
+			continue
+		}
+		var n [4]uint64
+		ok := true
+		for i, col := range []int{3, 5, 7, 9} {
+			var err error
+			if n[i], err = strconv.ParseUint(f[col], 10, 64); err != nil {
+				ok = false
+			}
+		}
+		if ok {
+			out[f[0]+"."+f[1]] = diskIO{reads: n[0], readBytes: n[1] * 512, writes: n[2], writeBytes: n[3] * 512}
+		}
+	}
+	return out
+}
+
+// diskRates 是两次采样之间各磁盘读写的增量之和（顺序同 diskIOMetrics）。前一次没有的盘（刚接上）和计数变小的盘（重新接上）这一轮不算，
+// 不会把开机以来的累计当成这 10 秒的读写。
+func diskRates(prev, cur map[string]diskIO) (out [4]float64) {
+	for dev, x := range cur {
+		p, ok := prev[dev]
+		if !ok || x.readBytes < p.readBytes || x.writeBytes < p.writeBytes || x.reads < p.reads || x.writes < p.writes {
+			continue
+		}
+		out[0] += float64(x.readBytes - p.readBytes)
+		out[1] += float64(x.writeBytes - p.writeBytes)
+		out[2] += float64(x.reads - p.reads)
+		out[3] += float64(x.writes - p.writes)
+	}
+	return out
+}
+
+// containerDiskIO 是容器两次采样之间读写的字节数和次数（顺序同 diskIOMetrics），来自 Docker 按设备报的累计值
+// （cgroup v2 的 io.stat，v1 的 blkio.io_service_bytes_recursive、io_serviced_recursive），键形如 device@8.0:io_bytes_read_total。
+// 同一次读写会同时记在 device-mapper 等叠加设备和下面的物理盘上，所以容器在物理盘（physical 的键）上有记录时只算物理盘；
+// 一块都对不上（例如读不到 /proc/diskstats）时算全部设备。Docker 没报的项（拿不到 cgroup 的读写统计；cgroup v2 上 Docker\n// 只报字节、不报次数）ok 为 false，不记成 0。
+func containerDiskIO(prev, cur map[string]float64, physical map[string]diskIO) (out [4]float64, ok [4]bool) {
+	var all, phys [4]float64
+	onPhysical := false
+	for key, x := range cur {
+		rest, found := strings.CutPrefix(key, "device@")
+		dev, metric, _ := strings.Cut(rest, ":")
+		i := slices.Index(dockerIOKeys[:], metric)
+		if !found || i < 0 {
+			continue
+		}
+		ok[i] = true
+		_, isPhysical := physical[dev]
+		onPhysical = onPhysical || isPhysical
+		before, seen := prev[key]
+		if !seen || x < before {
+			continue
+		}
+		all[i] += x - before
+		if isPhysical {
+			phys[i] += x - before
+		}
+	}
+	if onPhysical {
+		return phys, ok
+	}
+	return all, ok
+}
+
+// diskIOMetrics 是节点（node:）和容器（c:…:）的磁盘读写序列名：读、写（字节/秒），读、写次数（次/秒）。
+var diskIOMetrics = [4]string{"disk_read", "disk_write", "disk_read_ops", "disk_write_ops"}
+
+// dockerIOKeys 是 docker.Stats.Details 里和 diskIOMetrics 对应的累计值。
+var dockerIOKeys = [4]string{"io_bytes_read_total", "io_bytes_write_total", "io_ops_read_total", "io_ops_write_total"}
+
 // mountEntry 是 /proc/self/mountinfo 里的一行。
 type mountEntry struct {
 	mount  string

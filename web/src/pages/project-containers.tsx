@@ -970,7 +970,7 @@ function Overview({ project, container, services }: { project: Project; containe
         </div>
       </Section>
       <Section title={o.resources} actions={picker}>
-        <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} container={container.name} range={range} />
+        <ContainerMetrics projectId={project.id} nodeIds={projectMetricNodes(project)} nodeId={container.nodeId} container={container.name} range={range} />
       </Section>
       <ContainerEvents project={project} container={container} />
       {showServices && (

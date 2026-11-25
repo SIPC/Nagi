@@ -8,6 +8,7 @@ import { EmptyRow, Notice, QueryError, Roll, Select, Skeleton } from "@/componen
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
+import { lacksDiskIO } from "@/pages/update";
 
 const m = t.metrics;
 
@@ -67,6 +68,8 @@ export function sizeParts(v: number, units = ["B", "KB", "MB", "GB", "TB"], deci
 export const fmtBytes = (v: number) => sizeParts(v).join(" ");
 export const rateParts = (v: number) => sizeParts(v, ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"], 10);
 export const fmtRate = (v: number) => rateParts(v).join(" ");
+// fmtIops：每秒读写次数，不到 10 保留一位小数，上万用紧凑写法。
+export const fmtIops = (v: number) => m.iops(v < 10 ? v.toFixed(1) : compactCount.format(v));
 
 
 // CPU 图的纵轴至少到 1%，空闲容器的微小波动贴在底部，不被放大成尖峰。
@@ -165,6 +168,10 @@ const containerMetricFormat: Record<string, [string, (v: number) => string]> = {
   net_rx: [m.netRx, fmtRate],
   net_tx: [m.netTx, fmtRate],
   restarts: [m.restarts, (v) => String(v)],
+  disk_read: [m.diskRead, fmtRate],
+  disk_write: [m.diskWrite, fmtRate],
+  disk_read_ops: [m.diskReadOps, fmtIops],
+  disk_write_ops: [m.diskWriteOps, fmtIops],
 };
 
 // projectMetricNodes 是存着项目监控数据的节点：容器所在的节点，以及端口映射的其他入口节点（请求统计记在收到请求的节点上）。
@@ -406,12 +413,15 @@ export function UsageCell({ percent, value, limit, title }: { percent?: number; 
 
 
 const cellOrder = ["cpu", "mem", "net_rx", "net_tx"];
+// 磁盘读写另起一排四个数值块：读、写的速率和次数（旧节点没有这些序列，见 lacksDiskIO）。容器的次数只在 cgroup v1 上有
+// （cgroup v2 上 Docker 只报字节），没有时只显示读、写两块。
+const diskCellOrder = ["disk_read", "disk_write", "disk_read_ops", "disk_write_ops"];
 
 // MetricCells：一组四个数值块，顺序固定，某项没有数据时写「—」。
-function MetricCells({ series, range, quiet }: { series: Map<string, Pt[]>; range: MetricRange; quiet?: boolean }) {
+function MetricCells({ series, range, quiet, order = cellOrder }: { series: Map<string, Pt[]>; range: MetricRange; quiet?: boolean; order?: string[] }) {
   return (
     <div className={cellsC4}>
-      {cellOrder.map((metric) => (
+      {order.map((metric) => (
         <Metric
           key={metric}
           label={containerMetricFormat[metric][0]}
@@ -666,10 +676,12 @@ function L4RouteMetrics({ name, data, range, divided, empty }: { name: string; d
   );
 }
 
-// ContainerMetrics：一个容器的资源：CPU、内存、下行、上行，容器组按服务分组。重启过的话在数值块下面写一行。
-// service：服务页里只显示这一个服务，不写服务名。
-export function ContainerMetrics({ projectId, nodeIds, container, service: only, range }: { projectId: string; nodeIds: string[]; container: string; service?: string; range: MetricRange }) {
+// ContainerMetrics：一个容器的资源：CPU、内存、下行、上行，下面一排磁盘读写，容器组按服务分组。重启过的话在数值块下面写一行。
+// service：服务页里只显示这一个服务，不写服务名。nodeId：容器所在的节点，版本过旧（没有磁盘读写统计）时磁盘那一排换成升级提示。
+export function ContainerMetrics({ projectId, nodeIds, nodeId, container, service: only, range }: { projectId: string; nodeIds: string[]; nodeId: string; container: string; service?: string; range: MetricRange }) {
   const q = useProjectMetrics(projectId, nodeIds, range);
+  const nodes = useQuery({ queryKey: ["nodes"], queryFn: () => nodeClient.listNodes({}) });
+  const diskTooOld = lacksDiskIO(nodes.data?.nodes.find((n) => n.id === nodeId)?.info?.version);
   if (q.isPending) return <MetricsSkeleton />;
   if (q.error) return <QueryError error={errorMessage(q.error)} onRetry={() => q.refetch()} />;
   const services = new Map<string, Map<string, Pt[]>>();
@@ -691,6 +703,7 @@ export function ContainerMetrics({ projectId, nodeIds, container, service: only,
             {/* 单个容器（只有一个服务）不再重复名称。 */}
             {services.size > 1 && only === undefined && <div className="font-mono text-[13px] text-muted-foreground">{name}</div>}
             <MetricCells series={series} range={range} />
+            {diskTooOld ? <Notice tone="warning">{m.diskIOTooOld}</Notice> : <MetricCells series={series} range={range} order={diskCellOrder.filter((m) => !m.endsWith("_ops") || series.has(m))} />}
             {restarts > 0 && (
               <div className="text-muted-foreground">
                 {m.restarts} {restarts}
