@@ -3,6 +3,7 @@ package nodes
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -248,5 +249,145 @@ func TestClearAlertsEndsCurrentAndKeepsReportsFromReviving(t *testing.T) {
 	events, err := logs.Query(ctx, logstore.Filter{Category: logstore.Alert, KindPrefix: "alert.cleared", Limit: 10})
 	if err != nil || len(events) != 3 {
 		t.Fatalf("each cleared ledger must be logged: %v %v", events, err)
+	}
+}
+
+// 清理标记不随 200 条历史淘汰，也不因面板重启丢失（安全审查 A1）：旧节点（不认识 cleared_at）一直上报被清理的
+// 那一轮，同时又有 200 条更新的结束记录把它挤出 History 后，这一轮仍不回到当前告警，回给节点的处理状态仍带
+// cleared_at；来源在完整快照里不再上报这一轮后，标记删掉，同一轮次再出现就照常显示。
+func TestClearedMarkerSurvivesHistoryEvictionAndRestart(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	p := newSessionPanel(t)
+	path := filepath.Join(t.TempDir(), "logs.db")
+	logs, err := logstore.Open(ctx, path, 64<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { logs.Close() }()
+	p.r.AlertLogs = logs
+	s := p.connect(t)
+	defer s.sess.Close()
+	report := func(rev uint64, current, history []*nagiv1.Alert) *nagiv1.ReportResponse {
+		t.Helper()
+		res, err := s.panel.Report(ctx, &nagiv1.ReportRequest{Alerts: &nagiv1.AlertSync{Source: "src", Revision: rev, Complete: true, Current: current, History: history}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	occ := &nagiv1.Alert{Key: "logstore_write", Rule: "logstore_write", Source: "src", Occurrence: "occ-1", Revision: 1, Status: "firing", Validity: "valid", Since: timestamppb.Now()}
+	// expectCleared：这一轮不在当前告警里，回给节点的处理状态里有且只有一条它，带 cleared_at。
+	expectCleared := func(step string, res *nagiv1.ReportResponse) {
+		t.Helper()
+		if cur, err := p.r.AlertStates(ctx, p.nodeID, false); err != nil || len(cur) != 0 {
+			t.Fatalf("%s: cleared occurrence back in current: %v %v", step, cur, err)
+		}
+		n := 0
+		for _, a := range res.AlertHandling {
+			if a.Alert.Occurrence == "occ-1" {
+				n++
+				if a.ClearedAt == nil || a.Alert.Status == "firing" {
+					t.Fatalf("%s: node not told about the clear: %v", step, a)
+				}
+			}
+		}
+		if n != 1 {
+			t.Fatalf("%s: want exactly one handling entry for occ-1, got %v", step, res.AlertHandling)
+		}
+	}
+	report(1, []*nagiv1.Alert{occ}, nil)
+	if n, err := p.r.ClearAlerts(ctx, p.nodeID, false, "1"); err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	expectCleared("old node re-reports", report(2, []*nagiv1.Alert{occ}, nil))
+	var hist []*nagiv1.Alert
+	for i := range 200 {
+		hist = append(hist, &nagiv1.Alert{Key: fmt.Sprintf("kernel_oom:%d", i), Rule: "kernel_oom", Source: "src", Occurrence: fmt.Sprintf("h-%d", i), Revision: uint64(3 + i), Status: "resolved", EndReason: "recovered", Validity: "valid", Since: timestamppb.Now()})
+	}
+	expectCleared("200 newer history entries", report(202, []*nagiv1.Alert{occ}, hist))
+	all, err := p.r.AlertStates(ctx, p.nodeID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range all {
+		if a.Alert.Occurrence == "occ-1" {
+			t.Fatalf("test setup: occ-1 should have been evicted from History: %v", a)
+		}
+	}
+	expectCleared("after eviction", report(203, []*nagiv1.Alert{occ}, nil))
+	if err := logs.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if logs, err = logstore.Open(ctx, path, 64<<20); err != nil {
+		t.Fatal(err)
+	}
+	p.r.AlertLogs = logs
+	expectCleared("after panel restart", report(204, []*nagiv1.Alert{occ}, nil))
+	// 新节点收到 cleared_at 后自己以 cleared 结束并上报终态：不在历史里重复记一条，也不回到当前告警。
+	ended := proto.CloneOf(occ)
+	ended.Status, ended.EndReason, ended.Revision = "ended", "cleared", 205
+	report(205, nil, []*nagiv1.Alert{ended})
+	if all, err := p.r.AlertStates(ctx, p.nodeID, true); err != nil || len(all) != 200 {
+		t.Fatalf("node's own cleared terminal duplicated or lost: %d %v", len(all), err)
+	}
+	// 来源不再上报这一轮，标记删掉（不会一直积累）；同一个键的新一轮照常显示，回给节点的不带 cleared_at。
+	p.r.alerts.mu.Lock()
+	l, err := p.r.loadAlertLedger(ctx, p.nodeID)
+	p.r.alerts.mu.Unlock()
+	if err != nil || len(l.Cleared) != 0 {
+		t.Fatalf("marker must be dropped once the source stops reporting the occurrence: %v %v", l.Cleared, err)
+	}
+	next := proto.CloneOf(occ)
+	next.Occurrence, next.Revision = "occ-2", 206
+	if res := report(206, []*nagiv1.Alert{next}, nil); len(res.AlertHandling) != 1 || res.AlertHandling[0].ClearedAt != nil || res.AlertHandling[0].Alert.Occurrence != "occ-2" {
+		t.Fatalf("new occurrence after the clear must show normally: %v", res.AlertHandling)
+	}
+}
+
+// 22cdfe56 写的账本只在 History 里有清理记录（没有 Cleared）：升级面板后旧节点照常上报这一轮时补进 Cleared，
+// 之后被 200 条更新的历史挤出 History 也不回到当前告警。
+func TestClearedMarkerMigratesFromHistoryOnlyLedger(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	p := newSessionPanel(t)
+	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 64<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	p.r.AlertLogs = logs
+	s := p.connect(t)
+	defer s.sess.Close()
+	report := func(rev uint64, current, history []*nagiv1.Alert) {
+		t.Helper()
+		if _, err := s.panel.Report(ctx, &nagiv1.ReportRequest{Alerts: &nagiv1.AlertSync{Source: "src", Revision: rev, Complete: true, Current: current, History: history}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	occ := &nagiv1.Alert{Key: "logstore_write", Rule: "logstore_write", Source: "src", Occurrence: "occ-1", Revision: 1, Status: "firing", Validity: "valid", Since: timestamppb.Now()}
+	report(1, []*nagiv1.Alert{occ}, nil)
+	if _, err := p.r.ClearAlerts(ctx, p.nodeID, false, "1"); err != nil {
+		t.Fatal(err)
+	}
+	p.r.alerts.mu.Lock()
+	l, err := p.r.loadAlertLedger(ctx, p.nodeID)
+	if err == nil {
+		l.Cleared = nil // 22cdfe56 的账本
+		err = p.r.saveAlertLedger(ctx, p.nodeID, l, logstore.Event{Kind: "test"})
+	}
+	p.r.alerts.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report(2, []*nagiv1.Alert{occ}, nil)
+	var hist []*nagiv1.Alert
+	for i := range 200 {
+		hist = append(hist, &nagiv1.Alert{Key: fmt.Sprintf("kernel_oom:%d", i), Rule: "kernel_oom", Source: "src", Occurrence: fmt.Sprintf("h-%d", i), Revision: uint64(3 + i), Status: "resolved", EndReason: "recovered", Validity: "valid", Since: timestamppb.Now()})
+	}
+	report(202, []*nagiv1.Alert{occ}, hist)
+	report(203, []*nagiv1.Alert{occ}, nil)
+	if cur, err := p.r.AlertStates(ctx, p.nodeID, false); err != nil || len(cur) != 0 {
+		t.Fatalf("history-only clear from 22cdfe56 lost after eviction: %v %v", cur, err)
 	}
 }

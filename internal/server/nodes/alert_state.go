@@ -33,7 +33,13 @@ type alertLedger struct {
 	// 节点不上报（v0.37）时为空，界面上提示升级。
 	Baselines  []json.RawMessage `json:"baselines,omitempty"`
 	BaselineAt int64             `json:"baseline_at,omitempty"`
+	// Cleared 是管理员清理过、来源还在上报为当前告警的那几轮（键 + "\x00" + 轮次 → 清理时间，Unix 秒）。
+	// 和 History 分开保存：History 只留最近 200 条，旧节点（不认识 cleared_at）一直上报同一轮时，标记不能被
+	// 更新的历史挤掉。只由清理写入（每次至多当前告警的 200 条），完整快照里来源不再上报这一轮时删掉。
+	Cleared map[string]int64 `json:"cleared,omitempty"`
 }
+
+func clearedKey(key, occurrence string) string { return key + "\x00" + occurrence }
 
 func alertStateKey(node string) string { return "alerts/state/" + node }
 
@@ -182,17 +188,22 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 		current[a.Alert.Key] = a
 	}
 	latest := map[string]uint64{}
+	// 清理过的轮次：Ledger.Cleared（旧节点还在上报的，不随 History 淘汰），加上 History 里还在的清理记录
+	// （新节点结束后上报的 cleared 终态不再重复记一条）。
 	cleared := map[string]bool{}
+	for k := range l.Cleared {
+		cleared[k] = true
+	}
 	for _, a := range append(append([]*nagiv1.AlertState{}, l.History...), l.Current...) {
 		latest[a.Alert.Key+"\x00"+a.Alert.Occurrence] = max(latest[a.Alert.Key+"\x00"+a.Alert.Occurrence], a.Alert.Revision)
 		if a.ClearedAt != nil {
-			cleared[a.Alert.Key+"\x00"+a.Alert.Occurrence] = true
+			cleared[clearedKey(a.Alert.Key, a.Alert.Occurrence)] = true
 		}
 	}
 	now := timestamppb.Now()
 	apply := func(a *nagiv1.Alert, active bool) {
 		// 管理员清理过的这一轮（ClearAlerts）不再放回当前告警：旧节点不会结束它，新节点收到后以 cleared 结束。
-		if cleared[a.Key+"\x00"+a.Occurrence] {
+		if cleared[clearedKey(a.Key, a.Occurrence)] {
 			return
 		}
 		old := current[a.Key]
@@ -255,6 +266,25 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 		apply(a, false)
 	}
 	if !delta && s.Complete {
+		// 来源不再把清理过的那一轮当作当前告警上报（已结束、已恢复或节点已升级处理），标记就不再需要了。
+		reported := map[string]bool{}
+		for _, a := range s.Current {
+			reported[clearedKey(a.Key, a.Occurrence)] = true
+		}
+		for k := range l.Cleared {
+			if !reported[k] {
+				delete(l.Cleared, k)
+			}
+		}
+		// 只在 History 里有清理记录、来源仍上报的轮次补进 Cleared，免得之后被更新的历史挤掉。
+		for k := range cleared {
+			if _, ok := l.Cleared[k]; reported[k] && !ok {
+				if l.Cleared == nil {
+					l.Cleared = map[string]int64{}
+				}
+				l.Cleared[k] = now.AsTime().Unix()
+			}
+		}
 		for key, a := range current {
 			if !seen[key] {
 				a.Alert = proto.CloneOf(a.Alert)
@@ -370,15 +400,28 @@ func (r *Registry) alertHandling(ctx context.Context, node string, s *nagiv1.Ale
 	if err != nil {
 		return nil, err
 	}
-	reported := map[string]bool{}
-	for _, a := range s.GetCurrent() {
-		reported[a.GetKey()+"\x00"+a.GetOccurrence()] = true
+	r.alerts.mu.Lock()
+	l, err := r.loadAlertLedger(ctx, node)
+	r.alerts.mu.Unlock()
+	if err != nil {
+		return nil, err
 	}
 	var out []*nagiv1.AlertState
 	for _, a := range all {
-		if a.Alert.GetStatus() == "firing" || a.ClearedAt != nil && reported[a.Alert.Key+"\x00"+a.Alert.Occurrence] {
+		if a.Alert.GetStatus() == "firing" {
 			out = append(out, a)
 		}
+	}
+	// 清理标记以 Ledger.Cleared 为准（不依赖 History 里还留着这一轮）：来源还在上报的，回一条带 cleared_at 的状态。
+	for _, a := range s.GetCurrent() {
+		at, ok := l.Cleared[clearedKey(a.GetKey(), a.GetOccurrence())]
+		if !ok {
+			continue
+		}
+		v := &nagiv1.AlertState{NodeId: node, Alert: proto.CloneOf(a), ClearedAt: timestamppb.New(time.Unix(at, 0))}
+		v.Alert.Status, v.Alert.EndReason = "ended", "cleared"
+		v.Alert.Title, v.Alert.Message = "", ""
+		out = append(out, v)
 	}
 	return out, nil
 }
@@ -398,6 +441,13 @@ func (r *Registry) clearLedger(ctx context.Context, node, actor string) (int, er
 		a.ClearedAt = now
 		a.HandlingRevision++
 		keys = append(keys, a.Alert.Key)
+		// 面板自己的告警不经上报，新一轮另起轮次，不需要标记（也没有完整快照来删它）。
+		if node != "" {
+			if l.Cleared == nil {
+				l.Cleared = map[string]int64{}
+			}
+			l.Cleared[clearedKey(a.Alert.Key, a.Alert.Occurrence)] = now.AsTime().Unix()
+		}
 	}
 	n := len(l.Current)
 	l.History = append(l.History, l.Current...)
