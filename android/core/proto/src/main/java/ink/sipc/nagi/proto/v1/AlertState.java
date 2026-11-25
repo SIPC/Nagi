@@ -129,7 +129,7 @@ public  final class AlertState extends
    * @param value The acknowledged to set.
    */
   private void setAcknowledged(boolean value) {
-    
+
     acknowledged_ = value;
   }
   /**
@@ -296,7 +296,7 @@ public  final class AlertState extends
    * @param value The handlingRevision to set.
    */
   private void setHandlingRevision(long value) {
-    
+
     handlingRevision_ = value;
   }
   /**
@@ -421,6 +421,73 @@ public  final class AlertState extends
 
   }
 
+  public static final int CLEARED_AT_FIELD_NUMBER = 10;
+  private com.google.protobuf.Timestamp clearedAt_;
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   */
+  @java.lang.Override
+  public boolean hasClearedAt() {
+    return ((bitField0_ & 0x00000010) != 0);
+  }
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   */
+  @java.lang.Override
+  public com.google.protobuf.Timestamp getClearedAt() {
+    return clearedAt_ == null ? com.google.protobuf.Timestamp.getDefaultInstance() : clearedAt_;
+  }
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   */
+  private void setClearedAt(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    clearedAt_ = value;
+    bitField0_ |= 0x00000010;
+  }
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeClearedAt(com.google.protobuf.Timestamp value) {
+    java.util.Objects.requireNonNull(value);
+    if (clearedAt_ != null &&
+        clearedAt_ != com.google.protobuf.Timestamp.getDefaultInstance()) {
+      clearedAt_ =
+        com.google.protobuf.Timestamp.newBuilder(clearedAt_).mergeFrom(value).buildPartial();
+    } else {
+      clearedAt_ = value;
+    }
+    bitField0_ |= 0x00000010;
+  }
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   */
+  private void clearClearedAt() {
+    clearedAt_ = null;
+    bitField0_ = (bitField0_ & ~0x00000010);
+  }
+
   public static ink.sipc.nagi.proto.v1.AlertState parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -516,7 +583,6 @@ public  final class AlertState extends
     private Builder() {
       super(DEFAULT_INSTANCE);
     }
-
 
     /**
      * <code>string node_id = 1 [json_name = "nodeId"];</code>
@@ -933,6 +999,77 @@ public  final class AlertState extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+     */
+    @java.lang.Override
+    public boolean hasClearedAt() {
+      return instance.hasClearedAt();
+    }
+    /**
+     * <pre>
+     * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+     */
+    @java.lang.Override
+    public com.google.protobuf.Timestamp getClearedAt() {
+      return instance.getClearedAt();
+    }
+    /**
+     * <pre>
+     * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+     */
+    public Builder setClearedAt(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.setClearedAt(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+     */
+    public Builder setClearedAt(
+        com.google.protobuf.Timestamp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setClearedAt(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+     */
+    public Builder mergeClearedAt(com.google.protobuf.Timestamp value) {
+      copyOnWrite();
+      instance.mergeClearedAt(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+     * </pre>
+     *
+     * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+     */
+    public Builder clearClearedAt() {  copyOnWrite();
+      instance.clearClearedAt();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.AlertState)
   }
   @java.lang.Override
@@ -959,11 +1096,12 @@ public  final class AlertState extends
             "handlingRevision_",
             "receivedAt_",
             "validity_",
+            "clearedAt_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0001\u0001\t\t\u0000\u0000\u0000\u0001\u0208\u0002\u1009\u0000\u0003" +
+              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0000\u0000\u0001\u0208\u0002\u1009\u0000\u0003" +
               "\u0007\u0004\u0208\u0005\u1009\u0001\u0006\u1009\u0002\u0007\u0003\b\u1009\u0003" +
-              "\t\u0208";
+              "\t\u0208\n\u1009\u0004";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {
@@ -995,7 +1133,6 @@ public  final class AlertState extends
     throw null;
   }
 
-
   // @@protoc_insertion_point(class_scope:nagi.v1.AlertState)
   private static final ink.sipc.nagi.proto.v1.AlertState DEFAULT_INSTANCE;
   static {
@@ -1017,4 +1154,3 @@ public  final class AlertState extends
     return DEFAULT_INSTANCE.getParserForType();
   }
 }
-

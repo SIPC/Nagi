@@ -2592,7 +2592,7 @@ export type Alert = Message<"nagi.v1.Alert"> & {
   validity: string;
 
   /**
-   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data / cleared（管理员一键清理）/ manual（结束面板事件）；只有 recovered 表示健康恢复。
    *
    * @generated from field: string end_reason = 12;
    */

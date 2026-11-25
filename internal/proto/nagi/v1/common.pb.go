@@ -4291,7 +4291,7 @@ type Alert struct {
 	Source     string `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
 	// valid / unknown；缺数据不改 detection status。
 	Validity string `protobuf:"bytes,11,opt,name=validity,proto3" json:"validity,omitempty"`
-	// recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
+	// recovered / rule_disabled / object_removed / insufficient_data / cleared（管理员一键清理）/ manual（结束面板事件）；只有 recovered 表示健康恢复。
 	EndReason string                 `protobuf:"bytes,12,opt,name=end_reason,json=endReason,proto3" json:"end_reason,omitempty"`
 	Since     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=since,proto3" json:"since,omitempty"`
 	// critical / warning / info；空值按现有单项规则保守处理。

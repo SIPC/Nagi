@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AlertService_ListAlertStates_FullMethodName      = "/nagi.v1.AlertService/ListAlertStates"
 	AlertService_HandleAlert_FullMethodName          = "/nagi.v1.AlertService/HandleAlert"
+	AlertService_ClearAlerts_FullMethodName          = "/nagi.v1.AlertService/ClearAlerts"
 	AlertService_GetAlertRules_FullMethodName        = "/nagi.v1.AlertService/GetAlertRules"
 	AlertService_UpdateAlertPolicy_FullMethodName    = "/nagi.v1.AlertService/UpdateAlertPolicy"
 	AlertService_SetAlertOverride_FullMethodName     = "/nagi.v1.AlertService/SetAlertOverride"
@@ -36,6 +37,10 @@ const (
 type AlertServiceClient interface {
 	ListAlertStates(ctx context.Context, in *ListAlertStatesRequest, opts ...grpc.CallOption) (*ListAlertStatesResponse, error)
 	HandleAlert(ctx context.Context, in *HandleAlertRequest, opts ...grpc.CallOption) (*HandleAlertResponse, error)
+	// 一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+	// 选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+	// 也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+	ClearAlerts(ctx context.Context, in *ClearAlertsRequest, opts ...grpc.CallOption) (*ClearAlertsResponse, error)
 	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
 	GetAlertRules(ctx context.Context, in *GetAlertRulesRequest, opts ...grpc.CallOption) (*GetAlertRulesResponse, error)
 	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
@@ -72,6 +77,16 @@ func (c *alertServiceClient) HandleAlert(ctx context.Context, in *HandleAlertReq
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HandleAlertResponse)
 	err := c.cc.Invoke(ctx, AlertService_HandleAlert_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *alertServiceClient) ClearAlerts(ctx context.Context, in *ClearAlertsRequest, opts ...grpc.CallOption) (*ClearAlertsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClearAlertsResponse)
+	err := c.cc.Invoke(ctx, AlertService_ClearAlerts_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +151,10 @@ func (c *alertServiceClient) ListAlertBaselines(ctx context.Context, in *ListAle
 type AlertServiceServer interface {
 	ListAlertStates(context.Context, *ListAlertStatesRequest) (*ListAlertStatesResponse, error)
 	HandleAlert(context.Context, *HandleAlertRequest) (*HandleAlertResponse, error)
+	// 一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+	// 选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+	// 也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+	ClearAlerts(context.Context, *ClearAlertsRequest) (*ClearAlertsResponse, error)
 	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
 	GetAlertRules(context.Context, *GetAlertRulesRequest) (*GetAlertRulesResponse, error)
 	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
@@ -163,6 +182,9 @@ func (UnimplementedAlertServiceServer) ListAlertStates(context.Context, *ListAle
 }
 func (UnimplementedAlertServiceServer) HandleAlert(context.Context, *HandleAlertRequest) (*HandleAlertResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HandleAlert not implemented")
+}
+func (UnimplementedAlertServiceServer) ClearAlerts(context.Context, *ClearAlertsRequest) (*ClearAlertsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClearAlerts not implemented")
 }
 func (UnimplementedAlertServiceServer) GetAlertRules(context.Context, *GetAlertRulesRequest) (*GetAlertRulesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAlertRules not implemented")
@@ -232,6 +254,24 @@ func _AlertService_HandleAlert_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AlertServiceServer).HandleAlert(ctx, req.(*HandleAlertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AlertService_ClearAlerts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClearAlertsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AlertServiceServer).ClearAlerts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AlertService_ClearAlerts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AlertServiceServer).ClearAlerts(ctx, req.(*ClearAlertsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -340,6 +380,10 @@ var AlertService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HandleAlert",
 			Handler:    _AlertService_HandleAlert_Handler,
+		},
+		{
+			MethodName: "ClearAlerts",
+			Handler:    _AlertService_ClearAlerts_Handler,
 		},
 		{
 			MethodName: "GetAlertRules",

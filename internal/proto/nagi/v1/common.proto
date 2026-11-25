@@ -712,7 +712,7 @@ message Alert {
   string source = 10;
   // valid / unknown；缺数据不改 detection status。
   string validity = 11;
-  // recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
+  // recovered / rule_disabled / object_removed / insufficient_data / cleared（管理员一键清理）/ manual（结束面板事件）；只有 recovered 表示健康恢复。
   string end_reason = 12;
   google.protobuf.Timestamp since = 13;
   // critical / warning / info；空值按现有单项规则保守处理。

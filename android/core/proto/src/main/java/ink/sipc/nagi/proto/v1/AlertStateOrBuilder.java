@@ -109,4 +109,23 @@ public interface AlertStateOrBuilder extends
    */
   com.google.protobuf.ByteString
       getValidityBytes();
+
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   * @return Whether the clearedAt field is set.
+   */
+  boolean hasClearedAt();
+  /**
+   * <pre>
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   * </pre>
+   *
+   * <code>.google.protobuf.Timestamp cleared_at = 10 [json_name = "clearedAt"];</code>
+   * @return The clearedAt.
+   */
+  com.google.protobuf.Timestamp getClearedAt();
 }

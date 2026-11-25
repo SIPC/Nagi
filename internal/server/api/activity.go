@@ -576,6 +576,8 @@ func listHead(items []string) []string {
 // 请求本身的列表很长时会被截断（见 withExtraParams），摘要另外记，追查时看得到实际删了哪些。不是批量操作时返回 nil。
 func batchSummary(req proto.Message, res any) map[string]any {
 	switch m := res.(type) {
+	case *nagiv1.ClearAlertsResponse:
+		return map[string]any{"cleared": m.GetCleared()}
 	case *nagiv1.DeleteImagesResponse:
 		var deleted []string
 		failed := 0

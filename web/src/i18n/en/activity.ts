@@ -120,6 +120,7 @@ export default {
     ReclaimNodeSnapshots: "Clean up snapshot repositories",
     DeleteNodeImages: "Delete images",
     PruneNodeImages: "Clean up images",
+    ClearAlerts: "Clear alerts",
     PullNodeImage: "Pull image",
     SetNodeProjectsRoot: "Set projects root",
     SetNodeReplicaDir: "Set replica directory",

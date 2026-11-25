@@ -21,6 +21,7 @@ import (
 // elevationRequired 里新加接口时，这里要跟着写明，否则测试失败。
 var tokenElevationRules = map[string]string{
 	nagiv1connect.AlertServiceHandleAlertProcedure:                 "",
+	nagiv1connect.AlertServiceClearAlertsProcedure:                 "",
 	nagiv1connect.SettingsServiceTestAuditSinkProcedure:            "",
 	nagiv1connect.SettingsServiceCreateAccessTokenProcedure:        "",
 	nagiv1connect.SettingsServiceBeginTOTPProcedure:                "",

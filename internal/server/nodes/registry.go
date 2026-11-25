@@ -827,7 +827,7 @@ func (p *panelService) Report(ctx context.Context, req *nagiv1.ReportRequest) (*
 		if err := p.r.syncAlerts(ctx, p.conn.NodeID, req.Alerts, false); err != nil {
 			p.r.log.Warn("保存告警快照失败", "node", p.conn.NodeID, "err", err)
 		} else if !p.r.ReadOnly && accepts {
-			resp.AlertHandling, _ = p.r.AlertStates(ctx, p.conn.NodeID, false)
+			resp.AlertHandling, _ = p.r.alertHandling(ctx, p.conn.NodeID, req.Alerts)
 		}
 	}
 	if p.r.Cluster != nil {

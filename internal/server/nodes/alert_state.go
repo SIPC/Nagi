@@ -137,7 +137,7 @@ func validSourceAlert(a *nagiv1.Alert, source string, revision uint64, current b
 	if current {
 		return a.GetStatus() == "firing" && a.GetEndReason() == ""
 	}
-	return a.GetStatus() == "resolved" && a.GetEndReason() == "recovered" || a.GetStatus() == "ended" && (a.GetEndReason() == "rule_disabled" || a.GetEndReason() == "object_removed" || a.GetEndReason() == "insufficient_data")
+	return a.GetStatus() == "resolved" && a.GetEndReason() == "recovered" || a.GetStatus() == "ended" && (a.GetEndReason() == "rule_disabled" || a.GetEndReason() == "object_removed" || a.GetEndReason() == "insufficient_data" || a.GetEndReason() == "cleared")
 }
 
 // syncAlerts is called only after authenticating/approving the source. A delta
@@ -182,11 +182,19 @@ func (r *Registry) syncAlerts(ctx context.Context, node string, s *nagiv1.AlertS
 		current[a.Alert.Key] = a
 	}
 	latest := map[string]uint64{}
+	cleared := map[string]bool{}
 	for _, a := range append(append([]*nagiv1.AlertState{}, l.History...), l.Current...) {
 		latest[a.Alert.Key+"\x00"+a.Alert.Occurrence] = max(latest[a.Alert.Key+"\x00"+a.Alert.Occurrence], a.Alert.Revision)
+		if a.ClearedAt != nil {
+			cleared[a.Alert.Key+"\x00"+a.Alert.Occurrence] = true
+		}
 	}
 	now := timestamppb.Now()
 	apply := func(a *nagiv1.Alert, active bool) {
+		// 管理员清理过的这一轮（ClearAlerts）不再放回当前告警：旧节点不会结束它，新节点收到后以 cleared 结束。
+		if cleared[a.Key+"\x00"+a.Occurrence] {
+			return
+		}
 		old := current[a.Key]
 		// Equal snapshot entries refresh receipt time, but never overwrite content.
 		if a.Revision <= latest[a.Key+"\x00"+a.Occurrence] {
@@ -326,6 +334,89 @@ func (r *Registry) AlertStates(ctx context.Context, node string, history bool) (
 		return out[i].Alert.Revision > out[j].Alert.Revision
 	})
 	return out, nil
+}
+
+// ClearAlerts 把当前告警以 cleared 结束（见 docs/monitoring.md#日志页中的当前告警与人工处理）：node 不为空时只清这个节点的，
+// panel 只清面板自己的，都没有时清全部。只改告警状态，记录留在历史和审计里。节点的告警记下 cleared_at，节点下次上报时
+// 收到（AlertHandling）也结束这一轮并重新计时；面板自己的规则同样重新计时。条件仍在时会作为新的一轮重新告警。
+func (r *Registry) ClearAlerts(ctx context.Context, node string, panel bool, actor string) (int, error) {
+	ids := []string{node}
+	if !panel && node == "" {
+		rows, err := r.q.ListNodes(ctx)
+		if err != nil {
+			return 0, err
+		}
+		for _, n := range rows {
+			ids = append(ids, n.ID)
+		}
+	}
+	total := 0
+	for _, id := range ids {
+		n, err := r.clearLedger(ctx, id, actor)
+		total += n
+		if err != nil {
+			return total, err
+		}
+	}
+	if total > 0 {
+		r.Changes.Bump()
+	}
+	return total, nil
+}
+
+// alertHandling 是回给节点的处理状态：当前告警，加上节点还在报告、但已被清理的那几轮（节点据此以 cleared 结束）。
+func (r *Registry) alertHandling(ctx context.Context, node string, s *nagiv1.AlertSync) ([]*nagiv1.AlertState, error) {
+	all, err := r.AlertStates(ctx, node, true)
+	if err != nil {
+		return nil, err
+	}
+	reported := map[string]bool{}
+	for _, a := range s.GetCurrent() {
+		reported[a.GetKey()+"\x00"+a.GetOccurrence()] = true
+	}
+	var out []*nagiv1.AlertState
+	for _, a := range all {
+		if a.Alert.GetStatus() == "firing" || a.ClearedAt != nil && reported[a.Alert.Key+"\x00"+a.Alert.Occurrence] {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+func (r *Registry) clearLedger(ctx context.Context, node, actor string) (int, error) {
+	r.alerts.mu.Lock()
+	defer r.alerts.mu.Unlock()
+	l, err := r.loadAlertLedger(ctx, node)
+	if err != nil || len(l.Current) == 0 {
+		return 0, err
+	}
+	now := timestamppb.Now()
+	keys := make([]string, 0, len(l.Current))
+	for _, a := range l.Current {
+		a.Alert = proto.CloneOf(a.Alert)
+		a.Alert.Status, a.Alert.EndReason, a.Alert.Time = "ended", "cleared", now
+		a.ClearedAt = now
+		a.HandlingRevision++
+		keys = append(keys, a.Alert.Key)
+	}
+	n := len(l.Current)
+	l.History = append(l.History, l.Current...)
+	l.Current = nil
+	if len(l.History) > 200 {
+		l.History = l.History[len(l.History)-200:]
+	}
+	if node == "" {
+		p := &r.panelRules
+		p.mu.Lock()
+		for _, k := range keys {
+			delete(p.tracks, k)
+		}
+		p.mu.Unlock()
+	}
+	if len(keys) > 50 {
+		keys = keys[:50]
+	}
+	return n, r.saveAlertLedger(ctx, node, l, logstore.Event{Kind: "alert.cleared", Object: node, Data: map[string]any{"actor": actor, "cleared": n, "alert_keys": keys}})
 }
 
 func (r *Registry) HandleAlert(ctx context.Context, req *nagiv1.HandleAlertRequest, actor string) (*nagiv1.AlertState, error) {

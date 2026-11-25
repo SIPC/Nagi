@@ -16,6 +16,13 @@ public interface AlertServiceClientInterface {
   public suspend fun handleAlert(request: HandleAlertRequest, headers: Headers = emptyMap()): ResponseMessage<HandleAlertResponse>
 
   /**
+   *  一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+   *  选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+   *  也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+   */
+  public suspend fun clearAlerts(request: ClearAlertsRequest, headers: Headers = emptyMap()): ResponseMessage<ClearAlertsResponse>
+
+  /**
    *  告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
    */
   public suspend fun getAlertRules(request: GetAlertRulesRequest, headers: Headers = emptyMap()): ResponseMessage<GetAlertRulesResponse>

@@ -531,3 +531,32 @@ func TestCountAlertRestoredAfterRestartRecovers(t *testing.T) {
 		}
 	}
 }
+
+// 管理员一键清理（面板回 cleared_at）：这一轮以 cleared 结束（不是恢复），不发通知；计时从头开始，条件还在时
+// 要重新持续满 for_seconds 才作为新的一轮告警。清理的是旧一轮时不能结束新的一轮。
+func TestPanelClearEndsOccurrenceAndRestartsDetection(t *testing.T) {
+	h := newHarness(t, nil)
+	h.feed(mem(92), 11)
+	h.expect(1, "超标满 5 分钟")
+	old := h.e.Snapshot().Current[0]
+	h.e.ApplyHandling([]*nagiv1.AlertState{{Alert: old, ClearedAt: timestamppb.Now()}})
+	s := h.e.Snapshot()
+	if len(s.Current) != 0 || len(s.History) != 1 || s.History[0].GetStatus() != "ended" || s.History[0].GetEndReason() != "cleared" {
+		t.Fatalf("应该以 cleared 结束：%v", s)
+	}
+	h.feed(mem(92), 10)
+	h.expect(1, "清理不发通知，清理后超标不满 5 分钟不重新告警")
+	if len(h.e.Snapshot().Current) != 0 {
+		t.Fatal("清理后应该重新计时")
+	}
+	h.feed(mem(92), 1)
+	h.expect(2, "条件还在，满 5 分钟后重新告警")
+	cur := h.e.Snapshot().Current
+	if len(cur) != 1 || cur[0].GetOccurrence() == old.GetOccurrence() {
+		t.Fatalf("应该是新的一轮：%v", cur)
+	}
+	h.e.ApplyHandling([]*nagiv1.AlertState{{Alert: old, ClearedAt: timestamppb.Now()}})
+	if len(h.e.Snapshot().Current) != 1 {
+		t.Fatal("清理旧一轮不能结束新的一轮")
+	}
+}

@@ -10,6 +10,10 @@ option java_package = "ink.sipc.nagi.proto.v1";
 service AlertService {
   rpc ListAlertStates(ListAlertStatesRequest) returns (ListAlertStatesResponse);
   rpc HandleAlert(HandleAlertRequest) returns (HandleAlertResponse);
+  // 一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+  // 选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+  // 也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+  rpc ClearAlerts(ClearAlertsRequest) returns (ClearAlertsResponse);
   // 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
   rpc GetAlertRules(GetAlertRulesRequest) returns (GetAlertRulesResponse);
   // 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
@@ -74,6 +78,8 @@ message AlertState {
   // 面板接收到该条状态的时间；来源中断时动态返回 stale，而非健康。
   google.protobuf.Timestamp received_at = 8;
   string validity = 9;
+  // 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+  google.protobuf.Timestamp cleared_at = 10;
 }
 
 message ListAlertStatesRequest { string node_id = 1; bool include_history = 2; }
@@ -90,6 +96,9 @@ message HandleAlertRequest {
   google.protobuf.Timestamp until = 7;
 }
 message HandleAlertResponse { AlertState alert = 1; }
+// node_id 为空且 panel 为 false 时清理全部当前告警；node_id 只清这个节点的；panel 只清面板自己的。
+message ClearAlertsRequest { string node_id = 1; bool panel = 2; }
+message ClearAlertsResponse { uint32 cleared = 1; }
 
 message GetAlertRulesRequest {}
 message GetAlertRulesResponse {

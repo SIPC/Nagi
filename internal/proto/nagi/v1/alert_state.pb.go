@@ -374,8 +374,10 @@ type AlertState struct {
 	MaintenanceUntil *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=maintenance_until,json=maintenanceUntil,proto3" json:"maintenance_until,omitempty"`
 	HandlingRevision uint64                 `protobuf:"varint,7,opt,name=handling_revision,json=handlingRevision,proto3" json:"handling_revision,omitempty"`
 	// 面板接收到该条状态的时间；来源中断时动态返回 stale，而非健康。
-	ReceivedAt    *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
-	Validity      string                 `protobuf:"bytes,9,opt,name=validity,proto3" json:"validity,omitempty"`
+	ReceivedAt *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
+	Validity   string                 `protobuf:"bytes,9,opt,name=validity,proto3" json:"validity,omitempty"`
+	// 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+	ClearedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=cleared_at,json=clearedAt,proto3" json:"cleared_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -471,6 +473,13 @@ func (x *AlertState) GetValidity() string {
 		return x.Validity
 	}
 	return ""
+}
+
+func (x *AlertState) GetClearedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ClearedAt
+	}
+	return nil
 }
 
 type ListAlertStatesRequest struct {
@@ -715,6 +724,103 @@ func (x *HandleAlertResponse) GetAlert() *AlertState {
 	return nil
 }
 
+// node_id 为空且 panel 为 false 时清理全部当前告警；node_id 只清这个节点的；panel 只清面板自己的。
+type ClearAlertsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Panel         bool                   `protobuf:"varint,2,opt,name=panel,proto3" json:"panel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearAlertsRequest) Reset() {
+	*x = ClearAlertsRequest{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearAlertsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearAlertsRequest) ProtoMessage() {}
+
+func (x *ClearAlertsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearAlertsRequest.ProtoReflect.Descriptor instead.
+func (*ClearAlertsRequest) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ClearAlertsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *ClearAlertsRequest) GetPanel() bool {
+	if x != nil {
+		return x.Panel
+	}
+	return false
+}
+
+type ClearAlertsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cleared       uint32                 `protobuf:"varint,1,opt,name=cleared,proto3" json:"cleared,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClearAlertsResponse) Reset() {
+	*x = ClearAlertsResponse{}
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClearAlertsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClearAlertsResponse) ProtoMessage() {}
+
+func (x *ClearAlertsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClearAlertsResponse.ProtoReflect.Descriptor instead.
+func (*ClearAlertsResponse) Descriptor() ([]byte, []int) {
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ClearAlertsResponse) GetCleared() uint32 {
+	if x != nil {
+		return x.Cleared
+	}
+	return 0
+}
+
 type GetAlertRulesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -723,7 +829,7 @@ type GetAlertRulesRequest struct {
 
 func (x *GetAlertRulesRequest) Reset() {
 	*x = GetAlertRulesRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[10]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -735,7 +841,7 @@ func (x *GetAlertRulesRequest) String() string {
 func (*GetAlertRulesRequest) ProtoMessage() {}
 
 func (x *GetAlertRulesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[10]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -748,7 +854,7 @@ func (x *GetAlertRulesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAlertRulesRequest.ProtoReflect.Descriptor instead.
 func (*GetAlertRulesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{10}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{12}
 }
 
 type GetAlertRulesResponse struct {
@@ -771,7 +877,7 @@ type GetAlertRulesResponse struct {
 
 func (x *GetAlertRulesResponse) Reset() {
 	*x = GetAlertRulesResponse{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[11]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -783,7 +889,7 @@ func (x *GetAlertRulesResponse) String() string {
 func (*GetAlertRulesResponse) ProtoMessage() {}
 
 func (x *GetAlertRulesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[11]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -796,7 +902,7 @@ func (x *GetAlertRulesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAlertRulesResponse.ProtoReflect.Descriptor instead.
 func (*GetAlertRulesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{11}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetAlertRulesResponse) GetBuiltin() *AlertPolicy {
@@ -873,7 +979,7 @@ type AlertRuleDef struct {
 
 func (x *AlertRuleDef) Reset() {
 	*x = AlertRuleDef{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[12]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -885,7 +991,7 @@ func (x *AlertRuleDef) String() string {
 func (*AlertRuleDef) ProtoMessage() {}
 
 func (x *AlertRuleDef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[12]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -898,7 +1004,7 @@ func (x *AlertRuleDef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertRuleDef.ProtoReflect.Descriptor instead.
 func (*AlertRuleDef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{12}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AlertRuleDef) GetName() string {
@@ -968,7 +1074,7 @@ type AlertNoticeDef struct {
 
 func (x *AlertNoticeDef) Reset() {
 	*x = AlertNoticeDef{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[13]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -980,7 +1086,7 @@ func (x *AlertNoticeDef) String() string {
 func (*AlertNoticeDef) ProtoMessage() {}
 
 func (x *AlertNoticeDef) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[13]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -993,7 +1099,7 @@ func (x *AlertNoticeDef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertNoticeDef.ProtoReflect.Descriptor instead.
 func (*AlertNoticeDef) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{13}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AlertNoticeDef) GetKey() string {
@@ -1055,7 +1161,7 @@ type UpdateAlertPolicyRequest struct {
 
 func (x *UpdateAlertPolicyRequest) Reset() {
 	*x = UpdateAlertPolicyRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[14]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1067,7 +1173,7 @@ func (x *UpdateAlertPolicyRequest) String() string {
 func (*UpdateAlertPolicyRequest) ProtoMessage() {}
 
 func (x *UpdateAlertPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[14]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1080,7 +1186,7 @@ func (x *UpdateAlertPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateAlertPolicyRequest.ProtoReflect.Descriptor instead.
 func (*UpdateAlertPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{14}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpdateAlertPolicyRequest) GetPolicy() *AlertPolicy {
@@ -1108,7 +1214,7 @@ type SetAlertNotificationRequest struct {
 
 func (x *SetAlertNotificationRequest) Reset() {
 	*x = SetAlertNotificationRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[15]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1226,7 @@ func (x *SetAlertNotificationRequest) String() string {
 func (*SetAlertNotificationRequest) ProtoMessage() {}
 
 func (x *SetAlertNotificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[15]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1239,7 @@ func (x *SetAlertNotificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAlertNotificationRequest.ProtoReflect.Descriptor instead.
 func (*SetAlertNotificationRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{15}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SetAlertNotificationRequest) GetKey() string {
@@ -1165,7 +1271,7 @@ type ListAlertBaselinesRequest struct {
 
 func (x *ListAlertBaselinesRequest) Reset() {
 	*x = ListAlertBaselinesRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[16]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1177,7 +1283,7 @@ func (x *ListAlertBaselinesRequest) String() string {
 func (*ListAlertBaselinesRequest) ProtoMessage() {}
 
 func (x *ListAlertBaselinesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[16]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1190,7 +1296,7 @@ func (x *ListAlertBaselinesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAlertBaselinesRequest.ProtoReflect.Descriptor instead.
 func (*ListAlertBaselinesRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{16}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{18}
 }
 
 type ListAlertBaselinesResponse struct {
@@ -1202,7 +1308,7 @@ type ListAlertBaselinesResponse struct {
 
 func (x *ListAlertBaselinesResponse) Reset() {
 	*x = ListAlertBaselinesResponse{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[17]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1214,7 +1320,7 @@ func (x *ListAlertBaselinesResponse) String() string {
 func (*ListAlertBaselinesResponse) ProtoMessage() {}
 
 func (x *ListAlertBaselinesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[17]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1227,7 +1333,7 @@ func (x *ListAlertBaselinesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAlertBaselinesResponse.ProtoReflect.Descriptor instead.
 func (*ListAlertBaselinesResponse) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{17}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListAlertBaselinesResponse) GetBaselines() []*AlertBaselineState {
@@ -1253,7 +1359,7 @@ type AlertBaselineState struct {
 
 func (x *AlertBaselineState) Reset() {
 	*x = AlertBaselineState{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[18]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1265,7 +1371,7 @@ func (x *AlertBaselineState) String() string {
 func (*AlertBaselineState) ProtoMessage() {}
 
 func (x *AlertBaselineState) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[18]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1278,7 +1384,7 @@ func (x *AlertBaselineState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlertBaselineState.ProtoReflect.Descriptor instead.
 func (*AlertBaselineState) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{18}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AlertBaselineState) GetNodeId() string {
@@ -1331,7 +1437,7 @@ type SetAlertOverrideRequest struct {
 
 func (x *SetAlertOverrideRequest) Reset() {
 	*x = SetAlertOverrideRequest{}
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[19]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1343,7 +1449,7 @@ func (x *SetAlertOverrideRequest) String() string {
 func (*SetAlertOverrideRequest) ProtoMessage() {}
 
 func (x *SetAlertOverrideRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_nagi_v1_alert_state_proto_msgTypes[19]
+	mi := &file_nagi_v1_alert_state_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1356,7 +1462,7 @@ func (x *SetAlertOverrideRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAlertOverrideRequest.ProtoReflect.Descriptor instead.
 func (*SetAlertOverrideRequest) Descriptor() ([]byte, []int) {
-	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{19}
+	return file_nagi_v1_alert_state_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SetAlertOverrideRequest) GetScope() string {
@@ -1439,7 +1545,7 @@ const file_nagi_v1_alert_state_proto_rawDesc = "" +
 	"\x11collected_seconds\x18\x05 \x01(\rR\x10collectedSeconds\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12;\n" +
 	"\vlast_sample\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"lastSample\"\x9f\x03\n" +
+	"lastSample\"\xda\x03\n" +
 	"\n" +
 	"AlertState\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12$\n" +
@@ -1453,7 +1559,10 @@ const file_nagi_v1_alert_state_proto_rawDesc = "" +
 	"\x11handling_revision\x18\a \x01(\x04R\x10handlingRevision\x12;\n" +
 	"\vreceived_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"receivedAt\x12\x1a\n" +
-	"\bvalidity\x18\t \x01(\tR\bvalidity\"Z\n" +
+	"\bvalidity\x18\t \x01(\tR\bvalidity\x129\n" +
+	"\n" +
+	"cleared_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tclearedAt\"Z\n" +
 	"\x16ListAlertStatesRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12'\n" +
 	"\x0finclude_history\x18\x02 \x01(\bR\x0eincludeHistory\"g\n" +
@@ -1474,7 +1583,12 @@ const file_nagi_v1_alert_state_proto_rawDesc = "" +
 	"conclusion\x120\n" +
 	"\x05until\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\x05until\"@\n" +
 	"\x13HandleAlertResponse\x12)\n" +
-	"\x05alert\x18\x01 \x01(\v2\x13.nagi.v1.AlertStateR\x05alert\"\x16\n" +
+	"\x05alert\x18\x01 \x01(\v2\x13.nagi.v1.AlertStateR\x05alert\"C\n" +
+	"\x12ClearAlertsRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05panel\x18\x02 \x01(\bR\x05panel\"/\n" +
+	"\x13ClearAlertsResponse\x12\x18\n" +
+	"\acleared\x18\x01 \x01(\rR\acleared\"\x16\n" +
 	"\x14GetAlertRulesRequest\"\x96\x03\n" +
 	"\x15GetAlertRulesResponse\x12.\n" +
 	"\abuiltin\x18\x01 \x01(\v2\x14.nagi.v1.AlertPolicyR\abuiltin\x12,\n" +
@@ -1529,10 +1643,11 @@ const file_nagi_v1_alert_state_proto_rawDesc = "" +
 	"\n" +
 	"RulesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12(\n" +
-	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x012\xcd\x04\n" +
+	"\x05value\x18\x02 \x01(\v2\x12.nagi.v1.AlertRuleR\x05value:\x028\x012\x97\x05\n" +
 	"\fAlertService\x12T\n" +
 	"\x0fListAlertStates\x12\x1f.nagi.v1.ListAlertStatesRequest\x1a .nagi.v1.ListAlertStatesResponse\x12H\n" +
-	"\vHandleAlert\x12\x1b.nagi.v1.HandleAlertRequest\x1a\x1c.nagi.v1.HandleAlertResponse\x12N\n" +
+	"\vHandleAlert\x12\x1b.nagi.v1.HandleAlertRequest\x1a\x1c.nagi.v1.HandleAlertResponse\x12H\n" +
+	"\vClearAlerts\x12\x1b.nagi.v1.ClearAlertsRequest\x1a\x1c.nagi.v1.ClearAlertsResponse\x12N\n" +
 	"\rGetAlertRules\x12\x1d.nagi.v1.GetAlertRulesRequest\x1a\x1e.nagi.v1.GetAlertRulesResponse\x12L\n" +
 	"\x11UpdateAlertPolicy\x12!.nagi.v1.UpdateAlertPolicyRequest\x1a\x14.nagi.v1.AlertPolicy\x12L\n" +
 	"\x10SetAlertOverride\x12 .nagi.v1.SetAlertOverrideRequest\x1a\x16.nagi.v1.AlertOverride\x12R\n" +
@@ -1555,7 +1670,7 @@ func file_nagi_v1_alert_state_proto_rawDescGZIP() []byte {
 	return file_nagi_v1_alert_state_proto_rawDescData
 }
 
-var file_nagi_v1_alert_state_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_nagi_v1_alert_state_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_nagi_v1_alert_state_proto_goTypes = []any{
 	(*AlertReplicaRequest)(nil),         // 0: nagi.v1.AlertReplicaRequest
 	(*AlertReplica)(nil),                // 1: nagi.v1.AlertReplica
@@ -1567,69 +1682,74 @@ var file_nagi_v1_alert_state_proto_goTypes = []any{
 	(*ListAlertStatesResponse)(nil),     // 7: nagi.v1.ListAlertStatesResponse
 	(*HandleAlertRequest)(nil),          // 8: nagi.v1.HandleAlertRequest
 	(*HandleAlertResponse)(nil),         // 9: nagi.v1.HandleAlertResponse
-	(*GetAlertRulesRequest)(nil),        // 10: nagi.v1.GetAlertRulesRequest
-	(*GetAlertRulesResponse)(nil),       // 11: nagi.v1.GetAlertRulesResponse
-	(*AlertRuleDef)(nil),                // 12: nagi.v1.AlertRuleDef
-	(*AlertNoticeDef)(nil),              // 13: nagi.v1.AlertNoticeDef
-	(*UpdateAlertPolicyRequest)(nil),    // 14: nagi.v1.UpdateAlertPolicyRequest
-	(*SetAlertNotificationRequest)(nil), // 15: nagi.v1.SetAlertNotificationRequest
-	(*ListAlertBaselinesRequest)(nil),   // 16: nagi.v1.ListAlertBaselinesRequest
-	(*ListAlertBaselinesResponse)(nil),  // 17: nagi.v1.ListAlertBaselinesResponse
-	(*AlertBaselineState)(nil),          // 18: nagi.v1.AlertBaselineState
-	(*SetAlertOverrideRequest)(nil),     // 19: nagi.v1.SetAlertOverrideRequest
-	nil,                                 // 20: nagi.v1.SetAlertOverrideRequest.RulesEntry
-	(*Alert)(nil),                       // 21: nagi.v1.Alert
-	(*timestamppb.Timestamp)(nil),       // 22: google.protobuf.Timestamp
-	(*AlertPolicy)(nil),                 // 23: nagi.v1.AlertPolicy
-	(*AlertOverride)(nil),               // 24: nagi.v1.AlertOverride
-	(*AlertRule)(nil),                   // 25: nagi.v1.AlertRule
+	(*ClearAlertsRequest)(nil),          // 10: nagi.v1.ClearAlertsRequest
+	(*ClearAlertsResponse)(nil),         // 11: nagi.v1.ClearAlertsResponse
+	(*GetAlertRulesRequest)(nil),        // 12: nagi.v1.GetAlertRulesRequest
+	(*GetAlertRulesResponse)(nil),       // 13: nagi.v1.GetAlertRulesResponse
+	(*AlertRuleDef)(nil),                // 14: nagi.v1.AlertRuleDef
+	(*AlertNoticeDef)(nil),              // 15: nagi.v1.AlertNoticeDef
+	(*UpdateAlertPolicyRequest)(nil),    // 16: nagi.v1.UpdateAlertPolicyRequest
+	(*SetAlertNotificationRequest)(nil), // 17: nagi.v1.SetAlertNotificationRequest
+	(*ListAlertBaselinesRequest)(nil),   // 18: nagi.v1.ListAlertBaselinesRequest
+	(*ListAlertBaselinesResponse)(nil),  // 19: nagi.v1.ListAlertBaselinesResponse
+	(*AlertBaselineState)(nil),          // 20: nagi.v1.AlertBaselineState
+	(*SetAlertOverrideRequest)(nil),     // 21: nagi.v1.SetAlertOverrideRequest
+	nil,                                 // 22: nagi.v1.SetAlertOverrideRequest.RulesEntry
+	(*Alert)(nil),                       // 23: nagi.v1.Alert
+	(*timestamppb.Timestamp)(nil),       // 24: google.protobuf.Timestamp
+	(*AlertPolicy)(nil),                 // 25: nagi.v1.AlertPolicy
+	(*AlertOverride)(nil),               // 26: nagi.v1.AlertOverride
+	(*AlertRule)(nil),                   // 27: nagi.v1.AlertRule
 }
 var file_nagi_v1_alert_state_proto_depIdxs = []int32{
 	8,  // 0: nagi.v1.RelayHandleAlertRequest.request:type_name -> nagi.v1.HandleAlertRequest
-	21, // 1: nagi.v1.AlertSync.current:type_name -> nagi.v1.Alert
-	21, // 2: nagi.v1.AlertSync.history:type_name -> nagi.v1.Alert
+	23, // 1: nagi.v1.AlertSync.current:type_name -> nagi.v1.Alert
+	23, // 2: nagi.v1.AlertSync.history:type_name -> nagi.v1.Alert
 	4,  // 3: nagi.v1.AlertSync.baselines:type_name -> nagi.v1.AlertBaseline
-	22, // 4: nagi.v1.AlertBaseline.last_sample:type_name -> google.protobuf.Timestamp
-	21, // 5: nagi.v1.AlertState.alert:type_name -> nagi.v1.Alert
-	22, // 6: nagi.v1.AlertState.silence_until:type_name -> google.protobuf.Timestamp
-	22, // 7: nagi.v1.AlertState.maintenance_until:type_name -> google.protobuf.Timestamp
-	22, // 8: nagi.v1.AlertState.received_at:type_name -> google.protobuf.Timestamp
-	5,  // 9: nagi.v1.ListAlertStatesResponse.alerts:type_name -> nagi.v1.AlertState
-	22, // 10: nagi.v1.HandleAlertRequest.until:type_name -> google.protobuf.Timestamp
-	5,  // 11: nagi.v1.HandleAlertResponse.alert:type_name -> nagi.v1.AlertState
-	23, // 12: nagi.v1.GetAlertRulesResponse.builtin:type_name -> nagi.v1.AlertPolicy
-	23, // 13: nagi.v1.GetAlertRulesResponse.policy:type_name -> nagi.v1.AlertPolicy
-	24, // 14: nagi.v1.GetAlertRulesResponse.overrides:type_name -> nagi.v1.AlertOverride
-	12, // 15: nagi.v1.GetAlertRulesResponse.defs:type_name -> nagi.v1.AlertRuleDef
-	13, // 16: nagi.v1.GetAlertRulesResponse.notices:type_name -> nagi.v1.AlertNoticeDef
-	23, // 17: nagi.v1.UpdateAlertPolicyRequest.policy:type_name -> nagi.v1.AlertPolicy
-	18, // 18: nagi.v1.ListAlertBaselinesResponse.baselines:type_name -> nagi.v1.AlertBaselineState
-	4,  // 19: nagi.v1.AlertBaselineState.baseline:type_name -> nagi.v1.AlertBaseline
-	20, // 20: nagi.v1.SetAlertOverrideRequest.rules:type_name -> nagi.v1.SetAlertOverrideRequest.RulesEntry
-	25, // 21: nagi.v1.SetAlertOverrideRequest.RulesEntry.value:type_name -> nagi.v1.AlertRule
-	6,  // 22: nagi.v1.AlertService.ListAlertStates:input_type -> nagi.v1.ListAlertStatesRequest
-	8,  // 23: nagi.v1.AlertService.HandleAlert:input_type -> nagi.v1.HandleAlertRequest
-	10, // 24: nagi.v1.AlertService.GetAlertRules:input_type -> nagi.v1.GetAlertRulesRequest
-	14, // 25: nagi.v1.AlertService.UpdateAlertPolicy:input_type -> nagi.v1.UpdateAlertPolicyRequest
-	19, // 26: nagi.v1.AlertService.SetAlertOverride:input_type -> nagi.v1.SetAlertOverrideRequest
-	15, // 27: nagi.v1.AlertService.SetAlertNotification:input_type -> nagi.v1.SetAlertNotificationRequest
-	16, // 28: nagi.v1.AlertService.ListAlertBaselines:input_type -> nagi.v1.ListAlertBaselinesRequest
-	0,  // 29: nagi.v1.PanelAlertService.ReadAlertReplica:input_type -> nagi.v1.AlertReplicaRequest
-	2,  // 30: nagi.v1.PanelAlertService.RelayHandleAlert:input_type -> nagi.v1.RelayHandleAlertRequest
-	7,  // 31: nagi.v1.AlertService.ListAlertStates:output_type -> nagi.v1.ListAlertStatesResponse
-	9,  // 32: nagi.v1.AlertService.HandleAlert:output_type -> nagi.v1.HandleAlertResponse
-	11, // 33: nagi.v1.AlertService.GetAlertRules:output_type -> nagi.v1.GetAlertRulesResponse
-	23, // 34: nagi.v1.AlertService.UpdateAlertPolicy:output_type -> nagi.v1.AlertPolicy
-	24, // 35: nagi.v1.AlertService.SetAlertOverride:output_type -> nagi.v1.AlertOverride
-	23, // 36: nagi.v1.AlertService.SetAlertNotification:output_type -> nagi.v1.AlertPolicy
-	17, // 37: nagi.v1.AlertService.ListAlertBaselines:output_type -> nagi.v1.ListAlertBaselinesResponse
-	1,  // 38: nagi.v1.PanelAlertService.ReadAlertReplica:output_type -> nagi.v1.AlertReplica
-	1,  // 39: nagi.v1.PanelAlertService.RelayHandleAlert:output_type -> nagi.v1.AlertReplica
-	31, // [31:40] is the sub-list for method output_type
-	22, // [22:31] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	24, // 4: nagi.v1.AlertBaseline.last_sample:type_name -> google.protobuf.Timestamp
+	23, // 5: nagi.v1.AlertState.alert:type_name -> nagi.v1.Alert
+	24, // 6: nagi.v1.AlertState.silence_until:type_name -> google.protobuf.Timestamp
+	24, // 7: nagi.v1.AlertState.maintenance_until:type_name -> google.protobuf.Timestamp
+	24, // 8: nagi.v1.AlertState.received_at:type_name -> google.protobuf.Timestamp
+	24, // 9: nagi.v1.AlertState.cleared_at:type_name -> google.protobuf.Timestamp
+	5,  // 10: nagi.v1.ListAlertStatesResponse.alerts:type_name -> nagi.v1.AlertState
+	24, // 11: nagi.v1.HandleAlertRequest.until:type_name -> google.protobuf.Timestamp
+	5,  // 12: nagi.v1.HandleAlertResponse.alert:type_name -> nagi.v1.AlertState
+	25, // 13: nagi.v1.GetAlertRulesResponse.builtin:type_name -> nagi.v1.AlertPolicy
+	25, // 14: nagi.v1.GetAlertRulesResponse.policy:type_name -> nagi.v1.AlertPolicy
+	26, // 15: nagi.v1.GetAlertRulesResponse.overrides:type_name -> nagi.v1.AlertOverride
+	14, // 16: nagi.v1.GetAlertRulesResponse.defs:type_name -> nagi.v1.AlertRuleDef
+	15, // 17: nagi.v1.GetAlertRulesResponse.notices:type_name -> nagi.v1.AlertNoticeDef
+	25, // 18: nagi.v1.UpdateAlertPolicyRequest.policy:type_name -> nagi.v1.AlertPolicy
+	20, // 19: nagi.v1.ListAlertBaselinesResponse.baselines:type_name -> nagi.v1.AlertBaselineState
+	4,  // 20: nagi.v1.AlertBaselineState.baseline:type_name -> nagi.v1.AlertBaseline
+	22, // 21: nagi.v1.SetAlertOverrideRequest.rules:type_name -> nagi.v1.SetAlertOverrideRequest.RulesEntry
+	27, // 22: nagi.v1.SetAlertOverrideRequest.RulesEntry.value:type_name -> nagi.v1.AlertRule
+	6,  // 23: nagi.v1.AlertService.ListAlertStates:input_type -> nagi.v1.ListAlertStatesRequest
+	8,  // 24: nagi.v1.AlertService.HandleAlert:input_type -> nagi.v1.HandleAlertRequest
+	10, // 25: nagi.v1.AlertService.ClearAlerts:input_type -> nagi.v1.ClearAlertsRequest
+	12, // 26: nagi.v1.AlertService.GetAlertRules:input_type -> nagi.v1.GetAlertRulesRequest
+	16, // 27: nagi.v1.AlertService.UpdateAlertPolicy:input_type -> nagi.v1.UpdateAlertPolicyRequest
+	21, // 28: nagi.v1.AlertService.SetAlertOverride:input_type -> nagi.v1.SetAlertOverrideRequest
+	17, // 29: nagi.v1.AlertService.SetAlertNotification:input_type -> nagi.v1.SetAlertNotificationRequest
+	18, // 30: nagi.v1.AlertService.ListAlertBaselines:input_type -> nagi.v1.ListAlertBaselinesRequest
+	0,  // 31: nagi.v1.PanelAlertService.ReadAlertReplica:input_type -> nagi.v1.AlertReplicaRequest
+	2,  // 32: nagi.v1.PanelAlertService.RelayHandleAlert:input_type -> nagi.v1.RelayHandleAlertRequest
+	7,  // 33: nagi.v1.AlertService.ListAlertStates:output_type -> nagi.v1.ListAlertStatesResponse
+	9,  // 34: nagi.v1.AlertService.HandleAlert:output_type -> nagi.v1.HandleAlertResponse
+	11, // 35: nagi.v1.AlertService.ClearAlerts:output_type -> nagi.v1.ClearAlertsResponse
+	13, // 36: nagi.v1.AlertService.GetAlertRules:output_type -> nagi.v1.GetAlertRulesResponse
+	25, // 37: nagi.v1.AlertService.UpdateAlertPolicy:output_type -> nagi.v1.AlertPolicy
+	26, // 38: nagi.v1.AlertService.SetAlertOverride:output_type -> nagi.v1.AlertOverride
+	25, // 39: nagi.v1.AlertService.SetAlertNotification:output_type -> nagi.v1.AlertPolicy
+	19, // 40: nagi.v1.AlertService.ListAlertBaselines:output_type -> nagi.v1.ListAlertBaselinesResponse
+	1,  // 41: nagi.v1.PanelAlertService.ReadAlertReplica:output_type -> nagi.v1.AlertReplica
+	1,  // 42: nagi.v1.PanelAlertService.RelayHandleAlert:output_type -> nagi.v1.AlertReplica
+	33, // [33:43] is the sub-list for method output_type
+	23, // [23:33] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_nagi_v1_alert_state_proto_init() }
@@ -1644,7 +1764,7 @@ func file_nagi_v1_alert_state_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_nagi_v1_alert_state_proto_rawDesc), len(file_nagi_v1_alert_state_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

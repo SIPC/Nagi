@@ -169,7 +169,7 @@ public interface AlertOrBuilder extends
 
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data / cleared（管理员一键清理）/ manual（结束面板事件）；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>
@@ -178,7 +178,7 @@ public interface AlertOrBuilder extends
   java.lang.String getEndReason();
   /**
    * <pre>
-   * recovered / rule_disabled / object_removed / insufficient_data；只有 recovered 表示健康恢复。
+   * recovered / rule_disabled / object_removed / insufficient_data / cleared（管理员一键清理）/ manual（结束面板事件）；只有 recovered 表示健康恢复。
    * </pre>
    *
    * <code>string end_reason = 12 [json_name = "endReason"];</code>

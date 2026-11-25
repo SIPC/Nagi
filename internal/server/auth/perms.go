@@ -235,6 +235,8 @@ var selfProcedures = map[string]bool{
 }
 
 var adminProcedures = map[string]bool{
+	// 一键清理告警：会结束所有项目和节点的当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）。
+	"/nagi.v1.AlertService/ClearAlerts": true,
 	// Reports combine cross-project host and alert evidence.
 	"/nagi.v1.ModelReportService/GetReportConfig":    true,
 	"/nagi.v1.ModelReportService/UpdateReportConfig": true,

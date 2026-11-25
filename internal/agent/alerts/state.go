@@ -288,6 +288,14 @@ func (e *Engine) ApplyHandling(states []*nagiv1.AlertState) {
 			until = t
 		}
 		key := s.GetAlert().GetKey()
+		// 管理员在面板上清理了这一轮（ClearAlerts）：以 cleared 结束，不通知，计时和次数从头开始；条件仍在时按规则重新告警。
+		if st := e.states[key]; s.GetClearedAt() != nil && st != nil && st.occurrence == s.Alert.GetOccurrence() {
+			e.end(key, "cleared")
+			delete(e.tracks, key)
+			delete(e.counts, key)
+			changed = true
+			continue
+		}
 		if until.After(now) && until.Sub(now) <= 24*time.Hour {
 			suppressed[s.Alert.Occurrence] = until
 			// 按键记下：告警反复出现时，新一轮也不通知（见 docs/monitoring.md#告警）。

@@ -178,3 +178,75 @@ func TestPanelAlertHandlingPersistsAndMuteDoesNotResolve(t *testing.T) {
 		t.Fatalf("ended event still current: %v %v", states, err)
 	}
 }
+
+// 一键清理：当前告警以 cleared 结束（不是恢复）并留在历史里；旧节点之后还在上报这一轮也不放回当前告警，
+// 回给节点的处理状态带上 cleared_at（新节点据此结束）；节点的新一轮照常显示。按节点清理不动别的节点和面板的告警。
+func TestClearAlertsEndsCurrentAndKeepsReportsFromReviving(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	p := newSessionPanel(t)
+	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 16<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	p.r.AlertLogs = logs
+	s := p.connect(t)
+	defer s.sess.Close()
+	firing := &nagiv1.Alert{Key: "logstore_write", Rule: "logstore_write", Source: "src", Occurrence: "occ-1", Revision: 1, Status: "firing", Validity: "valid", Since: timestamppb.Now()}
+	report := func(rev uint64, current ...*nagiv1.Alert) *nagiv1.ReportResponse {
+		t.Helper()
+		res, err := s.panel.Report(ctx, &nagiv1.ReportRequest{Alerts: &nagiv1.AlertSync{Source: "src", Revision: rev, Complete: true, Current: current}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	report(1, firing)
+	if _, err := p.r.trackPanelAlert(ctx, &nagiv1.Alert{Key: "security:event", Status: "firing", Title: "panel event"}); err != nil {
+		t.Fatal(err)
+	}
+	current := func(node string) []*nagiv1.AlertState {
+		t.Helper()
+		list, err := p.r.AlertStates(ctx, node, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return list
+	}
+	if n, err := p.r.ClearAlerts(ctx, p.nodeID, false, "1"); err != nil || n != 1 {
+		t.Fatalf("clear node: %d %v", n, err)
+	}
+	if len(current(p.nodeID)) != 0 || len(current("")) != 1 {
+		t.Fatal("node clear must end only that node's alerts")
+	}
+	// v0.37.4 节点不认识 cleared_at，下一次快照还带着这一轮。
+	again := proto.CloneOf(firing)
+	again.Revision = 2
+	res := report(2, again)
+	if len(current(p.nodeID)) != 0 {
+		t.Fatal("old node report revived a cleared occurrence")
+	}
+	if len(res.AlertHandling) != 1 || res.AlertHandling[0].ClearedAt == nil || res.AlertHandling[0].Alert.Occurrence != "occ-1" {
+		t.Fatalf("node not told about the clear: %v", res.AlertHandling)
+	}
+	all, err := p.r.AlertStates(ctx, p.nodeID, true)
+	if err != nil || len(all) != 1 || all[0].Alert.Status != "ended" || all[0].Alert.EndReason != "cleared" {
+		t.Fatalf("cleared occurrence must stay in history as ended/cleared: %v %v", all, err)
+	}
+	next := &nagiv1.Alert{Key: "logstore_write", Rule: "logstore_write", Source: "src", Occurrence: "occ-2", Revision: 3, Status: "firing", Validity: "valid", Since: timestamppb.Now()}
+	res = report(3, next)
+	if list := current(p.nodeID); len(list) != 1 || list[0].Alert.Occurrence != "occ-2" || list[0].ClearedAt != nil {
+		t.Fatalf("new occurrence after clear must show: %v", list)
+	}
+	if len(res.AlertHandling) != 1 || res.AlertHandling[0].Alert.Occurrence != "occ-2" {
+		t.Fatalf("cleared entry must stop once the node no longer reports it: %v", res.AlertHandling)
+	}
+	if n, err := p.r.ClearAlerts(ctx, "", false, "1"); err != nil || n != 2 || len(current("")) != 0 || len(current(p.nodeID)) != 0 {
+		t.Fatalf("clear all: %d %v", n, err)
+	}
+	events, err := logs.Query(ctx, logstore.Filter{Category: logstore.Alert, KindPrefix: "alert.cleared", Limit: 10})
+	if err != nil || len(events) != 3 {
+		t.Fatalf("each cleared ledger must be logged: %v %v", events, err)
+	}
+}

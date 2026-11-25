@@ -234,4 +234,4 @@ mesh 本机与逐成员的只读状态随 `metrics_every_seconds` 留史：路�
 
 mesh 与日志的边界：备用保留独立身份和可信成员资格；节点向主/备分别建立连接，主故障后仍使用备用的直连或加密 mesh 中转路径；查询、接收和面板对账分别校验权限，撤权不因已建连接而延后。每面板的持久确认由日志模块负责；日志正文只在 mesh RPC 内传输，TLS 控制链路仅可承载加密 mesh 包。原日志协议集中在 `logs.proto`；主备对账新增独立的 `panel_logs.proto`（`PanelLogService.ListLogCopies` / `ReadLogCopies`），复用 `LogEntry`，未修改既有消息以及 `common.proto` / `panel.proto` 字段。
 
-告警生命周期另在 `alert_state.proto` 注册浏览器 `AlertService` 和仅主备 mesh 可调用的 `PanelAlertService`。现有 `ReportRequest.alerts=11` 携带快照；`panel.proto` 新增 `ReportResponse.alert_handling=3`，`ListAlertStatesResponse` 新增 `recent_copy=2`。既有字段编号及含义不变；处理记录不随业务配置快照写入备用的 panel.db。
+告警生命周期另在 `alert_state.proto` 注册浏览器 `AlertService` 和仅主备 mesh 可调用的 `PanelAlertService`。现有 `ReportRequest.alerts=11` 携带快照；`panel.proto` 新增 `ReportResponse.alert_handling=3`，`ListAlertStatesResponse` 新增 `recent_copy=2`。v0.37.5 新增 `AlertService.ClearAlerts` 和 `AlertState.cleared_at=10`（一键清理，节点据此以 `cleared` 结束这一轮）。既有字段编号及含义不变；处理记录不随业务配置快照写入备用的 panel.db。

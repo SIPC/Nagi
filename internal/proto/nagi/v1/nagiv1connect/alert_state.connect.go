@@ -41,6 +41,9 @@ const (
 	// AlertServiceHandleAlertProcedure is the fully-qualified name of the AlertService's HandleAlert
 	// RPC.
 	AlertServiceHandleAlertProcedure = "/nagi.v1.AlertService/HandleAlert"
+	// AlertServiceClearAlertsProcedure is the fully-qualified name of the AlertService's ClearAlerts
+	// RPC.
+	AlertServiceClearAlertsProcedure = "/nagi.v1.AlertService/ClearAlerts"
 	// AlertServiceGetAlertRulesProcedure is the fully-qualified name of the AlertService's
 	// GetAlertRules RPC.
 	AlertServiceGetAlertRulesProcedure = "/nagi.v1.AlertService/GetAlertRules"
@@ -68,6 +71,10 @@ const (
 type AlertServiceClient interface {
 	ListAlertStates(context.Context, *connect.Request[v1.ListAlertStatesRequest]) (*connect.Response[v1.ListAlertStatesResponse], error)
 	HandleAlert(context.Context, *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error)
+	// 一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+	// 选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+	// 也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+	ClearAlerts(context.Context, *connect.Request[v1.ClearAlertsRequest]) (*connect.Response[v1.ClearAlertsResponse], error)
 	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
 	GetAlertRules(context.Context, *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error)
 	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
@@ -103,6 +110,12 @@ func NewAlertServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			httpClient,
 			baseURL+AlertServiceHandleAlertProcedure,
 			connect.WithSchema(alertServiceMethods.ByName("HandleAlert")),
+			connect.WithClientOptions(opts...),
+		),
+		clearAlerts: connect.NewClient[v1.ClearAlertsRequest, v1.ClearAlertsResponse](
+			httpClient,
+			baseURL+AlertServiceClearAlertsProcedure,
+			connect.WithSchema(alertServiceMethods.ByName("ClearAlerts")),
 			connect.WithClientOptions(opts...),
 		),
 		getAlertRules: connect.NewClient[v1.GetAlertRulesRequest, v1.GetAlertRulesResponse](
@@ -142,6 +155,7 @@ func NewAlertServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 type alertServiceClient struct {
 	listAlertStates      *connect.Client[v1.ListAlertStatesRequest, v1.ListAlertStatesResponse]
 	handleAlert          *connect.Client[v1.HandleAlertRequest, v1.HandleAlertResponse]
+	clearAlerts          *connect.Client[v1.ClearAlertsRequest, v1.ClearAlertsResponse]
 	getAlertRules        *connect.Client[v1.GetAlertRulesRequest, v1.GetAlertRulesResponse]
 	updateAlertPolicy    *connect.Client[v1.UpdateAlertPolicyRequest, v1.AlertPolicy]
 	setAlertOverride     *connect.Client[v1.SetAlertOverrideRequest, v1.AlertOverride]
@@ -157,6 +171,11 @@ func (c *alertServiceClient) ListAlertStates(ctx context.Context, req *connect.R
 // HandleAlert calls nagi.v1.AlertService.HandleAlert.
 func (c *alertServiceClient) HandleAlert(ctx context.Context, req *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error) {
 	return c.handleAlert.CallUnary(ctx, req)
+}
+
+// ClearAlerts calls nagi.v1.AlertService.ClearAlerts.
+func (c *alertServiceClient) ClearAlerts(ctx context.Context, req *connect.Request[v1.ClearAlertsRequest]) (*connect.Response[v1.ClearAlertsResponse], error) {
+	return c.clearAlerts.CallUnary(ctx, req)
 }
 
 // GetAlertRules calls nagi.v1.AlertService.GetAlertRules.
@@ -188,6 +207,10 @@ func (c *alertServiceClient) ListAlertBaselines(ctx context.Context, req *connec
 type AlertServiceHandler interface {
 	ListAlertStates(context.Context, *connect.Request[v1.ListAlertStatesRequest]) (*connect.Response[v1.ListAlertStatesResponse], error)
 	HandleAlert(context.Context, *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error)
+	// 一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+	// 选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+	// 也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+	ClearAlerts(context.Context, *connect.Request[v1.ClearAlertsRequest]) (*connect.Response[v1.ClearAlertsResponse], error)
 	// 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。
 	GetAlertRules(context.Context, *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error)
 	// 全局默认值、通知语言和抖动保护，要「面板设置和告警渠道」。
@@ -219,6 +242,12 @@ func NewAlertServiceHandler(svc AlertServiceHandler, opts ...connect.HandlerOpti
 		AlertServiceHandleAlertProcedure,
 		svc.HandleAlert,
 		connect.WithSchema(alertServiceMethods.ByName("HandleAlert")),
+		connect.WithHandlerOptions(opts...),
+	)
+	alertServiceClearAlertsHandler := connect.NewUnaryHandler(
+		AlertServiceClearAlertsProcedure,
+		svc.ClearAlerts,
+		connect.WithSchema(alertServiceMethods.ByName("ClearAlerts")),
 		connect.WithHandlerOptions(opts...),
 	)
 	alertServiceGetAlertRulesHandler := connect.NewUnaryHandler(
@@ -257,6 +286,8 @@ func NewAlertServiceHandler(svc AlertServiceHandler, opts ...connect.HandlerOpti
 			alertServiceListAlertStatesHandler.ServeHTTP(w, r)
 		case AlertServiceHandleAlertProcedure:
 			alertServiceHandleAlertHandler.ServeHTTP(w, r)
+		case AlertServiceClearAlertsProcedure:
+			alertServiceClearAlertsHandler.ServeHTTP(w, r)
 		case AlertServiceGetAlertRulesProcedure:
 			alertServiceGetAlertRulesHandler.ServeHTTP(w, r)
 		case AlertServiceUpdateAlertPolicyProcedure:
@@ -282,6 +313,10 @@ func (UnimplementedAlertServiceHandler) ListAlertStates(context.Context, *connec
 
 func (UnimplementedAlertServiceHandler) HandleAlert(context.Context, *connect.Request[v1.HandleAlertRequest]) (*connect.Response[v1.HandleAlertResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.HandleAlert is not implemented"))
+}
+
+func (UnimplementedAlertServiceHandler) ClearAlerts(context.Context, *connect.Request[v1.ClearAlertsRequest]) (*connect.Response[v1.ClearAlertsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AlertService.ClearAlerts is not implemented"))
 }
 
 func (UnimplementedAlertServiceHandler) GetAlertRules(context.Context, *connect.Request[v1.GetAlertRulesRequest]) (*connect.Response[v1.GetAlertRulesResponse], error) {

@@ -120,6 +120,7 @@ export default {
     ReclaimNodeSnapshots: "清理快照仓库",
     DeleteNodeImages: "删除镜像",
     PruneNodeImages: "清理镜像",
+    ClearAlerts: "一键清理告警",
     PullNodeImage: "拉取镜像",
     SetNodeProjectsRoot: "设置项目根目录",
     SetNodeReplicaDir: "设置副本目录",

@@ -389,6 +389,11 @@ func endText(a *nagiv1.Alert, reason string) (string, string) {
 			return title, "The object no longer exists; this is not a recovery"
 		}
 		return title, "对象已不存在，这不是恢复"
+	case "cleared":
+		if en {
+			return title, "Cleared by an admin on the panel; this is not a recovery"
+		}
+		return title, "管理员在面板上清理了这条告警，这不是恢复"
 	case "insufficient_data":
 		if en {
 			return title, fmt.Sprintf("Too few requests for %d min to tell; this is not a recovery", int(alert.InsufficientDataAfter/time.Minute))

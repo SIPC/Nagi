@@ -142,6 +142,29 @@ func (s *alertService) ListAlertStates(ctx context.Context, req *connect.Request
 	return connect.NewResponse(out), nil
 }
 
+// ClearAlerts 一键清理当前告警（只有管理员，要高权限确认，见 auth 的 adminProcedures 和 elevationRequired）。
+// 审计由 activityLog 记下请求（节点、面板）和清理的条数。
+func (s *alertService) ClearAlerts(ctx context.Context, req *connect.Request[nagiv1.ClearAlertsRequest]) (*connect.Response[nagiv1.ClearAlertsResponse], error) {
+	if s.Nodes == nil || s.Nodes.ReadOnly {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, i18n.New("告警处理需要连接当前主面板"))
+	}
+	if req.Msg.NodeId != "" && req.Msg.Panel {
+		return nil, connect.NewError(connect.CodeInvalidArgument, i18n.New("不支持的处理动作"))
+	}
+	if req.Msg.NodeId != "" {
+		if _, err := s.Q.GetNode(ctx, req.Msg.NodeId); err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, i18n.New("节点不存在"))
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	n, err := s.Nodes.ClearAlerts(ctx, req.Msg.NodeId, req.Msg.Panel, strconv.FormatInt(auth.CurrentUser(ctx).ID, 10))
+	if err != nil {
+		return nil, toConnect(err)
+	}
+	return connect.NewResponse(&nagiv1.ClearAlertsResponse{Cleared: uint32(n)}), nil
+}
+
 func (s *alertService) HandleAlert(ctx context.Context, req *connect.Request[nagiv1.HandleAlertRequest]) (*connect.Response[nagiv1.HandleAlertResponse], error) {
 	u := auth.CurrentUser(ctx)
 	if !u.Can(auth.PermAudit) {

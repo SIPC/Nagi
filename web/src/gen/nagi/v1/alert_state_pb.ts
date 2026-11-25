@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file nagi/v1/alert_state.proto.
  */
 export const file_nagi_v1_alert_state: GenFile = /*@__PURE__*/
-  fileDesc("ChluYWdpL3YxL2FsZXJ0X3N0YXRlLnByb3RvEgduYWdpLnYxIiYKE0FsZXJ0UmVwbGljYVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSI0CgxBbGVydFJlcGxpY2ESDwoHbm9kZV9pZBgBIAEoCRITCgtsZWRnZXJfanNvbhgCIAEoDCJWChdSZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBIsCgdyZXF1ZXN0GAEgASgLMhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QSDQoFYWN0b3IYAiABKAkiyQEKCUFsZXJ0U3luYxIOCgZzb3VyY2UYASABKAkSEAoIcmV2aXNpb24YAiABKAQSHwoHY3VycmVudBgDIAMoCzIOLm5hZ2kudjEuQWxlcnQSHwoHaGlzdG9yeRgEIAMoCzIOLm5hZ2kudjEuQWxlcnQSEAoIY29tcGxldGUYBSABKAgSKQoJYmFzZWxpbmVzGAYgAygLMhYubmFnaS52MS5BbGVydEJhc2VsaW5lEhsKE2Jhc2VsaW5lc19zdXBwb3J0ZWQYByABKAgiuAEKDUFsZXJ0QmFzZWxpbmUSDAoEcnVsZRgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg8KB3N1YmplY3QYAyABKAkSGAoQcmVxdWlyZWRfc2Vjb25kcxgEIAEoDRIZChFjb2xsZWN0ZWRfc2Vjb25kcxgFIAEoDRIOCgZzdGF0dXMYBiABKAkSLwoLbGFzdF9zYW1wbGUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIq4CCgpBbGVydFN0YXRlEg8KB25vZGVfaWQYASABKAkSHQoFYWxlcnQYAiABKAsyDi5uYWdpLnYxLkFsZXJ0EhQKDGFja25vd2xlZGdlZBgDIAEoCBISCgpjb25jbHVzaW9uGAQgASgJEjEKDXNpbGVuY2VfdW50aWwYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjUKEW1haW50ZW5hbmNlX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIZChFoYW5kbGluZ19yZXZpc2lvbhgHIAEoBBIvCgtyZWNlaXZlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIdmFsaWRpdHkYCSABKAkiQgoWTGlzdEFsZXJ0U3RhdGVzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhcKD2luY2x1ZGVfaGlzdG9yeRgCIAEoCCJTChdMaXN0QWxlcnRTdGF0ZXNSZXNwb25zZRIjCgZhbGVydHMYASADKAsyEy5uYWdpLnYxLkFsZXJ0U3RhdGUSEwoLcmVjZW50X2NvcHkYAiABKAgisAEKEkhhbmRsZUFsZXJ0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEgsKA2tleRgCIAEoCRISCgpvY2N1cnJlbmNlGAMgASgJEhkKEWhhbmRsaW5nX3JldmlzaW9uGAQgASgEEg4KBmFjdGlvbhgFIAEoCRISCgpjb25jbHVzaW9uGAYgASgJEikKBXVudGlsGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCI5ChNIYW5kbGVBbGVydFJlc3BvbnNlEiIKBWFsZXJ0GAEgASgLMhMubmFnaS52MS5BbGVydFN0YXRlIhYKFEdldEFsZXJ0UnVsZXNSZXF1ZXN0IrQCChVHZXRBbGVydFJ1bGVzUmVzcG9uc2USJQoHYnVpbHRpbhgBIAEoCzIULm5hZ2kudjEuQWxlcnRQb2xpY3kSJAoGcG9saWN5GAIgASgLMhQubmFnaS52MS5BbGVydFBvbGljeRIpCglvdmVycmlkZXMYAyADKAsyFi5uYWdpLnYxLkFsZXJ0T3ZlcnJpZGUSFwoPY2FuX2VkaXRfcG9saWN5GAQgASgIEiMKBGRlZnMYBSADKAsyFS5uYWdpLnYxLkFsZXJ0UnVsZURlZhIoCgdub3RpY2VzGAYgAygLMhcubmFnaS52MS5BbGVydE5vdGljZURlZhIhChljYW5fZWRpdF9zZWN1cml0eV9ub3RpY2VzGAcgASgIEhgKEGNhbl9lZGl0X25vdGljZXMYCCABKAgidQoMQWxlcnRSdWxlRGVmEgwKBG5hbWUYASABKAkSDAoEbm9kZRgCIAEoCBINCgVyb3V0ZRgDIAEoCBINCgVwYW5lbBgEIAEoCBIMCgR1bml0GAUgASgJEg0KBWxvd2VyGAYgASgIEg4KBmZpZWxkcxgHIAMoCSJ6Cg5BbGVydE5vdGljZURlZhILCgNrZXkYASABKAkSEAoIY2F0ZWdvcnkYAiABKAkSEAoIcmVjb3ZlcnMYAyABKAgSDQoFcmlza3kYBCABKAgSEAoIc2VjdXJpdHkYBSABKAgSCgoCemgYBiABKAkSCgoCZW4YByABKAkiVwoYVXBkYXRlQWxlcnRQb2xpY3lSZXF1ZXN0EiQKBnBvbGljeRgBIAEoCzIULm5hZ2kudjEuQWxlcnRQb2xpY3kSFQoNYmFzZV9yZXZpc2lvbhgCIAEoAyJSChtTZXRBbGVydE5vdGlmaWNhdGlvblJlcXVlc3QSCwoDa2V5GAEgASgJEg8KB2VuYWJsZWQYAiABKAgSFQoNYmFzZV9yZXZpc2lvbhgDIAEoAyIbChlMaXN0QWxlcnRCYXNlbGluZXNSZXF1ZXN0IkwKGkxpc3RBbGVydEJhc2VsaW5lc1Jlc3BvbnNlEi4KCWJhc2VsaW5lcxgBIAMoCzIbLm5hZ2kudjEuQWxlcnRCYXNlbGluZVN0YXRlIoMBChJBbGVydEJhc2VsaW5lU3RhdGUSDwoHbm9kZV9pZBgBIAEoCRIMCgRub2RlGAIgASgJEg8KB3Byb2plY3QYAyABKAkSKAoIYmFzZWxpbmUYBCABKAsyFi5uYWdpLnYxLkFsZXJ0QmFzZWxpbmUSEwoLdW5zdXBwb3J0ZWQYBSABKAgihAIKF1NldEFsZXJ0T3ZlcnJpZGVSZXF1ZXN0Eg0KBXNjb3BlGAEgASgJEg8KB25vZGVfaWQYAiABKAkSEgoKcHJvamVjdF9pZBgDIAEoCRIRCgljb250YWluZXIYBCABKAkSOgoFcnVsZXMYBSADKAsyKy5uYWdpLnYxLlNldEFsZXJ0T3ZlcnJpZGVSZXF1ZXN0LlJ1bGVzRW50cnkSFQoNYmFzZV9yZXZpc2lvbhgGIAEoAxINCgVyb3V0ZRgHIAEoCRpACgpSdWxlc0VudHJ5EgsKA2tleRgBIAEoCRIhCgV2YWx1ZRgCIAEoCzISLm5hZ2kudjEuQWxlcnRSdWxlOgI4ATLNBAoMQWxlcnRTZXJ2aWNlElQKD0xpc3RBbGVydFN0YXRlcxIfLm5hZ2kudjEuTGlzdEFsZXJ0U3RhdGVzUmVxdWVzdBogLm5hZ2kudjEuTGlzdEFsZXJ0U3RhdGVzUmVzcG9uc2USSAoLSGFuZGxlQWxlcnQSGy5uYWdpLnYxLkhhbmRsZUFsZXJ0UmVxdWVzdBocLm5hZ2kudjEuSGFuZGxlQWxlcnRSZXNwb25zZRJOCg1HZXRBbGVydFJ1bGVzEh0ubmFnaS52MS5HZXRBbGVydFJ1bGVzUmVxdWVzdBoeLm5hZ2kudjEuR2V0QWxlcnRSdWxlc1Jlc3BvbnNlEkwKEVVwZGF0ZUFsZXJ0UG9saWN5EiEubmFnaS52MS5VcGRhdGVBbGVydFBvbGljeVJlcXVlc3QaFC5uYWdpLnYxLkFsZXJ0UG9saWN5EkwKEFNldEFsZXJ0T3ZlcnJpZGUSIC5uYWdpLnYxLlNldEFsZXJ0T3ZlcnJpZGVSZXF1ZXN0GhYubmFnaS52MS5BbGVydE92ZXJyaWRlElIKFFNldEFsZXJ0Tm90aWZpY2F0aW9uEiQubmFnaS52MS5TZXRBbGVydE5vdGlmaWNhdGlvblJlcXVlc3QaFC5uYWdpLnYxLkFsZXJ0UG9saWN5El0KEkxpc3RBbGVydEJhc2VsaW5lcxIiLm5hZ2kudjEuTGlzdEFsZXJ0QmFzZWxpbmVzUmVxdWVzdBojLm5hZ2kudjEuTGlzdEFsZXJ0QmFzZWxpbmVzUmVzcG9uc2UyqQEKEVBhbmVsQWxlcnRTZXJ2aWNlEkcKEFJlYWRBbGVydFJlcGxpY2ESHC5uYWdpLnYxLkFsZXJ0UmVwbGljYVJlcXVlc3QaFS5uYWdpLnYxLkFsZXJ0UmVwbGljYRJLChBSZWxheUhhbmRsZUFsZXJ0EiAubmFnaS52MS5SZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBoVLm5hZ2kudjEuQWxlcnRSZXBsaWNhQk4KFmluay5zaXBjLm5hZ2kucHJvdG8udjFQAVoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
+  fileDesc("ChluYWdpL3YxL2FsZXJ0X3N0YXRlLnByb3RvEgduYWdpLnYxIiYKE0FsZXJ0UmVwbGljYVJlcXVlc3QSDwoHbm9kZV9pZBgBIAEoCSI0CgxBbGVydFJlcGxpY2ESDwoHbm9kZV9pZBgBIAEoCRITCgtsZWRnZXJfanNvbhgCIAEoDCJWChdSZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBIsCgdyZXF1ZXN0GAEgASgLMhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QSDQoFYWN0b3IYAiABKAkiyQEKCUFsZXJ0U3luYxIOCgZzb3VyY2UYASABKAkSEAoIcmV2aXNpb24YAiABKAQSHwoHY3VycmVudBgDIAMoCzIOLm5hZ2kudjEuQWxlcnQSHwoHaGlzdG9yeRgEIAMoCzIOLm5hZ2kudjEuQWxlcnQSEAoIY29tcGxldGUYBSABKAgSKQoJYmFzZWxpbmVzGAYgAygLMhYubmFnaS52MS5BbGVydEJhc2VsaW5lEhsKE2Jhc2VsaW5lc19zdXBwb3J0ZWQYByABKAgiuAEKDUFsZXJ0QmFzZWxpbmUSDAoEcnVsZRgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEg8KB3N1YmplY3QYAyABKAkSGAoQcmVxdWlyZWRfc2Vjb25kcxgEIAEoDRIZChFjb2xsZWN0ZWRfc2Vjb25kcxgFIAEoDRIOCgZzdGF0dXMYBiABKAkSLwoLbGFzdF9zYW1wbGUYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIt4CCgpBbGVydFN0YXRlEg8KB25vZGVfaWQYASABKAkSHQoFYWxlcnQYAiABKAsyDi5uYWdpLnYxLkFsZXJ0EhQKDGFja25vd2xlZGdlZBgDIAEoCBISCgpjb25jbHVzaW9uGAQgASgJEjEKDXNpbGVuY2VfdW50aWwYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjUKEW1haW50ZW5hbmNlX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIZChFoYW5kbGluZ19yZXZpc2lvbhgHIAEoBBIvCgtyZWNlaXZlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIdmFsaWRpdHkYCSABKAkSLgoKY2xlYXJlZF9hdBgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiQgoWTGlzdEFsZXJ0U3RhdGVzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEhcKD2luY2x1ZGVfaGlzdG9yeRgCIAEoCCJTChdMaXN0QWxlcnRTdGF0ZXNSZXNwb25zZRIjCgZhbGVydHMYASADKAsyEy5uYWdpLnYxLkFsZXJ0U3RhdGUSEwoLcmVjZW50X2NvcHkYAiABKAgisAEKEkhhbmRsZUFsZXJ0UmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEgsKA2tleRgCIAEoCRISCgpvY2N1cnJlbmNlGAMgASgJEhkKEWhhbmRsaW5nX3JldmlzaW9uGAQgASgEEg4KBmFjdGlvbhgFIAEoCRISCgpjb25jbHVzaW9uGAYgASgJEikKBXVudGlsGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCI5ChNIYW5kbGVBbGVydFJlc3BvbnNlEiIKBWFsZXJ0GAEgASgLMhMubmFnaS52MS5BbGVydFN0YXRlIjQKEkNsZWFyQWxlcnRzUmVxdWVzdBIPCgdub2RlX2lkGAEgASgJEg0KBXBhbmVsGAIgASgIIiYKE0NsZWFyQWxlcnRzUmVzcG9uc2USDwoHY2xlYXJlZBgBIAEoDSIWChRHZXRBbGVydFJ1bGVzUmVxdWVzdCK0AgoVR2V0QWxlcnRSdWxlc1Jlc3BvbnNlEiUKB2J1aWx0aW4YASABKAsyFC5uYWdpLnYxLkFsZXJ0UG9saWN5EiQKBnBvbGljeRgCIAEoCzIULm5hZ2kudjEuQWxlcnRQb2xpY3kSKQoJb3ZlcnJpZGVzGAMgAygLMhYubmFnaS52MS5BbGVydE92ZXJyaWRlEhcKD2Nhbl9lZGl0X3BvbGljeRgEIAEoCBIjCgRkZWZzGAUgAygLMhUubmFnaS52MS5BbGVydFJ1bGVEZWYSKAoHbm90aWNlcxgGIAMoCzIXLm5hZ2kudjEuQWxlcnROb3RpY2VEZWYSIQoZY2FuX2VkaXRfc2VjdXJpdHlfbm90aWNlcxgHIAEoCBIYChBjYW5fZWRpdF9ub3RpY2VzGAggASgIInUKDEFsZXJ0UnVsZURlZhIMCgRuYW1lGAEgASgJEgwKBG5vZGUYAiABKAgSDQoFcm91dGUYAyABKAgSDQoFcGFuZWwYBCABKAgSDAoEdW5pdBgFIAEoCRINCgVsb3dlchgGIAEoCBIOCgZmaWVsZHMYByADKAkiegoOQWxlcnROb3RpY2VEZWYSCwoDa2V5GAEgASgJEhAKCGNhdGVnb3J5GAIgASgJEhAKCHJlY292ZXJzGAMgASgIEg0KBXJpc2t5GAQgASgIEhAKCHNlY3VyaXR5GAUgASgIEgoKAnpoGAYgASgJEgoKAmVuGAcgASgJIlcKGFVwZGF0ZUFsZXJ0UG9saWN5UmVxdWVzdBIkCgZwb2xpY3kYASABKAsyFC5uYWdpLnYxLkFsZXJ0UG9saWN5EhUKDWJhc2VfcmV2aXNpb24YAiABKAMiUgobU2V0QWxlcnROb3RpZmljYXRpb25SZXF1ZXN0EgsKA2tleRgBIAEoCRIPCgdlbmFibGVkGAIgASgIEhUKDWJhc2VfcmV2aXNpb24YAyABKAMiGwoZTGlzdEFsZXJ0QmFzZWxpbmVzUmVxdWVzdCJMChpMaXN0QWxlcnRCYXNlbGluZXNSZXNwb25zZRIuCgliYXNlbGluZXMYASADKAsyGy5uYWdpLnYxLkFsZXJ0QmFzZWxpbmVTdGF0ZSKDAQoSQWxlcnRCYXNlbGluZVN0YXRlEg8KB25vZGVfaWQYASABKAkSDAoEbm9kZRgCIAEoCRIPCgdwcm9qZWN0GAMgASgJEigKCGJhc2VsaW5lGAQgASgLMhYubmFnaS52MS5BbGVydEJhc2VsaW5lEhMKC3Vuc3VwcG9ydGVkGAUgASgIIoQCChdTZXRBbGVydE92ZXJyaWRlUmVxdWVzdBINCgVzY29wZRgBIAEoCRIPCgdub2RlX2lkGAIgASgJEhIKCnByb2plY3RfaWQYAyABKAkSEQoJY29udGFpbmVyGAQgASgJEjoKBXJ1bGVzGAUgAygLMisubmFnaS52MS5TZXRBbGVydE92ZXJyaWRlUmVxdWVzdC5SdWxlc0VudHJ5EhUKDWJhc2VfcmV2aXNpb24YBiABKAMSDQoFcm91dGUYByABKAkaQAoKUnVsZXNFbnRyeRILCgNrZXkYASABKAkSIQoFdmFsdWUYAiABKAsyEi5uYWdpLnYxLkFsZXJ0UnVsZToCOAEylwUKDEFsZXJ0U2VydmljZRJUCg9MaXN0QWxlcnRTdGF0ZXMSHy5uYWdpLnYxLkxpc3RBbGVydFN0YXRlc1JlcXVlc3QaIC5uYWdpLnYxLkxpc3RBbGVydFN0YXRlc1Jlc3BvbnNlEkgKC0hhbmRsZUFsZXJ0EhsubmFnaS52MS5IYW5kbGVBbGVydFJlcXVlc3QaHC5uYWdpLnYxLkhhbmRsZUFsZXJ0UmVzcG9uc2USSAoLQ2xlYXJBbGVydHMSGy5uYWdpLnYxLkNsZWFyQWxlcnRzUmVxdWVzdBocLm5hZ2kudjEuQ2xlYXJBbGVydHNSZXNwb25zZRJOCg1HZXRBbGVydFJ1bGVzEh0ubmFnaS52MS5HZXRBbGVydFJ1bGVzUmVxdWVzdBoeLm5hZ2kudjEuR2V0QWxlcnRSdWxlc1Jlc3BvbnNlEkwKEVVwZGF0ZUFsZXJ0UG9saWN5EiEubmFnaS52MS5VcGRhdGVBbGVydFBvbGljeVJlcXVlc3QaFC5uYWdpLnYxLkFsZXJ0UG9saWN5EkwKEFNldEFsZXJ0T3ZlcnJpZGUSIC5uYWdpLnYxLlNldEFsZXJ0T3ZlcnJpZGVSZXF1ZXN0GhYubmFnaS52MS5BbGVydE92ZXJyaWRlElIKFFNldEFsZXJ0Tm90aWZpY2F0aW9uEiQubmFnaS52MS5TZXRBbGVydE5vdGlmaWNhdGlvblJlcXVlc3QaFC5uYWdpLnYxLkFsZXJ0UG9saWN5El0KEkxpc3RBbGVydEJhc2VsaW5lcxIiLm5hZ2kudjEuTGlzdEFsZXJ0QmFzZWxpbmVzUmVxdWVzdBojLm5hZ2kudjEuTGlzdEFsZXJ0QmFzZWxpbmVzUmVzcG9uc2UyqQEKEVBhbmVsQWxlcnRTZXJ2aWNlEkcKEFJlYWRBbGVydFJlcGxpY2ESHC5uYWdpLnYxLkFsZXJ0UmVwbGljYVJlcXVlc3QaFS5uYWdpLnYxLkFsZXJ0UmVwbGljYRJLChBSZWxheUhhbmRsZUFsZXJ0EiAubmFnaS52MS5SZWxheUhhbmRsZUFsZXJ0UmVxdWVzdBoVLm5hZ2kudjEuQWxlcnRSZXBsaWNhQk4KFmluay5zaXBjLm5hZ2kucHJvdG8udjFQAVoyZ2l0aHViLmNvbS9TSVBDL25hZ2kvaW50ZXJuYWwvcHJvdG8vbmFnaS92MTtuYWdpdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_nagi_v1_common]);
 
 /**
  * @generated from message nagi.v1.AlertReplicaRequest
@@ -241,6 +241,13 @@ export type AlertState = Message<"nagi.v1.AlertState"> & {
    * @generated from field: string validity = 9;
    */
   validity: string;
+
+  /**
+   * 管理员在面板上清理的时间（ClearAlerts）。节点收到带它的处理状态时以 cleared 结束这一轮（v0.37.5 起）。
+   *
+   * @generated from field: google.protobuf.Timestamp cleared_at = 10;
+   */
+  clearedAt?: Timestamp | undefined;
 };
 
 /**
@@ -362,6 +369,47 @@ export const HandleAlertResponseSchema: GenMessage<HandleAlertResponse> = /*@__P
   messageDesc(file_nagi_v1_alert_state, 9);
 
 /**
+ * node_id 为空且 panel 为 false 时清理全部当前告警；node_id 只清这个节点的；panel 只清面板自己的。
+ *
+ * @generated from message nagi.v1.ClearAlertsRequest
+ */
+export type ClearAlertsRequest = Message<"nagi.v1.ClearAlertsRequest"> & {
+  /**
+   * @generated from field: string node_id = 1;
+   */
+  nodeId: string;
+
+  /**
+   * @generated from field: bool panel = 2;
+   */
+  panel: boolean;
+};
+
+/**
+ * Describes the message nagi.v1.ClearAlertsRequest.
+ * Use `create(ClearAlertsRequestSchema)` to create a new message.
+ */
+export const ClearAlertsRequestSchema: GenMessage<ClearAlertsRequest> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 10);
+
+/**
+ * @generated from message nagi.v1.ClearAlertsResponse
+ */
+export type ClearAlertsResponse = Message<"nagi.v1.ClearAlertsResponse"> & {
+  /**
+   * @generated from field: uint32 cleared = 1;
+   */
+  cleared: number;
+};
+
+/**
+ * Describes the message nagi.v1.ClearAlertsResponse.
+ * Use `create(ClearAlertsResponseSchema)` to create a new message.
+ */
+export const ClearAlertsResponseSchema: GenMessage<ClearAlertsResponse> = /*@__PURE__*/
+  messageDesc(file_nagi_v1_alert_state, 11);
+
+/**
  * @generated from message nagi.v1.GetAlertRulesRequest
  */
 export type GetAlertRulesRequest = Message<"nagi.v1.GetAlertRulesRequest"> & {
@@ -372,7 +420,7 @@ export type GetAlertRulesRequest = Message<"nagi.v1.GetAlertRulesRequest"> & {
  * Use `create(GetAlertRulesRequestSchema)` to create a new message.
  */
 export const GetAlertRulesRequestSchema: GenMessage<GetAlertRulesRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 10);
+  messageDesc(file_nagi_v1_alert_state, 12);
 
 /**
  * @generated from message nagi.v1.GetAlertRulesResponse
@@ -432,7 +480,7 @@ export type GetAlertRulesResponse = Message<"nagi.v1.GetAlertRulesResponse"> & {
  * Use `create(GetAlertRulesResponseSchema)` to create a new message.
  */
 export const GetAlertRulesResponseSchema: GenMessage<GetAlertRulesResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 11);
+  messageDesc(file_nagi_v1_alert_state, 13);
 
 /**
  * @generated from message nagi.v1.AlertRuleDef
@@ -485,7 +533,7 @@ export type AlertRuleDef = Message<"nagi.v1.AlertRuleDef"> & {
  * Use `create(AlertRuleDefSchema)` to create a new message.
  */
 export const AlertRuleDefSchema: GenMessage<AlertRuleDef> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 12);
+  messageDesc(file_nagi_v1_alert_state, 14);
 
 /**
  * @generated from message nagi.v1.AlertNoticeDef
@@ -538,7 +586,7 @@ export type AlertNoticeDef = Message<"nagi.v1.AlertNoticeDef"> & {
  * Use `create(AlertNoticeDefSchema)` to create a new message.
  */
 export const AlertNoticeDefSchema: GenMessage<AlertNoticeDef> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 13);
+  messageDesc(file_nagi_v1_alert_state, 15);
 
 /**
  * @generated from message nagi.v1.UpdateAlertPolicyRequest
@@ -560,7 +608,7 @@ export type UpdateAlertPolicyRequest = Message<"nagi.v1.UpdateAlertPolicyRequest
  * Use `create(UpdateAlertPolicyRequestSchema)` to create a new message.
  */
 export const UpdateAlertPolicyRequestSchema: GenMessage<UpdateAlertPolicyRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 14);
+  messageDesc(file_nagi_v1_alert_state, 16);
 
 /**
  * @generated from message nagi.v1.SetAlertNotificationRequest
@@ -587,7 +635,7 @@ export type SetAlertNotificationRequest = Message<"nagi.v1.SetAlertNotificationR
  * Use `create(SetAlertNotificationRequestSchema)` to create a new message.
  */
 export const SetAlertNotificationRequestSchema: GenMessage<SetAlertNotificationRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 15);
+  messageDesc(file_nagi_v1_alert_state, 17);
 
 /**
  * @generated from message nagi.v1.ListAlertBaselinesRequest
@@ -600,7 +648,7 @@ export type ListAlertBaselinesRequest = Message<"nagi.v1.ListAlertBaselinesReque
  * Use `create(ListAlertBaselinesRequestSchema)` to create a new message.
  */
 export const ListAlertBaselinesRequestSchema: GenMessage<ListAlertBaselinesRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 16);
+  messageDesc(file_nagi_v1_alert_state, 18);
 
 /**
  * @generated from message nagi.v1.ListAlertBaselinesResponse
@@ -617,7 +665,7 @@ export type ListAlertBaselinesResponse = Message<"nagi.v1.ListAlertBaselinesResp
  * Use `create(ListAlertBaselinesResponseSchema)` to create a new message.
  */
 export const ListAlertBaselinesResponseSchema: GenMessage<ListAlertBaselinesResponse> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 17);
+  messageDesc(file_nagi_v1_alert_state, 19);
 
 /**
  * @generated from message nagi.v1.AlertBaselineState
@@ -660,7 +708,7 @@ export type AlertBaselineState = Message<"nagi.v1.AlertBaselineState"> & {
  * Use `create(AlertBaselineStateSchema)` to create a new message.
  */
 export const AlertBaselineStateSchema: GenMessage<AlertBaselineState> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 18);
+  messageDesc(file_nagi_v1_alert_state, 20);
 
 /**
  * @generated from message nagi.v1.SetAlertOverrideRequest
@@ -707,7 +755,7 @@ export type SetAlertOverrideRequest = Message<"nagi.v1.SetAlertOverrideRequest">
  * Use `create(SetAlertOverrideRequestSchema)` to create a new message.
  */
 export const SetAlertOverrideRequestSchema: GenMessage<SetAlertOverrideRequest> = /*@__PURE__*/
-  messageDesc(file_nagi_v1_alert_state, 19);
+  messageDesc(file_nagi_v1_alert_state, 21);
 
 /**
  * Browser API. Scope and elevation are enforced on the receiving panel.
@@ -730,6 +778,18 @@ export const AlertService: GenService<{
     methodKind: "unary";
     input: typeof HandleAlertRequestSchema;
     output: typeof HandleAlertResponseSchema;
+  },
+  /**
+   * 一键清理当前告警（见 docs/monitoring.md#日志页中的当前告警与人工处理）：只有管理员，要高权限确认，记入审计。
+   * 选中的当前告警在面板上立即以 cleared 结束（不是恢复），之后这一轮的上报不再把它放回当前告警；节点下次上报时
+   * 也结束这一轮并重新计时。条件仍在时下一次检测照常重新告警（新的一轮）。不删除历史和审计。
+   *
+   * @generated from rpc nagi.v1.AlertService.ClearAlerts
+   */
+  clearAlerts: {
+    methodKind: "unary";
+    input: typeof ClearAlertsRequestSchema;
+    output: typeof ClearAlertsResponseSchema;
   },
   /**
    * 告警规则（设置 → 告警，见 docs/monitoring.md#告警）。按调用者的权限和访问范围返回能看到的部分。

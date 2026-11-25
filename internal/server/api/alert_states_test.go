@@ -11,6 +11,7 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 	nagiv1 "github.com/SIPC/nagi/internal/proto/nagi/v1"
 	"github.com/SIPC/nagi/internal/proto/nagi/v1/nagiv1connect"
+	"github.com/SIPC/nagi/internal/server/audit"
 	"github.com/SIPC/nagi/internal/server/auth"
 	"github.com/SIPC/nagi/internal/server/nodes"
 	"google.golang.org/grpc"
@@ -203,5 +204,83 @@ func TestAlertAPIEnforcesProjectScopePermissionsAndElevation(t *testing.T) {
 	user.LimitProjects = true
 	if ok, err := svc.visibleAlert(auth.WithUser(ctx, user), &nagiv1.AlertState{NodeId: "shared", Alert: &nagiv1.Alert{Key: "disk"}}); err != nil || ok {
 		t.Fatalf("shared node bypassed project scope: %v %v", ok, err)
+	}
+}
+
+// 一键清理告警只给管理员，要高权限确认，成功和被拒绝都记入审计，记录里有清理的条数。
+func TestClearAlertsAdminOnlyElevatedAndAudited(t *testing.T) {
+	h := newAuditHarness(t)
+	ctx := t.Context()
+	logs, err := logstore.Open(ctx, filepath.Join(t.TempDir(), "logs.db"), 16<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	h.a.Nodes = nodes.NewRegistry(h.a.Q, h.a.Log, h.a.Sealer, nil)
+	h.a.Nodes.AlertLogs = logs
+	for _, k := range []string{"event:a", "event:b"} {
+		h.a.Nodes.PanelAlert(ctx, &nagiv1.Alert{Key: k, Title: k})
+	}
+	if _, err := h.a.Auth.CreateUser(ctx, "admin", "admin-password-1", auth.AdminRoleID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.ExecContext(ctx, `INSERT INTO roles(id,name) VALUES(10,'alert-handler')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.db.ExecContext(ctx, `INSERT INTO role_permissions(role_id,permission) VALUES(10,'project.view'),(10,'project.alerts'),(10,'panel.audit')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.a.Auth.CreateUser(ctx, "handler", "handler-test-pass", 10); err != nil {
+		t.Fatal(err)
+	}
+	clearer := func(user, password string, elevate bool) nagiv1connect.AlertServiceClient {
+		jar, _ := cookiejar.New(nil)
+		hc := *h.srv.Client()
+		hc.Jar = jar
+		ac := nagiv1connect.NewAuthServiceClient(&hc, h.srv.URL)
+		if _, err := ac.Login(ctx, connect.NewRequest(&nagiv1.LoginRequest{Username: user, Password: password})); err != nil {
+			t.Fatal(err)
+		}
+		if elevate {
+			if _, err := ac.Elevate(ctx, connect.NewRequest(&nagiv1.ElevateRequest{Password: password})); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return nagiv1connect.NewAlertServiceClient(&hc, h.srv.URL)
+	}
+	if _, err := clearer("handler", "handler-test-pass", true).ClearAlerts(ctx, connect.NewRequest(&nagiv1.ClearAlertsRequest{})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("non-admin with alert permissions cleared alerts: %v", err)
+	}
+	if _, err := clearer("admin", "admin-password-1", false).ClearAlerts(ctx, connect.NewRequest(&nagiv1.ClearAlertsRequest{})); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("missing elevation accepted: %v", err)
+	}
+	if list, _ := h.a.Nodes.AlertStates(ctx, "", false); len(list) != 2 {
+		t.Fatalf("refused clears changed alerts: %v", list)
+	}
+	res, err := clearer("admin", "admin-password-1", true).ClearAlerts(ctx, connect.NewRequest(&nagiv1.ClearAlertsRequest{}))
+	if err != nil || res.Msg.Cleared != 2 {
+		t.Fatalf("elevated admin clear: %v %v", res, err)
+	}
+	if list, _ := h.a.Nodes.AlertStates(ctx, "", false); len(list) != 0 {
+		t.Fatalf("alerts still current: %v", list)
+	}
+	_, sc := h.login("admin", "admin-password-1")
+	var ok, denied int
+	for _, e := range h.list(sc, nil) {
+		if e.GetAction() != "ClearAlerts" {
+			continue
+		}
+		switch e.GetResult() {
+		case audit.ResultOK:
+			ok++
+			if !strings.Contains(e.GetParams(), `"cleared":2`) {
+				t.Fatalf("audit record lacks the cleared count: %s", e.GetParams())
+			}
+		case audit.ResultDenied:
+			denied++
+		}
+	}
+	if ok != 1 || denied != 2 {
+		t.Fatalf("audit: %d ok, %d denied", ok, denied)
 	}
 }
