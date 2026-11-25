@@ -238,6 +238,60 @@ func TestSamplesCommitOncePerMinuteAndStayQueryable(t *testing.T) {
 	}
 }
 
+// Shutdown can cancel a periodic flush that is still waiting for the history
+// connection. Its samples must stay for the final flush instead of being
+// dropped with the cancelled write (security review of ae787d71: 0 of 6 saved).
+func TestShutdownDuringPeriodicFlushKeepsSamples(t *testing.T) {
+	ctx := t.Context()
+	legacy, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	history, err := OpenHistory(ctx, filepath.Join(t.TempDir(), "metrics.db"), legacy, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer history.Close()
+	c := New(history, nil, "", slog.New(slog.DiscardHandler))
+	defer c.CloseReader()
+	conn, err := history.Conn(ctx) // hold the only connection
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	pending := make(chan sample, 6)
+	at := time.Now().Add(-time.Minute)
+	for i := range 6 {
+		pending <- sample{at.Add(time.Duration(i) * Interval), map[string]float64{"node:cpu": float64(i)}}
+	}
+	run, stop := context.WithCancel(ctx)
+	defer stop()
+	done := make(chan struct{})
+	go func() { defer close(done); c.writeHistory(run, pending) }()
+	for deadline := time.Now().Add(5 * time.Second); history.Stats().WaitCount == 0; {
+		if time.Now().After(deadline) {
+			t.Fatal("periodic flush did not wait for the connection")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	stop()
+	time.Sleep(30 * time.Millisecond) // the cancelled flush returns, the final one starts
+	conn.Close()
+	select {
+	case <-done:
+	case <-time.After(6 * time.Second):
+		t.Fatal("shutdown did not finish")
+	}
+	var n int
+	if err := history.QueryRowContext(ctx, `SELECT count(*) FROM metrics_raw`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 6 || c.Dropped() != 0 {
+		t.Fatalf("shutdown saved %d of 6 samples, dropped %d", n, c.Dropped())
+	}
+}
+
 func TestLatestFresh(t *testing.T) {
 	at := time.Now()
 	c := &Collector{latestAt: at, latest: map[string]float64{"node:disk": 42, "bad": math.NaN(), "reset": -1}}

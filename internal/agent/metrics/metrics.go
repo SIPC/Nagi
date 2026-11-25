@@ -264,6 +264,14 @@ func (c *Collector) writeHistory(ctx context.Context, pending <-chan sample) {
 			final, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			c.flushHistory(final)
 			cancel()
+			// Whatever the final flush could not write is lost; count it.
+			c.unsavedMu.Lock()
+			if n := len(c.unsaved); n > 0 {
+				c.dropped.Add(int64(n))
+				c.log.Warn("停止时保存监控数据失败", "samples", n)
+				c.unsaved = nil
+			}
+			c.unsavedMu.Unlock()
 			return
 		case v := <-pending:
 			if c.keep(v) {
@@ -283,7 +291,9 @@ func (c *Collector) keep(v sample) bool {
 
 // flushHistory writes the unsaved samples. They leave memory only after the
 // commit, so a concurrent query sees each point in memory or in the database.
-// A failed write drops them, as a failed write of one sample did before.
+// A failed write drops them, as a failed write of one sample did before,
+// except when shutdown cancelled it: then they stay for the final flush,
+// which writes them without the cancelled context.
 func (c *Collector) flushHistory(ctx context.Context) {
 	c.unsavedMu.Lock()
 	batch := slices.Clone(c.unsaved)
@@ -291,7 +301,11 @@ func (c *Collector) flushHistory(ctx context.Context) {
 	if len(batch) == 0 {
 		return
 	}
-	if err := c.storeBatch(ctx, batch); err != nil && ctx.Err() == nil {
+	if err := c.storeBatch(ctx, batch); err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+		c.dropped.Add(int64(len(batch)))
 		c.log.Warn("保存监控数据失败", "err", err, "samples", len(batch))
 	}
 	c.unsavedMu.Lock()
@@ -536,7 +550,6 @@ func (c *Collector) storeBatch(ctx context.Context, batch []sample) error {
 		err := c.budget.Reserve(wait, 2, min(reserve, 64<<20))
 		cancel()
 		if err != nil {
-			c.dropped.Add(int64(len(batch)))
 			return err
 		}
 	}

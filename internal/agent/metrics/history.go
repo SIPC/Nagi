@@ -157,9 +157,9 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 			return fail(err)
 		}
 	}
-	// Chart history is rebuildable observation data: NORMAL keeps every commit
-	// on a process crash and may lose the last minute on power loss, without
-	// corrupting the file. FULL paid an extra fsync of the whole WAL on every
+	// Chart history is observation data: NORMAL keeps every commit on a
+	// process crash; on power loss the last minute or more of chart points may
+	// be lost (commits not yet synced roll back), and the file is not corrupted. FULL paid an extra fsync of the whole WAL on every
 	// commit. journal_size_limit lets the WAL be reused at a steady size
 	// instead of truncated and grown again by every minute's commit.
 	if err := budget.WriteArchive(ctx, 2, 256<<10, func() error {
