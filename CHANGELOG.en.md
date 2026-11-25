@@ -15,11 +15,13 @@ curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | su
 - Fixed large nodes (for example bare-metal servers) where, once log usage reached the cleanup line, background cleanup deleted chart history first, leaving only the last hour or two of charts, while the log store's own monitoring records were never cleaned up and kept growing. The log store's own records are now cleaned up first, and chart history comes after them.
 - Fixed background cleanup steps holding up writes for too long, which made container output, Docker events and alert state writes time out in batches and raised a round of "Log store write failures" alerts about every two hours. Writes that only timed out while waiting and are retried from their saved position no longer count as write failures.
 - Fixed count alerts such as "Log store write failures" and "Kernel out-of-memory kills" that were firing before a node restart staying active after the restart even with no new occurrences.
+- Fixed nodes writing to disk heavily all the time (about 3 MB/s, most noticeable on network storage such as bare-metal servers): chart data is now written once a minute, container state is recorded only when it changes, health checks no longer trigger container rescans, monitoring samples in the log store now default to once a minute, and space freed by cleanup is reused for new records. If a node is killed or loses power, at most the last minute of chart points is lost.
 - Fixed known vulnerabilities and improved security.
 
 ### Upgrade notes
 
 - If you raised a node's log capacity by hand to work around this (`capacity_gib` in `logs/config.json`), you can keep it after upgrading, or change it back and restart the node service.
+- The default log store monitoring sample interval (`metrics_every_seconds` in `logs/config.json`) changes from 10 to 60 seconds; a value already set in the config file is kept.
 
 ## v0.37.4
 
