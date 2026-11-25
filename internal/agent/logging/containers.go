@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,11 @@ func RunContainers(ctx context.Context, src ContainerSource, logs *logstore.Stor
 		done   chan struct{}
 	}
 	workers := map[string]worker{}
+	type snapshot struct {
+		data map[string]any
+		at   time.Time
+	}
+	snapshots := map[string]snapshot{}
 	kick := make(chan struct{}, 1)
 	defer func() { cancel(); wg.Wait() }()
 	wg.Go(func() { collectEvents(ctx, src, logs, cfg, kick) })
@@ -60,9 +66,18 @@ func RunContainers(ctx context.Context, src ContainerSource, logs *logstore.Stor
 					return
 				}
 				present[c.ID] = true
-				logs.Report(logstore.Event{Category: logstore.Metrics, Kind: "container.state", Project: c.Project, Object: c.ID,
-					Data: map[string]any{"name": c.Name, "container": c.Container, "service": c.Service, "state": c.State,
-						"status": c.Status, "health": c.Health, "image": c.Image, "image_id": c.ImageID}})
+				// 状态快照只在内容变化时写，没变化的最多每 stateRefresh 写一次。每个 Docker 事件都会触发重扫，
+				// 原来每次重扫给每个容器各写一行，占日志库新增行数的七成。
+				state := map[string]any{"name": c.Name, "container": c.Container, "service": c.Service, "state": c.State,
+					"status": c.Status, "health": c.Health, "image": c.Image, "image_id": c.ImageID}
+				// status 是 Docker 的运行时长文字（Up 5 minutes），每分钟都会变，不算状态变化。
+				key := map[string]any{}
+				maps.Copy(key, state)
+				delete(key, "status")
+				if last, ok := snapshots[c.ID]; !ok || !maps.Equal(last.data, key) || time.Since(last.at) >= stateRefresh {
+					logs.Report(logstore.Event{Category: logstore.Metrics, Kind: "container.state", Project: c.Project, Object: c.ID, Data: state})
+					snapshots[c.ID] = snapshot{data: key, at: time.Now()}
+				}
 				w, exists := workers[c.ID]
 				if exists && w.state == c.State {
 					continue
@@ -86,6 +101,11 @@ func RunContainers(ctx context.Context, src ContainerSource, logs *logstore.Stor
 					logs.Report(logstore.Event{Category: logstore.Runtime, Kind: "container.disappeared", Object: id,
 						Data: map[string]any{"history_complete": false, "reason": "来源已不在 Docker 清单，未采到的尾部不保证能补回"}})
 					delete(workers, id)
+				}
+			}
+			for id := range snapshots {
+				if !present[id] {
+					delete(snapshots, id)
 				}
 			}
 		}
@@ -214,7 +234,8 @@ func collectEvents(ctx context.Context, src ContainerSource, logs *logstore.Stor
 			err = src.EventsSince(ctx, c.since(), func(e docker.EngineEvent) error {
 				err := c.append(ctx, logs, key, "events", replay, logstore.Event{Time: e.Time, Category: logstore.Task,
 					Kind: "docker." + e.Type + "." + e.Action, Project: e.Project, Object: e.ID, Data: e})
-				if err == nil && e.Type == "container" {
+				// exec_* 是健康检查和终端里执行的命令，不改变容器清单，不触发重扫。
+				if err == nil && e.Type == "container" && !strings.HasPrefix(e.Action, "exec_") {
 					select {
 					case kick <- struct{}{}:
 					default:
@@ -236,6 +257,9 @@ func collectEvents(ctx context.Context, src ContainerSource, logs *logstore.Stor
 		}
 	}
 }
+
+// stateRefresh 是容器状态没有变化时重写快照的间隔，按时间查看日志时仍能找到附近的快照。
+const stateRefresh = 10 * time.Minute
 
 func retry(ctx context.Context, cfg logstore.Config) bool {
 	t := time.NewTimer(time.Duration(cfg.ContainerRetrySeconds) * time.Second)

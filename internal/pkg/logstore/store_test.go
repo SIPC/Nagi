@@ -292,7 +292,7 @@ func TestJournalRedactsAndPreservesLoggerGroups(t *testing.T) {
 func TestLocalConfigDefaultsAndCapacityRange(t *testing.T) {
 	dir := t.TempDir()
 	c, err := logstore.LoadConfig(dir)
-	if err != nil || c.CapacityGiB != 5 || c.MetricsEverySeconds != 10 || c.TransferProgressSeconds != 5 || c.RecordingFlushSeconds != 5 {
+	if err != nil || c.CapacityGiB != 5 || c.MetricsEverySeconds != 60 || c.TransferProgressSeconds != 5 || c.RecordingFlushSeconds != 5 {
 		t.Fatalf("默认配置: %+v err=%v", c, err)
 	}
 	if !c.HostJournal || c.HostRetrySeconds != 30 || c.HostLookbackHours != 24 || c.HostSSH || c.HostSudo || c.HostSSHFailuresPerMinute != 100 || c.HostSSHSummarySeconds != 10 {
@@ -515,6 +515,61 @@ func TestWritesStayFastWhileArchivePastCleanupLine(t *testing.T) {
 	}
 	if err := s.Record(t.Context(), logstore.Event{Category: logstore.Audit, Kind: "after"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 裸金属 on v0.37.4 gave every freed page back to the disk after each cleanup
+// (and truncated the WAL after every batch), so the file shrank and grew
+// again every 3–4 hours and cleanup rewrote about 0.5 GB each time. Below the
+// hard limit the freed pages now stay in the file and new records reuse them:
+// after a cleanup the file keeps its size and stays within the limit while
+// writing continues.
+func TestCleanupKeepsFreedPagesForReuse(t *testing.T) {
+	const budget = 8 << 20
+	limit := int64(budget * 4 / 5)
+	path := filepath.Join(t.TempDir(), "logs.db")
+	s := openStore(t, path, budget)
+	size := func() int64 {
+		st, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return st.Size()
+	}
+	fill := func(prefix string, until func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(30 * time.Second)
+		for i := 0; !until(); i++ {
+			record(t, s, logstore.Event{Category: logstore.Metrics, Kind: "sample", Data: strings.Repeat(prefix, 8<<10) + fmt.Sprint(i)})
+			st, err := s.State(t.Context())
+			if err != nil || st.DiskBytes > limit {
+				t.Fatalf("files past the limit: %+v %v", st.DiskBytes, err)
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("cleanup never ran")
+			}
+		}
+	}
+	// Write until the background cleanup has pruned once (the line is 90%).
+	pruned := func() bool {
+		st, err := s.State(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(st.Pruned) > 0
+	}
+	fill("a", pruned)
+	time.Sleep(500 * time.Millisecond) // let the cleanup finish its round
+	before := size()
+	if before < limit*80/100 {
+		t.Fatalf("cleanup gave freed pages back to the disk: file %d of limit %d", before, limit)
+	}
+	// Another round of the same volume reuses the free pages: the file does
+	// not grow by what was written, and stays under the limit.
+	written := 0
+	fill("b", func() bool { written++; return written > 200 })
+	if after := size(); after > limit || after > before+before/10 {
+		t.Fatalf("file grew from %d to %d instead of reusing free pages", before, after)
 	}
 }
 

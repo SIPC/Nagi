@@ -3,6 +3,7 @@ package logging_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"path/filepath"
 	"sync"
@@ -177,5 +178,89 @@ func TestBackgroundHistoryReconnectsWithoutConfirmingUnreadTail(t *testing.T) {
 	var tail struct{ Text string }
 	if err := json.Unmarshal(rows[1].Data.(json.RawMessage), &tail); err != nil || tail.Text != "unread before disconnect" {
 		t.Fatalf("重连后的尾部错误: %+v %v", tail, err)
+	}
+}
+
+// rescanSource 每次重扫时 Docker 的运行时长文字都在变；从第 exitAt 次起容器已退出。
+type rescanSource struct {
+	*historySource
+	scans  atomic.Int32
+	exitAt int32
+}
+
+func (s *rescanSource) AllInstances(context.Context) ([]docker.Instance, error) {
+	n := s.scans.Add(1)
+	c := s.instances[0]
+	c.Status = fmt.Sprintf("Up %d seconds", n)
+	if s.exitAt > 0 && n >= s.exitAt {
+		c.State, c.Status = "exited", "Exited (0)"
+	}
+	return []docker.Instance{c}, nil
+}
+
+func TestContainerStateWrittenOnlyOnChangeAndExecDoesNotRescan(t *testing.T) {
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 2<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	run := func(src *rescanSource, rescan int, until func() bool) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		cfg := logstore.DefaultConfig()
+		cfg.ContainerRescanSeconds, cfg.ContainerRetrySeconds = rescan, 1
+		var wg sync.WaitGroup
+		wg.Go(func() { logging.RunContainers(ctx, src, logs, cfg) })
+		for !until() {
+			if ctx.Err() != nil {
+				t.Fatal("后台采集没有完成")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		cancel()
+		wg.Wait()
+		if err := logs.Flush(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	states := func() int {
+		rows, err := logs.Query(t.Context(), logstore.Filter{Category: logstore.Metrics, KindPrefix: "container.state"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(rows)
+	}
+	app := docker.Instance{ID: "a", Project: "p", Container: "app", State: "running"}
+
+	// 健康检查每次都产生 exec_create/start/die，它们不改变容器清单，不能触发重扫。
+	var events []docker.EngineEvent
+	at := time.Now()
+	for i := range 5 {
+		for _, action := range []string{"exec_create: sh", "exec_start: sh", "exec_die"} {
+			events = append(events, docker.EngineEvent{ID: app.ID, Time: at.Add(time.Duration(i) * time.Millisecond), Type: "container", Action: action})
+		}
+	}
+	execs := &rescanSource{historySource: &historySource{instances: []docker.Instance{app}, events: events, delivered: make(chan string, 16)}}
+	var settled time.Time
+	run(execs, 3600, func() bool {
+		select {
+		case id := <-execs.delivered:
+			if id == "events" {
+				settled = time.Now().Add(300 * time.Millisecond) // 留时间给被误触发的重扫
+			}
+		default:
+		}
+		return !settled.IsZero() && time.Now().After(settled)
+	})
+	if n := execs.scans.Load(); n != 1 {
+		t.Fatalf("exec 事件触发了 %d 次额外重扫", n-1)
+	}
+
+	// 只有运行时长文字在变时不重写快照；状态真的变化（退出）时立即写。
+	before := states()
+	src := &rescanSource{historySource: &historySource{instances: []docker.Instance{app}, delivered: make(chan string, 16)}, exitAt: 4}
+	run(src, 1, func() bool { return src.scans.Load() >= 5 })
+	if got := states() - before; got != 2 {
+		t.Fatalf("5 次重扫（第 4 次起已退出）应写 2 条状态快照，实际 %d 条", got)
 	}
 }

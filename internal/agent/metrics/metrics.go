@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"math"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -80,6 +81,11 @@ type Collector struct {
 	lastDownsampledTo time.Time
 	sources           []Source
 	dropped           atomic.Int64
+	// unsaved holds samples not yet written to the chart history, oldest
+	// first. They are written together once they span historyFlush; queries
+	// merge them, so charts and alert windows still see the latest minute.
+	unsavedMu sync.Mutex
+	unsaved   []sample
 
 	// ExtraRestarts 返回节点代为重启某个容器的次数（顶替项目由节点代管重启，Docker 不计数）。
 	ExtraRestarts func(containerID string) int
@@ -200,24 +206,7 @@ func (c *Collector) Run(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case v := <-pending:
-				batch := []sample{v}
-			drain:
-				for len(batch) < pendingSamples {
-					select {
-					case v := <-pending:
-						batch = append(batch, v)
-					default:
-						break drain
-					}
-				}
-				c.persist(ctx, batch)
-			}
-		}
+		c.writeHistory(ctx, pending)
 	}()
 	defer func() { <-done }()
 	t := time.NewTicker(Interval)
@@ -254,11 +243,81 @@ type sample struct {
 // Dropped 返回因写入跟不上采样而没有写进图表历史的采样数（本进程启动以来）。
 func (c *Collector) Dropped() int64 { return c.dropped.Load() }
 
-func (c *Collector) persist(ctx context.Context, batch []sample) {
+// writeHistory keeps samples in memory and writes them to the chart history
+// in one transaction once they span historyFlush, and once more on shutdown.
+// Each commit rewrites one B-tree page per series (about 2400 pages on 裸金属),
+// however few points it adds: committing every 10 s sample wrote about 2 MB/s
+// to disk for 10 KB/s of data.
+func (c *Collector) writeHistory(ctx context.Context, pending <-chan sample) {
+	for {
+		select {
+		case <-ctx.Done():
+			// Samples still queued were taken before shutdown; keep them too.
+			for drained := false; !drained; {
+				select {
+				case v := <-pending:
+					c.keep(v)
+				default:
+					drained = true
+				}
+			}
+			final, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			c.flushHistory(final)
+			cancel()
+			return
+		case v := <-pending:
+			if c.keep(v) {
+				c.flushHistory(ctx)
+			}
+		}
+	}
+}
+
+// keep adds a sample to the unsaved ones and reports whether they are due.
+func (c *Collector) keep(v sample) bool {
+	c.unsavedMu.Lock()
+	defer c.unsavedMu.Unlock()
+	c.unsaved = append(c.unsaved, v)
+	return v.at.Sub(c.unsaved[0].at) >= historyFlush-Interval
+}
+
+// flushHistory writes the unsaved samples. They leave memory only after the
+// commit, so a concurrent query sees each point in memory or in the database.
+// A failed write drops them, as a failed write of one sample did before.
+func (c *Collector) flushHistory(ctx context.Context) {
+	c.unsavedMu.Lock()
+	batch := slices.Clone(c.unsaved)
+	c.unsavedMu.Unlock()
+	if len(batch) == 0 {
+		return
+	}
 	if err := c.storeBatch(ctx, batch); err != nil && ctx.Err() == nil {
 		c.log.Warn("保存监控数据失败", "err", err, "samples", len(batch))
 	}
+	c.unsavedMu.Lock()
+	c.unsaved = slices.Delete(c.unsaved, 0, len(batch))
+	c.unsavedMu.Unlock()
 	c.maintain(ctx, batch[len(batch)-1].at)
+}
+
+// unsavedPoints returns the unsaved points of series starting with prefix in
+// [from, to], oldest first, at the second resolution the database stores.
+func (c *Collector) unsavedPoints(prefix string, from, to time.Time) map[string][]Point {
+	c.unsavedMu.Lock()
+	defer c.unsavedMu.Unlock()
+	out := map[string][]Point{}
+	for _, v := range c.unsaved {
+		ts := v.at.Unix()
+		if ts < from.Unix() || ts > to.Unix() {
+			continue
+		}
+		for series, value := range v.values {
+			if strings.HasPrefix(series, prefix) {
+				out[series] = append(out[series], Point{Time: time.Unix(ts, 0), Value: value})
+			}
+		}
+	}
+	return out
 }
 
 const (
@@ -266,6 +325,8 @@ const (
 	historyWait = 2 * time.Second
 	// pendingSamples 是等待写入图表历史的采样上限（5 分钟）。
 	pendingSamples = 30
+	// historyFlush 是采样在内存里攒多久再一起写进图表历史。
+	historyFlush = time.Minute
 )
 
 func (c *Collector) collect(ctx context.Context, now time.Time) map[string]float64 {
@@ -665,6 +726,9 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 	c.historyMu.RLock()
 	defer c.historyMu.RUnlock()
 	now := time.Now()
+	// Taken before reading the database: a point leaves memory only after its
+	// commit, so it is either here or in the database read below.
+	unsaved := c.unsavedPoints(prefix, from, to)
 	out := map[string][]Point{}
 	add := func(series string, ts int64, value float64) {
 		out[series] = append(out[series], Point{Time: time.Unix(ts, 0), Value: value})
@@ -713,6 +777,17 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 				params.AfterSeries, params.AfterTs = last.Series, last.Ts
 			}
 		}
+		for series, points := range unsaved {
+			have := out[series]
+			for _, p := range points {
+				// A point committed after unsavedPoints is in both; the legacy
+				// merge above sorts and removes duplicates itself.
+				if c.historyLegacy != nil || len(have) == 0 || p.Time.After(have[len(have)-1].Time) {
+					have = append(have, p)
+				}
+			}
+			out[series] = have
+		}
 		// 超过 keepRaw 的部分已经删掉了，不算在覆盖的时间段里。
 		return out, Window{Res: Interval, From: maxTime(from, now.Add(-keepRaw)), To: minTime(to, now)}, nil
 	}
@@ -733,12 +808,13 @@ func (c *Collector) QueryWindow(ctx context.Context, prefix string, from, to tim
 			params.AfterSeries, params.AfterTs = last.Series, last.Ts
 		}
 	}
-	// 5 分钟的点取窗口起点：覆盖起点不早于 from 的窗口，到 to 所在的窗口为止，且只有已经降采样的（留两个采样间隔的余量）。
+	// 5 分钟的点取窗口起点：覆盖起点不早于 from 的窗口，到 to 所在的窗口为止，且只有已经降采样的
+	//（采样最多在内存里攒 historyFlush 才写入并降采样，再留两个采样间隔的余量）。
 	first := from.Truncate(bucket)
 	if first.Before(from) {
 		first = first.Add(bucket)
 	}
-	return out, Window{Res: bucket, From: first, To: minTime(to.Truncate(bucket).Add(bucket), now.Add(-2*Interval).Truncate(bucket))}, nil
+	return out, Window{Res: bucket, From: first, To: minTime(to.Truncate(bucket).Add(bucket), now.Add(-historyFlush-2*Interval).Truncate(bucket))}, nil
 }
 
 func maxTime(a, b time.Time) time.Time {

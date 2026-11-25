@@ -72,12 +72,15 @@ func CaptureMetrics(logs *logstore.Store, cfg logstore.Config) func(time.Time, m
 type Statistics struct {
 	Store   *logstore.Store
 	History *metrics.Collector
+	// Every is how often samples are saved (metrics_every_seconds); a sample
+	// stays fresh for three of these, never less than three collector intervals.
+	Every time.Duration
 }
 
 func (s Statistics) LatestFresh(now time.Time) map[string]float64 {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	data, latest, err := s.readSamples(ctx, "", now.Add(-3*metrics.Interval), now.Add(time.Nanosecond))
+	data, latest, err := s.readSamples(ctx, "", now.Add(-3*max(metrics.Interval, s.Every)), now.Add(time.Nanosecond))
 	if err != nil {
 		return nil
 	}

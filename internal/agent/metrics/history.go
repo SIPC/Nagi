@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -14,6 +15,10 @@ import (
 	"github.com/SIPC/nagi/internal/pkg/db"
 	"github.com/SIPC/nagi/internal/pkg/logstore"
 )
+
+// historyWALLimit is the size metrics.db's WAL is cut back to after a
+// checkpoint: about two minutes of commits on a node with 2400 series.
+const historyWALLimit = 32 << 20
 
 // OpenHistory separates graph history from node configuration. Call before any
 // collector starts. Copy/verify durable destination batches before deleting either
@@ -152,8 +157,14 @@ func prepareHistory(ctx context.Context, path string, legacy *sql.DB, budget *lo
 			return fail(err)
 		}
 	}
+	// Chart history is rebuildable observation data: NORMAL keeps every commit
+	// on a process crash and may lose the last minute on power loss, without
+	// corrupting the file. FULL paid an extra fsync of the whole WAL on every
+	// commit. journal_size_limit lets the WAL be reused at a steady size
+	// instead of truncated and grown again by every minute's commit.
 	if err := budget.WriteArchive(ctx, 2, 256<<10, func() error {
-		_, err := d.ExecContext(ctx, `PRAGMA synchronous=FULL;
+		_, err := d.ExecContext(ctx, `PRAGMA synchronous=NORMAL;
+		PRAGMA journal_size_limit=`+strconv.Itoa(historyWALLimit)+`;
 		CREATE TABLE IF NOT EXISTS metrics_raw (series TEXT NOT NULL, ts INTEGER NOT NULL, value REAL NOT NULL, PRIMARY KEY(series,ts)) WITHOUT ROWID;
 		CREATE TABLE IF NOT EXISTS metrics_m5 (series TEXT NOT NULL, ts INTEGER NOT NULL, value REAL NOT NULL, PRIMARY KEY(series,ts)) WITHOUT ROWID;
 		CREATE INDEX IF NOT EXISTS metrics_raw_ts ON metrics_raw(ts);

@@ -16,7 +16,9 @@ func TestMeshHistoryPreservesUnknownLossAndObservedPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	capture := CaptureMesh(logs, logstore.DefaultConfig())
+	cfg := logstore.DefaultConfig()
+	cfg.MetricsEverySeconds = 10
+	capture := CaptureMesh(logs, cfg)
 	at := time.Now()
 	peer := &nagiv1.MeshPeerStatus{PublicKey: []byte{1, 2}, Path: "direct", Endpoint: "192.0.2.3:51820", RxBytes: 9007199254740993, LocalPort: 51820}
 	st := &nagiv1.MeshStatus{Peers: []*nagiv1.MeshPeerStatus{peer}}

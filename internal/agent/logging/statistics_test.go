@@ -61,6 +61,28 @@ func TestLatestFreshDoesNotWalkMetricsHistory(t *testing.T) {
 	}
 }
 
+// With the default one-minute journal sample, the alert engine (every 10 s)
+// must keep seeing the latest sample until the next one is due, and drop it
+// once three sample intervals pass without a new one.
+func TestLatestFreshFollowsConfiguredSampleInterval(t *testing.T) {
+	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logs.Close()
+	cfg := logstore.DefaultConfig()
+	at := time.Now().UTC().Add(-time.Hour)
+	CaptureMetrics(logs, cfg)(at, map[string]float64{"node:disk": 96})
+	flush(t, logs)
+	s := Statistics{Store: logs, Every: time.Duration(cfg.MetricsEverySeconds) * time.Second}
+	if got := s.LatestFresh(at.Add(55 * time.Second)); got["node:disk"] != 96 {
+		t.Fatalf("sample from 55 s ago dropped with a %d s interval: %+v", cfg.MetricsEverySeconds, got)
+	}
+	if got := s.LatestFresh(at.Add(3*s.Every + time.Second)); len(got) != 0 {
+		t.Fatalf("sample older than three intervals accepted: %+v", got)
+	}
+}
+
 func TestRecordedStatisticsRequireCompleteFreshSamples(t *testing.T) {
 	logs, err := logstore.Open(t.Context(), filepath.Join(t.TempDir(), "logs.db"), 4<<20)
 	if err != nil {
@@ -68,7 +90,9 @@ func TestRecordedStatisticsRequireCompleteFreshSamples(t *testing.T) {
 	}
 	defer logs.Close()
 	now := time.Now().UTC()
-	collect := CaptureMetrics(logs, logstore.DefaultConfig())
+	cfg := logstore.DefaultConfig()
+	cfg.MetricsEverySeconds = 10
+	collect := CaptureMetrics(logs, cfg)
 	values := map[string]float64{"node:disk": 96, "node:cpu": 17,
 		// 按挂载点、网卡、映射的序列名带 @ 和 /，不能被日志的脱敏当成 user:pass@ 或路径改写，否则磁盘、inode 告警看不到。
 		"node:disk@/srv/nagi": 92, "node:filesystem@/srv/nagi:inodes_free": 7, "node:interface@eth0:rx_errors_per_second": 3}

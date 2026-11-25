@@ -46,7 +46,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{CapacityGiB: 5, MetricsEverySeconds: 10, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, DecisionQueueEntries: 256, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, CopyCatchupEntries: 256, CopyCatchupKiB: 512, CopyBudgetKiBPerSecond: 1024, CopyBudgetEntriesPerSec: 2048, CopyBackoffMaxSeconds: 60, CopyYieldPressurePercent: 40, CopyReceiveSharePercent: 50, RuntimeLevel: "INFO", HostJournal: true, HostRetrySeconds: 30, HostLookbackHours: 24, HostSSHFailuresPerMinute: 100, HostSSHSummarySeconds: 10}
+	return Config{CapacityGiB: 5, MetricsEverySeconds: 60, NodeDetails: true, ContainerRescanSeconds: 15, ContainerRetrySeconds: 5, ContainerLineBytes: 8192, TransferProgressSeconds: 5, RecordingFlushSeconds: 5, UpgradeProgressSeconds: 1, FileProgressSeconds: 1, DecisionQueueEntries: 256, RecentCapacityMiB: 1024, RecentHours: 24, CopyImportantSeconds: 1, CopyOrdinarySeconds: 10, CopyCatchupEntries: 256, CopyCatchupKiB: 512, CopyBudgetKiBPerSecond: 1024, CopyBudgetEntriesPerSec: 2048, CopyBackoffMaxSeconds: 60, CopyYieldPressurePercent: 40, CopyReceiveSharePercent: 50, RuntimeLevel: "INFO", HostJournal: true, HostRetrySeconds: 30, HostLookbackHours: 24, HostSSHFailuresPerMinute: 100, HostSSHSummarySeconds: 10}
 }
 
 // LoadConfig 读取本机配置，不存在时用默认值；无效配置不悄悄回退。

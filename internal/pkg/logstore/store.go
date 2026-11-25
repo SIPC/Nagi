@@ -287,8 +287,15 @@ func open(ctx context.Context, path string, budget int64, pruneOnOpen bool) (*St
 			return fail(err)
 		}
 	}
-	if err := s.compact(ctx); err != nil {
+	// Free pages are kept for reuse (see reclaimPercent); reclaim them on open
+	// only when the files would not fit comfortably, such as after the
+	// capacity was lowered.
+	if n, err := s.diskBytes(); err != nil {
 		return fail(err)
+	} else if n > s.dbLimit*reclaimPercent/100 {
+		if err := s.compact(ctx); err != nil {
+			return fail(err)
+		}
 	}
 	if n, err := s.diskBytes(); err != nil || n > s.budget {
 		return fail(fmt.Errorf("日志库无法收缩到额度内: bytes=%d: %v", n, err))
@@ -641,9 +648,6 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int, stop t
 				if _, err := s.db.ExecContext(ctx, `INSERT INTO log_meta(key,value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1`, "archive_pruned:"+a.Name); err != nil {
 					return err
 				}
-				if _, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-					return err
-				}
 			}
 			continue
 		}
@@ -675,12 +679,13 @@ func (s *Store) prune(ctx context.Context, target int64, maxPriority int, stop t
 			tx.Rollback()
 			return err
 		}
+		// No checkpoint per batch: the automatic one writes the WAL back.
+		// A TRUNCATE after every 512 rows wrote each freed page twice and
+		// made cleanup the largest disk writer on 裸金属 (iSCSI).
 		if err := tx.Commit(); err != nil {
 			return err
 		}
-		if _, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-			return err
-		}
+		s.trimWAL(ctx)
 	}
 }
 
@@ -953,6 +958,12 @@ func OpenLocal(ctx context.Context, dir string) (*Store, Config, error) {
 // for a second or more and these writes timed out in bulk on 裸金属.
 const cleanupStep = 150 * time.Millisecond
 
+// reclaimPercent is the share of the limit the files may reach before the
+// background cleanup gives free pages back to the disk. Cleanup starts at 90%
+// of the limit in use and stops at 80%, so the files normally settle near 90%
+// with the difference as free pages that new records fill again.
+const reclaimPercent = 95
+
 // kickCleanup wakes the background cleanup. The caller holds the gate.
 func (s *Store) kickCleanup() {
 	s.cleanupOnce.Do(func() { go s.cleanupLoop() })
@@ -993,20 +1004,33 @@ func (s *Store) cleanupOnceStep() (bool, error) {
 		return true, err
 	}
 	start := time.Now()
-	if live <= s.dbLimit*8/10 {
-		// Usage is back under the line; return the freed pages to the disk in
-		// short steps too, so the file shrinks without one long hold.
+	// Freed pages stay in the file for new records to reuse; they are given
+	// back to the disk only while the files are near the hard limit. Giving
+	// them back after every cleanup made the file shrink and grow again each
+	// cycle and rewrote every moved page (about 0.5 GB per cycle on 裸金属).
+	reclaim := func() (bool, error) {
+		physical, err := s.diskBytes()
+		if err != nil || physical <= s.dbLimit*reclaimPercent/100 {
+			return false, err
+		}
 		var free int
 		if err := s.db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&free); err != nil || free == 0 {
-			return true, err
+			return false, err
 		}
-		return false, s.compact(context.WithValue(ctx, backgroundTrim{}, start.Add(compactStep)))
+		return true, s.compact(context.WithValue(ctx, backgroundTrim{}, time.Now().Add(compactStep)))
+	}
+	if live <= s.dbLimit*8/10 {
+		more, err := reclaim()
+		return !more || err != nil, err
 	}
 	err = s.prune(context.WithValue(ctx, backgroundTrim{}, start.Add(cleanupStep)), s.dbLimit*8/10, 3, start.Add(cleanupStep))
 	if err == nil || errors.Is(err, errStepEnded) || errors.Is(err, ErrArchiveBusy) {
-		if err := s.compact(context.WithValue(ctx, backgroundTrim{}, start.Add(cleanupStep+compactStep))); err != nil {
+		if _, err := reclaim(); err != nil {
 			return true, err
 		}
+	}
+	if err == nil {
+		return false, nil // under the line now; the next step reclaims if still needed
 	}
 	if errors.Is(err, errStepEnded) {
 		return false, nil // continue after queued writers

@@ -290,7 +290,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		a.metrics.AddSource(routeMetrics())
 	}
 	a.metrics.AddSource(a.meshMetrics())
-	statistics := logging.Statistics{Store: cfg.Logs, History: a.metrics}
+	statistics := logging.Statistics{Store: cfg.Logs, History: a.metrics, Every: time.Duration(cfg.LogConfig.MetricsEverySeconds) * time.Second}
 	a.alerts = alerts.New(log.With("component", "alerts"), hostname, filepath.Join(cfg.DataDir, "identity"),
 		filepath.Join(cfg.DataDir, "caddy"), statistics, dc,
 		func(id string) string { return projects.ProjectName(context.Background(), id) }, a.relayAlert, cfg.Logs)

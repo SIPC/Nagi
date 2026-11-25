@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -162,6 +163,78 @@ func TestQueryWindowKeepsEveryPointAcrossBatches(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Each commit to the chart history rewrites one page per series, so samples
+// are kept in memory and committed once a minute (裸金属 wrote 2 MB/s for
+// 10 KB/s of data). Charts must still show every point at once, and stopping
+// the node must not lose the ones not yet written.
+func TestSamplesCommitOncePerMinuteAndStayQueryable(t *testing.T) {
+	ctx := t.Context()
+	path := filepath.Join(t.TempDir(), "metrics.db")
+	legacy, err := db.OpenMigrated(ctx, filepath.Join(t.TempDir(), "node.db"), nodestore.Migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	history, err := OpenHistory(ctx, path, legacy, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer history.Close()
+	var syncMode, walLimit int
+	if err := history.QueryRow(`PRAGMA synchronous`).Scan(&syncMode); err != nil || syncMode != 1 {
+		t.Fatalf("metrics.db synchronous=%d (want NORMAL=1): %v", syncMode, err)
+	}
+	if err := history.QueryRow(`PRAGMA journal_size_limit`).Scan(&walLimit); err != nil || walLimit != historyWALLimit {
+		t.Fatalf("metrics.db journal_size_limit=%d: %v", walLimit, err)
+	}
+	c := New(history, nil, "", slog.New(slog.DiscardHandler))
+	defer c.CloseReader()
+	commits := func() int {
+		var n int
+		if err := history.QueryRow(`SELECT count(DISTINCT ts) FROM metrics_raw`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	pending := make(chan sample)
+	run, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { defer close(done); c.writeHistory(run, pending) }()
+	at := time.Now().Add(-time.Hour).Truncate(time.Minute)
+	send := func(i int) {
+		pending <- sample{at.Add(time.Duration(i) * Interval), map[string]float64{"node:cpu": float64(i), "c:p/a:mem": 1}}
+	}
+	for i := range 5 {
+		send(i)
+	}
+	if n := commits(); n != 0 {
+		t.Fatalf("%d samples committed before a minute of them was collected", n)
+	}
+	got, err := c.Query(ctx, "node:", at, at.Add(time.Hour))
+	if err != nil || len(got["node:cpu"]) != 5 || got["node:cpu"][4].Value != 4 {
+		t.Fatalf("unsaved samples missing from the chart: %+v %v", got, err)
+	}
+	send(5) // the sixth sample spans the minute
+	for deadline := time.Now().Add(5 * time.Second); commits() != 6; {
+		if time.Now().After(deadline) {
+			t.Fatalf("a minute of samples was not committed: %d", commits())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	send(6)
+	stop()
+	<-done
+	got, err = c.Query(ctx, "node:", at, at.Add(time.Hour))
+	if err != nil || len(got["node:cpu"]) != 7 || commits() != 7 {
+		t.Fatalf("samples lost at shutdown or duplicated: %+v commits=%d %v", got, commits(), err)
+	}
+	for i, p := range got["node:cpu"] {
+		if p.Value != float64(i) || !p.Time.Equal(at.Add(time.Duration(i)*Interval)) {
+			t.Fatalf("point %d: %+v", i, p)
+		}
 	}
 }
 
