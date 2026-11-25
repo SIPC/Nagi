@@ -62,12 +62,6 @@ export function lacksLogService(version: string | undefined) {
   return !!x && (Number(x[1]) === 0 ? Number(x[2]) < 37 : false);
 }
 
-// lacksDiskIO：节点早于 v0.37.5，图表历史里没有磁盘读写（node:disk_read 等、容器的 :disk_read 等）。和 lacksLogService 一样只比较主、次、修订号。
-export function lacksDiskIO(version: string | undefined) {
-  const x = versionRe.exec(version ?? "");
-  return !!x && Number(x[1]) * 1e6 + Number(x[2]) * 1e3 + Number(x[3]) < 37005;
-}
-
 // upgradeTarget：节点可以一键升级到的版本（即面板的版本），不能升级时返回空串。
 // 只升不降；正式版渠道的节点不升到预发布版（见 docs/development.md#预发布版本），和面板的 Node.upgrade_target 一致；
 // 面板自带的节点随面板升级；只支持 Linux 节点（见 internal/agent/upgrade.go）。

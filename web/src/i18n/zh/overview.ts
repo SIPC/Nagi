@@ -66,6 +66,7 @@ export default {
     cpu: "CPU",
     memory: "内存",
     disk: "磁盘",
+    diskIO: "磁盘读写",
     inbound: "入站",
     outbound: "出站",
     containers: "容器",

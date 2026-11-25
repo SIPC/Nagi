@@ -57,4 +57,36 @@ public interface NodeUsageOrBuilder extends
    * <code>repeated .nagi.v1.DiskUsage disks = 4 [json_name = "disks"];</code>
    */
   int getDisksCount();
+
+  /**
+   * <pre>
+   * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+   * /proc/diskstats 的节点不报，和 0 区分开。
+   * </pre>
+   *
+   * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+   * @return Whether the diskRead field is set.
+   */
+  boolean hasDiskRead();
+  /**
+   * <pre>
+   * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+   * /proc/diskstats 的节点不报，和 0 区分开。
+   * </pre>
+   *
+   * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+   * @return The diskRead.
+   */
+  double getDiskRead();
+
+  /**
+   * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+   * @return Whether the diskWrite field is set.
+   */
+  boolean hasDiskWrite();
+  /**
+   * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+   * @return The diskWrite.
+   */
+  double getDiskWrite();
 }

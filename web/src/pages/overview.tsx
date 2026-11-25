@@ -5,10 +5,11 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { errorMessage, logClient, orOther, nodeClient, projectClient } from "@/lib/api";
 import { PageHeader } from "@/pages/layout";
-import { fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, spanOf, type MetricRange } from "@/components/metrics";
+import { DiskIOValue, fmtBytes, fmtCount, fmtCpuShort, fmtErrorRate, fmtRate, metricRanges, RangePicker, rateParts, spanOf, type MetricRange } from "@/components/metrics";
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import { stateOf } from "@/components/status";
 import { lacksLogService } from "@/pages/update";
+import { diskIOCell } from "@/lib/disk-io";
 import { ButtonLink, Empty, EmptyRow, HelpTip, Notice, QueryError, RowsSkeleton, layoutMotionCurve, layoutMotionMs, Roll, Section, Segmented, Status, Table, Td, Th } from "@/components/ui";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -510,7 +511,7 @@ function OverviewTable({ cols, children }: { cols: Col[]; children: ReactNode })
   );
 }
 
-// 节点表：CPU 到 md、内存和磁盘到 lg、流量到 xl 才显示。
+// 节点表：CPU 到 md、内存、磁盘和磁盘读写到 lg、流量到 xl 才显示。
 const hideCpu = "max-md:hidden";
 const hideUsage = "max-lg:hidden";
 const hideNet = "max-xl:hidden";
@@ -520,6 +521,7 @@ const nodeCols: Col[] = [
   { label: o.nodes.cpu, width: 120, hide: hideCpu },
   { label: o.nodes.memory, width: 136, hide: hideUsage },
   { label: o.nodes.disk, width: 136, hide: hideUsage },
+  { label: o.nodes.diskIO, width: 176, hide: hideUsage },
   { label: o.nodes.inbound, width: 104, hide: hideNet },
   { label: o.nodes.outbound, width: 104, hide: hideNet },
   { label: o.nodes.containers },
@@ -1025,6 +1027,7 @@ export function OverviewPage() {
                       <Td className={cn(cell, hideCpu)}><Roll value={u ? (n.info?.cpus ? `${fmtCpuShort(u.cpu)} / ${n.info.cpus * 100}%` : fmtCpuShort(u.cpu)) : dash} n={u?.cpu} /></Td>
                       <Td className={cn(cell, hideUsage)}><Roll value={u ? (memTotal ? fmtUsed((u.memory / 100) * memTotal, memTotal) : fmtCpuShort(u.memory)) : dash} n={u?.memory} /></Td>
                       <Td className={cn(cell, hideUsage)}><Roll value={u ? (diskTotal ? fmtUsed(diskUsed, diskTotal) : fmtCpuShort(u.disk)) : dash} n={u?.disk} /></Td>
+                      <Td className={cn(cell, hideUsage)}><DiskIOValue io={diskIOCell({ online: n.online, pending: n.pending, version: n.info?.version, read: u?.diskRead, write: u?.diskWrite })} /></Td>
                       <Td className={cn(cell, hideNet)}><Roll value={net?.rx !== undefined ? fmtRate(net.rx) : dash} n={net?.rx} /></Td>
                       <Td className={cn(cell, hideNet)}><Roll value={net?.tx !== undefined ? fmtRate(net.tx) : dash} n={net?.tx} /></Td>
                       <Td className={cell}><Roll value={String(n.containers)} /></Td>

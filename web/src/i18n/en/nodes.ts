@@ -32,7 +32,8 @@ export default {
   },
   approveConfirm: (name, address) => `Approve node ${name} (${address})? It'll join the node network and be managed by this panel. Make sure it's your machine.`,
   title: "Nodes",
-  columns: { node: "Node", containers: "Containers" },
+  columns: { node: "Node", containers: "Containers", diskIO: "Disk I/O" },
+  upgradeForDiskIO: "Upgrade node",
   sort: { label: "Sort", byJoined: "Joined", byName: "Name", byCustom: "Custom", reorderHint: "Drag group headings or nodes to reorder." },
   views: {
     label: "View",

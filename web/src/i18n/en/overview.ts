@@ -66,6 +66,7 @@ export default {
     cpu: "CPU",
     memory: "Memory",
     disk: "Disk",
+    diskIO: "Disk I/O",
     inbound: "In",
     outbound: "Out",
     containers: "Containers",

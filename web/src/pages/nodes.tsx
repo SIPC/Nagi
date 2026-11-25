@@ -1,4 +1,4 @@
-import { Children, useContext, useEffect, useState } from "react";
+import { Children, Fragment, useContext, useEffect, useState } from "react";
 import type * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -9,7 +9,8 @@ import { errorMessage, nodeClient, projectClient, settingsClient, toDate } from 
 import { cn, timeAgo } from "@/lib/utils";
 import { t } from "@/i18n";
 import { Breadcrumb, PageHeader } from "@/pages/layout";
-import { RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtIops, fmtRate, metricRanges, nodeUsage, useRangeSearch } from "@/components/metrics";
+import { DiskIOValue, RangePicker, UsageCell, fmtBytes, fmtCpuShort, fmtIops, fmtRate, metricRanges, nodeUsage, useRangeSearch } from "@/components/metrics";
+import { diskIOCell, lacksDiskIO } from "@/lib/disk-io";
 import { TimeChart } from "@/components/chart";
 import { HandOver, NodePanels } from "@/pages/panels";
 import { NodeDirectDownload, NodeMesh, NodeQUIC, NodeRelay, NodeRelayPool, ratePair } from "@/pages/mesh";
@@ -60,7 +61,7 @@ import type { Node, StaleProject, UnknownContainer, UpdateState } from "@/gen/na
 import type { NodeInfo, NodeUsage } from "@/gen/nagi/v1/common_pb";
 import { ask, confirmAction, notify } from "@/components/confirm";
 import { requireElevation, withPrivilegedElevation } from "@/components/elevate";
-import { cancelable, isPrerelease, lacksDiskIO, lacksLogService, progressText, updateActive, UpdateChannelRow, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
+import { cancelable, isPrerelease, lacksLogService, progressText, updateActive, UpdateChannelRow, UpdateProgressBar, upgradeTarget, useUpdateStatus } from "@/pages/update";
 import { useRole } from "@/components/role";
 import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
@@ -629,8 +630,9 @@ export function NodesPage({
   );
 }
 
-// 节点列表的列：名称和地址，CPU、内存、磁盘各一列（已用 / 上限加占用条），容器数靠右，各列上下居中。窄于 lg 时（平板上五列放不下）只留名称这一列，用量并进第三行。
-const nodeCols = "grid grid-cols-[minmax(0,1fr)] items-center gap-x-6 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_8rem_3rem]";
+// 节点列表的列：名称和地址，CPU、内存、磁盘各一列（已用 / 上限加占用条），磁盘读写（当前的写入、读取速率），容器数靠右，各列上下居中。
+// 窄于 lg 时（平板上六列放不下）只留名称这一列，用量并进第三行。
+const nodeCols = "grid grid-cols-[minmax(0,1fr)] items-center gap-x-6 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_8rem_8rem_3rem]";
 
 // NodeList：节点页的列表。字段多、要横向比较，所以有表头；表头线不超出内容区，行左右外扩 8 只为悬停底色。
 function NodeList({ children }: { children: React.ReactNode }) {
@@ -641,6 +643,7 @@ function NodeList({ children }: { children: React.ReactNode }) {
         <span>CPU</span>
         <span>{t.metrics.memory}</span>
         <span>{t.metrics.disk}</span>
+        <span>{t.nodes.columns.diskIO}</span>
         <span className="text-right">{t.nodes.columns.containers}</span>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)] pt-1">{children}</div>
@@ -672,6 +675,7 @@ function SortableNodeRow(props: React.ComponentProps<typeof NodeRow>) {
 // 状态只用名称前的圆点，在线时不写字；离线和待批准时在名称后面写灰字。
 function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: boolean; upgrade?: UpdateState; onApproved: () => void }) {
   const usage = n.online && !n.pending ? nodeUsage(n.usage, n.info) : undefined;
+  const io = diskIOCell({ online: n.online, pending: n.pending, version: n.info?.version, read: n.usage?.diskRead, write: n.usage?.diskWrite });
   const tone = n.pending ? "warning" : n.online ? "success" : "neutral";
   const progress = progressText(upgrade, false);
   return (
@@ -713,12 +717,17 @@ function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: 
           )}
         </div>
         <div className="text-[13px] leading-5 text-muted-foreground tabular-nums lg:hidden">
-          {/* 和 Row 在手机上合并灰色信息的写法相同，用 · 隔开。 */}
-          {[...(usage ?? []).map((u) => `${u.label} ${u.label === "CPU" ? u.value : u.percent === undefined ? "—" : fmtCpuShort(u.percent)}`), t.nodes.containers(n.containers)].join(" · ")}
+          {/* 和 Row 在手机上合并灰色信息的写法相同，用 · 隔开。每一项不在中间折行（「1.6」和「MB/s」不分开），放不下整项换行。 */}
+          {[...(usage ?? []).map((u) => `${u.label} ${u.label === "CPU" ? u.value : u.percent === undefined ? "—" : fmtCpuShort(u.percent)}`), ...(io.kind === "rates" ? [`${t.nodes.columns.diskIO} ${ratePair(io.write, io.read)}`] : []), t.nodes.containers(n.containers)].map((item, i) => (
+            <Fragment key={i}>
+              {i > 0 && " · "}
+              <span className="whitespace-nowrap">{item}</span>
+            </Fragment>
+          ))}
         </div>
       </div>
       {n.pending ? (
-        <div className="lg:col-span-3 max-lg:mt-2">
+        <div className="lg:col-span-4 max-lg:mt-2">
           <Button
             variant="outline"
             className="relative"
@@ -730,13 +739,16 @@ function NodeRow({ n, canUpgrade, upgrade, onApproved }: { n: Node; canUpgrade: 
           </Button>
         </div>
       ) : usage ? (
-        usage.map((u) => (
-          <span key={u.label} className="max-lg:hidden">
-            <UsageCell {...u} />
-          </span>
-        ))
+        <>
+          {usage.map((u) => (
+            <span key={u.label} className="max-lg:hidden">
+              <UsageCell {...u} />
+            </span>
+          ))}
+          <DiskIOValue io={io} stacked className="max-lg:hidden" />
+        </>
       ) : (
-        [0, 1, 2].map((i) => (
+        [0, 1, 2, 3].map((i) => (
           <span key={i} className="text-muted-foreground max-lg:hidden">
             —
           </span>

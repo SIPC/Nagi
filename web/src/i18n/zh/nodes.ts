@@ -32,7 +32,9 @@ export default {
   },
   approveConfirm: (name: string, address: string) => `批准节点 ${name}（${address}）？节点将加入节点网络并接受面板管理，请确认是自有机器。`,
   title: "节点",
-  columns: { node: "节点", containers: "容器" },
+  columns: { node: "节点", containers: "容器", diskIO: "读写" },
+  // 节点列表、概览节点表的「读写」一格：节点版本过旧，没有磁盘读写。
+  upgradeForDiskIO: "请升级节点",
   sort: { label: "排序", byJoined: "加入时间", byName: "按名称", byCustom: "自定义", reorderHint: "拖动分组标题或节点调整顺序。" },
   views: {
     label: "视图",

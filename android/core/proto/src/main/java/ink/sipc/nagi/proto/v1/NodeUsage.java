@@ -21,6 +21,7 @@ public  final class NodeUsage extends
   private NodeUsage() {
     disks_ = emptyProtobufList();
   }
+  private int bitField0_;
   public static final int CPU_FIELD_NUMBER = 1;
   private double cpu_;
   /**
@@ -36,7 +37,7 @@ public  final class NodeUsage extends
    * @param value The cpu to set.
    */
   private void setCpu(double value) {
-    
+
     cpu_ = value;
   }
   /**
@@ -62,7 +63,7 @@ public  final class NodeUsage extends
    * @param value The memory to set.
    */
   private void setMemory(double value) {
-    
+
     memory_ = value;
   }
   /**
@@ -96,7 +97,7 @@ public  final class NodeUsage extends
    * @param value The disk to set.
    */
   private void setDisk(double value) {
-    
+
     disk_ = value;
   }
   /**
@@ -131,7 +132,7 @@ public  final class NodeUsage extends
    *
    * <code>repeated .nagi.v1.DiskUsage disks = 4 [json_name = "disks"];</code>
    */
-  public java.util.List<? extends ink.sipc.nagi.proto.v1.DiskUsageOrBuilder> 
+  public java.util.List<? extends ink.sipc.nagi.proto.v1.DiskUsageOrBuilder>
       getDisksOrBuilderList() {
     return disks_;
   }
@@ -247,6 +248,94 @@ public  final class NodeUsage extends
   private void removeDisks(int index) {
     ensureDisksIsMutable();
     disks_.remove(index);
+  }
+
+  public static final int DISK_READ_FIELD_NUMBER = 5;
+  private double diskRead_;
+  /**
+   * <pre>
+   * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+   * /proc/diskstats 的节点不报，和 0 区分开。
+   * </pre>
+   *
+   * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+   * @return Whether the diskRead field is set.
+   */
+  @java.lang.Override
+  public boolean hasDiskRead() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+   * /proc/diskstats 的节点不报，和 0 区分开。
+   * </pre>
+   *
+   * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+   * @return The diskRead.
+   */
+  @java.lang.Override
+  public double getDiskRead() {
+    return diskRead_;
+  }
+  /**
+   * <pre>
+   * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+   * /proc/diskstats 的节点不报，和 0 区分开。
+   * </pre>
+   *
+   * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+   * @param value The diskRead to set.
+   */
+  private void setDiskRead(double value) {
+    bitField0_ |= 0x00000001;
+    diskRead_ = value;
+  }
+  /**
+   * <pre>
+   * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+   * /proc/diskstats 的节点不报，和 0 区分开。
+   * </pre>
+   *
+   * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+   */
+  private void clearDiskRead() {
+    bitField0_ = (bitField0_ & ~0x00000001);
+    diskRead_ = 0D;
+  }
+
+  public static final int DISK_WRITE_FIELD_NUMBER = 6;
+  private double diskWrite_;
+  /**
+   * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+   * @return Whether the diskWrite field is set.
+   */
+  @java.lang.Override
+  public boolean hasDiskWrite() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+   * @return The diskWrite.
+   */
+  @java.lang.Override
+  public double getDiskWrite() {
+    return diskWrite_;
+  }
+  /**
+   * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+   * @param value The diskWrite to set.
+   */
+  private void setDiskWrite(double value) {
+    bitField0_ |= 0x00000002;
+    diskWrite_ = value;
+  }
+  /**
+   * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+   */
+  private void clearDiskWrite() {
+    bitField0_ = (bitField0_ & ~0x00000002);
+    diskWrite_ = 0D;
   }
 
   public static ink.sipc.nagi.proto.v1.NodeUsage parseFrom(
@@ -596,6 +685,98 @@ public  final class NodeUsage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+     * /proc/diskstats 的节点不报，和 0 区分开。
+     * </pre>
+     *
+     * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+     * @return Whether the diskRead field is set.
+     */
+    @java.lang.Override
+    public boolean hasDiskRead() {
+      return instance.hasDiskRead();
+    }
+    /**
+     * <pre>
+     * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+     * /proc/diskstats 的节点不报，和 0 区分开。
+     * </pre>
+     *
+     * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+     * @return The diskRead.
+     */
+    @java.lang.Override
+    public double getDiskRead() {
+      return instance.getDiskRead();
+    }
+    /**
+     * <pre>
+     * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+     * /proc/diskstats 的节点不报，和 0 区分开。
+     * </pre>
+     *
+     * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+     * @param value The diskRead to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDiskRead(double value) {
+      copyOnWrite();
+      instance.setDiskRead(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+     * /proc/diskstats 的节点不报，和 0 区分开。
+     * </pre>
+     *
+     * <code>optional double disk_read = 5 [json_name = "diskRead"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDiskRead() {
+      copyOnWrite();
+      instance.clearDiskRead();
+      return this;
+    }
+
+    /**
+     * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+     * @return Whether the diskWrite field is set.
+     */
+    @java.lang.Override
+    public boolean hasDiskWrite() {
+      return instance.hasDiskWrite();
+    }
+    /**
+     * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+     * @return The diskWrite.
+     */
+    @java.lang.Override
+    public double getDiskWrite() {
+      return instance.getDiskWrite();
+    }
+    /**
+     * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+     * @param value The diskWrite to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDiskWrite(double value) {
+      copyOnWrite();
+      instance.setDiskWrite(value);
+      return this;
+    }
+    /**
+     * <code>optional double disk_write = 6 [json_name = "diskWrite"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDiskWrite() {
+      copyOnWrite();
+      instance.clearDiskWrite();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.NodeUsage)
   }
   @java.lang.Override
@@ -612,15 +793,18 @@ public  final class NodeUsage extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "cpu_",
             "memory_",
             "disk_",
             "disks_",
             ink.sipc.nagi.proto.v1.DiskUsage.class,
+            "diskRead_",
+            "diskWrite_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u0000\u0002\u0000" +
-              "\u0003\u0000\u0004\u001b";
+              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0001\u0000\u0001\u0000\u0002\u0000" +
+              "\u0003\u0000\u0004\u001b\u0005\u1000\u0000\u0006\u1000\u0001";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

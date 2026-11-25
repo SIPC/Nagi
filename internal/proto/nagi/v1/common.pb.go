@@ -2697,7 +2697,11 @@ type NodeUsage struct {
 	// 数据目录所在的磁盘。
 	Disk float64 `protobuf:"fixed64,3,opt,name=disk,proto3" json:"disk,omitempty"`
 	// 节点上的所有本地磁盘，同一块盘的多个挂载点只算一次。旧版本的节点不报。
-	Disks         []*DiskUsage `protobuf:"bytes,4,rep,name=disks,proto3" json:"disks,omitempty"`
+	Disks []*DiskUsage `protobuf:"bytes,4,rep,name=disks,proto3" json:"disks,omitempty"`
+	// 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+	// /proc/diskstats 的节点不报，和 0 区分开。
+	DiskRead      *float64 `protobuf:"fixed64,5,opt,name=disk_read,json=diskRead,proto3,oneof" json:"disk_read,omitempty"`
+	DiskWrite     *float64 `protobuf:"fixed64,6,opt,name=disk_write,json=diskWrite,proto3,oneof" json:"disk_write,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2758,6 +2762,20 @@ func (x *NodeUsage) GetDisks() []*DiskUsage {
 		return x.Disks
 	}
 	return nil
+}
+
+func (x *NodeUsage) GetDiskRead() float64 {
+	if x != nil && x.DiskRead != nil {
+		return *x.DiskRead
+	}
+	return 0
+}
+
+func (x *NodeUsage) GetDiskWrite() float64 {
+	if x != nil && x.DiskWrite != nil {
+		return *x.DiskWrite
+	}
+	return 0
 }
 
 // DiskUsage 是一块磁盘的容量和用量（字节）。
@@ -6751,12 +6769,18 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\x06backup\x18\t \x01(\v2\x15.nagi.v1.BackupStatusR\x06backup\x12\x14\n" +
 	"\x05panel\x18\n" +
 	" \x01(\tR\x05panel\x12/\n" +
-	"\abackups\x18\v \x03(\v2\x15.nagi.v1.BackupStatusR\abackups\"s\n" +
+	"\abackups\x18\v \x03(\v2\x15.nagi.v1.BackupStatusR\abackups\"\xd6\x01\n" +
 	"\tNodeUsage\x12\x10\n" +
 	"\x03cpu\x18\x01 \x01(\x01R\x03cpu\x12\x16\n" +
 	"\x06memory\x18\x02 \x01(\x01R\x06memory\x12\x12\n" +
 	"\x04disk\x18\x03 \x01(\x01R\x04disk\x12(\n" +
-	"\x05disks\x18\x04 \x03(\v2\x12.nagi.v1.DiskUsageR\x05disks\"a\n" +
+	"\x05disks\x18\x04 \x03(\v2\x12.nagi.v1.DiskUsageR\x05disks\x12 \n" +
+	"\tdisk_read\x18\x05 \x01(\x01H\x00R\bdiskRead\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"disk_write\x18\x06 \x01(\x01H\x01R\tdiskWrite\x88\x01\x01B\f\n" +
+	"\n" +
+	"_disk_readB\r\n" +
+	"\v_disk_write\"a\n" +
 	"\tDiskUsage\x12\x14\n" +
 	"\x05mount\x18\x01 \x01(\tR\x05mount\x12\x1f\n" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
@@ -7381,6 +7405,7 @@ func file_nagi_v1_common_proto_init() {
 	if File_nagi_v1_common_proto != nil {
 		return
 	}
+	file_nagi_v1_common_proto_msgTypes[25].OneofWrappers = []any{}
 	file_nagi_v1_common_proto_msgTypes[31].OneofWrappers = []any{
 		(*DeployEvent_Output)(nil),
 		(*DeployEvent_Result)(nil),

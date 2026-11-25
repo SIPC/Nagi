@@ -459,6 +459,10 @@ message NodeUsage {
   double disk = 3;
   // 节点上的所有本地磁盘，同一块盘的多个挂载点只算一次。旧版本的节点不报。
   repeated DiskUsage disks = 4;
+  // 物理磁盘合计的读写速率（字节/秒），即 node:disk_read、node:disk_write 最新的值。v0.37.5 以前的节点和读不到
+  // /proc/diskstats 的节点不报，和 0 区分开。
+  optional double disk_read = 5;
+  optional double disk_write = 6;
 }
 
 // DiskUsage 是一块磁盘的容量和用量（字节）。

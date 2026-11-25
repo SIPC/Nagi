@@ -861,6 +861,22 @@ func (a *agent) liveInfo() *nagiv1.NodeInfo {
 	return info
 }
 
+// nodeUsage 是上报给面板的当前用量。磁盘读写只在采到时带上（旧版本、刚启动、读不到 /proc/diskstats 时没有），
+// 面板据此区分「没有数据」和「读写都是 0」。
+func nodeUsage(latest map[string]float64, disks []metrics.Disk) *nagiv1.NodeUsage {
+	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
+	if v, ok := latest["node:disk_read"]; ok {
+		usage.DiskRead = &v
+	}
+	if v, ok := latest["node:disk_write"]; ok {
+		usage.DiskWrite = &v
+	}
+	for _, d := range disks {
+		usage.Disks = append(usage.Disks, &nagiv1.DiskUsage{Mount: d.Mount, TotalBytes: d.Total, UsedBytes: d.Used})
+	}
+	return usage
+}
+
 func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p trustedPanel) (*nagiv1.ReportResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
@@ -871,11 +887,7 @@ func (a *agent) report(ctx context.Context, panel nagiv1.PanelServiceClient, p t
 		}
 	}
 	info := a.liveInfo()
-	latest := a.metrics.Latest()
-	usage := &nagiv1.NodeUsage{Cpu: latest["node:cpu"], Memory: latest["node:mem"], Disk: latest["node:disk"]}
-	for _, d := range a.metrics.Disks() {
-		usage.Disks = append(usage.Disks, &nagiv1.DiskUsage{Mount: d.Mount, TotalBytes: d.Total, UsedBytes: d.Used})
-	}
+	usage := nodeUsage(a.metrics.Latest(), a.metrics.Disks())
 	st := a.clusterOf(p)
 	var primaryAddr string
 	if pp, ok := a.id.panel(st.Primary); ok {

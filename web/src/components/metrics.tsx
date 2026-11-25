@@ -8,7 +8,7 @@ import { EmptyRow, Notice, QueryError, Roll, Select, Skeleton } from "@/componen
 import { Legend, TimeChart, type ChartSeries, type Pt } from "@/components/chart";
 import type { MetricSeries, NodeInfo, NodeUsage, Project } from "@/gen/nagi/v1/common_pb";
 import { locale, t } from "@/i18n";
-import { lacksDiskIO } from "@/pages/update";
+import { lacksDiskIO, type DiskIOCell } from "@/lib/disk-io";
 
 const m = t.metrics;
 
@@ -411,6 +411,31 @@ export function UsageCell({ percent, value, limit, title }: { percent?: number; 
   );
 }
 
+
+// DiskIOValue：节点列表、概览节点表里的「读写」：当前的写入、读取速率，和流量一样写成「↑ 写入 ↓ 读取」（写入是往盘里去），
+// 悬停写全称。stacked：节点列表里分两行（写入在上），和旁边「已用 / 上限加占用条」的两行对齐，列宽放得下。
+// 旧节点写「请升级节点」，没有数据写「—」。
+export function DiskIOValue({ io, stacked, className }: { io: DiskIOCell; stacked?: boolean; className?: string }) {
+  if (io.kind === "upgrade") return <span className={cn("truncate text-muted-foreground", className)}>{t.nodes.upgradeForDiskIO}</span>;
+  if (io.kind === "none") return <span className={cn("text-muted-foreground", className)}>—</span>;
+  const title = `${m.diskWrite} ${fmtRate(io.write)} · ${m.diskRead} ${fmtRate(io.read)}`;
+  if (stacked)
+    return (
+      <span className={cn("grid min-w-0 tabular-nums leading-5", className)} title={title}>
+        <span className="truncate">
+          <Roll value={`↑ ${fmtRate(io.write)}`} n={io.write} />
+        </span>
+        <span className="truncate text-muted-foreground">
+          <Roll value={`↓ ${fmtRate(io.read)}`} n={io.read} />
+        </span>
+      </span>
+    );
+  return (
+    <span className={cn("truncate tabular-nums", className)} title={title}>
+      <Roll value={`↑ ${fmtRate(io.write)} ↓ ${fmtRate(io.read)}`} n={io.read + io.write} />
+    </span>
+  );
+}
 
 const cellOrder = ["cpu", "mem", "net_rx", "net_tx"];
 // 磁盘读写另起一排四个数值块：读、写的速率和次数（旧节点没有这些序列，见 lacksDiskIO）。容器的次数只在 cgroup v1 上有
