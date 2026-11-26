@@ -230,4 +230,10 @@ public interface NodeServiceClientInterface {
    *  浏览器断开（取消）时停止拉取。
    */
   public suspend fun pullNodeImage(headers: Headers = emptyMap()): ServerOnlyStreamInterface<PullNodeImageRequest, ImagePullEvent>
+
+  /**
+   *  网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+   *  命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+   */
+  public suspend fun watchNodeConnections(headers: Headers = emptyMap()): ServerOnlyStreamInterface<WatchNodeConnectionsRequest, ConnectionSnapshot>
 }

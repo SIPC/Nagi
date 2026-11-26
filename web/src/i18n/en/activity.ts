@@ -18,6 +18,7 @@ export default {
     OpenNodeShell: "Open node terminal",
     CloseNodeShell: "Close node terminal",
     ReadNodeFile: "Read node file",
+    WatchNodeConnections: "View node connections",
     WriteNodeFile: "Save node file",
     DeleteNodeFile: "Delete node file",
     CreateNodeDir: "Create node directory",

@@ -253,6 +253,7 @@ var readOnlyRPCs = map[string]bool{
 	nagiv1.AgentService_MeshPing_FullMethodName:             true,
 	nagiv1.AgentService_GetMirrors_FullMethodName:           true,
 	nagiv1.AgentService_ListImages_FullMethodName:           true,
+	nagiv1.AgentService_StreamConnections_FullMethodName:    true,
 	nagiv1.LogService_QueryLogs_FullMethodName:              true,
 	nagiv1.LogService_QueryMetrics_FullMethodName:           true,
 }

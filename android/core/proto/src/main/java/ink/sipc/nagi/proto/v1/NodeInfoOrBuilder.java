@@ -323,4 +323,14 @@ public interface NodeInfoOrBuilder extends
    * @return The asyncBackupSync.
    */
   boolean getAsyncBackupSync();
+
+  /**
+   * <pre>
+   * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+   * </pre>
+   *
+   * <code>bool connections = 42 [json_name = "connections"];</code>
+   * @return The connections.
+   */
+  boolean getConnections();
 }

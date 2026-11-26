@@ -17,6 +17,8 @@ var SensitiveReads = map[string]bool{
 	// 不走 Connect 的下载（/api/volume-file、/api/node-file）由处理函数按这两个名字记。
 	"DownloadVolumeFile": true,
 	"DownloadNodeFile":   true,
+	// 节点的网络连接：对端地址、进程，带命令行时可能有密钥。每次打开都记（见 docs/agent.md#网络连接）。
+	"WatchNodeConnections": true,
 	// 回放终端录制。
 	"GetRecording": true,
 }

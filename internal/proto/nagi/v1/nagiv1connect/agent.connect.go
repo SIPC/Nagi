@@ -253,6 +253,9 @@ const (
 	AgentServicePruneImagesProcedure = "/nagi.v1.AgentService/PruneImages"
 	// AgentServicePullImageProcedure is the fully-qualified name of the AgentService's PullImage RPC.
 	AgentServicePullImageProcedure = "/nagi.v1.AgentService/PullImage"
+	// AgentServiceStreamConnectionsProcedure is the fully-qualified name of the AgentService's
+	// StreamConnections RPC.
+	AgentServiceStreamConnectionsProcedure = "/nagi.v1.AgentService/StreamConnections"
 )
 
 // AgentServiceClient is a client for the nagi.v1.AgentService service.
@@ -410,6 +413,9 @@ type AgentServiceClient interface {
 	PruneImages(context.Context, *connect.Request[v1.PruneImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
 	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
 	PullImage(context.Context, *connect.Request[v1.PullImageRequest]) (*connect.ServerStreamForClient[v1.ImagePullEvent], error)
+	// ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+	// 每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+	StreamConnections(context.Context, *connect.Request[v1.StreamConnectionsRequest]) (*connect.ServerStreamForClient[v1.ConnectionSnapshot], error)
 }
 
 // NewAgentServiceClient constructs a client for the nagi.v1.AgentService service. By default, it
@@ -903,6 +909,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("PullImage")),
 			connect.WithClientOptions(opts...),
 		),
+		streamConnections: connect.NewClient[v1.StreamConnectionsRequest, v1.ConnectionSnapshot](
+			httpClient,
+			baseURL+AgentServiceStreamConnectionsProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("StreamConnections")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -988,6 +1000,7 @@ type agentServiceClient struct {
 	deleteImages          *connect.Client[v1.DeleteImagesRequest, v1.DeleteImagesResponse]
 	pruneImages           *connect.Client[v1.PruneImagesRequest, v1.PruneImagesResponse]
 	pullImage             *connect.Client[v1.PullImageRequest, v1.ImagePullEvent]
+	streamConnections     *connect.Client[v1.StreamConnectionsRequest, v1.ConnectionSnapshot]
 }
 
 // PutContainer calls nagi.v1.AgentService.PutContainer.
@@ -1390,6 +1403,11 @@ func (c *agentServiceClient) PullImage(ctx context.Context, req *connect.Request
 	return c.pullImage.CallServerStream(ctx, req)
 }
 
+// StreamConnections calls nagi.v1.AgentService.StreamConnections.
+func (c *agentServiceClient) StreamConnections(ctx context.Context, req *connect.Request[v1.StreamConnectionsRequest]) (*connect.ServerStreamForClient[v1.ConnectionSnapshot], error) {
+	return c.streamConnections.CallServerStream(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the nagi.v1.AgentService service.
 type AgentServiceHandler interface {
 	// ---- 容器 ----
@@ -1545,6 +1563,9 @@ type AgentServiceHandler interface {
 	PruneImages(context.Context, *connect.Request[v1.PruneImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
 	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
 	PullImage(context.Context, *connect.Request[v1.PullImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error
+	// ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+	// 每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+	StreamConnections(context.Context, *connect.Request[v1.StreamConnectionsRequest], *connect.ServerStream[v1.ConnectionSnapshot]) error
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -2034,6 +2055,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("PullImage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceStreamConnectionsHandler := connect.NewServerStreamHandler(
+		AgentServiceStreamConnectionsProcedure,
+		svc.StreamConnections,
+		connect.WithSchema(agentServiceMethods.ByName("StreamConnections")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServicePutContainerProcedure:
@@ -2196,6 +2223,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServicePruneImagesHandler.ServeHTTP(w, r)
 		case AgentServicePullImageProcedure:
 			agentServicePullImageHandler.ServeHTTP(w, r)
+		case AgentServiceStreamConnectionsProcedure:
+			agentServiceStreamConnectionsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2523,4 +2552,8 @@ func (UnimplementedAgentServiceHandler) PruneImages(context.Context, *connect.Re
 
 func (UnimplementedAgentServiceHandler) PullImage(context.Context, *connect.Request[v1.PullImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.PullImage is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) StreamConnections(context.Context, *connect.Request[v1.StreamConnectionsRequest], *connect.ServerStream[v1.ConnectionSnapshot]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.AgentService.StreamConnections is not implemented"))
 }

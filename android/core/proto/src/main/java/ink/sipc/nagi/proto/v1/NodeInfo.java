@@ -1201,6 +1201,44 @@ public  final class NodeInfo extends
     asyncBackupSync_ = false;
   }
 
+  public static final int CONNECTIONS_FIELD_NUMBER = 42;
+  private boolean connections_;
+  /**
+   * <pre>
+   * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+   * </pre>
+   *
+   * <code>bool connections = 42 [json_name = "connections"];</code>
+   * @return The connections.
+   */
+  @java.lang.Override
+  public boolean getConnections() {
+    return connections_;
+  }
+  /**
+   * <pre>
+   * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+   * </pre>
+   *
+   * <code>bool connections = 42 [json_name = "connections"];</code>
+   * @param value The connections to set.
+   */
+  private void setConnections(boolean value) {
+    
+    connections_ = value;
+  }
+  /**
+   * <pre>
+   * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+   * </pre>
+   *
+   * <code>bool connections = 42 [json_name = "connections"];</code>
+   */
+  private void clearConnections() {
+
+    connections_ = false;
+  }
+
   public static ink.sipc.nagi.proto.v1.NodeInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -2529,6 +2567,46 @@ public  final class NodeInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+     * </pre>
+     *
+     * <code>bool connections = 42 [json_name = "connections"];</code>
+     * @return The connections.
+     */
+    @java.lang.Override
+    public boolean getConnections() {
+      return instance.getConnections();
+    }
+    /**
+     * <pre>
+     * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+     * </pre>
+     *
+     * <code>bool connections = 42 [json_name = "connections"];</code>
+     * @param value The connections to set.
+     * @return This builder for chaining.
+     */
+    public Builder setConnections(boolean value) {
+      copyOnWrite();
+      instance.setConnections(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+     * </pre>
+     *
+     * <code>bool connections = 42 [json_name = "connections"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearConnections() {
+      copyOnWrite();
+      instance.clearConnections();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:nagi.v1.NodeInfo)
   }
   @java.lang.Override
@@ -2573,13 +2651,14 @@ public  final class NodeInfo extends
             "replicaDir_",
             "directDownload_",
             "asyncBackupSync_",
+            "connections_",
           };
           java.lang.String info =
-              "\u0000\u001b\u0000\u0001\u0001)\u001b\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003" +
+              "\u0000\u001c\u0000\u0001\u0001*\u001c\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003" +
               "\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0007\b\u0208\t\u0004\n\u0003\u000b" +
               "\u0003\f\u0007\r\u0007\u000e\u0007\u000f\u0007\u0010\u0007\u0011\u0007\u0012\u0007" +
               "\u0013\u0007\u0014\u0208\u0015\u0002\u0016\u0007\u0017\u0007\u0019\u0007\u001a\u0208" +
-              "\u001e\u1009\u0000)\u0007";
+              "\u001e\u1009\u0000)\u0007*\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

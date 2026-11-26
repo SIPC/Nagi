@@ -25,6 +25,7 @@ export default {
     images: "Images",
     containers: "Containers",
     metrics: "Monitoring",
+    connections: "Connections",
     settings: "Settings",
     replicas: "Replicas",
     panels: "Trusted panels",

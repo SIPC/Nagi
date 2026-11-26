@@ -172,6 +172,65 @@ service AgentService {
   rpc PruneImages(PruneImagesRequest) returns (PruneImagesResponse);
   // 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
   rpc PullImage(PullImageRequest) returns (stream ImagePullEvent);
+  // ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+  // 每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+  rpc StreamConnections(StreamConnectionsRequest) returns (stream ConnectionSnapshot);
+}
+
+// ---- 网络连接（见 docs/agent.md#网络连接） ----
+
+message StreamConnectionsRequest {
+  // 带上进程的命令行。命令行里可能有密码、令牌，面板只在调用者有「节点终端和文件」并做过高权限确认时才设。
+  bool cmdline = 1;
+}
+
+message ConnectionSnapshot {
+  // 这一轮的连接，按收发速率从高到低，最多 max 条（见 docs/agent.md#网络连接）。
+  repeated NodeConnection connections = 1;
+  // 超出上限没有发的连接数。
+  uint32 omitted = 2;
+  // 采样间隔（毫秒）。节点忙时会放慢，这一项随之变化。
+  uint32 interval_ms = 3;
+  // 这一轮采样花了多久（毫秒）。
+  uint32 took_ms = 4;
+  // 读不到的网络命名空间数（容器正好退出等），不影响其余的结果。
+  uint32 namespace_errors = 5;
+}
+
+message NodeConnection {
+  // tcp、udp。
+  string protocol = 1;
+  // TCP 状态：ESTABLISHED、SYN_SENT、TIME_WAIT 等；已连接的 UDP 为空。
+  string state = 2;
+  string local_ip = 3;
+  uint32 local_port = 4;
+  string remote_ip = 5;
+  uint32 remote_port = 6;
+  // 本地端口是这个网络命名空间里正在监听的端口：别人连进来的连接。否则是本机发起的出站连接。
+  bool inbound = 7;
+  // 累计发送、接收的字节（TCP，内核 4.1 起有接收、4.19 起有发送，没有时为 0）。
+  uint64 bytes_sent = 8;
+  uint64 bytes_received = 9;
+  // 两轮之间的速率（字节/秒）。第一次看到这条连接时没有。
+  double send_rate = 10;
+  double receive_rate = 11;
+  // 平滑往返时间（微秒），TCP 才有。
+  uint32 rtt_us = 12;
+  // 持有这个 socket 的进程。内核自己的连接（iSCSI、NFS 等）、已经关掉的（TIME_WAIT）没有进程，pid 为 0。
+  uint32 pid = 13;
+  string process = 14;
+  // 命令行，只在请求要求时才有，最多 512 字节。
+  string cmdline = 15;
+  // 所属的 Docker 容器（Docker 里的容器名）和 Nagi 的项目、容器、服务；不是容器里的进程时为空。
+  string docker_name = 16;
+  string project_id = 17;
+  string project_name = 18;
+  string container = 19;
+  string service = 20;
+  // 不在容器里的进程所属的 systemd 单元，例如 nagi-agent.service。
+  string unit = 21;
+  // 面板填：对端是 Nagi 的节点（公网地址或 mesh 地址）时的节点名称，看不到的节点是「其他节点」。
+  string remote_node_name = 22;
 }
 
 // ---- 节点镜像（见 docs/agent.md#节点镜像） ----

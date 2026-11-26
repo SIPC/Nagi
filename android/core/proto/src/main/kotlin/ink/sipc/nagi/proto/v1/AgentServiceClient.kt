@@ -1147,4 +1147,19 @@ public class AgentServiceClient(
     ),
   )
 
+
+  /**
+   *  ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+   *  每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+   */
+  override suspend fun streamConnections(headers: Headers): ServerOnlyStreamInterface<StreamConnectionsRequest, ConnectionSnapshot> = client.serverStream(
+    headers,
+    MethodSpec(
+    "nagi.v1.AgentService/StreamConnections",
+      ink.sipc.nagi.proto.v1.StreamConnectionsRequest::class,
+      ink.sipc.nagi.proto.v1.ConnectionSnapshot::class,
+      StreamType.SERVER,
+    ),
+  )
+
 }

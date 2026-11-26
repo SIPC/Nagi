@@ -270,6 +270,9 @@ const (
 	// NodeServicePullNodeImageProcedure is the fully-qualified name of the NodeService's PullNodeImage
 	// RPC.
 	NodeServicePullNodeImageProcedure = "/nagi.v1.NodeService/PullNodeImage"
+	// NodeServiceWatchNodeConnectionsProcedure is the fully-qualified name of the NodeService's
+	// WatchNodeConnections RPC.
+	NodeServiceWatchNodeConnectionsProcedure = "/nagi.v1.NodeService/WatchNodeConnections"
 	// SettingsServiceGetSettingsProcedure is the fully-qualified name of the SettingsService's
 	// GetSettings RPC.
 	SettingsServiceGetSettingsProcedure = "/nagi.v1.SettingsService/GetSettings"
@@ -1551,6 +1554,9 @@ type NodeServiceClient interface {
 	PruneNodeImages(context.Context, *connect.Request[v1.PruneNodeImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
 	// 浏览器断开（取消）时停止拉取。
 	PullNodeImage(context.Context, *connect.Request[v1.PullNodeImageRequest]) (*connect.ServerStreamForClient[v1.ImagePullEvent], error)
+	// 网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+	// 命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+	WatchNodeConnections(context.Context, *connect.Request[v1.WatchNodeConnectionsRequest]) (*connect.ServerStreamForClient[v1.ConnectionSnapshot], error)
 }
 
 // NewNodeServiceClient constructs a client for the nagi.v1.NodeService service. By default, it uses
@@ -1894,6 +1900,12 @@ func NewNodeServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(nodeServiceMethods.ByName("PullNodeImage")),
 			connect.WithClientOptions(opts...),
 		),
+		watchNodeConnections: connect.NewClient[v1.WatchNodeConnectionsRequest, v1.ConnectionSnapshot](
+			httpClient,
+			baseURL+NodeServiceWatchNodeConnectionsProcedure,
+			connect.WithSchema(nodeServiceMethods.ByName("WatchNodeConnections")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1954,6 +1966,7 @@ type nodeServiceClient struct {
 	deleteNodeImages      *connect.Client[v1.DeleteNodeImagesRequest, v1.DeleteImagesResponse]
 	pruneNodeImages       *connect.Client[v1.PruneNodeImagesRequest, v1.PruneImagesResponse]
 	pullNodeImage         *connect.Client[v1.PullNodeImageRequest, v1.ImagePullEvent]
+	watchNodeConnections  *connect.Client[v1.WatchNodeConnectionsRequest, v1.ConnectionSnapshot]
 }
 
 // ListNodes calls nagi.v1.NodeService.ListNodes.
@@ -2231,6 +2244,11 @@ func (c *nodeServiceClient) PullNodeImage(ctx context.Context, req *connect.Requ
 	return c.pullNodeImage.CallServerStream(ctx, req)
 }
 
+// WatchNodeConnections calls nagi.v1.NodeService.WatchNodeConnections.
+func (c *nodeServiceClient) WatchNodeConnections(ctx context.Context, req *connect.Request[v1.WatchNodeConnectionsRequest]) (*connect.ServerStreamForClient[v1.ConnectionSnapshot], error) {
+	return c.watchNodeConnections.CallServerStream(ctx, req)
+}
+
 // NodeServiceHandler is an implementation of the nagi.v1.NodeService service.
 type NodeServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
@@ -2328,6 +2346,9 @@ type NodeServiceHandler interface {
 	PruneNodeImages(context.Context, *connect.Request[v1.PruneNodeImagesRequest]) (*connect.Response[v1.PruneImagesResponse], error)
 	// 浏览器断开（取消）时停止拉取。
 	PullNodeImage(context.Context, *connect.Request[v1.PullNodeImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error
+	// 网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+	// 命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+	WatchNodeConnections(context.Context, *connect.Request[v1.WatchNodeConnectionsRequest], *connect.ServerStream[v1.ConnectionSnapshot]) error
 }
 
 // NewNodeServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -2667,6 +2688,12 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(nodeServiceMethods.ByName("PullNodeImage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	nodeServiceWatchNodeConnectionsHandler := connect.NewServerStreamHandler(
+		NodeServiceWatchNodeConnectionsProcedure,
+		svc.WatchNodeConnections,
+		connect.WithSchema(nodeServiceMethods.ByName("WatchNodeConnections")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/nagi.v1.NodeService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NodeServiceListNodesProcedure:
@@ -2779,6 +2806,8 @@ func NewNodeServiceHandler(svc NodeServiceHandler, opts ...connect.HandlerOption
 			nodeServicePruneNodeImagesHandler.ServeHTTP(w, r)
 		case NodeServicePullNodeImageProcedure:
 			nodeServicePullNodeImageHandler.ServeHTTP(w, r)
+		case NodeServiceWatchNodeConnectionsProcedure:
+			nodeServiceWatchNodeConnectionsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3006,6 +3035,10 @@ func (UnimplementedNodeServiceHandler) PruneNodeImages(context.Context, *connect
 
 func (UnimplementedNodeServiceHandler) PullNodeImage(context.Context, *connect.Request[v1.PullNodeImageRequest], *connect.ServerStream[v1.ImagePullEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.PullNodeImage is not implemented"))
+}
+
+func (UnimplementedNodeServiceHandler) WatchNodeConnections(context.Context, *connect.Request[v1.WatchNodeConnectionsRequest], *connect.ServerStream[v1.ConnectionSnapshot]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("nagi.v1.NodeService.WatchNodeConnections is not implemented"))
 }
 
 // SettingsServiceClient is a client for the nagi.v1.SettingsService service.

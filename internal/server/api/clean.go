@@ -135,6 +135,10 @@ var cleanedFields = map[string]string{
 	"nagi.v1.HandoverResult.node_id":              "接口只给管理员",
 	"nagi.v1.UnknownContainer.project_name":       "非管理员清空",
 	"nagi.v1.ComposeDirPreview.path":              "接口要节点终端和文件",
+	// 网络连接（conns.go）：接口要查看节点详情。连接两端是节点自己看到的地址，查看节点详情本来就看得到主机的网络。
+	"nagi.v1.NodeConnection.local_ip":         "接口要查看节点详情",
+	"nagi.v1.NodeConnection.remote_ip":        "接口要查看节点详情",
+	"nagi.v1.NodeConnection.remote_node_name": "看不到的节点换成「其他节点」",
 
 	// ---- 面板 ----
 	"nagi.v1.PanelSettings.public_address":        "非管理员清空（B3）",

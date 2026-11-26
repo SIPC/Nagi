@@ -364,4 +364,10 @@ public interface AgentServiceClientInterface {
    *  拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
    */
   public suspend fun pullImage(headers: Headers = emptyMap()): ServerOnlyStreamInterface<PullImageRequest, ImagePullEvent>
+
+  /**
+   *  ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+   *  每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+   */
+  public suspend fun streamConnections(headers: Headers = emptyMap()): ServerOnlyStreamInterface<StreamConnectionsRequest, ConnectionSnapshot>
 }

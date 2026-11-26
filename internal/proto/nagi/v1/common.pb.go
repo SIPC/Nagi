@@ -2889,8 +2889,10 @@ type NodeInfo struct {
 	DirectDownload *DirectDownload `protobuf:"bytes,30,opt,name=direct_download,json=directDownload,proto3" json:"direct_download,omitempty"`
 	// 节点支持后台同步备份节点（SyncBackupRequest.async、cancel）并上报同步进度（BackupStatus.bytes_total 等）。旧版本的节点不报。
 	AsyncBackupSync bool `protobuf:"varint,41,opt,name=async_backup_sync,json=asyncBackupSync,proto3" json:"async_backup_sync,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+	Connections   bool `protobuf:"varint,42,opt,name=connections,proto3" json:"connections,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeInfo) Reset() {
@@ -3108,6 +3110,13 @@ func (x *NodeInfo) GetDirectDownload() *DirectDownload {
 func (x *NodeInfo) GetAsyncBackupSync() bool {
 	if x != nil {
 		return x.AsyncBackupSync
+	}
+	return false
+}
+
+func (x *NodeInfo) GetConnections() bool {
+	if x != nil {
+		return x.Connections
 	}
 	return false
 }
@@ -6786,7 +6795,7 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
 	"totalBytes\x12\x1d\n" +
 	"\n" +
-	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xad\a\n" +
+	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\"\xcf\a\n" +
 	"\bNodeInfo\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02os\x18\x02 \x01(\tR\x02os\x12\x12\n" +
@@ -6819,7 +6828,8 @@ const file_nagi_v1_common_proto_rawDesc = "" +
 	"\vreplica_dir\x18\x1a \x01(\tR\n" +
 	"replicaDir\x12@\n" +
 	"\x0fdirect_download\x18\x1e \x01(\v2\x17.nagi.v1.DirectDownloadR\x0edirectDownload\x12*\n" +
-	"\x11async_backup_sync\x18) \x01(\bR\x0fasyncBackupSync\"\x88\x02\n" +
+	"\x11async_backup_sync\x18) \x01(\bR\x0fasyncBackupSync\x12 \n" +
+	"\vconnections\x18* \x01(\bR\vconnections\"\x88\x02\n" +
 	"\x0eDirectDownload\x12\x1c\n" +
 	"\tsupported\x18\x01 \x01(\bR\tsupported\x12\x10\n" +
 	"\x03off\x18\x02 \x01(\bR\x03off\x12\x18\n" +

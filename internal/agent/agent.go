@@ -195,6 +195,7 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	a.direct = newDirectDL(a)
 	a.egress = newEgress(a)
 	a.violations = newViolations(a)
+	a.conns = newAgentConns(a)
 	closeAudit := a.openAudit(ctx)
 	defer closeAudit()
 	closeRecordings := a.openRecordings(ctx)
@@ -456,6 +457,8 @@ type agent struct {
 	direct     *directDL // 直连下载（见 directdl.go）
 	// egress 是容器出站限制（见 docs/agent.md#出站限制）。
 	egress *egress
+	// conns 是网络连接视图的采样（见 conns.go），只在面板看的时候采。
+	conns *connWatch
 	// violations 收集被拒绝的越权请求，上报给面板（见 docs/mesh.md#越权识别）。
 	violations *violations
 	// audit 是节点本地审计，面板用 ReadAuditLog 读走后代为外送（见 audit.go）。
@@ -699,6 +702,7 @@ func (a *agent) nodeInfo(ctx context.Context) *nagiv1.NodeInfo {
 		ProxyDisabled:   a.cfg.DisableProxy,
 		EgressError:     a.egress.Error(),
 		ReportsCerts:    true,
+		Connections:     connsSupported,
 
 		NodeAccess:         nodeAccessSupported() && !NodeAccessDisabled(a.cfg.DataDir),
 		NodeAccessDisabled: NodeAccessDisabled(a.cfg.DataDir),

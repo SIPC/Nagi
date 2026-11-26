@@ -353,6 +353,9 @@ var procedurePerms = map[string]Perm{
 	// 节点的更新渠道：决定节点能不能升级到预发布版，和升级节点一样要「节点管理」。
 	"/nagi.v1.NodeService/SetNodeUpdateChannel": PermNodeManage,
 
+	// 网络连接（见 docs/agent.md#网络连接）：连接的对端、进程和容器，和主机名、挂载点一样属于节点详情。命令行另外要「节点终端和文件」（api 的 conns.go）。
+	"/nagi.v1.NodeService/WatchNodeConnections": PermNodeDetails,
+
 	"/nagi.v1.NodeService/ListNodeImages": PermNodeImages, "/nagi.v1.NodeService/DeleteNodeImages": PermNodeImages,
 	"/nagi.v1.NodeService/PruneNodeImages": PermNodeImages, "/nagi.v1.NodeService/PullNodeImage": PermNodeImages,
 

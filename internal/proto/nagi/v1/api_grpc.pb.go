@@ -1228,6 +1228,7 @@ const (
 	NodeService_DeleteNodeImages_FullMethodName      = "/nagi.v1.NodeService/DeleteNodeImages"
 	NodeService_PruneNodeImages_FullMethodName       = "/nagi.v1.NodeService/PruneNodeImages"
 	NodeService_PullNodeImage_FullMethodName         = "/nagi.v1.NodeService/PullNodeImage"
+	NodeService_WatchNodeConnections_FullMethodName  = "/nagi.v1.NodeService/WatchNodeConnections"
 )
 
 // NodeServiceClient is the client API for NodeService service.
@@ -1329,6 +1330,9 @@ type NodeServiceClient interface {
 	PruneNodeImages(ctx context.Context, in *PruneNodeImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error)
 	// 浏览器断开（取消）时停止拉取。
 	PullNodeImage(ctx context.Context, in *PullNodeImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error)
+	// 网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+	// 命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+	WatchNodeConnections(ctx context.Context, in *WatchNodeConnectionsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ConnectionSnapshot], error)
 }
 
 type nodeServiceClient struct {
@@ -1952,6 +1956,25 @@ func (c *nodeServiceClient) PullNodeImage(ctx context.Context, in *PullNodeImage
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NodeService_PullNodeImageClient = grpc.ServerStreamingClient[ImagePullEvent]
 
+func (c *nodeServiceClient) WatchNodeConnections(ctx context.Context, in *WatchNodeConnectionsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ConnectionSnapshot], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NodeService_ServiceDesc.Streams[7], NodeService_WatchNodeConnections_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchNodeConnectionsRequest, ConnectionSnapshot]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_WatchNodeConnectionsClient = grpc.ServerStreamingClient[ConnectionSnapshot]
+
 // NodeServiceServer is the server API for NodeService service.
 // All implementations must embed UnimplementedNodeServiceServer
 // for forward compatibility.
@@ -2051,6 +2074,9 @@ type NodeServiceServer interface {
 	PruneNodeImages(context.Context, *PruneNodeImagesRequest) (*PruneImagesResponse, error)
 	// 浏览器断开（取消）时停止拉取。
 	PullNodeImage(*PullNodeImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error
+	// 网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+	// 命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+	WatchNodeConnections(*WatchNodeConnectionsRequest, grpc.ServerStreamingServer[ConnectionSnapshot]) error
 	mustEmbedUnimplementedNodeServiceServer()
 }
 
@@ -2225,6 +2251,9 @@ func (UnimplementedNodeServiceServer) PruneNodeImages(context.Context, *PruneNod
 }
 func (UnimplementedNodeServiceServer) PullNodeImage(*PullNodeImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error {
 	return status.Error(codes.Unimplemented, "method PullNodeImage not implemented")
+}
+func (UnimplementedNodeServiceServer) WatchNodeConnections(*WatchNodeConnectionsRequest, grpc.ServerStreamingServer[ConnectionSnapshot]) error {
+	return status.Error(codes.Unimplemented, "method WatchNodeConnections not implemented")
 }
 func (UnimplementedNodeServiceServer) mustEmbedUnimplementedNodeServiceServer() {}
 func (UnimplementedNodeServiceServer) testEmbeddedByValue()                     {}
@@ -3188,6 +3217,17 @@ func _NodeService_PullNodeImage_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NodeService_PullNodeImageServer = grpc.ServerStreamingServer[ImagePullEvent]
 
+func _NodeService_WatchNodeConnections_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchNodeConnectionsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NodeServiceServer).WatchNodeConnections(m, &grpc.GenericServerStream[WatchNodeConnectionsRequest, ConnectionSnapshot]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NodeService_WatchNodeConnectionsServer = grpc.ServerStreamingServer[ConnectionSnapshot]
+
 // NodeService_ServiceDesc is the grpc.ServiceDesc for NodeService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3422,6 +3462,11 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "PullNodeImage",
 			Handler:       _NodeService_PullNodeImage_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WatchNodeConnections",
+			Handler:       _NodeService_WatchNodeConnections_Handler,
 			ServerStreams: true,
 		},
 	},

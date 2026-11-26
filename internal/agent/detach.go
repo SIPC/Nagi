@@ -52,5 +52,5 @@ type detachedStream struct {
 func (s *detachedStream) Context() context.Context { return s.ctx }
 
 func isFollowStream(method string) bool {
-	return strings.HasSuffix(method, "/StreamLogs") || strings.HasSuffix(method, "/PullImage")
+	return strings.HasSuffix(method, "/StreamLogs") || strings.HasSuffix(method, "/PullImage") || strings.HasSuffix(method, "/StreamConnections")
 }

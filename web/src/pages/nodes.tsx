@@ -67,11 +67,13 @@ import { useRun } from "@/components/run";
 import { stateOf } from "@/components/status";
 import { NodeFiles, NodeTerminal, nodeAccessBlock } from "@/pages/node-access";
 import { NodeImages } from "@/pages/node-images";
+import { NodeConnections } from "@/pages/node-connections";
 
-export type NodeTab = "metrics" | "containers" | "terminal" | "files" | "images" | "panels" | "mesh" | "settings" | "replicas";
+export type NodeTab = "metrics" | "connections" | "containers" | "terminal" | "files" | "images" | "panels" | "mesh" | "settings" | "replicas";
 
 export const nodeTabs: { value: NodeTab; label: string }[] = [
   { value: "metrics", label: t.nodes.tabs.metrics },
+  { value: "connections", label: t.nodes.tabs.connections },
   { value: "containers", label: t.nodes.tabs.containers },
   { value: "terminal", label: t.nodes.tabs.terminal },
   { value: "files", label: t.nodes.tabs.files },
@@ -803,6 +805,8 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
   // 其余标签：副本归「备份」，信任的面板只给管理员，设置要「节点管理」或「查看节点详情」。
   const tabAllowed: Record<NodeTab, boolean> = {
     metrics: true,
+    // 网络连接要「查看节点详情」（见 docs/agent.md#网络连接）。旧节点也显示，里面提示升级。
+    connections: can("node.details"),
     containers: true,
     mesh: true,
     terminal: showAccess,
@@ -959,6 +963,8 @@ export function NodePage({ nodeId, tab, path, onTab, onFilePath, onOpenTerminal 
                 accessBlock ?? (tab === "files" ? <NodeFiles node={n} path={path || "/"} onPath={onFilePath} onTerminal={onOpenTerminal} onExit={() => onTab("metrics")} /> : null)
               ) : tab === "metrics" ? (
                 <NodeResources n={n} />
+              ) : tab === "connections" ? (
+                <NodeConnections node={n} />
               ) : tab === "mesh" ? (
                 <NodeMesh nodeId={n.id} />
               ) : tab === "images" ? (

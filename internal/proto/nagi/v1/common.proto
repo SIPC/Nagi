@@ -521,6 +521,8 @@ message NodeInfo {
   DirectDownload direct_download = 30;
   // 节点支持后台同步备份节点（SyncBackupRequest.async、cancel）并上报同步进度（BackupStatus.bytes_total 等）。旧版本的节点不报。
   bool async_backup_sync = 41;
+  // 节点支持网络连接视图（AgentService.StreamConnections，见 docs/agent.md#网络连接）。旧版本的节点不报。
+  bool connections = 42;
 }
 
 // DirectDownload 是节点直连下载的状态：浏览器直接从节点下载文件，不经面板和 mesh。

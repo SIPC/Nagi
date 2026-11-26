@@ -18,6 +18,7 @@ export default {
     OpenNodeShell: "打开节点终端",
     CloseNodeShell: "关闭节点终端",
     ReadNodeFile: "读取节点文件",
+    WatchNodeConnections: "查看节点网络连接",
     WriteNodeFile: "保存节点文件",
     DeleteNodeFile: "删除节点文件",
     CreateNodeDir: "新建节点目录",

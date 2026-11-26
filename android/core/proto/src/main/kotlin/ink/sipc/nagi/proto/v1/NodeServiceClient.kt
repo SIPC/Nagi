@@ -778,4 +778,19 @@ public class NodeServiceClient(
     ),
   )
 
+
+  /**
+   *  网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+   *  命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+   */
+  override suspend fun watchNodeConnections(headers: Headers): ServerOnlyStreamInterface<WatchNodeConnectionsRequest, ConnectionSnapshot> = client.serverStream(
+    headers,
+    MethodSpec(
+    "nagi.v1.NodeService/WatchNodeConnections",
+      ink.sipc.nagi.proto.v1.WatchNodeConnectionsRequest::class,
+      ink.sipc.nagi.proto.v1.ConnectionSnapshot::class,
+      StreamType.SERVER,
+    ),
+  )
+
 }

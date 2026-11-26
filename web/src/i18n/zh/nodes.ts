@@ -22,6 +22,7 @@ export default {
   tabs: {
     containers: "容器",
     metrics: "监控",
+    connections: "网络连接",
     settings: "设置",
     replicas: "副本",
     panels: "信任的面板",

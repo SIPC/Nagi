@@ -99,6 +99,7 @@ const (
 	AgentService_DeleteImages_FullMethodName          = "/nagi.v1.AgentService/DeleteImages"
 	AgentService_PruneImages_FullMethodName           = "/nagi.v1.AgentService/PruneImages"
 	AgentService_PullImage_FullMethodName             = "/nagi.v1.AgentService/PullImage"
+	AgentService_StreamConnections_FullMethodName     = "/nagi.v1.AgentService/StreamConnections"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -261,6 +262,9 @@ type AgentServiceClient interface {
 	PruneImages(ctx context.Context, in *PruneImagesRequest, opts ...grpc.CallOption) (*PruneImagesResponse, error)
 	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
 	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ImagePullEvent], error)
+	// ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+	// 每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+	StreamConnections(ctx context.Context, in *StreamConnectionsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ConnectionSnapshot], error)
 }
 
 type agentServiceClient struct {
@@ -1257,6 +1261,25 @@ func (c *agentServiceClient) PullImage(ctx context.Context, in *PullImageRequest
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_PullImageClient = grpc.ServerStreamingClient[ImagePullEvent]
 
+func (c *agentServiceClient) StreamConnections(ctx context.Context, in *StreamConnectionsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ConnectionSnapshot], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[22], AgentService_StreamConnections_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamConnectionsRequest, ConnectionSnapshot]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_StreamConnectionsClient = grpc.ServerStreamingClient[ConnectionSnapshot]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -1417,6 +1440,9 @@ type AgentServiceServer interface {
 	PruneImages(context.Context, *PruneImagesRequest) (*PruneImagesResponse, error)
 	// 拉取镜像，只用节点全局的 Docker 登录信息。调用方取消时停止拉取。
 	PullImage(*PullImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error
+	// ---- 网络连接（见 docs/agent.md#网络连接），NodeInfo.connections 起支持，更早的节点返回 Unimplemented ----
+	// 每隔几秒发一次本机和各容器网络命名空间里的 TCP、已连接的 UDP 连接和发起的进程。只在调用期间采样，不写盘。
+	StreamConnections(*StreamConnectionsRequest, grpc.ServerStreamingServer[ConnectionSnapshot]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -1666,6 +1692,9 @@ func (UnimplementedAgentServiceServer) PruneImages(context.Context, *PruneImages
 }
 func (UnimplementedAgentServiceServer) PullImage(*PullImageRequest, grpc.ServerStreamingServer[ImagePullEvent]) error {
 	return status.Error(codes.Unimplemented, "method PullImage not implemented")
+}
+func (UnimplementedAgentServiceServer) StreamConnections(*StreamConnectionsRequest, grpc.ServerStreamingServer[ConnectionSnapshot]) error {
+	return status.Error(codes.Unimplemented, "method StreamConnections not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -2966,6 +2995,17 @@ func _AgentService_PullImage_Handler(srv interface{}, stream grpc.ServerStream) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_PullImageServer = grpc.ServerStreamingServer[ImagePullEvent]
 
+func _AgentService_StreamConnections_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamConnectionsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).StreamConnections(m, &grpc.GenericServerStream[StreamConnectionsRequest, ConnectionSnapshot]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_StreamConnectionsServer = grpc.ServerStreamingServer[ConnectionSnapshot]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3317,6 +3357,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "PullImage",
 			Handler:       _AgentService_PullImage_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamConnections",
+			Handler:       _AgentService_StreamConnections_Handler,
 			ServerStreams: true,
 		},
 	},

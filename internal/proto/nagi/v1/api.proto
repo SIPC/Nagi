@@ -350,6 +350,15 @@ service NodeService {
   rpc PruneNodeImages(PruneNodeImagesRequest) returns (PruneImagesResponse);
   // 浏览器断开（取消）时停止拉取。
   rpc PullNodeImage(PullNodeImageRequest) returns (stream ImagePullEvent);
+  // 网络连接（见 docs/agent.md#网络连接）：实时看节点上的连接和发起的进程，要「查看节点详情」；
+  // 命令行另外要「节点终端和文件」并做过高权限确认，否则不返回。浏览器断开时节点停止采样。
+  rpc WatchNodeConnections(WatchNodeConnectionsRequest) returns (stream ConnectionSnapshot);
+}
+
+message WatchNodeConnectionsRequest {
+  string node_id = 1;
+  // 要进程的命令行。没有权限或没做高权限确认时拒绝（要确认），界面先不要，用户点开时再要。
+  bool cmdline = 2;
 }
 
 message DeleteNodeImagesRequest {
