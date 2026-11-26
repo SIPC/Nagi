@@ -11,7 +11,7 @@ import { useRole } from "@/components/role";
 import { Badge, Button, Check, EmptyRow, Input, Notice, QueryError, RowsSkeleton, Section, Segmented, Select, Table, Td, Th } from "@/components/ui";
 import type { Node } from "@/gen/nagi/v1/api_pb";
 import type { ConnectionSnapshot } from "@/gen/nagi/v1/agent_pb";
-import { defaultFilter, filterConns, groupConns, groupBys, hostPort, ownerOf, portHint, remoteKind, type Conn, type Filter, type Group, type GroupBy } from "@/lib/connections";
+import { defaultFilter, filterConns, groupConns, groupBys, hostPort, ownerOf, portHint, remoteKind, remoteLabel, type Conn, type Filter, type Group, type GroupBy } from "@/lib/connections";
 
 const m = t.nodeConnections;
 
@@ -219,9 +219,9 @@ function ConnTable({ conns, cmdline, hide }: { conns: Conn[]; cmdline: boolean; 
                 <Td className="text-muted-foreground uppercase">{c.protocol}</Td>
                 {hide !== "remote" && (
                   <Td className="truncate">
-                    <span className="font-mono text-[13px]" title={`${hostPort(c.localIp, c.localPort)} → ${hostPort(c.remoteIp, c.remotePort)}`}>
+                    <span className="font-mono text-[13px]" title={`${c.localIp ? hostPort(c.localIp, c.localPort) : c.localPort} → ${remoteLabel(c)}`}>
                       {c.inbound && <span className="text-muted-foreground">{m.inbound} </span>}
-                      {hostPort(c.remoteIp, c.remotePort)}
+                      {remoteLabel(c)}
                     </span>
                     <RemoteTag conn={c} />
                   </Td>
@@ -256,7 +256,8 @@ function ConnTable({ conns, cmdline, hide }: { conns: Conn[]; cmdline: boolean; 
 function RemoteTag({ conn }: { conn: Conn }) {
   const kind = remoteKind(conn.remoteIp);
   const hint = portHint(conn);
-  const label = conn.remoteNodeName ? m.node(conn.remoteNodeName) : kind === "public" ? "" : m.kinds[kind];
+  // 远端是面板时节点名就是「面板」，不加「节点」；没给地址时名称已经在地址的位置上。
+  const label = !conn.remoteIp ? "" : conn.remoteNodeName ? (conn.remoteNodeName === m.panel ? m.panel : m.node(conn.remoteNodeName)) : kind === "public" ? "" : m.kinds[kind];
   if (!label && !hint) return null;
   return (
     <span className="ml-2 inline-flex gap-1 align-middle">

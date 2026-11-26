@@ -1,7 +1,7 @@
 // node --test scripts/*.test.mjs（Node 22.18+ 直接加载 .ts）。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { defaultFilter, filterConns, groupConns, ownerOf, portHint, remoteKind } from "../src/lib/connections.ts";
+import { defaultFilter, filterConns, groupConns, ownerOf, portHint, remoteKind, remoteLabel } from "../src/lib/connections.ts";
 
 const base = { protocol: "tcp", state: "ESTABLISHED", localIp: "10.0.0.2", localPort: 40000, remoteIp: "1.1.1.1", remotePort: 443, inbound: false, bytesSent: 0n, bytesReceived: 0n, sendRate: 0, receiveRate: 0, pid: 0, process: "", cmdline: "", dockerName: "", projectId: "", projectName: "", container: "", service: "", unit: "", remoteNodeName: "" };
 const c = (o) => ({ ...base, ...o });
@@ -72,4 +72,16 @@ test("端口提示：出站看远端端口，入站看本地端口", () => {
   assert.equal(portHint(c({ remotePort: 3260 })), "iSCSI");
   assert.equal(portHint(c({ inbound: true, localPort: 22, remotePort: 51234 })), "SSH");
   assert.equal(portHint(c({ remotePort: 12345 })), "");
+});
+
+test("面板不给节点地址时：远端写节点名和端口，按远端分组按节点名，搜得到", () => {
+  const list = [
+    c({ remoteIp: "", remotePort: 7002, remoteNodeName: "HK-001", sendRate: 5 }),
+    c({ remoteIp: "", remotePort: 7003, remoteNodeName: "HK-001" }),
+    c({ remoteIp: "", remotePort: 7002, remoteNodeName: "其他节点" }),
+  ];
+  assert.equal(remoteLabel(list[0]), "HK-001:7002");
+  assert.equal(remoteLabel(c({ remoteIp: "2001:db8::1", remotePort: 443 })), "[2001:db8::1]:443");
+  assert.deepEqual(groupConns(list, "remote").map((g) => [g.label, g.conns.length]), [["HK-001", 2], ["其他节点", 1]]);
+  assert.equal(filterConns(list, { ...defaultFilter, query: "hk-001:7003" }).length, 1);
 });

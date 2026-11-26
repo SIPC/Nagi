@@ -62,7 +62,8 @@ export function groupConns(list: Conn[], by: GroupBy): Group[] {
       key = `${kind}:${label}`;
     } else {
       kind = "remote";
-      label = c.remoteIp;
+      // 没有地址（面板不给）时按节点名分组。
+      label = c.remoteIp || c.remoteNodeName;
       key = `remote:${label}`;
     }
     let g = groups.get(key);
@@ -90,8 +91,7 @@ export function filterConns(list: Conn[], f: Filter): Conn[] {
     if (f.protocol && c.protocol !== f.protocol) return false;
     if (f.activeOnly && c.sendRate + c.receiveRate <= 0) return false;
     if (!q) return true;
-    const remote = c.remoteIp.includes(":") ? `[${c.remoteIp}]:${c.remotePort}` : `${c.remoteIp}:${c.remotePort}`;
-    return [remote, String(c.localPort), c.process, c.cmdline, c.dockerName, c.projectName, c.container, c.service, c.unit, c.remoteNodeName, String(c.pid || "")].some((v) => v && v.toLowerCase().includes(q));
+    return [remoteLabel(c), String(c.localPort), c.process, c.cmdline, c.dockerName, c.projectName, c.container, c.service, c.unit, c.remoteNodeName, String(c.pid || "")].some((v) => v && v.toLowerCase().includes(q));
   });
 }
 
@@ -122,4 +122,10 @@ export function portHint(c: Conn): string {
 
 export function hostPort(ip: string, port: number) {
   return ip.includes(":") ? `[${ip}]:${port}` : `${ip}:${port}`;
+}
+
+// remoteLabel 是远端的显示：Nagi 节点、面板的地址没有「查看访问地址」时面板不给（看不到的节点一律不给），
+// 这时写节点名和端口。
+export function remoteLabel(c: Conn) {
+  return c.remoteIp ? hostPort(c.remoteIp, c.remotePort) : `${c.remoteNodeName}:${c.remotePort}`;
 }

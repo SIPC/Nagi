@@ -1004,6 +1004,7 @@ var en = map[string]string{
 	"这个节点不支持网络连接视图（只支持 Linux）":       "This node doesn't support the connections view (Linux only)",
 	"sock_diag 返回错误 %d":              "sock_diag returned error %d",
 	"其他节点":                           "Other node",
+	"面板":                             "Panel",
 	"只有管理员能管理管理员":                    "Only administrators can manage administrators",
 	"只能授予自己拥有的权限":                    "You can only grant permissions you have",
 	"安全设置只给管理员":                      "Security settings are for administrators only",

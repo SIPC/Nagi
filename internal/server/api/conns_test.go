@@ -74,37 +74,76 @@ func TestWatchNodeConnectionsCmdline(t *testing.T) {
 	}
 }
 
-// 对端是 Nagi 节点时填上名称，看不到的节点是「其他节点」；范围外项目的容器不给项目、容器名和 Docker 名称。
-// 管理员（x 为 nil）看到全部。
+// 安全审查 M1、M2（2d6a7f45）：
+//   - 范围外项目的容器、不认识的容器（只给管理员，C5）的连接整条去掉并计进 omitted，不只是去掉名称：
+//     进程、端口、对端、流量照样说明那个容器在做什么。
+//   - Nagi 节点和面板的地址（对端，或本端是节点的公网地址）要「查看访问地址」；看不到的节点一律不给地址，
+//     只换名称的话 IP 照样认得出是哪台。互联网上别的地址照常给。管理员（x 为 nil）看到全部。
 func TestCleanConnections(t *testing.T) {
 	names := map[netip.Addr]nodeAddrName{
-		netip.MustParseAddr("203.0.113.5"): {id: "n2", name: "HK-001"},
-		netip.MustParseAddr("203.0.113.6"): {id: "n3", name: "secret-node"},
+		netip.MustParseAddr("203.0.113.5"):  {id: "n2", name: "HK-001"},
+		netip.MustParseAddr("203.0.113.6"):  {id: "n3", name: "secret-node"},
+		netip.MustParseAddr("198.51.100.1"): {name: "面板"},
+		netip.MustParseAddr("203.0.113.1"):  {id: "n1", name: "self"},
 	}
 	mk := func() *nagiv1.ConnectionSnapshot {
-		return &nagiv1.ConnectionSnapshot{Connections: []*nagiv1.NodeConnection{
-			{RemoteIp: "203.0.113.5", ProjectId: "p1", ProjectName: "博客", Container: "web", DockerName: "nagi-p1-web"},
-			{RemoteIp: "203.0.113.6", ProjectId: "p2", ProjectName: "别人的", Container: "db", Service: "db", DockerName: "nagi-p2-db"},
-			{RemoteIp: "1.1.1.1", Process: "curl"},
+		return &nagiv1.ConnectionSnapshot{Omitted: 1, Connections: []*nagiv1.NodeConnection{
+			{LocalIp: "203.0.113.1", RemoteIp: "203.0.113.5", ProjectId: "p1", ProjectName: "博客", Container: "web", DockerName: "nagi-p1-web"},
+			{LocalIp: "172.18.0.3", RemoteIp: "1.1.1.1", ProjectId: "p2", ProjectName: "别人的", Container: "db", Pid: 42, Process: "app", SendRate: 900},
+			{LocalIp: "172.17.0.2", RemoteIp: "8.8.8.8", DockerName: "stray_container", Pid: 43, Process: "miner"},
+			// IPv4 映射的 IPv6 地址也认得出是节点。
+			{LocalIp: "203.0.113.1", RemoteIp: "::ffff:203.0.113.6", Pid: 7, Process: "nagi"},
+			{LocalIp: "203.0.113.1", RemoteIp: "198.51.100.1", Pid: 7, Process: "nagi"},
+			{LocalIp: "10.0.0.2", RemoteIp: "1.1.1.1", Pid: 8, Process: "curl"},
 		}}
 	}
+
 	admin := mk()
 	cleanConnections(nil, names, "其他节点", admin)
-	if c := admin.Connections; c[0].GetRemoteNodeName() != "HK-001" || c[1].GetRemoteNodeName() != "secret-node" || c[1].GetContainer() != "db" || c[2].GetRemoteNodeName() != "" {
+	if len(admin.Connections) != 6 || admin.Omitted != 1 {
+		t.Fatalf("管理员看到全部：%v", admin)
+	}
+	if c := admin.Connections; c[0].GetRemoteNodeName() != "HK-001" || c[3].GetRemoteNodeName() != "secret-node" || c[3].GetRemoteIp() == "" ||
+		c[4].GetRemoteNodeName() != "面板" || c[4].GetRemoteIp() != "198.51.100.1" || c[0].GetLocalIp() != "203.0.113.1" {
 		t.Errorf("管理员：%v", c)
 	}
 
-	x := &access{perms: auth.PermsOf(auth.PermNodeView, auth.PermNodeDetails), projects: map[string]bool{"p1": true}, nodes: map[string]bool{"n1": true, "n2": true}}
+	scoped := func(perms ...auth.Perm) *access {
+		return &access{perms: auth.PermsOf(append([]auth.Perm{auth.PermNodeView, auth.PermNodeDetails}, perms...)...),
+			projects: map[string]bool{"p1": true}, nodes: map[string]bool{"n1": true, "n2": true}}
+	}
+
 	m := mk()
-	cleanConnections(x, names, "其他节点", m)
+	cleanConnections(scoped(), names, "其他节点", m)
+	if m.Omitted != 3 || len(m.Connections) != 4 {
+		t.Fatalf("范围外项目和不认识的容器整条去掉并计数：omitted=%d %v", m.Omitted, m.Connections)
+	}
+	for _, c := range m.Connections {
+		if c.GetPid() == 42 || c.GetPid() == 43 || c.GetProjectId() == "p2" {
+			t.Errorf("不该留下：%v", c)
+		}
+	}
 	c := m.Connections
-	if c[0].GetRemoteNodeName() != "HK-001" || c[0].GetContainer() != "web" || c[0].GetDockerName() != "nagi-p1-web" {
-		t.Errorf("范围内：%v", c[0])
+	if c[0].GetRemoteNodeName() != "HK-001" || c[0].GetRemoteIp() != "" || c[0].GetLocalIp() != "" || c[0].GetContainer() != "web" {
+		t.Errorf("范围内的节点：名称照给，没有查看访问地址时两端的节点地址都不给：%v", c[0])
 	}
-	if c[1].GetRemoteNodeName() != "其他节点" || c[1].GetProjectId() != "" || c[1].GetProjectName() != "" || c[1].GetContainer() != "" || c[1].GetService() != "" || c[1].GetDockerName() != "" {
-		t.Errorf("范围外：%v", c[1])
+	if c[1].GetRemoteNodeName() != "其他节点" || c[1].GetRemoteIp() != "" {
+		t.Errorf("看不到的节点：%v", c[1])
 	}
-	if c[2].GetProcess() != "curl" {
-		t.Errorf("不是容器的进程照常显示：%v", c[2])
+	if c[2].GetRemoteNodeName() != "面板" || c[2].GetRemoteIp() != "" {
+		t.Errorf("面板：%v", c[2])
+	}
+	if c[3].GetRemoteIp() != "1.1.1.1" || c[3].GetLocalIp() != "10.0.0.2" {
+		t.Errorf("互联网上的地址和内网地址照常给：%v", c[3])
+	}
+
+	a := mk()
+	cleanConnections(scoped(auth.PermAddresses), names, "其他节点", a)
+	c = a.Connections
+	if c[0].GetRemoteIp() != "203.0.113.5" || c[0].GetLocalIp() != "203.0.113.1" || c[2].GetRemoteIp() != "198.51.100.1" {
+		t.Errorf("有查看访问地址时给范围内节点和面板的地址：%v", c)
+	}
+	if c[1].GetRemoteNodeName() != "其他节点" || c[1].GetRemoteIp() != "" {
+		t.Errorf("有查看访问地址也不给看不到的节点的地址：%v", c[1])
 	}
 }
