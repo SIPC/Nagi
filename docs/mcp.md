@@ -152,6 +152,7 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 | `check_mesh` | 一个节点（或面板自己）看到的节点网络：每个成员的路径（直连、中转）、延迟、丢包、最近握手；带 `peer` 时让节点立即 ping 这个成员（`peer` 写名称或公钥；有不止一个成员叫这个名称时报错，要求改用公钥，`test_mesh_speed` 同样） | `GetNodeMesh`、`GetPanelMesh`、`PingNodeMesh` |
 | `get_node_mirrors` | 只给管理员：节点的镜像加速地址、Docker 当前生效的和默认的加速地址 | `GetNodeMirrors` |
 | `list_node_images` | 只给管理员：节点上的镜像（标签、ID、大小、创建时间、使用它的容器、Nagi 需要它的原因），一键清理会删除几个、至少释放多少，可回收的构建缓存。可以按文字筛选，最多列 300 个 | `ListNodeImages` |
+| `list_node_connections` | 节点上正在进行的连接，和节点页的「网络连接」一样：协议、状态、方向、两端地址、对端的 Nagi 节点、发起的进程（PID、名称、systemd 单元）、所属的项目 / 容器 / 服务和收发速率。要「查看节点详情」，不返回命令行。见下面的[网络连接](#网络连接) | `WatchNodeConnections` |
 
 ### 日常操作
 
@@ -284,6 +285,15 @@ agent 不能用网页的登录会话（cookie 加两步验证）。两种方式�
 - `pull_node_image` 用节点全局的 Docker 登录信息和镜像加速拉取，等拉完才返回，最长 30 分钟。不用确认。每个节点同时最多拉取 2 个，拉取中磁盘剩余空间不足时停下。
 - 删除、清理、拉取都记进审计，挂在这次工具调用下面。
 
+### 网络连接
+
+`list_node_connections` 用节点页「网络连接」的同一个接口（`WatchNodeConnections`，见 [agent.md](agent.md#网络连接)），权限、范围清理和审计都在接口里，和网页一样：
+
+- **权限**：要「查看节点详情」，令牌不用勾别的选项（只读令牌、备用面板上都有）。成员看不到范围外项目和面板不认识的容器的连接（不列出，只计数）；Nagi 节点和面板的地址要「查看访问地址」，没有时只给名称和端口，看不到的节点写 `其他节点`、不给地址。
+- **不返回命令行**：命令行里可能有密码、令牌，网页上要「节点终端和文件」并做过高权限确认才给。令牌做不了交互式的确认，`WatchNodeConnections` 也不在[高权限确认](#高权限确认)的令牌表里，所以工具从不要命令行，结果的 `notes` 写明原因，请用户到网页上看。
+- **取两轮就返回**：节点有人看时才采样，每 2 秒一轮（忙时 5 秒），第二轮才有速率。工具等到第二轮（最多 15 秒，只等到一轮时返回这一轮并说明没有速率）就断开，节点没人看就停。不跟随，不写盘；不到一轮就结束的短连接看不到。
+- **上限**：默认按收发速率列前 50 条，`limit` 最多 200；`direction` 默认只看出站（`in`、`all`）；`filter` 匹配远端地址、节点名、进程、单元、项目、容器；`group_by` 按进程、容器或远端 IP 加总（最多 50 组，不受 `limit` 影响）。节点一轮最多发 2000 条，全节点同时最多 4 个人看（网页和 MCP 一起算），满了时报错，稍后再试。
+- **审计**：每次调用记一条 MCP 调用，下面挂一条 `WatchNodeConnections`（查询类）。旧节点返回「节点版本过低」。
 ### 节点命令
 
 `node_exec` 以 root 身份在节点上执行一条命令，等它结束，返回输出（最多 64 KB）和退出码。默认 30 秒、最长 120 秒超时，到时结束整个进程组。这等于把整台机器交给 agent，所以比网页的节点终端还多几道限制：
@@ -398,7 +408,7 @@ agent 常见的乱部署：单个服务也写 compose，密码这类值写死在
 
 ## 实现
 
-- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作、`images.go` 节点镜像、`replicadirs.go` 副本的存放位置、`panel.go` 管理面板和项目页排序）、给 agent 的资源（`resources.go`）、保存后的提醒（`advice.go`，compose 的读法在 `spec.AdviseCompose`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 按[高权限确认](#高权限确认)的表逐个检查 `elevationRequired` 里的接口；`TestTokenNeverReaches` 逐个检查设置、账号、初始化的接口，令牌只能碰管理面板列出的那些。
+- `internal/server/mcp`：`/mcp` 入口和令牌核对（`mcp.go`，用 SDK 的 `RequireBearerToken`）、进程内调用面板接口的传输、按令牌的权限给工具（`tools.go`）、工具本身（`list.go`、`ops.go`、`snapshots.go`、`diagnose.go`、`files.go`、`fileops.go` 卷文件的移动打包解压、`alerts.go` 告警规则和版本、`nodes.go` 节点管理、`nodefiles.go` 节点文件和节点级操作、`images.go` 节点镜像、`conns.go` 网络连接、`replicadirs.go` 副本的存放位置、`panel.go` 管理面板和项目页排序）、给 agent 的资源（`resources.go`）、保存后的提醒（`advice.go`，compose 的读法在 `spec.AdviseCompose`）。每个工具声明是否修改、是否执行命令和用到的接口，`tools_test.go` 检查查看类的工具只用查询接口、修改类的至少用到一个修改接口、接口都存在且操作员能调用（声明了只给管理员的除外）、用到要「节点终端」的接口的工具都声明了 `nodeExec`；`nodes_test.go` 用假的接口检查要确认的工具先预览、确认码对上才执行。`internal/server/api/token_elevation_test.go` 按[高权限确认](#高权限确认)的表逐个检查 `elevationRequired` 里的接口；`TestTokenNeverReaches` 逐个检查设置、账号、初始化的接口，令牌只能碰管理面板列出的那些。
 - `internal/server/oauth`：授权服务器。`oauth_test.go` 按规范走一遍完整流程（注册、授权、换令牌、刷新、旧刷新令牌重用时吊销整个授权、吊销），并测回调地址不匹配、没有 PKCE、PKCE 不对、授权码重用、拒绝授权、本机回调换端口。
 - `internal/server/auth/tokens.go`：生成和核对令牌。`internal/server/api/tokens.go`：令牌管理和授权页的接口。`internal/server/api/exec.go`：`exec` 用的执行命令（和终端同一条路）。`internal/server/api/agentfiles.go`：文件工具用的读写（和网页的文件管理同一条路）。
 - `internal/server/store`：`api_tokens`、`oauth_clients` 表。查询手写在 `tokens.go`，不放进 `queries.sql`。
