@@ -8,6 +8,15 @@ To upgrade: from v0.6.0, update the panel with one click in its settings; for ea
 curl -fsSL https://github.com/SIPC/Nagi/releases/latest/download/install.sh | sudo sh
 ```
 
+## v0.37.6-pre.1
+
+This is a pre-release for trying out changes before the stable release. Only panels and nodes on the pre-release channel are offered it (see [pre-releases](docs/development.md#预发布版本), in Chinese).
+
+### New features
+
+- New "Connections" tab on the node page: live TCP and UDP connections with remote address, owning process, container or service, and send/receive rate, grouped by process, container, or remote. Requires "View node details"; process command lines also require "Node terminal and files" plus re-authentication. Members don't see connections of out-of-scope projects or unknown containers, and addresses of Nagi nodes and the panel need "View access addresses". Live only, nothing is stored. Nodes must be upgraded too; older nodes show "Node is out of date. Upgrade the node".
+- New MCP tool `list_node_connections`: a node's live connections (process, container, remote, and rates), with the same permissions as the node page ("View node details"). It doesn't return process command lines, which need re-authentication that tokens can't do.
+
 ## v0.37.5
 
 ### New features
